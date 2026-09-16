@@ -8,14 +8,14 @@ object NoOpSyncCoordinator : SyncCoordinator {
     override fun register(
         key: ProjectionKey,
         loader: suspend () -> Unit,
-    ): SyncRegistration = object : SyncRegistration {
-        override fun close() = Unit
-    }
+    ): SyncRegistration =
+        object : SyncRegistration {
+            override fun close() = Unit
+        }
 
     override fun unregister(registration: SyncRegistration) = Unit
 
-    override fun observe(key: ProjectionKey): Flow<ProjectionState> =
-        MutableStateFlow(ProjectionState.Fresh).asStateFlow()
+    override fun observe(key: ProjectionKey): Flow<ProjectionState> = MutableStateFlow(ProjectionState.Fresh).asStateFlow()
 
     override suspend fun ensureFresh(key: ProjectionKey) = Unit
 

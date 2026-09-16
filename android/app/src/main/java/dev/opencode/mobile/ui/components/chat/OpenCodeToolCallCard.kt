@@ -83,8 +83,7 @@ fun OpenCodeToolCallCard(
                     if (onClick != null) {
                         role = Role.Button
                     }
-                }
-                .then(
+                }.then(
                     if (onClick != null) {
                         Modifier
                             .clip(shape)

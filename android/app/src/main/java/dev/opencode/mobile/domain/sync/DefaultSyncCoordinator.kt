@@ -140,8 +140,7 @@ class DefaultSyncCoordinator(
         }
     }
 
-    override fun observe(key: ProjectionKey): Flow<ProjectionState> =
-        entries.getOrPut(key) { Entry(key) }.state
+    override fun observe(key: ProjectionKey): Flow<ProjectionState> = entries.getOrPut(key) { Entry(key) }.state
 
     override suspend fun ensureFresh(key: ProjectionKey) {
         while (true) {
@@ -419,8 +418,7 @@ class DefaultSyncCoordinator(
         }
     }
 
-    private fun canCatchUpNow(): Boolean =
-        canCatchUp(worldSignals.occupancy.value, liveConnection.snapshot.value)
+    private fun canCatchUpNow(): Boolean = canCatchUp(worldSignals.occupancy.value, liveConnection.snapshot.value)
 
     private inner class Handle(
         val id: Long,

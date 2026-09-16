@@ -48,8 +48,7 @@ internal object OpenCodeReleaseObservability {
         preferences.edit().putBoolean(markerKey, true).commit()
     }
 
-    fun isProductAnalyticsConsented(): Boolean =
-        AnalyticsConsentPreferences.productAnalyticsConsented
+    fun isProductAnalyticsConsented(): Boolean = AnalyticsConsentPreferences.productAnalyticsConsented
 
     fun setProductAnalyticsConsented(value: Boolean) {
         AnalyticsConsentPreferences.updateProductAnalyticsConsented(value)

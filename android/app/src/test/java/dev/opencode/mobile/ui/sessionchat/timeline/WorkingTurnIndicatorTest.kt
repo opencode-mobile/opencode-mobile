@@ -447,8 +447,7 @@ class WorkingTurnIndicatorTest {
     private fun fadingWorking(): WorkingTurnIndicator.Chrome =
         WorkingTurnIndicator.Chrome(label = "Working", collapsed = false, fading = true)
 
-    private fun visibleHold(startedAtMs: Long = 0L): WorkingTurnIndicator.Hold =
-        WorkingTurnIndicator.Hold(startedAtMs = startedAtMs)
+    private fun visibleHold(startedAtMs: Long = 0L): WorkingTurnIndicator.Hold = WorkingTurnIndicator.Hold(startedAtMs = startedAtMs)
 
     private fun message(vararg blocks: SessionChatTimelineBlock): SessionChatMessageItem =
         SessionChatMessageItem(

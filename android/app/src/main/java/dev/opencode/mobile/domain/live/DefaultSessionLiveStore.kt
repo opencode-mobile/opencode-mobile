@@ -63,8 +63,7 @@ class DefaultSessionLiveStore
                                 syncCoordinator.ensureFresh(projection)
                             }
                         }
-                    }
-                    .awaitAll()
+                    }.awaitAll()
             }
         }
 

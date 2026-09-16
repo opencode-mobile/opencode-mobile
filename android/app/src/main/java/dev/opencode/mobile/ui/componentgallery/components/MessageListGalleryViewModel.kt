@@ -49,9 +49,9 @@ class MessageListGalleryViewModel : ViewModel() {
         val lastMessage = messages.lastOrNull() ?: return
         messages =
             messages.dropLast(1) +
-                lastMessage.copy(
-                    text = lastMessage.text.toggledResizeText(),
-                )
+            lastMessage.copy(
+                text = lastMessage.text.toggledResizeText(),
+            )
     }
 
     private fun startLiveMessages() {

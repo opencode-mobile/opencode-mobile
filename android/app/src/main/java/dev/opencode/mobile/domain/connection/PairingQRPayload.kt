@@ -1,8 +1,8 @@
 package dev.opencode.mobile.domain.connection
 
-import java.net.URI
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import java.net.URI
 
 data class PairingQRCredentials(
     val baseUrl: String,

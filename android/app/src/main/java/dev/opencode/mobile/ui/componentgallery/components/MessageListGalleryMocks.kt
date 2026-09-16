@@ -43,7 +43,7 @@ object MessageListGalleryMocks {
                 role = MessageListGalleryRole.Assistant,
                 text =
                     "It should animate to the true bottom of the conversation, including bottom padding, " +
-                    "without leaving a small manual scroll gap.",
+                        "without leaving a small manual scroll gap.",
             ),
             MessageListGalleryMessage(
                 id = "gallery-user-3",
@@ -146,7 +146,7 @@ object MessageListGalleryMocks {
                     role = MessageListGalleryRole.Assistant,
                     text =
                         "Live reply $sequence: this simulated assistant message was appended " +
-                        "while live messages are enabled.",
+                            "while live messages are enabled.",
                 )
         }
     }

@@ -45,10 +45,12 @@ class AttachmentIngestionService private constructor(
         if (metadata.size != null && metadata.size > AttachmentLimits.MAX_DECODED_BYTES) {
             throw IllegalArgumentException(AttachmentLimits.TOO_LARGE_ERROR)
         }
-        val accepted = acceptedType(contentResolver.getType(uri), metadata.filename)
-            ?: throw IllegalArgumentException(UNSUPPORTED_ERROR)
-        val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() }
-            ?: throw IllegalArgumentException(READ_ERROR)
+        val accepted =
+            acceptedType(contentResolver.getType(uri), metadata.filename)
+                ?: throw IllegalArgumentException(UNSUPPORTED_ERROR)
+        val bytes =
+            contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                ?: throw IllegalArgumentException(READ_ERROR)
         return ingest(metadata.filename, accepted, bytes)
     }
 
@@ -105,20 +107,21 @@ class AttachmentIngestionService private constructor(
         val contentResolver = requireNotNull(contentResolver)
         var filename: String? = null
         var size: Long? = null
-        contentResolver.query(
-            uri,
-            arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE),
-            null,
-            null,
-            null,
-        )?.use { cursor ->
-            if (cursor.moveToFirst()) {
-                val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                if (nameIndex >= 0) filename = cursor.getString(nameIndex)
-                val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
-                if (sizeIndex >= 0 && !cursor.isNull(sizeIndex)) size = cursor.getLong(sizeIndex)
+        contentResolver
+            .query(
+                uri,
+                arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE),
+                null,
+                null,
+                null,
+            )?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    if (nameIndex >= 0) filename = cursor.getString(nameIndex)
+                    val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
+                    if (sizeIndex >= 0 && !cursor.isNull(sizeIndex)) size = cursor.getLong(sizeIndex)
+                }
             }
-        }
         return AttachmentMetadata(
             filename = filename?.takeIf { it.isNotBlank() } ?: uri.lastPathSegment ?: "Attachment",
             size = size,
@@ -152,7 +155,11 @@ class AttachmentIngestionService private constructor(
         val filename: String,
         val size: Long? = null,
     )
-    private data class AcceptedType(val mime: String, val kind: AttachmentKind)
+
+    private data class AcceptedType(
+        val mime: String,
+        val kind: AttachmentKind,
+    )
 
     companion object {
         const val UNSUPPORTED_ERROR = "Only images, PDFs, or text files can be attached here."
@@ -161,11 +168,44 @@ class AttachmentIngestionService private constructor(
         private val IMAGE_MIMES = setOf("image/png", "image/jpeg", "image/gif", "image/webp")
         private val TEXT_EXTENSIONS =
             setOf(
-                "txt", "md", "markdown", "csv", "json", "jsonl", "xml", "yaml", "yml", "toml", "conf",
-                "kt", "kts", "java", "swift", "js", "jsx", "mjs", "ts", "tsx", "css", "html", "htm",
-                "py", "rb", "rs", "go", "c", "cc", "h", "cpp", "hpp", "mm", "sh", "zsh", "sql", "log",
+                "txt",
+                "md",
+                "markdown",
+                "csv",
+                "json",
+                "jsonl",
+                "xml",
+                "yaml",
+                "yml",
+                "toml",
+                "conf",
+                "kt",
+                "kts",
+                "java",
+                "swift",
+                "js",
+                "jsx",
+                "mjs",
+                "ts",
+                "tsx",
+                "css",
+                "html",
+                "htm",
+                "py",
+                "rb",
+                "rs",
+                "go",
+                "c",
+                "cc",
+                "h",
+                "cpp",
+                "hpp",
+                "mm",
+                "sh",
+                "zsh",
+                "sql",
+                "log",
             )
-
     }
 }
 
@@ -193,12 +233,13 @@ internal object AttachmentThumbnailer {
         val scale = minOf(1f, MAX_PREVIEW_DIMENSION.toFloat() / maxOf(decoded.width, decoded.height))
         val thumbnail =
             if (scale < 1f) {
-                Bitmap.createScaledBitmap(
-                    decoded,
-                    (decoded.width * scale).toInt().coerceAtLeast(1),
-                    (decoded.height * scale).toInt().coerceAtLeast(1),
-                    true,
-                ).also { decoded.recycle() }
+                Bitmap
+                    .createScaledBitmap(
+                        decoded,
+                        (decoded.width * scale).toInt().coerceAtLeast(1),
+                        (decoded.height * scale).toInt().coerceAtLeast(1),
+                        true,
+                    ).also { decoded.recycle() }
             } else {
                 decoded
             }

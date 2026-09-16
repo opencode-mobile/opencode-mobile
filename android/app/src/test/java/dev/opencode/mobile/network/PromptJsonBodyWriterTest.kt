@@ -6,17 +6,18 @@ import dev.opencode.mobile.data.remote.dto.SendMessagePartDto
 import dev.opencode.mobile.data.remote.dto.SendMessageRequestDto
 import dev.opencode.mobile.domain.message.Attachment
 import dev.opencode.mobile.domain.message.AttachmentKind
-import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
 
 class PromptJsonBodyWriterTest {
     @Test
     fun writeV1Prompt_streamsFileBackedDataUrl() {
-        val source = File(System.getProperty("java.io.tmpdir"), "prompt-writer-source.bin").apply {
-            writeBytes(byteArrayOf(1, 2, 3, 4))
-        }
+        val source =
+            File(System.getProperty("java.io.tmpdir"), "prompt-writer-source.bin").apply {
+                writeBytes(byteArrayOf(1, 2, 3, 4))
+            }
         val attachment =
             Attachment(
                 id = "a1",

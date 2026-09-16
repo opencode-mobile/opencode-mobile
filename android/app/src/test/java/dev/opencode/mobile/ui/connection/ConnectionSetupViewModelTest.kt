@@ -63,7 +63,11 @@ class ConnectionSetupViewModelTest {
             viewModel.submit { saved = true }
             advanceUntilIdle()
             assertFalse(saved)
-            assertEquals("Enter a host", viewModel.uiState.value.snackbar?.text)
+            assertEquals(
+                "Enter a host",
+                viewModel.uiState.value.snackbar
+                    ?.text,
+            )
         }
 
     @Test
@@ -127,7 +131,11 @@ class ConnectionSetupViewModelTest {
             advanceUntilIdle()
             assertFalse(saved)
             assertFalse(failing.uiState.value.credentialsExpanded)
-            assertEquals("Unable to reach the server", failing.uiState.value.snackbar?.text)
+            assertEquals(
+                "Unable to reach the server",
+                failing.uiState.value.snackbar
+                    ?.text,
+            )
         }
 
     @Test
@@ -295,7 +303,11 @@ class ConnectionSetupViewModelTest {
             viewModel.submit { saved = true }
             advanceUntilIdle()
             assertFalse(saved)
-            assertEquals("Authentication failed", viewModel.uiState.value.snackbar?.text)
+            assertEquals(
+                "Authentication failed",
+                viewModel.uiState.value.snackbar
+                    ?.text,
+            )
         }
 
     @Test
@@ -327,7 +339,11 @@ class ConnectionSetupViewModelTest {
         val viewModel = viewModel(probe = neverProbe())
         viewModel.configure(initialProfile = null, mode = ConnectionSetupMode.Add)
         viewModel.applyPairingQR("nope")
-        assertEquals("This isn't an OpenCode 2 pairing QR", viewModel.uiState.value.snackbar?.text)
+        assertEquals(
+            "This isn't an OpenCode 2 pairing QR",
+            viewModel.uiState.value.snackbar
+                ?.text,
+        )
         assertEquals("", viewModel.uiState.value.baseUrl)
     }
 
@@ -338,7 +354,8 @@ class ConnectionSetupViewModelTest {
         viewModel.pairingQRCameraDenied()
         assertEquals(
             "Allow camera access to scan the pairing QR",
-            viewModel.uiState.value.snackbar?.text,
+            viewModel.uiState.value.snackbar
+                ?.text,
         )
     }
 
@@ -349,7 +366,8 @@ class ConnectionSetupViewModelTest {
         viewModel.pairingQRCameraUnavailable()
         assertEquals(
             "Camera isn't available on this device",
-            viewModel.uiState.value.snackbar?.text,
+            viewModel.uiState.value.snackbar
+                ?.text,
         )
     }
 

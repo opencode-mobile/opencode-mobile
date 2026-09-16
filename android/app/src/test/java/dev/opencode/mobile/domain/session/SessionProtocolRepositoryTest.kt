@@ -47,7 +47,12 @@ class SessionProtocolRepositoryTest {
 
             assertEquals("ses_1", sessions.single().id)
             assertEquals("/repo", requests.single().url.parameters["directory"])
-            assertTrue(requests.single().url.encodedPath.endsWith("/session"))
+            assertTrue(
+                requests
+                    .single()
+                    .url.encodedPath
+                    .endsWith("/session"),
+            )
         }
 
     @Test
@@ -82,7 +87,12 @@ class SessionProtocolRepositoryTest {
             assertEquals("ses_2", sessions.single().id)
             assertEquals("/repo", sessions.single().directory)
             assertEquals("/repo", requests.single().url.parameters["directory"])
-            assertTrue(requests.single().url.encodedPath.contains("/api/session"))
+            assertTrue(
+                requests
+                    .single()
+                    .url.encodedPath
+                    .contains("/api/session"),
+            )
         }
 
     @Test
@@ -369,7 +379,12 @@ class SessionProtocolRepositoryTest {
 
             assertEquals("ses_2", sessions.single().id)
             assertEquals(ServerProtocol.V2, manager.currentProtocol())
-            assertTrue(requests.single().url.encodedPath.contains("/api/session"))
+            assertTrue(
+                requests
+                    .single()
+                    .url.encodedPath
+                    .contains("/api/session"),
+            )
         }
 
     @Test
@@ -406,7 +421,12 @@ class SessionProtocolRepositoryTest {
             assertEquals(listOf("src/a.kt"), permissions.single().patterns)
             assertEquals("msg_1", permissions.single().toolMessageId)
             assertEquals("call_1", permissions.single().toolCallId)
-            assertTrue(requests.single().url.encodedPath.contains("/api/permission/request"))
+            assertTrue(
+                requests
+                    .single()
+                    .url.encodedPath
+                    .contains("/api/permission/request"),
+            )
             assertEquals("/repo", requests.single().url.parameters["location[directory]"])
         }
 
@@ -429,7 +449,12 @@ class SessionProtocolRepositoryTest {
             val ok = repository.respondToPermission("ses_1", "per_1", PermissionDecision.AllowOnce, "/repo")
 
             assertTrue(ok)
-            assertTrue(requests.single().url.encodedPath.contains("/api/session/ses_1/permission/per_1/reply"))
+            assertTrue(
+                requests
+                    .single()
+                    .url.encodedPath
+                    .contains("/api/session/ses_1/permission/per_1/reply"),
+            )
             assertTrue(requests.single().requestBodyText().contains("\"reply\":\"once\""))
         }
 
@@ -480,8 +505,24 @@ class SessionProtocolRepositoryTest {
 
             assertEquals("frm_1", questions.single().id)
             assertEquals("ses_1", questions.single().sessionId)
-            assertEquals("What would you like to work on?", questions.single().questions.single().question)
-            assertEquals("Code changes", questions.single().questions.single().options.single().label)
+            assertEquals(
+                "What would you like to work on?",
+                questions
+                    .single()
+                    .questions
+                    .single()
+                    .question,
+            )
+            assertEquals(
+                "Code changes",
+                questions
+                    .single()
+                    .questions
+                    .single()
+                    .options
+                    .single()
+                    .label,
+            )
             assertEquals(2, requests.size)
             assertTrue(requests[0].url.encodedPath.contains("/api/question/request"))
             assertTrue(requests[1].url.encodedPath.contains("/api/form/request"))
@@ -506,7 +547,12 @@ class SessionProtocolRepositoryTest {
             val ok = repository.replyToQuestion("ses_1", "que_1", listOf(listOf("Yes")), "/repo")
 
             assertTrue(ok)
-            assertTrue(requests.single().url.encodedPath.contains("/api/session/ses_1/question/que_1/reply"))
+            assertTrue(
+                requests
+                    .single()
+                    .url.encodedPath
+                    .contains("/api/session/ses_1/question/que_1/reply"),
+            )
             assertTrue(requests.single().requestBodyText().contains("\"answers\""))
         }
 
@@ -552,7 +598,12 @@ class SessionProtocolRepositoryTest {
                 )
 
             assertTrue(ok)
-            assertTrue(requests.single().url.encodedPath.contains("/api/session/ses_1/form/frm_1/reply"))
+            assertTrue(
+                requests
+                    .single()
+                    .url.encodedPath
+                    .contains("/api/session/ses_1/form/frm_1/reply"),
+            )
             val body = requests.single().requestBodyText()
             assertTrue(body.contains("\"choice\""))
             assertTrue(body.contains("\"allow\""))
@@ -579,7 +630,12 @@ class SessionProtocolRepositoryTest {
 
             assertTrue(ok)
             assertEquals(HttpMethod.Post, requests.single().method)
-            assertTrue(requests.single().url.encodedPath.contains("/api/session/ses_1/interrupt"))
+            assertTrue(
+                requests
+                    .single()
+                    .url.encodedPath
+                    .contains("/api/session/ses_1/interrupt"),
+            )
         }
 
     @Test
@@ -602,7 +658,12 @@ class SessionProtocolRepositoryTest {
 
             assertTrue(ok)
             assertEquals(HttpMethod.Post, requests.single().method)
-            assertTrue(requests.single().url.encodedPath.contains("/api/session/ses_1/compact"))
+            assertTrue(
+                requests
+                    .single()
+                    .url.encodedPath
+                    .contains("/api/session/ses_1/compact"),
+            )
             assertTrue(requests.single().requestBodyText().contains("\"delivery\":\"steer\""))
         }
 
@@ -628,7 +689,12 @@ class SessionProtocolRepositoryTest {
 
             assertTrue(ok)
             assertEquals(HttpMethod.Post, requests.single().method)
-            assertTrue(requests.single().url.encodedPath.contains("/session/ses_1/revert"))
+            assertTrue(
+                requests
+                    .single()
+                    .url.encodedPath
+                    .contains("/session/ses_1/revert"),
+            )
             assertEquals("/repo", requests.single().url.parameters["directory"])
             val body = requests.single().requestBodyText()
             assertTrue(body.contains("\"messageID\":\"msg_9\""))
@@ -656,7 +722,12 @@ class SessionProtocolRepositoryTest {
 
             assertTrue(ok)
             assertEquals(HttpMethod.Post, requests.single().method)
-            assertTrue(requests.single().url.encodedPath.contains("/session/ses_1/unrevert"))
+            assertTrue(
+                requests
+                    .single()
+                    .url.encodedPath
+                    .contains("/session/ses_1/unrevert"),
+            )
         }
 
     @Test
@@ -678,7 +749,12 @@ class SessionProtocolRepositoryTest {
             val ok = repository.revertSession("ses_1", "msg_9", "part_2", "/repo")
 
             assertTrue(ok)
-            assertTrue(requests.single().url.encodedPath.contains("/api/session/ses_1/revert/stage"))
+            assertTrue(
+                requests
+                    .single()
+                    .url.encodedPath
+                    .contains("/api/session/ses_1/revert/stage"),
+            )
             val body = requests.single().requestBodyText()
             assertTrue(body.contains("\"messageID\":\"msg_9\""))
             assertTrue(!body.contains("\"partID\""))
@@ -705,7 +781,12 @@ class SessionProtocolRepositoryTest {
 
             assertTrue(ok)
             assertEquals(HttpMethod.Post, requests.single().method)
-            assertTrue(requests.single().url.encodedPath.contains("/api/session/ses_1/revert/clear"))
+            assertTrue(
+                requests
+                    .single()
+                    .url.encodedPath
+                    .contains("/api/session/ses_1/revert/clear"),
+            )
         }
 
     @Test
@@ -826,7 +907,12 @@ class SessionProtocolRepositoryTest {
             val info = repository.getVcsInfo("/repo")
 
             assertEquals(VcsInfo("feature/review", "main"), info)
-            assertTrue(requests.single().url.encodedPath.contains("/api/vcs"))
+            assertTrue(
+                requests
+                    .single()
+                    .url.encodedPath
+                    .contains("/api/vcs"),
+            )
             assertEquals("/repo", requests.single().url.parameters["location[directory]"])
         }
 
@@ -856,7 +942,12 @@ class SessionProtocolRepositoryTest {
             val files = repository.getVcsDiff(VcsDiffMode.WorkingTree, "/repo", context = 12)
 
             assertEquals("App.kt", files.single().path)
-            assertTrue(requests.single().url.encodedPath.contains("/api/vcs/diff"))
+            assertTrue(
+                requests
+                    .single()
+                    .url.encodedPath
+                    .contains("/api/vcs/diff"),
+            )
             assertEquals("working", requests.single().url.parameters["mode"])
             assertEquals("12", requests.single().url.parameters["context"])
             assertEquals("/repo", requests.single().url.parameters["location[directory]"])

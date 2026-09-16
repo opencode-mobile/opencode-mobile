@@ -28,7 +28,10 @@ class SessionChatReviewChanges(
     private var candidateMessageId: String? = null
     private var observeJob: Job? = null
 
-    fun bind(sessionId: String, worktree: String) {
+    fun bind(
+        sessionId: String,
+        worktree: String,
+    ) {
         if (boundSessionId == sessionId && boundWorktree == worktree) return
         boundSessionId = sessionId
         boundWorktree = worktree
@@ -50,7 +53,9 @@ class SessionChatReviewChanges(
         isSending: Boolean,
     ) {
         val messageId =
-            messages.lastOrNull { it.role == MessageRole.User && !it.isPending && !it.isStreaming }?.id
+            messages
+                .lastOrNull { it.role == MessageRole.User && !it.isPending && !it.isStreaming }
+                ?.id
                 .takeIf { supportsSessionMessageDiff() && hasResolvedSessionStatus && !isTurnActive && !isSending }
         if (messageId != candidateMessageId) {
             candidateMessageId = messageId

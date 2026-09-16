@@ -69,46 +69,46 @@ fun SessionContextScreen(
         )
         OpenCodeReadableColumn(modifier = Modifier.weight(1f)) {
             Column(modifier = Modifier.fillMaxSize()) {
-        when (uiState.timeline) {
-            SessionContextTimelineState.Loading ->
-                Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
+                when (uiState.timeline) {
+                    SessionContextTimelineState.Loading ->
+                        Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator()
+                        }
+                    SessionContextTimelineState.Error ->
+                        Column(
+                            modifier = Modifier.weight(1f).fillMaxWidth().padding(24.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Text(
+                                text = uiState.errorMessage ?: "Unable to load session context",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            OpenCodeButton(
+                                variant = OpenCodeButtonVariant.FullWidthText("Retry"),
+                                // load() also runs on bind, so the retry tap is logged here.
+                                onClick = {
+                                    logSessionContextAction(ProductAnalytics.Action.SESSION_CONTEXT_RETRY)
+                                    viewModel.load()
+                                },
+                            )
+                        }
+                    SessionContextTimelineState.Ready ->
+                        PullToRefreshBox(
+                            isRefreshing = uiState.isRefreshing,
+                            onRefresh = {
+                                logSessionContextAction(ProductAnalytics.Action.SESSION_CONTEXT_REFRESH)
+                                viewModel.refresh()
+                            },
+                            modifier = Modifier.weight(1f).fillMaxWidth(),
+                        ) {
+                            val display = uiState.display
+                            if (display != null) {
+                                SessionContextContent(display = display, errorMessage = uiState.errorMessage)
+                            }
+                        }
                 }
-            SessionContextTimelineState.Error ->
-                Column(
-                    modifier = Modifier.weight(1f).fillMaxWidth().padding(24.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Text(
-                        text = uiState.errorMessage ?: "Unable to load session context",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    OpenCodeButton(
-                        variant = OpenCodeButtonVariant.FullWidthText("Retry"),
-                        // load() also runs on bind, so the retry tap is logged here.
-                        onClick = {
-                            logSessionContextAction(ProductAnalytics.Action.SESSION_CONTEXT_RETRY)
-                            viewModel.load()
-                        },
-                    )
-                }
-            SessionContextTimelineState.Ready ->
-                PullToRefreshBox(
-                    isRefreshing = uiState.isRefreshing,
-                    onRefresh = {
-                        logSessionContextAction(ProductAnalytics.Action.SESSION_CONTEXT_REFRESH)
-                        viewModel.refresh()
-                    },
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
-                ) {
-                    val display = uiState.display
-                    if (display != null) {
-                        SessionContextContent(display = display, errorMessage = uiState.errorMessage)
-                    }
-                }
-        }
             }
         }
     }

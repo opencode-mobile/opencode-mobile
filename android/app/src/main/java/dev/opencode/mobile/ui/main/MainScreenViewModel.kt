@@ -119,7 +119,9 @@ class MainScreenViewModel
                 .stateIn(
                     scope = viewModelScope,
                     started = SharingStarted.WhileSubscribed(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS),
-                    initialValue = liveUpdates.chrome.value.label.toSessionConnectionStatus(),
+                    initialValue =
+                        liveUpdates.chrome.value.label
+                            .toSessionConnectionStatus(),
                 )
 
         private val serverBaseUrl: String
@@ -176,8 +178,9 @@ class MainScreenViewModel
 
         private suspend fun refreshServersChrome() {
             val profiles = connectionProfileStore.listProfiles()
-            val active = connectionProfileStore.activeProfile()
-                ?: activeConnectionManager.currentProfile()
+            val active =
+                connectionProfileStore.activeProfile()
+                    ?: activeConnectionManager.currentProfile()
             _serversChrome.update { current ->
                 current.copy(
                     title = active?.displayName ?: "Sessions",
@@ -1031,7 +1034,6 @@ class MainScreenViewModel
                 }
             }
         }
-
     }
 
 fun suggestedHomeForkTitle(currentTitle: String): String {

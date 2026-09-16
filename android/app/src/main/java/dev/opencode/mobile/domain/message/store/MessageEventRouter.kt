@@ -41,7 +41,11 @@ object MessageEventRouter {
     fun estimatedByteCost(event: OpencodeEvent): Int {
         var cost = event.type.length + (event.sessionId?.length ?: 0)
         val props = event.rawProperties
-        props?.get("delta")?.jsonPrimitive?.contentOrNull?.let { cost += it.length }
+        props
+            ?.get("delta")
+            ?.jsonPrimitive
+            ?.contentOrNull
+            ?.let { cost += it.length }
         props
             ?.get("part")
             ?.jsonObject

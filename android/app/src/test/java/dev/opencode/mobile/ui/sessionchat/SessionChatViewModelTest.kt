@@ -25,7 +25,6 @@ import dev.opencode.mobile.domain.live.LiveStoreScope
 import dev.opencode.mobile.domain.live.PermissionLiveStore
 import dev.opencode.mobile.domain.live.QuestionLiveStore
 import dev.opencode.mobile.domain.live.SessionReadyStore
-import dev.opencode.mobile.domain.sync.testSyncCoordinator
 import dev.opencode.mobile.domain.message.Attachment
 import dev.opencode.mobile.domain.message.AttachmentKind
 import dev.opencode.mobile.domain.message.AttachmentLimits
@@ -48,16 +47,17 @@ import dev.opencode.mobile.domain.model.SessionModelSelection
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
 import dev.opencode.mobile.domain.session.FileDiff
 import dev.opencode.mobile.domain.session.FileDiffStatus
+import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.PermissionRequest
 import dev.opencode.mobile.domain.session.QuestionInfo
 import dev.opencode.mobile.domain.session.QuestionOption
 import dev.opencode.mobile.domain.session.QuestionRequest
 import dev.opencode.mobile.domain.session.Session
-import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionRevert
 import dev.opencode.mobile.domain.session.SessionStatus
+import dev.opencode.mobile.domain.sync.testSyncCoordinator
 import dev.opencode.mobile.markdown.OpenCodeBundledJoniMarkdownHighlighter
 import dev.opencode.mobile.markdown.OpenCodeMarkdownDetector
 import dev.opencode.mobile.markdown.OpenCodeMarkdownParser
@@ -68,7 +68,6 @@ import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.OpencodeSseHttpClient
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatComposer
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatReviewChanges
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -158,8 +157,16 @@ class SessionChatViewModelTest {
             advanceUntilIdle()
 
             assertEquals(false, viewModel.uiState.value.shouldLeaveSession)
-            assertEquals("Couldn't archive session.", viewModel.uiState.value.snackbar?.message)
-            assertEquals(SessionChatSnackbarTone.Error, viewModel.uiState.value.snackbar?.tone)
+            assertEquals(
+                "Couldn't archive session.",
+                viewModel.uiState.value.snackbar
+                    ?.message,
+            )
+            assertEquals(
+                SessionChatSnackbarTone.Error,
+                viewModel.uiState.value.snackbar
+                    ?.tone,
+            )
             assertEquals(null, viewModel.uiState.value.errorMessage)
         }
 
@@ -202,8 +209,16 @@ class SessionChatViewModelTest {
             advanceUntilIdle()
 
             assertEquals(false, viewModel.uiState.value.shouldLeaveSession)
-            assertEquals("Couldn't delete session.", viewModel.uiState.value.snackbar?.message)
-            assertEquals(SessionChatSnackbarTone.Error, viewModel.uiState.value.snackbar?.tone)
+            assertEquals(
+                "Couldn't delete session.",
+                viewModel.uiState.value.snackbar
+                    ?.message,
+            )
+            assertEquals(
+                SessionChatSnackbarTone.Error,
+                viewModel.uiState.value.snackbar
+                    ?.tone,
+            )
             assertEquals(null, viewModel.uiState.value.errorMessage)
         }
 
@@ -223,8 +238,16 @@ class SessionChatViewModelTest {
             advanceUntilIdle()
 
             assertEquals(false, viewModel.uiState.value.shouldLeaveSession)
-            assertEquals("Couldn't delete session.", viewModel.uiState.value.snackbar?.message)
-            assertEquals(SessionChatSnackbarTone.Error, viewModel.uiState.value.snackbar?.tone)
+            assertEquals(
+                "Couldn't delete session.",
+                viewModel.uiState.value.snackbar
+                    ?.message,
+            )
+            assertEquals(
+                SessionChatSnackbarTone.Error,
+                viewModel.uiState.value.snackbar
+                    ?.tone,
+            )
             assertEquals(null, viewModel.uiState.value.errorMessage)
         }
 
@@ -353,8 +376,16 @@ class SessionChatViewModelTest {
             advanceUntilIdle()
 
             assertEquals(null, viewModel.uiState.value.permissionRequest)
-            assertEquals("Unable to refresh permission session tree", viewModel.uiState.value.snackbar?.message)
-            assertEquals(SessionChatSnackbarTone.Error, viewModel.uiState.value.snackbar?.tone)
+            assertEquals(
+                "Unable to refresh permission session tree",
+                viewModel.uiState.value.snackbar
+                    ?.message,
+            )
+            assertEquals(
+                SessionChatSnackbarTone.Error,
+                viewModel.uiState.value.snackbar
+                    ?.tone,
+            )
             assertEquals(null, viewModel.uiState.value.errorMessage)
         }
 
@@ -486,7 +517,11 @@ class SessionChatViewModelTest {
             viewModel.bind("ses-1", "Title", "/repo")
             advanceUntilIdle()
 
-            assertEquals("permission-1", viewModel.uiState.value.permissionRequest?.id)
+            assertEquals(
+                "permission-1",
+                viewModel.uiState.value.permissionRequest
+                    ?.id,
+            )
             assertEquals(null, viewModel.uiState.value.questionRequest)
         }
 
@@ -509,7 +544,11 @@ class SessionChatViewModelTest {
 
             viewModel.bind("ses-1", "Title", "/repo")
             advanceUntilIdle()
-            assertEquals("que-1", viewModel.uiState.value.questionRequest?.id)
+            assertEquals(
+                "que-1",
+                viewModel.uiState.value.questionRequest
+                    ?.id,
+            )
 
             viewModel.toggleQuestionOption(request.id, request.sessionId, "A")
             viewModel.submitQuestion(request.id, request.sessionId)
@@ -573,18 +612,30 @@ class SessionChatViewModelTest {
 
             viewModel.bind("ses-1", "Title", "/repo")
             advanceUntilIdle()
-            assertEquals("que-1", viewModel.uiState.value.questionRequest?.id)
+            assertEquals(
+                "que-1",
+                viewModel.uiState.value.questionRequest
+                    ?.id,
+            )
 
             viewModel.dismissQuestion(second.id, second.sessionId)
             advanceUntilIdle()
             assertEquals(false, viewModel.uiState.value.questionSubmitting)
-            assertEquals("que-1", viewModel.uiState.value.questionRequest?.id)
+            assertEquals(
+                "que-1",
+                viewModel.uiState.value.questionRequest
+                    ?.id,
+            )
 
             gate.complete(Unit)
             advanceUntilIdle()
 
             assertEquals("que-2", sessionRepository.rejectedQuestionId)
-            assertEquals("que-1", viewModel.uiState.value.questionRequest?.id)
+            assertEquals(
+                "que-1",
+                viewModel.uiState.value.questionRequest
+                    ?.id,
+            )
             assertEquals(null, viewModel.uiState.value.questionErrorMessage)
             assertEquals(false, viewModel.uiState.value.questionSubmitting)
         }
@@ -1012,7 +1063,9 @@ class SessionChatViewModelTest {
     @Test
     fun composerDraft_restoresTextAndMentionsForSameSessionOnly() =
         runTest(testDispatcher) {
-            val draftStore = dev.opencode.mobile.domain.composer.InMemoryComposerDraftStore()
+            val draftStore =
+                dev.opencode.mobile.domain.composer
+                    .InMemoryComposerDraftStore()
             val first = createViewModel(FakeMessageRepository(), composerDraftStore = draftStore)
             first.bind("ses-1", "Title", "/repo")
             advanceUntilIdle()
@@ -1040,7 +1093,9 @@ class SessionChatViewModelTest {
     @Test
     fun composerDraft_successfulSendClearsStoredDraft() =
         runTest(testDispatcher) {
-            val draftStore = dev.opencode.mobile.domain.composer.InMemoryComposerDraftStore()
+            val draftStore =
+                dev.opencode.mobile.domain.composer
+                    .InMemoryComposerDraftStore()
             val first = createViewModel(FakeMessageRepository(), composerDraftStore = draftStore)
             first.bind("ses-1", "Title", "/repo")
             advanceUntilIdle()
@@ -1058,7 +1113,9 @@ class SessionChatViewModelTest {
     @Test
     fun composerDraft_promoteOptimisticCreatePersistsUnderRealSessionId() =
         runTest(testDispatcher) {
-            val draftStore = dev.opencode.mobile.domain.composer.InMemoryComposerDraftStore()
+            val draftStore =
+                dev.opencode.mobile.domain.composer
+                    .InMemoryComposerDraftStore()
             val sessionRepository =
                 FakeSessionRepository(
                     createSessionResult = Session(id = "ses-new", title = "Created", directory = "/repo"),
@@ -1147,7 +1204,11 @@ class SessionChatViewModelTest {
             val viewModel = createViewModel(repository)
             viewModel.bind("ses-1", "Title", "/repo")
             advanceUntilIdle()
-            assertEquals(listOf("Hello"), viewModel.uiState.value.messages.map { it.text })
+            assertEquals(
+                listOf("Hello"),
+                viewModel.uiState.value.messages
+                    .map { it.text },
+            )
 
             repository.messages =
                 listOf(
@@ -1162,7 +1223,8 @@ class SessionChatViewModelTest {
 
             assertEquals(
                 listOf("After reconnect"),
-                viewModel.uiState.value.messages.map { it.text },
+                viewModel.uiState.value.messages
+                    .map { it.text },
             )
         }
 
@@ -1406,7 +1468,10 @@ class SessionChatViewModelTest {
             viewModel.updateComposerText("/in")
             advanceUntilIdle()
             assertTrue(viewModel.uiState.value.slashSuggestionsVisible)
-            assertTrue(viewModel.uiState.value.slashSuggestions.any { it.commandName == "init" })
+            assertTrue(
+                viewModel.uiState.value.slashSuggestions
+                    .any { it.commandName == "init" },
+            )
             viewModel.selectSlashSuggestion("init")
             runCurrent()
             assertEquals("/init ", viewModel.uiState.value.composer.text)
@@ -1437,8 +1502,16 @@ class SessionChatViewModelTest {
             advanceUntilIdle()
 
             assertTrue(commandRepository.runCommandCalled)
-            assertEquals("parts.0.type Required", viewModel.uiState.value.snackbar?.message)
-            assertEquals(SessionChatSnackbarTone.Error, viewModel.uiState.value.snackbar?.tone)
+            assertEquals(
+                "parts.0.type Required",
+                viewModel.uiState.value.snackbar
+                    ?.message,
+            )
+            assertEquals(
+                SessionChatSnackbarTone.Error,
+                viewModel.uiState.value.snackbar
+                    ?.tone,
+            )
         }
 
     @Test
@@ -1455,8 +1528,16 @@ class SessionChatViewModelTest {
             viewModel.sendPrompt()
             advanceUntilIdle()
 
-            assertEquals("Unable to reach the server", viewModel.uiState.value.snackbar?.message)
-            assertEquals(SessionChatSnackbarTone.Error, viewModel.uiState.value.snackbar?.tone)
+            assertEquals(
+                "Unable to reach the server",
+                viewModel.uiState.value.snackbar
+                    ?.message,
+            )
+            assertEquals(
+                SessionChatSnackbarTone.Error,
+                viewModel.uiState.value.snackbar
+                    ?.tone,
+            )
         }
 
     @Test
@@ -1488,7 +1569,10 @@ class SessionChatViewModelTest {
             viewModel.updateComposerText("@", cursor = 1)
             advanceUntilIdle()
             assertTrue(viewModel.uiState.value.atSuggestionsVisible)
-            assertTrue(viewModel.uiState.value.atSuggestions.any { it.agentName == "explore" })
+            assertTrue(
+                viewModel.uiState.value.atSuggestions
+                    .any { it.agentName == "explore" },
+            )
 
             viewModel.selectAtSuggestion("explore")
             runCurrent()
@@ -1502,9 +1586,18 @@ class SessionChatViewModelTest {
             assertTrue(repository.sendPromptAsyncCalled)
             assertEquals("@explore", repository.sentOptions?.text)
             assertEquals(1, repository.sentOptions?.agentMentions?.size)
-            assertEquals("explore", repository.sentOptions?.agentMentions?.single()?.name)
+            assertEquals(
+                "explore",
+                repository.sentOptions
+                    ?.agentMentions
+                    ?.single()
+                    ?.name,
+            )
             assertEquals("", viewModel.uiState.value.composer.text)
-            assertTrue(viewModel.uiState.value.composer.agentMentions.isEmpty())
+            assertTrue(
+                viewModel.uiState.value.composer.agentMentions
+                    .isEmpty(),
+            )
         }
 
     @Test
@@ -1613,7 +1706,9 @@ class SessionChatViewModelTest {
             sendGate.complete(Unit)
             advanceUntilIdle()
             assertFalse(
-                viewModel.uiState.value.workingIndicatorLabel.orEmpty().startsWith("Sending"),
+                viewModel.uiState.value.workingIndicatorLabel
+                    .orEmpty()
+                    .startsWith("Sending"),
             )
         }
 
@@ -1621,7 +1716,8 @@ class SessionChatViewModelTest {
     fun removeAttachment_deletesOwnedPendingFile() =
         runTest(testDispatcher) {
             val directory =
-                java.io.File(System.getProperty("java.io.tmpdir"), AttachmentLimits.STORE_DIRECTORY_NAME)
+                java.io
+                    .File(System.getProperty("java.io.tmpdir"), AttachmentLimits.STORE_DIRECTORY_NAME)
                     .apply { mkdirs() }
             val file = java.io.File(directory, "pending-remove.bin").apply { writeBytes(byteArrayOf(1, 2, 3)) }
             val viewModel = createViewModel(FakeMessageRepository())
@@ -1708,18 +1804,31 @@ class SessionChatViewModelTest {
             val text = testAttachment(id = "txt", filename = "notes.txt", kind = AttachmentKind.Text, mime = "text/plain")
             viewModel.addAttachments(listOf(image, pdf, text))
             runCurrent()
-            assertEquals(listOf("img", "txt"), viewModel.uiState.value.composer.attachments.map { it.id })
+            assertEquals(
+                listOf("img", "txt"),
+                viewModel.uiState.value.composer.attachments
+                    .map { it.id },
+            )
             assertEquals(
                 "This model does not support PDF attachments.",
-                viewModel.uiState.value.snackbar?.message,
+                viewModel.uiState.value.snackbar
+                    ?.message,
             )
-            assertEquals(SessionChatSnackbarTone.Error, viewModel.uiState.value.snackbar?.tone)
+            assertEquals(
+                SessionChatSnackbarTone.Error,
+                viewModel.uiState.value.snackbar
+                    ?.tone,
+            )
             assertEquals(null, viewModel.uiState.value.errorMessage)
 
             viewModel.selectModel(textOnly)
             runCurrent()
             assertFalse(viewModel.uiState.value.composer.canAttach)
-            assertEquals(listOf("txt"), viewModel.uiState.value.composer.attachments.map { it.id })
+            assertEquals(
+                listOf("txt"),
+                viewModel.uiState.value.composer.attachments
+                    .map { it.id },
+            )
         }
 
     @Test
@@ -1749,8 +1858,16 @@ class SessionChatViewModelTest {
                 viewModel.uiState.value.composer.attachments
                     .map { it.id },
             )
-            assertEquals("send failed", viewModel.uiState.value.snackbar?.message)
-            assertEquals(SessionChatSnackbarTone.Error, viewModel.uiState.value.snackbar?.tone)
+            assertEquals(
+                "send failed",
+                viewModel.uiState.value.snackbar
+                    ?.message,
+            )
+            assertEquals(
+                SessionChatSnackbarTone.Error,
+                viewModel.uiState.value.snackbar
+                    ?.tone,
+            )
             assertEquals(null, viewModel.uiState.value.errorMessage)
         }
 
@@ -2640,8 +2757,16 @@ class SessionChatViewModelTest {
                 viewModel.uiState.value.messages
                     .any { it.text == "Fail me" },
             )
-            assertEquals("send failed", viewModel.uiState.value.snackbar?.message)
-            assertEquals(SessionChatSnackbarTone.Error, viewModel.uiState.value.snackbar?.tone)
+            assertEquals(
+                "send failed",
+                viewModel.uiState.value.snackbar
+                    ?.message,
+            )
+            assertEquals(
+                SessionChatSnackbarTone.Error,
+                viewModel.uiState.value.snackbar
+                    ?.tone,
+            )
             assertEquals(null, viewModel.uiState.value.errorMessage)
         }
 
@@ -2689,8 +2814,16 @@ class SessionChatViewModelTest {
             )
             runCurrent()
 
-            assertEquals("Image exceeds the size limit", viewModel.uiState.value.snackbar?.message)
-            assertEquals(SessionChatSnackbarTone.Error, viewModel.uiState.value.snackbar?.tone)
+            assertEquals(
+                "Image exceeds the size limit",
+                viewModel.uiState.value.snackbar
+                    ?.message,
+            )
+            assertEquals(
+                SessionChatSnackbarTone.Error,
+                viewModel.uiState.value.snackbar
+                    ?.tone,
+            )
             assertEquals(null, viewModel.uiState.value.errorMessage)
             assertTrue(
                 viewModel.uiState.value.composer.attachments
@@ -3096,11 +3229,23 @@ class SessionChatViewModelTest {
             assertFalse(viewModel.uiState.value.commandsSheetVisible)
             assertEquals(
                 OptimisticSessionCreate.PLACEHOLDER_SESSION_ID,
-                viewModel.uiState.value.pendingSessionReplace?.sessionId,
+                viewModel.uiState.value.pendingSessionReplace
+                    ?.sessionId,
             )
-            assertEquals("New Session", viewModel.uiState.value.pendingSessionReplace?.sessionTitle)
-            assertEquals("/repo", viewModel.uiState.value.pendingSessionReplace?.worktree)
-            assertNotNull(viewModel.uiState.value.pendingSessionReplace?.optimisticNavigationInstanceId)
+            assertEquals(
+                "New Session",
+                viewModel.uiState.value.pendingSessionReplace
+                    ?.sessionTitle,
+            )
+            assertEquals(
+                "/repo",
+                viewModel.uiState.value.pendingSessionReplace
+                    ?.worktree,
+            )
+            assertNotNull(
+                viewModel.uiState.value.pendingSessionReplace
+                    ?.optimisticNavigationInstanceId,
+            )
             assertEquals("draft that should survive", viewModel.uiState.value.composer.text)
             assertFalse(commandRepository.runCommandCalled)
 
@@ -3833,8 +3978,16 @@ class SessionChatViewModelTest {
                 ),
                 sessionRepository.summarizeRequest,
             )
-            assertEquals(SessionCompactChrome.FALLBACK_SUCCESS, viewModel.uiState.value.snackbar?.message)
-            assertEquals(SessionChatSnackbarTone.Default, viewModel.uiState.value.snackbar?.tone)
+            assertEquals(
+                SessionCompactChrome.FALLBACK_SUCCESS,
+                viewModel.uiState.value.snackbar
+                    ?.message,
+            )
+            assertEquals(
+                SessionChatSnackbarTone.Default,
+                viewModel.uiState.value.snackbar
+                    ?.tone,
+            )
             assertNull(viewModel.uiState.value.sessionStatusLabel)
             assertFalse(commandRepository.runCommandCalled)
         }
@@ -3861,7 +4014,11 @@ class SessionChatViewModelTest {
             hold.complete(Unit)
             runCurrent()
 
-            assertEquals(SessionCompactChrome.FALLBACK_SUCCESS, viewModel.uiState.value.snackbar?.message)
+            assertEquals(
+                SessionCompactChrome.FALLBACK_SUCCESS,
+                viewModel.uiState.value.snackbar
+                    ?.message,
+            )
             assertNull(viewModel.uiState.value.sessionStatusLabel)
             assertEquals(WorkingTurnIndicator.IDLE_LABEL, viewModel.uiState.value.workingIndicatorLabel)
             assertFalse(viewModel.uiState.value.workingIndicatorCollapsed)
@@ -3939,8 +4096,16 @@ class SessionChatViewModelTest {
             viewModel.runClientSlashAction(ClientSlashAction.Compact)
             advanceUntilIdle()
 
-            assertEquals(SessionCompactChrome.FAILURE, viewModel.uiState.value.snackbar?.message)
-            assertEquals(SessionChatSnackbarTone.Error, viewModel.uiState.value.snackbar?.tone)
+            assertEquals(
+                SessionCompactChrome.FAILURE,
+                viewModel.uiState.value.snackbar
+                    ?.message,
+            )
+            assertEquals(
+                SessionChatSnackbarTone.Error,
+                viewModel.uiState.value.snackbar
+                    ?.tone,
+            )
             assertNull(viewModel.uiState.value.sessionStatusLabel)
         }
 
@@ -4035,7 +4200,10 @@ class SessionChatViewModelTest {
 
             assertFalse(repository.sendPromptAsyncCalled)
             assertTrue(viewModel.uiState.value.isSending)
-            assertTrue(viewModel.uiState.value.messages.any { it.text == "Queued prompt" && it.isPending })
+            assertTrue(
+                viewModel.uiState.value.messages
+                    .any { it.text == "Queued prompt" && it.isPending },
+            )
 
             viewModel.updateComposerText("Second")
             viewModel.sendPrompt()
@@ -4081,10 +4249,18 @@ class SessionChatViewModelTest {
             assertEquals(false, viewModel.uiState.value.isSending)
             assertEquals(
                 SessionChatComposer.PENDING_SEND_TIMEOUT_ERROR,
-                viewModel.uiState.value.snackbar?.message,
+                viewModel.uiState.value.snackbar
+                    ?.message,
             )
-            assertEquals(SessionChatSnackbarTone.Error, viewModel.uiState.value.snackbar?.tone)
-            assertTrue(viewModel.uiState.value.messages.none { it.text == "Queued prompt" })
+            assertEquals(
+                SessionChatSnackbarTone.Error,
+                viewModel.uiState.value.snackbar
+                    ?.tone,
+            )
+            assertTrue(
+                viewModel.uiState.value.messages
+                    .none { it.text == "Queued prompt" },
+            )
             assertNull(viewModel.uiState.value.sessionStatusLabel)
         }
 
@@ -4095,7 +4271,8 @@ class SessionChatViewModelTest {
         agentRepository: FakeAgentRepository = FakeAgentRepository(),
         sessionModelSelectionStore: FakeSessionModelSelectionStore = FakeSessionModelSelectionStore(),
         composerDraftStore: dev.opencode.mobile.domain.composer.ComposerDraftStore =
-            dev.opencode.mobile.domain.composer.InMemoryComposerDraftStore(),
+            dev.opencode.mobile.domain.composer
+                .InMemoryComposerDraftStore(),
         sessionRepository: FakeSessionRepository = FakeSessionRepository(),
         permissionLiveStore: PermissionLiveStore = FakePermissionLiveStore(emptyList()),
         questionLiveStore: QuestionLiveStore = FakeQuestionLiveStore(emptyList()),
@@ -4214,8 +4391,7 @@ class SessionChatViewModelTest {
 private class RecordingSessionReadyStore : SessionReadyStore {
     val focusCalls = mutableListOf<Pair<String?, String?>>()
 
-    override fun observeReadyIds(directory: String): Flow<Set<String>> =
-        kotlinx.coroutines.flow.flowOf(emptySet())
+    override fun observeReadyIds(directory: String): Flow<Set<String>> = kotlinx.coroutines.flow.flowOf(emptySet())
 
     override fun notifyPromptSent(
         sessionId: String,
@@ -4408,8 +4584,10 @@ private class FakeCommandRepository(
 private class FakeAgentRepository(
     var agents: List<dev.opencode.mobile.domain.agent.MentionableAgent> =
         listOf(
-            dev.opencode.mobile.domain.agent.MentionableAgent(name = "explore", description = "Read-only explorer"),
-            dev.opencode.mobile.domain.agent.MentionableAgent(name = "general", description = "General helper"),
+            dev.opencode.mobile.domain.agent
+                .MentionableAgent(name = "explore", description = "Read-only explorer"),
+            dev.opencode.mobile.domain.agent
+                .MentionableAgent(name = "general", description = "General helper"),
         ),
     var selectableAgents: List<dev.opencode.mobile.domain.agent.SelectableAgent> =
         dev.opencode.mobile.domain.agent.SelectableAgent.Fallback,
@@ -4420,8 +4598,7 @@ private class FakeAgentRepository(
         return selectableAgents
     }
 
-    override suspend fun listMentionableAgents(directory: String?): List<dev.opencode.mobile.domain.agent.MentionableAgent> =
-        agents
+    override suspend fun listMentionableAgents(directory: String?): List<dev.opencode.mobile.domain.agent.MentionableAgent> = agents
 }
 
 private class FakeMessageRepository(
@@ -4553,7 +4730,9 @@ private class FakeMessageRepository(
         sendPromptAsyncCalled = true
         sentOptions = options
         if (options.attachments.isNotEmpty()) {
-            kotlin.coroutines.coroutineContext[PromptSendProgressReporter]?.onProgress?.invoke(1, 4)
+            kotlin.coroutines.coroutineContext[PromptSendProgressReporter]
+                ?.onProgress
+                ?.invoke(1, 4)
         }
         holdSendUntil?.await()
         if (shouldFailSend) error("send failed")

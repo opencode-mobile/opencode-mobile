@@ -1256,7 +1256,11 @@ class TimelineProjectorTest {
         assertTrue(first.rows.isEmpty())
         assertEquals(1, second.rows.size)
         assertEquals(setOf("msg-1"), second.insertedRowIDs)
-        val thought = second.rows.single().blocks.single() as SessionChatTimelineBlock.Reasoning
+        val thought =
+            second.rows
+                .single()
+                .blocks
+                .single() as SessionChatTimelineBlock.Reasoning
         assertEquals("Think", thought.text)
         assertFalse(thought.isStreaming)
         val apply = TimelineApply.classify(second)

@@ -29,8 +29,7 @@ class MutableWorktreeProfileStore(
         revisions.tryEmit(Unit)
     }
 
-    override suspend fun addedWorktrees(serverBaseUrl: String): List<String> =
-        worktreesByServer[serverBaseUrl].orEmpty()
+    override suspend fun addedWorktrees(serverBaseUrl: String): List<String> = worktreesByServer[serverBaseUrl].orEmpty()
 
     override suspend fun addWorktree(
         serverBaseUrl: String,

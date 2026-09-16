@@ -67,75 +67,76 @@ fun TextMateLogbookScreen(
 
         OpenCodeReadableColumn(modifier = Modifier.weight(1f)) {
             Column(modifier = Modifier.fillMaxSize()) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
-        ) {
-            OpenCodeButton(
-                variant = OpenCodeButtonVariant.CompactText("Refresh"),
-                contrast = OpenCodeButtonContrast.Low,
-                onClick = onRefresh,
-            )
-            OpenCodeButton(
-                variant = OpenCodeButtonVariant.CompactText("Clear"),
-                contrast = OpenCodeButtonContrast.Low,
-                enabled = state.entries.isNotEmpty(),
-                onClick = { showClearConfirmation = true },
-            )
-        }
-
-        when {
-            state.loading ->
-                CircularProgressIndicator(
-                    modifier = Modifier.align(Alignment.CenterHorizontally).padding(24.dp),
-                    color = openCodeColor("interactive"),
-                )
-            state.entries.isEmpty() ->
-                Text(
-                    text = "No TextMate parsing entries yet.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = openCodeColor("text-base"),
-                    modifier = Modifier.padding(24.dp),
-                )
-            else ->
-                LazyColumn(
-                    modifier = Modifier.fillMaxWidth().weight(1f),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                        start = 16.dp,
-                        end = 16.dp,
-                        bottom = 24.dp,
-                    ),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
                 ) {
-                    if (state.droppedEntries > 0 || state.storageError != null) {
-                        item(key = "store-health") {
-                            TextMateStoreHealth(
-                                droppedEntries = state.droppedEntries,
-                                storageError = state.storageError,
-                            )
-                        }
-                    }
-                    items(state.entries, key = TextMateLogbookEntry::id) { entry ->
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            OpenCodeListItem(
-                                title = entry.observation.displayLanguage(),
-                                subtitle = entry.observation.summary(),
-                                caption = entry.timestampLabel(),
-                                status = entry.observation.status(),
-                                selected = selectedEntryID == entry.id,
-                                style = OpenCodeListItemStyle.Card,
-                                onClick = {
-                                    selectedEntryID =
-                                        if (selectedEntryID == entry.id) null else entry.id
-                                },
-                            )
-                            if (selectedEntryID == entry.id) {
-                                TextMateLogbookDetails(entry.observation)
+                    OpenCodeButton(
+                        variant = OpenCodeButtonVariant.CompactText("Refresh"),
+                        contrast = OpenCodeButtonContrast.Low,
+                        onClick = onRefresh,
+                    )
+                    OpenCodeButton(
+                        variant = OpenCodeButtonVariant.CompactText("Clear"),
+                        contrast = OpenCodeButtonContrast.Low,
+                        enabled = state.entries.isNotEmpty(),
+                        onClick = { showClearConfirmation = true },
+                    )
+                }
+
+                when {
+                    state.loading ->
+                        CircularProgressIndicator(
+                            modifier = Modifier.align(Alignment.CenterHorizontally).padding(24.dp),
+                            color = openCodeColor("interactive"),
+                        )
+                    state.entries.isEmpty() ->
+                        Text(
+                            text = "No TextMate parsing entries yet.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = openCodeColor("text-base"),
+                            modifier = Modifier.padding(24.dp),
+                        )
+                    else ->
+                        LazyColumn(
+                            modifier = Modifier.fillMaxWidth().weight(1f),
+                            contentPadding =
+                                androidx.compose.foundation.layout.PaddingValues(
+                                    start = 16.dp,
+                                    end = 16.dp,
+                                    bottom = 24.dp,
+                                ),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            if (state.droppedEntries > 0 || state.storageError != null) {
+                                item(key = "store-health") {
+                                    TextMateStoreHealth(
+                                        droppedEntries = state.droppedEntries,
+                                        storageError = state.storageError,
+                                    )
+                                }
+                            }
+                            items(state.entries, key = TextMateLogbookEntry::id) { entry ->
+                                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    OpenCodeListItem(
+                                        title = entry.observation.displayLanguage(),
+                                        subtitle = entry.observation.summary(),
+                                        caption = entry.timestampLabel(),
+                                        status = entry.observation.status(),
+                                        selected = selectedEntryID == entry.id,
+                                        style = OpenCodeListItemStyle.Card,
+                                        onClick = {
+                                            selectedEntryID =
+                                                if (selectedEntryID == entry.id) null else entry.id
+                                        },
+                                    )
+                                    if (selectedEntryID == entry.id) {
+                                        TextMateLogbookDetails(entry.observation)
+                                    }
+                                }
                             }
                         }
-                    }
                 }
-        }
             }
         }
     }
@@ -245,8 +246,7 @@ private fun DetailLine(
     }
 }
 
-private fun TextMateParseObservation.displayLanguage(): String =
-    canonicalLanguage ?: requestedLanguage ?: "Unspecified language"
+private fun TextMateParseObservation.displayLanguage(): String = canonicalLanguage ?: requestedLanguage ?: "Unspecified language"
 
 private fun TextMateParseObservation.summary(): String {
     val base =
@@ -293,7 +293,8 @@ private fun TextMateParseObservation.status(): OpenCodeListItemStatus {
 }
 
 private fun TextMateLogbookEntry.timestampLabel(): String =
-    DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.MEDIUM)
+    DateFormat
+        .getDateTimeInstance(DateFormat.SHORT, DateFormat.MEDIUM)
         .format(Date(timestampEpochMilliseconds))
 
 private fun Long.milliseconds(): String = String.format(Locale.US, "%.3f", toDouble() / 1_000_000.0)

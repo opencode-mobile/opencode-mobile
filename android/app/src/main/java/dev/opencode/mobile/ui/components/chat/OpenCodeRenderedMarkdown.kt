@@ -366,7 +366,11 @@ private fun TableView(
                 List(columnCount) { column ->
                     val contentPx =
                         allRows.maxOf { row ->
-                            val inlines = row.cells.getOrNull(column)?.inlines.orEmpty()
+                            val inlines =
+                                row.cells
+                                    .getOrNull(column)
+                                    ?.inlines
+                                    .orEmpty()
                             val plain = plainTextFromMarkdownInlines(inlines)
                             textMeasurer.measure(text = AnnotatedString(plain), style = style).size.width
                         }
@@ -414,7 +418,11 @@ private fun TableRowView(
 ) {
     EqualHeightRow {
         columnWidths.forEachIndexed { index, width ->
-            val inlines = row.cells.getOrNull(index)?.inlines.orEmpty()
+            val inlines =
+                row.cells
+                    .getOrNull(index)
+                    ?.inlines
+                    .orEmpty()
             Box(
                 modifier =
                     Modifier
@@ -426,8 +434,7 @@ private fun TableRowView(
                             } else {
                                 MaterialTheme.colorScheme.surface
                             },
-                        )
-                        .padding(horizontal = TableCellHorizontalPadding, vertical = 8.dp),
+                        ).padding(horizontal = TableCellHorizontalPadding, vertical = 8.dp),
             ) {
                 MarkdownInlineText(
                     inlines = inlines,

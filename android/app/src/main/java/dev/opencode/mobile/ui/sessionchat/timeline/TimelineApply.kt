@@ -69,7 +69,6 @@ data class TimelineApply(
             return TimelineApply(kinds = kinds, frame = frame)
         }
 
-        fun kindsLabel(kinds: Set<TimelineApplyKind>): String =
-            kinds.joinToString(separator = ",") { it.name }
+        fun kindsLabel(kinds: Set<TimelineApplyKind>): String = kinds.joinToString(separator = ",") { it.name }
     }
 }

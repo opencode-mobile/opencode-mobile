@@ -216,7 +216,9 @@ class ProcessWorldSignalsTest {
             ResumeTiming.markConnected(System.currentTimeMillis())
             ResumeTiming.markBootstrapDone(System.currentTimeMillis())
             val line =
-                DiagnosticLogBuffer.shared.snapshot().entries
+                DiagnosticLogBuffer.shared
+                    .snapshot()
+                    .entries
                     .map { it.message }
                     .lastOrNull { it.startsWith("resume:") }
             assertTrue(line != null && line.startsWith("resume: cache painted +"))

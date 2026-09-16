@@ -7,8 +7,7 @@ object AttachmentLimits {
     const val TOO_LARGE_ERROR: String = "This file is larger than 20 MB."
     const val STORE_DIRECTORY_NAME: String = "opencode-attachments"
 
-    fun persistedDataUrl(value: String): String =
-        if (value.startsWith("data:", ignoreCase = true)) "" else value
+    fun persistedDataUrl(value: String): String = if (value.startsWith("data:", ignoreCase = true)) "" else value
 
     fun discard(path: String?) {
         val file = path?.takeIf { it.isNotBlank() }?.let(::File) ?: return

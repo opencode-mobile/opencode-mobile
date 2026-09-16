@@ -49,7 +49,12 @@ class AgentProtocolRepositoryTest {
 
             assertEquals(listOf("explore"), agents.map { it.name })
             assertEquals("Explorer", agents.single().description)
-            assertTrue(requests.single().url.encodedPath.contains("/api/agent"))
+            assertTrue(
+                requests
+                    .single()
+                    .url.encodedPath
+                    .contains("/api/agent"),
+            )
             assertEquals("/repo", requests.single().url.parameters["location[directory]"])
         }
 
@@ -82,7 +87,12 @@ class AgentProtocolRepositoryTest {
 
             assertEquals(listOf("build", "review"), agents.map { it.id })
             assertEquals(listOf("Build", "Review"), agents.map { it.displayName })
-            assertTrue(requests.single().url.encodedPath.contains("/api/agent"))
+            assertTrue(
+                requests
+                    .single()
+                    .url.encodedPath
+                    .contains("/api/agent"),
+            )
             assertEquals("/repo", requests.single().url.parameters["location[directory]"])
         }
 

@@ -123,11 +123,28 @@ class QuestionRequestMappingTest {
         assertEquals("What would you like to do with SSE2?", request.questions.single().question)
         assertEquals("SSE2 goal", request.questions.single().header)
         assertEquals("q0", request.questions.single().fieldKey)
-        assertEquals("Check CPU support", request.questions.single().options.single().label)
-        assertEquals("Check CPU support", request.questions.single().options.single().value)
+        assertEquals(
+            "Check CPU support",
+            request.questions
+                .single()
+                .options
+                .single()
+                .label,
+        )
+        assertEquals(
+            "Check CPU support",
+            request.questions
+                .single()
+                .options
+                .single()
+                .value,
+        )
         assertEquals(
             "Wait for instructions",
-            adapter.formAnswer(listOf(listOf("Wait for instructions"))).getValue("q0").jsonPrimitive.content,
+            adapter
+                .formAnswer(listOf(listOf("Wait for instructions")))
+                .getValue("q0")
+                .jsonPrimitive.content,
         )
     }
 
@@ -165,10 +182,12 @@ class QuestionRequestMappingTest {
         assertEquals("allow", question.options.first().value)
         assertEquals(
             "allow",
-            adapter.formAnswer(
-                request.questions,
-                listOf(listOf("Allow search via Exa, Firecrawl, Parallel, Tavily")),
-            ).getValue("choice").jsonPrimitive.content,
+            adapter
+                .formAnswer(
+                    request.questions,
+                    listOf(listOf("Allow search via Exa, Firecrawl, Parallel, Tavily")),
+                ).getValue("choice")
+                .jsonPrimitive.content,
         )
     }
 

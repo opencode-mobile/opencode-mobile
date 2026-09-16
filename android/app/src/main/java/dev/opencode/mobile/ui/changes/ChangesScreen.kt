@@ -1,7 +1,6 @@
 package dev.opencode.mobile.ui.changes
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -57,9 +56,9 @@ import dev.opencode.mobile.ui.components.OpenCodeButtonContrast
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeHunkNavigationPill
 import dev.opencode.mobile.ui.components.OpenCodeListGroup
-import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
 import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeOverflowMenuEntry
+import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
 import dev.opencode.mobile.ui.components.OpenCodeTextInput
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarAction
@@ -205,44 +204,44 @@ private fun ChangedFilesScreen(
             )
         }
         OpenCodeReadableColumn(modifier = Modifier.weight(1f)) {
-        when (val phase = state.phase) {
-            ChangesPhase.Loading -> Centered { CircularProgressIndicator() }
-            ChangesPhase.NoTurn ->
-                RefreshableMessage(
-                    state.isRefreshing,
-                    {
-                        logChangesAction(ProductAnalytics.Action.CHANGES_REFRESH)
-                        viewModel.refresh()
-                    },
-                    "No completed turn",
-                    "Send a prompt and wait for it to complete, then try again.",
-                )
-            ChangesPhase.NoChanges ->
-                RefreshableMessage(
-                    state.isRefreshing,
-                    {
-                        logChangesAction(ProductAnalytics.Action.CHANGES_REFRESH)
-                        viewModel.refresh()
-                    },
-                    state.selectedSource.emptyTitle,
-                    state.selectedSource.emptyDetail,
-                )
-            is ChangesPhase.Content -> ChangedFilesContent(phase.changeSet, state, listResetToken, viewModel, onOpenFile)
-            is ChangesPhase.Error ->
-                Centered {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        EmptyMessage("Unable to load changes", phase.message)
-                        OpenCodeButton(
-                            OpenCodeButtonVariant.CompactText("Retry"),
-                            onClick = {
-                                logChangesAction(ProductAnalytics.Action.CHANGES_RETRY)
-                                viewModel.retry()
-                            },
-                            contrast = OpenCodeButtonContrast.Low,
-                        )
+            when (val phase = state.phase) {
+                ChangesPhase.Loading -> Centered { CircularProgressIndicator() }
+                ChangesPhase.NoTurn ->
+                    RefreshableMessage(
+                        state.isRefreshing,
+                        {
+                            logChangesAction(ProductAnalytics.Action.CHANGES_REFRESH)
+                            viewModel.refresh()
+                        },
+                        "No completed turn",
+                        "Send a prompt and wait for it to complete, then try again.",
+                    )
+                ChangesPhase.NoChanges ->
+                    RefreshableMessage(
+                        state.isRefreshing,
+                        {
+                            logChangesAction(ProductAnalytics.Action.CHANGES_REFRESH)
+                            viewModel.refresh()
+                        },
+                        state.selectedSource.emptyTitle,
+                        state.selectedSource.emptyDetail,
+                    )
+                is ChangesPhase.Content -> ChangedFilesContent(phase.changeSet, state, listResetToken, viewModel, onOpenFile)
+                is ChangesPhase.Error ->
+                    Centered {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            EmptyMessage("Unable to load changes", phase.message)
+                            OpenCodeButton(
+                                OpenCodeButtonVariant.CompactText("Retry"),
+                                onClick = {
+                                    logChangesAction(ProductAnalytics.Action.CHANGES_RETRY)
+                                    viewModel.retry()
+                                },
+                                contrast = OpenCodeButtonContrast.Low,
+                            )
+                        }
                     }
-                }
-        }
+            }
         }
     }
 }
@@ -432,51 +431,51 @@ private fun FileViewerScreen(
             showDivider = true,
         )
         OpenCodeReadableColumn(modifier = Modifier.weight(1f)) {
-        if (!viewer.hasPreview) {
-            Centered { EmptyMessage("Preview unavailable", "A text preview is unavailable for this file.") }
-        } else {
-            BoxWithConstraints(Modifier.fillMaxSize()) {
-                val trailingScrollSpace = maxOf(84.dp, maxHeight - 20.dp)
-                Column(
-                    Modifier
-                        .fillMaxSize()
-                        .verticalScroll(scrollState)
-                        .padding(start = 16.dp, top = 16.dp, end = 16.dp),
-                ) {
-                    OpenCodeUnifiedDiff(
-                        file = file,
-                        document = viewer.document,
-                        contextMode = viewer.contextMode,
-                        selectedHunkId = viewer.selectedHunkId,
-                        onSelectedHunkOffset = { selectedHunkOffset = it },
-                    )
-                    Spacer(Modifier.height(trailingScrollSpace))
-                }
-                OpenCodeHunkNavigationPill(
-                    previousEnabled = viewer.canSelectPreviousHunk,
-                    nextEnabled = viewer.canSelectNextHunk,
-                    contextEnabled = viewer.canExpandContext,
-                    contextExpanded = viewer.contextMode == UnifiedDiffContextMode.Expanded,
-                    onPrevious = {
-                        logFileViewerAction(ProductAnalytics.Action.FILE_VIEWER_HUNK_PREVIOUS)
-                        viewer = viewer.selectPreviousHunk()
-                    },
-                    onToggleContext = {
-                        logFileViewerAction(ProductAnalytics.Action.FILE_VIEWER_TOGGLE_CONTEXT)
-                        viewer = viewer.toggleContextMode()
-                    },
-                    onNext = {
-                        logFileViewerAction(ProductAnalytics.Action.FILE_VIEWER_HUNK_NEXT)
-                        viewer = viewer.selectNextHunk()
-                    },
-                    modifier =
+            if (!viewer.hasPreview) {
+                Centered { EmptyMessage("Preview unavailable", "A text preview is unavailable for this file.") }
+            } else {
+                BoxWithConstraints(Modifier.fillMaxSize()) {
+                    val trailingScrollSpace = maxOf(84.dp, maxHeight - 20.dp)
+                    Column(
                         Modifier
-                            .align(Alignment.BottomCenter)
-                            .navigationBarsPadding()
-                            .padding(bottom = 12.dp),
-                )
+                            .fillMaxSize()
+                            .verticalScroll(scrollState)
+                            .padding(start = 16.dp, top = 16.dp, end = 16.dp),
+                    ) {
+                        OpenCodeUnifiedDiff(
+                            file = file,
+                            document = viewer.document,
+                            contextMode = viewer.contextMode,
+                            selectedHunkId = viewer.selectedHunkId,
+                            onSelectedHunkOffset = { selectedHunkOffset = it },
+                        )
+                        Spacer(Modifier.height(trailingScrollSpace))
+                    }
+                    OpenCodeHunkNavigationPill(
+                        previousEnabled = viewer.canSelectPreviousHunk,
+                        nextEnabled = viewer.canSelectNextHunk,
+                        contextEnabled = viewer.canExpandContext,
+                        contextExpanded = viewer.contextMode == UnifiedDiffContextMode.Expanded,
+                        onPrevious = {
+                            logFileViewerAction(ProductAnalytics.Action.FILE_VIEWER_HUNK_PREVIOUS)
+                            viewer = viewer.selectPreviousHunk()
+                        },
+                        onToggleContext = {
+                            logFileViewerAction(ProductAnalytics.Action.FILE_VIEWER_TOGGLE_CONTEXT)
+                            viewer = viewer.toggleContextMode()
+                        },
+                        onNext = {
+                            logFileViewerAction(ProductAnalytics.Action.FILE_VIEWER_HUNK_NEXT)
+                            viewer = viewer.selectNextHunk()
+                        },
+                        modifier =
+                            Modifier
+                                .align(Alignment.BottomCenter)
+                                .navigationBarsPadding()
+                                .padding(bottom = 12.dp),
+                    )
+                }
             }
-        }
         }
     }
 }

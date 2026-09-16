@@ -17,8 +17,8 @@ import dev.opencode.mobile.ui.sessionchat.SessionChatInboxRegionState
 import dev.opencode.mobile.ui.sessionchat.buildQuestionAnswers
 import dev.opencode.mobile.ui.sessionchat.dropOrphanQuestionRequests
 import dev.opencode.mobile.ui.sessionchat.isQuestionAnswerValid
-import dev.opencode.mobile.ui.sessionchat.orderedQuestionRequests
 import dev.opencode.mobile.ui.sessionchat.orderedPermissionRequests
+import dev.opencode.mobile.ui.sessionchat.orderedQuestionRequests
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -406,7 +406,10 @@ class SessionChatInbox(
             }
         val ordered = orderedQuestionRequests(sessionId, questionSessions, requests)
         val filtered = dropOrphanQuestionRequests(ordered, loadedMessages())
-        val previousVisibleId = _state.value.questionRequests.firstOrNull()?.id
+        val previousVisibleId =
+            _state.value.questionRequests
+                .firstOrNull()
+                ?.id
         _state.update { current ->
             val submittingCleared =
                 current.questionSubmittingId != null &&
@@ -420,7 +423,10 @@ class SessionChatInbox(
                 )
             syncQuestionDrafts(next)
         }
-        val visibleId = _state.value.questionRequests.firstOrNull()?.id
+        val visibleId =
+            _state.value.questionRequests
+                .firstOrNull()
+                ?.id
         if (visibleId != previousVisibleId) {
             logI("question visible=${visibleId ?: "none"} queue=${filtered.size}")
         }

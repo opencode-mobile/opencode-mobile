@@ -9,8 +9,7 @@ enum class ServerAddressScheme(
     ;
 
     companion object {
-        fun fromLabel(label: String): ServerAddressScheme =
-            entries.firstOrNull { it.label.equals(label, ignoreCase = true) } ?: Http
+        fun fromLabel(label: String): ServerAddressScheme = entries.firstOrNull { it.label.equals(label, ignoreCase = true) } ?: Http
     }
 }
 

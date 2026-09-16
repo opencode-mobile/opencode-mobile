@@ -37,19 +37,16 @@ class SseRecoveryFaultOracleTest {
     }
 
     @Test
-    fun briefBackgroundSameEpoch_doesNotLatchStale() =
-        runOracle("android-brief-background-same-epoch-stale-latch")
+    fun briefBackgroundSameEpoch_doesNotLatchStale() = runOracle("android-brief-background-same-epoch-stale-latch")
 
     @Test
     fun coldResumeDoubleEpoch_performsOneCatchUp() = runOracle("cold-resume-double-epoch")
 
     @Test
-    fun profileSwitch_retargetsStreamAndDropsOldPublication() =
-        runOracle("ios-profile-a-to-b-old-stream")
+    fun profileSwitch_retargetsStreamAndDropsOldPublication() = runOracle("ios-profile-a-to-b-old-stream")
 
     @Test
-    fun v1SilentInstance_isNotKeptLiveByGlobalHeartbeats() =
-        runOracle("v1-one-target-silent-while-other-heartbeats")
+    fun v1SilentInstance_isNotKeptLiveByGlobalHeartbeats() = runOracle("v1-one-target-silent-while-other-heartbeats")
 
     @Test
     fun addProjectWhileV1Live_opensNewInstanceStream() = runOracle("add-project-while-v1-live")
@@ -97,12 +94,10 @@ class SseRecoveryFaultOracleTest {
     fun backgroundStopThenForeground_reconcilesOnce() = runOracle("background-stop-then-foreground")
 
     @Test
-    fun v1ProfileSwitch_doesNotReuseDirectories() =
-        runOracle("v1-profile-switch-does-not-reuse-directories")
+    fun v1ProfileSwitch_doesNotReuseDirectories() = runOracle("v1-profile-switch-does-not-reuse-directories")
 
     @Test
-    fun v1CatchUp_waitsUntilRequiredLeasesAreLive() =
-        runOracle("v1-catch-up-waits-for-required-leases")
+    fun v1CatchUp_waitsUntilRequiredLeasesAreLive() = runOracle("v1-catch-up-waits-for-required-leases")
 
     private fun runOracle(id: String) {
         val trace = SseFaultOracleLoader.loadTrace(id)

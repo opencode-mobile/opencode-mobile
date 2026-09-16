@@ -74,9 +74,10 @@ class InMemorySessionCacheStore : SessionCacheStore {
                 SessionCacheEvictSelector.All -> rows.clear()
                 is SessionCacheEvictSelector.Worktree -> {
                     val keys =
-                        rows.filterValues { row ->
-                            matchesWorktree(row.key, selector)
-                        }.keys
+                        rows
+                            .filterValues { row ->
+                                matchesWorktree(row.key, selector)
+                            }.keys
                     keys.forEach { rows.remove(it) }
                 }
             }

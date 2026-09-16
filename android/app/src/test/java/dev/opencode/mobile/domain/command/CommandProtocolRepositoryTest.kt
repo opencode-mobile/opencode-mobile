@@ -155,7 +155,12 @@ class CommandProtocolRepositoryTest {
             repository.runCommand("ses_1", CommandRunOptions(command = "init", arguments = "now"), "/repo")
 
             assertEquals(HttpMethod.Post, requests.single().method)
-            assertTrue(requests.single().url.encodedPath.contains("/api/session/ses_1/command"))
+            assertTrue(
+                requests
+                    .single()
+                    .url.encodedPath
+                    .contains("/api/session/ses_1/command"),
+            )
             assertTrue((requests.single().body as io.ktor.http.content.TextContent).text.contains("\"command\":\"init\""))
             assertTrue((requests.single().body as io.ktor.http.content.TextContent).text.contains("\"delivery\":\"steer\""))
             assertTrue(!(requests.single().body as io.ktor.http.content.TextContent).text.contains("\"parts\""))

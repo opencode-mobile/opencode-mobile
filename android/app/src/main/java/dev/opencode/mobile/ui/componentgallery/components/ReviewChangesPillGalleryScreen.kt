@@ -32,13 +32,28 @@ fun ReviewChangesPillGalleryScreen(modifier: Modifier = Modifier) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OpenCodeChoiceBadge("Mixed", summary == ReviewChangesPillGallerySummary.Mixed, onClick = { summary = ReviewChangesPillGallerySummary.Mixed })
-            OpenCodeChoiceBadge("+ only", summary == ReviewChangesPillGallerySummary.AdditionsOnly, onClick = { summary = ReviewChangesPillGallerySummary.AdditionsOnly })
-            OpenCodeChoiceBadge("− only", summary == ReviewChangesPillGallerySummary.DeletionsOnly, onClick = { summary = ReviewChangesPillGallerySummary.DeletionsOnly })
+            OpenCodeChoiceBadge("Mixed", summary == ReviewChangesPillGallerySummary.Mixed, onClick = {
+                summary =
+                    ReviewChangesPillGallerySummary.Mixed
+            })
+            OpenCodeChoiceBadge("+ only", summary == ReviewChangesPillGallerySummary.AdditionsOnly, onClick = {
+                summary =
+                    ReviewChangesPillGallerySummary.AdditionsOnly
+            })
+            OpenCodeChoiceBadge("− only", summary == ReviewChangesPillGallerySummary.DeletionsOnly, onClick = {
+                summary =
+                    ReviewChangesPillGallerySummary.DeletionsOnly
+            })
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OpenCodeChoiceBadge("Zero lines", summary == ReviewChangesPillGallerySummary.ZeroLine, onClick = { summary = ReviewChangesPillGallerySummary.ZeroLine })
-            OpenCodeChoiceBadge("1 file", summary == ReviewChangesPillGallerySummary.Singular, onClick = { summary = ReviewChangesPillGallerySummary.Singular })
+            OpenCodeChoiceBadge("Zero lines", summary == ReviewChangesPillGallerySummary.ZeroLine, onClick = {
+                summary =
+                    ReviewChangesPillGallerySummary.ZeroLine
+            })
+            OpenCodeChoiceBadge("1 file", summary == ReviewChangesPillGallerySummary.Singular, onClick = {
+                summary =
+                    ReviewChangesPillGallerySummary.Singular
+            })
             OpenCodeChoiceBadge("Enabled", enabled, onClick = { enabled = !enabled })
         }
         Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {

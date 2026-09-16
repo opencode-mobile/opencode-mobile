@@ -51,8 +51,7 @@ fun LiveConnectionSnapshot.isReachable(): Boolean =
         connectionState == EventStreamConnectionState.Reconnecting
 
 /** Every required SSE lease is actually up. Connecting/Reconnecting are not live. */
-fun LiveConnectionSnapshot.isFullyLive(): Boolean =
-    requiredTargets.isNotEmpty() && liveTargets.containsAll(requiredTargets)
+fun LiveConnectionSnapshot.isFullyLive(): Boolean = requiredTargets.isNotEmpty() && liveTargets.containsAll(requiredTargets)
 
 /** Non-force REST catch-up: occupancy is live and every required lease is up. */
 fun canCatchUp(
@@ -69,5 +68,6 @@ private class AdaptedLiveConnection(
     private val stream: ForegroundEventStream,
 ) : LiveConnection,
     ForegroundEventStream by stream {
-    override val snapshot: StateFlow<LiveConnectionSnapshot> = MutableStateFlow(LiveConnectionSnapshot(connectionState = stream.connectionState.value))
+    override val snapshot: StateFlow<LiveConnectionSnapshot> =
+        MutableStateFlow(LiveConnectionSnapshot(connectionState = stream.connectionState.value))
 }

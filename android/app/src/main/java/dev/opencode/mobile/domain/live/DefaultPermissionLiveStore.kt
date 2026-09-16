@@ -35,28 +35,28 @@ class DefaultPermissionLiveStore
                     var lastEmitted: List<PermissionRequest>? = null
                     val gate = LiveStoreRefreshGate()
                     val registration =
-                    syncCoordinator.register(key) {
-                        val generation = syncCoordinator.profileGeneration
-                        var failure: Throwable? = null
-                        val outcome =
-                            gate.refresh(
-                                load = {
-                                    runCatching { sessionRepository.listPendingPermissions(directory) }
-                                        .onFailure { failure = it }
-                                        .getOrNull()
-                                },
-                                commit = { requests ->
-                                    diagnosticLogger.info(
-                                        DiagnosticLogArea.Permission,
-                                        "permission refresh count=${requests.size}",
-                                    )
-                                    if (requests != lastEmitted) {
-                                        lastEmitted = requests
-                                        send(requests)
-                                    }
-                                },
-                                isCurrent = { syncCoordinator.profileGeneration == generation },
-                            )
+                        syncCoordinator.register(key) {
+                            val generation = syncCoordinator.profileGeneration
+                            var failure: Throwable? = null
+                            val outcome =
+                                gate.refresh(
+                                    load = {
+                                        runCatching { sessionRepository.listPendingPermissions(directory) }
+                                            .onFailure { failure = it }
+                                            .getOrNull()
+                                    },
+                                    commit = { requests ->
+                                        diagnosticLogger.info(
+                                            DiagnosticLogArea.Permission,
+                                            "permission refresh count=${requests.size}",
+                                        )
+                                        if (requests != lastEmitted) {
+                                            lastEmitted = requests
+                                            send(requests)
+                                        }
+                                    },
+                                    isCurrent = { syncCoordinator.profileGeneration == generation },
+                                )
                             failure?.let {
                                 diagnosticLogger.warning(
                                     DiagnosticLogArea.Permission,

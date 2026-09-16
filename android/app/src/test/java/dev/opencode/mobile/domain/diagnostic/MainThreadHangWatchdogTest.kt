@@ -1,12 +1,12 @@
 package dev.opencode.mobile.domain.diagnostic
 
-import java.util.concurrent.CopyOnWriteArrayList
-import java.util.concurrent.Executors
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.Executors
 
 class MainThreadHangWatchdogTest {
     @Test

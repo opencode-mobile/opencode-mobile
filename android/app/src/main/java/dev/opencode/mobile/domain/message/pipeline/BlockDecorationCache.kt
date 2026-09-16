@@ -21,8 +21,7 @@ object BlockDecorationCache {
     private val lock = Any()
     private val entries =
         object : LinkedHashMap<Key, MarkdownDocument>(MAX_ENTRIES + 1, 0.75f, true) {
-            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Key, MarkdownDocument>?): Boolean =
-                size > MAX_ENTRIES
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Key, MarkdownDocument>?): Boolean = size > MAX_ENTRIES
         }
 
     fun get(

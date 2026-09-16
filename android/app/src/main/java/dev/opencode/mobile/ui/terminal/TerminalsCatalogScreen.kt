@@ -47,45 +47,45 @@ fun TerminalsCatalogScreen(
             showDivider = true,
         )
         OpenCodeReadableColumn(modifier = Modifier.weight(1f)) {
-        if (uiState.isLoading) {
-            OpenCodeStatusStack(
-                title = "Loading terminals",
-                subtitle = "Checking server…",
-                modifier = Modifier.fillMaxSize(),
-            )
-        } else if (uiState.rows.isEmpty()) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center,
-            ) {
-                OpenCodeEmptyState(
-                    title = "No running shells",
-                    message = "Open a session and use / terminal to start one for that project.",
+            if (uiState.isLoading) {
+                OpenCodeStatusStack(
+                    title = "Loading terminals",
+                    subtitle = "Checking server…",
+                    modifier = Modifier.fillMaxSize(),
                 )
-            }
-        } else {
-            LazyColumn(modifier = Modifier.fillMaxSize()) {
-                items(uiState.rows, key = { "${it.worktree}:${it.id}" }) { row ->
-                    OpenCodeListItem(
-                        title = row.title,
-                        subtitle = row.projectTitle,
-                        startDecorator =
-                            StartDecorator.Letter(
-                                letterCharacterForProject(row.projectTitle),
-                                letterAccentForWorktree(row.worktree),
-                            ),
-                        onClick = { onOpenTerminal(row.worktree, row.projectTitle, row.id) },
-                        trailing = {
-                            OpenCodeButton(
-                                variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Close, "Close"),
-                                contrast = OpenCodeButtonContrast.Low,
-                                onClick = { viewModel.requestClose(row) },
-                            )
-                        },
+            } else if (uiState.rows.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    OpenCodeEmptyState(
+                        title = "No running shells",
+                        message = "Open a session and use / terminal to start one for that project.",
                     )
                 }
+            } else {
+                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    items(uiState.rows, key = { "${it.worktree}:${it.id}" }) { row ->
+                        OpenCodeListItem(
+                            title = row.title,
+                            subtitle = row.projectTitle,
+                            startDecorator =
+                                StartDecorator.Letter(
+                                    letterCharacterForProject(row.projectTitle),
+                                    letterAccentForWorktree(row.worktree),
+                                ),
+                            onClick = { onOpenTerminal(row.worktree, row.projectTitle, row.id) },
+                            trailing = {
+                                OpenCodeButton(
+                                    variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Close, "Close"),
+                                    contrast = OpenCodeButtonContrast.Low,
+                                    onClick = { viewModel.requestClose(row) },
+                                )
+                            },
+                        )
+                    }
+                }
             }
-        }
         }
     }
     val pending = uiState.pendingClose

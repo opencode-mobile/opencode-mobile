@@ -206,8 +206,7 @@ fun OpenCodeButton(
                 .graphicsLayer {
                     scaleX = accentScale
                     scaleY = accentScale
-                }
-                .clip(shape)
+                }.clip(shape)
                 .then(interaction),
         shape = shape,
         color = containerColor,

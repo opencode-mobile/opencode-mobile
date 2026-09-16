@@ -1,7 +1,6 @@
 package dev.opencode.mobile.domain.connection
 
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 
 class FakeDeviceNetworkPath(
     initial: DeviceNetworkPathStatus = DeviceNetworkPathStatus.Ready,

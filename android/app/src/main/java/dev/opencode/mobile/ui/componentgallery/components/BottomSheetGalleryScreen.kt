@@ -17,8 +17,8 @@ import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetContentMode
-import dev.opencode.mobile.ui.components.OpenCodeBottomSheetHeaderAction
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
+import dev.opencode.mobile.ui.components.OpenCodeBottomSheetHeaderAction
 import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
@@ -155,43 +155,43 @@ private fun ActionSheetEntries(
     itemCount: Int,
     onDismiss: () -> Unit,
 ) {
+    OpenCodeBottomSheetEntry(
+        title = "Open current project",
+        enabled = enabled,
+        startDecorator = startDecorator,
+        endDecorator = endDecorator,
+        onClick = onDismiss,
+    )
+    OpenCodeBottomSheetEntry(
+        title = "Create new session",
+        startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Add, "Create new session"),
+        onClick = onDismiss,
+    )
+    if (itemCount >= 4) {
         OpenCodeBottomSheetEntry(
-            title = "Open current project",
-            enabled = enabled,
-            startDecorator = startDecorator,
-            endDecorator = endDecorator,
+            title = "Rename session",
+            startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Edit, "Rename session"),
             onClick = onDismiss,
         )
         OpenCodeBottomSheetEntry(
-            title = "Create new session",
-            startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Add, "Create new session"),
+            title = "Fork session",
+            endDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.ChevronRight, null),
             onClick = onDismiss,
         )
-        if (itemCount >= 4) {
-            OpenCodeBottomSheetEntry(
-                title = "Rename session",
-                startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Edit, "Rename session"),
-                onClick = onDismiss,
-            )
-            OpenCodeBottomSheetEntry(
-                title = "Fork session",
-                endDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.ChevronRight, null),
-                onClick = onDismiss,
-            )
-        }
-        if (itemCount >= 6) {
-            OpenCodeBottomSheetEntry(
-                title = "Review diff",
-                startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Description, "Review diff"),
-                onClick = onDismiss,
-            )
-            OpenCodeBottomSheetEntry(
-                title = "Abort active work",
-                startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.StopCircle, "Abort active work"),
-                onClick = onDismiss,
-            )
-        }
     }
+    if (itemCount >= 6) {
+        OpenCodeBottomSheetEntry(
+            title = "Review diff",
+            startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Description, "Review diff"),
+            onClick = onDismiss,
+        )
+        OpenCodeBottomSheetEntry(
+            title = "Abort active work",
+            startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.StopCircle, "Abort active work"),
+            onClick = onDismiss,
+        )
+    }
+}
 
 @Composable
 private fun DecoratorControls(

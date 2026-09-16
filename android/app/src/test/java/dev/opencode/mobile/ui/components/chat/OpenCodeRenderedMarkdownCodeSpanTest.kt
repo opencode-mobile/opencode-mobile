@@ -4,7 +4,6 @@ import androidx.compose.ui.graphics.Color
 import dev.opencode.mobile.markdown.CodeSpan
 import dev.opencode.mobile.markdown.CodeTokenRole
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class OpenCodeRenderedMarkdownCodeSpanTest {

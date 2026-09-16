@@ -94,14 +94,12 @@ fun OpenCodeActionTile(
                     indication = ripple(bounded = true),
                     enabled = enabled,
                     onClick = onClick,
-                )
-                .padding(
+                ).padding(
                     start = ActionTilePaddingHorizontal,
                     top = ActionTilePaddingTop,
                     end = ActionTilePaddingHorizontal,
                     bottom = ActionTilePaddingBottom,
-                )
-                .semantics { contentDescription = accessibilityLabel }
+                ).semantics { contentDescription = accessibilityLabel }
                 .then(if (enabled) Modifier else Modifier.alpha(0.7f)),
         verticalArrangement = Arrangement.spacedBy(ActionTileContentGap),
     ) {

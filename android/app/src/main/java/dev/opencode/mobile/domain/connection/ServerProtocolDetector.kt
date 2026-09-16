@@ -20,12 +20,14 @@ class ServerProtocolDetector(
     ): ServerProtocol {
         val (globalHealth, apiHealth, lastError) =
             coroutineScope {
-                val global = async {
-                    runCatching { fetchGlobalHealth() }
-                }
-                val api = async {
-                    runCatching { fetchApiHealth() }
-                }
+                val global =
+                    async {
+                        runCatching { fetchGlobalHealth() }
+                    }
+                val api =
+                    async {
+                        runCatching { fetchApiHealth() }
+                    }
                 val globalResult = global.await()
                 val apiResult = api.await()
                 Triple(

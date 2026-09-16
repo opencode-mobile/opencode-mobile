@@ -6,16 +6,15 @@ import dev.opencode.mobile.data.remote.dto.RunCommandRequestDto
 import dev.opencode.mobile.data.remote.dto.V2CommandDto
 import dev.opencode.mobile.data.remote.dto.V2RunCommandRequestDto
 import dev.opencode.mobile.data.remote.dto.V2SkillDto
+import dev.opencode.mobile.domain.message.Attachment
 import dev.opencode.mobile.domain.message.PromptSendProgressReporter
 import dev.opencode.mobile.network.OpencodeHttpClient
-import dev.opencode.mobile.network.applyDirectory
-import dev.opencode.mobile.domain.message.Attachment
 import dev.opencode.mobile.network.PromptJsonBodyWriter
+import dev.opencode.mobile.network.applyDirectory
 import dev.opencode.mobile.network.applyDurableSend
 import dev.opencode.mobile.network.applyLocationDirectory
 import dev.opencode.mobile.network.setJsonBody
 import dev.opencode.mobile.network.setJsonFileBody
-import java.io.File
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.ResponseException
@@ -24,8 +23,9 @@ import io.ktor.client.request.post
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
-import kotlin.coroutines.coroutineContext
 import kotlinx.serialization.json.Json
+import java.io.File
+import kotlin.coroutines.coroutineContext
 
 class CommandsApi private constructor(
     private val httpClient: ClientProvider,

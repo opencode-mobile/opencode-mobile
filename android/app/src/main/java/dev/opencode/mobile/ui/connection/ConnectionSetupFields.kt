@@ -86,8 +86,7 @@ fun ConnectionSetupFields(
                         enabled = !uiState.isBusy,
                         role = Role.Button,
                         onClick = { onCredentialsExpandedChanged(!uiState.credentialsExpanded) },
-                    )
-                    .padding(vertical = 10.dp),
+                    ).padding(vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(

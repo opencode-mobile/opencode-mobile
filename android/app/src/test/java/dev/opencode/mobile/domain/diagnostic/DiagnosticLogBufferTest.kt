@@ -1,10 +1,10 @@
 package dev.opencode.mobile.domain.diagnostic
 
-import java.nio.file.Files
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.nio.file.Files
 
 class DiagnosticLogBufferTest {
     @Test
@@ -67,7 +67,8 @@ class DiagnosticLogBufferTest {
     @Test
     fun redactsSecretsAndPreservesSafeStatusLines() {
         assertTrue(
-            DiagnosticLogRedactor.redact("auth failed password=super-secret token=abc123")
+            DiagnosticLogRedactor
+                .redact("auth failed password=super-secret token=abc123")
                 .contains("[REDACTED]"),
         )
         assertFalse(DiagnosticLogRedactor.redact("password=super-secret").contains("super-secret"))
@@ -82,7 +83,12 @@ class DiagnosticLogBufferTest {
     fun appendRedactsBeforeStorage() {
         val buffer = DiagnosticLogBuffer(clockEpochMilliseconds = { 99L })
         buffer.append(DiagnosticLogArea.Sse, DiagnosticLogLevel.Info, "opened password=leak status=200")
-        val message = buffer.snapshot().entries.single().message
+        val message =
+            buffer
+                .snapshot()
+                .entries
+                .single()
+                .message
         assertFalse(message.contains("leak"))
         assertTrue(message.contains("[REDACTED]"))
         assertTrue(message.contains("status=200"))

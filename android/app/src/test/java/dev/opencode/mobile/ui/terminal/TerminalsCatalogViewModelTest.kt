@@ -152,7 +152,9 @@ class TerminalsCatalogViewModelTest {
 
             viewModel.appear()
             advanceUntilIdle()
-            val row = viewModel.uiState.value.rows.single()
+            val row =
+                viewModel.uiState.value.rows
+                    .single()
             viewModel.requestClose(row)
 
             assertEquals(row, viewModel.uiState.value.pendingClose)
@@ -170,7 +172,10 @@ class TerminalsCatalogViewModelTest {
 
             viewModel.appear()
             advanceUntilIdle()
-            viewModel.requestClose(viewModel.uiState.value.rows.single())
+            viewModel.requestClose(
+                viewModel.uiState.value.rows
+                    .single(),
+            )
             viewModel.dismissClose()
 
             assertEquals(null, viewModel.uiState.value.pendingClose)
