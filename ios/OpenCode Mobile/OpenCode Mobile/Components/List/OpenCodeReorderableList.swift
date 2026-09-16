@@ -31,12 +31,7 @@ struct OpenCodeReorderableList<Item: Identifiable, Row: View>: View {
     @GestureState(wrappedValue: .inactive, resetTransaction: Transaction(animation: reorderableDropAnimation))
     private var session: ReorderSession<Item.ID>
     @State private var rowHeights: [Item.ID: CGFloat] = [:]
-    @State private var liftedID: Item.ID?
-    @State private var announcedTargetIndex: Int?
-    /// True once the finger travelled past the context-action limit during the
-    /// current lift, so a drag that wanders back to the starting slot cancels
-    /// the row instead of offering the context action.
-    @State private var travelledPastContextLimit = false
+    @State private var lift = OpenCodeReorderableListLift<Item.ID>()
 
     init(
         items: [Item],
@@ -98,6 +93,14 @@ struct OpenCodeReorderableList<Item: Identifiable, Row: View>: View {
         .coordinateSpace(name: "openCodeReorderableList")
         .onPreferenceChange(ReorderableRowHeightKey<Item.ID>.self) { heights in
             rowHeights = heights
+        }
+        .onChange(of: session) { _, newValue in
+            // Cancelled drags skip onEnded and leave liftedID set. Forget the
+            // row so the next same-row lift can reset travel; keep the travel
+            // flag itself for an onEnded that races this reset.
+            if case .inactive = newValue {
+                lift.releaseIdentity()
+            }
         }
     }
 
@@ -182,26 +185,17 @@ struct OpenCodeReorderableList<Item: Identifiable, Row: View>: View {
             }
             .onChanged { value in
                 guard case let .second(true, drag) = value else { return }
-                if liftedID != item.id {
-                    liftedID = item.id
-                    announcedTargetIndex = index
-                    travelledPastContextLimit = false
+                if lift.beginLift(id: item.id, index: index) {
                     OpenCodeHaptics.contextAction()
                 }
                 let translation = drag?.translation.height ?? 0
-                if movable, abs(translation) >= OpenCodeReorderableListMath.contextActionTranslationLimit {
-                    travelledPastContextLimit = true
-                }
-                if movable, let targetIndex, targetIndex != announcedTargetIndex {
-                    announcedTargetIndex = targetIndex
+                lift.noteTravel(translation, movable: movable)
+                if movable, let targetIndex, lift.noteTarget(targetIndex) {
                     OpenCodeHaptics.selectionChanged()
                 }
             }
             .onEnded { value in
-                let contextActionEligible = !travelledPastContextLimit
-                liftedID = nil
-                announcedTargetIndex = nil
-                travelledPastContextLimit = false
+                let contextActionEligible = lift.finish()
                 guard case let .second(true, drag) = value else { return }
                 let translation = drag?.translation.height ?? 0
                 guard movable, let from = items.firstIndex(where: { $0.id == item.id }) else {
