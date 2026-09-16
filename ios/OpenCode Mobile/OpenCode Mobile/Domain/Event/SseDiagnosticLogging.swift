@@ -1,6 +1,10 @@
 import Foundation
 
 enum SseDiagnosticLogging {
+    static func droppedMessage(type: String) -> String {
+        "SSE event dropped type=\(type)"
+    }
+
     static func parseFailedMessage(_ dataLine: String) -> String {
         let trimmed = dataLine.trimmingCharacters(in: .whitespacesAndNewlines)
         let type = extractType(trimmed) ?? "-"

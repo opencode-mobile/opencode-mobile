@@ -5,21 +5,21 @@ nonisolated struct EventDomainAdapter: Sendable {
         parseEvents(dataLine: dataLine).first
     }
 
-    func recognizes(_ dataLine: String) -> Bool {
-        eventType(dataLine) != nil
-    }
-
     func isServerConnectedFrame(_ dataLine: String) -> Bool {
         parseEvents(dataLine: dataLine).first?.type == "server.connected"
     }
 
     func parseEvents(dataLine: String) -> [OpencodeEvent] {
-        guard let json = jsonObject(dataLine) else { return [] }
+        if case .events(let events) = parse(dataLine) { return events } else { return [] }
+    }
+
+    func parse(_ dataLine: String) -> EventParseOutcome {
+        guard let json = jsonObject(dataLine) else { return .unrecognized }
 
         let payload = json["payload"] as? [String: Any]
         let dataProperties = properties(fromData: json["data"])
         guard let type = eventType(json: json, payload: payload, dataProperties: dataProperties) else {
-            return []
+            return .unrecognized
         }
 
         let eventProperties = withEnvelopeCreated(
@@ -27,35 +27,35 @@ nonisolated struct EventDomainAdapter: Sendable {
             raw: json
         )
         if canonicalEventType(type) == "sync" {
-            let syncEvent = payload?["syncEvent"] as? [String: Any]
+            guard let syncEvent = payload?["syncEvent"] as? [String: Any]
                 ?? eventProperties["syncEvent"] as? [String: Any]
-            let innerType = syncEvent.flatMap { string(in: $0, key: "type") }
-            let data = properties(fromData: syncEvent?["data"]) ?? [:]
-            guard let innerType else { return [] }
-            return stampEnvelopeId(
+            else {
+                return .unrecognized
+            }
+            guard let innerType = string(in: syncEvent, key: "type") else {
+                return .unrecognized
+            }
+            let data = properties(fromData: syncEvent["data"]) ?? [:]
+            let stamped = stampEnvelopeId(
                 project(type: canonicalEventType(innerType), properties: data),
                 id: string(in: syncEvent, key: "id") ?? string(in: payload, key: "id") ?? json["id"] as? String
             )
+            return stamped.isEmpty
+                ? .dropped(type: canonicalEventType(innerType))
+                : .events(stamped)
         }
-        return stampEnvelopeId(
+        let stamped = stampEnvelopeId(
             project(type: canonicalEventType(type), properties: eventProperties),
             id: string(in: payload, key: "id") ?? json["id"] as? String
         )
+        return stamped.isEmpty
+            ? .dropped(type: canonicalEventType(type))
+            : .events(stamped)
     }
 
     private func jsonObject(_ dataLine: String) -> [String: Any]? {
         guard let data = dataLine.data(using: .utf8) else { return nil }
         return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
-    }
-
-    private func eventType(_ dataLine: String) -> String? {
-        guard let json = jsonObject(dataLine) else { return nil }
-        let payload = json["payload"] as? [String: Any]
-        return eventType(
-            json: json,
-            payload: payload,
-            dataProperties: properties(fromData: json["data"])
-        )
     }
 
     private func eventType(
@@ -874,6 +874,14 @@ nonisolated struct EventDomainAdapter: Sendable {
         "project",
         "workspace",
     ]
+}
+
+nonisolated enum EventParseOutcome: Sendable {
+    /// Frame could not be decoded or no event type could be resolved. Possible lost event.
+    case unrecognized
+    /// Frame was recognized but intentionally projected to no domain event.
+    case dropped(type: String)
+    case events([OpencodeEvent])
 }
 
 nonisolated struct SessionTitleUpdate: Equatable, Sendable {

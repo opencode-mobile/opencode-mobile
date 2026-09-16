@@ -64,6 +64,7 @@ class SseEventIngressTest {
         assertTrue(result.parsed.isEmpty())
         assertTrue(result.toEmit.isEmpty())
         assertFalse(result.parseFailed)
+        assertEquals("session.usage.updated", result.droppedType)
     }
 
     @Test
@@ -75,6 +76,7 @@ class SseEventIngressTest {
         assertTrue(result.parsed.isEmpty())
         assertTrue(result.toEmit.isEmpty())
         assertFalse(result.parseFailed)
+        assertEquals("session.usage.updated", result.droppedType)
     }
 
     @Test
@@ -85,5 +87,36 @@ class SseEventIngressTest {
             )
         assertFalse(result.parseFailed)
         assertEquals(listOf("message.updated"), result.toEmit.map { it.type })
+    }
+
+    @Test
+    fun syncEnvelopeWithoutInnerEvent_isAParseFailure() {
+        val result = ingress.accept("""{"payload":{"type":"sync","properties":{}}}""")
+        assertTrue(result.parseFailed)
+        assertEquals(listOf("sse.parse.failed"), result.toEmit.map { it.type })
+    }
+
+    @Test
+    fun syncEnvelopeWithInnerTypeMissing_isAParseFailure() {
+        val result = ingress.accept("""{"payload":{"type":"sync","syncEvent":{"data":{}}}}""")
+        assertTrue(result.parseFailed)
+        assertEquals(listOf("sse.parse.failed"), result.toEmit.map { it.type })
+    }
+
+    @Test
+    fun syncEnvelopeWithDroppedInner_isNotAParseFailure() {
+        val result =
+            ingress.accept(
+                """{"payload":{"type":"sync","syncEvent":{"type":"session.usage.updated","data":{"sessionID":"ses-1","tokens":{"input":1}}}}}""",
+            )
+        assertFalse(result.parseFailed)
+        assertEquals("session.usage.updated", result.droppedType)
+    }
+
+    @Test
+    fun unknownType_passesThrough() {
+        val result = ingress.accept("""{"type":"some.future.event","data":{"sessionID":"ses-1"}}""")
+        assertEquals(listOf("some.future.event"), result.toEmit.map { it.type })
+        assertFalse(result.parseFailed)
     }
 }

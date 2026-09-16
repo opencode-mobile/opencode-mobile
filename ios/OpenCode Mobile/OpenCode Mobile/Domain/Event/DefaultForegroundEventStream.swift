@@ -720,6 +720,8 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
                 for event in result.toEmit {
                     _ = publishIfCurrent(event, generation: generation)
                 }
+            } else if let droppedType = result.droppedType {
+                DiagnosticLog.debug(.sse, SseDiagnosticLogging.droppedMessage(type: droppedType))
             }
             return
         }
