@@ -14,10 +14,11 @@ private let reorderableDropAnimation = Animation.spring(response: 0.36, dampingF
 /// Stacked rows that reorder with long-press and drag.
 ///
 /// Tap selects a row. Long-press lifts a movable row; dragging shifts the
-/// neighbors live and release commits `onMove`. Releasing a lifted row without
-/// moving it fires `onContextAction`, so a row can keep one long-press action
-/// alongside reordering. Rows that fail `canMove` never lift or get crossed.
-/// Reordering is inactive until at least two rows can move or `onMove` is nil.
+/// neighbors live and release commits `onMove`. Releasing a lifted row that
+/// never travelled past the context-action limit fires `onContextAction`, so a
+/// row can keep one long-press action alongside reordering. Rows that fail
+/// `canMove` never lift or get crossed. Reordering is inactive until at least
+/// two rows can move or `onMove` is nil.
 struct OpenCodeReorderableList<Item: Identifiable, Row: View>: View {
     let items: [Item]
     let canMove: (Item) -> Bool
@@ -32,6 +33,10 @@ struct OpenCodeReorderableList<Item: Identifiable, Row: View>: View {
     @State private var rowHeights: [Item.ID: CGFloat] = [:]
     @State private var liftedID: Item.ID?
     @State private var announcedTargetIndex: Int?
+    /// True once the finger travelled past the context-action limit during the
+    /// current lift, so a drag that wanders back to the starting slot cancels
+    /// the row instead of offering the context action.
+    @State private var travelledPastContextLimit = false
 
     init(
         items: [Item],
@@ -176,11 +181,16 @@ struct OpenCodeReorderableList<Item: Identifiable, Row: View>: View {
                 }
             }
             .onChanged { value in
-                guard case .second(true, _) = value else { return }
+                guard case let .second(true, drag) = value else { return }
                 if liftedID != item.id {
                     liftedID = item.id
                     announcedTargetIndex = index
+                    travelledPastContextLimit = false
                     OpenCodeHaptics.contextAction()
+                }
+                let translation = drag?.translation.height ?? 0
+                if movable, abs(translation) >= OpenCodeReorderableListMath.contextActionTranslationLimit {
+                    travelledPastContextLimit = true
                 }
                 if movable, let targetIndex, targetIndex != announcedTargetIndex {
                     announcedTargetIndex = targetIndex
@@ -188,14 +198,14 @@ struct OpenCodeReorderableList<Item: Identifiable, Row: View>: View {
                 }
             }
             .onEnded { value in
-                defer {
-                    liftedID = nil
-                    announcedTargetIndex = nil
-                }
+                let contextActionEligible = !travelledPastContextLimit
+                liftedID = nil
+                announcedTargetIndex = nil
+                travelledPastContextLimit = false
                 guard case let .second(true, drag) = value else { return }
                 let translation = drag?.translation.height ?? 0
                 guard movable, let from = items.firstIndex(where: { $0.id == item.id }) else {
-                    if let onContextAction, supportsContextAction(item) {
+                    if contextActionEligible, let onContextAction, supportsContextAction(item) {
                         onContextAction(item)
                     }
                     return
@@ -218,8 +228,7 @@ struct OpenCodeReorderableList<Item: Identifiable, Row: View>: View {
                     withAnimation(reorderableDropAnimation) {
                         onMove?(from, target)
                     }
-                } else if abs(translation) < OpenCodeReorderableListMath.contextActionTranslationLimit,
-                          let onContextAction, supportsContextAction(item) {
+                } else if contextActionEligible, let onContextAction, supportsContextAction(item) {
                     onContextAction(item)
                 }
             }
