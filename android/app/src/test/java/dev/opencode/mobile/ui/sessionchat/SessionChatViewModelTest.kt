@@ -3863,7 +3863,60 @@ class SessionChatViewModelTest {
 
             assertEquals(SessionCompactChrome.FALLBACK_SUCCESS, viewModel.uiState.value.snackbar?.message)
             assertNull(viewModel.uiState.value.sessionStatusLabel)
-            assertNull(viewModel.uiState.value.workingIndicatorLabel)
+            assertEquals(SessionCompactChrome.STATUS_LABEL, viewModel.uiState.value.workingIndicatorLabel)
+            assertTrue(viewModel.uiState.value.workingIndicatorCollapsed)
+            assertFalse(viewModel.uiState.value.workingIndicatorFading)
+        }
+
+    @Test
+    fun workingFooter_holdsThroughIdleThenCollapsesAndCancelsOnBusy() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val viewModel =
+                createViewModel(
+                    repository = repository,
+                    sessionRepository = FakeSessionRepository(sessionStatusType = "busy"),
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
+            assertFalse(viewModel.uiState.value.workingIndicatorCollapsed)
+            assertFalse(viewModel.uiState.value.workingIndicatorFading)
+
+            repository.eventStream.emit(OpencodeEvent(type = "session.idle", sessionId = "ses-1"))
+            runCurrent()
+
+            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
+            assertTrue(viewModel.uiState.value.workingIndicatorFading)
+            assertFalse(viewModel.uiState.value.workingIndicatorCollapsed)
+            assertNull(viewModel.uiState.value.sessionStatusLabel)
+
+            testDispatcher.scheduler.advanceTimeBy(WorkingTurnIndicator.IDLE_HOLD_MS - 1)
+            runCurrent()
+            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
+            assertTrue(viewModel.uiState.value.workingIndicatorFading)
+            assertFalse(viewModel.uiState.value.workingIndicatorCollapsed)
+
+            testDispatcher.scheduler.advanceTimeBy(1)
+            runCurrent()
+            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
+            assertFalse(viewModel.uiState.value.workingIndicatorFading)
+            assertTrue(viewModel.uiState.value.workingIndicatorCollapsed)
+            assertNull(viewModel.uiState.value.sessionStatusLabel)
+
+            repository.eventStream.emit(
+                OpencodeEvent(
+                    type = "session.status",
+                    sessionId = "ses-1",
+                    rawProperties = buildJsonObject { put("type", "busy") },
+                ),
+            )
+            runCurrent()
+
+            assertEquals("Working", viewModel.uiState.value.workingIndicatorLabel)
+            assertFalse(viewModel.uiState.value.workingIndicatorFading)
+            assertFalse(viewModel.uiState.value.workingIndicatorCollapsed)
         }
 
     @Test
@@ -4115,6 +4168,7 @@ class SessionChatViewModelTest {
             liveUpdates = liveUpdates,
         ).apply {
             ioDispatcher = testDispatcher
+            nowMs = { testDispatcher.scheduler.currentTime }
             // Mutations (send/rename/fork/new) require Live; default fakes start Connected.
             eventStream.setConnectionState(EventStreamConnectionState.Connected)
         }

@@ -12,6 +12,7 @@ struct SessionChatTimelineViewProps {
     let syncingIndicatorLabel: String?
     let workingIndicatorLabel: String?
     let workingIndicatorCollapsed: Bool
+    let workingIndicatorFading: Bool
     let sessionTodosVisible: Bool
     let sessionTodoCompletedCount: Int
     let sessionTodoTotalCount: Int
@@ -43,6 +44,7 @@ struct SessionChatTimelineViewProps {
         syncingIndicatorLabel: String? = nil,
         workingIndicatorLabel: String? = nil,
         workingIndicatorCollapsed: Bool = false,
+        workingIndicatorFading: Bool = false,
         sessionTodosVisible: Bool = false,
         sessionTodoCompletedCount: Int = 0,
         sessionTodoTotalCount: Int = 0,
@@ -72,6 +74,7 @@ struct SessionChatTimelineViewProps {
         self.syncingIndicatorLabel = syncingIndicatorLabel
         self.workingIndicatorLabel = workingIndicatorLabel
         self.workingIndicatorCollapsed = workingIndicatorCollapsed
+        self.workingIndicatorFading = workingIndicatorFading
         self.sessionTodosVisible = sessionTodosVisible
         self.sessionTodoCompletedCount = sessionTodoCompletedCount
         self.sessionTodoTotalCount = sessionTodoTotalCount
@@ -208,6 +211,7 @@ private struct SessionChatTimelineReadyView: View {
             ) { message in
                 SessionChatTimelineHostRow(
                     message: message,
+                    workingIndicatorFading: props.workingIndicatorFading,
                     onMessageActionsTap: props.onMessageActionsTap,
                     onToolDetailTap: props.onToolDetailTap,
                     onToolGroupTap: props.onToolGroupTap,
@@ -347,6 +351,7 @@ private struct SessionChatTimelineReadyView: View {
 
 private struct SessionChatTimelineHostRow: View {
     let message: SessionChatRow
+    var workingIndicatorFading: Bool = false
     let onMessageActionsTap: (SessionChatMessageActionsTarget) -> Void
     let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
     let onToolGroupTap: (SessionChatToolGroupTarget) -> Void
@@ -358,7 +363,8 @@ private struct SessionChatTimelineHostRow: View {
         if message.id == SessionChatStatusChrome.workingRowID {
             SessionChatWorkingIndicatorRow(
                 label: message.text,
-                collapsed: message.isLayoutCollapsed
+                collapsed: message.isLayoutCollapsed,
+                fading: workingIndicatorFading
             )
         } else {
             HStack {
@@ -394,6 +400,7 @@ private struct SessionChatTimelineHostRow: View {
 private struct SessionChatWorkingIndicatorRow: View {
     let label: String
     var collapsed: Bool = false
+    var fading: Bool = false
 
     var body: some View {
         HStack(alignment: .center, spacing: 8) {
@@ -403,16 +410,18 @@ private struct SessionChatWorkingIndicatorRow: View {
                 .foregroundStyle(OpenCodeColors.textWeak)
             Spacer(minLength: 0)
         }
+        .opacity(collapsed ? 0 : (fading ? 0.35 : 1))
         .padding(.leading, collapsed ? 0 : 4)
         .padding(.top, collapsed ? 0 : 12)
         .padding(.bottom, collapsed ? 0 : 8)
         .frame(maxWidth: .infinity, alignment: .leading)
         .frame(height: collapsed ? 0 : nil)
-        .opacity(collapsed ? 0 : 1)
         .clipped()
         .accessibilityElement(children: .ignore)
         .accessibilityHidden(collapsed)
         .accessibilityLabel(label)
+        .animation(.easeInOut(duration: 0.22), value: collapsed)
+        .animation(.easeInOut(duration: 0.22), value: fading)
     }
 }
 

@@ -60,6 +60,8 @@ import dev.opencode.mobile.ui.sessionchat.region.SessionInfo
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -106,6 +108,8 @@ class SessionChatViewModel
                 commands.ioDispatcher = value
                 inbox.ioDispatcher = value
             }
+
+        internal var nowMs: () -> Long = { System.currentTimeMillis() }
 
         private val timeline =
             SessionChatTimeline(
@@ -173,6 +177,9 @@ class SessionChatViewModel
         private var lastSnackbarKey: String? = null
         private var loggedWorkingLamp = false
         private var lastWorkingLamp: String? = null
+        private var workingChrome: WorkingTurnIndicator.Chrome = WorkingTurnIndicator.Chrome.Unmounted
+        private var workingHold: WorkingTurnIndicator.Hold? = null
+        private var workingHoldJob: Job? = null
         private var suppressedSnackbarKey: String? = null
         private var snackbarSequence: Long = 0L
 
@@ -270,6 +277,7 @@ class SessionChatViewModel
             lastSnackbarKey = null
             suppressedSnackbarKey = null
             snackbarSequence = 0L
+            resetWorkingFooter()
             logI("bind session=$sessionId worktree=$worktree title=$sessionTitle")
             seedProjectIdentity(worktree)
             _uiState.value =
@@ -305,6 +313,7 @@ class SessionChatViewModel
             lastSnackbarKey = null
             suppressedSnackbarKey = null
             snackbarSequence = 0L
+            resetWorkingFooter()
             logI("bind optimistic create worktree=$worktree title=$sessionTitle")
             seedProjectIdentity(worktree)
             _uiState.value =
@@ -362,6 +371,7 @@ class SessionChatViewModel
         ) {
             boundSessionId = sessionId
             boundSessionTitle = sessionTitle
+            resetWorkingFooter()
             sessionReadyStore.setFocusedSession(sessionId, worktree)
             timeline.bind(sessionId, worktree)
             composer.bind(sessionId, worktree)
@@ -1093,26 +1103,41 @@ class SessionChatViewModel
             val awaitingUser =
                 inboxSnapshot.permissionRequests.isNotEmpty() || inboxSnapshot.questionRequests.isNotEmpty()
             val lastIsThinking = WorkingTurnIndicator.lastIsThinking(messages)
-            val workingIndicatorLabel =
+            val activeWorkingLabel =
                 WorkingTurnIndicator.labelForActiveTurn(
                     statusLabel = sessionStatusLabel,
                     isCompacting = isCompacting,
                     isAwaitingUser = awaitingUser,
                     sendProgressPercent = composerState.sendProgressPercent,
                 )
-            val workingIndicatorCollapsed =
-                WorkingTurnIndicator.shouldCollapseReservedRow(
+            val workingResolution =
+                WorkingTurnIndicator.resolveFooter(
+                    activeLabel = activeWorkingLabel,
                     lastIsThinking = lastIsThinking,
-                    label = workingIndicatorLabel,
+                    hideImmediately = awaitingUser || boundSessionId == null,
+                    previous = workingChrome,
+                    hold = workingHold,
+                    nowMs = nowMs(),
                 )
+            workingChrome = workingResolution.chrome
+            workingHold = workingResolution.hold
+            scheduleWorkingFooterWake(workingResolution.wakeAfterMs)
+            val workingIndicatorLabel = workingResolution.chrome.label
+            val workingIndicatorCollapsed = workingResolution.chrome.collapsed
+            val workingIndicatorFading = workingResolution.chrome.fading
             val workingLampKey =
-                "${workingIndicatorLabel ?: "none"}:${if (workingIndicatorCollapsed) 1 else 0}"
+                "${workingIndicatorLabel ?: "none"}:" +
+                    "${if (workingIndicatorCollapsed) 1 else 0}:" +
+                    "${if (workingIndicatorFading) 1 else 0}:" +
+                    "${if (workingHold != null) 1 else 0}"
             if (!loggedWorkingLamp || lastWorkingLamp != workingLampKey) {
                 loggedWorkingLamp = true
                 lastWorkingLamp = workingLampKey
                 logI(
                     "workingLamp label=${workingIndicatorLabel ?: "none"} " +
                         "collapsed=${if (workingIndicatorCollapsed) 1 else 0} " +
+                        "fading=${if (workingIndicatorFading) 1 else 0} " +
+                        "hold=${if (workingHold != null) 1 else 0} " +
                         "status=${sessionStatusLabel ?: "none"} " +
                         "awaitingUser=${if (awaitingUser) 1 else 0} " +
                         "lastIsThinking=${if (lastIsThinking) 1 else 0}",
@@ -1148,6 +1173,7 @@ class SessionChatViewModel
                 sessionStatusLabel = sessionStatusLabel,
                 workingIndicatorLabel = workingIndicatorLabel,
                 workingIndicatorCollapsed = workingIndicatorCollapsed,
+                workingIndicatorFading = workingIndicatorFading,
                 syncingIndicatorLabel = syncingIndicatorLabel,
                 sessionTodos = inboxSnapshot.sessionTodos,
                 sessionTodosVisible = SessionTodoList.isVisible(inboxSnapshot.sessionTodos),
@@ -1269,9 +1295,28 @@ class SessionChatViewModel
         override fun onCleared() {
             composer.flushDraft()
             inbox.stop()
+            resetWorkingFooter()
             clearSessionReadyFocus()
             syncCoordinator.markFocused(null)
             super.onCleared()
+        }
+
+        private fun resetWorkingFooter() {
+            workingHoldJob?.cancel()
+            workingHoldJob = null
+            workingHold = null
+            workingChrome = WorkingTurnIndicator.Chrome.Unmounted
+        }
+
+        private fun scheduleWorkingFooterWake(wakeAfterMs: Long?) {
+            workingHoldJob?.cancel()
+            workingHoldJob = null
+            if (wakeAfterMs == null) return
+            workingHoldJob =
+                viewModelScope.launch {
+                    delay(wakeAfterMs)
+                    publishUiState()
+                }
         }
 
         private fun logI(message: String) {

@@ -170,6 +170,7 @@ struct SessionChatView: View {
                         syncingIndicatorLabel: viewModel.uiState.syncingIndicatorLabel,
                         workingIndicatorLabel: viewModel.uiState.workingIndicatorLabel,
                         workingIndicatorCollapsed: viewModel.uiState.workingIndicatorCollapsed,
+                        workingIndicatorFading: viewModel.uiState.workingIndicatorFading,
                         sessionTodosVisible: sessionTodosPillVisible,
                         sessionTodoCompletedCount: viewModel.uiState.sessionTodoCompletedCount,
                         sessionTodoTotalCount: viewModel.uiState.sessionTodoTotalCount,

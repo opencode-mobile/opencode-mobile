@@ -2773,10 +2773,12 @@ struct SessionChatViewModelTests {
 
     @Test func runClientSlashAction_compact_showsCompactingWhileInFlight() async {
         let hold = AsyncGate()
+        let clock = ChatTestSyncClock(now: 1_000)
         let sessionRepository = FakeChatSessionRepository(summarizeHold: hold)
         let viewModel = makeViewModel(
             messageRepository: FakeMessageRepository(),
-            sessionRepository: sessionRepository
+            sessionRepository: sessionRepository,
+            clock: clock
         )
         defer { viewModel.stopObserving() }
         await viewModel.loadMessages()
@@ -2789,8 +2791,59 @@ struct SessionChatViewModelTests {
 
         await hold.open()
         await waitUntil { viewModel.uiState.snackbar?.message == SessionCompactChrome.fallbackSuccess }
+        try? await clock.awaitWaiter(milliseconds: Int(WorkingTurnIndicator.idleHoldMilliseconds))
+        clock.now += WorkingTurnIndicator.idleHoldMilliseconds
+        clock.release(milliseconds: Int(WorkingTurnIndicator.idleHoldMilliseconds))
+        await waitUntil { viewModel.uiState.workingIndicatorCollapsed }
         #expect(viewModel.uiState.sessionStatusLabel == nil)
-        #expect(viewModel.uiState.workingIndicatorLabel == nil)
+        #expect(viewModel.uiState.workingIndicatorLabel == SessionCompactChrome.statusLabel)
+        #expect(viewModel.uiState.workingIndicatorCollapsed)
+        #expect(viewModel.uiState.workingIndicatorFading == false)
+    }
+
+    @Test func workingFooter_holdsThroughIdleThenCollapsesAndCancelsOnBusy() async {
+        let clock = ChatTestSyncClock(now: 1_000)
+        let eventStream = FakeForegroundEventStream()
+        let viewModel = makeViewModel(
+            eventStream: eventStream,
+            sessionRepository: FakeChatSessionRepository(sessionStatusType: "busy"),
+            clock: clock
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        await waitUntil { viewModel.uiState.workingIndicatorLabel == "Working" }
+        #expect(viewModel.uiState.workingIndicatorCollapsed == false)
+        #expect(viewModel.uiState.workingIndicatorFading == false)
+
+        eventStream.emit(OpencodeEvent(type: "session.idle", sessionID: "ses-1"))
+        await waitUntil { viewModel.uiState.sessionStatusLabel == nil }
+        #expect(viewModel.uiState.workingIndicatorLabel == "Working")
+        #expect(viewModel.uiState.workingIndicatorFading)
+        #expect(viewModel.uiState.workingIndicatorCollapsed == false)
+
+        try? await clock.awaitWaiter(milliseconds: Int(WorkingTurnIndicator.idleHoldMilliseconds))
+        clock.now += WorkingTurnIndicator.idleHoldMilliseconds
+        clock.release(milliseconds: Int(WorkingTurnIndicator.idleHoldMilliseconds))
+        await waitUntil { viewModel.uiState.workingIndicatorCollapsed }
+        #expect(viewModel.uiState.workingIndicatorLabel == "Working")
+        #expect(viewModel.uiState.workingIndicatorFading == false)
+        #expect(viewModel.uiState.sessionStatusLabel == nil)
+
+        eventStream.emit(
+            OpencodeEvent(
+                type: "session.status",
+                sessionID: "ses-1",
+                rawProperties: ["status": .dictionary(["type": .string("busy")])]
+            )
+        )
+        await waitUntil {
+            viewModel.uiState.workingIndicatorLabel == "Working" &&
+                !viewModel.uiState.workingIndicatorFading &&
+                !viewModel.uiState.workingIndicatorCollapsed
+        }
+        #expect(viewModel.uiState.workingIndicatorLabel == "Working")
+        #expect(viewModel.uiState.workingIndicatorFading == false)
+        #expect(viewModel.uiState.workingIndicatorCollapsed == false)
     }
 
     @Test func runClientSlashAction_compact_failureClearsCompactingAndShowsError() async {
