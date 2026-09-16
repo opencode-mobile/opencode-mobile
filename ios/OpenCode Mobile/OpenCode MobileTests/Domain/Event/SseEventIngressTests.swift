@@ -44,4 +44,58 @@ struct SseEventIngressTests {
         #expect(result.parseFailed)
         #expect(result.toEmit.map(\.type) == ["sse.parse.failed"])
     }
+
+    @Test func droppedUsageUpdated_isNotAParseFailure() {
+        let result = ingress.accept(
+            #"{"type":"session.usage.updated","data":{"sessionID":"ses-1","tokens":{"input":120,"output":4}}}"#
+        )
+        #expect(result.parsed.isEmpty)
+        #expect(result.toEmit.isEmpty)
+        #expect(result.parseFailed == false)
+        #expect(result.droppedType == "session.usage.updated")
+    }
+
+    @Test func droppedUsageUpdated_v2Envelope_isNotAParseFailure() {
+        let result = ingress.accept(
+            #"{"payload":{"type":"session.usage.updated","properties":{"sessionID":"ses-1","tokens":{"input":120,"output":4},"cost":0.01}}}"#
+        )
+        #expect(result.parsed.isEmpty)
+        #expect(result.toEmit.isEmpty)
+        #expect(result.parseFailed == false)
+        #expect(result.droppedType == "session.usage.updated")
+    }
+
+    @Test func projectedUsageUpdated_emitsMessageUpdated() {
+        let result = ingress.accept(
+            #"{"type":"session.usage.updated","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","tokens":{"input":120,"output":4,"reasoning":0}}}"#
+        )
+        #expect(result.parseFailed == false)
+        #expect(result.toEmit.map(\.type) == ["message.updated"])
+    }
+
+    @Test func syncEnvelopeWithoutInnerEvent_isAParseFailure() {
+        let result = ingress.accept(#"{"payload":{"type":"sync","properties":{}}}"#)
+        #expect(result.parseFailed)
+        #expect(result.toEmit.map(\.type) == ["sse.parse.failed"])
+    }
+
+    @Test func syncEnvelopeWithInnerTypeMissing_isAParseFailure() {
+        let result = ingress.accept(#"{"payload":{"type":"sync","syncEvent":{"data":{}}}}"#)
+        #expect(result.parseFailed)
+        #expect(result.toEmit.map(\.type) == ["sse.parse.failed"])
+    }
+
+    @Test func syncEnvelopeWithDroppedInner_isNotAParseFailure() {
+        let result = ingress.accept(
+            #"{"payload":{"type":"sync","syncEvent":{"type":"session.usage.updated","data":{"sessionID":"ses-1","tokens":{"input":1}}}}}"#
+        )
+        #expect(result.parseFailed == false)
+        #expect(result.droppedType == "session.usage.updated")
+    }
+
+    @Test func unknownType_passesThrough() {
+        let result = ingress.accept(#"{"type":"some.future.event","data":{"sessionID":"ses-1"}}"#)
+        #expect(result.toEmit.map(\.type) == ["some.future.event"])
+        #expect(result.parseFailed == false)
+    }
 }

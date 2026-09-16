@@ -2,6 +2,13 @@ import Testing
 @testable import OpenCode_Mobile
 
 struct SseDiagnosticLoggingTests {
+    @Test func droppedMessage_recordsType() {
+        #expect(
+            SseDiagnosticLogging.droppedMessage(type: "session.usage.updated")
+                == "SSE event dropped type=session.usage.updated"
+        )
+    }
+
     @Test func parseFailedMessage_recordsTypeAndLengthWithoutBody() {
         #expect(
             SseDiagnosticLogging.parseFailedMessage(#"{"type":"session.text.ended","payload":{}}"#)

@@ -714,12 +714,14 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         guard generation == currentGeneration() else { return }
         let result = eventIngress.accept(dataLine)
         if result.parsed.isEmpty {
-            DiagnosticLog.warning(.sse, SseDiagnosticLogging.parseFailedMessage(dataLine))
             if result.parseFailed {
+                DiagnosticLog.warning(.sse, SseDiagnosticLogging.parseFailedMessage(dataLine))
                 publishSnapshot()
                 for event in result.toEmit {
                     _ = publishIfCurrent(event, generation: generation)
                 }
+            } else if let droppedType = result.droppedType {
+                DiagnosticLog.debug(.sse, SseDiagnosticLogging.droppedMessage(type: droppedType))
             }
             return
         }

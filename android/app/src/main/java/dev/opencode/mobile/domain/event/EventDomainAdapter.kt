@@ -24,33 +24,45 @@ class EventDomainAdapter(
 ) {
     fun parseEvent(dataLine: String): OpencodeEvent? = parseEvents(dataLine).firstOrNull()
 
-    fun parseEvents(dataLine: String): List<OpencodeEvent> {
-        val raw = runCatching { json.parseToJsonElement(dataLine) }.getOrNull() as? JsonObject ?: return emptyList()
+    fun parseEvents(dataLine: String): List<OpencodeEvent> =
+        (parse(dataLine) as? EventParseOutcome.Events)?.events ?: emptyList()
+
+    fun parse(dataLine: String): EventParseOutcome {
+        val raw =
+            runCatching { json.parseToJsonElement(dataLine) }.getOrNull() as? JsonObject
+                ?: return EventParseOutcome.Unrecognized
         val payload = raw["payload"] as? JsonObject
         val dataProperties = propertiesFromData(raw["data"])
-        val type =
-            stringIn(payload, "type")
-                ?: stringIn(raw, "type")
-                ?: stringIn(raw, "event")
-                ?: stringIn(dataProperties, "type")
-                ?: return emptyList()
+        val type = eventType(raw, payload, dataProperties) ?: return EventParseOutcome.Unrecognized
         val properties = withEnvelopeCreated(resolveProperties(payload, raw, dataProperties), raw)
         if (canonicalEventType(type) == "sync") {
             val syncEvent =
                 (payload?.get("syncEvent") as? JsonObject)
                     ?: properties["syncEvent"] as? JsonObject
-                    ?: return emptyList()
-            val innerType = stringIn(syncEvent, "type") ?: return emptyList()
+                    ?: return EventParseOutcome.Unrecognized
+            val innerType = stringIn(syncEvent, "type") ?: return EventParseOutcome.Unrecognized
             val data = propertiesFromData(syncEvent["data"]) ?: JsonObject(emptyMap())
-            return stampEnvelopeId(
-                project(canonicalEventType(innerType), data),
-                stringIn(syncEvent, "id") ?: stringIn(payload, "id") ?: stringIn(raw, "id"),
-            )
+            val stamped =
+                stampEnvelopeId(
+                    project(canonicalEventType(innerType), data),
+                    stringIn(syncEvent, "id") ?: stringIn(payload, "id") ?: stringIn(raw, "id"),
+                )
+            return if (stamped.isEmpty()) {
+                EventParseOutcome.Dropped(canonicalEventType(innerType))
+            } else {
+                EventParseOutcome.Events(stamped)
+            }
         }
-        return stampEnvelopeId(
-            project(canonicalEventType(type), properties),
-            stringIn(payload, "id") ?: stringIn(raw, "id"),
-        )
+        val stamped =
+            stampEnvelopeId(
+                project(canonicalEventType(type), properties),
+                stringIn(payload, "id") ?: stringIn(raw, "id"),
+            )
+        return if (stamped.isEmpty()) {
+            EventParseOutcome.Dropped(canonicalEventType(type))
+        } else {
+            EventParseOutcome.Events(stamped)
+        }
     }
 
     private fun stampEnvelopeId(
@@ -66,6 +78,16 @@ class EventDomainAdapter(
             }
         }
     }
+
+    private fun eventType(
+        raw: JsonObject,
+        payload: JsonObject?,
+        dataProperties: JsonObject?,
+    ): String? =
+        stringIn(payload, "type")
+            ?: stringIn(raw, "type")
+            ?: stringIn(raw, "event")
+            ?: stringIn(dataProperties, "type")
 
     private fun propertiesFromData(data: JsonElement?): JsonObject? =
         when (data) {
@@ -884,6 +906,16 @@ class EventDomainAdapter(
                 "workspace",
             )
     }
+}
+
+sealed interface EventParseOutcome {
+    /** Frame could not be decoded or no event type could be resolved. Possible lost event. */
+    data object Unrecognized : EventParseOutcome
+
+    /** Frame was recognized but intentionally projected to no domain event. */
+    data class Dropped(val type: String) : EventParseOutcome
+
+    data class Events(val events: List<OpencodeEvent>) : EventParseOutcome
 }
 
 data class ParsedSessionActivity(

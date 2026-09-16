@@ -8,6 +8,14 @@ import org.junit.Test
 
 class SseDiagnosticLoggingTest {
     @Test
+    fun droppedMessage_recordsType() {
+        assertEquals(
+            "SSE event dropped type=session.usage.updated",
+            SseDiagnosticLogging.droppedMessage("session.usage.updated"),
+        )
+    }
+
+    @Test
     fun parseFailedMessage_recordsTypeAndLengthWithoutBody() {
         assertEquals(
             "SSE event parse failed type=session.text.ended chars=42",

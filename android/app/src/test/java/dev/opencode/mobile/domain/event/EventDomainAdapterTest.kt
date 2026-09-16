@@ -941,6 +941,43 @@ class EventDomainAdapterTest {
     }
 
     @Test
+    fun parse_garbageJson_isUnrecognized() {
+        assertEquals(EventParseOutcome.Unrecognized, adapter.parse("not-json"))
+    }
+
+    @Test
+    fun parse_objectWithoutType_isUnrecognized() {
+        assertEquals(EventParseOutcome.Unrecognized, adapter.parse("""{"foo":1}"""))
+    }
+
+    @Test
+    fun parse_usageUpdatedWithoutAssistantId_isDropped() {
+        val outcome =
+            adapter.parse(
+                """{"type":"session.usage.updated","data":{"sessionID":"ses-1","tokens":{"input":120,"output":4}}}""",
+            )
+        assertEquals(EventParseOutcome.Dropped("session.usage.updated"), outcome)
+    }
+
+    @Test
+    fun parse_usageUpdatedWithAssistantId_emitsMessageUpdated() {
+        val outcome =
+            adapter.parse(
+                """{"type":"session.usage.updated","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","tokens":{"input":120,"output":4}}}""",
+            )
+        val events = outcome as EventParseOutcome.Events
+        assertEquals(listOf("message.updated"), events.events.map { it.type })
+    }
+
+    @Test
+    fun parse_syncWithoutSyncEvent_isUnrecognized() {
+        assertEquals(
+            EventParseOutcome.Unrecognized,
+            adapter.parse("""{"payload":{"type":"sync","properties":{}}}"""),
+        )
+    }
+
+    @Test
     fun parseEvent_projectsLiveRenamedIntoSessionUpdated() {
         val event =
             adapter.parseEvent(

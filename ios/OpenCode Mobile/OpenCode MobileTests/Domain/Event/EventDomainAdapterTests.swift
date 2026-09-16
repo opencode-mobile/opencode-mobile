@@ -528,6 +528,54 @@ struct EventDomainAdapterTests {
         #expect(event == nil)
     }
 
+    @Test func parse_garbageJson_isUnrecognized() {
+        let adapter = EventDomainAdapter()
+        guard case .unrecognized = adapter.parse("not-json") else {
+            Issue.record("expected unrecognized")
+            return
+        }
+    }
+
+    @Test func parse_objectWithoutType_isUnrecognized() {
+        let adapter = EventDomainAdapter()
+        guard case .unrecognized = adapter.parse(#"{"foo":1}"#) else {
+            Issue.record("expected unrecognized")
+            return
+        }
+    }
+
+    @Test func parse_usageUpdatedWithoutAssistantId_isDropped() {
+        let adapter = EventDomainAdapter()
+        let outcome = adapter.parse(
+            #"{"type":"session.usage.updated","data":{"sessionID":"ses-1","tokens":{"input":120,"output":4}}}"#
+        )
+        guard case .dropped(let type) = outcome else {
+            Issue.record("expected dropped")
+            return
+        }
+        #expect(type == "session.usage.updated")
+    }
+
+    @Test func parse_usageUpdatedWithAssistantId_emitsMessageUpdated() {
+        let adapter = EventDomainAdapter()
+        let outcome = adapter.parse(
+            #"{"type":"session.usage.updated","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","tokens":{"input":120,"output":4,"reasoning":0}}}"#
+        )
+        guard case .events(let events) = outcome else {
+            Issue.record("expected events")
+            return
+        }
+        #expect(events.map(\.type) == ["message.updated"])
+    }
+
+    @Test func parse_syncWithoutSyncEvent_isUnrecognized() {
+        let adapter = EventDomainAdapter()
+        guard case .unrecognized = adapter.parse(#"{"payload":{"type":"sync","properties":{}}}"#) else {
+            Issue.record("expected unrecognized")
+            return
+        }
+    }
+
     @Test func parseEvent_projectsLiveRenamedIntoSessionUpdated() {
         let adapter = EventDomainAdapter()
         let event = adapter.parseEvent(

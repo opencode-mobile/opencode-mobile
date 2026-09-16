@@ -5,6 +5,7 @@ nonisolated final class SseEventIngress: @unchecked Sendable {
         var parsed: [OpencodeEvent]
         var toEmit: [OpencodeEvent]
         var parseFailed: Bool
+        var droppedType: String? = nil
     }
 
     private let adapter: EventDomainAdapter
@@ -28,33 +29,43 @@ nonisolated final class SseEventIngress: @unchecked Sendable {
     }
 
     func accept(_ dataLine: String) -> Result {
-        let parsed = adapter.parseEvents(dataLine: dataLine)
-        if parsed.isEmpty {
-            let failed = !dataLine.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if dataLine.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return Result(parsed: [], toEmit: [], parseFailed: false)
+        }
+        switch adapter.parse(dataLine) {
+        case .unrecognized:
             return Result(
                 parsed: [],
-                toEmit: failed ? [OpencodeEvent(type: "sse.parse.failed", sessionID: nil)] : [],
-                parseFailed: failed
+                toEmit: [OpencodeEvent(type: "sse.parse.failed", sessionID: nil)],
+                parseFailed: true
             )
-        }
-        lock.lock()
-        var toEmit: [OpencodeEvent] = []
-        for event in parsed {
-            switch event.type {
-            case "server.connected":
-                if !emittedConnected {
-                    emittedConnected = true
-                    toEmit.append(event)
-                }
-            case "server.heartbeat":
-                break
-            default:
-                if deduper.accept(event.id) {
-                    toEmit.append(event)
+        case .dropped(let type):
+            return Result(
+                parsed: [],
+                toEmit: [],
+                parseFailed: false,
+                droppedType: type
+            )
+        case .events(let parsed):
+            lock.lock()
+            var toEmit: [OpencodeEvent] = []
+            for event in parsed {
+                switch event.type {
+                case "server.connected":
+                    if !emittedConnected {
+                        emittedConnected = true
+                        toEmit.append(event)
+                    }
+                case "server.heartbeat":
+                    break
+                default:
+                    if deduper.accept(event.id) {
+                        toEmit.append(event)
+                    }
                 }
             }
+            lock.unlock()
+            return Result(parsed: parsed, toEmit: toEmit, parseFailed: false)
         }
-        lock.unlock()
-        return Result(parsed: parsed, toEmit: toEmit, parseFailed: false)
     }
 }

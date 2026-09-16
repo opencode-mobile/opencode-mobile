@@ -18,39 +18,52 @@ internal class SseEventIngress(
         val parsed: List<OpencodeEvent>,
         val toEmit: List<OpencodeEvent>,
         val parseFailed: Boolean,
+        val droppedType: String? = null,
     )
 
     fun accept(dataLine: String): Result {
-        val parsed = adapter.parseEvents(dataLine)
-        if (parsed.isEmpty()) {
-            val failed = dataLine.isNotBlank()
-            return Result(
-                parsed = emptyList(),
-                toEmit = if (failed) listOf(OpencodeEvent(type = "sse.parse.failed")) else emptyList(),
-                parseFailed = failed,
-            )
+        if (dataLine.isBlank()) {
+            return Result(emptyList(), emptyList(), parseFailed = false)
         }
-        val toEmit =
-            synchronized(lock) {
-                val emit = ArrayList<OpencodeEvent>(parsed.size)
-                for (event in parsed) {
-                    when (event.type) {
-                        "server.connected" -> {
-                            if (!emittedConnected) {
-                                emittedConnected = true
-                                emit += event
+        return when (val outcome = adapter.parse(dataLine)) {
+            EventParseOutcome.Unrecognized ->
+                Result(
+                    parsed = emptyList(),
+                    toEmit = listOf(OpencodeEvent(type = "sse.parse.failed")),
+                    parseFailed = true,
+                )
+            is EventParseOutcome.Dropped ->
+                Result(
+                    parsed = emptyList(),
+                    toEmit = emptyList(),
+                    parseFailed = false,
+                    droppedType = outcome.type,
+                )
+            is EventParseOutcome.Events -> {
+                val parsed = outcome.events
+                val toEmit =
+                    synchronized(lock) {
+                        val emit = ArrayList<OpencodeEvent>(parsed.size)
+                        for (event in parsed) {
+                            when (event.type) {
+                                "server.connected" -> {
+                                    if (!emittedConnected) {
+                                        emittedConnected = true
+                                        emit += event
+                                    }
+                                }
+                                "server.heartbeat" -> Unit
+                                else -> {
+                                    if (deduper.accept(event.id)) {
+                                        emit += event
+                                    }
+                                }
                             }
                         }
-                        "server.heartbeat" -> Unit
-                        else -> {
-                            if (deduper.accept(event.id)) {
-                                emit += event
-                            }
-                        }
+                        emit
                     }
-                }
-                emit
+                Result(parsed = parsed, toEmit = toEmit, parseFailed = false)
             }
-        return Result(parsed = parsed, toEmit = toEmit, parseFailed = false)
+        }
     }
 }

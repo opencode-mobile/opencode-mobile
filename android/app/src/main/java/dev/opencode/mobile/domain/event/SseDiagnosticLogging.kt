@@ -5,6 +5,8 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 
 object SseDiagnosticLogging {
+    fun droppedMessage(type: String): String = "SSE event dropped type=$type"
+
     fun parseFailedMessage(dataLine: String): String {
         val trimmed = dataLine.trim()
         val type = EVENT_TYPE.find(trimmed)?.groupValues?.getOrNull(1) ?: "-"
