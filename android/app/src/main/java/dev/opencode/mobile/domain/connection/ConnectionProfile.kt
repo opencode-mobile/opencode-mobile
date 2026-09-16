@@ -11,6 +11,5 @@ data class ConnectionProfile(
     val displayName: String
         get() = name.trim().ifBlank { ConnectionProfileIdentity.hostLabel(baseUrl) }
 
-    fun hasSameIdentity(other: ConnectionProfile): Boolean =
-        ConnectionProfileIdentity.hasSameIdentity(this, other)
+    fun hasSameIdentity(other: ConnectionProfile): Boolean = ConnectionProfileIdentity.hasSameIdentity(this, other)
 }

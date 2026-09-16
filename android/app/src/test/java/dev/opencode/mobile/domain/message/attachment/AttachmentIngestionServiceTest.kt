@@ -82,11 +82,16 @@ class AttachmentIngestionServiceTest {
     @Test
     fun discard_deletesOwnedPendingFileAndIgnoresForeignPaths() {
         val owned =
-            java.io.File(
-                java.io.File(System.getProperty("java.io.tmpdir"), AttachmentLimits.STORE_DIRECTORY_NAME).apply { mkdirs() },
-                "pending.bin",
-            ).apply { writeBytes(byteArrayOf(1, 2, 3)) }
-        val foreign = kotlin.io.path.createTempFile(prefix = "foreign", suffix = ".bin").toFile().apply { writeBytes(byteArrayOf(4)) }
+            java.io
+                .File(
+                    java.io.File(System.getProperty("java.io.tmpdir"), AttachmentLimits.STORE_DIRECTORY_NAME).apply { mkdirs() },
+                    "pending.bin",
+                ).apply { writeBytes(byteArrayOf(1, 2, 3)) }
+        val foreign =
+            kotlin.io.path
+                .createTempFile(prefix = "foreign", suffix = ".bin")
+                .toFile()
+                .apply { writeBytes(byteArrayOf(4)) }
 
         AttachmentLimits.discard(owned.absolutePath)
         AttachmentLimits.discard(foreign.absolutePath)

@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -129,34 +128,34 @@ internal fun SessionChatToolGroupScreen(
             showDivider = true,
         )
         OpenCodeReadableColumn(modifier = Modifier.weight(1f)) {
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            target.members.forEach { card ->
-                OpenCodeToolCallCard(
-                    status = card.status.toGroupToolCallCardStatus(),
-                    title = card.title,
-                    subtitle = card.subtitle,
-                    additions = card.additions,
-                    deletions = card.deletions,
-                    errorText = card.errorText,
-                    onClick =
-                        toolGroupMemberOnClick(
-                            card = card,
-                            messageId = target.messageId,
-                            supportsSessionMessageDiff = supportsSessionMessageDiff,
-                            onToolDetailTap = onToolDetailTap,
-                            onChildSessionTap = onChildSessionTap,
-                            onChangesReviewTap = onChangesReviewTap,
-                        ),
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                target.members.forEach { card ->
+                    OpenCodeToolCallCard(
+                        status = card.status.toGroupToolCallCardStatus(),
+                        title = card.title,
+                        subtitle = card.subtitle,
+                        additions = card.additions,
+                        deletions = card.deletions,
+                        errorText = card.errorText,
+                        onClick =
+                            toolGroupMemberOnClick(
+                                card = card,
+                                messageId = target.messageId,
+                                supportsSessionMessageDiff = supportsSessionMessageDiff,
+                                onToolDetailTap = onToolDetailTap,
+                                onChildSessionTap = onChildSessionTap,
+                                onChangesReviewTap = onChangesReviewTap,
+                            ),
                     )
+                }
             }
-        }
         }
     }
 }

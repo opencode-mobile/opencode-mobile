@@ -49,7 +49,12 @@ class DisplayMessagePipelineCharacterizationTest {
             val frame = harness.emissions.single() as DisplayMessageListUpdate.Messages
             assertEquals("hi", frame.messages.single().text)
             assertEquals(1, harness.preparer.prepareMessagesInvocations.size)
-            assertEquals(MessagePreparationMode.Final, harness.preparer.prepareMessagesInvocations.single().mode)
+            assertEquals(
+                MessagePreparationMode.Final,
+                harness.preparer.prepareMessagesInvocations
+                    .single()
+                    .mode,
+            )
         }
 
     @Test
@@ -88,7 +93,12 @@ class DisplayMessagePipelineCharacterizationTest {
 
             harness.source.emit(MessageListUpdate.Messages(history))
 
-            assertEquals(MessagePreparationMode.HistoryPlainFirst, harness.preparer.prepareMessagesInvocations.first().mode)
+            assertEquals(
+                MessagePreparationMode.HistoryPlainFirst,
+                harness.preparer.prepareMessagesInvocations
+                    .first()
+                    .mode,
+            )
             // Newest-first HistoryPlainFirst: newest message frame, then remaining history.
             assertEquals(2, harness.emissions.size)
             val newestFirst = harness.emissions[0] as DisplayMessageListUpdate.Messages
@@ -135,7 +145,13 @@ class DisplayMessagePipelineCharacterizationTest {
                     .filterIsInstance<DisplayMessageListUpdate.Messages>()
                     .drop(2)
             assertEquals(1, enrichmentFrames.size)
-            assertTrue(enrichmentFrames.single().messages.single().renderedMarkdown != null)
+            assertTrue(
+                enrichmentFrames
+                    .single()
+                    .messages
+                    .single()
+                    .renderedMarkdown != null,
+            )
         }
 
     @Test
@@ -271,8 +287,21 @@ class DisplayMessagePipelineCharacterizationTest {
 
             val frames = harness.emissions.filterIsInstance<DisplayMessageListUpdate.Messages>()
             assertTrue("expected progressive streaming publishes, got ${frames.size}", frames.size >= 2)
-            assertEquals("xxxxxxxx", frames.last().messages.single().text)
-            assertTrue(frames.last().messages.single().isStreaming)
+            assertEquals(
+                "xxxxxxxx",
+                frames
+                    .last()
+                    .messages
+                    .single()
+                    .text,
+            )
+            assertTrue(
+                frames
+                    .last()
+                    .messages
+                    .single()
+                    .isStreaming,
+            )
         }
 
     @Test
@@ -589,8 +618,10 @@ class DisplayMessagePipelineCharacterizationTest {
             assertTrue(code.spans.isEmpty())
             assertTrue(harness.preparer.prepareStructureOnlyInvocations.isNotEmpty())
             // Decoration may still be held; structure must already be visible.
-            assertTrue(harness.preparer.prepareTextBlockInvocations.isEmpty() ||
-                harness.preparer.hasPendingPrepareMessagesHold())
+            assertTrue(
+                harness.preparer.prepareTextBlockInvocations.isEmpty() ||
+                    harness.preparer.hasPendingPrepareMessagesHold(),
+            )
         }
 
     @Test
@@ -736,7 +767,14 @@ class DisplayMessagePipelineCharacterizationTest {
                 harness.emissions.filterIsInstance<DisplayMessageListUpdate.Messages>()
             assertEquals(1, messages.size)
             assertFalse(messages.single().isFromCache)
-            assertEquals("cached", messages.single().messages.single().text)
+            assertEquals(
+                "cached",
+                messages
+                    .single()
+                    .messages
+                    .single()
+                    .text,
+            )
         }
 
     private fun TestScope.startHarness(

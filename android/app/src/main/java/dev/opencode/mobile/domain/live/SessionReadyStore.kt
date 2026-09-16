@@ -21,8 +21,7 @@ interface SessionReadyStore {
 }
 
 object EmptySessionReadyStore : SessionReadyStore {
-    override fun observeReadyIds(directory: String): Flow<Set<String>> =
-        kotlinx.coroutines.flow.flowOf(emptySet())
+    override fun observeReadyIds(directory: String): Flow<Set<String>> = kotlinx.coroutines.flow.flowOf(emptySet())
 
     override fun notifyPromptSent(
         sessionId: String,

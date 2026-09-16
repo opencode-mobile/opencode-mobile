@@ -59,9 +59,10 @@ class AndroidTextMateHighlightingEngine(
                     val ticketId = admit.ticketId
                     if (ticketId == null) {
                         val rejected =
-                            admit.completed.lastOrNull {
-                                it.request.key == request.key && it.request.revision == request.revision
-                            }?.result
+                            admit.completed
+                                .lastOrNull {
+                                    it.request.key == request.key && it.request.revision == request.revision
+                                }?.result
                                 ?: admit.completed.last().result
                         return@withLock CompletableDeferred(rejected)
                     }
@@ -147,6 +148,5 @@ class AndroidTextMateHighlightingEngine(
             }
     }
 
-    private fun ownedDelegate(): TextMateHighlightingEngine =
-        delegate ?: delegateFactory().also { created -> delegate = created }
+    private fun ownedDelegate(): TextMateHighlightingEngine = delegate ?: delegateFactory().also { created -> delegate = created }
 }

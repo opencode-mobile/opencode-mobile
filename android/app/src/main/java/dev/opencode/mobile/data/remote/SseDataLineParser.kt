@@ -42,6 +42,5 @@ internal class SseDataLineParser {
         return listOf(payload)
     }
 
-    private fun isCompleteJsonPayload(payload: String): Boolean =
-        runCatching { Json.parseToJsonElement(payload) }.isSuccess
+    private fun isCompleteJsonPayload(payload: String): Boolean = runCatching { Json.parseToJsonElement(payload) }.isSuccess
 }

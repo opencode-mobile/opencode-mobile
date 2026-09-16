@@ -39,14 +39,22 @@ class SessionChatTimelineOlderHistoryTest {
             timeline.bind("ses-1", "/repo")
             advanceUntilIdle()
 
-            assertEquals(listOf("c", "d"), timeline.state.value.messages.map { it.id })
+            assertEquals(
+                listOf("c", "d"),
+                timeline.state.value.messages
+                    .map { it.id },
+            )
             assertTrue(timeline.state.value.hasOlder)
 
             repository.failOlder = true
             timeline.loadOlder()
             advanceUntilIdle()
 
-            assertEquals(listOf("c", "d"), timeline.state.value.messages.map { it.id })
+            assertEquals(
+                listOf("c", "d"),
+                timeline.state.value.messages
+                    .map { it.id },
+            )
             assertTrue(timeline.state.value.hasOlder)
             assertFalse(timeline.state.value.isLoadingOlder)
 
@@ -54,7 +62,11 @@ class SessionChatTimelineOlderHistoryTest {
             timeline.loadOlder()
             advanceUntilIdle()
 
-            assertEquals(listOf("a", "b", "c", "d"), timeline.state.value.messages.map { it.id })
+            assertEquals(
+                listOf("a", "b", "c", "d"),
+                timeline.state.value.messages
+                    .map { it.id },
+            )
             assertFalse(timeline.state.value.hasOlder)
             assertEquals(2, repository.olderCalls)
         }

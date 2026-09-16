@@ -83,8 +83,7 @@ class DefaultTerminalRepository
             return result
         }
 
-        private fun List<TerminalSession>.running(): List<TerminalSession> =
-            filter { it.status == TerminalSessionStatus.Running }
+        private fun List<TerminalSession>.running(): List<TerminalSession> = filter { it.status == TerminalSessionStatus.Running }
 
         override fun connectRequest(
             id: String,

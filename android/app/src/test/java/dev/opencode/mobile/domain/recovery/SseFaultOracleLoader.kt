@@ -44,8 +44,7 @@ object SseFaultOracleLoader {
 
     fun loadSchemaObject(name: String): JsonObject = json.parseToJsonElement(readResource("/schema/$name")).jsonObject
 
-    fun schemaRequiredFields(schema: JsonObject): List<String> =
-        schema["required"]?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty()
+    fun schemaRequiredFields(schema: JsonObject): List<String> = schema["required"]?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty()
 
     private fun readResource(path: String): String {
         val stream =

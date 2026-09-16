@@ -204,8 +204,7 @@ class MessageSync(
         directory: String?,
     ): MessageSyncHealth = healthByKey[sessionKey(sessionId, directory)] ?: MessageSyncHealth.Fresh
 
-    fun observeCatchUpChrome(): Flow<Boolean> =
-        catchUpSlots.map { it.isNotEmpty() }.distinctUntilChanged()
+    fun observeCatchUpChrome(): Flow<Boolean> = catchUpSlots.map { it.isNotEmpty() }.distinctUntilChanged()
 
     fun observeCatchUpChrome(
         sessionId: String,
@@ -268,7 +267,8 @@ class MessageSync(
             extraPublishFlow(key.storeSlot),
         )
 
-    private fun extraPublishFlow(storeSlot: String): kotlinx.coroutines.flow.MutableSharedFlow<MessageListUpdate> = extraPublishes.getOrPut(storeSlot) {
+    private fun extraPublishFlow(storeSlot: String): kotlinx.coroutines.flow.MutableSharedFlow<MessageListUpdate> =
+        extraPublishes.getOrPut(storeSlot) {
             kotlinx.coroutines.flow.MutableSharedFlow(extraBufferCapacity = 8)
         }
 
@@ -305,7 +305,8 @@ class MessageSync(
             )
     }
 
-    private fun messageCacheHandle(key: MessageSessionKey): SessionMessageCacheHandle = messageCacheHandles.computeIfAbsent(key) {
+    private fun messageCacheHandle(key: MessageSessionKey): SessionMessageCacheHandle =
+        messageCacheHandles.computeIfAbsent(key) {
             sessionCache.openMessages(sessionId = key.sessionId, worktree = key.directory)
         }
 
@@ -317,8 +318,8 @@ class MessageSync(
         channelFlow {
             val startedGeneration = observationGeneration.get()
             noteMessageActivity(key.storeSlot)
-            fun observationStillCurrent(): Boolean =
-                observationGeneration.get() == startedGeneration && key !in terminalSessionKeys
+
+            fun observationStillCurrent(): Boolean = observationGeneration.get() == startedGeneration && key !in terminalSessionKeys
 
             val staging = Channel<StagedItem>(capacity = eventStagingCapacity)
             val queued = AtomicInteger(0)
@@ -330,7 +331,9 @@ class MessageSync(
             val cacheHandle = messageCacheHandle(key)
             val projection = transcriptKey(key)
             val extra = extraPublishFlow(storeSlot)
-            val overflowed = java.util.concurrent.atomic.AtomicBoolean(false)
+            val overflowed =
+                java.util.concurrent.atomic
+                    .AtomicBoolean(false)
 
             suspend fun emitMessages(
                 messages: List<Message>,

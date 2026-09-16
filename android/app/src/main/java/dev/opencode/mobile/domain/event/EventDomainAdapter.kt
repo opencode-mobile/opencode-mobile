@@ -24,8 +24,7 @@ class EventDomainAdapter(
 ) {
     fun parseEvent(dataLine: String): OpencodeEvent? = parseEvents(dataLine).firstOrNull()
 
-    fun parseEvents(dataLine: String): List<OpencodeEvent> =
-        (parse(dataLine) as? EventParseOutcome.Events)?.events ?: emptyList()
+    fun parseEvents(dataLine: String): List<OpencodeEvent> = (parse(dataLine) as? EventParseOutcome.Events)?.events ?: emptyList()
 
     fun parse(dataLine: String): EventParseOutcome {
         val raw =
@@ -913,9 +912,13 @@ sealed interface EventParseOutcome {
     data object Unrecognized : EventParseOutcome
 
     /** Frame was recognized but intentionally projected to no domain event. */
-    data class Dropped(val type: String) : EventParseOutcome
+    data class Dropped(
+        val type: String,
+    ) : EventParseOutcome
 
-    data class Events(val events: List<OpencodeEvent>) : EventParseOutcome
+    data class Events(
+        val events: List<OpencodeEvent>,
+    ) : EventParseOutcome
 }
 
 data class ParsedSessionActivity(

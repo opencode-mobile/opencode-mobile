@@ -57,7 +57,8 @@ class DefaultSessionTodoLiveStore
         ): Flow<List<SessionTodo>> {
             val key = SessionKey(sessionId, directory.orEmpty())
             val state = sessions.getOrPut(key) { SessionState() }
-            return state.updates.onStart {
+            return state.updates
+                .onStart {
                     state.observerCount += 1
                     ensureEventLoop(key, state)
                     emit(state.todos)

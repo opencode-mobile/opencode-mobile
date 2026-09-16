@@ -666,12 +666,10 @@ class DisplayMessagePipeline(
         )
     }
 
-    private fun hasStreamingDelta(messages: List<Message>): Boolean =
-        messages.any(::messageHasStreamingText)
+    private fun hasStreamingDelta(messages: List<Message>): Boolean = messages.any(::messageHasStreamingText)
 }
 
-private fun messageHasStreamingText(message: Message): Boolean =
-    message.parts.any { part -> part is MessagePart.Text && part.isStreaming }
+private fun messageHasStreamingText(message: Message): Boolean = message.parts.any { part -> part is MessagePart.Text && part.isStreaming }
 
 internal data class StreamingDecorationTarget(
     val blockID: String,
@@ -747,8 +745,7 @@ internal fun resolveStreamingDecorationTarget(message: Message): StreamingDecora
 }
 
 /** Mirrors [SessionChatTimelineBlocks] visibility used when flushing text runs. */
-private fun isVisibleToolForStreamingDecoration(tool: MessagePart.Tool): Boolean =
-    ToolPartIdentity.isVisibleOnTimeline(tool)
+private fun isVisibleToolForStreamingDecoration(tool: MessagePart.Tool): Boolean = ToolPartIdentity.isVisibleOnTimeline(tool)
 
 private fun messageHasSoleTextBlock(message: Message): Boolean {
     val blocks =

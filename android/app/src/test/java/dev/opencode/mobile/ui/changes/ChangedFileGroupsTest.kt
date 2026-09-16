@@ -90,7 +90,16 @@ class ChangedFileGroupsTest {
             )
 
         assertEquals(listOf("changes"), content.fileGroups.map(ChangedFileGroup::directory))
-        assertEquals("ChangesScreen.kt", changedFileName(content.fileGroups.single().files.single().path))
+        assertEquals(
+            "ChangesScreen.kt",
+            changedFileName(
+                content.fileGroups
+                    .single()
+                    .files
+                    .single()
+                    .path,
+            ),
+        )
     }
 
     @Test

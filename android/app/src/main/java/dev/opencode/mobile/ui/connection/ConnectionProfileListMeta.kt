@@ -4,8 +4,7 @@ import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.ui.components.OpenCodeListItemStatus
 import dev.opencode.mobile.ui.components.OpenCodeListItemStatusTone
 
-internal fun ConnectionProfile.listCaption(isActive: Boolean): String? =
-    serverProtocol?.takeIf { isActive }?.apiCaption
+internal fun ConnectionProfile.listCaption(isActive: Boolean): String? = serverProtocol?.takeIf { isActive }?.apiCaption
 
 internal fun ConnectionProfile.listStatus(isActive: Boolean): OpenCodeListItemStatus? =
     when {

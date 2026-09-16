@@ -125,8 +125,7 @@ class SettingsViewModel
             SessionChatDisplayPreferences.updateFollowUpDelivery(value)
         }
 
-        fun supportsFollowUpDelivery(): Boolean =
-            activeConnectionManager.currentCapabilities().supportsFollowUpDelivery
+        fun supportsFollowUpDelivery(): Boolean = activeConnectionManager.currentCapabilities().supportsFollowUpDelivery
 
         fun setTextMateEnabled(enabled: Boolean) {
             MarkdownHighlightPreferences.updateTextMateEnabled(enabled)

@@ -47,7 +47,11 @@ class ModelDomainAdapter {
             models
                 .filter { model -> isUsable(model) && model.providerId !in disabledProviders }
                 .map { model ->
-                    val inputs = model.capabilities?.input.orEmpty().map { it.lowercase() }
+                    val inputs =
+                        model.capabilities
+                            ?.input
+                            .orEmpty()
+                            .map { it.lowercase() }
                     ModelSelectionOption(
                         providerId = model.providerId,
                         providerName = providerNames[model.providerId] ?: model.providerId,
@@ -78,8 +82,7 @@ class ModelDomainAdapter {
 
     private fun isUsable(model: ProviderModelDto): Boolean = model.disabled != true && model.status?.lowercase() != "deprecated"
 
-    private fun isUsable(model: V2ModelInfoDto): Boolean =
-        model.enabled != false && model.status?.lowercase() != "deprecated"
+    private fun isUsable(model: V2ModelInfoDto): Boolean = model.enabled != false && model.status?.lowercase() != "deprecated"
 
     private fun defaultOption(
         defaults: Map<String, String>,

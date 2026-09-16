@@ -6,7 +6,6 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.opencode.mobile.domain.sessioncontext.SessionContextBreakdownItem
 import dev.opencode.mobile.domain.sessioncontext.SessionContextRepository
 import dev.opencode.mobile.domain.sessioncontext.SessionContextSnapshot
-import dev.opencode.mobile.domain.sessioncontext.SessionContextTokenStats
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow

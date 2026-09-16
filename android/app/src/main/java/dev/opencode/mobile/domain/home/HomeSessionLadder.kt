@@ -86,7 +86,12 @@ object HomeSessionLadder {
         for (offset in 0 until DAY_WINDOW_COUNT) {
             val day = today.minusDays(offset.toLong())
             val startMs = day.atStartOfDay(zoneId).toInstant().toEpochMilli()
-            val endMs = day.plusDays(1).atStartOfDay(zoneId).toInstant().toEpochMilli()
+            val endMs =
+                day
+                    .plusDays(1)
+                    .atStartOfDay(zoneId)
+                    .toInstant()
+                    .toEpochMilli()
             val items =
                 rest.filter { session ->
                     val updated = updatedAtEpochMs(session) ?: return@filter false

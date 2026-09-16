@@ -12,8 +12,7 @@ import dev.opencode.mobile.domain.preferences.AnalyticsConsentPreferences
 internal object OpenCodeReleaseObservability {
     fun initialize(application: Application) = Unit
 
-    fun isProductAnalyticsConsented(): Boolean =
-        AnalyticsConsentPreferences.productAnalyticsConsented
+    fun isProductAnalyticsConsented(): Boolean = AnalyticsConsentPreferences.productAnalyticsConsented
 
     fun setProductAnalyticsConsented(value: Boolean) {
         AnalyticsConsentPreferences.updateProductAnalyticsConsented(value)

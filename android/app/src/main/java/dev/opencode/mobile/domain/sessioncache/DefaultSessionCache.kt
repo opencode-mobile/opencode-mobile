@@ -227,8 +227,7 @@ private fun logSessionCacheIo(
     DiagnosticLog.warning(DiagnosticLogArea.Session, action, error)
 }
 
-private fun SessionActivityCacheEntry.normalized(): SessionActivityCacheEntry =
-    copy(activity = activity.forCache())
+private fun SessionActivityCacheEntry.normalized(): SessionActivityCacheEntry = copy(activity = activity.forCache())
 
 private fun SessionActivity.forCache(): SessionActivity =
     when (this) {

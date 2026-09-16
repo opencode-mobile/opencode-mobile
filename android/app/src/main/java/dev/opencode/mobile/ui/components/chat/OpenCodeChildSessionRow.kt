@@ -71,8 +71,7 @@ fun OpenCodeChildSessionRow(
                     if (onClick != null) {
                         role = Role.Button
                     }
-                }
-                .then(
+                }.then(
                     if (onClick != null) {
                         Modifier
                             .clip(shape)

@@ -42,7 +42,12 @@ class FilesystemProtocolRepositoryTest {
 
             assertEquals("/home", paths.home)
             assertEquals("/repo", paths.directory)
-            assertTrue(requests.single().url.encodedPath.endsWith("/path"))
+            assertTrue(
+                requests
+                    .single()
+                    .url.encodedPath
+                    .endsWith("/path"),
+            )
         }
 
     @Test
@@ -73,7 +78,12 @@ class FilesystemProtocolRepositoryTest {
             assertEquals("/repo", paths.home)
             assertEquals("/repo", paths.directory)
             assertEquals("/repo", paths.worktree)
-            assertTrue(requests.single().url.encodedPath.contains("/api/location"))
+            assertTrue(
+                requests
+                    .single()
+                    .url.encodedPath
+                    .contains("/api/location"),
+            )
         }
 
     @Test
@@ -108,7 +118,12 @@ class FilesystemProtocolRepositoryTest {
             assertEquals(listOf("docs", "src"), nodes.map { it.name })
             assertEquals(listOf("/repo/docs", "/repo/src"), nodes.map { it.absolutePath })
             assertTrue(nodes.all { it.isDirectory })
-            assertTrue(requests.single().url.encodedPath.contains("/api/fs/list"))
+            assertTrue(
+                requests
+                    .single()
+                    .url.encodedPath
+                    .contains("/api/fs/list"),
+            )
             assertEquals("/repo", requests.single().url.parameters["location[directory]"])
             assertEquals(".", requests.single().url.parameters["path"])
         }

@@ -61,30 +61,30 @@ fun TerminalScreen(
             showDivider = true,
         )
         OpenCodeReadableColumn(modifier = Modifier.weight(1f)) {
-        when (uiState) {
-            TerminalUiState.Connecting ->
-                OpenCodeStatusStack(
-                    title = "Connecting",
-                    subtitle = "Starting shell…",
-                    modifier = Modifier.fillMaxSize(),
-                )
-            is TerminalUiState.Live,
-            is TerminalUiState.Reconnecting,
-            ->
-                TerminalLivePane(viewModel = viewModel)
-            TerminalUiState.ConnectFailed ->
-                TerminalErrorContent(
-                    title = "Connect failed",
-                    message = "Could not start a shell for this project.",
-                    onRetry = viewModel::retry,
-                )
-            TerminalUiState.Exited ->
-                TerminalErrorContent(
-                    title = "Shell ended",
-                    message = "Shell ended",
-                    onRetry = viewModel::retry,
-                )
-        }
+            when (uiState) {
+                TerminalUiState.Connecting ->
+                    OpenCodeStatusStack(
+                        title = "Connecting",
+                        subtitle = "Starting shell…",
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                is TerminalUiState.Live,
+                is TerminalUiState.Reconnecting,
+                ->
+                    TerminalLivePane(viewModel = viewModel)
+                TerminalUiState.ConnectFailed ->
+                    TerminalErrorContent(
+                        title = "Connect failed",
+                        message = "Could not start a shell for this project.",
+                        onRetry = viewModel::retry,
+                    )
+                TerminalUiState.Exited ->
+                    TerminalErrorContent(
+                        title = "Shell ended",
+                        message = "Shell ended",
+                        onRetry = viewModel::retry,
+                    )
+            }
         }
     }
 }

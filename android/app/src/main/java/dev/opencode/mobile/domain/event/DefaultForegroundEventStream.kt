@@ -5,10 +5,10 @@ import dev.opencode.mobile.data.remote.SseAttemptOutcome
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileIdentity
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
-import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.connection.DeviceNetworkPath
 import dev.opencode.mobile.domain.connection.DeviceNetworkPathStatus
 import dev.opencode.mobile.domain.connection.ReadyDeviceNetworkPath
+import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogger
 import dev.opencode.mobile.domain.message.ConnectionEpoch
@@ -252,10 +252,11 @@ class DefaultForegroundEventStream
                 snapshot = buildSnapshotLocked(EventStreamConnectionState.Idle)
             }
             occupancyToJoin?.cancel()
-            val toJoin = buildList {
-                occupancyToJoin?.let { add(it) }
-                addAll(leaseJobs)
-            }
+            val toJoin =
+                buildList {
+                    occupancyToJoin?.let { add(it) }
+                    addAll(leaseJobs)
+                }
             toJoin.forEach { it.join() }
             setConnectionState(EventStreamConnectionState.Idle, generation)
             _snapshot.value = snapshot

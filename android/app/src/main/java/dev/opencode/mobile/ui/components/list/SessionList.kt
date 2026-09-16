@@ -214,8 +214,7 @@ fun SessionList(
                             if (height != dockBlockHeight) {
                                 dockBlockHeight = height
                             }
-                        }
-                        .navigationBarsPadding(),
+                        }.navigationBarsPadding(),
             )
         }
     }
@@ -465,7 +464,11 @@ private fun rememberStabilizedLadder(
                     previousLastAppliedAtEpochMs = hold.lastAppliedAtEpochMs,
                     desired = desired,
                     itemId = SessionListSession::id,
-                    isAttention = { it.status == SessionListStatus.Running || it.status == SessionListStatus.Retrying || it.status == SessionListStatus.Ready },
+                    isAttention = {
+                        it.status == SessionListStatus.Running ||
+                            it.status == SessionListStatus.Retrying ||
+                            it.status == SessionListStatus.Ready
+                    },
                     isReady = { it.status == SessionListStatus.Ready },
                     nowEpochMs = System.currentTimeMillis(),
                 )

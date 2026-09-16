@@ -51,7 +51,13 @@ class SessionContextViewModelTest {
             advanceUntilIdle()
 
             assertEquals(SessionContextTimelineState.Ready, viewModel.uiState.value.timeline)
-            assertEquals("Loaded", viewModel.uiState.value.display?.stats?.first { it.id == "session" }?.value)
+            assertEquals(
+                "Loaded",
+                viewModel.uiState.value.display
+                    ?.stats
+                    ?.first { it.id == "session" }
+                    ?.value,
+            )
             assertEquals(false, viewModel.uiState.value.isRefreshing)
             assertEquals("Refresh failed", viewModel.uiState.value.errorMessage)
             assertNotNull(viewModel.uiState.value.display)

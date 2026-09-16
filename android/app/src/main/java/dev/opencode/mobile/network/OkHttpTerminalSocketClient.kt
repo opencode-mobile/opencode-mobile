@@ -39,8 +39,7 @@ class OkHttpTerminalSocketClient
                         if (!authorization.isNullOrEmpty()) {
                             header("Authorization", authorization)
                         }
-                    }
-                    .build()
+                    }.build()
             webSocket =
                 client.newWebSocket(
                     request,

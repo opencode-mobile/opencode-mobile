@@ -435,8 +435,7 @@ class DefaultSessionReadyStore
             readyFlow(directory).value = readyIdsFor(directory)
         }
 
-        private fun readyIdsFor(directory: String): Set<String> =
-            ready.filterValues { it.directory == directory }.keys.toSet()
+        private fun readyIdsFor(directory: String): Set<String> = ready.filterValues { it.directory == directory }.keys.toSet()
 
         private fun readyFlow(directory: String): MutableStateFlow<Set<String>> =
             readyFlows.getOrPut(directory) {
@@ -459,7 +458,6 @@ class DefaultSessionReadyStore
         )
 
         companion object {
-
             const val READY_TTL_MS: Long = 24L * 60L * 60L * 1000L
         }
     }

@@ -55,9 +55,7 @@ abstract class LiveStoreModule {
 
     @Binds
     @Singleton
-    abstract fun bindSessionReadyPersistence(
-        impl: SharedPreferencesSessionReadyPersistence,
-    ): SessionReadyPersistence
+    abstract fun bindSessionReadyPersistence(impl: SharedPreferencesSessionReadyPersistence): SessionReadyPersistence
 
     @Binds
     @Singleton

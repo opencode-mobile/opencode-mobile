@@ -1,15 +1,15 @@
 package dev.opencode.mobile.domain.diagnostic
 
 import androidx.core.util.AtomicFile
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import java.io.File
 import java.util.UUID
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 
 enum class DiagnosticLogArea(
     val wireValue: String,
@@ -201,13 +201,14 @@ class DiagnosticLogBuffer(
         val loaded =
             runCatching {
                 store.useLines { lines ->
-                    lines.mapNotNull { line ->
-                        line
-                            .takeIf(String::isNotBlank)
-                            ?.let { encoded ->
-                                runCatching { json.decodeFromString<DiagnosticLogEntry>(encoded) }.getOrNull()
-                            }
-                    }.toList()
+                    lines
+                        .mapNotNull { line ->
+                            line
+                                .takeIf(String::isNotBlank)
+                                ?.let { encoded ->
+                                    runCatching { json.decodeFromString<DiagnosticLogEntry>(encoded) }.getOrNull()
+                                }
+                        }.toList()
                 }
             }.getOrDefault(emptyList())
         entries.clear()

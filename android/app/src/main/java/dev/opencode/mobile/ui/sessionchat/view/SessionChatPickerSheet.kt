@@ -1,7 +1,6 @@
 package dev.opencode.mobile.ui.sessionchat.view
 
 import androidx.compose.foundation.background
-import dev.opencode.mobile.ui.sessionchat.SessionChatViewModel
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -31,6 +30,7 @@ import dev.opencode.mobile.ui.components.OpenCodeBottomSheetContentMode
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetHeaderAction
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
+import dev.opencode.mobile.ui.sessionchat.SessionChatViewModel
 
 internal enum class ComposerPickerKind(
     val sheetTitle: String,

@@ -50,12 +50,13 @@ class DisplayMessagePipelineOlderLoadTest {
                     engine = SessionMessageEngine(InMemoryMessageStore(MessageDomainAdapter())),
                     eventStream = FakeForegroundEventStream(),
                     liveStoreScope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher)),
-                    syncCoordinator = testSyncCoordinator(
-                        eventStream = FakeForegroundEventStream(),
-                        scope = CoroutineScope(SupervisorJob() + testDispatcher),
-                        nowMs = { testDispatcher.scheduler.currentTime },
-                        wait = { kotlinx.coroutines.delay(it) },
-                    ),
+                    syncCoordinator =
+                        testSyncCoordinator(
+                            eventStream = FakeForegroundEventStream(),
+                            scope = CoroutineScope(SupervisorJob() + testDispatcher),
+                            nowMs = { testDispatcher.scheduler.currentTime },
+                            wait = { kotlinx.coroutines.delay(it) },
+                        ),
                     nowMs = { testDispatcher.scheduler.currentTime },
                 )
             val pipeline =

@@ -133,7 +133,10 @@ object ThemeManager {
         val ctx = appContext ?: return emptyList()
         return try {
             val manifest =
-                ctx.assets.open("$PRESET_ASSET_DIR/manifest.json").bufferedReader().use { it.readText() }
+                ctx.assets
+                    .open("$PRESET_ASSET_DIR/manifest.json")
+                    .bufferedReader()
+                    .use { it.readText() }
             json.decodeFromString<List<ThemePreset>>(manifest).also { cachedManifestPresets = it }
         } catch (e: Exception) {
             DiagnosticLog.error(DiagnosticLogArea.Connection, "Failed to load theme preset manifest", e)
@@ -146,14 +149,19 @@ object ThemeManager {
         val ctx = appContext ?: return listOf(SyntaxHighlightPreset.Match)
         return try {
             val manifest =
-                ctx.assets.open("$SYNTAX_ASSET_DIR/syntax-manifest.json").bufferedReader().use { it.readText() }
-            json.decodeFromString<List<SyntaxHighlightPreset>>(manifest).map { entry ->
-                if (entry.id == MATCH_SYNTAX_PRESET_ID) {
-                    SyntaxHighlightPreset.Match.copy(name = entry.name, blurb = entry.blurb)
-                } else {
-                    loadSyntaxPreset(entry.id) ?: entry
-                }
-            }.also { cachedSyntaxPresets = it }
+                ctx.assets
+                    .open("$SYNTAX_ASSET_DIR/syntax-manifest.json")
+                    .bufferedReader()
+                    .use { it.readText() }
+            json
+                .decodeFromString<List<SyntaxHighlightPreset>>(manifest)
+                .map { entry ->
+                    if (entry.id == MATCH_SYNTAX_PRESET_ID) {
+                        SyntaxHighlightPreset.Match.copy(name = entry.name, blurb = entry.blurb)
+                    } else {
+                        loadSyntaxPreset(entry.id) ?: entry
+                    }
+                }.also { cachedSyntaxPresets = it }
         } catch (e: Exception) {
             DiagnosticLog.error(DiagnosticLogArea.Connection, "Failed to load syntax preset manifest", e)
             listOf(SyntaxHighlightPreset.Match)
@@ -164,7 +172,10 @@ object ThemeManager {
         val ctx = appContext ?: return null
         return try {
             val jsonString =
-                ctx.assets.open("$SYNTAX_ASSET_DIR/$id.json").bufferedReader().use { it.readText() }
+                ctx.assets
+                    .open("$SYNTAX_ASSET_DIR/$id.json")
+                    .bufferedReader()
+                    .use { it.readText() }
             json.decodeFromString<SyntaxHighlightPreset>(jsonString)
         } catch (_: Exception) {
             null
@@ -200,7 +211,10 @@ object ThemeManager {
         val ctx = appContext ?: return null
         return try {
             val jsonString =
-                ctx.assets.open("$PRESET_ASSET_DIR/$id.json").bufferedReader().use { it.readText() }
+                ctx.assets
+                    .open("$PRESET_ASSET_DIR/$id.json")
+                    .bufferedReader()
+                    .use { it.readText() }
             json.decodeFromString<OpenCodeTheme>(jsonString)
         } catch (_: Exception) {
             null

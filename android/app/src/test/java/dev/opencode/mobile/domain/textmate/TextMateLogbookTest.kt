@@ -3,7 +3,6 @@ package dev.opencode.mobile.domain.textmate
 import dev.opencode.mobile.markdown.MarkdownDiagnosticKind
 import dev.opencode.mobile.markdown.TextMateParseObservation
 import dev.opencode.mobile.markdown.TextMateParseOutcome
-import java.nio.file.Files
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
@@ -11,6 +10,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.nio.file.Files
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class TextMateLogbookTest {
@@ -31,7 +31,12 @@ class TextMateLogbookTest {
             val first = store.snapshot()
             assertEquals(1, first.entries.size)
             assertEquals(42L, first.entries.single().timestampEpochMilliseconds)
-            assertEquals("kotlin", first.entries.single().observation.canonicalLanguage)
+            assertEquals(
+                "kotlin",
+                first.entries
+                    .single()
+                    .observation.canonicalLanguage,
+            )
 
             file.appendText("{corrupt-tail")
             val reopened = TextMateLogbook(file = file, dispatcher = dispatcher)
@@ -61,7 +66,12 @@ class TextMateLogbookTest {
             val snapshot = store.snapshot()
 
             assertEquals(TextMateLogbook.MAX_PERSISTED_ENTRIES, snapshot.entries.size)
-            assertEquals("language-559", snapshot.entries.first().observation.canonicalLanguage)
+            assertEquals(
+                "language-559",
+                snapshot.entries
+                    .first()
+                    .observation.canonicalLanguage,
+            )
             val persisted = file.readText()
             assertFalse(persisted.contains("secret source"))
             assertFalse(persisted.contains("session-id"))

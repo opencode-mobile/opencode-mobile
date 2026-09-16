@@ -1,9 +1,9 @@
 package dev.opencode.mobile.domain.message
 
 import dev.opencode.mobile.data.remote.dto.MessageInfoDto
+import dev.opencode.mobile.data.remote.dto.MessagePartDto
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
-import dev.opencode.mobile.data.remote.dto.MessagePartDto
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -325,7 +325,12 @@ class InMemoryMessageStore
             sessionId: String,
             messageId: String,
         ): Boolean {
-            val infoRole = infoCaches[sessionId]?.get(messageId)?.get("role")?.jsonPrimitive?.contentOrNull
+            val infoRole =
+                infoCaches[sessionId]
+                    ?.get(messageId)
+                    ?.get("role")
+                    ?.jsonPrimitive
+                    ?.contentOrNull
             if (infoRole.equals("user", ignoreCase = true)) return true
             return baseMessages[sessionId]?.firstOrNull { it.id == messageId }?.role == MessageRole.User
         }
@@ -335,9 +340,10 @@ class InMemoryMessageStore
             messageId: String,
         ): Boolean {
             val base = baseMessages[sessionId]?.firstOrNull { it.id == messageId }
-            val infoRole = infoCaches[sessionId]?.get(messageId)?.let { info ->
-                info["role"]?.jsonPrimitive?.contentOrNull
-            }
+            val infoRole =
+                infoCaches[sessionId]?.get(messageId)?.let { info ->
+                    info["role"]?.jsonPrimitive?.contentOrNull
+                }
             val isAssistant =
                 infoRole.equals("assistant", ignoreCase = true) ||
                     base?.role == MessageRole.Assistant
@@ -422,7 +428,12 @@ class InMemoryMessageStore
             val msgParts = partsCaches[sessionId]?.get(messageId) ?: return null
             val existing = msgParts[partId] ?: return null
             if (existing is MessagePart.Tool) {
-                val previous = existing.input?.get("preview")?.jsonPrimitive?.contentOrNull.orEmpty()
+                val previous =
+                    existing.input
+                        ?.get("preview")
+                        ?.jsonPrimitive
+                        ?.contentOrNull
+                        .orEmpty()
                 msgParts[partId] =
                     existing.copy(
                         input =
@@ -1018,6 +1029,5 @@ class InMemoryMessageStore
         private fun Message.hasRenderableContent(): Boolean = text.isNotBlank() || parts.isNotEmpty()
 
         companion object {
-
         }
     }

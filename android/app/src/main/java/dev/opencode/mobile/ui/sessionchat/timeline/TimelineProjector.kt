@@ -111,8 +111,7 @@ object TimelineProjector {
     fun reconciliationSignaturesById(rows: List<TimelineRow>): Map<String, String> =
         rows.associate { row -> row.id to reconciliationSignature(row) }
 
-    fun isHiddenPendingPrompt(item: SessionChatMessageItem): Boolean =
-        item.role == MessageRole.User && item.pendingDelivery != null
+    fun isHiddenPendingPrompt(item: SessionChatMessageItem): Boolean = item.role == MessageRole.User && item.pendingDelivery != null
 
     fun displayedOptimisticSendItems(items: List<SessionChatMessageItem>): List<SessionChatMessageItem> =
         items.filterNot(::isHiddenPendingPrompt)
@@ -357,8 +356,7 @@ object TimelineProjector {
      * matching optimistic row, then leave the displayed set. The timeline shows
      * delivered history only — Steer and Queue, including optimistic rows.
      */
-    fun isHiddenPendingPrompt(row: TimelineRow): Boolean =
-        row.role == MessageRole.User && row.pendingDelivery != null
+    fun isHiddenPendingPrompt(row: TimelineRow): Boolean = row.role == MessageRole.User && row.pendingDelivery != null
 
     private fun mergeWithPending(
         serverRows: List<TimelineRow>,

@@ -400,7 +400,10 @@ object SessionChatTimelineBlocks {
      * collapse is on every other visible tool groups, otherwise only context
      * tools do.
      */
-    private fun isGroupableTool(tool: MessagePart.Tool, collapse: Boolean): Boolean {
+    private fun isGroupableTool(
+        tool: MessagePart.Tool,
+        collapse: Boolean,
+    ): Boolean {
         if (isChildSessionTool(tool.toolName)) return false
         if (collapse) return true
         return isContextTool(tool.toolName)
@@ -676,8 +679,7 @@ object SessionChatTimelineBlocks {
         )
     }
 
-    private fun canOpenChangesReview(status: ToolStatus): Boolean =
-        status == ToolStatus.Completed || status == ToolStatus.Error
+    private fun canOpenChangesReview(status: ToolStatus): Boolean = status == ToolStatus.Completed || status == ToolStatus.Error
 
     private data class PatchFileEntry(
         val path: String,
@@ -776,8 +778,7 @@ object SessionChatTimelineBlocks {
         return name == "task" || name == "subagent"
     }
 
-    private fun childSessionId(tool: MessagePart.Tool): String? =
-        metadataString(tool.metadata, "sessionId", "sessionID")
+    private fun childSessionId(tool: MessagePart.Tool): String? = metadataString(tool.metadata, "sessionId", "sessionID")
 
     private fun contextChrome(
         tool: MessagePart.Tool,
@@ -926,12 +927,10 @@ object SessionChatTimelineBlocks {
             else -> null
         }
 
-    private fun pathSubtitle(input: JsonObject?): String? =
-        inputString(input, "filePath", "path", "file")
+    private fun pathSubtitle(input: JsonObject?): String? = inputString(input, "filePath", "path", "file")
 
     /** Read chrome is the file, not explore/cwd `path` (often the project root). */
-    private fun readPathSubtitle(input: JsonObject?): String? =
-        inputString(input, "filePath", "file")
+    private fun readPathSubtitle(input: JsonObject?): String? = inputString(input, "filePath", "file")
 
     private fun patternPathSubtitle(input: JsonObject?): String? {
         val pattern = inputString(input, "pattern")
@@ -944,11 +943,9 @@ object SessionChatTimelineBlocks {
         }
     }
 
-    private fun isQuestionTool(tool: MessagePart.Tool): Boolean =
-        ToolPartIdentity.isQuestion(tool.toolName, tool.input)
+    private fun isQuestionTool(tool: MessagePart.Tool): Boolean = ToolPartIdentity.isQuestion(tool.toolName, tool.input)
 
-    private fun askedQuestionsTitle(count: Int): String =
-        if (count == 1) "Asked 1 question" else "Asked $count questions"
+    private fun askedQuestionsTitle(count: Int): String = if (count == 1) "Asked 1 question" else "Asked $count questions"
 
     private fun questionChrome(tool: MessagePart.Tool): Chrome {
         val questions = questionTexts(tool.input)

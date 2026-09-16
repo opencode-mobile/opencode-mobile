@@ -31,8 +31,8 @@ import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeListItemStyle
-import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
 import dev.opencode.mobile.ui.components.OpenCodeOverflowMenuEntry
+import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarAction
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
@@ -171,10 +171,10 @@ fun TextMateLanguagesScreen(
                         .padding(bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-            SectionHeader(title = "Packaged")
-            rows.forEach { row ->
-                LanguageToggleRow(row = row, onLanguageEnabledChange = onLanguageEnabledChange)
-            }
+                SectionHeader(title = "Packaged")
+                rows.forEach { row ->
+                    LanguageToggleRow(row = row, onLanguageEnabledChange = onLanguageEnabledChange)
+                }
             }
         }
     }

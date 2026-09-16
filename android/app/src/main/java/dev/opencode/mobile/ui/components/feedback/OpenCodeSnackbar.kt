@@ -69,8 +69,7 @@ fun OpenCodeSnackbarHost(
                 .fillMaxWidth()
                 .padding(
                     horizontal = OpenCodeSnackbarScreenMarginHorizontal - OpenCodeSnackbarMaterialOuterInset,
-                )
-                .padding(
+                ).padding(
                     bottom = OpenCodeSnackbarScreenMarginBottom - OpenCodeSnackbarMaterialOuterInset,
                 ),
     ) { data ->

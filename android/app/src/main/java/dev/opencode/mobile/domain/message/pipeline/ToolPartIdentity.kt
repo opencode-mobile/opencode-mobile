@@ -56,11 +56,9 @@ object ToolPartIdentity {
         return true
     }
 
-    private fun hasQuestions(input: JsonObject?): Boolean =
-        (input?.get("questions") as? JsonArray)?.isNotEmpty() == true
+    private fun hasQuestions(input: JsonObject?): Boolean = (input?.get("questions") as? JsonArray)?.isNotEmpty() == true
 
-    private fun hasFilePath(input: JsonObject?): Boolean =
-        hasNonBlank(input, "filePath") || hasNonBlank(input, "file")
+    private fun hasFilePath(input: JsonObject?): Boolean = hasNonBlank(input, "filePath") || hasNonBlank(input, "file")
 
     private fun hasNonBlank(
         input: JsonObject?,

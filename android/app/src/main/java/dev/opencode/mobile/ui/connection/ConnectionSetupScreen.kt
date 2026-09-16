@@ -137,45 +137,45 @@ fun ConnectionSetupScreen(
             )
             OpenCodeReadableColumn(modifier = Modifier.weight(1f)) {
                 Column(modifier = Modifier.fillMaxSize()) {
-            Column(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .verticalScroll(rememberScrollState())
-                        .padding(top = 16.dp, bottom = 16.dp),
-            ) {
-                ConnectionSetupFields(
-                    uiState = uiState,
-                    onNameChanged = onNameChanged,
-                    onBaseUrlChanged = onBaseUrlChanged,
-                    onUsernameChanged = onUsernameChanged,
-                    onPasswordChanged = onPasswordChanged,
-                    onCredentialsExpandedChanged = onCredentialsExpandedChanged,
-                    onPasswordFocusConsumed = onPasswordFocusConsumed,
-                )
-            }
-            Column(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp)
-                        .padding(bottom = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(20.dp),
-            ) {
-                if (!WindowInsets.isImeVisible) {
-                    PairingQREntry(
-                        enabled = !uiState.isBusy,
-                        onClick = { openPairingScanner() },
-                    )
-                }
-                OpenCodeButton(
-                    variant = OpenCodeButtonVariant.FullWidthText(uiState.primaryActionLabel),
-                    enabled = uiState.primaryEnabled,
-                    onClick = onSubmit,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
+                    Column(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .weight(1f)
+                                .verticalScroll(rememberScrollState())
+                                .padding(top = 16.dp, bottom = 16.dp),
+                    ) {
+                        ConnectionSetupFields(
+                            uiState = uiState,
+                            onNameChanged = onNameChanged,
+                            onBaseUrlChanged = onBaseUrlChanged,
+                            onUsernameChanged = onUsernameChanged,
+                            onPasswordChanged = onPasswordChanged,
+                            onCredentialsExpandedChanged = onCredentialsExpandedChanged,
+                            onPasswordFocusConsumed = onPasswordFocusConsumed,
+                        )
+                    }
+                    Column(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp)
+                                .padding(bottom = 24.dp),
+                        verticalArrangement = Arrangement.spacedBy(20.dp),
+                    ) {
+                        if (!WindowInsets.isImeVisible) {
+                            PairingQREntry(
+                                enabled = !uiState.isBusy,
+                                onClick = { openPairingScanner() },
+                            )
+                        }
+                        OpenCodeButton(
+                            variant = OpenCodeButtonVariant.FullWidthText(uiState.primaryActionLabel),
+                            enabled = uiState.primaryEnabled,
+                            onClick = onSubmit,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
                 }
             }
         }
@@ -238,13 +238,11 @@ private fun PairingQREntry(
                 .fillMaxWidth()
                 .semantics {
                     contentDescription = "Running opencode2? Connect with a QR code"
-                }
-                .clickable(
+                }.clickable(
                     enabled = enabled,
                     role = Role.Button,
                     onClick = onClick,
-                )
-                .padding(vertical = 8.dp),
+                ).padding(vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(3.dp),
     ) {

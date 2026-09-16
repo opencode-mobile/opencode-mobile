@@ -9,6 +9,10 @@ import dev.opencode.mobile.domain.event.EventStreamConnectionState
 import dev.opencode.mobile.domain.event.FakeForegroundEventStream
 import dev.opencode.mobile.domain.event.OpencodeEvent
 import dev.opencode.mobile.domain.event.SilentWorldSignals
+import dev.opencode.mobile.domain.filesystem.DirectoryListingPolicy
+import dev.opencode.mobile.domain.filesystem.DirectoryNode
+import dev.opencode.mobile.domain.filesystem.FilesystemRepository
+import dev.opencode.mobile.domain.filesystem.ServerPaths
 import dev.opencode.mobile.domain.live.DefaultSessionLiveStore
 import dev.opencode.mobile.domain.live.DefaultSessionReadyStore
 import dev.opencode.mobile.domain.live.DefaultSessionStatusLiveStore
@@ -29,14 +33,9 @@ import dev.opencode.mobile.domain.message.PromptSendOptions
 import dev.opencode.mobile.domain.model.ModelRepository
 import dev.opencode.mobile.domain.model.ModelSelectionCatalog
 import dev.opencode.mobile.domain.model.ModelSelectionConnectionIdentity
-import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.model.NewSessionModelSelectionResolver
 import dev.opencode.mobile.domain.model.SessionModelSelection
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
-import dev.opencode.mobile.domain.filesystem.DirectoryListingPolicy
-import dev.opencode.mobile.domain.filesystem.DirectoryNode
-import dev.opencode.mobile.domain.filesystem.FilesystemRepository
-import dev.opencode.mobile.domain.filesystem.ServerPaths
 import dev.opencode.mobile.domain.project.Project
 import dev.opencode.mobile.domain.project.ProjectRepository
 import dev.opencode.mobile.domain.project.ServerProbeError
@@ -149,7 +148,12 @@ class MainScreenViewModelTest {
                 )
             advanceUntilIdle()
             val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
-            assertEquals(7, loaded.sections.single().allSessions.size)
+            assertEquals(
+                7,
+                loaded.sections
+                    .single()
+                    .allSessions.size,
+            )
         }
 
     @Test
@@ -731,7 +735,11 @@ class MainScreenViewModelTest {
                     sessionRepository = sessionRepository,
                 )
             advanceUntilIdle()
-            val before = (viewModel.uiState.value as MainScreenUiState.Loaded).sections.single().allSessions.size
+            val before =
+                (viewModel.uiState.value as MainScreenUiState.Loaded)
+                    .sections
+                    .single()
+                    .allSessions.size
 
             sessionsByWorktree["/repo"] =
                 listOf(
@@ -742,7 +750,11 @@ class MainScreenViewModelTest {
             advanceTimeBy(550)
             advanceUntilIdle()
 
-            val after = (viewModel.uiState.value as MainScreenUiState.Loaded).sections.single().allSessions.size
+            val after =
+                (viewModel.uiState.value as MainScreenUiState.Loaded)
+                    .sections
+                    .single()
+                    .allSessions.size
             assertEquals(before + 1, after)
             assertTrue(sessionRepository.listSessionsCallCount >= 2)
         }
@@ -1005,7 +1017,14 @@ class MainScreenViewModelTest {
                 )
             advanceUntilIdle()
             val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
-            assertEquals("Retrying · 2", loaded.sections.single().allSessions.single().statusLabel)
+            assertEquals(
+                "Retrying · 2",
+                loaded.sections
+                    .single()
+                    .allSessions
+                    .single()
+                    .statusLabel,
+            )
         }
 
     @Test
@@ -1021,7 +1040,14 @@ class MainScreenViewModelTest {
                 )
             advanceUntilIdle()
             val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
-            assertEquals("Working", loaded.sections.single().allSessions.single().statusLabel)
+            assertEquals(
+                "Working",
+                loaded.sections
+                    .single()
+                    .allSessions
+                    .single()
+                    .statusLabel,
+            )
         }
 
     @Test
@@ -1051,7 +1077,13 @@ class MainScreenViewModelTest {
                 )
             advanceUntilIdle()
             val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
-            assertNull(loaded.sections.single().allSessions.single().statusLabel)
+            assertNull(
+                loaded.sections
+                    .single()
+                    .allSessions
+                    .single()
+                    .statusLabel,
+            )
         }
 
     @Test
@@ -1082,7 +1114,11 @@ class MainScreenViewModelTest {
                 )
             advanceUntilIdle()
             val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
-            val summary = loaded.sections.single().allSessions.single()
+            val summary =
+                loaded.sections
+                    .single()
+                    .allSessions
+                    .single()
             assertEquals("Working", summary.statusLabel)
             assertTrue(summary.statusStale)
         }
@@ -1120,7 +1156,9 @@ class MainScreenViewModelTest {
                 connectionProfileStore = connectionProfileStore,
                 secureCredentialStore = FakeSecureCredentialStore(),
                 sessionModelSelectionStore = selectionStore,
-                composerDraftStore = dev.opencode.mobile.domain.composer.InMemoryComposerDraftStore(),
+                composerDraftStore =
+                    dev.opencode.mobile.domain.composer
+                        .InMemoryComposerDraftStore(),
                 httpClient = OpencodeHttpClient(json, activeConnectionManager),
                 sseHttpClient = OpencodeSseHttpClient(json, activeConnectionManager),
                 eventStream = eventStream,
@@ -1173,14 +1211,19 @@ class MainScreenViewModelTest {
             eventDomainAdapter = EventDomainAdapter(json),
             sessionLiveStore = sessionLiveStore,
             sessionStatusLiveStore = sessionStatusLiveStore,
-            permissionLiveStore = object : PermissionLiveStore {
-                override fun observePermissions(directory: String) = emptyFlow<List<dev.opencode.mobile.domain.session.PermissionRequest>>()
-                override fun clearCache() = Unit
-            },
-            questionLiveStore = object : QuestionLiveStore {
-                override fun observeQuestions(directory: String) = emptyFlow<List<dev.opencode.mobile.domain.session.QuestionRequest>>()
-                override fun clearCache() = Unit
-            },
+            permissionLiveStore =
+                object : PermissionLiveStore {
+                    override fun observePermissions(directory: String) =
+                        emptyFlow<List<dev.opencode.mobile.domain.session.PermissionRequest>>()
+
+                    override fun clearCache() = Unit
+                },
+            questionLiveStore =
+                object : QuestionLiveStore {
+                    override fun observeQuestions(directory: String) = emptyFlow<List<dev.opencode.mobile.domain.session.QuestionRequest>>()
+
+                    override fun clearCache() = Unit
+                },
             sessionTodoLiveStore = EmptySessionTodoLiveStore,
             sessionReadyStore = sessionReadyStore,
             foregroundEventStream = eventStream,
@@ -1226,8 +1269,7 @@ private class FakeFilesystemRepository(
 ) : FilesystemRepository {
     override suspend fun getPaths(): ServerPaths = paths
 
-    override suspend fun listDirectory(path: String): List<DirectoryNode> =
-        DirectoryListingPolicy.prepare(listings[path].orEmpty())
+    override suspend fun listDirectory(path: String): List<DirectoryNode> = DirectoryListingPolicy.prepare(listings[path].orEmpty())
 }
 
 private class FakeSessionRepository(

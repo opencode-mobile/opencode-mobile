@@ -51,16 +51,16 @@ import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
-import java.io.File
-import java.text.DateFormat
-import java.util.Date
-import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.text.DateFormat
+import java.util.Date
+import javax.inject.Inject
 
 private const val EXPORT_FILE_NAME = DiagnosticLogAttachment.FILENAME
 private const val EXPORT_MIME_TYPE = DiagnosticLogAttachment.MIME
@@ -207,7 +207,8 @@ class DiagnosticLogsViewModel
         }
 
         private fun formatTimestamp(epochMilliseconds: Long): String =
-            DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.MEDIUM)
+            DateFormat
+                .getDateTimeInstance(DateFormat.MEDIUM, DateFormat.MEDIUM)
                 .format(Date(epochMilliseconds))
     }
 
@@ -243,119 +244,119 @@ fun DiagnosticLogsScreen(
 
         OpenCodeReadableColumn(modifier = Modifier.weight(1f)) {
             Column(modifier = Modifier.fillMaxSize()) {
-        when {
-            state.loading ->
-                CircularProgressIndicator(
-                    modifier =
-                        Modifier
-                            .align(Alignment.CenterHorizontally)
-                            .padding(24.dp)
-                            .weight(1f),
-                    color = openCodeColor("interactive"),
-                )
-            else ->
+                when {
+                    state.loading ->
+                        CircularProgressIndicator(
+                            modifier =
+                                Modifier
+                                    .align(Alignment.CenterHorizontally)
+                                    .padding(24.dp)
+                                    .weight(1f),
+                            color = openCodeColor("interactive"),
+                        )
+                    else ->
+                        Column(
+                            modifier =
+                                Modifier
+                                    .weight(1f)
+                                    .fillMaxWidth()
+                                    .verticalScroll(rememberScrollState())
+                                    .padding(horizontal = 16.dp, vertical = 16.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            OpenCodeListItem(
+                                title = "Entries",
+                                subtitle =
+                                    if (state.hasEntries) {
+                                        "${state.entryCount} redacted lines in the kept window"
+                                    } else {
+                                        "No entries in the kept window yet"
+                                    },
+                                style = OpenCodeListItemStyle.Card,
+                            )
+                            OpenCodeListItem(
+                                title = "Kept",
+                                subtitle = "Last ${state.retainMinutes} minutes",
+                                style = OpenCodeListItemStyle.Card,
+                            )
+                            OpenCodeListItem(
+                                title = "Export",
+                                subtitle = state.exportWindow.label,
+                                style = OpenCodeListItemStyle.Card,
+                                onClick = { showExportWindowPicker = true },
+                            )
+                            OpenCodeListItem(
+                                title = "Soft cap",
+                                subtitle =
+                                    if (state.droppedBySoftCap > 0) {
+                                        "${state.softCap} max · ${state.droppedBySoftCap} dropped oldest"
+                                    } else {
+                                        "${state.softCap} max · none dropped"
+                                    },
+                                style = OpenCodeListItemStyle.Card,
+                            )
+                            OpenCodeListItem(
+                                title = "Format",
+                                subtitle = "JSONL · secrets and message bodies redacted",
+                                style = OpenCodeListItemStyle.Card,
+                            )
+                            val oldest = state.oldestTimestampLabel
+                            val newest = state.newestTimestampLabel
+                            if (oldest != null && newest != null) {
+                                OpenCodeListItem(
+                                    title = "Range",
+                                    subtitle = if (oldest == newest) oldest else "$oldest → $newest",
+                                    style = OpenCodeListItemStyle.Card,
+                                )
+                            }
+                            if (state.areaCounts.isNotEmpty()) {
+                                OpenCodeListItem(
+                                    title = "Areas",
+                                    subtitle = state.areaCounts.joinToString(" · ") { "${it.first} ${it.second}" },
+                                    style = OpenCodeListItemStyle.Card,
+                                )
+                            }
+                            state.saveMessage?.let { message ->
+                                Text(
+                                    text = message,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = openCodeColor("text-base"),
+                                    modifier = Modifier.padding(top = 4.dp),
+                                )
+                            }
+                            state.shareError?.let { error ->
+                                Text(
+                                    text = error,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.padding(top = 4.dp),
+                                )
+                            }
+                        }
+                }
+
                 Column(
                     modifier =
                         Modifier
-                            .weight(1f)
                             .fillMaxWidth()
-                            .verticalScroll(rememberScrollState())
-                            .padding(horizontal = 16.dp, vertical = 16.dp),
+                            .padding(horizontal = 16.dp)
+                            .padding(top = 8.dp, bottom = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    OpenCodeListItem(
-                        title = "Entries",
-                        subtitle =
-                            if (state.hasEntries) {
-                                "${state.entryCount} redacted lines in the kept window"
-                            } else {
-                                "No entries in the kept window yet"
-                            },
-                        style = OpenCodeListItemStyle.Card,
+                    OpenCodeButton(
+                        variant = OpenCodeButtonVariant.FullWidthText("Clear"),
+                        contrast = OpenCodeButtonContrast.Low,
+                        size = OpenCodeButtonSize.Large,
+                        enabled = state.hasEntries,
+                        onClick = { showClearConfirmation = true },
                     )
-                    OpenCodeListItem(
-                        title = "Kept",
-                        subtitle = "Last ${state.retainMinutes} minutes",
-                        style = OpenCodeListItemStyle.Card,
+                    OpenCodeButton(
+                        variant = OpenCodeButtonVariant.FullWidthText("Share"),
+                        contrast = OpenCodeButtonContrast.High,
+                        size = OpenCodeButtonSize.Large,
+                        onClick = { showExportSheet = true },
                     )
-                    OpenCodeListItem(
-                        title = "Export",
-                        subtitle = state.exportWindow.label,
-                        style = OpenCodeListItemStyle.Card,
-                        onClick = { showExportWindowPicker = true },
-                    )
-                    OpenCodeListItem(
-                        title = "Soft cap",
-                        subtitle =
-                            if (state.droppedBySoftCap > 0) {
-                                "${state.softCap} max · ${state.droppedBySoftCap} dropped oldest"
-                            } else {
-                                "${state.softCap} max · none dropped"
-                            },
-                        style = OpenCodeListItemStyle.Card,
-                    )
-                    OpenCodeListItem(
-                        title = "Format",
-                        subtitle = "JSONL · secrets and message bodies redacted",
-                        style = OpenCodeListItemStyle.Card,
-                    )
-                    val oldest = state.oldestTimestampLabel
-                    val newest = state.newestTimestampLabel
-                    if (oldest != null && newest != null) {
-                        OpenCodeListItem(
-                            title = "Range",
-                            subtitle = if (oldest == newest) oldest else "$oldest → $newest",
-                            style = OpenCodeListItemStyle.Card,
-                        )
-                    }
-                    if (state.areaCounts.isNotEmpty()) {
-                        OpenCodeListItem(
-                            title = "Areas",
-                            subtitle = state.areaCounts.joinToString(" · ") { "${it.first} ${it.second}" },
-                            style = OpenCodeListItemStyle.Card,
-                        )
-                    }
-                    state.saveMessage?.let { message ->
-                        Text(
-                            text = message,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = openCodeColor("text-base"),
-                            modifier = Modifier.padding(top = 4.dp),
-                        )
-                    }
-                    state.shareError?.let { error ->
-                        Text(
-                            text = error,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.padding(top = 4.dp),
-                        )
-                    }
                 }
-        }
-
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .padding(top = 8.dp, bottom = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            OpenCodeButton(
-                variant = OpenCodeButtonVariant.FullWidthText("Clear"),
-                contrast = OpenCodeButtonContrast.Low,
-                size = OpenCodeButtonSize.Large,
-                enabled = state.hasEntries,
-                onClick = { showClearConfirmation = true },
-            )
-            OpenCodeButton(
-                variant = OpenCodeButtonVariant.FullWidthText("Share"),
-                contrast = OpenCodeButtonContrast.High,
-                size = OpenCodeButtonSize.Large,
-                onClick = { showExportSheet = true },
-            )
-        }
             }
         }
     }

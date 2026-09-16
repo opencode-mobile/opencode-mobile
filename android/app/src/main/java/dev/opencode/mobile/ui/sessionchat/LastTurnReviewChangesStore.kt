@@ -25,8 +25,7 @@ class LastTurnReviewChangesStore
 
         private val snapshots = MutableStateFlow<Map<String, Snapshot>>(emptyMap())
 
-        fun observe(sessionId: String): Flow<Snapshot?> =
-            snapshots.map { it[sessionId] }.distinctUntilChanged()
+        fun observe(sessionId: String): Flow<Snapshot?> = snapshots.map { it[sessionId] }.distinctUntilChanged()
 
         fun snapshot(sessionId: String): Snapshot? = snapshots.value[sessionId]
 

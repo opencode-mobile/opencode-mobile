@@ -82,8 +82,7 @@ fun OpenCodeFilterChip(
                                     count >= 10 -> 28.dp
                                     else -> ChipMetaSize
                                 },
-                        )
-                        .clip(ChipShape)
+                        ).clip(ChipShape)
                         .background(textStrong.copy(alpha = 0.10f))
                         .padding(horizontal = if (count >= 10) 8.dp else 6.dp),
                 contentAlignment = Alignment.Center,

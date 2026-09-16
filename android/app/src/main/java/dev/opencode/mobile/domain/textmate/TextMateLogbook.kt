@@ -2,9 +2,6 @@ package dev.opencode.mobile.domain.textmate
 
 import androidx.core.util.AtomicFile
 import dev.opencode.mobile.markdown.TextMateParseObservation
-import java.io.File
-import java.util.UUID
-import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -14,6 +11,9 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import java.io.File
+import java.util.UUID
+import java.util.concurrent.atomic.AtomicLong
 
 fun interface TextMateLogbookRecorder {
     fun submit(observations: List<TextMateParseObservation>)
@@ -188,13 +188,14 @@ class TextMateLogbook internal constructor(
     private fun readValidEntries(): List<TextMateLogbookEntry> {
         if (!file.exists()) return emptyList()
         return file.useLines { lines ->
-            lines.mapNotNull { line ->
-                line
-                    .takeIf(String::isNotBlank)
-                    ?.let { encoded ->
-                        runCatching { json.decodeFromString<TextMateLogbookEntry>(encoded) }.getOrNull()
-                    }
-            }.toList()
+            lines
+                .mapNotNull { line ->
+                    line
+                        .takeIf(String::isNotBlank)
+                        ?.let { encoded ->
+                            runCatching { json.decodeFromString<TextMateLogbookEntry>(encoded) }.getOrNull()
+                        }
+                }.toList()
         }
     }
 
@@ -204,7 +205,6 @@ class TextMateLogbook internal constructor(
         private const val MAX_PENDING_BATCHES = 64
         private const val MAX_FILE_BYTES = 2L * 1024L * 1024L
 
-        fun fileIn(filesDirectory: File): File =
-            File(filesDirectory, "debug/textmate-logbook-v1.jsonl")
+        fun fileIn(filesDirectory: File): File = File(filesDirectory, "debug/textmate-logbook-v1.jsonl")
     }
 }

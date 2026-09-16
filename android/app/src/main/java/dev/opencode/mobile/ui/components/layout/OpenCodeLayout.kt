@@ -19,8 +19,7 @@ enum class OpenCodeLayoutWidth {
     ;
 
     companion object {
-        fun fromWidth(width: Dp): OpenCodeLayoutWidth =
-            if (width < OpenCodeLayout.CompactMaxWidth) Compact else Regular
+        fun fromWidth(width: Dp): OpenCodeLayoutWidth = if (width < OpenCodeLayout.CompactMaxWidth) Compact else Regular
     }
 }
 

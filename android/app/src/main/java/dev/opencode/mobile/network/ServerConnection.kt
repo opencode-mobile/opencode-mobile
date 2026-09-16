@@ -17,8 +17,7 @@ data class ServerConnection(
     val capabilities: ServerCapabilities
         get() = ServerCapabilities.forProtocol(serverProtocol ?: ServerProtocol.V1)
 
-    fun hasSameIdentity(other: ServerConnection): Boolean =
-        baseUrl == other.baseUrl && username == other.username
+    fun hasSameIdentity(other: ServerConnection): Boolean = baseUrl == other.baseUrl && username == other.username
 
     fun withProtocol(protocol: ServerProtocol): ServerConnection = copy(serverProtocol = protocol)
 

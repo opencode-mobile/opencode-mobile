@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -80,55 +79,55 @@ fun ServersScreen(
                                 .padding(top = 8.dp, bottom = 88.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                Text(
-                    text = "SAVED",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier =
-                        Modifier
-                            .padding(horizontal = 16.dp, vertical = 12.dp)
-                            .clickable(
-                                interactionSource = headerTapInteraction,
-                                indication = null,
-                            ) {
-                                val nowMs = System.currentTimeMillis()
-                                val next =
-                                    DeveloperToolsUnlock.nextCount(
-                                        previousCount = headerTapCount,
-                                        lastTapAtMs = lastHeaderTapAtMs,
-                                        nowMs = nowMs,
+                        Text(
+                            text = "SAVED",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier =
+                                Modifier
+                                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                                    .clickable(
+                                        interactionSource = headerTapInteraction,
+                                        indication = null,
+                                    ) {
+                                        val nowMs = System.currentTimeMillis()
+                                        val next =
+                                            DeveloperToolsUnlock.nextCount(
+                                                previousCount = headerTapCount,
+                                                lastTapAtMs = lastHeaderTapAtMs,
+                                                nowMs = nowMs,
+                                            )
+                                        headerTapCount = next
+                                        lastHeaderTapAtMs = nowMs
+                                        if (next >= DeveloperToolsUnlock.REQUIRED_TAPS) {
+                                            DeveloperToolsPreferences.unlock()
+                                        }
+                                    },
+                        )
+                        uiState.profiles.forEach { profile ->
+                            val isActive = profile.id == uiState.activeId
+                            OpenCodeListItem(
+                                title = profile.displayName,
+                                subtitle = ConnectionProfileIdentity.hostLabel(profile.baseUrl),
+                                caption = profile.listCaption(isActive = isActive),
+                                status = profile.listStatus(isActive = isActive),
+                                style = OpenCodeListItemStyle.Card,
+                                startDecorator =
+                                    StartDecorator.Letter(
+                                        letterCharacterForProject(profile.displayName),
+                                        letterAccentForWorktree(profile.id.ifBlank { profile.displayName }),
+                                    ),
+                                onClick = { onEditProfile(profile) },
+                                trailing = {
+                                    OpenCodeButton(
+                                        variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Close, "Remove ${profile.displayName}"),
+                                        contrast = OpenCodeButtonContrast.Low,
+                                        onClick = { onRequestRemove(profile) },
                                     )
-                                headerTapCount = next
-                                lastHeaderTapAtMs = nowMs
-                                if (next >= DeveloperToolsUnlock.REQUIRED_TAPS) {
-                                    DeveloperToolsPreferences.unlock()
-                                }
-                            },
-                )
-                uiState.profiles.forEach { profile ->
-                    val isActive = profile.id == uiState.activeId
-                    OpenCodeListItem(
-                        title = profile.displayName,
-                        subtitle = ConnectionProfileIdentity.hostLabel(profile.baseUrl),
-                        caption = profile.listCaption(isActive = isActive),
-                        status = profile.listStatus(isActive = isActive),
-                        style = OpenCodeListItemStyle.Card,
-                        startDecorator =
-                            StartDecorator.Letter(
-                                letterCharacterForProject(profile.displayName),
-                                letterAccentForWorktree(profile.id.ifBlank { profile.displayName }),
-                            ),
-                        onClick = { onEditProfile(profile) },
-                        trailing = {
-                            OpenCodeButton(
-                                variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Close, "Remove ${profile.displayName}"),
-                                contrast = OpenCodeButtonContrast.Low,
-                                onClick = { onRequestRemove(profile) },
+                                },
+                                modifier = Modifier.padding(horizontal = 16.dp),
                             )
-                        },
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                    )
-                }
+                        }
                     }
                     OpenCodeButton(
                         variant = OpenCodeButtonVariant.FullWidthText("Add server"),
