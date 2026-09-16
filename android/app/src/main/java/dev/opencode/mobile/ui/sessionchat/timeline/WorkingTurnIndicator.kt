@@ -72,7 +72,7 @@ object WorkingTurnIndicator {
         if (sendProgressPercent != null) {
             return PromptSendProgress.label(sendProgressPercent)
         }
-        if (isThinking) return THINKING_LABEL
+        if (isThinking && statusLabel != null) return THINKING_LABEL
         return statusLabel
     }
 

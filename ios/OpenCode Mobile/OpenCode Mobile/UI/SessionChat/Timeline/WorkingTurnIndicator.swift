@@ -83,7 +83,7 @@ enum WorkingTurnIndicator {
         if let sendProgressPercent {
             return PromptSendProgress.label(percent: sendProgressPercent)
         }
-        if isThinking { return thinkingLabel }
+        if isThinking, statusLabel != nil { return thinkingLabel }
         return statusLabel
     }
 

@@ -122,6 +122,16 @@ class WorkingTurnIndicatorTest {
     }
 
     @Test
+    fun labelForActiveTurn_ignoresThinkingWhenIdleStatus() {
+        assertNull(
+            WorkingTurnIndicator.labelForActiveTurn(
+                statusLabel = null,
+                isThinking = true,
+            ),
+        )
+    }
+
+    @Test
     fun labelForActiveTurn_showsThinkingInPlace() {
         assertEquals(
             WorkingTurnIndicator.THINKING_LABEL,

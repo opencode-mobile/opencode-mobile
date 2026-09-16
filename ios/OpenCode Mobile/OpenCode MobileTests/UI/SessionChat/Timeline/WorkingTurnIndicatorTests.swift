@@ -94,6 +94,15 @@ struct WorkingTurnIndicatorTests {
         )
     }
 
+    @Test func labelForActiveTurn_ignoresThinkingWhenIdleStatus() {
+        #expect(
+            WorkingTurnIndicator.labelForActiveTurn(
+                statusLabel: nil,
+                isThinking: true
+            ) == nil
+        )
+    }
+
     @Test func labelForActiveTurn_showsThinkingInPlace() {
         #expect(
             WorkingTurnIndicator.labelForActiveTurn(
