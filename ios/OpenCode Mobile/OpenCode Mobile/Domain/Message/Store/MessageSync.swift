@@ -154,12 +154,13 @@ nonisolated final class MessageSync: @unchecked Sendable {
         lock.unlock()
         if observing {
             setQuietRefresh(true, for: key.storeSlot)
-            // Stay quiet until this hop (or its serial-mismatch retry) is Fresh.
-            // `ensureFresh` can return while a bumped serial is still syncing.
-            defer { setQuietRefresh(false, for: key.storeSlot) }
             syncCoordinator.invalidate(projection)
             await syncCoordinator.ensureFresh(projection)
-            await waitUntilRefreshSettled(projection, key: key)
+            // `ensureFresh` can return while a bumped serial is still syncing.
+            // Leave the quiet count up in that case; Fresh clears it.
+            if await shouldEndQuietRefresh(projection, key: key) {
+                setQuietRefresh(false, for: key.storeSlot)
+            }
             lock.lock()
             let error = lastLoadErrorBySlot[key.storeSlot]
             lock.unlock()
@@ -387,6 +388,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
         )
         switch state {
         case .fresh:
+            clearQuietRefresh(for: key.storeSlot)
             if awaitingCache {
                 setHealth(.recovering(.reconnect), for: key)
             } else {
@@ -398,6 +400,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
             if catchingUp {
                 setHealth(.recovering(.reconnect), for: key)
             } else if publishedFrame(for: key.storeSlot) != nil {
+                clearQuietRefresh(for: key.storeSlot)
                 setHealth(.stale(.transportUnavailable), for: key)
             } else {
                 setHealth(.recovering(.reconnect), for: key)
@@ -420,23 +423,30 @@ nonisolated final class MessageSync: @unchecked Sendable {
         lock.unlock()
     }
 
-    private func waitUntilRefreshSettled(
+    private func clearQuietRefresh(for storeSlot: String) {
+        lock.lock()
+        quietRefreshDepth.removeValue(forKey: storeSlot)
+        lock.unlock()
+    }
+
+    private func shouldEndQuietRefresh(
         _ projection: ProjectionKey,
         key: MessageSessionKey
-    ) async {
-        for await state in syncCoordinator.observe(projection) {
-            if state == .fresh { return }
-            if !canCatchUp(
-                occupancy: worldSignals.occupancy,
-                snapshot: liveConnection.snapshot
-            ) {
-                return
-            }
-            lock.lock()
-            let error = lastLoadErrorBySlot[key.storeSlot]
-            lock.unlock()
-            if error != nil { return }
+    ) async -> Bool {
+        lock.lock()
+        let error = lastLoadErrorBySlot[key.storeSlot]
+        lock.unlock()
+        if error != nil { return true }
+        if !canCatchUp(
+            occupancy: worldSignals.occupancy,
+            snapshot: liveConnection.snapshot
+        ) {
+            return true
         }
+        for await state in syncCoordinator.observe(projection) {
+            return state == .fresh
+        }
+        return true
     }
 
     private func isAwaitingCacheSyncConfirm(for storeSlot: String) -> Bool {
