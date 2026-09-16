@@ -28,6 +28,13 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
         }
     }
 
+    /// False for blocks the timeline paints as nothing (a live thought is footer
+    /// chrome). Rows must not render empty: see AssistantMessageContent fallback.
+    var paintsInTimeline: Bool {
+        if case .reasoning(_, _, let isStreaming, _) = self { return !isStreaming }
+        return true
+    }
+
     static func == (lhs: SessionChatTimelineBlock, rhs: SessionChatTimelineBlock) -> Bool {
         switch (lhs, rhs) {
         case let (.text(lID, lText, lDoc), .text(rID, rText, rDoc)):
@@ -272,6 +279,22 @@ nonisolated enum SessionChatTimelineBlocks {
                 renderedMarkdown: nil
             ),
         ]
+    }
+
+    /// Rows never render empty: drop blocks the timeline paints as nothing
+    /// (live thought is footer chrome) and fall back to the live placeholder.
+    static func paintedBlocks(for message: SessionChatRow) -> [SessionChatTimelineBlock] {
+        let painted = message.blocks.filter(\.paintsInTimeline)
+        if painted.isEmpty {
+            return [
+                .text(
+                    blockID: PresentationBlockId.messageFallback(message.id),
+                    text: message.text,
+                    renderedMarkdown: nil
+                ),
+            ]
+        }
+        return painted
     }
 
     /// When collapse is on, consecutive assistant messages whose visible blocks

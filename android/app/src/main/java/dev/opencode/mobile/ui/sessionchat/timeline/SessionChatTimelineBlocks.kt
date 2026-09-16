@@ -79,6 +79,17 @@ sealed class SessionChatTimelineBlock {
         val isStreaming: Boolean,
         val durationMs: Long? = null,
     ) : SessionChatTimelineBlock()
+
+    /**
+     * False for blocks the timeline paints as nothing (a live thought is footer
+     * chrome). Rows must not render empty: see AssistantMessageContent fallback.
+     */
+    val paintsInTimeline: Boolean
+        get() =
+            when (this) {
+                is Reasoning -> !isStreaming
+                else -> true
+            }
 }
 
 object SessionChatTimelineBlocks {
@@ -237,6 +248,23 @@ object SessionChatTimelineBlocks {
                 text = message.text,
             ),
         )
+    }
+
+    /**
+     * Rows never render empty: drop blocks the timeline paints as nothing
+     * (live thought is footer chrome) and fall back to the live placeholder.
+     */
+    fun paintedBlocks(message: SessionChatMessageItem): List<SessionChatTimelineBlock> {
+        val painted = message.blocks.filter { it.paintsInTimeline }
+        if (painted.isEmpty()) {
+            return listOf(
+                SessionChatTimelineBlock.Text(
+                    blockID = PresentationBlockId.messageFallback(message.id),
+                    text = message.text,
+                ),
+            )
+        }
+        return painted
     }
 
     /**

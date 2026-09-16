@@ -208,6 +208,69 @@ struct SessionChatTimelineBlocksTests {
         #expect(text == message.text)
     }
 
+    @Test func paintsInTimeline_falseOnlyForLiveThought() {
+        let streaming = SessionChatTimelineBlock.reasoning(
+            blockID: "r1",
+            text: "thinking",
+            isStreaming: true,
+            durationMs: nil
+        )
+        #expect(!streaming.paintsInTimeline)
+
+        let settled = SessionChatTimelineBlock.reasoning(
+            blockID: "r2",
+            text: "done",
+            isStreaming: false,
+            durationMs: 100
+        )
+        #expect(settled.paintsInTimeline)
+
+        let text = SessionChatTimelineBlock.text(
+            blockID: "t1",
+            text: "Hello",
+            renderedMarkdown: nil
+        )
+        #expect(text.paintsInTimeline)
+    }
+
+    @Test func paintedBlocks_streamingReasoningOnly_fallsBackToPlaceholder() {
+        let message = SessionChatRow(
+            id: "msg-1",
+            role: .assistant,
+            text: "",
+            metadataLabel: "",
+            blocks: [
+                .reasoning(blockID: "r1", text: "thinking", isStreaming: true, durationMs: nil),
+            ]
+        )
+        let painted = SessionChatTimelineBlocks.paintedBlocks(for: message)
+        #expect(painted.count == 1)
+        guard case .text(let blockID, _, _) = painted[0] else {
+            Issue.record("expected fallback text")
+            return
+        }
+        #expect(blockID == PresentationBlockId.messageFallback("msg-1"))
+    }
+
+    @Test func paintedBlocks_textPlusStreamingReasoning_keepsOnlyText() {
+        let textBlock = SessionChatTimelineBlock.text(
+            blockID: "t1",
+            text: "Hello",
+            renderedMarkdown: nil
+        )
+        let message = SessionChatRow(
+            id: "msg-2",
+            role: .assistant,
+            text: "Hello",
+            metadataLabel: "",
+            blocks: [
+                textBlock,
+                .reasoning(blockID: "r1", text: "thinking", isStreaming: true, durationMs: nil),
+            ]
+        )
+        #expect(SessionChatTimelineBlocks.paintedBlocks(for: message) == [textBlock])
+    }
+
     @Test func build_reasoningPart_includesDuration() {
         let blocks = okBlocks(
             parts: [
