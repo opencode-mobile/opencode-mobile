@@ -590,17 +590,10 @@ private struct AssistantMessageContent: View {
     let onChangesReviewTap: (String, String?) -> Void
     let supportsSessionMessageDiff: Bool
 
+    /// Rows never render empty — unpaintable blocks are filtered and an empty
+    /// result falls back to the live placeholder.
     private var blocks: [SessionChatTimelineBlock] {
-        if message.blocks.isEmpty {
-            return [
-                .text(
-                    blockID: PresentationBlockId.messageFallback(message.id),
-                    text: message.text,
-                    renderedMarkdown: nil
-                ),
-            ]
-        }
-        return message.blocks
+        SessionChatTimelineBlocks.paintedBlocks(for: message)
     }
 
     /// Migration bridge: prefer per-block markdown; fall back to message-root
@@ -675,23 +668,21 @@ private struct AssistantMessageContent: View {
                             { onChildSessionTap(id, row.agentName) }
                         }
                     )
-                case .reasoning(_, let text, let isStreaming, let durationMs):
-                    if !isStreaming {
-                        ReasoningBlock(
-                            text: text,
-                            isStreaming: false,
-                            durationMs: durationMs,
-                            onTap: {
-                                guard !text.isEmpty else { return }
-                                onToolDetailTap(
-                                    SessionChatToolDetailTarget(
-                                        title: "Thought",
-                                        body: text
-                                    )
+                case .reasoning(_, let text, _, let durationMs):
+                    ReasoningBlock(
+                        text: text,
+                        isStreaming: false,
+                        durationMs: durationMs,
+                        onTap: {
+                            guard !text.isEmpty else { return }
+                            onToolDetailTap(
+                                SessionChatToolDetailTarget(
+                                    title: "Thought",
+                                    body: text
                                 )
-                            }
-                        )
-                    }
+                            )
+                        }
+                    )
                 }
             }
         }

@@ -640,15 +640,9 @@ private fun AssistantMessageContent(
     onChangesReviewTap: (assistantMessageId: String, initialFilePath: String?) -> Unit,
     supportsSessionMessageDiff: Boolean,
 ) {
-    val blocks =
-        message.blocks.ifEmpty {
-            listOf(
-                SessionChatTimelineBlock.Text(
-                    blockID = PresentationBlockId.messageFallback(message.id),
-                    text = message.text,
-                ),
-            )
-        }
+    // Rows never render empty — unpaintable blocks are filtered and an empty
+    // result falls back to the live placeholder.
+    val blocks = SessionChatTimelineBlocks.paintedBlocks(message)
     val textBlockCount = blocks.count { it is SessionChatTimelineBlock.Text }
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -741,24 +735,22 @@ private fun AssistantMessageContent(
                                 },
                         )
                     is SessionChatTimelineBlock.Reasoning ->
-                        if (!block.isStreaming) {
-                            ReasoningBlock(
-                                text = block.text,
-                                isStreaming = false,
-                                durationMs = block.durationMs,
-                                onClick =
-                                    block.text.takeIf { it.isNotBlank() }?.let { body ->
-                                        {
-                                            onToolDetailTap(
-                                                SessionChatToolDetailTarget(
-                                                    title = "Thought",
-                                                    body = body,
-                                                ),
-                                            )
-                                        }
-                                    },
-                            )
-                        }
+                        ReasoningBlock(
+                            text = block.text,
+                            isStreaming = false,
+                            durationMs = block.durationMs,
+                            onClick =
+                                block.text.takeIf { it.isNotBlank() }?.let { body ->
+                                    {
+                                        onToolDetailTap(
+                                            SessionChatToolDetailTarget(
+                                                title = "Thought",
+                                                body = body,
+                                            ),
+                                        )
+                                    }
+                                },
+                        )
                 }
             }
         }

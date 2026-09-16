@@ -160,6 +160,117 @@ struct SessionChatTimelineBlocksTests {
         #expect(tool.toolName == "bash")
     }
 
+    @Test func streamingReasoning_isNotEmittedAsBlock() {
+        let streaming = okBlocks(
+            parts: [.reasoning(ReasoningPart(id: "r1", text: "Need to greet the user.", isStreaming: true))]
+        )
+        #expect(streaming.isEmpty)
+
+        let settled = okBlocks(
+            parts: [.reasoning(ReasoningPart(id: "r1", text: "Need to greet the user.", isStreaming: false))]
+        )
+        #expect(settled.count == 1)
+        guard case .reasoning(_, let text, let isStreaming, _) = settled.first else {
+            Issue.record("expected settled reasoning")
+            return
+        }
+        #expect(text == "Need to greet the user.")
+        #expect(isStreaming == false)
+    }
+
+    @Test func streamingReasoningOnlyMessage_fallsBackToLiveRow() {
+        let message = Message(
+            id: "msg-thought",
+            role: .assistant,
+            text: "",
+            parts: [.reasoning(ReasoningPart(id: "r1", text: "Need to greet the user.", isStreaming: true))],
+            model: nil,
+            mode: nil,
+            sentAtEpochMs: nil
+        )
+        let built = SessionChatTimelineBlocks.buildOrFallback(
+            role: message.role,
+            parts: message.parts,
+            messageId: message.id,
+            fallbackText: message.text
+        )
+        let blocks = SessionChatTimelineBlocks.ensureLiveRow(
+            message: message,
+            isStreaming: true,
+            blocks: built
+        )
+        #expect(blocks.count == 1)
+        guard case .text(let blockID, let text, _) = blocks[0] else {
+            Issue.record("expected live-row text block")
+            return
+        }
+        #expect(blockID == PresentationBlockId.messageFallback(message.id))
+        #expect(text == message.text)
+    }
+
+    @Test func paintsInTimeline_falseOnlyForLiveThought() {
+        let streaming = SessionChatTimelineBlock.reasoning(
+            blockID: "r1",
+            text: "thinking",
+            isStreaming: true,
+            durationMs: nil
+        )
+        #expect(!streaming.paintsInTimeline)
+
+        let settled = SessionChatTimelineBlock.reasoning(
+            blockID: "r2",
+            text: "done",
+            isStreaming: false,
+            durationMs: 100
+        )
+        #expect(settled.paintsInTimeline)
+
+        let text = SessionChatTimelineBlock.text(
+            blockID: "t1",
+            text: "Hello",
+            renderedMarkdown: nil
+        )
+        #expect(text.paintsInTimeline)
+    }
+
+    @Test func paintedBlocks_streamingReasoningOnly_fallsBackToPlaceholder() {
+        let message = SessionChatRow(
+            id: "msg-1",
+            role: .assistant,
+            text: "",
+            metadataLabel: "",
+            blocks: [
+                .reasoning(blockID: "r1", text: "thinking", isStreaming: true, durationMs: nil),
+            ]
+        )
+        let painted = SessionChatTimelineBlocks.paintedBlocks(for: message)
+        #expect(painted.count == 1)
+        guard case .text(let blockID, _, _) = painted[0] else {
+            Issue.record("expected fallback text")
+            return
+        }
+        #expect(blockID == PresentationBlockId.messageFallback("msg-1"))
+    }
+
+    @Test func paintedBlocks_textPlusStreamingReasoning_keepsOnlyText() {
+        let textBlock = SessionChatTimelineBlock.text(
+            blockID: "t1",
+            text: "Hello",
+            renderedMarkdown: nil
+        )
+        let message = SessionChatRow(
+            id: "msg-2",
+            role: .assistant,
+            text: "Hello",
+            metadataLabel: "",
+            blocks: [
+                textBlock,
+                .reasoning(blockID: "r1", text: "thinking", isStreaming: true, durationMs: nil),
+            ]
+        )
+        #expect(SessionChatTimelineBlocks.paintedBlocks(for: message) == [textBlock])
+    }
+
     @Test func build_reasoningPart_includesDuration() {
         let blocks = okBlocks(
             parts: [

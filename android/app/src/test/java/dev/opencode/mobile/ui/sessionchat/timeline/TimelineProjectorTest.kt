@@ -1201,7 +1201,7 @@ class TimelineProjectorTest {
     }
 
     @Test
-    fun project_streamingReasoningGrowth_isContentNotLayout() {
+    fun project_streamingReasoningGrowth_isOmittedFromTimeline() {
         val first =
             projectAssistant(
                 parts =
@@ -1220,17 +1220,15 @@ class TimelineProjectorTest {
                 previous = first,
             )
 
-        assertEquals(setOf("msg-1"), second.changedRowIDs)
+        assertTrue(first.rows.isEmpty())
+        assertTrue(second.rows.isEmpty())
+        assertTrue(second.changedRowIDs.isEmpty())
         assertTrue(second.layoutChangedRowIDs.isEmpty())
         assertTrue(second.layoutAffectingRowIDs().isEmpty())
-        assertEquals(first.rows.single().layoutRevision, second.rows.single().layoutRevision)
-        val apply = TimelineApply.classify(second)
-        assertTrue(apply.kinds.contains(TimelineApplyKind.Content))
-        assertFalse(apply.kinds.contains(TimelineApplyKind.Structure))
     }
 
     @Test
-    fun project_reasoningComplete_isContentNotLayout() {
+    fun project_reasoningComplete_insertsSettledThoughtRow() {
         val first =
             projectAssistant(
                 parts =
@@ -1255,12 +1253,14 @@ class TimelineProjectorTest {
                 previous = first,
             )
 
-        assertEquals(setOf("msg-1"), second.changedRowIDs)
-        assertTrue(second.layoutChangedRowIDs.isEmpty())
-        assertEquals(first.rows.single().layoutRevision, second.rows.single().layoutRevision)
+        assertTrue(first.rows.isEmpty())
+        assertEquals(1, second.rows.size)
+        assertEquals(setOf("msg-1"), second.insertedRowIDs)
+        val thought = second.rows.single().blocks.single() as SessionChatTimelineBlock.Reasoning
+        assertEquals("Think", thought.text)
+        assertFalse(thought.isStreaming)
         val apply = TimelineApply.classify(second)
-        assertTrue(apply.kinds.contains(TimelineApplyKind.Content))
-        assertFalse(apply.kinds.contains(TimelineApplyKind.Structure))
+        assertTrue(apply.kinds.contains(TimelineApplyKind.Structure))
     }
 
     @Test
