@@ -4,8 +4,8 @@ on:
   workflow_dispatch:
     inputs:
       version_name:
-        description: "App Store marketing version: MAJOR.MINOR.PATCH (integers only)"
-        required: true
+        description: "App Store marketing version: MAJOR.MINOR.PATCH. Leave empty to use the repo VERSION file."
+        required: false
         type: string
       verify_crashlytics:
         description: "Record one Crashlytics verification non-fatal for this build"
@@ -38,6 +38,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Resolve marketing version
+        working-directory: .
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${IOS_MARKETING_VERSION:-}" ]]; then
+            IOS_MARKETING_VERSION="$(./scripts/read-app-version.sh)"
+          fi
+          echo "IOS_MARKETING_VERSION=$IOS_MARKETING_VERSION" >> "$GITHUB_ENV"
 
       - name: Validate release inputs
         shell: bash

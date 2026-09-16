@@ -4,8 +4,8 @@ on:
   workflow_dispatch:
     inputs:
       version_name:
-        description: "Semantic version: MAJOR.MINOR.PATCH[-PRERELEASE]"
-        required: true
+        description: "Semantic version: MAJOR.MINOR.PATCH[-PRERELEASE]. Leave empty to use the repo VERSION file."
+        required: false
         type: string
       verify_crashlytics:
         description: "Record one Crashlytics verification non-fatal for this version"
@@ -37,6 +37,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Resolve marketing version
+        working-directory: .
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${ANDROID_VERSION_NAME:-}" ]]; then
+            ANDROID_VERSION_NAME="$(./scripts/read-app-version.sh)"
+          fi
+          echo "ANDROID_VERSION_NAME=$ANDROID_VERSION_NAME" >> "$GITHUB_ENV"
 
       - name: Validate release inputs
         shell: bash
@@ -122,7 +132,7 @@ jobs:
           releaseFiles: android/app/build/outputs/bundle/release/app-release.aab
           tracks: internal
           status: completed
-          releaseName: OpenCode Mobile ${{ inputs.version_name }} (${{ github.run_number }})
+          releaseName: OpenCode Mobile ${{ env.ANDROID_VERSION_NAME }} (${{ github.run_number }})
 
       - name: Remove temporary keystore
         if: always()

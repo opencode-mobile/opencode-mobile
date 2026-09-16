@@ -26,6 +26,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Validate app VERSION
+        working-directory: .
+        run: ./scripts/read-app-version.sh
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
