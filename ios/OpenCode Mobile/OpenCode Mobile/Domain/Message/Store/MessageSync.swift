@@ -156,14 +156,18 @@ nonisolated final class MessageSync: @unchecked Sendable {
             setQuietRefresh(true, for: key.storeSlot)
             syncCoordinator.invalidate(projection)
             await syncCoordinator.ensureFresh(projection)
-            // `ensureFresh` can return while a bumped serial is still syncing.
-            // Leave the quiet count up in that case; Fresh clears it.
-            if await shouldEndQuietRefresh(projection, key: key) {
-                setQuietRefresh(false, for: key.storeSlot)
-            }
             lock.lock()
             let error = lastLoadErrorBySlot[key.storeSlot]
             lock.unlock()
+            // Leave quiet up while a serial-mismatch retry is still syncing;
+            // Fresh (or a failed/uncatchable hop) clears it. Do not wait here:
+            // a second observe can let `.loadFailed` paint send-reload errors.
+            if error != nil || !canCatchUp(
+                occupancy: worldSignals.occupancy,
+                snapshot: liveConnection.snapshot
+            ) {
+                setQuietRefresh(false, for: key.storeSlot)
+            }
             if let error { throw error }
         } else {
             switch await fullReloadResult(key: key, reason: reason) {
@@ -427,26 +431,6 @@ nonisolated final class MessageSync: @unchecked Sendable {
         lock.lock()
         quietRefreshDepth.removeValue(forKey: storeSlot)
         lock.unlock()
-    }
-
-    private func shouldEndQuietRefresh(
-        _ projection: ProjectionKey,
-        key: MessageSessionKey
-    ) async -> Bool {
-        lock.lock()
-        let error = lastLoadErrorBySlot[key.storeSlot]
-        lock.unlock()
-        if error != nil { return true }
-        if !canCatchUp(
-            occupancy: worldSignals.occupancy,
-            snapshot: liveConnection.snapshot
-        ) {
-            return true
-        }
-        for await state in syncCoordinator.observe(projection) {
-            return state == .fresh
-        }
-        return true
     }
 
     private func isAwaitingCacheSyncConfirm(for storeSlot: String) -> Bool {
