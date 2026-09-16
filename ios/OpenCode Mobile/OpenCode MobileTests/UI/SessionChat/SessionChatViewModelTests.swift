@@ -3317,7 +3317,13 @@ private final class FakeMessageRepository: MessageRepository, @unchecked Sendabl
     }
 
     func refreshMessages(sessionID: String, directory: String?) async throws -> [Message] {
-        try await listMessages(sessionID: sessionID, directory: directory)
+        // Post-send refresh is the reload-after-send path. Live observe still
+        // lists through `listMessages` and must not inherit this failure, or a
+        // late subscribe snapshot flips a ready timeline to full-screen error.
+        if failListMessagesAfterSend, sendPromptAsyncCalled {
+            throw MessageError.transport("reload failed")
+        }
+        return try await listMessages(sessionID: sessionID, directory: directory)
     }
 
     func refreshDisplayMessages(sessionID: String, directory: String?) async throws -> [DisplayMessage] {
@@ -3335,9 +3341,6 @@ private final class FakeMessageRepository: MessageRepository, @unchecked Sendabl
         listMessagesCallCount += 1
         if shouldFailLoad {
             throw MessageError.transport("load failed")
-        }
-        if failListMessagesAfterSend, sendPromptAsyncCalled {
-            throw MessageError.transport("reload failed")
         }
         return messages
     }
