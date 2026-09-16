@@ -13,7 +13,7 @@ struct SessionChatRow: Identifiable, Equatable {
     let modelProviderID: String?
     let modelID: String?
     let contextInputTokens: Int64?
-    /// Working-row only: reserved list identity collapsed while Thinking is last.
+    /// Working-row only: reserved list identity collapsed after the Idle hold.
     let isLayoutCollapsed: Bool
 
     init(
@@ -72,10 +72,7 @@ extension SessionChatRow: MessageListTimelineHeightEstimating {
     var timelineRowHeightEstimate: CGFloat {
         if id == SessionChatStatusChrome.workingRowID {
             if isLayoutCollapsed { return 0 }
-            return MessageListTimelineRowHeightEstimate.fallback(
-                characterCount: text.count,
-                style: .compact
-            )
+            return WorkingTurnIndicator.rowHeight
         }
         let style: MessageListTimelineRowHeightEstimate.Style =
             switch role {
@@ -213,7 +210,7 @@ struct SessionChatUiState: Equatable {
     var sessionStatusLabel: String?
     /// In-chat Working/Thinking/Retrying label for an active turn.
     var workingIndicatorLabel: String? = nil
-    /// True while Working is reserved but collapsed under last-row Thinking.
+    /// True after the Idle hold when the reserved footer has collapsed.
     var workingIndicatorCollapsed: Bool = false
     /// True while the reserved Working lamp/label is fading through the idle hold.
     var workingIndicatorFading: Bool = false

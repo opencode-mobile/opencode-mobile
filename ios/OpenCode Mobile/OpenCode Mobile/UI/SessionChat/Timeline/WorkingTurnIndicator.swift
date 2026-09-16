@@ -4,12 +4,13 @@ import Foundation
 /// Last-timeline-row Session Running chrome. Show iff this session's
 /// status is not idle, or a large prompt body is still on the wire.
 /// Optimistic busy on send is the same status. Hide when a permission
-/// or question dock is waiting on the user. When the last painted row
-/// is Thinking, keep this label so the timeline can collapse the reserved
-/// Working row in place — do not drop the list identity.
+/// or question dock is waiting on the user. Streaming Thinking is the
+/// same reserved footer — change the label in place. Do not collapse
+/// under a thought row or the footer goes blank between labels.
 /// After busy ends, show Idle for 5s, then collapse. A new send snaps back.
 enum WorkingTurnIndicator {
     static let idleLabel = "Idle"
+    static let thinkingLabel = "Thinking"
     static let idleHoldMilliseconds: Int64 = 5_000
 
     struct Chrome: Equatable {
@@ -41,34 +42,41 @@ enum WorkingTurnIndicator {
         }
     }
 
-    static func shouldCollapseReservedRow(lastIsThinking: Bool, label: String?) -> Bool {
-        lastIsThinking && label != nil
+    static func isStreamingThinking(messages: [Message]) -> Bool {
+        messages.contains { message in
+            message.parts.contains { part in
+                if case .reasoning(let reasoning) = part {
+                    return reasoning.isStreaming
+                }
+                return false
+            }
+        }
+    }
+
+    static func shouldCollapseReservedRow(lastIsThinking _: Bool, label _: String?) -> Bool {
+        false
     }
 
     static func showsIdleMark(label: String) -> Bool {
         label == idleLabel
     }
 
-    /// Space the timeline must lift so the SwiftUI Working overlay sits on the
-    /// composer pin line instead of inside the collection view's bottom inset.
-    static let overlayFallbackHeight: CGFloat = 36
-
-    static func overlayLift(label: String?, collapsed: Bool, measuredHeight: CGFloat) -> CGFloat {
-        guard label != nil, !collapsed else { return 0 }
-        return measuredHeight > 0.5 ? measuredHeight : overlayFallbackHeight
-    }
+    /// Fixed footer row height so the list's height estimate equals the real height and pin-to-end never needs an estimate→real correction for this row.
+    static let rowHeight: CGFloat = 40
 
     static func labelForActiveTurn(
         statusLabel: String?,
         isCompacting: Bool = false,
         isAwaitingUser: Bool = false,
-        sendProgressPercent: Int? = nil
+        sendProgressPercent: Int? = nil,
+        isThinking: Bool = false
     ) -> String? {
         if isAwaitingUser { return nil }
         if isCompacting { return SessionCompactChrome.statusLabel }
         if let sendProgressPercent {
             return PromptSendProgress.label(percent: sendProgressPercent)
         }
+        if isThinking { return thinkingLabel }
         return statusLabel
     }
 

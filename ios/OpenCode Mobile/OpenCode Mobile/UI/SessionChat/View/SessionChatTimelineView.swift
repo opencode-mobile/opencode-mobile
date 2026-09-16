@@ -150,8 +150,10 @@ private struct SessionChatTimelineReadyView: View {
     @State private var sessionTodosPillCompletedCount = 0
     @State private var sessionTodosPillTotalCount = 1
     @State private var sessionTodosPillActivePreview: String?
+    @State private var previousWorkingIndicatorLabel: String?
+    @State private var previousWorkingIndicatorCollapsed = false
+    @State private var previousWorkingIndicatorFading = false
     @State private var topOverlayInset: CGFloat = 0
-    @State private var workingFooterHeight = WorkingTurnIndicator.overlayFallbackHeight
 
     private var showScrollToEnd: Bool {
         scrollController.shouldShowScrollToEnd
@@ -169,26 +171,45 @@ private struct SessionChatTimelineReadyView: View {
         props.syncingIndicatorLabel != nil || showSessionTodosPill || showReviewChanges
     }
 
-    private var workingFooterLift: CGFloat {
-        WorkingTurnIndicator.overlayLift(
-            label: props.workingIndicatorLabel,
-            collapsed: props.workingIndicatorCollapsed,
-            measuredHeight: workingFooterHeight
-        )
+    private var displayMessages: [SessionChatRow] {
+        var rows = props.messages
+        if let label = props.workingIndicatorLabel {
+            rows.append(
+                SessionChatRow(
+                    id: SessionChatStatusChrome.workingRowID,
+                    role: .assistant,
+                    text: label,
+                    metadataLabel: "",
+                    isLayoutCollapsed: props.workingIndicatorCollapsed
+                )
+            )
+        }
+        return rows
     }
 
     var body: some View {
         ZStack(alignment: .bottom) {
             MessageListTimelineHost(
-                items: props.messages,
-                applyPacket: .from(props.timelineFrame),
+                items: displayMessages,
+                // Declared timeline sets stay; Working label folds into
+                // revision, and only label *changes* reconfigure that stable
+                // row without clearing the packet (OPE-136).
+                applyPacket: .from(
+                    props.timelineFrame,
+                    workingIndicatorLabel: props.workingIndicatorLabel,
+                    previousWorkingIndicatorLabel: previousWorkingIndicatorLabel,
+                    workingIndicatorCollapsed: props.workingIndicatorCollapsed,
+                    previousWorkingIndicatorCollapsed: previousWorkingIndicatorCollapsed,
+                    workingIndicatorFading: props.workingIndicatorFading,
+                    previousWorkingIndicatorFading: previousWorkingIndicatorFading
+                ),
                 scrollController: scrollController,
                 onRefresh: props.onRefresh,
                 onUserScrollDismissKeyboard: props.onUserScrollDismissKeyboard,
                 canLoadOlder: props.hasOlder && !props.isLoadingOlder,
                 onNearOldestVisible: props.onLoadOlder,
                 bottomContentPadding: 0,
-                bottomOverlayInset: props.bottomOverlayInset + workingFooterLift,
+                bottomOverlayInset: props.bottomOverlayInset,
                 topOverlayInset: topOverlayInset
             ) { message in
                 SessionChatTimelineHostRow(
@@ -237,26 +258,6 @@ private struct SessionChatTimelineReadyView: View {
                 }
             }
 
-            if let label = props.workingIndicatorLabel {
-                SessionChatWorkingIndicatorRow(
-                    label: label,
-                    collapsed: props.workingIndicatorCollapsed,
-                    fading: props.workingIndicatorFading
-                )
-                .padding(.horizontal, MessageListTimelineDefaults.horizontalContentPadding)
-                .background {
-                    GeometryReader { geometry in
-                        Color.clear
-                            .onAppear { updateWorkingFooterHeight(geometry.size.height) }
-                            .onChange(of: geometry.size.height) { _, height in
-                                updateWorkingFooterHeight(height)
-                            }
-                    }
-                }
-                .padding(.bottom, props.bottomOverlayInset)
-                .allowsHitTesting(false)
-            }
-
             if !props.hideFloatStack, showScrollToEnd {
                 OpenCodeActionPill(variant: .scrollToEnd) {
                     logScroll("pill-click count=\(props.messages.count)")
@@ -266,7 +267,7 @@ private struct SessionChatTimelineReadyView: View {
                     )
                     scrollController.scrollToEndAnimated()
                 }
-                .padding(.bottom, props.bottomOverlayInset + workingFooterLift)
+                .padding(.bottom, props.bottomOverlayInset)
             }
         }
         .onChange(of: props.sessionTodoTotalCount) { _, total in
@@ -279,9 +280,21 @@ private struct SessionChatTimelineReadyView: View {
             refreshSessionTodosPillSnapshot(totalCount: props.sessionTodoTotalCount)
         }
         .onAppear {
+            previousWorkingIndicatorLabel = props.workingIndicatorLabel
+            previousWorkingIndicatorCollapsed = props.workingIndicatorCollapsed
+            previousWorkingIndicatorFading = props.workingIndicatorFading
             refreshSessionTodosPillSnapshot(totalCount: props.sessionTodoTotalCount)
             scrollController.autoFollowEnabled = true
             logScroll("appear count=\(props.messages.count) pinned=\(scrollController.isPinnedToEnd)")
+        }
+        .onChange(of: props.workingIndicatorLabel) { _, newValue in
+            previousWorkingIndicatorLabel = newValue
+        }
+        .onChange(of: props.workingIndicatorCollapsed) { _, newValue in
+            previousWorkingIndicatorCollapsed = newValue
+        }
+        .onChange(of: props.workingIndicatorFading) { _, newValue in
+            previousWorkingIndicatorFading = newValue
         }
         .onChange(of: props.messages.count) { _, newCount in
             logScroll("message-count changed count=\(newCount)")
@@ -340,11 +353,6 @@ private struct SessionChatTimelineReadyView: View {
         let inset = max(0, height)
         guard abs(topOverlayInset - inset) > 0.5 else { return }
         topOverlayInset = inset
-    }
-
-    private func updateWorkingFooterHeight(_ height: CGFloat) {
-        guard height > 0.5, abs(workingFooterHeight - height) > 0.5 else { return }
-        workingFooterHeight = height
     }
 }
 
@@ -411,12 +419,11 @@ private struct SessionChatWorkingIndicatorRow: View {
         }
         .opacity(collapsed ? 0 : (fading ? 0.35 : 1))
         .padding(.leading, collapsed ? 0 : 4)
-        .padding(.top, collapsed ? 0 : 12)
-        .padding(.bottom, collapsed ? 0 : 8)
         .frame(maxWidth: .infinity, alignment: .leading)
         // Hosted cells with minSize 0 treated `frame(height: nil)` as 0 and
-        // never painted Working / Idle. Expanded chrome must keep a real floor.
-        .frame(minHeight: collapsed ? 0 : 36, maxHeight: collapsed ? 0 : nil)
+        // never painted Working / Idle. Fixed expanded height matches the
+        // list estimate so pin-to-end needs no estimate→real correction.
+        .frame(height: collapsed ? 0 : WorkingTurnIndicator.rowHeight)
         .clipped()
         .accessibilityElement(children: .ignore)
         .accessibilityHidden(collapsed)
@@ -670,20 +677,22 @@ private struct AssistantMessageContent: View {
                         }
                     )
                 case .reasoning(_, let text, let isStreaming, let durationMs):
-                    ReasoningBlock(
-                        text: text,
-                        isStreaming: isStreaming,
-                        durationMs: durationMs,
-                        onTap: {
-                            guard !text.isEmpty else { return }
-                            onToolDetailTap(
-                                SessionChatToolDetailTarget(
-                                    title: isStreaming ? "Thinking" : "Thought",
-                                    body: text
+                    if !isStreaming {
+                        ReasoningBlock(
+                            text: text,
+                            isStreaming: false,
+                            durationMs: durationMs,
+                            onTap: {
+                                guard !text.isEmpty else { return }
+                                onToolDetailTap(
+                                    SessionChatToolDetailTarget(
+                                        title: "Thought",
+                                        body: text
+                                    )
                                 )
-                            )
-                        }
-                    )
+                            }
+                        )
+                    }
                 }
             }
         }

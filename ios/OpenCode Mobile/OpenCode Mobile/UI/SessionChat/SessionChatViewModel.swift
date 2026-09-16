@@ -1019,12 +1019,15 @@ final class SessionChatViewModel {
         let sessionStatusLabel =
             isCompacting ? SessionCompactChrome.statusLabel : infoState.sessionStatusLabel
         let awaitingUser = !inboxState.permissionRequests.isEmpty || !inboxState.questionRequests.isEmpty
-        let lastIsThinking = WorkingTurnIndicator.lastIsThinking(messages: timelineState.messages)
+        let lastIsThinking =
+            WorkingTurnIndicator.isStreamingThinking(messages: timeline.loadedMessages())
+            || WorkingTurnIndicator.lastIsThinking(messages: timelineState.messages)
         let activeWorkingLabel = WorkingTurnIndicator.labelForActiveTurn(
             statusLabel: sessionStatusLabel,
             isCompacting: isCompacting,
             isAwaitingUser: awaitingUser,
-            sendProgressPercent: composerState.sendProgressPercent
+            sendProgressPercent: composerState.sendProgressPercent,
+            isThinking: lastIsThinking
         )
         let workingResolution = WorkingTurnIndicator.resolveFooter(
             activeLabel: activeWorkingLabel,

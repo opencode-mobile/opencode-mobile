@@ -1,5 +1,7 @@
 package dev.opencode.mobile.ui.sessionchat
 
+import dev.opencode.mobile.domain.message.Message
+import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRole
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -120,15 +122,18 @@ class WorkingTurnIndicatorTest {
     }
 
     @Test
-    fun labelForActiveTurn_keepsWorkingWhenLastIsThinking() {
+    fun labelForActiveTurn_showsThinkingInPlace() {
         assertEquals(
-            "Working",
-            WorkingTurnIndicator.labelForActiveTurn(statusLabel = "Working"),
+            WorkingTurnIndicator.THINKING_LABEL,
+            WorkingTurnIndicator.labelForActiveTurn(
+                statusLabel = "Working",
+                isThinking = true,
+            ),
         )
-        assertTrue(
+        assertFalse(
             WorkingTurnIndicator.shouldCollapseReservedRow(
                 lastIsThinking = true,
-                label = "Working",
+                label = WorkingTurnIndicator.THINKING_LABEL,
             ),
         )
     }
@@ -140,9 +145,10 @@ class WorkingTurnIndicatorTest {
             WorkingTurnIndicator.labelForActiveTurn(
                 statusLabel = "Working",
                 isCompacting = true,
+                isThinking = true,
             ),
         )
-        assertTrue(
+        assertFalse(
             WorkingTurnIndicator.shouldCollapseReservedRow(
                 lastIsThinking = true,
                 label = SessionCompactChrome.STATUS_LABEL,
@@ -174,6 +180,7 @@ class WorkingTurnIndicatorTest {
     fun showsIdleMark_onlyForIdleLabel() {
         assertTrue(WorkingTurnIndicator.showsIdleMark(WorkingTurnIndicator.IDLE_LABEL))
         assertFalse(WorkingTurnIndicator.showsIdleMark("Working"))
+        assertFalse(WorkingTurnIndicator.showsIdleMark(WorkingTurnIndicator.THINKING_LABEL))
         assertFalse(WorkingTurnIndicator.showsIdleMark(SessionCompactChrome.STATUS_LABEL))
     }
 
@@ -215,6 +222,52 @@ class WorkingTurnIndicatorTest {
     }
 
     @Test
+    fun isStreamingThinking_trueForEmptyStreamingReasoning() {
+        assertTrue(
+            WorkingTurnIndicator.isStreamingThinking(
+                listOf(
+                    Message(
+                        id = "a1",
+                        role = MessageRole.Assistant,
+                        text = "",
+                        parts =
+                            listOf(
+                                MessagePart.Reasoning(
+                                    text = "",
+                                    isStreaming = true,
+                                    id = "r1",
+                                ),
+                            ),
+                    ),
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun isStreamingThinking_falseWhenSettled() {
+        assertFalse(
+            WorkingTurnIndicator.isStreamingThinking(
+                listOf(
+                    Message(
+                        id = "a1",
+                        role = MessageRole.Assistant,
+                        text = "",
+                        parts =
+                            listOf(
+                                MessagePart.Reasoning(
+                                    text = "done",
+                                    isStreaming = false,
+                                    id = "r1",
+                                ),
+                            ),
+                    ),
+                ),
+            ),
+        )
+    }
+
+    @Test
     fun resolveFooter_freshIdleStaysUnmounted() {
         val resolved =
             resolve(
@@ -244,14 +297,18 @@ class WorkingTurnIndicatorTest {
     }
 
     @Test
-    fun resolveFooter_activeWorkingAndThinkingCollapsesWithoutFade() {
+    fun resolveFooter_activeThinkingStaysExpanded() {
         val resolved =
             resolve(
-                activeLabel = "Working",
+                activeLabel = WorkingTurnIndicator.THINKING_LABEL,
                 lastIsThinking = true,
             )
         assertEquals(
-            WorkingTurnIndicator.Chrome(label = "Working", collapsed = true, fading = false),
+            WorkingTurnIndicator.Chrome(
+                label = WorkingTurnIndicator.THINKING_LABEL,
+                collapsed = false,
+                fading = false,
+            ),
             resolved.chrome,
         )
         assertNull(resolved.hold)
