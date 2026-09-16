@@ -164,6 +164,61 @@ class SessionChatTimelineBlocksTest {
     }
 
     @Test
+    fun streamingReasoning_isNotEmittedAsBlock() {
+        val streaming =
+            SessionChatTimelineBlocks.build(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Reasoning(text = "Need to greet the user.", isStreaming = true, id = "r1"),
+                    ),
+            )
+        assertTrue((streaming as SessionChatTimelineBlocksResult.Ok).blocks.isEmpty())
+
+        val settled =
+            SessionChatTimelineBlocks.build(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Reasoning(text = "Need to greet the user.", isStreaming = false, id = "r1"),
+                    ),
+            )
+        val thought = (settled as SessionChatTimelineBlocksResult.Ok).blocks.single() as SessionChatTimelineBlock.Reasoning
+        assertEquals("Need to greet the user.", thought.text)
+        assertFalse(thought.isStreaming)
+    }
+
+    @Test
+    fun streamingReasoningOnlyMessage_fallsBackToLiveRow() {
+        val message =
+            Message(
+                id = "msg-thought",
+                role = MessageRole.Assistant,
+                text = "",
+                parts =
+                    listOf(
+                        MessagePart.Reasoning(text = "Need to greet the user.", isStreaming = true, id = "r1"),
+                    ),
+            )
+        val built =
+            SessionChatTimelineBlocks.buildOrFallback(
+                role = message.role,
+                parts = message.parts,
+                messageId = message.id,
+                fallbackText = message.text,
+            )
+        val blocks =
+            SessionChatTimelineBlocks.ensureLiveRow(
+                message = message,
+                isStreaming = true,
+                blocks = built,
+            )
+        val text = blocks.single() as SessionChatTimelineBlock.Text
+        assertEquals(PresentationBlockId.messageFallback(message.id), text.blockID)
+        assertEquals(message.text, text.text)
+    }
+
+    @Test
     fun build_reasoningPart_becomesThoughtBlock() {
         val result =
             SessionChatTimelineBlocks.build(

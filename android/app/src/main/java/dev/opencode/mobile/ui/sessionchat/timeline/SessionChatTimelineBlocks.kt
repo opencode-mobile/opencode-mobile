@@ -169,7 +169,8 @@ object SessionChatTimelineBlocks {
                 }
                 is MessagePart.Reasoning -> {
                     if (!flushText()) return SessionChatTimelineBlocksResult.MissingPartIds
-                    if (ThoughtPartChrome.isVisible(part)) {
+                    // Live thought is footer chrome (Thinking); only settled thoughts become rows.
+                    if (ThoughtPartChrome.isVisible(part) && !part.isStreaming) {
                         val partId = part.id ?: return SessionChatTimelineBlocksResult.MissingPartIds
                         val text = ThoughtPartChrome.displayText(part)
                         blocks +=
@@ -177,12 +178,7 @@ object SessionChatTimelineBlocks {
                                 blockID = PresentationBlockId.direct(partId),
                                 text = text,
                                 isStreaming = part.isStreaming,
-                                durationMs =
-                                    if (part.isStreaming) {
-                                        null
-                                    } else {
-                                        thoughtDurationMs(part.timeStartEpochMs, part.timeEndEpochMs)
-                                    },
+                                durationMs = thoughtDurationMs(part.timeStartEpochMs, part.timeEndEpochMs),
                             )
                     }
                     index += 1

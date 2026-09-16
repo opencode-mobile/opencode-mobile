@@ -167,7 +167,8 @@ nonisolated enum SessionChatTimelineBlocks {
                 index += 1
             case .reasoning(let reasoning):
                 flushText()
-                if ThoughtPartChrome.isVisible(reasoning) {
+                // Live thought is footer chrome (Thinking); only settled thoughts become rows.
+                if ThoughtPartChrome.isVisible(reasoning), !reasoning.isStreaming {
                     guard let partId = reasoning.id else { return .missingPartIds }
                     let text = ThoughtPartChrome.displayText(reasoning)
                     blocks.append(
@@ -175,12 +176,10 @@ nonisolated enum SessionChatTimelineBlocks {
                             blockID: PresentationBlockId.direct(partId),
                             text: text,
                             isStreaming: reasoning.isStreaming,
-                            durationMs: reasoning.isStreaming
-                                ? nil
-                                : Self.thoughtDurationMs(
-                                    start: reasoning.timeStartEpochMs,
-                                    end: reasoning.timeEndEpochMs
-                                )
+                            durationMs: Self.thoughtDurationMs(
+                                start: reasoning.timeStartEpochMs,
+                                end: reasoning.timeEndEpochMs
+                            )
                         )
                     )
                 }

@@ -648,7 +648,7 @@ struct SessionChatTimelineProjectorTests {
         #expect(!kinds.contains(.structure))
     }
 
-    @Test func streamingReasoningGrowth_isContentNotLayout() {
+    @Test func streamingReasoningGrowth_isOmittedFromTimeline() {
         let firstMessage = makeMessage(
             id: "msg-1",
             parts: [.reasoning(ReasoningPart(id: "prt-r", text: "Think", isStreaming: true))],
@@ -664,16 +664,14 @@ struct SessionChatTimelineProjectorTests {
             displayFrame(revision: 2, messages: [DisplayMessage(message: secondMessage)]),
             previous: first
         )
-        #expect(second.changedRowIDs == ["msg-1"])
+        #expect(first.rows.isEmpty)
+        #expect(second.rows.isEmpty)
+        #expect(second.changedRowIDs.isEmpty)
         #expect(second.layoutChangedRowIDs.isEmpty)
         #expect(second.layoutAffectingRowIDs.isEmpty)
-        #expect(second.rows[0].layoutRevision == first.rows[0].layoutRevision)
-        let kinds = TimelineApply.classify(second).kinds
-        #expect(kinds.contains(.content))
-        #expect(!kinds.contains(.structure))
     }
 
-    @Test func reasoningComplete_isContentNotLayout() {
+    @Test func reasoningComplete_insertsSettledThoughtRow() {
         let firstMessage = makeMessage(
             id: "msg-1",
             parts: [.reasoning(ReasoningPart(id: "prt-r", text: "Think", isStreaming: true))],
@@ -699,12 +697,17 @@ struct SessionChatTimelineProjectorTests {
             displayFrame(revision: 2, messages: [DisplayMessage(message: secondMessage)]),
             previous: first
         )
-        #expect(second.changedRowIDs == ["msg-1"])
-        #expect(second.layoutChangedRowIDs.isEmpty)
-        #expect(second.rows[0].layoutRevision == first.rows[0].layoutRevision)
+        #expect(first.rows.isEmpty)
+        #expect(second.rows.count == 1)
+        #expect(second.insertedRowIDs == ["msg-1"])
+        guard case .reasoning(_, let text, let isStreaming, _) = second.rows[0].blocks.first else {
+            Issue.record("expected settled reasoning row")
+            return
+        }
+        #expect(text == "Think")
+        #expect(isStreaming == false)
         let kinds = TimelineApply.classify(second).kinds
-        #expect(kinds.contains(.content))
-        #expect(!kinds.contains(.structure))
+        #expect(kinds.contains(.structure))
     }
 
     @Test func toolTitleChange_isContentNotLayout() {
