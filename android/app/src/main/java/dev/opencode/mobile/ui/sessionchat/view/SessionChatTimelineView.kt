@@ -49,6 +49,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
@@ -856,7 +857,13 @@ private fun SessionChatWorkingIndicatorRow(
             Modifier
                 .fillMaxWidth()
                 .clipToBounds()
-                .semantics { contentDescription = label },
+                .semantics {
+                    if (collapsed) {
+                        hideFromAccessibility()
+                    } else {
+                        contentDescription = label
+                    }
+                },
         content = {
             Row(
                 modifier =

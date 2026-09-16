@@ -152,6 +152,7 @@ private struct SessionChatTimelineReadyView: View {
     @State private var sessionTodosPillActivePreview: String?
     @State private var previousWorkingIndicatorLabel: String?
     @State private var previousWorkingIndicatorCollapsed = false
+    @State private var previousWorkingIndicatorFading = false
     @State private var topOverlayInset: CGFloat = 0
 
     private var showScrollToEnd: Bool {
@@ -198,7 +199,9 @@ private struct SessionChatTimelineReadyView: View {
                     workingIndicatorLabel: props.workingIndicatorLabel,
                     previousWorkingIndicatorLabel: previousWorkingIndicatorLabel,
                     workingIndicatorCollapsed: props.workingIndicatorCollapsed,
-                    previousWorkingIndicatorCollapsed: previousWorkingIndicatorCollapsed
+                    previousWorkingIndicatorCollapsed: previousWorkingIndicatorCollapsed,
+                    workingIndicatorFading: props.workingIndicatorFading,
+                    previousWorkingIndicatorFading: previousWorkingIndicatorFading
                 ),
                 scrollController: scrollController,
                 onRefresh: props.onRefresh,
@@ -279,6 +282,7 @@ private struct SessionChatTimelineReadyView: View {
         .onAppear {
             previousWorkingIndicatorLabel = props.workingIndicatorLabel
             previousWorkingIndicatorCollapsed = props.workingIndicatorCollapsed
+            previousWorkingIndicatorFading = props.workingIndicatorFading
             refreshSessionTodosPillSnapshot(totalCount: props.sessionTodoTotalCount)
             scrollController.autoFollowEnabled = true
             logScroll("appear count=\(props.messages.count) pinned=\(scrollController.isPinnedToEnd)")
@@ -288,6 +292,9 @@ private struct SessionChatTimelineReadyView: View {
         }
         .onChange(of: props.workingIndicatorCollapsed) { _, newValue in
             previousWorkingIndicatorCollapsed = newValue
+        }
+        .onChange(of: props.workingIndicatorFading) { _, newValue in
+            previousWorkingIndicatorFading = newValue
         }
         .onChange(of: props.messages.count) { _, newCount in
             logScroll("message-count changed count=\(newCount)")
