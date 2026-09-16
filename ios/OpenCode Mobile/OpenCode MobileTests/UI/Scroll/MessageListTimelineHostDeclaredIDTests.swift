@@ -260,6 +260,34 @@ struct MessageListTimelineHostDeclaredIDTests {
         #expect(collapsed.frameRevision != expanded.frameRevision)
     }
 
+    @Test func statusChromeExpandToggle_isStructureLayoutNotDecorate() {
+        let workingID = SessionChatStatusChrome.workingRowID
+        let frame = TimelineFrame(
+            frameRevision: 5,
+            rows: [],
+            insertedRowIDs: [],
+            changedRowIDs: [],
+            removedRowIDs: [],
+            layoutChangedRowIDs: [],
+            grewBottomRowIDs: [],
+            decorateRowIDs: [],
+            isRequired: false
+        )
+        let expanded = MessageListTimelineApplyPacket.from(
+            frame,
+            workingIndicatorLabel: "Idle",
+            previousWorkingIndicatorLabel: "Idle",
+            workingIndicatorCollapsed: false,
+            previousWorkingIndicatorCollapsed: true
+        )
+        #expect(!expanded.insertedRowIDs.contains(workingID))
+        #expect(!expanded.removedRowIDs.contains(workingID))
+        #expect(expanded.changedRowIDs.contains(workingID))
+        #expect(expanded.layoutChangedRowIDs.contains(workingID))
+        #expect(!expanded.decorateRowIDs.contains(workingID))
+        #expect(expanded.structureAffectingRowIDs.contains(workingID))
+    }
+
     @Test func statusChromeFadeToggle_reconfiguresStableWorkingRowWithoutLayout() {
         let workingID = SessionChatStatusChrome.workingRowID
         let frame = TimelineFrame(

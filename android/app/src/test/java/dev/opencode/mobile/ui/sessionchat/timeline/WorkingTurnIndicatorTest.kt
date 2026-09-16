@@ -171,6 +171,13 @@ class WorkingTurnIndicatorTest {
     }
 
     @Test
+    fun showsIdleMark_onlyForIdleLabel() {
+        assertTrue(WorkingTurnIndicator.showsIdleMark(WorkingTurnIndicator.IDLE_LABEL))
+        assertFalse(WorkingTurnIndicator.showsIdleMark("Working"))
+        assertFalse(WorkingTurnIndicator.showsIdleMark(SessionCompactChrome.STATUS_LABEL))
+    }
+
+    @Test
     fun lastIsThinking_trueWhenLastBlockIsStreamingReasoning() {
         assertTrue(
             WorkingTurnIndicator.lastIsThinking(
@@ -189,8 +196,8 @@ class WorkingTurnIndicatorTest {
     }
 
     @Test
-    fun lastIsThinking_falseWhenThinkingThenText() {
-        assertFalse(
+    fun lastIsThinking_trueWhenStreamingReasoningThenText() {
+        assertTrue(
             WorkingTurnIndicator.lastIsThinking(
                 listOf(
                     message(

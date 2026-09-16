@@ -139,6 +139,12 @@ struct WorkingTurnIndicatorTests {
         )
     }
 
+    @Test func showsIdleMark_onlyForIdleLabel() {
+        #expect(WorkingTurnIndicator.showsIdleMark(label: WorkingTurnIndicator.idleLabel))
+        #expect(WorkingTurnIndicator.showsIdleMark(label: "Working") == false)
+        #expect(WorkingTurnIndicator.showsIdleMark(label: SessionCompactChrome.statusLabel) == false)
+    }
+
     @Test func lastIsThinking_trueWhenLastBlockIsStreamingReasoning() {
         #expect(
             WorkingTurnIndicator.lastIsThinking(messages: [
@@ -155,14 +161,14 @@ struct WorkingTurnIndicatorTests {
         )
     }
 
-    @Test func lastIsThinking_falseWhenThinkingThenText() {
+    @Test func lastIsThinking_trueWhenStreamingReasoningThenText() {
         #expect(
             WorkingTurnIndicator.lastIsThinking(messages: [
                 row(
                     .reasoning(blockID: "r1", text: "hmm", isStreaming: true, durationMs: nil),
                     .text(blockID: "t1", text: "Hello", renderedMarkdown: nil)
                 ),
-            ]) == false
+            ])
         )
     }
 

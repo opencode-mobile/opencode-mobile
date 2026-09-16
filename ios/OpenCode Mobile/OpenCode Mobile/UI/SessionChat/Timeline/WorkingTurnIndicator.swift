@@ -30,14 +30,22 @@ enum WorkingTurnIndicator {
     }
 
     static func lastIsThinking(messages: [SessionChatRow]) -> Bool {
-        guard case .reasoning(_, _, let isStreaming, _)? = messages.last?.blocks.last else {
-            return false
+        messages.contains { message in
+            message.blocks.contains { block in
+                if case .reasoning(_, _, let isStreaming, _) = block {
+                    return isStreaming
+                }
+                return false
+            }
         }
-        return isStreaming
     }
 
     static func shouldCollapseReservedRow(lastIsThinking: Bool, label: String?) -> Bool {
         lastIsThinking && label != nil
+    }
+
+    static func showsIdleMark(label: String) -> Bool {
+        label == idleLabel
     }
 
     static func labelForActiveTurn(

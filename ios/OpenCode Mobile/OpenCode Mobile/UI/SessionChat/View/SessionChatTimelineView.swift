@@ -411,7 +411,7 @@ private struct SessionChatWorkingIndicatorRow: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 8) {
-            SessionChatWorkingStatusDot()
+            SessionChatWorkingStatusMark(isIdle: WorkingTurnIndicator.showsIdleMark(label: label))
             Text(label)
                 .font(OpenCodeTypography.body)
                 .foregroundStyle(OpenCodeColors.textWeak)
@@ -422,19 +422,49 @@ private struct SessionChatWorkingIndicatorRow: View {
         .padding(.top, collapsed ? 0 : 12)
         .padding(.bottom, collapsed ? 0 : 8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .frame(height: collapsed ? 0 : nil)
+        // Hosted cells with minSize 0 treated `frame(height: nil)` as 0 and
+        // never painted Working / Idle. Expanded chrome must keep a real floor.
+        .frame(minHeight: collapsed ? 0 : 36, maxHeight: collapsed ? 0 : nil)
         .clipped()
         .accessibilityElement(children: .ignore)
         .accessibilityHidden(collapsed)
         .accessibilityLabel(label)
         .transaction { transaction in
             // Host clears animations so cells do not animate on open. Re-enable
-            // only the Idle dismiss so Working/Thinking still snap.
+            // Idle so the lamp can become a check, then dismiss.
             transaction.animation =
-                collapsed && label == WorkingTurnIndicator.idleLabel
+                WorkingTurnIndicator.showsIdleMark(label: label)
                 ? .easeInOut(duration: 0.22)
                 : nil
         }
+    }
+}
+
+private struct SessionChatWorkingStatusMark: View {
+    var isIdle: Bool = false
+    @State private var pulse = false
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(OpenCodeColors.textWeak)
+                .frame(width: 6, height: 6)
+                .opacity(isIdle ? 0 : (pulse ? 0.35 : 1))
+                .animation(
+                    isIdle ? nil : .easeInOut(duration: 0.9).repeatForever(autoreverses: true),
+                    value: pulse
+                )
+            OpenCodeIconImage(icon: .check, size: 12)
+                .foregroundStyle(OpenCodeColors.textWeak)
+                .opacity(isIdle ? 1 : 0)
+                .scaleEffect(isIdle ? 1 : 0.4)
+        }
+        .frame(width: 12, height: 12)
+        .onAppear { pulse = true }
+        .onChange(of: isIdle) { _, idle in
+            pulse = !idle
+        }
+        .accessibilityHidden(true)
     }
 }
 

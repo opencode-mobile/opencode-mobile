@@ -246,11 +246,11 @@ struct MessageListTimelineApplyPacket: Equatable, Sendable {
     /// Session Chat path: keep declared timeline sets, and fold Working status
     /// chrome into revision. Label or fade *changes* land in `changedRowIDs` so
     /// that stable row reconfigures without clearing the packet (OPE-136).
-    /// Collapse toggles land in `layoutChangedRowIDs` and `decorateRowIDs` so
-    /// height 0 ↔ painted does not insert, remove, or structure-pin the reserved
-    /// identity. An unchanged label+collapse+fade while the timeline publishes
-    /// must not reconfigure it.
-    /// Syncing uses a top overlay pill and is not a timeline row.
+    /// Collapse (painted → height 0) is decorate-only so Idle dismiss does not
+    /// structure-pin. Expand (height 0 → painted) stays a real layout change —
+    /// decorate-only left the reserved row stuck at 0 and hid Working / Idle.
+    /// An unchanged label+collapse+fade while the timeline publishes must not
+    /// reconfigure it. Syncing uses a top overlay pill and is not a timeline row.
     static func from(
         _ frame: TimelineFrame,
         workingIndicatorLabel: String?,
@@ -274,11 +274,23 @@ struct MessageListTimelineApplyPacket: Equatable, Sendable {
             collapsed: workingIndicatorCollapsed,
             fading: workingIndicatorFading
         )
+        let decorateChrome: Set<String> =
+            if workingIndicatorLabel != nil,
+               workingIndicatorCollapsed,
+               !delta.layoutChanged.isEmpty
+            {
+                delta.layoutChanged
+            } else {
+                []
+            }
         var kinds = base.kinds
-        if !delta.inserted.isEmpty || !delta.removed.isEmpty {
+        if !delta.inserted.isEmpty
+            || !delta.removed.isEmpty
+            || !delta.layoutChanged.subtracting(decorateChrome).isEmpty
+        {
             kinds.insert(.structure)
         }
-        if !delta.layoutChanged.isEmpty {
+        if !decorateChrome.isEmpty {
             kinds.insert(.decorate)
         }
         if !delta.changed.isEmpty {
@@ -291,7 +303,7 @@ struct MessageListTimelineApplyPacket: Equatable, Sendable {
             removedRowIDs: base.removedRowIDs.union(delta.removed),
             layoutChangedRowIDs: base.layoutChangedRowIDs.union(delta.layoutChanged),
             grewBottomRowIDs: base.grewBottomRowIDs,
-            decorateRowIDs: base.decorateRowIDs.union(delta.layoutChanged),
+            decorateRowIDs: base.decorateRowIDs.union(decorateChrome),
             isRequired: base.isRequired,
             kinds: kinds
         )

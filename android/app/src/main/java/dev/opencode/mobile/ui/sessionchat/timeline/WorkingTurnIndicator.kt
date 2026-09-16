@@ -35,15 +35,19 @@ object WorkingTurnIndicator {
         val wakeAfterMs: Long? = null,
     )
 
-    fun lastIsThinking(messages: List<SessionChatMessageItem>): Boolean {
-        val last = messages.lastOrNull()?.blocks?.lastOrNull() as? SessionChatTimelineBlock.Reasoning
-        return last?.isStreaming == true
-    }
+    fun lastIsThinking(messages: List<SessionChatMessageItem>): Boolean =
+        messages.any { message ->
+            message.blocks.any { block ->
+                block is SessionChatTimelineBlock.Reasoning && block.isStreaming
+            }
+        }
 
     fun shouldCollapseReservedRow(
         lastIsThinking: Boolean,
         label: String?,
     ): Boolean = lastIsThinking && label != null
+
+    fun showsIdleMark(label: String): Boolean = label == IDLE_LABEL
 
     fun labelForActiveTurn(
         statusLabel: String?,
