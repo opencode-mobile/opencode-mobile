@@ -344,7 +344,8 @@ class MessageSync(
                 } else {
                     awaitingCacheSyncConfirm.remove(storeSlot)
                     cacheHandle.note(messages)
-                    setCatchUpSlot(key, false)
+                    // applyCoordinatorHealth owns the slot so a live SSE apply
+                    // cannot hide reconnect chrome while the projection is stale.
                 }
                 lastPublishedProfileId.set(key.connectionProfileId)
                 send(

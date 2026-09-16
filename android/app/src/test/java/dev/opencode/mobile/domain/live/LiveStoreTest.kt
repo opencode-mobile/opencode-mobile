@@ -455,6 +455,12 @@ class MessageSyncTest {
                 }
             advanceTimeBy(1)
             assertEquals(true, chrome.lastOrNull())
+
+            eventStream.emit(textPartEvent(partId = "prt-1", messageId = "msg-1", text = "Hello"))
+            advanceTimeBy(1)
+            runCurrent()
+            assertEquals(true, chrome.lastOrNull())
+            assertTrue(sync.syncHealth("ses-1", "/repo") is MessageSyncHealth.Stale)
             chromeJob.cancel()
             collectJob.cancel()
             advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)

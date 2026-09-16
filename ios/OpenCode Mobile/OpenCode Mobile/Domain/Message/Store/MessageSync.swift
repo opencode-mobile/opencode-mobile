@@ -154,12 +154,12 @@ nonisolated final class MessageSync: @unchecked Sendable {
         lock.unlock()
         if observing {
             setQuietRefresh(true, for: key.storeSlot)
-            // After the window closes, a failed refresh is re-published by the
-            // coordinator retry as `.syncing`; the uncatchable case is already
-            // handled at the end of `refreshMessages`.
+            // Stay quiet until this hop (or its serial-mismatch retry) is Fresh.
+            // `ensureFresh` can return while a bumped serial is still syncing.
             defer { setQuietRefresh(false, for: key.storeSlot) }
             syncCoordinator.invalidate(projection)
             await syncCoordinator.ensureFresh(projection)
+            await waitUntilRefreshSettled(projection, key: key)
             lock.lock()
             let error = lastLoadErrorBySlot[key.storeSlot]
             lock.unlock()
@@ -418,6 +418,25 @@ nonisolated final class MessageSync: @unchecked Sendable {
             }
         }
         lock.unlock()
+    }
+
+    private func waitUntilRefreshSettled(
+        _ projection: ProjectionKey,
+        key: MessageSessionKey
+    ) async {
+        for await state in syncCoordinator.observe(projection) {
+            if state == .fresh { return }
+            if !canCatchUp(
+                occupancy: worldSignals.occupancy,
+                snapshot: liveConnection.snapshot
+            ) {
+                return
+            }
+            lock.lock()
+            let error = lastLoadErrorBySlot[key.storeSlot]
+            lock.unlock()
+            if error != nil { return }
+        }
     }
 
     private func isAwaitingCacheSyncConfirm(for storeSlot: String) -> Bool {
