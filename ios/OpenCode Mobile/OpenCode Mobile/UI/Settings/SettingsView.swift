@@ -1,5 +1,6 @@
 import Factory
 import SwiftUI
+import UIKit
 
 private struct SectionHeader: View {
     let title: String
@@ -22,6 +23,8 @@ struct SettingsView: View {
     var onAddServer: () -> Void = {}
     var onEditProfile: (ConnectionProfile) -> Void = { _ in }
     var serversRefreshToken: Int = 0
+    var version: String = AppVersion.current().version
+    var build: String = AppVersion.current().build
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
     @State private var showComponentGallery = false
@@ -335,6 +338,26 @@ struct SettingsView: View {
                     )
                     .padding(.horizontal, 16)
 
+                    SectionHeader(title: "About")
+
+                    OpenCodeListItem(
+                        title: "Version",
+                        subtitle: version,
+                        style: .card,
+                        startDecorator: .icon(.description, accessibilityLabel: "Version"),
+                        action: { UIPasteboard.general.string = version }
+                    )
+                    .padding(.horizontal, 16)
+
+                    OpenCodeListItem(
+                        title: "Build",
+                        subtitle: build,
+                        style: .card,
+                        startDecorator: .icon(.settings, accessibilityLabel: "Build"),
+                        action: { UIPasteboard.general.string = build }
+                    )
+                    .padding(.horizontal, 16)
+
                     if developerToolsPreferences.unlocked {
                         SectionHeader(title: "Developer Tools")
 
@@ -585,14 +608,14 @@ struct SettingsView: View {
 
 #Preview {
     NavigationStack {
-        SettingsView()
+        SettingsView(version: "1.0", build: "1")
     }
     .openCodeTheme()
 }
 
 #Preview("Dark") {
     NavigationStack {
-        SettingsView()
+        SettingsView(version: "1.0", build: "1")
     }
     .openCodeTheme()
     .preferredColorScheme(.dark)
