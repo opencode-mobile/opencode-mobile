@@ -75,6 +75,8 @@ nonisolated final class MessageEventStaging: @unchecked Sendable {
                 lock.unlock()
                 return
             }
+        } else if authorityWindowOpen, event.type == "session.idle", event.sessionID == sessionID {
+            racedDuringAuthorityWindow = true
         }
         let cost = MessageEventRouter.estimatedByteCost(event)
         if count >= capacity || queuedBytes + cost > byteCapacity {

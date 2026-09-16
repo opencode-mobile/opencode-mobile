@@ -334,6 +334,12 @@ class MessageSync(
             val overflowed =
                 java.util.concurrent.atomic
                     .AtomicBoolean(false)
+            val authorityWindowOpen =
+                java.util.concurrent.atomic
+                    .AtomicBoolean(false)
+            val idleRacedAuthority =
+                java.util.concurrent.atomic
+                    .AtomicBoolean(false)
 
             suspend fun emitMessages(
                 messages: List<Message>,
@@ -413,66 +419,71 @@ class MessageSync(
 
             val registration =
                 syncCoordinator.register(projection) {
-                    val generation = syncCoordinator.profileGeneration
-                    applyQueuedIncrementalEvents()
-                    val previous = lastIdentities[storeSlot]
-                    val previousFrame = lastPublishedFrames[storeSlot]
-                    when (
-                        val result =
-                            fullReloadResult(
-                                key,
-                                reason = "transcript",
-                                mergeExisting = true,
-                                beforeCommit = {
-                                    if (syncCoordinator.profileGeneration == generation) {
-                                        applyQueuedIncrementalEvents()
-                                    }
-                                },
-                                stillCurrent = { syncCoordinator.profileGeneration == generation },
-                            )
-                    ) {
-                        is ReloadResult.Accepted,
-                        is ReloadResult.Discarded,
-                        -> {
-                            if (syncCoordinator.profileGeneration != generation) return@register
-                            if (overflowed.getAndSet(false)) {
-                                throw IllegalStateException("event staging overflow")
-                            }
-                            val messages =
-                                when (result) {
-                                    is ReloadResult.Accepted -> result.messages
-                                    is ReloadResult.Discarded -> result.messages
-                                    is ReloadResult.Failure -> error("unreachable")
+                    authorityWindowOpen.set(true)
+                    try {
+                        val generation = syncCoordinator.profileGeneration
+                        applyQueuedIncrementalEvents()
+                        val previous = lastIdentities[storeSlot]
+                        val previousFrame = lastPublishedFrames[storeSlot]
+                        when (
+                            val result =
+                                fullReloadResult(
+                                    key,
+                                    reason = "transcript",
+                                    mergeExisting = true,
+                                    beforeCommit = {
+                                        if (syncCoordinator.profileGeneration == generation) {
+                                            applyQueuedIncrementalEvents()
+                                        }
+                                    },
+                                    stillCurrent = { syncCoordinator.profileGeneration == generation },
+                                )
+                        ) {
+                            is ReloadResult.Accepted,
+                            is ReloadResult.Discarded,
+                            -> {
+                                if (syncCoordinator.profileGeneration != generation) return@register
+                                if (overflowed.getAndSet(false)) {
+                                    throw IllegalStateException("event staging overflow")
                                 }
-                            if (result is ReloadResult.Accepted && result.confirmedWithoutPublish) {
-                                confirmCacheSyncIfAwaiting()
-                            } else if (
-                                previous != frameIdentity(storeSlot, messages) &&
-                                messages != previousFrame
-                            ) {
-                                // Merge bumps the engine revision even when the tail is byte-identical;
-                                // only repaint when the frame itself changed (matches iOS).
-                                emitMessages(messages)
-                            } else {
-                                confirmCacheSyncIfAwaiting()
+                                val messages =
+                                    when (result) {
+                                        is ReloadResult.Accepted -> result.messages
+                                        is ReloadResult.Discarded -> result.messages
+                                        is ReloadResult.Failure -> error("unreachable")
+                                    }
+                                if (result is ReloadResult.Accepted && result.confirmedWithoutPublish) {
+                                    confirmCacheSyncIfAwaiting()
+                                } else if (
+                                    previous != frameIdentity(storeSlot, messages) &&
+                                    messages != previousFrame
+                                ) {
+                                    // Merge bumps the engine revision even when the tail is byte-identical;
+                                    // only repaint when the frame itself changed (matches iOS).
+                                    emitMessages(messages)
+                                } else {
+                                    confirmCacheSyncIfAwaiting()
+                                }
+                                backfillSplitTurnIfNeeded(
+                                    key,
+                                    stillCurrent = { observationStillCurrent() },
+                                    emitMessages = { frame -> emitMessages(frame, isFromCache = false) },
+                                )
+                                healthByKey[key] = MessageSyncHealth.Fresh
                             }
-                            backfillSplitTurnIfNeeded(
-                                key,
-                                stillCurrent = { observationStillCurrent() },
-                                emitMessages = { frame -> emitMessages(frame, isFromCache = false) },
-                            )
-                            healthByKey[key] = MessageSyncHealth.Fresh
+                            is ReloadResult.Failure -> {
+                                healthByKey[key] = MessageSyncHealth.Failed(result.error)
+                                if (!lastPublishedFrames.containsKey(storeSlot)) {
+                                    extra.tryEmit(MessageListUpdate.LoadFailed(result.error))
+                                }
+                                if (isMissingSessionError(result.error)) {
+                                    return@register
+                                }
+                                throw result.error
+                            }
                         }
-                        is ReloadResult.Failure -> {
-                            healthByKey[key] = MessageSyncHealth.Failed(result.error)
-                            if (!lastPublishedFrames.containsKey(storeSlot)) {
-                                extra.tryEmit(MessageListUpdate.LoadFailed(result.error))
-                            }
-                            if (isMissingSessionError(result.error)) {
-                                return@register
-                            }
-                            throw result.error
-                        }
+                    } finally {
+                        authorityWindowOpen.set(false)
                     }
                 }
             syncCoordinator.visible(projection, true)
@@ -490,6 +501,12 @@ class MessageSync(
                         assertOffMainThread()
                         if (!isActive || !observationStillCurrent()) return@collect
                         if (!MessageEventRouter.shouldStageForMessageSync(event)) return@collect
+                        if (event.type == "session.idle" &&
+                            event.sessionId == key.sessionId &&
+                            authorityWindowOpen.get()
+                        ) {
+                            idleRacedAuthority.set(true)
+                        }
                         val cost = MessageEventRouter.estimatedByteCost(event)
                         if (queued.get() >= eventStagingCapacity ||
                             queuedBytes.get() + cost > eventStagingByteCapacity
@@ -591,7 +608,9 @@ class MessageSync(
                             )
                             emitMessages(recovered)
                         }
-                        if (SessionTranscriptAuthority.lastAssistantNeedsAuthority(recovered)) {
+                        if (SessionTranscriptAuthority.lastAssistantNeedsAuthority(recovered) ||
+                            idleRacedAuthority.getAndSet(false)
+                        ) {
                             requestCatchUp()
                         }
                         return
