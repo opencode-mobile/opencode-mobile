@@ -143,6 +143,18 @@ struct WorkingTurnIndicatorTests {
         )
     }
 
+    @Test func mountedLabel_dropsCollapsedFooter() {
+        #expect(
+            WorkingTurnIndicator.mountedLabel(label: "Idle", collapsed: true) == nil
+        )
+        #expect(
+            WorkingTurnIndicator.mountedLabel(label: "Working", collapsed: false) == "Working"
+        )
+        #expect(
+            WorkingTurnIndicator.mountedLabel(label: nil, collapsed: false) == nil
+        )
+    }
+
     @Test func showsIdleMark_onlyForIdleLabel() {
         #expect(WorkingTurnIndicator.showsIdleMark(label: WorkingTurnIndicator.idleLabel))
         #expect(WorkingTurnIndicator.showsIdleMark(label: "Working") == false)

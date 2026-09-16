@@ -61,6 +61,13 @@ enum WorkingTurnIndicator {
         label == idleLabel
     }
 
+    /// Label the timeline mounts as its last row. A collapsed footer is not a
+    /// row: zero-height cells are not visible cells, so a later expand could
+    /// not re-measure them. Collapse = remove, expand = insert.
+    static func mountedLabel(label: String?, collapsed: Bool) -> String? {
+        collapsed ? nil : label
+    }
+
     /// Fixed footer row height so the list's height estimate equals the real height and pin-to-end never needs an estimate→real correction for this row.
     static let rowHeight: CGFloat = 40
 

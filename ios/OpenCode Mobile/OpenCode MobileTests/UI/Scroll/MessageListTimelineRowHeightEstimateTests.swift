@@ -20,18 +20,14 @@ struct MessageListTimelineRowHeightEstimateTests {
         #expect(abs(estimate - 64) < 0.001)
     }
 
-    @Test func workingStatusRowUsesCompactEstimate() {
+    @Test func workingStatusRowUsesFixedRowHeight() {
         let row = SessionChatRow(
             id: SessionChatStatusChrome.workingRowID,
             role: .assistant,
             text: "Working",
             metadataLabel: ""
         )
-        let compact = MessageListTimelineRowHeightEstimate.fallback(
-            characterCount: row.text.count,
-            style: .compact
-        )
-        #expect(abs(row.timelineRowHeightEstimate - compact) < 0.001)
+        #expect(row.timelineRowHeightEstimate == WorkingTurnIndicator.rowHeight)
         #expect(row.timelineRowHeightEstimate < MessageListTimelineDefaults.estimatedRowHeight)
     }
 
