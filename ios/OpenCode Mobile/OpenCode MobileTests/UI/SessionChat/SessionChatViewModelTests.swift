@@ -2773,10 +2773,12 @@ struct SessionChatViewModelTests {
 
     @Test func runClientSlashAction_compact_showsCompactingWhileInFlight() async {
         let hold = AsyncGate()
+        let clock = ChatTestSyncClock(now: 1_000)
         let sessionRepository = FakeChatSessionRepository(summarizeHold: hold)
         let viewModel = makeViewModel(
             messageRepository: FakeMessageRepository(),
-            sessionRepository: sessionRepository
+            sessionRepository: sessionRepository,
+            clock: clock
         )
         defer { viewModel.stopObserving() }
         await viewModel.loadMessages()
@@ -2789,8 +2791,59 @@ struct SessionChatViewModelTests {
 
         await hold.open()
         await waitUntil { viewModel.uiState.snackbar?.message == SessionCompactChrome.fallbackSuccess }
+        try? await clock.awaitWaiter(milliseconds: Int(WorkingTurnIndicator.idleHoldMilliseconds))
+        clock.now += WorkingTurnIndicator.idleHoldMilliseconds
+        clock.release(milliseconds: Int(WorkingTurnIndicator.idleHoldMilliseconds))
+        await waitUntil { viewModel.uiState.workingIndicatorCollapsed }
         #expect(viewModel.uiState.sessionStatusLabel == nil)
-        #expect(viewModel.uiState.workingIndicatorLabel == nil)
+        #expect(viewModel.uiState.workingIndicatorLabel == SessionCompactChrome.statusLabel)
+        #expect(viewModel.uiState.workingIndicatorCollapsed)
+        #expect(viewModel.uiState.workingIndicatorFading == false)
+    }
+
+    @Test func workingFooter_holdsThroughIdleThenCollapsesAndCancelsOnBusy() async {
+        let clock = ChatTestSyncClock(now: 1_000)
+        let eventStream = FakeForegroundEventStream()
+        let viewModel = makeViewModel(
+            eventStream: eventStream,
+            sessionRepository: FakeChatSessionRepository(sessionStatusType: "busy"),
+            clock: clock
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        await waitUntil { viewModel.uiState.workingIndicatorLabel == "Working" }
+        #expect(viewModel.uiState.workingIndicatorCollapsed == false)
+        #expect(viewModel.uiState.workingIndicatorFading == false)
+
+        eventStream.emit(OpencodeEvent(type: "session.idle", sessionID: "ses-1"))
+        await waitUntil { viewModel.uiState.sessionStatusLabel == nil }
+        #expect(viewModel.uiState.workingIndicatorLabel == "Working")
+        #expect(viewModel.uiState.workingIndicatorFading)
+        #expect(viewModel.uiState.workingIndicatorCollapsed == false)
+
+        try? await clock.awaitWaiter(milliseconds: Int(WorkingTurnIndicator.idleHoldMilliseconds))
+        clock.now += WorkingTurnIndicator.idleHoldMilliseconds
+        clock.release(milliseconds: Int(WorkingTurnIndicator.idleHoldMilliseconds))
+        await waitUntil { viewModel.uiState.workingIndicatorCollapsed }
+        #expect(viewModel.uiState.workingIndicatorLabel == "Working")
+        #expect(viewModel.uiState.workingIndicatorFading == false)
+        #expect(viewModel.uiState.sessionStatusLabel == nil)
+
+        eventStream.emit(
+            OpencodeEvent(
+                type: "session.status",
+                sessionID: "ses-1",
+                rawProperties: ["status": .dictionary(["type": .string("busy")])]
+            )
+        )
+        await waitUntil {
+            viewModel.uiState.workingIndicatorLabel == "Working" &&
+                !viewModel.uiState.workingIndicatorFading &&
+                !viewModel.uiState.workingIndicatorCollapsed
+        }
+        #expect(viewModel.uiState.workingIndicatorLabel == "Working")
+        #expect(viewModel.uiState.workingIndicatorFading == false)
+        #expect(viewModel.uiState.workingIndicatorCollapsed == false)
     }
 
     @Test func runClientSlashAction_compact_failureClearsCompactingAndShowsError() async {
@@ -3264,7 +3317,13 @@ private final class FakeMessageRepository: MessageRepository, @unchecked Sendabl
     }
 
     func refreshMessages(sessionID: String, directory: String?) async throws -> [Message] {
-        try await listMessages(sessionID: sessionID, directory: directory)
+        // Post-send refresh is the reload-after-send path. Live observe still
+        // lists through `listMessages` and must not inherit this failure, or a
+        // late subscribe snapshot flips a ready timeline to full-screen error.
+        if failListMessagesAfterSend, sendPromptAsyncCalled {
+            throw MessageError.transport("reload failed")
+        }
+        return try await listMessages(sessionID: sessionID, directory: directory)
     }
 
     func refreshDisplayMessages(sessionID: String, directory: String?) async throws -> [DisplayMessage] {
@@ -3282,9 +3341,6 @@ private final class FakeMessageRepository: MessageRepository, @unchecked Sendabl
         listMessagesCallCount += 1
         if shouldFailLoad {
             throw MessageError.transport("load failed")
-        }
-        if failListMessagesAfterSend, sendPromptAsyncCalled {
-            throw MessageError.transport("reload failed")
         }
         return messages
     }

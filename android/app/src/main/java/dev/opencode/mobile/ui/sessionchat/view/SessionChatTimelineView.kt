@@ -3,6 +3,7 @@ package dev.opencode.mobile.ui.sessionchat.view
 import android.util.Log
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
@@ -42,10 +43,13 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
@@ -103,6 +107,7 @@ internal data class SessionChatTimelineViewProps(
     val syncingIndicatorLabel: String? = null,
     val workingIndicatorLabel: String? = null,
     val workingIndicatorCollapsed: Boolean = false,
+    val workingIndicatorFading: Boolean = false,
     val sessionTodosVisible: Boolean = false,
     val sessionTodoCompletedCount: Int = 0,
     val sessionTodoTotalCount: Int = 0,
@@ -186,6 +191,7 @@ internal fun SessionChatTimelineView(
                 syncingIndicatorLabel = props.syncingIndicatorLabel,
                 workingIndicatorLabel = props.workingIndicatorLabel,
                 workingIndicatorCollapsed = props.workingIndicatorCollapsed,
+                workingIndicatorFading = props.workingIndicatorFading,
                 sessionTodosVisible = props.sessionTodosVisible,
                 sessionTodoCompletedCount = props.sessionTodoCompletedCount,
                 sessionTodoTotalCount = props.sessionTodoTotalCount,
@@ -220,6 +226,7 @@ private fun SessionChatTimelineReadyView(
     syncingIndicatorLabel: String?,
     workingIndicatorLabel: String?,
     workingIndicatorCollapsed: Boolean,
+    workingIndicatorFading: Boolean,
     sessionTodosVisible: Boolean,
     sessionTodoCompletedCount: Int,
     sessionTodoTotalCount: Int,
@@ -254,11 +261,13 @@ private fun SessionChatTimelineReadyView(
     var committedFrame by remember { mutableStateOf(timelineFrame) }
     var committedWorkingLabel by remember { mutableStateOf(workingIndicatorLabel) }
     var committedWorkingCollapsed by remember { mutableStateOf(workingIndicatorCollapsed) }
+    var committedWorkingFading by remember { mutableStateOf(workingIndicatorFading) }
     LaunchedEffect(
         messages,
         timelineFrame,
         workingIndicatorLabel,
         workingIndicatorCollapsed,
+        workingIndicatorFading,
         isUserScrollInProgress,
     ) {
         val hold =
@@ -271,6 +280,7 @@ private fun SessionChatTimelineReadyView(
             committedFrame = timelineFrame
             committedWorkingLabel = workingIndicatorLabel
             committedWorkingCollapsed = workingIndicatorCollapsed
+            committedWorkingFading = workingIndicatorFading
         } else {
             runCatching {
                 Log.d(
@@ -394,11 +404,11 @@ private fun SessionChatTimelineReadyView(
                 statusIndicatorContent =
                     committedWorkingLabel?.let { label ->
                         {
-                            if (committedWorkingCollapsed) {
-                                Spacer(modifier = Modifier.height(0.dp))
-                            } else {
-                                SessionChatWorkingIndicatorRow(label = label)
-                            }
+                            SessionChatWorkingIndicatorRow(
+                                label = label,
+                                fading = committedWorkingFading,
+                                collapsed = committedWorkingCollapsed,
+                            )
                         }
                     },
             ) { message, isNewestMessage, onContentSizeSettled ->
@@ -822,23 +832,63 @@ private const val SESSION_CHAT_STATUS_INDICATOR_KEY = "session-chat-status-indic
 
 /** Feature-local Working/Retrying/Compacting status chrome (not prose). */
 @Composable
-private fun SessionChatWorkingIndicatorRow(label: String) {
-    Row(
+private fun SessionChatWorkingIndicatorRow(
+    label: String,
+    fading: Boolean = false,
+    collapsed: Boolean = false,
+) {
+    val contentAlpha by animateFloatAsState(
+        targetValue =
+            when {
+                collapsed -> 0f
+                fading -> 0.35f
+                else -> 1f
+            },
+        animationSpec = tween(durationMillis = 220),
+        label = "session-chat-working-fade",
+    )
+    val heightFactor by animateFloatAsState(
+        targetValue = if (collapsed) 0f else 1f,
+        animationSpec = tween(durationMillis = 220),
+        label = "session-chat-working-collapse",
+    )
+    Layout(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .padding(start = 4.dp, top = 12.dp, bottom = 8.dp)
-                .semantics { contentDescription = label },
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        SessionChatWorkingStatusDot()
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(modifier = Modifier.weight(1f))
+                .clipToBounds()
+                .semantics {
+                    if (collapsed) {
+                        hideFromAccessibility()
+                    } else {
+                        contentDescription = label
+                    }
+                },
+        content = {
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(start = 4.dp, top = 12.dp, bottom = 8.dp)
+                        .alpha(contentAlpha),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                SessionChatWorkingStatusDot()
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(modifier = Modifier.weight(1f))
+            }
+        },
+    ) { measurables, constraints ->
+        val placeable = measurables.first().measure(constraints)
+        val height = (placeable.height * heightFactor).toInt()
+        layout(placeable.width, height) {
+            placeable.placeRelative(0, 0)
+        }
     }
 }
 

@@ -170,6 +170,126 @@ struct WorkingTurnIndicatorTests {
         #expect(WorkingTurnIndicator.lastIsThinking(messages: []) == false)
     }
 
+    @Test func resolveFooter_freshIdleStaysUnmounted() {
+        let resolved = resolve(activeLabel: nil, previous: .unmounted, hold: nil)
+        #expect(resolved.chrome == .unmounted)
+        #expect(resolved.hold == nil)
+        #expect(resolved.wakeAfterMs == nil)
+    }
+
+    @Test func resolveFooter_activeWorkingExpandedCancelsHold() {
+        let resolved = resolve(
+            activeLabel: "Working",
+            previous: fadingWorking,
+            hold: visibleHold()
+        )
+        #expect(resolved.chrome == WorkingTurnIndicator.Chrome(label: "Working", collapsed: false, fading: false))
+        #expect(resolved.hold == nil)
+        #expect(resolved.wakeAfterMs == nil)
+    }
+
+    @Test func resolveFooter_activeWorkingAndThinkingCollapsesWithoutFade() {
+        let resolved = resolve(activeLabel: "Working", lastIsThinking: true)
+        #expect(resolved.chrome == WorkingTurnIndicator.Chrome(label: "Working", collapsed: true, fading: false))
+        #expect(resolved.hold == nil)
+        #expect(resolved.wakeAfterMs == nil)
+    }
+
+    @Test func resolveFooter_visibleWorkingIdleStartsFadeHold() {
+        let resolved = resolve(
+            activeLabel: nil,
+            previous: WorkingTurnIndicator.Chrome(label: "Working", collapsed: false, fading: false),
+            nowMs: 10_000
+        )
+        #expect(resolved.chrome == WorkingTurnIndicator.Chrome(label: "Working", collapsed: false, fading: true))
+        #expect(resolved.hold == WorkingTurnIndicator.Hold(label: "Working", startedAtMs: 10_000, fromCollapsed: false))
+        #expect(resolved.wakeAfterMs == WorkingTurnIndicator.idleHoldMilliseconds)
+    }
+
+    @Test func resolveFooter_visibleHoldAt999StillFading() {
+        let resolved = resolve(
+            activeLabel: nil,
+            previous: fadingWorking,
+            hold: visibleHold(startedAtMs: 10_000),
+            nowMs: 10_999
+        )
+        #expect(resolved.chrome == WorkingTurnIndicator.Chrome(label: "Working", collapsed: false, fading: true))
+        #expect(resolved.hold == visibleHold(startedAtMs: 10_000))
+        #expect(resolved.wakeAfterMs == 1)
+    }
+
+    @Test func resolveFooter_visibleHoldAt1000CollapsesAndKeepsLabel() {
+        let resolved = resolve(
+            activeLabel: nil,
+            previous: fadingWorking,
+            hold: visibleHold(startedAtMs: 10_000),
+            nowMs: 11_000
+        )
+        #expect(resolved.chrome == WorkingTurnIndicator.Chrome(label: "Working", collapsed: true, fading: false))
+        #expect(resolved.hold == visibleHold(startedAtMs: 10_000))
+        #expect(resolved.wakeAfterMs == nil)
+    }
+
+    @Test func resolveFooter_collapsedThinkingIdleStaysCollapsed() {
+        let resolved = resolve(
+            activeLabel: nil,
+            previous: WorkingTurnIndicator.Chrome(label: "Working", collapsed: true, fading: false),
+            nowMs: 10_000
+        )
+        #expect(resolved.chrome == WorkingTurnIndicator.Chrome(label: "Working", collapsed: true, fading: false))
+        #expect(resolved.hold == WorkingTurnIndicator.Hold(label: "Working", startedAtMs: 10_000, fromCollapsed: true))
+        #expect(resolved.wakeAfterMs == nil)
+    }
+
+    @Test func resolveFooter_newActiveWorkingCancelsVisibleHold() {
+        let resolved = resolve(
+            activeLabel: "Working",
+            previous: fadingWorking,
+            hold: visibleHold()
+        )
+        #expect(resolved.chrome == WorkingTurnIndicator.Chrome(label: "Working", collapsed: false, fading: false))
+        #expect(resolved.hold == nil)
+        #expect(resolved.wakeAfterMs == nil)
+    }
+
+    @Test func resolveFooter_hideImmediatelyUnmountsAnyHold() {
+        let resolved = resolve(
+            activeLabel: nil,
+            hideImmediately: true,
+            previous: fadingWorking,
+            hold: visibleHold()
+        )
+        #expect(resolved.chrome == .unmounted)
+        #expect(resolved.hold == nil)
+        #expect(resolved.wakeAfterMs == nil)
+    }
+
+    private var fadingWorking: WorkingTurnIndicator.Chrome {
+        WorkingTurnIndicator.Chrome(label: "Working", collapsed: false, fading: true)
+    }
+
+    private func visibleHold(startedAtMs: Int64 = 0) -> WorkingTurnIndicator.Hold {
+        WorkingTurnIndicator.Hold(label: "Working", startedAtMs: startedAtMs, fromCollapsed: false)
+    }
+
+    private func resolve(
+        activeLabel: String?,
+        lastIsThinking: Bool = false,
+        hideImmediately: Bool = false,
+        previous: WorkingTurnIndicator.Chrome = .unmounted,
+        hold: WorkingTurnIndicator.Hold? = nil,
+        nowMs: Int64 = 0
+    ) -> WorkingTurnIndicator.Resolution {
+        WorkingTurnIndicator.resolveFooter(
+            activeLabel: activeLabel,
+            lastIsThinking: lastIsThinking,
+            hideImmediately: hideImmediately,
+            previous: previous,
+            hold: hold,
+            nowMs: nowMs
+        )
+    }
+
     private func row(_ blocks: SessionChatTimelineBlock...) -> SessionChatRow {
         SessionChatRow(
             id: "m1",

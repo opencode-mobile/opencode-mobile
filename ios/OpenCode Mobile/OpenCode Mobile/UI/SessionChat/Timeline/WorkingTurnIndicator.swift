@@ -8,6 +8,28 @@ import Foundation
 /// Working row in place — do not drop the list identity.
 /// Do not hide for settled Thought, tools, or streaming text.
 enum WorkingTurnIndicator {
+    static let idleHoldMilliseconds: Int64 = 1_000
+
+    struct Chrome: Equatable {
+        var label: String?
+        var collapsed: Bool
+        var fading: Bool
+
+        static let unmounted = Chrome(label: nil, collapsed: false, fading: false)
+    }
+
+    struct Hold: Equatable {
+        var label: String
+        var startedAtMs: Int64
+        var fromCollapsed: Bool
+    }
+
+    struct Resolution: Equatable {
+        var chrome: Chrome
+        var hold: Hold?
+        var wakeAfterMs: Int64?
+    }
+
     static func lastIsThinking(messages: [SessionChatRow]) -> Bool {
         guard case .reasoning(_, _, let isStreaming, _)? = messages.last?.blocks.last else {
             return false
@@ -31,5 +53,54 @@ enum WorkingTurnIndicator {
             return PromptSendProgress.label(percent: sendProgressPercent)
         }
         return statusLabel
+    }
+
+    static func resolveFooter(
+        activeLabel: String?,
+        lastIsThinking: Bool,
+        hideImmediately: Bool,
+        previous: Chrome,
+        hold: Hold?,
+        nowMs: Int64
+    ) -> Resolution {
+        if hideImmediately {
+            return Resolution(chrome: .unmounted, hold: nil)
+        }
+        if let activeLabel {
+            return Resolution(
+                chrome: Chrome(
+                    label: activeLabel,
+                    collapsed: shouldCollapseReservedRow(lastIsThinking: lastIsThinking, label: activeLabel),
+                    fading: false
+                ),
+                hold: nil
+            )
+        }
+        if previous.label == nil, hold == nil {
+            return Resolution(chrome: .unmounted, hold: nil)
+        }
+        let nextHold = hold ?? Hold(
+            label: previous.label ?? "",
+            startedAtMs: nowMs,
+            fromCollapsed: previous.collapsed
+        )
+        if nextHold.fromCollapsed {
+            return Resolution(
+                chrome: Chrome(label: nextHold.label, collapsed: true, fading: false),
+                hold: nextHold
+            )
+        }
+        let remainingMs = idleHoldMilliseconds - (nowMs - nextHold.startedAtMs)
+        if remainingMs > 0 {
+            return Resolution(
+                chrome: Chrome(label: nextHold.label, collapsed: false, fading: true),
+                hold: nextHold,
+                wakeAfterMs: remainingMs
+            )
+        }
+        return Resolution(
+            chrome: Chrome(label: nextHold.label, collapsed: true, fading: false),
+            hold: nextHold
+        )
     }
 }

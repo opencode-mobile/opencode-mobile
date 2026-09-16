@@ -244,33 +244,42 @@ struct MessageListTimelineApplyPacket: Equatable, Sendable {
     }
 
     /// Session Chat path: keep declared timeline sets, and fold Working status
-    /// chrome into revision. Label *changes* land in `changedRowIDs` so that
-    /// stable row reconfigures without clearing the packet (OPE-136). Collapse
-    /// toggles land in `layoutChangedRowIDs` so height 0 ↔ painted does not
-    /// insert or remove the reserved identity. An unchanged label+collapse
-    /// while the timeline publishes must not reconfigure it.
+    /// chrome into revision. Label or fade *changes* land in `changedRowIDs` so
+    /// that stable row reconfigures without clearing the packet (OPE-136).
+    /// Collapse toggles land in `layoutChangedRowIDs` and `decorateRowIDs` so
+    /// height 0 ↔ painted does not insert, remove, or structure-pin the reserved
+    /// identity. An unchanged label+collapse+fade while the timeline publishes
+    /// must not reconfigure it.
     /// Syncing uses a top overlay pill and is not a timeline row.
     static func from(
         _ frame: TimelineFrame,
         workingIndicatorLabel: String?,
         previousWorkingIndicatorLabel: String?,
         workingIndicatorCollapsed: Bool = false,
-        previousWorkingIndicatorCollapsed: Bool = false
+        previousWorkingIndicatorCollapsed: Bool = false,
+        workingIndicatorFading: Bool = false,
+        previousWorkingIndicatorFading: Bool = false
     ) -> MessageListTimelineApplyPacket {
         let base = from(frame)
         let delta = SessionChatStatusChrome.applyDelta(
             current: workingIndicatorLabel,
             previous: previousWorkingIndicatorLabel,
             currentCollapsed: workingIndicatorCollapsed,
-            previousCollapsed: previousWorkingIndicatorCollapsed
+            previousCollapsed: previousWorkingIndicatorCollapsed,
+            currentFading: workingIndicatorFading,
+            previousFading: previousWorkingIndicatorFading
         )
         let chrome = SessionChatStatusChrome.fingerprint(
             workingIndicatorLabel: workingIndicatorLabel,
-            collapsed: workingIndicatorCollapsed
+            collapsed: workingIndicatorCollapsed,
+            fading: workingIndicatorFading
         )
         var kinds = base.kinds
-        if !delta.inserted.isEmpty || !delta.removed.isEmpty || !delta.layoutChanged.isEmpty {
+        if !delta.inserted.isEmpty || !delta.removed.isEmpty {
             kinds.insert(.structure)
+        }
+        if !delta.layoutChanged.isEmpty {
+            kinds.insert(.decorate)
         }
         if !delta.changed.isEmpty {
             kinds.insert(.content)
@@ -282,7 +291,7 @@ struct MessageListTimelineApplyPacket: Equatable, Sendable {
             removedRowIDs: base.removedRowIDs.union(delta.removed),
             layoutChangedRowIDs: base.layoutChangedRowIDs.union(delta.layoutChanged),
             grewBottomRowIDs: base.grewBottomRowIDs,
-            decorateRowIDs: base.decorateRowIDs,
+            decorateRowIDs: base.decorateRowIDs.union(delta.layoutChanged),
             isRequired: base.isRequired,
             kinds: kinds
         )
@@ -319,13 +328,17 @@ enum SessionChatStatusChrome {
 
     static func fingerprint(
         workingIndicatorLabel: String?,
-        collapsed: Bool = false
+        collapsed: Bool = false,
+        fading: Bool = false
     ) -> UInt64 {
         var value: UInt64 = 0
         guard let workingIndicatorLabel else { return value }
         value = value &* 1_000_003 &+ 2
         if collapsed {
             value = value &* 1_000_003 &+ 3
+        }
+        if fading {
+            value = value &* 1_000_003 &+ 5
         }
         for scalar in workingIndicatorLabel.unicodeScalars {
             value = value &* 31 &+ UInt64(scalar.value)
@@ -337,7 +350,9 @@ enum SessionChatStatusChrome {
         current: String?,
         previous: String?,
         currentCollapsed: Bool = false,
-        previousCollapsed: Bool = false
+        previousCollapsed: Bool = false,
+        currentFading: Bool = false,
+        previousFading: Bool = false
     ) -> (
         inserted: Set<String>,
         changed: Set<String>,
@@ -352,9 +367,10 @@ enum SessionChatStatusChrome {
         case let (previous?, current?):
             let labelChanged = previous != current
             let collapseChanged = previousCollapsed != currentCollapsed
+            let fadeChanged = previousFading != currentFading
             return (
                 [],
-                (labelChanged || collapseChanged) ? [workingRowID] : [],
+                (labelChanged || collapseChanged || fadeChanged) ? [workingRowID] : [],
                 [],
                 collapseChanged ? [workingRowID] : []
             )

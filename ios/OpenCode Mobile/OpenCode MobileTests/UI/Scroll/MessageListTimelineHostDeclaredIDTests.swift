@@ -255,7 +255,44 @@ struct MessageListTimelineHostDeclaredIDTests {
         #expect(!collapsed.removedRowIDs.contains(workingID))
         #expect(collapsed.changedRowIDs.contains(workingID))
         #expect(collapsed.layoutChangedRowIDs.contains(workingID))
+        #expect(collapsed.decorateRowIDs.contains(workingID))
+        #expect(!collapsed.structureAffectingRowIDs.contains(workingID))
         #expect(collapsed.frameRevision != expanded.frameRevision)
+    }
+
+    @Test func statusChromeFadeToggle_reconfiguresStableWorkingRowWithoutLayout() {
+        let workingID = SessionChatStatusChrome.workingRowID
+        let frame = TimelineFrame(
+            frameRevision: 6,
+            rows: [],
+            insertedRowIDs: [],
+            changedRowIDs: [],
+            removedRowIDs: [],
+            layoutChangedRowIDs: [],
+            grewBottomRowIDs: [],
+            decorateRowIDs: [],
+            isRequired: false
+        )
+        let opaque = MessageListTimelineApplyPacket.from(
+            frame,
+            workingIndicatorLabel: "Working",
+            previousWorkingIndicatorLabel: "Working",
+            workingIndicatorFading: false,
+            previousWorkingIndicatorFading: false
+        )
+        let fading = MessageListTimelineApplyPacket.from(
+            frame,
+            workingIndicatorLabel: "Working",
+            previousWorkingIndicatorLabel: "Working",
+            workingIndicatorFading: true,
+            previousWorkingIndicatorFading: false
+        )
+        #expect(!fading.insertedRowIDs.contains(workingID))
+        #expect(!fading.removedRowIDs.contains(workingID))
+        #expect(fading.changedRowIDs.contains(workingID))
+        #expect(!fading.layoutChangedRowIDs.contains(workingID))
+        #expect(!fading.structureAffectingRowIDs.contains(workingID))
+        #expect(fading.frameRevision != opaque.frameRevision)
     }
 
     @Test func pendingApply_coalescesCollapseDeltaWhenLaterPacketDropsIt() {

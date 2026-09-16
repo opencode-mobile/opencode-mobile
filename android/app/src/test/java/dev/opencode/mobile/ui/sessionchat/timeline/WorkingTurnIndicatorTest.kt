@@ -207,6 +207,175 @@ class WorkingTurnIndicatorTest {
         assertFalse(WorkingTurnIndicator.lastIsThinking(emptyList()))
     }
 
+    @Test
+    fun resolveFooter_freshIdleStaysUnmounted() {
+        val resolved =
+            resolve(
+                activeLabel = null,
+                previous = WorkingTurnIndicator.Chrome.Unmounted,
+                hold = null,
+            )
+        assertEquals(WorkingTurnIndicator.Chrome.Unmounted, resolved.chrome)
+        assertNull(resolved.hold)
+        assertNull(resolved.wakeAfterMs)
+    }
+
+    @Test
+    fun resolveFooter_activeWorkingExpandedCancelsHold() {
+        val resolved =
+            resolve(
+                activeLabel = "Working",
+                previous = fadingWorking(),
+                hold = visibleHold(),
+            )
+        assertEquals(
+            WorkingTurnIndicator.Chrome(label = "Working", collapsed = false, fading = false),
+            resolved.chrome,
+        )
+        assertNull(resolved.hold)
+        assertNull(resolved.wakeAfterMs)
+    }
+
+    @Test
+    fun resolveFooter_activeWorkingAndThinkingCollapsesWithoutFade() {
+        val resolved =
+            resolve(
+                activeLabel = "Working",
+                lastIsThinking = true,
+            )
+        assertEquals(
+            WorkingTurnIndicator.Chrome(label = "Working", collapsed = true, fading = false),
+            resolved.chrome,
+        )
+        assertNull(resolved.hold)
+        assertNull(resolved.wakeAfterMs)
+    }
+
+    @Test
+    fun resolveFooter_visibleWorkingIdleStartsFadeHold() {
+        val resolved =
+            resolve(
+                activeLabel = null,
+                previous = WorkingTurnIndicator.Chrome(label = "Working", collapsed = false, fading = false),
+                nowMs = 10_000L,
+            )
+        assertEquals(
+            WorkingTurnIndicator.Chrome(label = "Working", collapsed = false, fading = true),
+            resolved.chrome,
+        )
+        assertEquals(
+            WorkingTurnIndicator.Hold(label = "Working", startedAtMs = 10_000L, fromCollapsed = false),
+            resolved.hold,
+        )
+        assertEquals(WorkingTurnIndicator.IDLE_HOLD_MS, resolved.wakeAfterMs)
+    }
+
+    @Test
+    fun resolveFooter_visibleHoldAt999StillFading() {
+        val resolved =
+            resolve(
+                activeLabel = null,
+                previous = fadingWorking(),
+                hold = visibleHold(startedAtMs = 10_000L),
+                nowMs = 10_999L,
+            )
+        assertEquals(
+            WorkingTurnIndicator.Chrome(label = "Working", collapsed = false, fading = true),
+            resolved.chrome,
+        )
+        assertEquals(visibleHold(startedAtMs = 10_000L), resolved.hold)
+        assertEquals(1L, resolved.wakeAfterMs)
+    }
+
+    @Test
+    fun resolveFooter_visibleHoldAt1000CollapsesAndKeepsLabel() {
+        val resolved =
+            resolve(
+                activeLabel = null,
+                previous = fadingWorking(),
+                hold = visibleHold(startedAtMs = 10_000L),
+                nowMs = 11_000L,
+            )
+        assertEquals(
+            WorkingTurnIndicator.Chrome(label = "Working", collapsed = true, fading = false),
+            resolved.chrome,
+        )
+        assertEquals(visibleHold(startedAtMs = 10_000L), resolved.hold)
+        assertNull(resolved.wakeAfterMs)
+    }
+
+    @Test
+    fun resolveFooter_collapsedThinkingIdleStaysCollapsed() {
+        val resolved =
+            resolve(
+                activeLabel = null,
+                previous = WorkingTurnIndicator.Chrome(label = "Working", collapsed = true, fading = false),
+                nowMs = 10_000L,
+            )
+        assertEquals(
+            WorkingTurnIndicator.Chrome(label = "Working", collapsed = true, fading = false),
+            resolved.chrome,
+        )
+        assertEquals(
+            WorkingTurnIndicator.Hold(label = "Working", startedAtMs = 10_000L, fromCollapsed = true),
+            resolved.hold,
+        )
+        assertNull(resolved.wakeAfterMs)
+    }
+
+    @Test
+    fun resolveFooter_newActiveWorkingCancelsVisibleHold() {
+        val resolved =
+            resolve(
+                activeLabel = "Working",
+                previous = fadingWorking(),
+                hold = visibleHold(),
+            )
+        assertEquals(
+            WorkingTurnIndicator.Chrome(label = "Working", collapsed = false, fading = false),
+            resolved.chrome,
+        )
+        assertNull(resolved.hold)
+        assertNull(resolved.wakeAfterMs)
+    }
+
+    @Test
+    fun resolveFooter_hideImmediatelyUnmountsAnyHold() {
+        val resolved =
+            resolve(
+                activeLabel = null,
+                hideImmediately = true,
+                previous = fadingWorking(),
+                hold = visibleHold(),
+            )
+        assertEquals(WorkingTurnIndicator.Chrome.Unmounted, resolved.chrome)
+        assertNull(resolved.hold)
+        assertNull(resolved.wakeAfterMs)
+    }
+
+    private fun resolve(
+        activeLabel: String?,
+        lastIsThinking: Boolean = false,
+        hideImmediately: Boolean = false,
+        previous: WorkingTurnIndicator.Chrome = WorkingTurnIndicator.Chrome.Unmounted,
+        hold: WorkingTurnIndicator.Hold? = null,
+        nowMs: Long = 0L,
+    ): WorkingTurnIndicator.Resolution =
+        WorkingTurnIndicator.resolveFooter(
+            activeLabel = activeLabel,
+            lastIsThinking = lastIsThinking,
+            hideImmediately = hideImmediately,
+            previous = previous,
+            hold = hold,
+            nowMs = nowMs,
+        )
+
+    private fun fadingWorking(): WorkingTurnIndicator.Chrome =
+        WorkingTurnIndicator.Chrome(label = "Working", collapsed = false, fading = true)
+
+    private fun visibleHold(startedAtMs: Long = 0L): WorkingTurnIndicator.Hold =
+        WorkingTurnIndicator.Hold(label = "Working", startedAtMs = startedAtMs, fromCollapsed = false)
+
     private fun message(vararg blocks: SessionChatTimelineBlock): SessionChatMessageItem =
         SessionChatMessageItem(
             id = "m1",

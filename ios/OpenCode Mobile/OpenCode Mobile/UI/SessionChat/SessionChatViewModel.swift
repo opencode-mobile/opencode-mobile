@@ -24,6 +24,10 @@ final class SessionChatViewModel {
     private var lastSnackbarKey: String?
     private var loggedWorkingLamp = false
     private var lastWorkingLamp: String?
+    private var workingChrome = WorkingTurnIndicator.Chrome.unmounted
+    private var workingHold: WorkingTurnIndicator.Hold?
+    private var workingHoldTask: Task<Void, Never>?
+    private var isSessionBound = true
     private var suppressedSnackbarKey: String?
     private var snackbarSequence: UInt64 = 0
     /// Free-text edits log once per dialog / question so keystrokes are not
@@ -156,6 +160,7 @@ final class SessionChatViewModel {
     }
 
     func startObserving() {
+        isSessionBound = true
         startCollapsePreferenceObservation()
         if OptimisticSessionCreate.isPlaceholder(sessionID) {
             beginOptimisticCreate()
@@ -809,6 +814,8 @@ final class SessionChatViewModel {
 
     func stopObserving() {
         OpenCodeLog.sessionChat.info("stop observing session=\(self.sessionID)")
+        isSessionBound = false
+        resetWorkingFooter()
         composer.flushDraft()
         pendingSend = nil
         optimisticCreateTask?.cancel()
@@ -938,6 +945,7 @@ final class SessionChatViewModel {
     private func promoteOptimisticSession(id: String, title: String) {
         sessionID = id
         sessionTitle = title
+        resetWorkingFooter()
         sessionReadyStore.setFocusedSession(sessionID: id, directory: worktree)
         timeline.rebind(sessionID: id)
         composer.rebind(sessionID: id)
@@ -1012,23 +1020,33 @@ final class SessionChatViewModel {
             isCompacting ? SessionCompactChrome.statusLabel : infoState.sessionStatusLabel
         let awaitingUser = !inboxState.permissionRequests.isEmpty || !inboxState.questionRequests.isEmpty
         let lastIsThinking = WorkingTurnIndicator.lastIsThinking(messages: timelineState.messages)
-        let workingIndicatorLabel = WorkingTurnIndicator.labelForActiveTurn(
+        let activeWorkingLabel = WorkingTurnIndicator.labelForActiveTurn(
             statusLabel: sessionStatusLabel,
             isCompacting: isCompacting,
             isAwaitingUser: awaitingUser,
             sendProgressPercent: composerState.sendProgressPercent
         )
-        let workingIndicatorCollapsed = WorkingTurnIndicator.shouldCollapseReservedRow(
+        let workingResolution = WorkingTurnIndicator.resolveFooter(
+            activeLabel: activeWorkingLabel,
             lastIsThinking: lastIsThinking,
-            label: workingIndicatorLabel
+            hideImmediately: awaitingUser || !isSessionBound,
+            previous: workingChrome,
+            hold: workingHold,
+            nowMs: clock.nowMs()
         )
+        workingChrome = workingResolution.chrome
+        workingHold = workingResolution.hold
+        scheduleWorkingFooterWake(workingResolution.wakeAfterMs)
+        let workingIndicatorLabel = workingResolution.chrome.label
+        let workingIndicatorCollapsed = workingResolution.chrome.collapsed
+        let workingIndicatorFading = workingResolution.chrome.fading
         let workingLampKey =
-            "\(workingIndicatorLabel ?? "none"):\(workingIndicatorCollapsed ? 1 : 0)"
+            "\(workingIndicatorLabel ?? "none"):\(workingIndicatorCollapsed ? 1 : 0):\(workingIndicatorFading ? 1 : 0):\(workingHold != nil ? 1 : 0)"
         if !loggedWorkingLamp || lastWorkingLamp != workingLampKey {
             loggedWorkingLamp = true
             lastWorkingLamp = workingLampKey
             OpenCodeLog.sessionChat.info(
-                "workingLamp label=\(workingIndicatorLabel ?? "none") collapsed=\(workingIndicatorCollapsed ? 1 : 0) status=\(sessionStatusLabel ?? "none") awaitingUser=\(awaitingUser ? 1 : 0) lastIsThinking=\(lastIsThinking ? 1 : 0)"
+                "workingLamp label=\(workingIndicatorLabel ?? "none") collapsed=\(workingIndicatorCollapsed ? 1 : 0) fading=\(workingIndicatorFading ? 1 : 0) hold=\(workingHold != nil ? 1 : 0) status=\(sessionStatusLabel ?? "none") awaitingUser=\(awaitingUser ? 1 : 0) lastIsThinking=\(lastIsThinking ? 1 : 0)"
             )
         }
         uiState = SessionChatUiState(
@@ -1057,6 +1075,7 @@ final class SessionChatViewModel {
             sessionStatusLabel: sessionStatusLabel,
             workingIndicatorLabel: workingIndicatorLabel,
             workingIndicatorCollapsed: workingIndicatorCollapsed,
+            workingIndicatorFading: workingIndicatorFading,
             syncingIndicatorLabel: timelineState.isSyncingMessages
                 ? SessionMessageSyncChrome.statusLabel
                 : nil,
@@ -1157,6 +1176,24 @@ final class SessionChatViewModel {
             messages: timeline.loadedMessages(),
             isSessionBusy: sessionStatusLabel != nil
         )
+    }
+
+    private func resetWorkingFooter() {
+        workingHoldTask?.cancel()
+        workingHoldTask = nil
+        workingHold = nil
+        workingChrome = .unmounted
+    }
+
+    private func scheduleWorkingFooterWake(_ wakeAfterMs: Int64?) {
+        workingHoldTask?.cancel()
+        workingHoldTask = nil
+        guard let wakeAfterMs else { return }
+        workingHoldTask = Task { [clock] in
+            await clock.sleep(milliseconds: Int(wakeAfterMs))
+            guard !Task.isCancelled else { return }
+            publishUiState()
+        }
     }
 
     /// Union of server inbox rows and still-unmerged optimistic busy sends.
