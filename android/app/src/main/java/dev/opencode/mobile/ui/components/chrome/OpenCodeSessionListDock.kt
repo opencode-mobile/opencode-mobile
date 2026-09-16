@@ -446,8 +446,7 @@ fun SessionListScopeControl(
                                 isSettling = false
                             }
                     }
-                }
-                .semantics {
+                }.semantics {
                     contentDescription = description
                     onClick {
                         onOpen()
@@ -471,8 +470,7 @@ fun SessionListScopeControl(
                     if (actions.isNotEmpty()) {
                         customActions = actions
                     }
-                }
-                .padding(horizontal = 10.dp, vertical = 8.dp)
+                }.padding(horizontal = 10.dp, vertical = 8.dp)
                 .heightIn(min = 44.dp),
     ) {
         Box(
@@ -608,7 +606,7 @@ fun SessionListScopeCountBadge(
 /**
  * Project picker rows. Tap selects a scope; long-press on a project row lifts
  * it for drag reordering when [onReorderProjects] is set, and releasing it
- * without moving offers [onRemoveProject]. The "All" row stays pinned first.
+ * without dragging offers [onRemoveProject]. The "All" row stays pinned first.
  */
 @Composable
 fun SessionListProjectPickerRows(

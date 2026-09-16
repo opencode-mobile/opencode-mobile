@@ -7,7 +7,6 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
 import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Column
@@ -30,8 +29,8 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.PointerEventTimeoutCancellationException
 import androidx.compose.ui.input.pointer.changedToUp
-import androidx.compose.ui.input.pointer.isOutOfBounds
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.onSizeChanged
@@ -63,10 +62,11 @@ private const val ReorderableRowLiftedScale = 1.03f
  * Stacked rows that reorder with long-press and drag.
  *
  * Tap selects a row. Long-press lifts a movable row; dragging shifts the
- * neighbors live and release commits [onMove]. Releasing a lifted row without
- * moving it fires [onContextAction], so a row can keep one long-press action
- * alongside reordering. Rows that fail [canMove] never lift or get crossed.
- * Reordering is inactive until at least two rows can move or [onMove] is null.
+ * neighbors live and release commits [onMove]. Releasing a lifted row that
+ * never travelled past the context-action limit fires [onContextAction], so a
+ * row can keep one long-press action alongside reordering. Rows that fail
+ * [canMove] never lift or get crossed. Reordering is inactive until at least
+ * two rows can move or [onMove] is null.
  */
 @Composable
 fun <T> OpenCodeReorderableList(
@@ -179,7 +179,13 @@ fun <T> OpenCodeReorderableList(
                 val previousMovable = if (movable && index > 0 && canMove(items[index - 1])) index - 1 else null
                 val nextMovable = if (movable && index < items.lastIndex && canMove(items[index + 1])) index + 1 else null
 
-                fun finishLift(commit: Boolean) {
+                // [contextActionEligible] is false once the finger travelled past the
+                // context-action limit at any point in the lift, so a drag that wanders
+                // back to the starting slot cancels the row instead of offering remove.
+                fun finishLift(
+                    commit: Boolean,
+                    contextActionEligible: Boolean = true,
+                ) {
                     val from = currentItems.indexOfFirst { key(it) == itemKey }
                     val liftedTranslation = translation
                     draggedKey = null
@@ -192,7 +198,9 @@ fun <T> OpenCodeReorderableList(
                     val canMoveNow: (Int) -> Boolean = { candidate -> currentCanMove(itemsNow[candidate]) }
                     val movableNow = currentOnMove != null && itemsNow.count(currentCanMove) >= 2 && currentCanMove(liveItem)
                     if (!movableNow) {
-                        if (currentSupportsContextAction(liveItem)) currentOnContextAction?.invoke(liveItem)
+                        if (contextActionEligible && currentSupportsContextAction(liveItem)) {
+                            currentOnContextAction?.invoke(liveItem)
+                        }
                         return
                     }
                     val clamped = ReorderableListMath.clampedTranslation(liftedTranslation, from, heightsNow, canMoveNow)
@@ -208,7 +216,7 @@ fun <T> OpenCodeReorderableList(
                         settleKey = itemKey
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         currentOnMove?.invoke(from, target)
-                    } else if (abs(liftedTranslation) < contextActionLimitPx && currentSupportsContextAction(liveItem)) {
+                    } else if (contextActionEligible && currentSupportsContextAction(liveItem)) {
                         currentOnContextAction?.invoke(liveItem)
                     }
                 }
@@ -260,24 +268,35 @@ fun <T> OpenCodeReorderableList(
                                 }
                                 if (actions.isNotEmpty()) customActions = actions
                             }.pointerInput(itemKey, liftsOnLongPress, movable) {
-                                // One detector owns press, tap, long-press and drag. Stacking
-                                // detectTapGestures under detectDragGesturesAfterLongPress lets
-                                // the tap detector consume the release of a stationary long-press,
-                                // which cancels the lift and fires a tap instead.
+                                // One detector owns press, tap, long-press and drag. A parent
+                                // clickable (the bottom sheet) consumes the same pointer; reading
+                                // currentEvent after awaitLongPressOrCancellation then misses the
+                                // already-consumed up and drops the tap. Wait for up on Main
+                                // first, and only lift after the long-press timeout.
+                                //
+                                // After the lift, travel alone decides: pass the context-action
+                                // limit and the release commits a move, stay inside it and the
+                                // release offers the context action. No timer arbitrates between
+                                // the two, so neither can steal the other's gesture.
                                 awaitEachGesture {
                                     val down = awaitFirstDown()
                                     pressedKey = itemKey
                                     try {
-                                        val longPress = if (liftsOnLongPress) awaitLongPressOrCancellation(down.id) else null
-                                        if (longPress == null) {
-                                            val up =
-                                                if (liftsOnLongPress) {
-                                                    currentEvent.changes.firstOrNull {
-                                                        it.id == down.id && it.changedToUp() && !it.isOutOfBounds(size, extendedTouchPadding)
+                                        var longPressed = false
+                                        val up =
+                                            if (!liftsOnLongPress) {
+                                                waitForUpOrCancellation()
+                                            } else {
+                                                try {
+                                                    withTimeout(viewConfiguration.longPressTimeoutMillis) {
+                                                        waitForUpOrCancellation()
                                                     }
-                                                } else {
-                                                    waitForUpOrCancellation()
+                                                } catch (_: PointerEventTimeoutCancellationException) {
+                                                    longPressed = true
+                                                    null
                                                 }
+                                            }
+                                        if (!longPressed) {
                                             if (up != null) {
                                                 up.consume()
                                                 onSelect(item)
@@ -288,12 +307,16 @@ fun <T> OpenCodeReorderableList(
                                         translation = 0f
                                         announcedTarget = currentItems.indexOfFirst { key(it) == itemKey }
                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        var travelledPastContextLimit = false
                                         val completed =
-                                            drag(longPress.id) { change ->
+                                            drag(down.id) { change ->
                                                 val delta = change.positionChange().y
                                                 change.consume()
                                                 if (!movable) return@drag
                                                 translation += delta
+                                                if (abs(translation) >= contextActionLimitPx) {
+                                                    travelledPastContextLimit = true
+                                                }
                                                 val itemsNow = currentItems
                                                 val from = itemsNow.indexOfFirst { key(it) == itemKey }
                                                 if (from < 0) return@drag
@@ -314,7 +337,10 @@ fun <T> OpenCodeReorderableList(
                                         if (completed) {
                                             currentEvent.changes.forEach { if (it.changedToUp()) it.consume() }
                                         }
-                                        finishLift(commit = completed)
+                                        finishLift(
+                                            commit = completed,
+                                            contextActionEligible = !travelledPastContextLimit,
+                                        )
                                     } catch (cancelled: CancellationException) {
                                         if (draggedKey == itemKey) finishLift(commit = false)
                                         throw cancelled
