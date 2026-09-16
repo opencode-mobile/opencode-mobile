@@ -26,6 +26,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -45,6 +46,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
@@ -72,6 +74,7 @@ import dev.opencode.mobile.ui.components.OpenCodeStatusStack
 import dev.opencode.mobile.ui.components.OpenCodeSyncingPill
 import dev.opencode.mobile.ui.components.OpenCodeToolCallCard
 import dev.opencode.mobile.ui.components.OpenCodeToolCallCardStatus
+import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.scroll.MessageListOlderHistory
 import dev.opencode.mobile.ui.scroll.MessageListOlderLoadIntent
 import dev.opencode.mobile.ui.scroll.MessageListReversedTimelineColumn
@@ -878,7 +881,7 @@ private fun SessionChatWorkingIndicatorRow(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                SessionChatWorkingStatusDot()
+                SessionChatWorkingStatusMark(isIdle = WorkingTurnIndicator.showsIdleMark(label))
                 Text(
                     text = label,
                     style = MaterialTheme.typography.bodyMedium,
@@ -897,7 +900,38 @@ private fun SessionChatWorkingIndicatorRow(
 }
 
 @Composable
-private fun SessionChatWorkingStatusDot() {
+private fun SessionChatWorkingStatusMark(isIdle: Boolean) {
+    val progress by animateFloatAsState(
+        targetValue = if (isIdle) 1f else 0f,
+        animationSpec = if (isIdle) tween(durationMillis = 220) else snap(),
+        label = "session-chat-working-idle-mark",
+    )
+    Box(
+        modifier = Modifier.size(12.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        SessionChatWorkingStatusDot(
+            modifier = Modifier.alpha(1f - progress),
+        )
+        Icon(
+            imageVector = OpenCodeIcons.Check,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier =
+                Modifier
+                    .size(12.dp)
+                    .graphicsLayer {
+                        alpha = progress
+                        val scale = 0.4f + (0.6f * progress)
+                        scaleX = scale
+                        scaleY = scale
+                    },
+        )
+    }
+}
+
+@Composable
+private fun SessionChatWorkingStatusDot(modifier: Modifier = Modifier) {
     val pulse =
         rememberInfiniteTransition(label = "session-chat-working-dot").animateFloat(
             initialValue = 1f,
@@ -911,7 +945,7 @@ private fun SessionChatWorkingStatusDot() {
         )
     Box(
         modifier =
-            Modifier
+            modifier
                 .size(6.dp)
                 .alpha(pulse.value)
                 .background(

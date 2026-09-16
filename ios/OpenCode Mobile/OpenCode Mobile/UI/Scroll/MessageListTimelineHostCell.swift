@@ -48,6 +48,11 @@ final class MessageListTimelineHostCell: UICollectionViewCell {
                 attributes.frame.size.height = 0
             }
             fitted = super.preferredLayoutAttributesFitting(attributes)
+            if seed > 0.5, fitted.size.height < 0.5 {
+                fitted.frame.size.height = seed
+            } else if seed < 0.5 {
+                fitted.frame.size.height = 0
+            }
         }
         CATransaction.commit()
 
