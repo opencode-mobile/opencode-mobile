@@ -722,6 +722,45 @@ class MessageSyncTest {
         }
 
     @Test
+    fun observeMessages_idleDuringInitialSubscribe_visibleThoughtStillRefetchesCompletedTail() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository(messages = visibleThoughtTranscript())
+            val eventStream = FakeForegroundEventStream()
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
+            val initialHold = CompletableDeferred<Unit>()
+            repository.nextLoadGate = initialHold
+            val sync = createMessageSync(repository, eventStream, pollIntervalMs = 60_000L)
+            val emissions = mutableListOf<List<Message>>()
+            val collectJob =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { update ->
+                        if (update is MessageListUpdate.Messages) emissions.add(update.messages)
+                    }
+                }
+            advanceTimeBy(1)
+            runCurrent()
+            assertTrue(eventStream.hasEventSubscriber)
+            assertEquals(1, repository.listHoldsEntered.get())
+
+            eventStream.emit(OpencodeEvent(type = "session.idle", sessionId = "ses-1"))
+            val idleHold = CompletableDeferred<Unit>()
+            repository.nextLoadGate = idleHold
+            initialHold.complete(Unit)
+            advanceTimeBy(1)
+            runCurrent()
+            assertEquals(2, repository.listHoldsEntered.get())
+            repository.messages = completedTurnWithExtraAssistant()
+            idleHold.complete(Unit)
+            advanceTimeBy(1)
+            runCurrent()
+
+            assertTrue(emissions.last().any { it.id == "msg-3" })
+            assertTrue(repository.listMessagesCallCount >= 2)
+            collectJob.cancel()
+            advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
+        }
+
+    @Test
     fun observeMessages_repeatedIncompleteIdle_reconcilesOnce() =
         runTest(testDispatcher) {
             val seed = hiddenReasoningTranscript()
@@ -1847,6 +1886,26 @@ class MessageSyncTest {
                 parts = listOf(MessagePart.Text(text = "Done")),
             ),
         )
+
+    private fun visibleThoughtTranscript(): List<Message> =
+        listOf(
+            Message(id = "msg-1", role = MessageRole.User, text = "Hello"),
+            Message(
+                id = "msg-2",
+                role = MessageRole.Assistant,
+                text = "",
+                parts = listOf(MessagePart.Reasoning(id = "prt-r", text = "Considering the request.", isStreaming = false)),
+            ),
+        )
+
+    private fun completedTurnWithExtraAssistant(): List<Message> =
+        visibleThoughtTranscript() +
+            Message(
+                id = "msg-3",
+                role = MessageRole.Assistant,
+                text = "Done",
+                parts = listOf(MessagePart.Text(text = "Done")),
+            )
 
     private fun messageUpdatedEvent(
         messageId: String,

@@ -839,6 +839,36 @@ struct MessageSyncTests {
             #expect(chrome.last == false)
     }
 
+    @Test func idleDuringInitialSubscribe_visibleThoughtStillRefetchesCompletedTail() async {
+        let repo = FakeLiveMessageRepository()
+        repo.messages = visibleThoughtTranscript()
+        let eventStream = FakeForegroundEventStream()
+        eventStream.setConnectionState(.connected)
+        repo.holdNextListMessages()
+        let sync = makeMessageSync(repo: repo, eventStream: eventStream, pollIntervalMs: 60_000)
+        let collector = MessageCollector()
+        let task = Task { await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo")) }
+        let subscribed = await waitUntil {
+            repo.isListBlocked && eventStream.hasEventSubscriber && repo.listHoldsEntered == 1
+        }
+        #expect(subscribed)
+
+        eventStream.emit(OpencodeEvent(type: "session.idle", sessionID: "ses-1"))
+        repo.holdNextListMessages()
+        repo.resumeListMessages()
+        let idleHeld = await waitUntil { repo.isListBlocked && repo.listHoldsEntered == 2 }
+        #expect(idleHeld)
+
+        repo.messages = completedTurnWithExtraAssistant()
+        repo.resumeListMessages()
+        let painted = await waitUntil {
+            collector.latest()?.contains(where: { $0.id == "msg-3" }) == true
+        }
+        task.cancel()
+        #expect(painted)
+        #expect(repo.listMessagesCallCount >= 2)
+    }
+
     @Test func repeatedIncompleteIdle_reconcilesOnce() async {
         let repo = FakeLiveMessageRepository()
         repo.messages = hiddenReasoningTranscript()
@@ -1923,6 +1953,35 @@ struct MessageSyncTests {
                 model: nil,
                 mode: nil,
                 sentAtEpochMs: 2
+            ),
+        ]
+    }
+
+    private func visibleThoughtTranscript() -> [Message] {
+        [
+            Message(id: "msg-1", role: .user, text: "Hello", model: nil, mode: nil, sentAtEpochMs: 1),
+            Message(
+                id: "msg-2",
+                role: .assistant,
+                text: "",
+                parts: [.reasoning(ReasoningPart(id: "prt-r", text: "Considering the request.", isStreaming: false))],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: 2
+            ),
+        ]
+    }
+
+    private func completedTurnWithExtraAssistant() -> [Message] {
+        visibleThoughtTranscript() + [
+            Message(
+                id: "msg-3",
+                role: .assistant,
+                text: "Done",
+                parts: [.text(TextPart(text: "Done", isStreaming: false))],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: 3
             ),
         ]
     }

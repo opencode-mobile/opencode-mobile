@@ -40,6 +40,28 @@ import Testing
         #expect(staging.currentHealth == .recovering(.racedAuthority))
     }
 
+    @Test func enqueue_sessionIdleDuringHealthyAuthorityWindow_racesAuthority() {
+        let staging = MessageEventStaging(capacity: 8, byteCapacity: 10_000)
+        staging.beginAuthorityWindow()
+        staging.enqueue(
+            OpencodeEvent(type: "session.idle", sessionID: "ses-1", rawProperties: nil),
+            sessionID: "ses-1"
+        )
+        #expect(!staging.completeAuthorityWindow(.accepted))
+        #expect(staging.currentHealth == .recovering(.racedAuthority))
+    }
+
+    @Test func enqueue_partDeltaDuringHealthyAuthorityWindow_doesNotRace() {
+        let staging = MessageEventStaging(capacity: 8, byteCapacity: 10_000)
+        staging.beginAuthorityWindow()
+        staging.enqueue(
+            eventWithPartDelta(partID: "prt-1", messageID: "msg-1", delta: "x", sessionID: "ses-1"),
+            sessionID: "ses-1"
+        )
+        #expect(staging.completeAuthorityWindow(.accepted))
+        #expect(staging.currentHealth == .healthy)
+    }
+
     @Test func clearCatchUpLatch_keepsStaleHealth() {
         let staging = MessageEventStaging(capacity: 8, byteCapacity: 10_000)
         staging.enterStale(.transportUnavailable)
