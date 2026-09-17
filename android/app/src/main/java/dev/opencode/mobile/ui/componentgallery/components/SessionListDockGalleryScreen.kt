@@ -33,11 +33,21 @@ fun SessionListDockGalleryScreen(modifier: Modifier = Modifier) {
     var useProjectPicker by rememberSaveable { mutableStateOf(false) }
     var showProjectPicker by rememberSaveable { mutableStateOf(false) }
     var showNewSessionPicker by rememberSaveable { mutableStateOf(false) }
+    // Null until the picker reorders, so the samples keep their authored order
+    // until someone drags one. Lets the gallery exercise reorder and swipe-to-
+    // remove on the same rows.
+    var worktreeOrder by rememberSaveable { mutableStateOf<List<String>?>(null) }
     val filterTabs =
-        if (oneProject) {
-            sessionListDockGalleryOneProjectFilterTabs
-        } else {
-            sessionListDockGalleryFilterTabs
+        run {
+            val base =
+                if (oneProject) {
+                    sessionListDockGalleryOneProjectFilterTabs
+                } else {
+                    sessionListDockGalleryFilterTabs
+                }
+            val order = worktreeOrder ?: return@run base
+            val byId = base.associateBy { it.id }
+            base.filter { it.isAll } + order.mapNotNull { byId[it] }
         }
 
     Box(modifier = modifier.fillMaxSize()) {
@@ -113,6 +123,7 @@ fun SessionListDockGalleryScreen(modifier: Modifier = Modifier) {
                 selectedFilterId = remaining.firstOrNull()?.id ?: selectedFilterId
                 showProjectPicker = false
             },
+            onReorderProjects = { worktrees -> worktreeOrder = worktrees },
         )
     }
 

@@ -8,8 +8,11 @@ package dev.opencode.mobile.ui.components
  * row that cannot move, and displaced rows shift by the dragged row's height.
  */
 object ReorderableListMath {
-    /** Vertical drag below which a lift-and-release counts as a context action instead of a move. */
-    const val CONTEXT_ACTION_TRANSLATION_LIMIT_DP = 6f
+    /** Width of the action strip a row reveals when swiped open. */
+    const val SWIPE_REVEAL_WIDTH_DP = 88f
+
+    /** Reveal past this much and the release settles open instead of closed. */
+    const val SWIPE_OPEN_THRESHOLD_DP = 44f
 
     fun targetIndex(
         from: Int,

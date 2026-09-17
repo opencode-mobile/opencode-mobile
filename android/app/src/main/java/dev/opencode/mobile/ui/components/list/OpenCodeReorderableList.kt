@@ -2,19 +2,28 @@ package dev.opencode.mobile.ui.components
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.drag
+import androidx.compose.foundation.gestures.horizontalDrag
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
@@ -24,13 +33,19 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.AwaitPointerEventScope
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventTimeoutCancellationException
+import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.changedToUp
+import androidx.compose.ui.input.pointer.isOutOfBounds
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.onSizeChanged
@@ -58,14 +73,28 @@ private val ReorderableRowFallbackHeight = 60.dp
 private const val ReorderableRowPressedScale = 0.965f
 private const val ReorderableRowLiftedScale = 1.03f
 
+/** What a press turned out to be, decided on the first movement that settles it. */
+private enum class RowGesturePhase {
+    Undecided,
+    Tap,
+    Swipe,
+    Lift,
+    Cancelled,
+}
+
 /**
- * Stacked rows that reorder with long-press and drag.
+ * Stacked rows that reorder with long-press and drag, and expose one secondary
+ * row action behind a horizontal swipe.
  *
- * Tap selects a row. Long-press lifts a movable row; dragging shifts the
- * neighbors live and release commits [onMove]. Releasing a lifted row that
- * never travelled past the context-action limit fires [onContextAction], so a
- * row can keep one long-press action alongside reordering. Rows that fail
- * [canMove] never lift or get crossed. Reordering is inactive until at least
+ * The two gestures own separate axes, so neither can take the other's input.
+ * Tap selects a row. Long-press lifts a movable row; dragging vertically shifts
+ * the neighbors live and release commits [onMove]. Swiping a row left reveals
+ * [contextActionLabel]; tapping that fires [onContextAction]. A long-press never
+ * fires the context action, and a swipe never reorders.
+ *
+ * Only one row stays open at a time, and the next press anywhere closes it.
+ * Rows that fail [canMove] never lift or get crossed; rows that fail
+ * [supportsContextAction] never reveal. Reordering is inactive until at least
  * two rows can move or [onMove] is null.
  */
 @Composable
@@ -78,22 +107,24 @@ fun <T> OpenCodeReorderableList(
     onMove: ((from: Int, to: Int) -> Unit)? = null,
     onContextAction: ((T) -> Unit)? = null,
     supportsContextAction: (T) -> Boolean = { true },
+    contextActionLabel: String = "Remove",
     row: @Composable (T) -> Unit,
 ) {
     val density = LocalDensity.current
     val haptic = LocalHapticFeedback.current
     val fallbackHeightPx = with(density) { ReorderableRowFallbackHeight.toPx() }
-    val contextActionLimitPx = with(density) { ReorderableListMath.CONTEXT_ACTION_TRANSLATION_LIMIT_DP.dp.toPx() }
+    val revealWidthDp = ReorderableListMath.SWIPE_REVEAL_WIDTH_DP.dp
+    val revealWidthPx = with(density) { revealWidthDp.toPx() }
+    val revealOpenThresholdPx = with(density) { ReorderableListMath.SWIPE_OPEN_THRESHOLD_DP.dp.toPx() }
 
     val currentItems by rememberUpdatedState(items)
     val currentOnMove by rememberUpdatedState(onMove)
-    val currentOnContextAction by rememberUpdatedState(onContextAction)
     val currentCanMove by rememberUpdatedState(canMove)
-    val currentSupportsContextAction by rememberUpdatedState(supportsContextAction)
 
     val rowHeights = remember { mutableStateMapOf<Any, Float>() }
     var pressedKey by remember { mutableStateOf<Any?>(null) }
     var draggedKey by remember { mutableStateOf<Any?>(null) }
+    var openKey by remember { mutableStateOf<Any?>(null) }
     var translation by remember { mutableFloatStateOf(0f) }
     var announcedTarget by remember { mutableIntStateOf(-1) }
     var settleKey by remember { mutableStateOf<Any?>(null) }
@@ -123,7 +154,29 @@ fun <T> OpenCodeReorderableList(
                 val isDragged = draggedKey == itemKey
                 val isPressed = pressedKey == itemKey
                 val movable = reorderEnabled && canMove(item)
-                val liftsOnLongPress = movable || (onContextAction != null && supportsContextAction(item))
+                val canReveal = onContextAction != null && supportsContextAction(item)
+                // Live reveal offset in px, 0 = closed. The swipe writes it directly
+                // while the finger is down; once released, [openKey] decides the
+                // target and the effect below settles there. The gesture cannot run
+                // the animation itself: AwaitPointerEventScope restricts suspension
+                // to its own members, so `animate` is unreachable from inside it.
+                val revealState = remember { mutableFloatStateOf(0f) }
+                var revealPx by revealState
+                // Gates the strip out of the tree (and out of the semantics a
+                // screen reader walks) while the row is shut. Derived so the swipe
+                // only recomposes on the open/shut flip, not on every frame.
+                val revealing by remember { derivedStateOf { revealState.floatValue > 0f } }
+                var swiping by remember { mutableStateOf(false) }
+                val revealTarget = if (openKey == itemKey) revealWidthPx else 0f
+                LaunchedEffect(revealTarget, swiping) {
+                    if (!swiping && revealPx != revealTarget) {
+                        animate(
+                            revealPx,
+                            revealTarget,
+                            animationSpec = spring(dampingRatio = 0.85f),
+                        ) { value, _ -> revealPx = value }
+                    }
+                }
                 val displacementTarget =
                     when {
                         isDragged || draggedIndex < 0 -> 0f
@@ -179,13 +232,9 @@ fun <T> OpenCodeReorderableList(
                 val previousMovable = if (movable && index > 0 && canMove(items[index - 1])) index - 1 else null
                 val nextMovable = if (movable && index < items.lastIndex && canMove(items[index + 1])) index + 1 else null
 
-                // [contextActionEligible] is false once the finger travelled past the
-                // context-action limit at any point in the lift, so a drag that wanders
-                // back to the starting slot cancels the row instead of offering remove.
-                fun finishLift(
-                    commit: Boolean,
-                    contextActionEligible: Boolean = true,
-                ) {
+                // A lift only ever commits a move. The context action lives on the
+                // swipe axis, so there is nothing to arbitrate here.
+                fun finishLift(commit: Boolean) {
                     val from = currentItems.indexOfFirst { key(it) == itemKey }
                     val liftedTranslation = translation
                     draggedKey = null
@@ -197,12 +246,7 @@ fun <T> OpenCodeReorderableList(
                     val heightsNow = itemsNow.map { rowHeights[key(it)] ?: fallbackHeightPx }
                     val canMoveNow: (Int) -> Boolean = { candidate -> currentCanMove(itemsNow[candidate]) }
                     val movableNow = currentOnMove != null && itemsNow.count(currentCanMove) >= 2 && currentCanMove(liveItem)
-                    if (!movableNow) {
-                        if (contextActionEligible && currentSupportsContextAction(liveItem)) {
-                            currentOnContextAction?.invoke(liveItem)
-                        }
-                        return
-                    }
+                    if (!movableNow) return
                     val clamped = ReorderableListMath.clampedTranslation(liftedTranslation, from, heightsNow, canMoveNow)
                     val target = ReorderableListMath.targetIndex(from, clamped, heightsNow, canMoveNow)
                     if (target != from) {
@@ -216,12 +260,10 @@ fun <T> OpenCodeReorderableList(
                         settleKey = itemKey
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         currentOnMove?.invoke(from, target)
-                    } else if (contextActionEligible && currentSupportsContextAction(liveItem)) {
-                        currentOnContextAction?.invoke(liveItem)
                     }
                 }
 
-                Column(
+                Box(
                     modifier =
                         Modifier
                             .fillMaxWidth()
@@ -231,126 +273,237 @@ fun <T> OpenCodeReorderableList(
                                 translationY = (if (isDragged) clampedTranslation else displacement.value) + settle.value
                                 scaleX = scale
                                 scaleY = scale
-                            }.shadow(
-                                elevation = ReorderableRowLiftedElevation * elevation,
-                                shape = shape,
-                                clip = false,
-                                ambientColor = Color.Black.copy(alpha = 0.18f * elevation),
-                                spotColor = Color.Black.copy(alpha = 0.18f * elevation),
-                            ).background(surfaceRaised.copy(alpha = surfaceRaised.alpha * highlightAlpha), shape)
-                            .semantics(mergeDescendants = true) {
-                                role = Role.Button
-                                onClick(label = null) {
-                                    onSelect(item)
-                                    true
-                                }
-                                val actions = mutableListOf<CustomAccessibilityAction>()
-                                if (onContextAction != null && supportsContextAction(item)) {
-                                    actions +=
-                                        CustomAccessibilityAction("Show actions") {
-                                            onContextAction(item)
-                                            true
-                                        }
-                                }
-                                if (previousMovable != null) {
-                                    actions +=
-                                        CustomAccessibilityAction("Move up") {
-                                            onMove?.invoke(index, previousMovable)
-                                            true
-                                        }
-                                }
-                                if (nextMovable != null) {
-                                    actions +=
-                                        CustomAccessibilityAction("Move down") {
-                                            onMove?.invoke(index, nextMovable)
-                                            true
-                                        }
-                                }
-                                if (actions.isNotEmpty()) customActions = actions
-                            }.pointerInput(itemKey, liftsOnLongPress, movable) {
-                                // One detector owns press, tap, long-press and drag. A parent
-                                // clickable (the bottom sheet) consumes the same pointer; reading
-                                // currentEvent after awaitLongPressOrCancellation then misses the
-                                // already-consumed up and drops the tap. Wait for up on Main
-                                // first, and only lift after the long-press timeout.
-                                //
-                                // After the lift, travel alone decides: pass the context-action
-                                // limit and the release commits a move, stay inside it and the
-                                // release offers the context action. No timer arbitrates between
-                                // the two, so neither can steal the other's gesture.
-                                awaitEachGesture {
-                                    val down = awaitFirstDown()
-                                    pressedKey = itemKey
-                                    try {
-                                        var longPressed = false
-                                        val up =
-                                            if (!liftsOnLongPress) {
-                                                waitForUpOrCancellation()
-                                            } else {
-                                                try {
-                                                    withTimeout(viewConfiguration.longPressTimeoutMillis) {
-                                                        waitForUpOrCancellation()
-                                                    }
-                                                } catch (_: PointerEventTimeoutCancellationException) {
-                                                    longPressed = true
-                                                    null
-                                                }
-                                            }
-                                        if (!longPressed) {
-                                            if (up != null) {
-                                                up.consume()
-                                                onSelect(item)
-                                            }
-                                            return@awaitEachGesture
-                                        }
-                                        draggedKey = itemKey
-                                        translation = 0f
-                                        announcedTarget = currentItems.indexOfFirst { key(it) == itemKey }
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        var travelledPastContextLimit = false
-                                        val completed =
-                                            drag(down.id) { change ->
-                                                val delta = change.positionChange().y
-                                                change.consume()
-                                                if (!movable) return@drag
-                                                translation += delta
-                                                if (abs(translation) >= contextActionLimitPx) {
-                                                    travelledPastContextLimit = true
-                                                }
-                                                val itemsNow = currentItems
-                                                val from = itemsNow.indexOfFirst { key(it) == itemKey }
-                                                if (from < 0) return@drag
-                                                val heightsNow = itemsNow.map { rowHeights[key(it)] ?: fallbackHeightPx }
-                                                val canMoveNow: (Int) -> Boolean = { candidate -> currentCanMove(itemsNow[candidate]) }
-                                                val target =
-                                                    ReorderableListMath.targetIndex(
-                                                        from,
-                                                        ReorderableListMath.clampedTranslation(translation, from, heightsNow, canMoveNow),
-                                                        heightsNow,
-                                                        canMoveNow,
-                                                    )
-                                                if (target != announcedTarget) {
-                                                    announcedTarget = target
-                                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                                }
-                                            }
-                                        if (completed) {
-                                            currentEvent.changes.forEach { if (it.changedToUp()) it.consume() }
-                                        }
-                                        finishLift(
-                                            commit = completed,
-                                            contextActionEligible = !travelledPastContextLimit,
-                                        )
-                                    } catch (cancelled: CancellationException) {
-                                        if (draggedKey == itemKey) finishLift(commit = false)
-                                        throw cancelled
-                                    } finally {
-                                        pressedKey = null
-                                    }
-                                }
                             },
                 ) {
-                    row(item)
+                    if (canReveal && revealing) {
+                        // The strip is laid out at full width against the trailing edge
+                        // and slid in from off-screen, so the only part on show is the
+                        // gap the row itself has vacated. Clipping is scoped to this
+                        // wrapper so it never crops the lifted row's shadow.
+                        Box(modifier = Modifier.matchParentSize().clipToBounds()) {
+                            Box(
+                                modifier =
+                                    Modifier
+                                        .align(Alignment.CenterEnd)
+                                        .width(revealWidthDp)
+                                        .fillMaxHeight()
+                                        .graphicsLayer { translationX = revealWidthPx - revealPx }
+                                        .background(MaterialTheme.colorScheme.error, shape)
+                                        .then(
+                                            // Only tappable once settled open, so a
+                                            // half-revealed strip cannot be hit.
+                                            if (openKey == itemKey) {
+                                                Modifier.clickable {
+                                                    openKey = null
+                                                    onContextAction?.invoke(item)
+                                                }
+                                            } else {
+                                                Modifier
+                                            },
+                                        ),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    text = contextActionLabel,
+                                    color = MaterialTheme.colorScheme.onError,
+                                    style = MaterialTheme.typography.labelLarge,
+                                    maxLines = 1,
+                                )
+                            }
+                        }
+                    }
+                    Column(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .graphicsLayer { translationX = -revealPx }
+                                .shadow(
+                                    elevation = ReorderableRowLiftedElevation * elevation,
+                                    shape = shape,
+                                    clip = false,
+                                    ambientColor = Color.Black.copy(alpha = 0.18f * elevation),
+                                    spotColor = Color.Black.copy(alpha = 0.18f * elevation),
+                                ).background(surfaceRaised.copy(alpha = surfaceRaised.alpha * highlightAlpha), shape)
+                                .semantics(mergeDescendants = true) {
+                                    role = Role.Button
+                                    onClick(label = null) {
+                                        onSelect(item)
+                                        true
+                                    }
+                                    val actions = mutableListOf<CustomAccessibilityAction>()
+                                    if (onContextAction != null && supportsContextAction(item)) {
+                                        // With no menu behind it any more, the action names
+                                        // itself rather than promising a list of choices.
+                                        actions +=
+                                            CustomAccessibilityAction(contextActionLabel) {
+                                                onContextAction(item)
+                                                true
+                                            }
+                                    }
+                                    if (previousMovable != null) {
+                                        actions +=
+                                            CustomAccessibilityAction("Move up") {
+                                                onMove?.invoke(index, previousMovable)
+                                                true
+                                            }
+                                    }
+                                    if (nextMovable != null) {
+                                        actions +=
+                                            CustomAccessibilityAction("Move down") {
+                                                onMove?.invoke(index, nextMovable)
+                                                true
+                                            }
+                                    }
+                                    if (actions.isNotEmpty()) customActions = actions
+                                }.pointerInput(itemKey, movable, canReveal) {
+                                    // One detector owns press, tap, swipe and lift, so the
+                                    // three arbitrate on the first decisive movement rather
+                                    // than racing a clock. Horizontal past slop is a swipe;
+                                    // the long-press timeout with no movement is a lift.
+                                    //
+                                    // The tap waits for its own up on Main and consumes it:
+                                    // a parent clickable (the bottom sheet) sees Main after
+                                    // us, so reading currentEvent later would find an
+                                    // already-consumed up and drop the tap.
+                                    awaitEachGesture {
+                                        val down = awaitFirstDown()
+                                        val wasOpen = openKey == itemKey
+                                        if (openKey != null && !wasOpen) {
+                                            // A press on any other row just dismisses the
+                                            // open one; it never also selects or lifts.
+                                            openKey = null
+                                            waitForUpOrCancellation()?.consume()
+                                            return@awaitEachGesture
+                                        }
+                                        pressedKey = itemKey
+                                        try {
+                                            var phase = RowGesturePhase.Undecided
+                                            var up: PointerInputChange? = null
+                                            val decide: suspend AwaitPointerEventScope.() -> Unit = {
+                                                while (phase == RowGesturePhase.Undecided) {
+                                                    val event = awaitPointerEvent(PointerEventPass.Main)
+                                                    val change = event.changes.firstOrNull { it.id == down.id }
+                                                    if (change == null) {
+                                                        phase = RowGesturePhase.Cancelled
+                                                        break
+                                                    }
+                                                    if (change.changedToUp()) {
+                                                        up = change
+                                                        phase = RowGesturePhase.Tap
+                                                        break
+                                                    }
+                                                    if (
+                                                        event.changes.any { it.isConsumed } ||
+                                                        change.isOutOfBounds(size, extendedTouchPadding)
+                                                    ) {
+                                                        phase = RowGesturePhase.Cancelled
+                                                        break
+                                                    }
+                                                    val dx = change.position.x - down.position.x
+                                                    val dy = change.position.y - down.position.y
+                                                    if (canReveal && abs(dx) > viewConfiguration.touchSlop && abs(dx) > abs(dy)) {
+                                                        phase = RowGesturePhase.Swipe
+                                                        break
+                                                    }
+                                                    if (abs(dy) > viewConfiguration.touchSlop) {
+                                                        // Vertical before the lift belongs to the scroller.
+                                                        phase = RowGesturePhase.Cancelled
+                                                        break
+                                                    }
+                                                    if (awaitPointerEvent(PointerEventPass.Final).changes.any { it.isConsumed }) {
+                                                        phase = RowGesturePhase.Cancelled
+                                                        break
+                                                    }
+                                                }
+                                            }
+                                            if (movable && !wasOpen) {
+                                                try {
+                                                    withTimeout(viewConfiguration.longPressTimeoutMillis) { decide() }
+                                                } catch (_: PointerEventTimeoutCancellationException) {
+                                                    if (phase == RowGesturePhase.Undecided) phase = RowGesturePhase.Lift
+                                                }
+                                            } else {
+                                                decide()
+                                            }
+
+                                            when (phase) {
+                                                RowGesturePhase.Tap -> {
+                                                    up?.consume()
+                                                    if (wasOpen) openKey = null else onSelect(item)
+                                                }
+
+                                                RowGesturePhase.Swipe -> {
+                                                    swiping = true
+                                                    var offset = revealPx
+                                                    val finished =
+                                                        horizontalDrag(down.id) { change ->
+                                                            offset =
+                                                                (offset - change.positionChange().x)
+                                                                    .coerceIn(0f, revealWidthPx)
+                                                            revealPx = offset
+                                                            change.consume()
+                                                        }
+                                                    val shouldOpen = finished && offset >= revealOpenThresholdPx
+                                                    if (shouldOpen && openKey != itemKey) {
+                                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                    }
+                                                    openKey = if (shouldOpen) itemKey else null
+                                                    // Releasing hands the row to the settle effect.
+                                                    swiping = false
+                                                }
+
+                                                RowGesturePhase.Lift -> {
+                                                    draggedKey = itemKey
+                                                    translation = 0f
+                                                    announcedTarget = currentItems.indexOfFirst { key(it) == itemKey }
+                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                    val completed =
+                                                        drag(down.id) { change ->
+                                                            val delta = change.positionChange().y
+                                                            change.consume()
+                                                            translation += delta
+                                                            val itemsNow = currentItems
+                                                            val from = itemsNow.indexOfFirst { key(it) == itemKey }
+                                                            if (from < 0) return@drag
+                                                            val heightsNow = itemsNow.map { rowHeights[key(it)] ?: fallbackHeightPx }
+                                                            val canMoveNow: (Int) -> Boolean =
+                                                                { candidate -> currentCanMove(itemsNow[candidate]) }
+                                                            val target =
+                                                                ReorderableListMath.targetIndex(
+                                                                    from,
+                                                                    ReorderableListMath.clampedTranslation(
+                                                                        translation,
+                                                                        from,
+                                                                        heightsNow,
+                                                                        canMoveNow,
+                                                                    ),
+                                                                    heightsNow,
+                                                                    canMoveNow,
+                                                                )
+                                                            if (target != announcedTarget) {
+                                                                announcedTarget = target
+                                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                            }
+                                                        }
+                                                    if (completed) {
+                                                        currentEvent.changes.forEach { if (it.changedToUp()) it.consume() }
+                                                    }
+                                                    finishLift(commit = completed)
+                                                }
+
+                                                RowGesturePhase.Undecided, RowGesturePhase.Cancelled -> Unit
+                                            }
+                                        } catch (cancelled: CancellationException) {
+                                            if (draggedKey == itemKey) finishLift(commit = false)
+                                            throw cancelled
+                                        } finally {
+                                            pressedKey = null
+                                        }
+                                    }
+                                },
+                    ) {
+                        row(item)
+                    }
                 }
             }
         }

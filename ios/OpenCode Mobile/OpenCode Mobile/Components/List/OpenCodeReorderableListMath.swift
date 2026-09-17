@@ -6,9 +6,11 @@ import CoreGraphics
 /// at the first neighbor whose midpoint it has crossed, never crosses a row
 /// that cannot move, and displaced rows shift by the dragged row's height.
 enum OpenCodeReorderableListMath {
-    /// Vertical translation below which a lift-and-release counts as a
-    /// context action instead of a move.
-    static let contextActionTranslationLimit: CGFloat = 6
+    /// Width of the action strip a row reveals when swiped open.
+    static let swipeRevealWidth: CGFloat = 88
+
+    /// Reveal past this much and the release settles open instead of closed.
+    static let swipeOpenThreshold: CGFloat = 44
 
     static func targetIndex(
         from index: Int,
