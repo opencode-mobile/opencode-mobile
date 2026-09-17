@@ -10,14 +10,28 @@ private let reorderablePressAnimation = Animation.easeOut(duration: 0.12)
 private let reorderableLiftAnimation = Animation.spring(response: 0.28, dampingFraction: 0.62)
 private let reorderableDisplacementAnimation = Animation.spring(response: 0.32, dampingFraction: 0.78)
 private let reorderableDropAnimation = Animation.spring(response: 0.36, dampingFraction: 0.8)
+private let reorderableRevealAnimation = Animation.spring(response: 0.3, dampingFraction: 0.85)
+/// Horizontal travel that commits a press to the swipe axis.
+private let reorderableSwipeActivation: CGFloat = 14
 
-/// Stacked rows that reorder with long-press and drag.
+/// A row mid-swipe, with `reveal` already clamped to the strip width.
+private struct RowSwipe<ID: Hashable>: Equatable {
+    let id: ID
+    let reveal: CGFloat
+}
+
+/// Stacked rows that reorder with long-press and drag, and expose one secondary
+/// row action behind a horizontal swipe.
 ///
-/// Tap selects a row. Long-press lifts a movable row; dragging shifts the
-/// neighbors live and release commits `onMove`. Releasing a lifted row that
-/// never travelled past the context-action limit fires `onContextAction`, so a
-/// row can keep one long-press action alongside reordering. Rows that fail
-/// `canMove` never lift or get crossed. Reordering is inactive until at least
+/// The two gestures own separate axes, so neither can take the other's input.
+/// Tap selects a row. Long-press lifts a movable row; dragging vertically
+/// shifts the neighbors live and release commits `onMove`. Swiping a row left
+/// reveals `contextActionLabel`; tapping that fires `onContextAction`. A
+/// long-press never fires the context action, and a swipe never reorders.
+///
+/// Only one row stays open at a time, and a tap anywhere closes it. Rows that
+/// fail `canMove` never lift or get crossed; rows that fail
+/// `supportsContextAction` never reveal. Reordering is inactive until at least
 /// two rows can move or `onMove` is nil.
 struct OpenCodeReorderableList<Item: Identifiable, Row: View>: View {
     let items: [Item]
@@ -26,12 +40,18 @@ struct OpenCodeReorderableList<Item: Identifiable, Row: View>: View {
     let onSelect: (Item) -> Void
     let onContextAction: ((Item) -> Void)?
     let supportsContextAction: (Item) -> Bool
+    let contextActionLabel: String
     @ViewBuilder let row: (Item) -> Row
 
     @GestureState(wrappedValue: .inactive, resetTransaction: Transaction(animation: reorderableDropAnimation))
     private var session: ReorderSession<Item.ID>
+    /// Live horizontal swipe. GestureState so a cancelled swipe snaps back on
+    /// its own rather than leaving a row stranded half-open.
+    @GestureState(wrappedValue: nil, resetTransaction: Transaction(animation: reorderableRevealAnimation))
+    private var swipe: RowSwipe<Item.ID>?
     @State private var rowHeights: [Item.ID: CGFloat] = [:]
     @State private var lift = OpenCodeReorderableListLift<Item.ID>()
+    @State private var openID: Item.ID?
 
     init(
         items: [Item],
@@ -40,6 +60,7 @@ struct OpenCodeReorderableList<Item: Identifiable, Row: View>: View {
         onSelect: @escaping (Item) -> Void,
         onContextAction: ((Item) -> Void)? = nil,
         supportsContextAction: @escaping (Item) -> Bool = { _ in true },
+        contextActionLabel: String = "Remove",
         @ViewBuilder row: @escaping (Item) -> Row
     ) {
         self.items = items
@@ -48,7 +69,16 @@ struct OpenCodeReorderableList<Item: Identifiable, Row: View>: View {
         self.onSelect = onSelect
         self.onContextAction = onContextAction
         self.supportsContextAction = supportsContextAction
+        self.contextActionLabel = contextActionLabel
         self.row = row
+    }
+
+    /// How far the row is currently slid open, 0 when shut.
+    private func revealWidth(for id: Item.ID) -> CGFloat {
+        if let swipe, swipe.id == id {
+            return swipe.reveal
+        }
+        return openID == id ? OpenCodeReorderableListMath.swipeRevealWidth : 0
     }
 
     private var reorderEnabled: Bool {
@@ -110,7 +140,8 @@ struct OpenCodeReorderableList<Item: Identifiable, Row: View>: View {
         let isDragged = session.isDragging(item.id)
         let movable = reorderEnabled && canMove(item)
         let offset = rowOffset(index: index, item: item, isDragged: isDragged)
-        let liftsOnLongPress = movable || (onContextAction != nil && supportsContextAction(item))
+        let canReveal = onContextAction != nil && supportsContextAction(item)
+        let reveal = canReveal ? revealWidth(for: item.id) : 0
 
         row(item)
             .background {
@@ -119,6 +150,19 @@ struct OpenCodeReorderableList<Item: Identifiable, Row: View>: View {
                         .fill(OpenCodeColors.surfaceRaisedBase.opacity(isDragged ? 1 : 0.92))
                 }
             }
+            .offset(x: -reveal)
+            .background(alignment: .trailing) {
+                if reveal > 0 {
+                    // The strip is laid out at full width against the trailing
+                    // edge and clipped to the gap the row has vacated, so it is
+                    // never visible through the row's own translucent fill.
+                    contextActionStrip(item)
+                        .frame(width: OpenCodeReorderableListMath.swipeRevealWidth)
+                        .frame(width: reveal, alignment: .trailing)
+                        .clipped()
+                }
+            }
+            .animation(reorderableRevealAnimation, value: reveal)
             .scaleEffect(rowScale(isPressing: isPressing, isDragged: isDragged))
             .shadow(
                 color: .black.opacity(isDragged ? 0.18 : 0),
@@ -139,13 +183,15 @@ struct OpenCodeReorderableList<Item: Identifiable, Row: View>: View {
                 }
             }
             .overlay {
-                gestureLayer(item, at: index, liftsOnLongPress: liftsOnLongPress, movable: movable)
+                gestureLayer(item, at: index, movable: movable, canReveal: canReveal)
             }
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isButton)
             .accessibilityActions {
                 if let onContextAction, supportsContextAction(item) {
-                    Button("Show actions") { onContextAction(item) }
+                    // With no menu behind it any more, the action names itself
+                    // rather than promising a list of choices.
+                    Button(contextActionLabel) { onContextAction(item) }
                 }
                 if movable, let previous = neighborMovableIndex(from: index, step: -1) {
                     Button("Move up") { onMove?(index, previous) }
@@ -157,17 +203,80 @@ struct OpenCodeReorderableList<Item: Identifiable, Row: View>: View {
     }
 
     @ViewBuilder
-    private func gestureLayer(_ item: Item, at index: Int, liftsOnLongPress: Bool, movable: Bool) -> some View {
-        if liftsOnLongPress {
-            Color.clear
-                .contentShape(Rectangle())
-                .onTapGesture { onSelect(item) }
-                .gesture(liftGesture(item, at: index, movable: movable))
-        } else {
-            Color.clear
-                .contentShape(Rectangle())
-                .onTapGesture { onSelect(item) }
+    private func contextActionStrip(_ item: Item) -> some View {
+        Button {
+            openID = nil
+            onContextAction?(item)
+        } label: {
+            Text(contextActionLabel)
+                .font(OpenCodeTypography.button)
+                .foregroundStyle(OpenCodeColors.surfaceBase)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(
+                    RoundedRectangle(cornerRadius: reorderableRowCornerRadius)
+                        .fill(OpenCodeColors.error)
+                )
         }
+        .buttonStyle(.plain)
+        // Only hittable once settled open, so a half-revealed strip cannot be
+        // tapped mid-swipe.
+        .allowsHitTesting(openID == item.id)
+    }
+
+    @ViewBuilder
+    private func gestureLayer(_ item: Item, at index: Int, movable: Bool, canReveal: Bool) -> some View {
+        Color.clear
+            .contentShape(Rectangle())
+            .onTapGesture {
+                // A tap anywhere dismisses the open row instead of selecting,
+                // so the revealed action is never one stray tap from a select.
+                if openID != nil {
+                    openID = nil
+                } else {
+                    onSelect(item)
+                }
+            }
+            .gesture(
+                swipeGesture(item),
+                including: canReveal && !session.isDragging(item.id) ? .all : .none
+            )
+            .gesture(
+                liftGesture(item, at: index, movable: movable),
+                including: movable && openID == nil ? .all : .none
+            )
+    }
+
+    private func swipeGesture(_ item: Item) -> some Gesture {
+        DragGesture(minimumDistance: reorderableSwipeActivation, coordinateSpace: .local)
+            .updating($swipe) { value, state, _ in
+                // Horizontal dominance keeps a vertical drag (a scroll, or the
+                // start of a lift) from ever opening a row.
+                guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                let base = openID == item.id ? OpenCodeReorderableListMath.swipeRevealWidth : 0
+                state = RowSwipe(
+                    id: item.id,
+                    reveal: min(
+                        max(base - value.translation.width, 0),
+                        OpenCodeReorderableListMath.swipeRevealWidth
+                    )
+                )
+            }
+            .onEnded { value in
+                guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                let base = openID == item.id ? OpenCodeReorderableListMath.swipeRevealWidth : 0
+                let reveal = min(
+                    max(base - value.translation.width, 0),
+                    OpenCodeReorderableListMath.swipeRevealWidth
+                )
+                let shouldOpen = reveal >= OpenCodeReorderableListMath.swipeOpenThreshold
+                if shouldOpen, openID != item.id {
+                    OpenCodeHaptics.selectionChanged()
+                }
+                withAnimation(reorderableRevealAnimation) {
+                    openID = shouldOpen ? item.id : nil
+                }
+            }
     }
 
     private func liftGesture(_ item: Item, at index: Int, movable: Bool) -> some Gesture {
@@ -188,22 +297,17 @@ struct OpenCodeReorderableList<Item: Identifiable, Row: View>: View {
                 if lift.beginLift(id: item.id, index: index) {
                     OpenCodeHaptics.contextAction()
                 }
-                let translation = drag?.translation.height ?? 0
-                lift.noteTravel(translation, movable: movable)
                 if movable, let targetIndex, lift.noteTarget(targetIndex) {
                     OpenCodeHaptics.selectionChanged()
                 }
             }
             .onEnded { value in
-                let contextActionEligible = lift.finish()
+                // A lift only ever commits a move; the context action lives on
+                // the swipe axis, so there is nothing to arbitrate here.
+                lift.finish()
                 guard case let .second(true, drag) = value else { return }
                 let translation = drag?.translation.height ?? 0
-                guard movable, let from = items.firstIndex(where: { $0.id == item.id }) else {
-                    if contextActionEligible, let onContextAction, supportsContextAction(item) {
-                        onContextAction(item)
-                    }
-                    return
-                }
+                guard movable, let from = items.firstIndex(where: { $0.id == item.id }) else { return }
                 let currentHeights = heights
                 let clamped = OpenCodeReorderableListMath.clampedTranslation(
                     translation,
@@ -222,8 +326,6 @@ struct OpenCodeReorderableList<Item: Identifiable, Row: View>: View {
                     withAnimation(reorderableDropAnimation) {
                         onMove?(from, target)
                     }
-                } else if contextActionEligible, let onContextAction, supportsContextAction(item) {
-                    onContextAction(item)
                 }
             }
     }

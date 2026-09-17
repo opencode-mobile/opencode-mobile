@@ -605,8 +605,9 @@ fun SessionListScopeCountBadge(
 
 /**
  * Project picker rows. Tap selects a scope; long-press on a project row lifts
- * it for drag reordering when [onReorderProjects] is set, and releasing it
- * without dragging offers [onRemoveProject]. The "All" row stays pinned first.
+ * it for drag reordering when [onReorderProjects] is set. Swiping a project row
+ * left reveals Remove, which calls [onRemoveProject]. The "All" row stays
+ * pinned first and neither reorders nor reveals.
  */
 @Composable
 fun SessionListProjectPickerRows(

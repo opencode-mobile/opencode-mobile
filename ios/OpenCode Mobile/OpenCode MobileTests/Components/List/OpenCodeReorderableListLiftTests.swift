@@ -2,77 +2,64 @@ import CoreGraphics
 import Testing
 @testable import OpenCode_Mobile
 
+/// The lift now only tracks which row is up and the last target it announced,
+/// so each haptic fires exactly once. Travel no longer arbitrates anything:
+/// remove moved onto the swipe axis.
 struct OpenCodeReorderableListLiftTests {
-    private let limit = OpenCodeReorderableListMath.contextActionTranslationLimit
-
-    @Test func finish_offersContextActionWhenFingerStayedPut() {
+    @Test func beginLift_startsOnceWhileTheSameRowStaysUp() {
         var lift = OpenCodeReorderableListLift<String>()
         let started = lift.beginLift(id: "a", index: 1)
-        lift.noteTravel(limit - 1, movable: true)
-        let eligible = lift.finish()
+        let startedAgain = lift.beginLift(id: "a", index: 1)
+        let liftedID = lift.liftedID
         #expect(started)
-        #expect(eligible)
-        #expect(lift.liftedID == nil)
+        #expect(!startedAgain)
+        #expect(liftedID == "a")
     }
 
-    @Test func finish_skipsContextActionAfterTravelEvenIfFingerReturns() {
+    @Test func beginLift_startsAgainWhenADifferentRowLifts() {
         var lift = OpenCodeReorderableListLift<String>()
         _ = lift.beginLift(id: "a", index: 1)
-        lift.noteTravel(limit, movable: true)
-        lift.noteTravel(0, movable: true)
-        let eligible = lift.finish()
-        #expect(!eligible)
+        let startedOther = lift.beginLift(id: "b", index: 2)
+        let liftedID = lift.liftedID
+        let announced = lift.announcedTargetIndex
+        #expect(startedOther)
+        #expect(liftedID == "b")
+        #expect(announced == 2)
     }
 
+    @Test func noteTarget_announcesOnlyOnChange() {
+        var lift = OpenCodeReorderableListLift<String>()
+        _ = lift.beginLift(id: "a", index: 1)
+        let sameAsLift = lift.noteTarget(1) // already announced by beginLift
+        let moved = lift.noteTarget(2)
+        let repeated = lift.noteTarget(2)
+        let movedBack = lift.noteTarget(1)
+        #expect(!sameAsLift)
+        #expect(moved)
+        #expect(!repeated)
+        #expect(movedBack)
+    }
+
+    @Test func finish_clearsLiftState() {
+        var lift = OpenCodeReorderableListLift<String>()
+        _ = lift.beginLift(id: "a", index: 1)
+        lift.finish()
+        let liftedID = lift.liftedID
+        let announced = lift.announcedTargetIndex
+        #expect(liftedID == nil)
+        #expect(announced == nil)
+    }
+
+    /// A cancelled drag never reaches `onEnded`, so the list releases identity
+    /// from the gesture-session reset instead. The same row must then be able
+    /// to lift again and re-announce.
     @Test func releaseIdentity_letsTheSameRowStartAFreshLift() {
         var lift = OpenCodeReorderableListLift<String>()
         _ = lift.beginLift(id: "a", index: 1)
-        lift.noteTravel(limit, movable: true)
         lift.releaseIdentity()
-
-        #expect(lift.travelledPastContextLimit)
+        let clearedID = lift.liftedID
         let startedAgain = lift.beginLift(id: "a", index: 1)
-        lift.noteTravel(0, movable: true)
-        let eligible = lift.finish()
+        #expect(clearedID == nil)
         #expect(startedAgain)
-        #expect(eligible)
-    }
-
-    @Test func finish_stillSeesTravelAfterIdentityWasReleased() {
-        var lift = OpenCodeReorderableListLift<String>()
-        _ = lift.beginLift(id: "a", index: 1)
-        lift.noteTravel(limit, movable: true)
-        lift.releaseIdentity()
-        let eligible = lift.finish()
-        #expect(!eligible)
-    }
-
-    @Test func beginLift_doesNotResetTravelWhileTheSameRowIsStillUp() {
-        var lift = OpenCodeReorderableListLift<String>()
-        let started = lift.beginLift(id: "a", index: 1)
-        lift.noteTravel(limit, movable: true)
-        let startedAgain = lift.beginLift(id: "a", index: 1)
-        #expect(started)
-        #expect(!startedAgain)
-        #expect(lift.travelledPastContextLimit)
-    }
-
-    @Test func beginLift_resetsTravelWhenADifferentRowLifts() {
-        var lift = OpenCodeReorderableListLift<String>()
-        _ = lift.beginLift(id: "a", index: 1)
-        lift.noteTravel(limit, movable: true)
-        let startedOther = lift.beginLift(id: "b", index: 2)
-        let eligible = lift.finish()
-        #expect(startedOther)
-        #expect(!lift.travelledPastContextLimit)
-        #expect(eligible)
-    }
-
-    @Test func noteTravel_ignoresImmovableRows() {
-        var lift = OpenCodeReorderableListLift<String>()
-        _ = lift.beginLift(id: "a", index: 0)
-        lift.noteTravel(limit, movable: false)
-        let eligible = lift.finish()
-        #expect(eligible)
     }
 }

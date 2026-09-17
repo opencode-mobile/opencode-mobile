@@ -12,6 +12,7 @@ import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.moveBy
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.up
 import dev.opencode.mobile.theme.OpenCodeTheme
 import org.junit.Assert.assertEquals
@@ -20,9 +21,9 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * Tap, long-press-and-drag, and long-press-and-release have to stay separable
- * on one row. Every case here keeps [onRemoveProject] set so the rows take the
- * lift-on-long-press path, which is the one the three gestures share.
+ * Select, reorder and remove each own a distinct gesture on a picker row, and
+ * the point of the split is that none of them can consume another's input:
+ * vertical is order, horizontal is remove, a plain release is select.
  */
 class OpenCodeReorderableListTest {
     @get:Rule val composeTestRule = createAndroidComposeRule<ComponentActivity>()
@@ -41,8 +42,8 @@ class OpenCodeReorderableListTest {
     private fun setPicker() {
         composeTestRule.setContent {
             OpenCodeTheme {
-                // The bottom sheet puts a no-op clickable around the rows; it consumes
-                // the same pointer, so it belongs in the repro.
+                // The bottom sheet wraps the rows in a no-op clickable that
+                // consumes the same pointer, so it belongs in the repro.
                 Box(Modifier.clickable {}) {
                     SessionListProjectPickerRows(
                         tabs = tabs,
@@ -69,26 +70,13 @@ class OpenCodeReorderableListTest {
     }
 
     @Test
-    fun longPressAndReleaseWithoutDraggingRemovesProject() {
-        setPicker()
-
-        composeTestRule.onNodeWithText("playground").performTouchInput { longClick() }
-
-        composeTestRule.runOnIdle {
-            assertEquals("/playground", removed)
-            assertNull(selected)
-            assertNull(reordered)
-        }
-    }
-
-    @Test
-    fun longPressAndDragReordersWithoutOfferingRemove() {
+    fun longPressAndDragReorders() {
         setPicker()
 
         composeTestRule.onNodeWithText("playground").performTouchInput {
             down(center)
-            // Past the long-press timeout, then a pause long enough that a
-            // hold-based remove offer would have fired before the drag starts.
+            // Past the long-press timeout, then a pause long enough that any
+            // hold-based remove would have fired before the drag starts.
             advanceEventTime(viewConfiguration.longPressTimeoutMillis + 100)
             advanceEventTime(400)
             moveBy(Offset(0f, height.toFloat()))
@@ -104,23 +92,71 @@ class OpenCodeReorderableListTest {
     }
 
     @Test
-    fun longPressAndDragBackToStartCancelsInsteadOfRemoving() {
+    fun longPressAndReleaseNeverRemoves() {
+        setPicker()
+
+        composeTestRule.onNodeWithText("playground").performTouchInput { longClick() }
+
+        composeTestRule.runOnIdle {
+            assertNull(removed)
+            assertNull(selected)
+            assertNull(reordered)
+        }
+    }
+
+    @Test
+    fun swipeRevealsRemoveAndTappingItRemovesTheProject() {
+        setPicker()
+
+        composeTestRule.onNodeWithText("playground").performTouchInput { swipeLeft() }
+        composeTestRule.waitForIdle()
+
+        composeTestRule.runOnIdle {
+            assertNull(removed) // revealing alone must not remove
+            assertNull(selected)
+        }
+
+        composeTestRule.onNodeWithText("Remove").performTouchInput { click() }
+
+        composeTestRule.runOnIdle {
+            assertEquals("/playground", removed)
+            assertNull(reordered)
+            assertNull(selected)
+        }
+    }
+
+    @Test
+    fun shortSwipeSettlesClosedWithoutSelecting() {
         setPicker()
 
         composeTestRule.onNodeWithText("playground").performTouchInput {
             down(center)
-            advanceEventTime(viewConfiguration.longPressTimeoutMillis + 100)
-            moveBy(Offset(0f, height.toFloat()))
-            advanceEventTime(32)
-            moveBy(Offset(0f, -height.toFloat()))
-            advanceEventTime(32)
+            // Past touch slop, so this commits to the swipe axis rather than
+            // staying a tap, but far short of the open threshold.
+            moveBy(Offset(-(viewConfiguration.touchSlop + 8f), 0f))
+            advanceEventTime(16)
+            moveBy(Offset(-12f, 0f))
+            advanceEventTime(16)
             up()
         }
+        composeTestRule.waitForIdle()
 
         composeTestRule.runOnIdle {
             assertNull(removed)
+            assertNull(selected) // a committed swipe is not a tap
             assertNull(reordered)
-            assertNull(selected)
         }
+        composeTestRule.onNodeWithText("Remove").assertDoesNotExist()
+    }
+
+    @Test
+    fun allProjectsRowNeverReveals() {
+        setPicker()
+
+        composeTestRule.onNodeWithText("All projects").performTouchInput { swipeLeft() }
+        composeTestRule.waitForIdle()
+
+        composeTestRule.runOnIdle { assertNull(removed) }
+        composeTestRule.onNodeWithText("Remove").assertDoesNotExist()
     }
 }
