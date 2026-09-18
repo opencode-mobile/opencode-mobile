@@ -40,7 +40,7 @@ object ServerProtocolProbeErrors {
             is ServerProbeError.Http ->
                 when (probe.statusCode) {
                     401, 403 -> 40
-                    else -> 10
+                    else -> 5
                 }
             is ServerProbeError.Unhealthy -> 30
             is ServerProbeError.Transport -> 5

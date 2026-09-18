@@ -39,4 +39,14 @@ class ServerProtocolProbeErrorsTest {
         assertTrue(error is ServerProbeError.Unhealthy)
         assertEquals("9.9.9", (error as ServerProbeError.Unhealthy).version)
     }
+
+    @Test
+    fun preferDoesNotPromoteNotFoundOverDecodeMiss() {
+        val preferred =
+            ServerProtocolProbeErrors.prefer(
+                previous = ServerProbeError.Transport(IllegalStateException("non-json")),
+                next = ServerProbeError.Http(404, "Not Found"),
+            )
+        assertTrue(preferred is ServerProbeError.Transport)
+    }
 }

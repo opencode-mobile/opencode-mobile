@@ -27,4 +27,15 @@ struct ServerProtocolProbeErrorsTests {
         }
         #expect(version == "9.9.9")
     }
+
+    @Test func preferDoesNotPromoteNotFoundOverDecodeMiss() {
+        let preferred = ServerProtocolProbeErrors.prefer(
+            previous: ServerProbeError.transport("non-json"),
+            next: ServerProbeError.http(statusCode: 404, message: "Not Found")
+        )
+        guard case .transport = preferred as? ServerProbeError else {
+            Issue.record("expected transport miss, got \(String(describing: preferred))")
+            return
+        }
+    }
 }

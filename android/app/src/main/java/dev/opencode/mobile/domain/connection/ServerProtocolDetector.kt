@@ -9,7 +9,8 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 
 /**
- * Shared dual-health detection used by connection setup and home probe.
+ * Shared health detection used by connection setup and home probe.
+ * Probes /global/health, /api/health, and /api/info in parallel.
  */
 class ServerProtocolDetector(
     private val adapter: ProjectDomainAdapter,
@@ -17,31 +18,41 @@ class ServerProtocolDetector(
     suspend fun detect(
         fetchGlobalHealth: suspend () -> HealthDto,
         fetchApiHealth: suspend () -> HealthDto,
+        fetchApiInfo: suspend () -> HealthDto,
     ): ServerProtocol {
-        val (globalHealth, apiHealth, lastError) =
+        val (globalHealth, apiHealth, apiInfo, lastError) =
             coroutineScope {
                 val global =
                     async {
-                        runCatching { fetchGlobalHealth() }
+                        probe("/global/health", fetchGlobalHealth)
                     }
                 val api =
                     async {
-                        runCatching { fetchApiHealth() }
+                        probe("/api/health", fetchApiHealth)
+                    }
+                val info =
+                    async {
+                        probe("/api/info", fetchApiInfo)
                     }
                 val globalResult = global.await()
                 val apiResult = api.await()
-                Triple(
+                val infoResult = info.await()
+                ProbeRound(
                     globalResult.getOrNull(),
                     apiResult.getOrNull(),
+                    infoResult.getOrNull(),
                     ServerProtocolProbeErrors.prefer(
-                        globalResult.exceptionOrNull(),
-                        apiResult.exceptionOrNull(),
+                        ServerProtocolProbeErrors.prefer(
+                            globalResult.exceptionOrNull(),
+                            apiResult.exceptionOrNull(),
+                        ),
+                        infoResult.exceptionOrNull(),
                     ),
                 )
             }
 
         val protocol =
-            ServerProtocolClassifier.classify(globalHealth, apiHealth)
+            ServerProtocolClassifier.classify(globalHealth, apiHealth, apiInfo)
                 ?: throw adapter.mapProbeError(
                     ServerProtocolProbeErrors.unresolved(globalHealth, apiHealth, lastError),
                 )
@@ -53,7 +64,12 @@ class ServerProtocolDetector(
                     throw ServerProbeError.Unhealthy(apiHealth.version)
                 }
             }
-            apiHealth != null -> adapter.requireHealthy(apiHealth)
+            apiHealth?.healthy == true -> adapter.requireHealthy(apiHealth)
+            apiInfo?.pid != null -> {
+                if (apiInfo.healthy == false) {
+                    throw ServerProbeError.Unhealthy(apiInfo.version)
+                }
+            }
         }
 
         DiagnosticLog.info(
@@ -62,4 +78,38 @@ class ServerProtocolDetector(
         )
         return protocol
     }
+
+    private suspend fun probe(
+        path: String,
+        fetch: suspend () -> HealthDto,
+    ): Result<HealthDto> {
+        val result =
+            runCatching { fetch() }
+                .recoverCatching { throw adapter.mapProbeError(it) }
+        result.exceptionOrNull()?.let { error ->
+            DiagnosticLog.warning(
+                DiagnosticLogArea.Connection,
+                "probe $path failed ${describeProbeFailure(error)}",
+            )
+        }
+        return result
+    }
+
+    private fun describeProbeFailure(error: Throwable): String =
+        when (val probe = error as? ServerProbeError) {
+            is ServerProbeError.Http -> "status=${probe.statusCode}"
+            is ServerProbeError.Unhealthy -> "unhealthy"
+            is ServerProbeError.Transport -> {
+                val code = probe.cause?.javaClass?.simpleName ?: "transport"
+                "code=$code"
+            }
+            null -> "code=${error.javaClass.simpleName}"
+        }
+
+    private data class ProbeRound(
+        val globalHealth: HealthDto?,
+        val apiHealth: HealthDto?,
+        val apiInfo: HealthDto?,
+        val lastError: Throwable?,
+    )
 }

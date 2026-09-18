@@ -22,7 +22,7 @@ class ConnectionProbeService(
     private val detector = ServerProtocolDetector(adapter)
 
     /**
-     * Dual-probe health and return the detected [ServerProtocol].
+     * Probe health endpoints and return the detected [ServerProtocol].
      *
      * Throws [ServerProbeError] when neither health endpoint is usable.
      */
@@ -32,6 +32,7 @@ class ConnectionProbeService(
             return detector.detect(
                 fetchGlobalHealth = { client.fetchHealth("global/health") },
                 fetchApiHealth = { client.fetchHealth("api/health") },
+                fetchApiInfo = { client.fetchHealth("api/info") },
             )
         } catch (error: Throwable) {
             throw if (error is ServerProbeError) error else adapter.mapProbeError(error)
@@ -76,7 +77,7 @@ fun ServerProbeError.userMessage(): String =
             if (statusCode == 401 || statusCode == 403) {
                 "Authentication failed"
             } else {
-                message?.takeIf { it.isNotBlank() } ?: "Unable to reach the server"
+                "Unable to reach the server"
             }
         is ServerProbeError.Unhealthy -> "Server reported unhealthy"
     }

@@ -7,6 +7,7 @@ import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
+import dev.opencode.mobile.domain.connection.userMessage
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.event.EventDomainAdapter
@@ -941,11 +942,7 @@ class MainScreenViewModel
         }
 
         private fun probeErrorMessage(error: ServerProbeError): String =
-            when (error) {
-                is ServerProbeError.Transport -> "Unable to reach the server"
-                is ServerProbeError.Http -> error.message ?: "Server returned ${error.statusCode}"
-                is ServerProbeError.Unhealthy -> "Server reported unhealthy"
-            }
+            error.userMessage()
 
         private fun startLiveObservations(worktrees: List<String>) {
             if (liveObservationsRunning(worktrees)) return
