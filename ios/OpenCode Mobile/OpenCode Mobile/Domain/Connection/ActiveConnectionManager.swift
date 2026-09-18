@@ -480,12 +480,9 @@ extension ServerProbeError {
         switch self {
         case .transport:
             return "Unable to reach the server"
-        case let .http(statusCode, message):
+        case let .http(statusCode, _):
             if statusCode == 401 || statusCode == 403 {
                 return "Authentication failed"
-            }
-            if let message, !message.isEmpty {
-                return message
             }
             return "Unable to reach the server"
         case .unhealthy:

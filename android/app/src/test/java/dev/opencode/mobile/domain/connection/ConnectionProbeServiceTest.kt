@@ -5,6 +5,7 @@ import dev.opencode.mobile.domain.project.ServerProbeError
 import dev.opencode.mobile.network.ServerConnection
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.engine.mock.MockRequestHandleScope
 import io.ktor.client.engine.mock.MockRequestHandler
 import io.ktor.client.engine.mock.respond
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
@@ -68,7 +69,8 @@ class ConnectionProbeServiceTest {
                                 status = HttpStatusCode.OK,
                                 headers = headersOf(HttpHeaders.ContentType, "application/json"),
                             )
-                        else -> error("unexpected ${request.url}")
+                        "/api/info" -> jsonNotFound()
+                        else -> error("unexpected path")
                     }
                 }
 
@@ -77,6 +79,7 @@ class ConnectionProbeServiceTest {
             assertEquals(ServerProtocol.V2, protocol)
             assertTrue(paths.contains("/global/health"))
             assertTrue(paths.contains("/api/health"))
+            assertTrue(paths.contains("/api/info"))
         }
 
     @Test
@@ -97,7 +100,8 @@ class ConnectionProbeServiceTest {
                                 status = HttpStatusCode.OK,
                                 headers = headersOf(HttpHeaders.ContentType, "application/json"),
                             )
-                        else -> error("unexpected ${request.url}")
+                        "/api/info" -> jsonNotFound()
+                        else -> error("unexpected path")
                     }
                 }
 
@@ -124,7 +128,8 @@ class ConnectionProbeServiceTest {
                                 status = HttpStatusCode.OK,
                                 headers = headersOf(HttpHeaders.ContentType, "application/json"),
                             )
-                        else -> error("unexpected ${request.url}")
+                        "/api/info" -> jsonNotFound()
+                        else -> error("unexpected path")
                     }
                 }
 
@@ -190,7 +195,8 @@ class ConnectionProbeServiceTest {
                                 status = HttpStatusCode.NotFound,
                                 headers = headersOf(HttpHeaders.ContentType, "application/json"),
                             )
-                        else -> error("unexpected ${request.url}")
+                        "/api/info" -> jsonNotFound()
+                        else -> error("unexpected path")
                     }
                 }
 
@@ -220,7 +226,8 @@ class ConnectionProbeServiceTest {
                                 status = HttpStatusCode.NotFound,
                                 headers = headersOf(HttpHeaders.ContentType, "application/json"),
                             )
-                        else -> error("unexpected ${request.url}")
+                        "/api/info" -> jsonNotFound()
+                        else -> error("unexpected path")
                     }
                 }
 
@@ -231,6 +238,128 @@ class ConnectionProbeServiceTest {
                 assertEquals("1.0.0", error.version)
             }
         }
+
+    @Test
+    fun probe_detectsV2FromOpenCode207ApiInfoWhenHealthPathsMiss() =
+        runTest {
+            val paths = mutableListOf<String>()
+            val service =
+                service { request ->
+                    paths += request.url.encodedPath
+                    when (request.url.encodedPath) {
+                        "/global/health" -> spaHtml()
+                        "/api/health" -> jsonNotFound()
+                        "/api/info" ->
+                            jsonOk(
+                                """{"version":"2.0.7","pid":1481731,"urls":["http://192.168.0.160:4096"]}""",
+                            )
+                        else -> error("unexpected path")
+                    }
+                }
+
+            assertEquals(ServerProtocol.V2, service.probe(connection))
+            assertTrue(paths.contains("/global/health"))
+            assertTrue(paths.contains("/api/health"))
+            assertTrue(paths.contains("/api/info"))
+        }
+
+    @Test
+    fun probe_detectsV1FromGlobalHealthEvenIfApiInfoIsHtml() =
+        runTest {
+            val service =
+                service { request ->
+                    when (request.url.encodedPath) {
+                        "/global/health" ->
+                            jsonOk("""{"healthy":true,"version":"1.18.31"}""")
+                        "/api/health" -> jsonNotFound()
+                        "/api/info" -> spaHtml()
+                        else -> error("unexpected path")
+                    }
+                }
+
+            assertEquals(ServerProtocol.V1, service.probe(connection))
+        }
+
+    @Test
+    fun probe_htmlAndNotFoundDoNotSurfaceNotFound() =
+        runTest {
+            val service =
+                service { request ->
+                    when (request.url.encodedPath) {
+                        "/global/health" -> spaHtml()
+                        "/api/health" -> jsonNotFound()
+                        "/api/info" -> jsonNotFound()
+                        else -> error("unexpected path")
+                    }
+                }
+
+            try {
+                service.probe(connection)
+                fail("expected ServerProbeError")
+            } catch (error: ServerProbeError) {
+                assertTrue(error is ServerProbeError.Http || error is ServerProbeError.Transport)
+                assertEquals("Unable to reach the server", error.userMessage())
+            }
+        }
+
+    @Test
+    fun probe_authFailureOnHealthPathsIsNotSwallowedByApiInfo() =
+        runTest {
+            val service =
+                service { request ->
+                    when (request.url.encodedPath) {
+                        "/global/health", "/api/health" ->
+                            respond(
+                                content = """{"error":"unauthorized"}""",
+                                status = HttpStatusCode.Unauthorized,
+                                headers = headersOf(HttpHeaders.ContentType, "application/json"),
+                            )
+                        "/api/info" -> jsonNotFound()
+                        else -> error("unexpected path")
+                    }
+                }
+
+            try {
+                service.probe(connection)
+                fail("expected ServerProbeError.Http 401")
+            } catch (error: ServerProbeError.Http) {
+                assertEquals(401, error.statusCode)
+                assertEquals("Authentication failed", error.userMessage())
+            }
+        }
+
+    @Test
+    fun userMessage_nonAuthHttpDoesNotSurfaceNotFound() {
+        assertEquals(
+            "Unable to reach the server",
+            ServerProbeError.Http(404, "Not Found").userMessage(),
+        )
+        assertEquals(
+            "Authentication failed",
+            ServerProbeError.Http(401, "Unauthorized").userMessage(),
+        )
+    }
+
+    private fun MockRequestHandleScope.jsonOk(content: String) =
+        respond(
+            content = content,
+            status = HttpStatusCode.OK,
+            headers = headersOf(HttpHeaders.ContentType, "application/json"),
+        )
+
+    private fun MockRequestHandleScope.jsonNotFound() =
+        respond(
+            content = "{}",
+            status = HttpStatusCode.NotFound,
+            headers = headersOf(HttpHeaders.ContentType, "application/json"),
+        )
+
+    private fun MockRequestHandleScope.spaHtml() =
+        respond(
+            content = "<!doctype html><html><head><title>OpenCode</title></head><body></body></html>",
+            status = HttpStatusCode.OK,
+            headers = headersOf(HttpHeaders.ContentType, "text/html"),
+        )
 
     private fun service(handler: MockRequestHandler) =
         ConnectionProbeService(

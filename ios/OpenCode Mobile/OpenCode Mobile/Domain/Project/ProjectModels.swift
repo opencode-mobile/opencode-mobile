@@ -15,10 +15,13 @@ enum ServerProbeError: Error, Equatable {
 extension ServerProbeError: LocalizedError {
     var errorDescription: String? {
         switch self {
-        case let .transport(message):
-            return message
-        case let .http(_, message):
-            return message ?? "Request failed"
+        case .transport:
+            return "Unable to reach the server"
+        case let .http(statusCode, _):
+            if statusCode == 401 || statusCode == 403 {
+                return "Authentication failed"
+            }
+            return "Unable to reach the server"
         case .unhealthy:
             return "Server reported unhealthy"
         }

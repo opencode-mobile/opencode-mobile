@@ -35,7 +35,7 @@ nonisolated enum ServerProtocolProbeErrors {
         }
         switch probe {
         case let .http(statusCode, _):
-            return (statusCode == 401 || statusCode == 403) ? 40 : 10
+            return (statusCode == 401 || statusCode == 403) ? 40 : 5
         case .unhealthy:
             return 30
         case .transport:

@@ -27,6 +27,25 @@ class ServerProtocolClassifierTest {
     }
 
     @Test
+    fun recognizesV2WhenPidPresentAndHealthyMissing() {
+        assertEquals(
+            ServerProtocol.V2,
+            ServerProtocolClassifier.classify(
+                globalHealth = null,
+                apiHealth = HealthDto(healthy = null, version = "2.0.0", pid = 123),
+            ),
+        )
+        assertEquals(
+            ServerProtocol.V2,
+            ServerProtocolClassifier.classify(
+                globalHealth = null,
+                apiHealth = null,
+                apiInfo = HealthDto(healthy = null, version = "2.0.7", pid = 1481731),
+            ),
+        )
+    }
+
+    @Test
     fun recognizesTransitionalV1ApiHealthResponse() {
         val protocol =
             ServerProtocolClassifier.classify(

@@ -4,7 +4,8 @@ import Foundation
 ///
 /// Detection follows desktop `detectServerProtocol`: prefer `/global/health`
 /// (v1), else `/api/health` with numeric `pid` (v2), else transitional
-/// `/api/health` with `healthy: true` (v1-shaped).
+/// `/api/health` with `healthy: true` (v1-shaped), else `/api/info` with
+/// numeric `pid` (v2; `healthy` may be absent).
 nonisolated enum ServerProtocol: String, Sendable, Equatable, Hashable {
     case v1
     case v2

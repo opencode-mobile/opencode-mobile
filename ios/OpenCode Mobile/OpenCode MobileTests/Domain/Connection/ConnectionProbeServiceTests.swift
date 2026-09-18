@@ -25,7 +25,7 @@ struct ConnectionProbeServiceTests {
         let detected = try await service.probe(connection: sampleConnection)
 
         #expect(detected == .v2)
-        #expect(Set(requestedPaths) == ["/global/health", "/api/health"])
+        #expect(Set(requestedPaths) == ["/global/health", "/api/health", "/api/info"])
     }
 
     @Test func probe_detectsTransitionalV1FromApiHealthWithoutPid() async throws {
@@ -110,6 +110,88 @@ struct ConnectionProbeServiceTests {
         } catch {
             Issue.record("unexpected error \(error)")
         }
+    }
+
+    @Test func probe_detectsV2FromOpenCode207ApiInfoWhenHealthPathsMiss() async throws {
+        ProtocolHealthURLProtocol.reset(responsesByPath: [
+            "/global/health": (200, "<!doctype html><html><head><title>OpenCode</title></head><body></body></html>"),
+            "/api/health": (404, #"{}"#),
+            "/api/info": (200, #"{"version":"2.0.7","pid":1481731,"urls":["http://192.168.0.160:4096"]}"#),
+        ])
+        let service = makeService()
+
+        let detected = try await service.probe(connection: sampleConnection)
+
+        #expect(detected == .v2)
+        #expect(Set(requestedPaths) == ["/global/health", "/api/health", "/api/info"])
+    }
+
+    @Test func probe_detectsV1FromGlobalHealthEvenIfApiInfoIsHtml() async throws {
+        ProtocolHealthURLProtocol.reset(responsesByPath: [
+            "/global/health": (200, #"{"healthy":true,"version":"1.18.31"}"#),
+            "/api/health": (404, #"{}"#),
+            "/api/info": (200, "<!doctype html><html><body>SPA</body></html>"),
+        ])
+        let service = makeService()
+
+        let detected = try await service.probe(connection: sampleConnection)
+
+        #expect(detected == .v1)
+    }
+
+    @Test func probe_htmlAndNotFoundDoNotSurfaceNotFound() async {
+        ProtocolHealthURLProtocol.reset(responsesByPath: [
+            "/global/health": (200, "<!doctype html><html><body>SPA</body></html>"),
+            "/api/health": (404, "Not Found"),
+            "/api/info": (404, "Not Found"),
+        ])
+        let service = makeService()
+
+        do {
+            _ = try await service.probe(connection: sampleConnection)
+            Issue.record("expected probe failure")
+        } catch let error as ServerProbeError {
+            #expect(error.probeUserMessage == "Unable to reach the server")
+            if case .unhealthy = error {
+                Issue.record("HTML/404 miss should not classify as unhealthy")
+            }
+        } catch {
+            Issue.record("unexpected error \(error)")
+        }
+    }
+
+    @Test func probe_authFailureOnHealthPathsIsNotSwallowedByApiInfo() async {
+        ProtocolHealthURLProtocol.reset(responsesByPath: [
+            "/global/health": (401, #"{"error":"unauthorized"}"#),
+            "/api/health": (401, #"{"error":"unauthorized"}"#),
+            "/api/info": (404, #"{}"#),
+        ])
+        let service = makeService()
+
+        do {
+            _ = try await service.probe(connection: sampleConnection)
+            Issue.record("expected auth failure")
+        } catch let error as ServerProbeError {
+            guard case let .http(statusCode, _) = error else {
+                Issue.record("expected http probe error, got \(error)")
+                return
+            }
+            #expect(statusCode == 401)
+            #expect(error.probeUserMessage == "Authentication failed")
+        } catch {
+            Issue.record("unexpected error \(error)")
+        }
+    }
+
+    @Test func probeUserMessage_nonAuthHttpDoesNotSurfaceNotFound() {
+        #expect(
+            ServerProbeError.http(statusCode: 404, message: "Not Found").probeUserMessage
+                == "Unable to reach the server"
+        )
+        #expect(
+            ServerProbeError.http(statusCode: 401, message: "Unauthorized").probeUserMessage
+                == "Authentication failed"
+        )
     }
 
     @Test func activeConnectionManager_cachesDetectedProtocol() async {
