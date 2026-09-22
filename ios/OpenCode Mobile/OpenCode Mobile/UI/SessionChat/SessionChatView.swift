@@ -130,6 +130,23 @@ struct SessionChatView: View {
                 )
             }
 
+            if let strip = viewModel.uiState.repoStrip {
+                OpenCodeRepoStrip(
+                    branch: strip.branch,
+                    defaultBranch: strip.defaultBranch,
+                    files: strip.files.map(\.repoStripFile),
+                    expanded: strip.isExpanded,
+                    onToggle: { viewModel.toggleRepoStrip() },
+                    onOpenChanges: {
+                        changesTarget = viewModel.uiState.changesNavigationTarget(worktree: session.worktree)
+                    }
+                )
+                .padding(.horizontal, 12)
+                .padding(.top, 6)
+                .padding(.bottom, 2)
+                .openCodeReadableColumn()
+            }
+
             // Hidden for now: status bar currently only shows context usage.
             // Session context remains available from the overflow menu.
             if Self.showsSessionStatusBar {
@@ -1165,4 +1182,16 @@ private extension ClientSlashAction {
         )
     }
     .openCodeTheme()
+}
+
+private extension VcsFileStatus {
+    var repoStripFile: OpenCodeRepoStripFile {
+        let mapped: OpenCodeRepoStripFileStatus =
+            switch status {
+            case .added: .added
+            case .deleted: .deleted
+            case .modified: .modified
+            }
+        return OpenCodeRepoStripFile(path: path, status: mapped, additions: additions, deletions: deletions)
+    }
 }

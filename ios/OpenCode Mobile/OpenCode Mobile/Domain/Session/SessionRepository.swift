@@ -19,6 +19,8 @@ protocol SessionRepository: Sendable {
     func unshareSession(id: String) async throws -> Session
     func getSessionDiff(id: String, messageID: String?, directory: String?) async throws -> [FileDiff]
     func getVcsInfo(directory: String?) async throws -> VcsInfo
+    /// Uncommitted working-copy changes for the project. Throws 404 when the server has no VCS routes.
+    func getVcsStatus(directory: String?) async throws -> [VcsFileStatus]
     func getVcsDiff(mode: VcsDiffMode, directory: String?, context: Int) async throws -> [FileDiff]
     func summarizeSession(id: String, providerID: String, modelID: String) async throws -> Bool
     func revertSession(id: String, messageID: String, partID: String?) async throws -> Bool
@@ -82,6 +84,10 @@ extension SessionRepository {
     }
 
     func getVcsDiff(mode: VcsDiffMode, directory: String?, context: Int = 12) async throws -> [FileDiff] {
+        throw SessionError.http(statusCode: 404, message: "VCS endpoints are unavailable")
+    }
+
+    func getVcsStatus(directory: String?) async throws -> [VcsFileStatus] {
         throw SessionError.http(statusCode: 404, message: "VCS endpoints are unavailable")
     }
 }
@@ -203,6 +209,10 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
 
     func getVcsInfo(directory: String?) async throws -> VcsInfo {
         try await run { try await remote.getVcsInfo(directory: directory) }
+    }
+
+    func getVcsStatus(directory: String?) async throws -> [VcsFileStatus] {
+        try await run { try await remote.getVcsStatus(directory: directory) }
     }
 
     func getVcsDiff(mode: VcsDiffMode, directory: String?, context: Int) async throws -> [FileDiff] {

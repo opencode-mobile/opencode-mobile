@@ -31,6 +31,7 @@ import dev.opencode.mobile.data.remote.dto.V2RenameSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.V2RevertStageRequestDto
 import dev.opencode.mobile.data.remote.dto.V2SessionDto
 import dev.opencode.mobile.data.remote.dto.V2VcsInfoDto
+import dev.opencode.mobile.data.remote.dto.VcsFileStatusDto
 import dev.opencode.mobile.data.remote.dto.VcsInfoDto
 import dev.opencode.mobile.data.remote.dto.decodeDataEnvelope
 import dev.opencode.mobile.network.OpencodeHttpClient
@@ -265,6 +266,13 @@ class SessionsApi private constructor(
         httpClient
             .get()
             .get("vcs") {
+                applyDirectory(directory)
+            }.body()
+
+    suspend fun getVcsStatus(directory: String? = null): List<VcsFileStatusDto> =
+        httpClient
+            .get()
+            .get("vcs/status") {
                 applyDirectory(directory)
             }.body()
 
@@ -564,6 +572,14 @@ class SessionsApi private constructor(
             .get("api/vcs") {
                 applyLocationDirectory(directory)
             }.body<ApiLocatedEnvelope<V2VcsInfoDto>>()
+            .data
+
+    suspend fun getVcsStatusV2(directory: String? = null): List<VcsFileStatusDto> =
+        httpClient
+            .get()
+            .get("api/vcs/status") {
+                applyLocationDirectory(directory)
+            }.body<ApiLocatedEnvelope<List<VcsFileStatusDto>>>()
             .data
 
     suspend fun getVcsDiffV2(

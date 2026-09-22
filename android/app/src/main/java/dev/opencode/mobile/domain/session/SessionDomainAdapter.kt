@@ -14,6 +14,7 @@ import dev.opencode.mobile.data.remote.dto.V2FormInfoDto
 import dev.opencode.mobile.data.remote.dto.V2PermissionRequestDto
 import dev.opencode.mobile.data.remote.dto.V2SessionDto
 import dev.opencode.mobile.data.remote.dto.V2VcsInfoDto
+import dev.opencode.mobile.data.remote.dto.VcsFileStatusDto
 import dev.opencode.mobile.data.remote.dto.VcsInfoDto
 import dev.opencode.mobile.domain.message.MessageTokenUsage
 import io.ktor.client.plugins.ResponseException
@@ -160,6 +161,19 @@ class SessionDomainAdapter {
         )
 
     fun toVcsInfo(dto: VcsInfoDto) = VcsInfo(dto.branch, dto.defaultBranch)
+
+    fun toVcsFileStatus(dto: VcsFileStatusDto) =
+        VcsFileStatus(
+            path = dto.file,
+            status =
+                when (dto.status) {
+                    "added" -> FileDiffStatus.Added
+                    "deleted" -> FileDiffStatus.Deleted
+                    else -> FileDiffStatus.Modified
+                },
+            additions = dto.additions,
+            deletions = dto.deletions,
+        )
 
     fun toVcsInfo(dto: V2VcsInfoDto) = VcsInfo(dto.branch?.current, dto.branch?.default)
 

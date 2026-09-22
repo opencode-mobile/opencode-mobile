@@ -56,6 +56,7 @@ import dev.opencode.mobile.theme.letterCharacterForProject
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatCommands
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatComposer
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatInbox
+import dev.opencode.mobile.ui.sessionchat.region.SessionChatRepoStrip
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatReviewChanges
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatTimeline
 import dev.opencode.mobile.ui.sessionchat.region.SessionInfo
@@ -108,6 +109,7 @@ class SessionChatViewModel
                 timeline.ioDispatcher = value
                 composer.ioDispatcher = value
                 reviewChanges.ioDispatcher = value
+                repoStrip.ioDispatcher = value
                 commands.ioDispatcher = value
                 inbox.ioDispatcher = value
             }
@@ -147,6 +149,12 @@ class SessionChatViewModel
                     activeConnectionManager.currentCapabilities().supportsSessionMessageDiff
                 },
                 lastTurnReviewChangesStore = lastTurnReviewChangesStore,
+            )
+        private val repoStrip =
+            SessionChatRepoStrip(
+                sessionRepository = sessionRepository,
+                foregroundEventStream = foregroundEventStream,
+                scope = viewModelScope,
             )
         private val commands =
             SessionChatCommands(
@@ -217,17 +225,19 @@ class SessionChatViewModel
                 }.collect { (timelineState, composerState, infoState, reviewChangesState, commandsState, inboxState) ->
                     timeline.updateServerCommands(composerState.serverCommands)
                     composer.tryApplyInitialSelection(timelineState, timeline.modelSelectionHistoryHints())
+                    val isTurnActive =
+                        infoState.sessionStatusLabel != null ||
+                            effectiveCompacting(
+                                localCompacting = commandsState.isCompacting,
+                                sessionStatusLabel = infoState.sessionStatusLabel,
+                            )
                     reviewChanges.updateCandidate(
                         messages = timelineState.messages,
                         hasResolvedSessionStatus = infoState.hasResolvedSessionStatus,
-                        isTurnActive =
-                            infoState.sessionStatusLabel != null ||
-                                effectiveCompacting(
-                                    localCompacting = commandsState.isCompacting,
-                                    sessionStatusLabel = infoState.sessionStatusLabel,
-                                ),
+                        isTurnActive = isTurnActive,
                         isSending = composerState.isSending,
                     )
+                    if (infoState.hasResolvedSessionStatus) repoStrip.updateTurnActive(isTurnActive)
                     commands.updateVisibility(
                         messages = timelineState.messages,
                         hasSelectedComposerModel = composerState.composer.selectedModel != null,
@@ -242,6 +252,9 @@ class SessionChatViewModel
                         inboxState,
                     )
                 }
+            }
+            viewModelScope.launch {
+                repoStrip.state.collect { publishUiState() }
             }
             viewModelScope.launch {
                 snapshotFlow { SessionChatDisplayPreferences.collapseConsecutiveToolCalls }
@@ -296,6 +309,7 @@ class SessionChatViewModel
             composer.bind(sessionId, worktree)
             bindTitleIfChanged(sessionId, sessionTitle, worktree)
             reviewChanges.bind(sessionId, worktree)
+            repoStrip.bind(worktree, startExpanded = false)
             commands.bind(sessionId, worktree)
             inbox.bind(sessionId, worktree)
             syncCoordinator.markFocused(ProjectionKey.Transcript(worktree, sessionId))
@@ -337,6 +351,7 @@ class SessionChatViewModel
             composer.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, worktree)
             sessionInfo.bindCreating(sessionTitle, worktree)
             reviewChanges.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, worktree)
+            repoStrip.bind(worktree, startExpanded = true)
             commands.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, worktree)
             optimisticCreateJob =
                 viewModelScope.launch {
@@ -988,6 +1003,10 @@ class SessionChatViewModel
             previous: SessionChatMessageItem? = null,
         ): SessionChatMessageItem? = timeline.toMessageItem(message, previous)
 
+        fun toggleRepoStrip() {
+            repoStrip.toggle()
+        }
+
         private fun publishUiState() {
             publishUiState(
                 timeline.state.value,
@@ -1281,6 +1300,15 @@ class SessionChatViewModel
                 projectLabel = projectLabel,
                 projectLetter = projectLetter,
                 projectLetterAccent = projectLetterAccent,
+                repoStrip =
+                    repoStrip.state.value.takeIf { it.isAvailable }?.let { strip ->
+                        SessionChatRepoStripUiState(
+                            branch = strip.branch,
+                            defaultBranch = strip.defaultBranch,
+                            files = strip.files,
+                            isExpanded = strip.isExpanded,
+                        )
+                    },
             )
         }
 

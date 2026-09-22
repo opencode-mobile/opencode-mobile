@@ -71,6 +71,7 @@ import dev.opencode.mobile.ui.componentgallery.components.OverflowMenuGalleryScr
 import dev.opencode.mobile.ui.componentgallery.components.PendingPromptsStripGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.RenderedMarkdownGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ReorderableListGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.RepoStripGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ReviewChangesPillGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ServerAddressInputGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SessionComposerGalleryScreen
@@ -528,6 +529,7 @@ fun MainNavigation() {
                                                             SessionListGalleryScreen()
                                                         ComponentGalleryEntryId.SessionListDock ->
                                                             SessionListDockGalleryScreen()
+                                                        ComponentGalleryEntryId.RepoStrip -> RepoStripGalleryScreen()
                                                         ComponentGalleryEntryId.SessionStatusBar ->
                                                             SessionStatusBarGalleryScreen()
                                                         ComponentGalleryEntryId.SessionComposer ->

@@ -53,6 +53,7 @@ enum class ComponentGalleryEntryId {
     SessionList,
     SessionListDock,
     SessionStatusBar,
+    RepoStrip,
     SessionComposer,
     RenderedMarkdown,
     MessageList,
@@ -269,6 +270,12 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.SessionComposer,
             title = "Session Composer",
             description = "Prompt entry and blocking permission states in one persistent session surface.",
+            category = ComponentGalleryCategory.Session,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.RepoStrip,
+            title = "Repo Strip",
+            description = "Collapsible branch and working-tree summary under the Session Chat header.",
             category = ComponentGalleryCategory.Session,
         ),
         ComponentGalleryEntry(

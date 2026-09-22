@@ -156,6 +156,10 @@ class DefaultSessionRepository
             runCatching { remote.getVcsInfo(directory) }
                 .getOrElse { throw adapter.mapError(it) }
 
+        override suspend fun getVcsStatus(directory: String?): List<VcsFileStatus> =
+            runCatching { remote.getVcsStatus(directory) }
+                .getOrElse { throw adapter.mapError(it) }
+
         override suspend fun getVcsDiff(
             mode: VcsDiffMode,
             directory: String?,

@@ -89,6 +89,9 @@ interface SessionRepository {
         context: Int = 12,
     ): List<FileDiff> = throw SessionError.Http(404, "VCS endpoints are unavailable")
 
+    /** Uncommitted working-copy changes for the project. 404 when the server has no VCS routes. */
+    suspend fun getVcsStatus(directory: String? = null): List<VcsFileStatus> = throw SessionError.Http(404, "VCS endpoints are unavailable")
+
     suspend fun summarizeSession(
         id: String,
         providerId: String,

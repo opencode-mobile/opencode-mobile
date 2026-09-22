@@ -96,6 +96,10 @@ struct ProtocolSelectedSessionRemote: SessionRemote, Sendable {
         try await selected().getVcsInfo(directory: directory)
     }
 
+    func getVcsStatus(directory: String?) async throws -> [VcsFileStatus] {
+        try await selected().getVcsStatus(directory: directory)
+    }
+
     func getVcsDiff(mode: VcsDiffMode, directory: String?, context: Int) async throws -> [FileDiff] {
         try await selected().getVcsDiff(mode: mode, directory: directory, context: context)
     }

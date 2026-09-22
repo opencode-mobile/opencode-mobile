@@ -19,6 +19,7 @@ import dev.opencode.mobile.domain.session.FileDiff
 import dev.opencode.mobile.domain.session.PermissionRequest
 import dev.opencode.mobile.domain.session.QuestionRequest
 import dev.opencode.mobile.domain.session.SessionTodo
+import dev.opencode.mobile.domain.session.VcsFileStatus
 import dev.opencode.mobile.domain.text.TitleCaseIdentifier
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.ui.changes.ChangeSource
@@ -160,6 +161,7 @@ data class SessionChatUiState(
     val questionErrorMessage: String? = null,
     val reviewChangesMessageId: String? = null,
     val reviewChangesSummary: ReviewChangesSummary? = null,
+    val repoStrip: SessionChatRepoStripUiState? = null,
     val supportsSessionMessageDiff: Boolean = true,
     val supportsSessionArchive: Boolean = true,
     val rename: SessionRenameUiState = SessionRenameUiState(),
@@ -446,6 +448,23 @@ fun SessionInfoRegionState.withStatus(
 data class SessionChatReviewChangesRegionState(
     val messageId: String? = null,
     val summary: ReviewChangesSummary? = null,
+)
+
+data class SessionChatRepoStripRegionState(
+    /** False until the server reports a current branch for the worktree. */
+    val isAvailable: Boolean = false,
+    val branch: String = "",
+    val defaultBranch: String? = null,
+    val files: List<VcsFileStatus> = emptyList(),
+    val isExpanded: Boolean = false,
+)
+
+/** Header repo strip: current branch and uncommitted working-tree changes. Null hides the strip. */
+data class SessionChatRepoStripUiState(
+    val branch: String,
+    val defaultBranch: String?,
+    val files: List<VcsFileStatus>,
+    val isExpanded: Boolean,
 )
 
 data class SessionChatInboxRegionState(

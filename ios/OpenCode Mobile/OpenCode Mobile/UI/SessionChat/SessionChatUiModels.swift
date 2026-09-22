@@ -195,6 +195,7 @@ struct SessionChatUiState: Equatable {
     var projectLabel: String? = nil
     var projectLetter: Character? = nil
     var projectLetterAccent: LetterAccent? = nil
+    var repoStrip: SessionChatRepoStripUiState? = nil
     var timeline: SessionChatTimelineState
     var messages: [SessionChatRow]
     var pendingPrompts: [PendingPrompt] = []
@@ -576,6 +577,23 @@ struct SessionChatInboxRegionState: Equatable {
 struct SessionChatReviewChangesRegionState: Equatable {
     var messageID: String?
     var summary: ReviewChangesSummary?
+}
+
+struct SessionChatRepoStripRegionState: Equatable {
+    /// False until the server reports a current branch for the worktree.
+    var isAvailable = false
+    var branch = ""
+    var defaultBranch: String?
+    var files: [VcsFileStatus] = []
+    var isExpanded = false
+}
+
+/// Header repo strip: current branch and uncommitted working-tree changes. Nil hides the strip.
+struct SessionChatRepoStripUiState: Equatable {
+    let branch: String
+    let defaultBranch: String?
+    let files: [VcsFileStatus]
+    let isExpanded: Bool
 }
 
 struct SessionChatCommandsRegionState: Equatable {

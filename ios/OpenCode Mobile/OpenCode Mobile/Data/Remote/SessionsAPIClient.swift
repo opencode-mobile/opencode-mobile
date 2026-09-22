@@ -159,6 +159,10 @@ nonisolated struct SessionsAPIClient: Sendable {
         try await get(path: "vcs", directory: directory)
     }
 
+    func getVcsStatus(directory: String? = nil) async throws -> [VcsFileStatusDTO] {
+        try await get(path: "vcs/status", directory: directory)
+    }
+
     func getVcsDiff(mode: VcsDiffMode, directory: String? = nil, context: Int = 12) async throws -> [FileDiffDTO] {
         var request = try requireConnection().authorizedRequest(path: "vcs/diff", directory: directory)
         if let url = request.url, var components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
@@ -347,6 +351,14 @@ nonisolated struct SessionsAPIClient: Sendable {
     func getVcsInfoV2(directory: String? = nil) async throws -> V2VcsInfoDTO {
         let envelope: APILocatedEnvelope<V2VcsInfoDTO> = try await get(
             path: "api/vcs",
+            locationDirectory: directory
+        )
+        return envelope.data
+    }
+
+    func getVcsStatusV2(directory: String? = nil) async throws -> [VcsFileStatusDTO] {
+        let envelope: APILocatedEnvelope<[VcsFileStatusDTO]> = try await get(
+            path: "api/vcs/status",
             locationDirectory: directory
         )
         return envelope.data

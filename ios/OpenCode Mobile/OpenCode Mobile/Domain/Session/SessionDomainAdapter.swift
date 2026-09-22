@@ -128,6 +128,16 @@ nonisolated struct SessionDomainAdapter: Sendable {
         )
     }
 
+    func vcsFileStatus(from dto: VcsFileStatusDTO) -> VcsFileStatus {
+        let status: FileDiffStatus =
+            switch dto.status {
+            case "added": .added
+            case "deleted": .deleted
+            default: .modified
+            }
+        return VcsFileStatus(path: dto.file, status: status, additions: dto.additions, deletions: dto.deletions)
+    }
+
     func vcsInfo(from dto: VcsInfoDTO) -> VcsInfo {
         VcsInfo(currentBranch: dto.branch, defaultBranch: dto.defaultBranch)
     }
