@@ -355,6 +355,24 @@ extension Container {
         }.singleton
     }
 
+    var mcpAPIClient: Factory<McpAPIClient> {
+        self { McpAPIClient(connectionProvider: self.connectionProvider()) }.singleton
+    }
+
+    var mcpDomainAdapter: Factory<McpDomainAdapter> {
+        self { McpDomainAdapter() }.singleton
+    }
+
+    var mcpRepository: Factory<any McpRepository> {
+        self {
+            DefaultMcpRepository(
+                api: self.mcpAPIClient(),
+                adapter: self.mcpDomainAdapter(),
+                activeConnectionManager: self.activeConnectionManager()
+            )
+        }.singleton
+    }
+
     var eventsAPIClient: Factory<EventsAPIClient> {
         self {
             EventsAPIClient(
@@ -608,7 +626,8 @@ extension Container {
                 ),
                 liveUpdates: self.liveUpdates(),
                 lastTurnReviewChangesStore: self.lastTurnReviewChangesStore(),
-                syncCoordinator: self.syncCoordinator()
+                syncCoordinator: self.syncCoordinator(),
+                mcpRepository: self.mcpRepository()
             )
         }
     }

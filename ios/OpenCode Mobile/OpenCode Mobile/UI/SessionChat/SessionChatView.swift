@@ -419,13 +419,27 @@ struct SessionChatView: View {
                 )
             }
         }
-        .openCodeBottomSheet(isPresented: commandsSheetBinding, title: "Commands") {
-            CommandsActionTileGrid(
-                actions: viewModel.uiState.visibleClientSlashActions,
-                canMutate: !OptimisticSessionCreate.isPlaceholder(viewModel.uiState.sessionID) &&
-                    viewModel.uiState.canMutate,
-                run: { viewModel.runClientSlashAction($0) }
-            )
+        .openCodeBottomSheet(
+            isPresented: commandsSheetBinding,
+            title: viewModel.uiState.mcpPageVisible ? "MCP servers" : "Commands",
+            leadingAction: commandsSheetLeadingAction
+        ) {
+            if viewModel.uiState.mcpPageVisible {
+                SessionChatMcpServersSheetContent(
+                    servers: viewModel.uiState.mcpServers,
+                    loading: viewModel.uiState.mcpLoading,
+                    errorMessage: viewModel.uiState.mcpErrorMessage,
+                    summary: viewModel.uiState.mcpSummary
+                )
+            } else {
+                CommandsActionTileGrid(
+                    actions: viewModel.uiState.visibleClientSlashActions,
+                    canMutate: !OptimisticSessionCreate.isPlaceholder(viewModel.uiState.sessionID) &&
+                        viewModel.uiState.canMutate,
+                    mcpBadge: viewModel.uiState.mcpSummary.actionTileBadge,
+                    run: { viewModel.runClientSlashAction($0) }
+                )
+            }
         }
         .photosPicker(
             isPresented: $showPhotosPicker,
@@ -699,6 +713,15 @@ struct SessionChatView: View {
                     viewModel.cancelRenameSession()
                 }
             }
+        )
+    }
+
+    private var commandsSheetLeadingAction: OpenCodeBottomSheetHeaderAction? {
+        guard viewModel.uiState.mcpPageVisible else { return nil }
+        return OpenCodeBottomSheetHeaderAction(
+            icon: .arrowBack,
+            accessibilityLabel: "Back to commands",
+            action: { viewModel.closeMcpServers() }
         )
     }
 
@@ -1099,6 +1122,7 @@ private extension Optional where Wrapped == SessionChatSnackbar {
 private struct CommandsActionTileGrid: View {
     let actions: [ClientSlashAction]
     let canMutate: Bool
+    let mcpBadge: OpenCodeActionTileBadge?
     let run: (ClientSlashAction) -> Void
 
     var body: some View {
@@ -1114,6 +1138,7 @@ private struct CommandsActionTileGrid: View {
             label: action.tileLabel,
             accessibilityLabel: action.descriptionText,
             enabled: !requiresLive || canMutate,
+            badge: action == .mcp ? mcpBadge : nil,
             action: { run(action) }
         )
     }
@@ -1128,6 +1153,7 @@ private extension ClientSlashAction {
         case .undo: .undo
         case .redo: .redo
         case .compact: .verticalAlignCenter
+        case .mcp: .plug
         }
     }
 }

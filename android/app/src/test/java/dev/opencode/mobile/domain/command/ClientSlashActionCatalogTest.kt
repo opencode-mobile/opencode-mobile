@@ -17,7 +17,7 @@ class ClientSlashActionCatalogTest {
                     hasSelectedComposerModel = false,
                 ),
             )
-        assertEquals(listOf(ClientSlashAction.New, ClientSlashAction.Terminal), visible)
+        assertEquals(listOf(ClientSlashAction.New, ClientSlashAction.Terminal, ClientSlashAction.Mcp), visible)
     }
 
     @Test
@@ -37,6 +37,7 @@ class ClientSlashActionCatalogTest {
                 ClientSlashAction.Terminal,
                 ClientSlashAction.Fork,
                 ClientSlashAction.Undo,
+                ClientSlashAction.Mcp,
             ),
             visible,
         )
@@ -60,6 +61,7 @@ class ClientSlashActionCatalogTest {
                 ClientSlashAction.Fork,
                 ClientSlashAction.Undo,
                 ClientSlashAction.Compact,
+                ClientSlashAction.Mcp,
             ),
             visible,
         )
@@ -77,7 +79,7 @@ class ClientSlashActionCatalogTest {
                 ),
             )
         assertEquals(
-            listOf(ClientSlashAction.New, ClientSlashAction.Terminal, ClientSlashAction.Redo),
+            listOf(ClientSlashAction.New, ClientSlashAction.Terminal, ClientSlashAction.Redo, ClientSlashAction.Mcp),
             visible,
         )
     }
@@ -90,6 +92,7 @@ class ClientSlashActionCatalogTest {
         assertEquals("[redo] Redo undone message", ClientSlashAction.Redo.rowTitle)
         assertEquals("[compact] Compact session context", ClientSlashAction.Compact.rowTitle)
         assertEquals("[terminal] Open project shell", ClientSlashAction.Terminal.rowTitle)
+        assertEquals("[mcp] Show MCP server status", ClientSlashAction.Mcp.rowTitle)
     }
 
     @Test
@@ -100,6 +103,7 @@ class ClientSlashActionCatalogTest {
         assertEquals("Redo", ClientSlashAction.Redo.tileLabel)
         assertEquals("Compact", ClientSlashAction.Compact.tileLabel)
         assertEquals("Terminal", ClientSlashAction.Terminal.tileLabel)
+        assertEquals("MCP servers", ClientSlashAction.Mcp.tileLabel)
     }
 
     @Test

@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -24,6 +25,7 @@ import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
@@ -45,6 +47,26 @@ private val ActionTilePaddingHorizontal = 14.dp
 private val ActionTilePaddingBottom = 16.dp
 private val ActionTileIconSize = 24.dp
 private val ActionTileContentGap = 12.dp
+private val ActionTileBadgeInset = 12.dp
+private val ActionTileBadgeDotSize = 10.dp
+private val ActionTileBadgeCountHeight = 18.dp
+
+/** Semantic tone for the corner badge on an action tile. */
+enum class OpenCodeActionTileBadgeTone {
+    Success,
+    Warning,
+    Error,
+    Neutral,
+}
+
+/**
+ * Corner status badge for [OpenCodeActionTile]: a dot when [count] is null,
+ * otherwise a small count pill. Tone conveys health, never raw colour.
+ */
+data class OpenCodeActionTileBadge(
+    val tone: OpenCodeActionTileBadgeTone,
+    val count: Int? = null,
+)
 
 @Composable
 fun OpenCodeActionTile(
@@ -54,6 +76,7 @@ fun OpenCodeActionTile(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     accessibilityLabel: String = label,
+    badge: OpenCodeActionTileBadge? = null,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -81,7 +104,7 @@ fun OpenCodeActionTile(
             MaterialTheme.colorScheme.onSurfaceVariant
         }
 
-    Column(
+    Box(
         modifier =
             modifier
                 .fillMaxWidth()
@@ -94,28 +117,82 @@ fun OpenCodeActionTile(
                     indication = ripple(bounded = true),
                     enabled = enabled,
                     onClick = onClick,
-                ).padding(
-                    start = ActionTilePaddingHorizontal,
-                    top = ActionTilePaddingTop,
-                    end = ActionTilePaddingHorizontal,
-                    bottom = ActionTilePaddingBottom,
                 ).semantics { contentDescription = accessibilityLabel }
                 .then(if (enabled) Modifier else Modifier.alpha(0.7f)),
-        verticalArrangement = Arrangement.spacedBy(ActionTileContentGap),
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            modifier = Modifier.size(ActionTileIconSize),
-            tint = iconColor,
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        start = ActionTilePaddingHorizontal,
+                        top = ActionTilePaddingTop,
+                        end = ActionTilePaddingHorizontal,
+                        bottom = ActionTilePaddingBottom,
+                    ),
+            verticalArrangement = Arrangement.spacedBy(ActionTileContentGap),
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(ActionTileIconSize),
+                tint = iconColor,
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyLarge,
+                color = labelColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        if (badge != null) {
+            ActionTileBadge(
+                badge = badge,
+                modifier = Modifier.align(Alignment.TopEnd).padding(ActionTileBadgeInset),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ActionTileBadge(
+    badge: OpenCodeActionTileBadge,
+    modifier: Modifier = Modifier,
+) {
+    val color =
+        when (badge.tone) {
+            OpenCodeActionTileBadgeTone.Success -> openCodeColor("success")
+            OpenCodeActionTileBadgeTone.Warning -> openCodeColor("warning")
+            OpenCodeActionTileBadgeTone.Error -> openCodeColor("error")
+            OpenCodeActionTileBadgeTone.Neutral -> openCodeColor("text-weak")
+        }
+    val count = badge.count
+    if (count == null) {
+        Box(
+            modifier =
+                modifier
+                    .size(ActionTileBadgeDotSize)
+                    .clip(CircleShape)
+                    .background(color),
         )
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyLarge,
-            color = labelColor,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+    } else {
+        Box(
+            modifier =
+                modifier
+                    .defaultMinSize(minWidth = ActionTileBadgeCountHeight, minHeight = ActionTileBadgeCountHeight)
+                    .clip(RoundedCornerShape(ActionTileBadgeCountHeight / 2))
+                    .background(color)
+                    .padding(horizontal = 5.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = if (count > 99) "99+" else count.toString(),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.surface,
+                maxLines = 1,
+            )
+        }
     }
 }
 
@@ -182,6 +259,29 @@ private fun OpenCodeActionTileDarkPreview() {
             onClick = {},
             modifier = Modifier.fillMaxWidth(),
         )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun OpenCodeActionTileBadgePreview() {
+    OpenCodeTheme(darkTheme = false) {
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            OpenCodeActionTile(
+                icon = OpenCodeIcons.Plug,
+                label = "MCP servers",
+                onClick = {},
+                badge = OpenCodeActionTileBadge(OpenCodeActionTileBadgeTone.Success),
+                modifier = Modifier.weight(1f),
+            )
+            OpenCodeActionTile(
+                icon = OpenCodeIcons.Plug,
+                label = "MCP servers",
+                onClick = {},
+                badge = OpenCodeActionTileBadge(OpenCodeActionTileBadgeTone.Error, count = 2),
+                modifier = Modifier.weight(1f),
+            )
+        }
     }
 }
 

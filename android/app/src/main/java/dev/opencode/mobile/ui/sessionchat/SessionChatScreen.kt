@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.sessionchat
 
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -49,11 +50,13 @@ import dev.opencode.mobile.domain.session.SessionTodoList
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
 import dev.opencode.mobile.ui.components.OpenCodeActionTile
+import dev.opencode.mobile.ui.components.OpenCodeActionTileBadge
 import dev.opencode.mobile.ui.components.OpenCodeActionTileGrid
 import dev.opencode.mobile.ui.components.OpenCodeBottomFade
 import dev.opencode.mobile.ui.components.OpenCodeBottomFadeOverhang
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
+import dev.opencode.mobile.ui.components.OpenCodeBottomSheetHeaderAction
 import dev.opencode.mobile.ui.components.OpenCodeComposerSuggestionItem
 import dev.opencode.mobile.ui.components.OpenCodeComposerSuggestionOverlay
 import dev.opencode.mobile.ui.components.OpenCodeDialog
@@ -80,6 +83,7 @@ import dev.opencode.mobile.ui.components.OpenCodeTopBarSubtitleLeading
 import dev.opencode.mobile.ui.components.copySessionIdToClipboard
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.sessionchat.view.ComposerPickerKind
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatMcpServersSheetContent
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatMessageActionsSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatMessageActionsTarget
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatPendingPromptsSheet
@@ -89,6 +93,7 @@ import dev.opencode.mobile.ui.sessionchat.view.SessionChatTimelineViewProps
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatTodosSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolDetailSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolDetailTarget
+import dev.opencode.mobile.ui.sessionchat.view.toActionTileBadge
 import dev.opencode.mobile.ui.sessionchat.view.toRoute
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -945,14 +950,35 @@ fun SessionChatScreen(
 
         OpenCodeBottomSheet(
             visible = uiState.commandsSheetVisible,
-            title = "Commands",
+            title = if (uiState.mcpPageVisible) "MCP servers" else "Commands",
             onDismissRequest = viewModel::dismissCommands,
+            headerLeadingAction =
+                if (uiState.mcpPageVisible) {
+                    OpenCodeBottomSheetHeaderAction(
+                        imageVector = OpenCodeIcons.ArrowBack,
+                        contentDescription = "Back to commands",
+                        onClick = viewModel::closeMcpServers,
+                    )
+                } else {
+                    null
+                },
         ) {
-            CommandsActionTileGrid(
-                actions = uiState.visibleClientSlashActions,
-                canMutate = sessionCreated && uiState.canMutate,
-                onAction = viewModel::runClientSlashAction,
-            )
+            if (uiState.mcpPageVisible) {
+                BackHandler(onBack = viewModel::closeMcpServers)
+                SessionChatMcpServersSheetContent(
+                    servers = uiState.mcpServers,
+                    loading = uiState.mcpLoading,
+                    errorMessage = uiState.mcpErrorMessage,
+                    summary = uiState.mcpSummary,
+                )
+            } else {
+                CommandsActionTileGrid(
+                    actions = uiState.visibleClientSlashActions,
+                    canMutate = sessionCreated && uiState.canMutate,
+                    mcpBadge = uiState.mcpSummary.toActionTileBadge(),
+                    onAction = viewModel::runClientSlashAction,
+                )
+            }
         }
 
         OpenCodeDialog(
@@ -1058,6 +1084,7 @@ private fun SessionChatSnackbar.toOpenCodeSnackbarMessage(): OpenCodeSnackbarMes
 private fun CommandsActionTileGrid(
     actions: List<ClientSlashAction>,
     canMutate: Boolean,
+    mcpBadge: OpenCodeActionTileBadge?,
     onAction: (ClientSlashAction) -> Unit,
 ) {
     OpenCodeActionTileGrid(
@@ -1075,6 +1102,7 @@ private fun CommandsActionTileGrid(
             onClick = { onAction(action) },
             enabled = !requiresLive || canMutate,
             accessibilityLabel = action.description,
+            badge = if (action == ClientSlashAction.Mcp) mcpBadge else null,
             modifier = Modifier.fillMaxWidth(),
         )
     }
@@ -1088,6 +1116,7 @@ private fun ClientSlashAction.tileIcon(): ImageVector =
         ClientSlashAction.Undo -> OpenCodeIcons.Undo
         ClientSlashAction.Redo -> OpenCodeIcons.Redo
         ClientSlashAction.Compact -> OpenCodeIcons.VerticalAlignCenter
+        ClientSlashAction.Mcp -> OpenCodeIcons.Plug
     }
 
 internal fun sessionChatViewModelKey(

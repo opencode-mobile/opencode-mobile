@@ -201,6 +201,8 @@ object ProductAnalytics {
         const val COMMANDS_REDO = "commands_redo"
         const val COMMANDS_COMPACT = "commands_compact"
         const val COMMANDS_TERMINAL = "commands_terminal"
+        const val COMMANDS_MCP = "commands_mcp"
+        const val MCP_SERVERS_BACK = "mcp_servers_back"
         const val ATTACH_SOURCE_DISMISS = "attach_source_dismiss"
         const val ATTACH_PICK_PHOTOS = "attach_pick_photos"
         const val ATTACH_PICK_FILES = "attach_pick_files"
