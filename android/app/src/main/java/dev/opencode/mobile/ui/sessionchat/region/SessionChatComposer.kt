@@ -696,6 +696,7 @@ class SessionChatComposer(
         isSessionBusy: Boolean,
         supportsFollowUp: Boolean,
         holdUntil: suspend () -> Boolean = { true },
+        serverAlreadyAccepted: () -> Boolean = { false },
     ) {
         val composer = _state.value.composer
         val submittedText = composer.text
@@ -859,6 +860,16 @@ class SessionChatComposer(
             } catch (throwable: CancellationException) {
                 throw throwable
             } catch (throwable: Throwable) {
+                if (isTransportFailure(throwable) && serverAlreadyAccepted()) {
+                    logI("sendPrompt transport error ignored; server already accepted the send")
+                    withContext(NonCancellable) {
+                        persistCurrentSelection(updatePreference = false)
+                        _state.update { it.copy(sendProgressPercent = null) }
+                        onSendAccepted()
+                        discardStoredAttachments(attachments)
+                    }
+                    return@launch
+                }
                 logSendFailure(throwable)
                 restoreFailedSubmission(
                     textRevision = submittedDraftRevision,
@@ -1337,6 +1348,9 @@ class SessionChatComposer(
             else -> "This model does not support some of the selected attachments."
         }
     }
+
+    private fun isTransportFailure(throwable: Throwable): Boolean =
+        throwable is MessageError.Transport || throwable is CommandError.Transport
 
     private fun errorMessage(throwable: Throwable): String =
         when (throwable) {

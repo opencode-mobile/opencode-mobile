@@ -32,6 +32,7 @@ import dev.opencode.mobile.domain.message.DisplayMessage
 import dev.opencode.mobile.domain.message.DisplayMessageListUpdate
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessageContentPreparer
+import dev.opencode.mobile.domain.message.MessageError
 import dev.opencode.mobile.domain.message.MessageListUpdate
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRepository
@@ -2771,6 +2772,81 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun sendPrompt_transportAfterBusy_keepsAcceptedPrompt() =
+        runTest(testDispatcher) {
+            val sendGate = CompletableDeferred<Unit>()
+            val repository =
+                FakeMessageRepository(
+                    holdSendUntil = sendGate,
+                    failSendWithTransport = true,
+                )
+            val viewModel = createViewModel(repository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.updateComposerText("Accepted prompt")
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+            assertEquals("", viewModel.uiState.value.composer.text)
+            assertTrue(viewModel.uiState.value.isSending)
+
+            repository.eventStream.emit(
+                OpencodeEvent(
+                    type = "session.status",
+                    sessionId = "ses-1",
+                    rawProperties = buildJsonObject { put("type", "busy") },
+                ),
+            )
+            advanceUntilIdle()
+            assertNotNull(viewModel.uiState.value.sessionStatusLabel)
+
+            sendGate.complete(Unit)
+            advanceUntilIdle()
+
+            assertTrue(repository.sendPromptAsyncCalled)
+            assertEquals("", viewModel.uiState.value.composer.text)
+            assertEquals(false, viewModel.uiState.value.isSending)
+            assertNull(viewModel.uiState.value.snackbar)
+            assertNull(viewModel.uiState.value.errorMessage)
+            assertTrue(
+                viewModel.uiState.value.messages
+                    .any { it.text == "Accepted prompt" && it.isPending },
+            )
+        }
+
+    @Test
+    fun sendPrompt_transportWhileIdle_restoresComposer() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository(failSendWithTransport = true)
+            val viewModel = createViewModel(repository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.updateComposerText("Lost prompt")
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+
+            assertTrue(repository.sendPromptAsyncCalled)
+            assertEquals(false, viewModel.uiState.value.isSending)
+            assertEquals("Lost prompt", viewModel.uiState.value.composer.text)
+            assertFalse(
+                viewModel.uiState.value.messages
+                    .any { it.text == "Lost prompt" },
+            )
+            assertEquals(
+                "Unable to reach the server",
+                viewModel.uiState.value.snackbar
+                    ?.message,
+            )
+            assertEquals(
+                SessionChatSnackbarTone.Error,
+                viewModel.uiState.value.snackbar
+                    ?.tone,
+            )
+            assertEquals(null, viewModel.uiState.value.errorMessage)
+        }
+
+    @Test
     fun messageUpdatedEvent_reloadsMessages() =
         runTest(testDispatcher) {
             val repository = FakeMessageRepository()
@@ -4612,6 +4688,7 @@ private class FakeMessageRepository(
         ),
     var shouldFailLoad: Boolean = false,
     private val shouldFailSend: Boolean = false,
+    private val failSendWithTransport: Boolean = false,
     var failListMessagesAfterSend: Boolean = false,
     private val echoSentPrompt: Boolean = false,
     private val holdSendUntil: CompletableDeferred<Unit>? = null,
@@ -4735,6 +4812,7 @@ private class FakeMessageRepository(
                 ?.invoke(1, 4)
         }
         holdSendUntil?.await()
+        if (failSendWithTransport) throw MessageError.Transport(RuntimeException("offline"))
         if (shouldFailSend) error("send failed")
         if (echoSentPrompt && options.text.isNotEmpty()) {
             messages = messages +

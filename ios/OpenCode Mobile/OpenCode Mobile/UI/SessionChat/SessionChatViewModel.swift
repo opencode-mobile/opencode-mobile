@@ -43,6 +43,7 @@ final class SessionChatViewModel {
     private let syncCoordinator: (any SyncCoordinator)?
     private let clock: any SyncClock
     private var pendingSend: PendingSend?
+    private var armedSendAcceptance: ArmedSendAcceptance?
     private var sendInFlight = false
     private var projectLabel: String?
     private var projectLetter: Character?
@@ -623,11 +624,13 @@ final class SessionChatViewModel {
                 if let self, !self.isConnectionLive {
                     self.pendingSend = PendingSend(queuedAtMs: self.clock.nowMs())
                 }
+                self?.armSendAcceptance()
                 self?.timeline.beginOptimisticSend(rows)
             },
             onSendAccepted: { [weak self] in
                 guard let self else { return }
                 DiagnosticLog.info(.chat, "sendPrompt accepted session=\(self.sessionID)")
+                self.armedSendAcceptance = nil
                 self.pendingSend = nil
                 self.sessionInfo.setOptimisticActivity(.running)
                 self.commands.consumePendingRevert()
@@ -646,15 +649,34 @@ final class SessionChatViewModel {
             },
             onSendFailed: { [weak self] optimisticID, error in
                 DiagnosticLog.warning(.chat, "sendPrompt failed error=\(error)")
+                self?.armedSendAcceptance = nil
                 self?.pendingSend = nil
                 self?.composer.setSendError(error)
                 self?.timeline.failOptimisticSend(optimisticID: optimisticID, error: error)
             },
             isSessionBusy: sessionInfo.state.sessionStatusLabel != nil,
             supportsFollowUp: activeConnectionManager.capabilities.supportsFollowUpDelivery,
-            waitToSend: waitToSend
+            waitToSend: waitToSend,
+            serverAlreadyAccepted: { [weak self] in
+                self?.serverAlreadyAccepted() ?? false
+            }
         )
         DiagnosticLog.info(.chat, "sendPrompt end session=\(sessionID)")
+    }
+
+    private func armSendAcceptance() {
+        armedSendAcceptance = ArmedSendAcceptance(
+            sessionID: sessionID,
+            wasBusy: sessionInfo.state.sessionStatusLabel != nil,
+            serverMessages: timeline.loadedMessages()
+        )
+    }
+
+    private func serverAlreadyAccepted() -> Bool {
+        guard let armed = armedSendAcceptance, armed.sessionID == sessionID else { return false }
+        let becameBusy = !armed.wasBusy && sessionInfo.state.sessionStatusLabel != nil
+        let serverUpdated = timeline.loadedMessages() != armed.serverMessages
+        return becameBusy || serverUpdated
     }
 
     func abortSession() async {
@@ -1231,6 +1253,12 @@ final class SessionChatViewModel {
     }
 
     private static let pendingPromptFailure = "Couldn't update pending prompt"
+
+    private struct ArmedSendAcceptance {
+        let sessionID: String
+        let wasBusy: Bool
+        let serverMessages: [Message]
+    }
 }
 
 private final class EmptyPermissionLiveStore: PermissionLiveStore {
