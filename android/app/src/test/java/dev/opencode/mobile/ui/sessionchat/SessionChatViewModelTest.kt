@@ -3263,7 +3263,7 @@ class SessionChatViewModelTest {
             emptyMessages.bind("ses-1", "Title", "/repo")
             advanceUntilIdle()
             assertEquals(
-                listOf(ClientSlashAction.New, ClientSlashAction.Terminal),
+                listOf(ClientSlashAction.New, ClientSlashAction.Terminal, ClientSlashAction.Mcp),
                 emptyMessages.uiState.value.visibleClientSlashActions,
             )
 

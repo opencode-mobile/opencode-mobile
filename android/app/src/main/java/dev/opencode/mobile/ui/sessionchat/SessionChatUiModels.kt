@@ -7,6 +7,8 @@ import dev.opencode.mobile.domain.command.ClientSlashAction
 import dev.opencode.mobile.domain.command.ServerCommand
 import dev.opencode.mobile.domain.command.ServerCommandSource
 import dev.opencode.mobile.domain.event.LiveUpdatesLabel
+import dev.opencode.mobile.domain.mcp.McpServer
+import dev.opencode.mobile.domain.mcp.McpServerSummary
 import dev.opencode.mobile.domain.message.Attachment
 import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.message.MessageRole
@@ -167,7 +169,12 @@ data class SessionChatUiState(
     val atSuggestions: List<SessionChatAtSuggestion> = emptyList(),
     val commandsSheetVisible: Boolean = false,
     val visibleClientSlashActions: List<ClientSlashAction> =
-        listOf(ClientSlashAction.New, ClientSlashAction.Terminal),
+        listOf(ClientSlashAction.New, ClientSlashAction.Terminal, ClientSlashAction.Mcp),
+    val mcpPageVisible: Boolean = false,
+    val mcpServers: List<McpServer> = emptyList(),
+    val mcpLoading: Boolean = false,
+    val mcpErrorMessage: String? = null,
+    val mcpSummary: McpServerSummary = McpServerSummary.Empty,
     val forkDialogVisible: Boolean = false,
     val forkDraftTitle: String = "",
     val forkSubmitting: Boolean = false,
@@ -463,7 +470,13 @@ data class SessionChatInboxRegionState(
 
 data class SessionChatCommandsRegionState(
     val commandsSheetVisible: Boolean = false,
-    val visibleActions: List<ClientSlashAction> = listOf(ClientSlashAction.New, ClientSlashAction.Terminal),
+    val visibleActions: List<ClientSlashAction> =
+        listOf(ClientSlashAction.New, ClientSlashAction.Terminal, ClientSlashAction.Mcp),
+    val mcpPageVisible: Boolean = false,
+    val mcpServers: List<McpServer> = emptyList(),
+    val mcpLoading: Boolean = false,
+    val mcpErrorMessage: String? = null,
+    val mcpSummary: McpServerSummary = McpServerSummary.Empty,
     val hasPendingRevert: Boolean = false,
     val forkDialogVisible: Boolean = false,
     val forkDraftTitle: String = "",

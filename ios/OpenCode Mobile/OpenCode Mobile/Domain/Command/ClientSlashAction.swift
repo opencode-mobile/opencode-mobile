@@ -7,6 +7,7 @@ enum ClientSlashAction: String, Sendable, Equatable, CaseIterable {
     case redo
     case compact
     case terminal
+    case mcp
 
     var command: String { rawValue }
 
@@ -18,13 +19,17 @@ enum ClientSlashAction: String, Sendable, Equatable, CaseIterable {
         case .redo: "Redo undone message"
         case .compact: "Compact session context"
         case .terminal: "Open project shell"
+        case .mcp: "Show MCP server status"
         }
     }
 
     var rowTitle: String { "[\(command)] \(descriptionText)" }
 
     var tileLabel: String {
-        command.prefix(1).uppercased() + command.dropFirst()
+        switch self {
+        case .mcp: "MCP servers"
+        default: command.prefix(1).uppercased() + command.dropFirst()
+        }
     }
 }
 
@@ -58,6 +63,7 @@ enum ClientSlashActionCatalog {
         if input.visibleUserMessageCount > 0, input.hasSelectedComposerModel {
             actions.append(.compact)
         }
+        actions.append(.mcp)
         return actions
     }
 

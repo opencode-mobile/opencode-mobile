@@ -10,13 +10,18 @@ enum class ClientSlashAction(
     Redo("redo", "Redo undone message"),
     Compact("compact", "Compact session context"),
     Terminal("terminal", "Open project shell"),
+    Mcp("mcp", "Show MCP server status"),
     ;
 
     val rowTitle: String
         get() = "[$command] $description"
 
     val tileLabel: String
-        get() = command.replaceFirstChar { it.uppercase() }
+        get() =
+            when (this) {
+                Mcp -> "MCP servers"
+                else -> command.replaceFirstChar { it.uppercase() }
+            }
 }
 
 data class ClientSlashMessageRef(
@@ -51,6 +56,7 @@ object ClientSlashActionCatalog {
             if (input.visibleUserMessageCount > 0 && input.hasSelectedComposerModel) {
                 add(ClientSlashAction.Compact)
             }
+            add(ClientSlashAction.Mcp)
         }
 
     fun visibilityInput(

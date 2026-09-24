@@ -40,6 +40,7 @@ enum OpenCodeIcon: String, CaseIterable, Hashable {
     case radioButtonUnchecked = "lucide_radio_button_unchecked"
     case widgets = "lucide_widgets"
     case slash = "lucide_slash"
+    case plug = "lucide_plug"
 
     var accessibilityIdentifier: String { rawValue }
 }

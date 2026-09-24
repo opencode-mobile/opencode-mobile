@@ -5,6 +5,8 @@ import dev.opencode.mobile.domain.command.ClientSlashMessageRef
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
+import dev.opencode.mobile.domain.mcp.McpRepository
+import dev.opencode.mobile.domain.mcp.McpServerCatalog
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.model.NewSessionModelSelectionResolver
@@ -17,9 +19,11 @@ import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlock
 import dev.opencode.mobile.ui.sessionchat.SessionCompactChrome
 import dev.opencode.mobile.ui.sessionchat.SessionCompactionPresence
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -34,9 +38,12 @@ class SessionChatCommands(
     private val sessionRepository: SessionRepository,
     private val newSessionModelSelectionResolver: NewSessionModelSelectionResolver,
     private val connectionSessionCoordinator: ConnectionSessionCoordinator,
+    private val mcpRepository: McpRepository,
     private val scope: CoroutineScope,
 ) {
     var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+
+    private var mcpJob: Job? = null
 
     private val _state = MutableStateFlow(SessionChatCommandsRegionState())
     val state: StateFlow<SessionChatCommandsRegionState> = _state.asStateFlow()
@@ -98,11 +105,51 @@ class SessionChatCommands(
     }
 
     fun openCommands() {
-        _state.update { it.copy(commandsSheetVisible = true) }
+        _state.update { it.copy(commandsSheetVisible = true, mcpPageVisible = false) }
+        refreshMcpServers()
     }
 
     fun dismissCommands() {
-        _state.update { it.copy(commandsSheetVisible = false) }
+        _state.update { it.copy(commandsSheetVisible = false, mcpPageVisible = false) }
+    }
+
+    /** Second page of the Commands sheet: read-only MCP server status. */
+    fun openMcpServers() {
+        _state.update { it.copy(mcpPageVisible = true) }
+        refreshMcpServers()
+    }
+
+    fun closeMcpServers() {
+        _state.update { it.copy(mcpPageVisible = false) }
+    }
+
+    fun refreshMcpServers() {
+        val worktree = boundWorktree
+        mcpJob?.cancel()
+        _state.update { it.copy(mcpLoading = true) }
+        mcpJob =
+            scope.launch(ioDispatcher) {
+                runCatching { mcpRepository.listServers(worktree) }
+                    .onSuccess { servers ->
+                        _state.update {
+                            it.copy(
+                                mcpServers = servers,
+                                mcpSummary = McpServerCatalog.summary(servers),
+                                mcpLoading = false,
+                                mcpErrorMessage = null,
+                            )
+                        }
+                    }.onFailure { error ->
+                        if (error is CancellationException) throw error
+                        logW("mcp servers load failed: ${error.message}")
+                        _state.update {
+                            it.copy(
+                                mcpLoading = false,
+                                mcpErrorMessage = "Couldn't load MCP servers. Check the connection and try again.",
+                            )
+                        }
+                    }
+            }
     }
 
     fun clearActionFeedback() {

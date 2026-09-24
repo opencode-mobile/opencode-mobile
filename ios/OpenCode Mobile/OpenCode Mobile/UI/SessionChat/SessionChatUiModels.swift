@@ -254,6 +254,11 @@ struct SessionChatUiState: Equatable {
     var atSuggestions: [SessionChatAtSuggestion] = []
     var commandsSheetVisible = false
     var visibleClientSlashActions: [ClientSlashAction] = []
+    var mcpPageVisible = false
+    var mcpServers: [McpServer] = []
+    var mcpLoading = false
+    var mcpErrorMessage: String?
+    var mcpSummary: McpServerSummary = .empty
     var forkDialogVisible = false
     var forkDraftTitle = ""
     var forkSubmitting = false
@@ -576,6 +581,11 @@ struct SessionChatReviewChangesRegionState: Equatable {
 struct SessionChatCommandsRegionState: Equatable {
     var commandsSheetVisible = false
     var visibleActions: [ClientSlashAction] = []
+    var mcpPageVisible = false
+    var mcpServers: [McpServer] = []
+    var mcpLoading = false
+    var mcpErrorMessage: String?
+    var mcpSummary: McpServerSummary = .empty
     var forkDialogVisible = false
     var forkDraftTitle = ""
     var forkSubmitting = false

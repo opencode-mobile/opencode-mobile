@@ -73,7 +73,8 @@ final class SessionChatViewModel {
         liveUpdates: any LiveUpdates = FixedLiveUpdates(),
         lastTurnReviewChangesStore: LastTurnReviewChangesStore? = nil,
         syncCoordinator: (any SyncCoordinator)? = nil,
-        clock: any SyncClock = SystemSyncClock()
+        clock: any SyncClock = SystemSyncClock(),
+        mcpRepository: (any McpRepository)? = nil
     ) {
         self.sessionID = sessionID
         self.sessionTitle = sessionTitle
@@ -127,7 +128,8 @@ final class SessionChatViewModel {
             worktree: worktree,
             sessionRepository: sessionRepository,
             newSessionModelSelectionResolver: newSessionModelSelectionResolver,
-            activeConnectionManager: activeConnectionManager
+            activeConnectionManager: activeConnectionManager,
+            mcpRepository: mcpRepository ?? EmptyMcpRepository()
         )
         let boundSessionInfo = self.sessionInfo
         let boundTimeline = self.timeline
@@ -318,8 +320,16 @@ final class SessionChatViewModel {
         commands.dismissCommands()
     }
 
+    func closeMcpServers() {
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.sessionCommands,
+            actionId: ProductAnalytics.Action.mcpServersBack
+        )
+        commands.closeMcpServers()
+    }
+
     func runClientSlashAction(_ action: ClientSlashAction) {
-        guard hasCreatedSession else { return }
+        guard action == .mcp || hasCreatedSession else { return }
         logCommandsAction(action)
         switch action {
         case .new:
@@ -346,6 +356,8 @@ final class SessionChatViewModel {
             )
         case .terminal:
             commands.runTerminal(projectTitle: uiState.projectLabel ?? uiState.sessionTitle)
+        case .mcp:
+            commands.openMcpServers()
         case .compact:
             guard let model = composer.state.composer.selectedModel else { return }
             let beforeFraction = uiState.contextUsageFraction.map { Float($0) }
@@ -384,6 +396,7 @@ final class SessionChatViewModel {
             case .redo: ProductAnalytics.Action.commandsRedo
             case .compact: ProductAnalytics.Action.commandsCompact
             case .terminal: ProductAnalytics.Action.commandsTerminal
+            case .mcp: ProductAnalytics.Action.commandsMcp
             }
         ProductAnalytics.logUserAction(
             screenId: ProductAnalytics.Screen.sessionCommands,
@@ -1148,6 +1161,11 @@ final class SessionChatViewModel {
             atSuggestions: composerState.atSuggestions,
             commandsSheetVisible: commandsState.commandsSheetVisible,
             visibleClientSlashActions: commandsState.visibleActions,
+            mcpPageVisible: commandsState.mcpPageVisible,
+            mcpServers: commandsState.mcpServers,
+            mcpLoading: commandsState.mcpLoading,
+            mcpErrorMessage: commandsState.mcpErrorMessage,
+            mcpSummary: commandsState.mcpSummary,
             forkDialogVisible: commandsState.forkDialogVisible,
             forkDraftTitle: commandsState.forkDraftTitle,
             forkSubmitting: commandsState.forkSubmitting,

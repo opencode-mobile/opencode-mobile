@@ -34,6 +34,37 @@ struct ActionTileGalleryView: View {
                     action: {}
                 )
             }
+
+            Text("Badge")
+                .font(OpenCodeTypography.heading)
+                .foregroundStyle(OpenCodeColors.textStrong)
+            Text("Corner badge: tone-only dot, or a count pill when something needs attention.")
+                .font(OpenCodeTypography.bodySecondary)
+                .foregroundStyle(OpenCodeColors.textBase)
+
+            HStack(spacing: 10) {
+                OpenCodeActionTile(
+                    icon: .plug,
+                    label: "MCP servers",
+                    enabled: enabled,
+                    badge: OpenCodeActionTileBadge(tone: .success),
+                    action: {}
+                )
+                OpenCodeActionTile(
+                    icon: .plug,
+                    label: "MCP servers",
+                    enabled: enabled,
+                    badge: OpenCodeActionTileBadge(tone: .warning),
+                    action: {}
+                )
+                OpenCodeActionTile(
+                    icon: .plug,
+                    label: "MCP servers",
+                    enabled: enabled,
+                    badge: OpenCodeActionTileBadge(tone: .error, count: 2),
+                    action: {}
+                )
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

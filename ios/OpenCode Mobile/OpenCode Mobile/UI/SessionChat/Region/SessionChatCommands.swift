@@ -13,6 +13,8 @@ final class SessionChatCommands {
     private let sessionRepository: any SessionRepository
     private let newSessionModelSelectionResolver: NewSessionModelSelectionResolver
     private let activeConnectionManager: ActiveConnectionManager
+    private let mcpRepository: any McpRepository
+    private var mcpTask: Task<Void, Never>?
 
     private var currentRevertMessageID: String?
     private var forkedTarget: ChildSessionNavigationTarget?
@@ -29,13 +31,15 @@ final class SessionChatCommands {
         worktree: String,
         sessionRepository: any SessionRepository,
         newSessionModelSelectionResolver: NewSessionModelSelectionResolver,
-        activeConnectionManager: ActiveConnectionManager
+        activeConnectionManager: ActiveConnectionManager,
+        mcpRepository: any McpRepository = EmptyMcpRepository()
     ) {
         self.sessionID = sessionID
         self.worktree = worktree
         self.sessionRepository = sessionRepository
         self.newSessionModelSelectionResolver = newSessionModelSelectionResolver
         self.activeConnectionManager = activeConnectionManager
+        self.mcpRepository = mcpRepository
     }
 
     func rebind(sessionID: String) {
@@ -93,12 +97,50 @@ final class SessionChatCommands {
 
     func openCommands() {
         state.commandsSheetVisible = true
+        state.mcpPageVisible = false
         notifyChange()
+        refreshMcpServers()
     }
 
     func dismissCommands() {
         state.commandsSheetVisible = false
+        state.mcpPageVisible = false
         notifyChange()
+    }
+
+    /// Second page of the Commands sheet: read-only MCP server status.
+    func openMcpServers() {
+        state.mcpPageVisible = true
+        notifyChange()
+        refreshMcpServers()
+    }
+
+    func closeMcpServers() {
+        state.mcpPageVisible = false
+        notifyChange()
+    }
+
+    func refreshMcpServers() {
+        let worktree = worktree
+        mcpTask?.cancel()
+        state.mcpLoading = true
+        notifyChange()
+        mcpTask = Task {
+            do {
+                let servers = try await mcpRepository.listServers(directory: worktree)
+                guard !Task.isCancelled else { return }
+                state.mcpServers = servers
+                state.mcpSummary = McpServerCatalog.summary(servers)
+                state.mcpLoading = false
+                state.mcpErrorMessage = nil
+            } catch {
+                guard !Task.isCancelled else { return }
+                OpenCodeLog.sessionChat.warning("mcp servers load failed error=\(error.localizedDescription)")
+                state.mcpLoading = false
+                state.mcpErrorMessage = "Couldn't load MCP servers. Check the connection and try again."
+            }
+            notifyChange()
+        }
     }
 
     func clearActionFeedback() {

@@ -24,6 +24,8 @@ import dev.opencode.mobile.domain.live.QuestionLiveStore
 import dev.opencode.mobile.domain.live.SessionReadyStore
 import dev.opencode.mobile.domain.live.SessionStatusLiveStore
 import dev.opencode.mobile.domain.live.SessionTodoLiveStore
+import dev.opencode.mobile.domain.mcp.McpRepository
+import dev.opencode.mobile.domain.mcp.McpServer
 import dev.opencode.mobile.domain.message.Attachment
 import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.message.Message
@@ -98,6 +100,7 @@ class SessionChatViewModel
         lastTurnReviewChangesStore: LastTurnReviewChangesStore = LastTurnReviewChangesStore(),
         liveUpdates: LiveUpdates = FixedLiveUpdates(),
         private val syncCoordinator: SyncCoordinator = NoOpSyncCoordinator,
+        mcpRepository: McpRepository = EmptyMcpRepository,
     ) : ViewModel() {
         internal var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
             set(value) {
@@ -150,6 +153,7 @@ class SessionChatViewModel
                 sessionRepository = sessionRepository,
                 newSessionModelSelectionResolver = newSessionModelSelectionResolver,
                 connectionSessionCoordinator = connectionSessionCoordinator,
+                mcpRepository = mcpRepository,
                 scope = viewModelScope,
             )
         private val inbox =
@@ -534,8 +538,16 @@ class SessionChatViewModel
             commands.dismissCommands()
         }
 
+        fun closeMcpServers() {
+            logAction(
+                actionId = ProductAnalytics.Action.MCP_SERVERS_BACK,
+                screenId = ProductAnalytics.Screen.SESSION_COMMANDS,
+            )
+            commands.closeMcpServers()
+        }
+
         fun runClientSlashAction(action: ClientSlashAction) {
-            if (!hasCreatedSession()) return
+            if (action != ClientSlashAction.Mcp && !hasCreatedSession()) return
             logAction(
                 actionId = action.productActionId,
                 screenId = ProductAnalytics.Screen.SESSION_COMMANDS,
@@ -565,6 +577,7 @@ class SessionChatViewModel
                     commands.runTerminal(
                         projectTitle = _uiState.value.projectLabel ?: sessionInfo.state.value.sessionTitle,
                     )
+                ClientSlashAction.Mcp -> commands.openMcpServers()
                 ClientSlashAction.Compact -> {
                     val model = composer.state.value.composer.selectedModel ?: return
                     val beforeFraction = _uiState.value.contextUsageFraction
@@ -1251,6 +1264,11 @@ class SessionChatViewModel
                 atSuggestions = composerState.atSuggestions,
                 commandsSheetVisible = commandsState.commandsSheetVisible,
                 visibleClientSlashActions = commandsState.visibleActions,
+                mcpPageVisible = commandsState.mcpPageVisible,
+                mcpServers = commandsState.mcpServers,
+                mcpLoading = commandsState.mcpLoading,
+                mcpErrorMessage = commandsState.mcpErrorMessage,
+                mcpSummary = commandsState.mcpSummary,
                 forkDialogVisible = commandsState.forkDialogVisible,
                 forkDraftTitle = commandsState.forkDraftTitle,
                 forkSubmitting = commandsState.forkSubmitting,
@@ -1426,7 +1444,12 @@ private val ClientSlashAction.productActionId: String
             ClientSlashAction.Redo -> ProductAnalytics.Action.COMMANDS_REDO
             ClientSlashAction.Compact -> ProductAnalytics.Action.COMMANDS_COMPACT
             ClientSlashAction.Terminal -> ProductAnalytics.Action.COMMANDS_TERMINAL
+            ClientSlashAction.Mcp -> ProductAnalytics.Action.COMMANDS_MCP
         }
+
+private object EmptyMcpRepository : McpRepository {
+    override suspend fun listServers(directory: String?): List<McpServer> = emptyList()
+}
 
 private object EmptyPermissionLiveStore : PermissionLiveStore {
     override fun observePermissions(directory: String) = kotlinx.coroutines.flow.flowOf(emptyList<PermissionRequest>())

@@ -6,6 +6,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import dev.opencode.mobile.data.remote.AgentsApi
 import dev.opencode.mobile.data.remote.CommandsApi
+import dev.opencode.mobile.data.remote.McpApi
 import dev.opencode.mobile.data.remote.MessagesApi
 import dev.opencode.mobile.data.remote.ModelsApi
 import dev.opencode.mobile.data.remote.PtyApi
@@ -64,4 +65,8 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideAgentsApi(httpClient: OpencodeHttpClient): AgentsApi = AgentsApi(httpClient)
+
+    @Provides
+    @Singleton
+    fun provideMcpApi(httpClient: OpencodeHttpClient): McpApi = McpApi(httpClient)
 }

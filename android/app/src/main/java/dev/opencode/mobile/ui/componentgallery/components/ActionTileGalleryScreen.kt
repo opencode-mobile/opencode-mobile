@@ -14,6 +14,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ui.components.OpenCodeActionTile
+import dev.opencode.mobile.ui.components.OpenCodeActionTileBadge
+import dev.opencode.mobile.ui.components.OpenCodeActionTileBadgeTone
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
@@ -53,6 +55,42 @@ fun ActionTileGalleryScreen(modifier: Modifier = Modifier) {
                 onClick = {},
                 enabled = enabled,
                 accessibilityLabel = "Open project shell",
+                modifier = Modifier.weight(1f),
+            )
+        }
+
+        Text(text = "Badge", style = MaterialTheme.typography.titleMedium)
+        Text(
+            text = "Corner badge: tone-only dot, or a count pill when something needs attention.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            OpenCodeActionTile(
+                icon = OpenCodeIcons.Plug,
+                label = "MCP servers",
+                onClick = {},
+                enabled = enabled,
+                badge = OpenCodeActionTileBadge(OpenCodeActionTileBadgeTone.Success),
+                modifier = Modifier.weight(1f),
+            )
+            OpenCodeActionTile(
+                icon = OpenCodeIcons.Plug,
+                label = "MCP servers",
+                onClick = {},
+                enabled = enabled,
+                badge = OpenCodeActionTileBadge(OpenCodeActionTileBadgeTone.Warning),
+                modifier = Modifier.weight(1f),
+            )
+            OpenCodeActionTile(
+                icon = OpenCodeIcons.Plug,
+                label = "MCP servers",
+                onClick = {},
+                enabled = enabled,
+                badge = OpenCodeActionTileBadge(OpenCodeActionTileBadgeTone.Error, count = 2),
                 modifier = Modifier.weight(1f),
             )
         }
