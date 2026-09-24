@@ -595,7 +595,8 @@ final class SessionChatComposer {
         onSendFailed: (String, String) -> Void,
         isSessionBusy: Bool,
         supportsFollowUp: Bool,
-        waitToSend: (() async -> Bool)? = nil
+        waitToSend: (() async -> Bool)? = nil,
+        serverAlreadyAccepted: () -> Bool = { false }
     ) async {
         let submittedText = state.composer.text
         let submittedMentions = state.composer.agentMentions
@@ -758,6 +759,17 @@ final class SessionChatComposer {
             await onSendAccepted()
             discardStoredAttachments(submittedAttachments)
         } catch {
+            if isTransportFailure(error), serverAlreadyAccepted() {
+                OpenCodeLog.sessionChat.info(
+                    "sendPrompt transport error ignored; server already accepted the send"
+                )
+                persistCurrentSelection(updatePreference: false)
+                state.sendProgressPercent = nil
+                notifyChange()
+                await onSendAccepted()
+                discardStoredAttachments(submittedAttachments)
+                return
+            }
             restoreFailedSubmission(
                 textRevision: submittedDraftRevision,
                 submittedText: submittedText,
@@ -1123,6 +1135,16 @@ final class SessionChatComposer {
         persistDraftTask?.cancel()
         persistDraftTask = nil
         persistDraft(sessionID: sessionID, draft: currentDraft())
+    }
+
+    private func isTransportFailure(_ error: Error) -> Bool {
+        if let messageError = error as? MessageError, case .transport = messageError {
+            return true
+        }
+        if let commandError = error as? CommandError, case .transport = commandError {
+            return true
+        }
+        return false
     }
 
     private func errorMessage(_ error: Error) -> String {

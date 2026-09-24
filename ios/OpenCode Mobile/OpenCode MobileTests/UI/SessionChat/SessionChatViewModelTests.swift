@@ -1754,6 +1754,59 @@ struct SessionChatViewModelTests {
         #expect(viewModel.uiState.errorMessage == nil)
     }
 
+    @Test func sendPrompt_transportAfterBusy_keepsAcceptedPrompt() async {
+        let eventStream = FakeForegroundEventStream()
+        let repository = FakeMessageRepository(shouldFailSend: true, holdSend: true)
+        let viewModel = makeViewModel(messageRepository: repository, eventStream: eventStream)
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        let loaded = await waitUntil { viewModel.uiState.timeline == .ready }
+        #expect(loaded)
+        viewModel.updateComposerText("Accepted prompt")
+        let sendTask = Task { await viewModel.sendPrompt() }
+        let sending = await waitUntil { viewModel.uiState.isSending }
+        #expect(sending)
+        #expect(viewModel.uiState.composer.text.isEmpty)
+
+        eventStream.emit(
+            OpencodeEvent(
+                type: "session.status",
+                sessionID: "ses-1",
+                rawProperties: ["status": .dictionary(["type": .string("busy")])]
+            )
+        )
+        let busy = await waitUntil { viewModel.uiState.sessionStatusLabel != nil }
+        #expect(busy)
+
+        repository.releaseSend()
+        await sendTask.value
+
+        #expect(repository.sendPromptAsyncCalled)
+        #expect(viewModel.uiState.composer.text.isEmpty)
+        #expect(viewModel.uiState.isSending == false)
+        #expect(viewModel.uiState.snackbar == nil)
+        #expect(viewModel.uiState.errorMessage == nil)
+        #expect(viewModel.uiState.messages.contains { $0.text == "Accepted prompt" && $0.isPending })
+    }
+
+    @Test func sendPrompt_transportWhileIdle_restoresComposer() async {
+        let viewModel = makeViewModel(messageRepository: FakeMessageRepository(shouldFailSend: true))
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        let loaded = await waitUntil { viewModel.uiState.timeline == .ready }
+        #expect(loaded)
+        viewModel.updateComposerText("Lost prompt")
+        await viewModel.sendPrompt()
+        let ready = await waitUntil { viewModel.uiState.isSending == false }
+        #expect(ready)
+        #expect(viewModel.uiState.composer.text == "Lost prompt")
+        #expect(!viewModel.uiState.messages.contains { $0.text == "Lost prompt" })
+        #expect(viewModel.uiState.snackbar?.message != nil)
+        #expect(viewModel.uiState.snackbar?.tone == .error)
+        #expect(viewModel.uiState.errorMessage == nil)
+        #expect(viewModel.uiState.isSending == false)
+    }
+
     @Test func sendPrompt_postSendReloadFailure_keepsOptimisticMessageWithoutError() async {
         let repository = FakeMessageRepository(failListMessagesAfterSend: true)
         let viewModel = makeViewModel(messageRepository: repository)

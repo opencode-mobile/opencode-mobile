@@ -190,6 +190,7 @@ class SessionChatViewModel
         private var questionCustomEditReportedRequestId: String? = null
         private var optimisticCreateJob: kotlinx.coroutines.Job? = null
         private var pendingSend: PendingSend? = null
+        private var armedSendAcceptance: ArmedSendAcceptance? = null
         private val newSessionModelSelectionResolver = newSessionModelSelectionResolver
         private val connectionSessionCoordinator = connectionSessionCoordinator
 
@@ -799,12 +800,14 @@ class SessionChatViewModel
                     }
                 },
                 onOptimisticRows = { rows ->
+                    armSendAcceptance()
                     if (shouldQueue) {
                         pendingSend = PendingSend(queuedAtMs = System.currentTimeMillis())
                     }
                     timeline.beginOptimisticSend(rows)
                 },
                 onSendAccepted = {
+                    armedSendAcceptance = null
                     pendingSend = null
                     commands.consumePendingRevert()
                     sessionInfo.setOptimistic(SessionActivity.Running)
@@ -816,11 +819,31 @@ class SessionChatViewModel
                     publishUiState()
                 },
                 onSendFailed = { optimisticId, error ->
+                    armedSendAcceptance = null
                     pendingSend = null
                     timeline.failOptimisticSend(optimisticId, error)
                     publishUiState()
                 },
+                serverAlreadyAccepted = ::serverAlreadyAccepted,
             )
+        }
+
+        private fun armSendAcceptance() {
+            val sessionId = boundSessionId ?: return
+            armedSendAcceptance =
+                ArmedSendAcceptance(
+                    sessionId = sessionId,
+                    wasBusy = sessionInfo.state.value.sessionStatusLabel != null,
+                    serverMessages = timeline.loadedMessages().toList(),
+                )
+        }
+
+        private fun serverAlreadyAccepted(): Boolean {
+            val armed = armedSendAcceptance ?: return false
+            if (armed.sessionId != boundSessionId) return false
+            val becameBusy = !armed.wasBusy && sessionInfo.state.value.sessionStatusLabel != null
+            val serverUpdated = timeline.loadedMessages() != armed.serverMessages
+            return becameBusy || serverUpdated
         }
 
         fun abort() {
@@ -1416,6 +1439,12 @@ private object EmptyQuestionLiveStore : QuestionLiveStore {
 
     override fun clearCache() = Unit
 }
+
+private data class ArmedSendAcceptance(
+    val sessionId: String,
+    val wasBusy: Boolean,
+    val serverMessages: List<Message>,
+)
 
 private data class SessionChatCombinedState(
     val timeline: SessionChatTimelineRegionState,
