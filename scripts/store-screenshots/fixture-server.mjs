@@ -418,6 +418,10 @@ function handleGet(url, pathname, world, req, res) {
     sendJson(res, 200, listEnvelope(world.questions));
     return;
   }
+  if (pathname === "/api/form") {
+    sendJson(res, 200, locatedEnvelope(world, query.directory, world.forms));
+    return;
+  }
   if (pathname === "/api/form/request") {
     sendJson(res, 200, listEnvelope(world.forms));
     return;

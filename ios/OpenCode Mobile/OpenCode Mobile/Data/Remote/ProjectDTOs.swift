@@ -9,7 +9,7 @@ struct HealthDTO: Codable, Sendable {
 struct ProjectDTO: Codable, Sendable {
     let id: String
     let worktree: String?
-    /// V2 `/api/project/current` uses `directory` instead of `worktree`.
+    /// V2 location project uses `directory` instead of `worktree`.
     let directory: String?
     let vcs: String?
 
