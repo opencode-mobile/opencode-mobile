@@ -833,33 +833,191 @@ private final class Harness {
 }
 
 private final class ControllableSnapshotSource: DisplayMessageSnapshotSource, @unchecked Sendable {
-    private let lock = NSLock()
-    private var continuation: AsyncStream<MessageListUpdate>.Continuation?
-    private lazy var stream: AsyncStream<MessageListUpdate> = AsyncStream { continuation in
-        self.lock.lock()
-        self.continuation = continuation
-        self.lock.unlock()
+    private struct QueuedEmit {
+        let id: UUID
+        let update: MessageListUpdate
+        let claim: CheckedContinuation<UInt64?, Never>
     }
+
+    private struct EpochWait {
+        let id: UUID
+        let after: UInt64
+        let continuation: CheckedContinuation<Void, Never>
+    }
+
+    private let lock = NSLock()
+    private var pullEpoch: UInt64 = 0
+    private var queue: [QueuedEmit] = []
+    private var waitingPull: CheckedContinuation<MessageListUpdate?, Never>?
+    private var epochWaits: [EpochWait] = []
+    private var finished = false
+    private lazy var stream: AsyncStream<MessageListUpdate> = AsyncStream(unfolding: { [weak self] in
+        guard let self else { return nil }
+        return await self.pull()
+    }, onCancel: { [weak self] in
+        self?.finish()
+    })
 
     func observeMessages(sessionID: String, directory: String?) -> AsyncStream<MessageListUpdate> {
         stream
     }
 
     func emit(_ update: MessageListUpdate) async {
-        // Ensure the lazy stream is created before yielding.
-        _ = stream
-        lock.lock()
-        let continuation = self.continuation
-        lock.unlock()
-        continuation?.yield(update)
-        await Task.yield()
+        let deadline = ContinuousClock.now + .seconds(3)
+        guard let deliveryPull = await deliver(update, deadline: deadline) else { return }
+        // Wait until the consumer pulls again, so the for-await body has stored this update.
+        await waitUntilPulledAgain(after: deliveryPull, deadline: deadline)
     }
 
     func finish() {
         lock.lock()
-        let continuation = self.continuation
+        finished = true
+        let pull = waitingPull
+        waitingPull = nil
+        let queued = queue
+        queue.removeAll()
+        let waits = epochWaits
+        epochWaits.removeAll()
         lock.unlock()
-        continuation?.finish()
+        pull?.resume(returning: nil)
+        for item in queued {
+            item.claim.resume(returning: nil)
+        }
+        for wait in waits {
+            wait.continuation.resume()
+        }
+    }
+
+    private func pull() async -> MessageListUpdate? {
+        lock.lock()
+        pullEpoch &+= 1
+        let epoch = pullEpoch
+        let readyWaits = takeReadyEpochWaitsLocked()
+        if !queue.isEmpty {
+            let item = queue.removeFirst()
+            lock.unlock()
+            resume(readyWaits)
+            item.claim.resume(returning: epoch)
+            return item.update
+        }
+        if finished {
+            lock.unlock()
+            resume(readyWaits)
+            return nil
+        }
+        lock.unlock()
+        resume(readyWaits)
+        return await withCheckedContinuation { (continuation: CheckedContinuation<MessageListUpdate?, Never>) in
+            self.lock.lock()
+            if !self.queue.isEmpty {
+                let item = self.queue.removeFirst()
+                self.lock.unlock()
+                item.claim.resume(returning: epoch)
+                continuation.resume(returning: item.update)
+                return
+            }
+            if self.finished {
+                self.lock.unlock()
+                continuation.resume(returning: nil)
+                return
+            }
+            self.waitingPull = continuation
+            self.lock.unlock()
+        }
+    }
+
+    private func deliver(
+        _ update: MessageListUpdate,
+        deadline: ContinuousClock.Instant
+    ) async -> UInt64? {
+        let id = UUID()
+        return await withCheckedContinuation { (continuation: CheckedContinuation<UInt64?, Never>) in
+            self.lock.lock()
+            if let pull = self.waitingPull {
+                let epoch = self.pullEpoch
+                self.waitingPull = nil
+                self.lock.unlock()
+                pull.resume(returning: update)
+                continuation.resume(returning: epoch)
+                return
+            }
+            if self.finished {
+                self.lock.unlock()
+                continuation.resume(returning: nil)
+                return
+            }
+            self.queue.append(QueuedEmit(id: id, update: update, claim: continuation))
+            self.lock.unlock()
+            Task {
+                await self.sleepUntil(deadline)
+                self.expireDeliver(id)
+            }
+        }
+    }
+
+    private func waitUntilPulledAgain(
+        after deliveryPull: UInt64,
+        deadline: ContinuousClock.Instant
+    ) async {
+        let id = UUID()
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            self.lock.lock()
+            if self.pullEpoch > deliveryPull || self.finished {
+                self.lock.unlock()
+                continuation.resume()
+                return
+            }
+            self.epochWaits.append(
+                EpochWait(id: id, after: deliveryPull, continuation: continuation)
+            )
+            self.lock.unlock()
+            Task {
+                await self.sleepUntil(deadline)
+                self.expireEpochWait(id)
+            }
+        }
+    }
+
+    private func takeReadyEpochWaitsLocked() -> [EpochWait] {
+        let ready = epochWaits.filter { pullEpoch > $0.after || finished }
+        if ready.isEmpty { return [] }
+        let ids = Set(ready.map(\.id))
+        epochWaits.removeAll { ids.contains($0.id) }
+        return ready
+    }
+
+    private func resume(_ waits: [EpochWait]) {
+        for wait in waits {
+            wait.continuation.resume()
+        }
+    }
+
+    private func expireDeliver(_ id: UUID) {
+        lock.lock()
+        guard let index = queue.firstIndex(where: { $0.id == id }) else {
+            lock.unlock()
+            return
+        }
+        let item = queue.remove(at: index)
+        lock.unlock()
+        item.claim.resume(returning: nil)
+    }
+
+    private func expireEpochWait(_ id: UUID) {
+        lock.lock()
+        guard let index = epochWaits.firstIndex(where: { $0.id == id }) else {
+            lock.unlock()
+            return
+        }
+        let wait = epochWaits.remove(at: index)
+        lock.unlock()
+        wait.continuation.resume()
+    }
+
+    private func sleepUntil(_ deadline: ContinuousClock.Instant) async {
+        let remaining = deadline - ContinuousClock.now
+        guard remaining > .zero else { return }
+        try? await Task.sleep(for: remaining)
     }
 }
 
