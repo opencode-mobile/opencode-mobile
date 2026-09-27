@@ -34,7 +34,11 @@ nonisolated struct ProjectsAPIClient: Sendable {
     }
 
     func getCurrentProjectV2(directory: String? = nil) async throws -> ProjectDTO {
-        try await get(path: "api/project/current", locationDirectory: directory)
+        let location: V2LocationInfoDTO = try await get(path: "api/location", locationDirectory: directory)
+        guard let id = location.project?.id, let projectDirectory = location.project?.directory else {
+            throw ProjectsAPIError.invalidResponse
+        }
+        return ProjectDTO(id: id, directory: projectDirectory)
     }
 
     func getGlobalHealth() async throws -> HealthDTO {

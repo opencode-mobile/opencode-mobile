@@ -113,8 +113,8 @@ struct SessionProtocolRepositoryTests {
 
         #expect(session.title == "Renamed")
         #expect(ProtocolRoutingURLProtocol.requests.count == 2)
-        #expect(ProtocolRoutingURLProtocol.requests[0].httpMethod == "POST")
-        #expect(ProtocolRoutingURLProtocol.requests[0].url?.path.hasSuffix("/api/session/ses_1/rename") == true)
+        #expect(ProtocolRoutingURLProtocol.requests[0].httpMethod == "PATCH")
+        #expect(ProtocolRoutingURLProtocol.requests[0].url?.path.hasSuffix("/api/session/ses_1") == true)
         #expect(ProtocolRoutingURLProtocol.bodies[0]?.contains(#""title":"Renamed""#) == true)
         #expect(ProtocolRoutingURLProtocol.requests[1].url?.path.hasSuffix("/api/session/ses_1") == true)
     }
@@ -205,7 +205,7 @@ struct SessionProtocolRepositoryTests {
     }
 
     @Test func v2ProjectCurrentUsesLocationDirectoryQuery() async throws {
-        ProtocolRoutingURLProtocol.reset(responses: [.json(#"{"id":"proj_1","directory":"/repo"}"#)])
+        ProtocolRoutingURLProtocol.reset(responses: [.json(#"{"directory":"/repo","project":{"id":"proj_1","directory":"/repo","canonical":"/repo"}}"#)])
         let manager = makeManager(serverProtocol: .v2)
         let repository = DefaultProjectRepository(
             api: ProjectsAPIClient(fixedConnection: try #require(manager.connection), urlSession: makeURLSession()),
@@ -218,7 +218,7 @@ struct SessionProtocolRepositoryTests {
         #expect(project.id == "proj_1")
         #expect(project.worktree == "/repo")
         let url = try #require(ProtocolRoutingURLProtocol.requests.first?.url)
-        #expect(url.path.hasSuffix("/api/project/current"))
+        #expect(url.path.hasSuffix("/api/location"))
         #expect(queryValue(url, "location[directory]") == "/repo")
         #expect(queryValue(url, "directory") == nil)
     }
@@ -356,7 +356,7 @@ struct SessionProtocolRepositoryTests {
         #expect(question.question == "What would you like to work on?")
         #expect(ProtocolRoutingURLProtocol.requests.count == 2)
         #expect(ProtocolRoutingURLProtocol.requests[0].url?.path.hasSuffix("/api/question/request") == true)
-        #expect(ProtocolRoutingURLProtocol.requests[1].url?.path.hasSuffix("/api/form/request") == true)
+        #expect(ProtocolRoutingURLProtocol.requests[1].url?.path.hasSuffix("/api/form") == true)
     }
 
     @Test func v2ReplyToQuestionUsesSessionScopedPath() async throws {
@@ -461,8 +461,8 @@ struct SessionProtocolRepositoryTests {
 
         #expect(ok)
         let request = try #require(ProtocolRoutingURLProtocol.requests.first)
-        #expect(request.httpMethod == "POST")
-        #expect(request.url?.path.hasSuffix("/api/session/ses_1/revert/clear") == true)
+        #expect(request.httpMethod == "DELETE")
+        #expect(request.url?.path.hasSuffix("/api/session/ses_1/revert") == true)
     }
 
     @Test func v2ListSessionTodosSkipsRestAndSignalsUnavailable() async {

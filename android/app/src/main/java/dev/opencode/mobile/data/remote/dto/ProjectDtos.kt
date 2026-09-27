@@ -13,7 +13,7 @@ data class HealthDto(
 data class ProjectDto(
     val id: String,
     val worktree: String? = null,
-    /** V2 `/api/project/current` uses `directory` instead of `worktree`. */
+    /** V2 location project uses `directory` instead of `worktree`. */
     val directory: String? = null,
     val vcs: String? = null,
 ) {

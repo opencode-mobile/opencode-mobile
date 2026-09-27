@@ -189,8 +189,8 @@ class SessionProtocolRepositoryTest {
             val session = repository.updateSession("ses_1", title = "Renamed", directory = "/repo")
 
             assertEquals("Renamed", session.title)
-            assertEquals(HttpMethod.Post, requests[0].method)
-            assertTrue(requests[0].url.encodedPath.endsWith("/api/session/ses_1/rename"))
+            assertEquals(HttpMethod.Patch, requests[0].method)
+            assertTrue(requests[0].url.encodedPath.endsWith("/api/session/ses_1"))
             assertTrue(requests[1].url.encodedPath.endsWith("/api/session/ses_1"))
         }
 
@@ -230,7 +230,9 @@ class SessionProtocolRepositoryTest {
             val client =
                 testClient { request ->
                     captured = request
-                    respondJson("""{"id":"proj_1","directory":"/repo"}""")
+                    respondJson(
+                        """{"directory":"/repo","project":{"id":"proj_1","directory":"/repo","canonical":"/repo"}}""",
+                    )
                 }
             val manager = manager(ServerProtocol.V2)
             val repository =
@@ -246,7 +248,7 @@ class SessionProtocolRepositoryTest {
             assertEquals("/repo", project.worktree)
             assertEquals("/repo", captured?.url?.parameters?.get("location[directory]"))
             assertNull(captured?.url?.parameters?.get("directory"))
-            assertTrue(captured!!.url.encodedPath.contains("/api/project/current"))
+            assertTrue(captured!!.url.encodedPath.endsWith("/api/location"))
         }
 
     @Test
@@ -472,7 +474,7 @@ class SessionProtocolRepositoryTest {
                                 status = HttpStatusCode.NotFound,
                                 headers = headersOf(),
                             )
-                        request.url.encodedPath.contains("/api/form/request") ->
+                        request.url.encodedPath.endsWith("/api/form") ->
                             respondJson(
                                 """
                                 {
@@ -525,7 +527,7 @@ class SessionProtocolRepositoryTest {
             )
             assertEquals(2, requests.size)
             assertTrue(requests[0].url.encodedPath.contains("/api/question/request"))
-            assertTrue(requests[1].url.encodedPath.contains("/api/form/request"))
+            assertTrue(requests[1].url.encodedPath.endsWith("/api/form"))
         }
 
     @Test
@@ -780,12 +782,12 @@ class SessionProtocolRepositoryTest {
             val ok = repository.unrevertSession("ses_1", "/repo")
 
             assertTrue(ok)
-            assertEquals(HttpMethod.Post, requests.single().method)
+            assertEquals(HttpMethod.Delete, requests.single().method)
             assertTrue(
                 requests
                     .single()
                     .url.encodedPath
-                    .contains("/api/session/ses_1/revert/clear"),
+                    .endsWith("/api/session/ses_1/revert"),
             )
         }
 

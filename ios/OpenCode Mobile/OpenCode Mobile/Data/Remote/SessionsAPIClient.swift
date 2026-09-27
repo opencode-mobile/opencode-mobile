@@ -57,7 +57,7 @@ nonisolated struct SessionsAPIClient: Sendable {
 
     func listPendingFormsV2(directory: String? = nil) async throws -> [V2FormInfoDTO] {
         let envelope: APIListEnvelope<V2FormInfoDTO> = try await get(
-            path: "api/form/request",
+            path: "api/form",
             locationDirectory: directory
         )
         return envelope.data
@@ -244,7 +244,7 @@ nonisolated struct SessionsAPIClient: Sendable {
     }
 
     func cancelFormV2(sessionID: String, formID: String) async throws -> Bool {
-        try await postWithoutBody(path: "api/session/\(sessionID)/form/\(formID)/cancel")
+        try await delete(path: "api/session/\(sessionID)/form/\(formID)")
     }
 
     // MARK: - V2 home / session CRUD
@@ -297,7 +297,7 @@ nonisolated struct SessionsAPIClient: Sendable {
     }
 
     func renameSessionV2(id: String, title: String) async throws {
-        _ = try await postEmpty(path: "api/session/\(id)/rename", body: V2RenameSessionRequestDTO(title: title))
+        _ = try await patchEmpty(path: "api/session/\(id)", body: V2RenameSessionRequestDTO(title: title))
     }
 
     func archiveSessionV2(id: String) async throws {
@@ -341,7 +341,7 @@ nonisolated struct SessionsAPIClient: Sendable {
     }
 
     func clearRevertV2(id: String) async throws -> Bool {
-        try await postWithoutBody(path: "api/session/\(id)/revert/clear")
+        try await delete(path: "api/session/\(id)/revert")
     }
 
     func getVcsInfoV2(directory: String? = nil) async throws -> V2VcsInfoDTO {
@@ -420,6 +420,17 @@ nonisolated struct SessionsAPIClient: Sendable {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try encoder.encode(body)
         return try await send(request)
+    }
+
+    private func patchEmpty<B: Encodable>(path: String, body: B, directory: String? = nil) async throws -> Bool {
+        var request = try requireConnection().authorizedRequest(path: path, method: "PATCH", directory: directory)
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try encoder.encode(body)
+        let data = try await data(for: request)
+        if let value = try? decoder.decode(Bool.self, from: data) {
+            return value
+        }
+        return true
     }
 
     private func delete(path: String, directory: String? = nil) async throws -> Bool {

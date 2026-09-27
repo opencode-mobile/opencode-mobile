@@ -386,7 +386,7 @@ class SessionsApi private constructor(
     suspend fun listPendingFormsV2(directory: String? = null): List<V2FormInfoDto> =
         httpClient
             .get()
-            .get("api/form/request") {
+            .get("api/form") {
                 applyLocationDirectory(directory)
             }.bodyOnSuccess<ApiListEnvelope<V2FormInfoDto>>()
             .data
@@ -428,7 +428,7 @@ class SessionsApi private constructor(
     ): Boolean =
         httpClient
             .get()
-            .post("api/session/$sessionId/form/$formId/cancel")
+            .delete("api/session/$sessionId/form/$formId")
             .ensureSuccess()
 
     // --- V2 home / session CRUD ---
@@ -493,7 +493,7 @@ class SessionsApi private constructor(
     ) {
         httpClient
             .get()
-            .post("api/session/$id/rename") {
+            .patch("api/session/$id") {
                 setJsonBody(json, V2RenameSessionRequestDto(title = title))
             }.ensureSuccess()
     }
@@ -555,7 +555,7 @@ class SessionsApi private constructor(
     suspend fun clearRevertV2(id: String): Boolean =
         httpClient
             .get()
-            .post("api/session/$id/revert/clear")
+            .delete("api/session/$id/revert")
             .ensureSuccess()
 
     suspend fun getVcsInfoV2(directory: String? = null): V2VcsInfoDto =
