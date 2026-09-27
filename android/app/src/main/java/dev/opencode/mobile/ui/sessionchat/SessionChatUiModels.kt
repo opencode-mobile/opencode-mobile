@@ -161,7 +161,7 @@ data class SessionChatUiState(
     val questionErrorMessage: String? = null,
     val reviewChangesMessageId: String? = null,
     val reviewChangesSummary: ReviewChangesSummary? = null,
-    val repoStrip: SessionChatRepoStripUiState? = null,
+    val sessionBranchPill: SessionBranchPillUiState? = null,
     val supportsSessionMessageDiff: Boolean = true,
     val supportsSessionArchive: Boolean = true,
     val rename: SessionRenameUiState = SessionRenameUiState(),
@@ -292,6 +292,13 @@ enum class SessionChatComposerKind {
 
 object ReviewChangesPillVisibility {
     fun shouldShow(summary: ReviewChangesSummary?): Boolean = (summary?.fileCount ?: 0) > 0
+}
+
+object SessionBranchPillVisibility {
+    fun shouldShow(
+        pill: SessionBranchPillUiState?,
+        hideFloatStack: Boolean,
+    ): Boolean = !hideFloatStack && !pill?.branch.isNullOrEmpty()
 }
 
 data class ReviewChangesSummary(
@@ -459,13 +466,20 @@ data class SessionChatRepoStripRegionState(
     val isExpanded: Boolean = false,
 )
 
-/** Header repo strip: current branch and uncommitted working-tree changes. Null hides the strip. */
-data class SessionChatRepoStripUiState(
+data class SessionBranchPillUiState(
     val branch: String,
-    val defaultBranch: String?,
-    val files: List<VcsFileStatus>,
-    val isExpanded: Boolean,
+    val additions: Int,
+    val deletions: Int,
 )
+
+fun SessionChatRepoStripRegionState.toSessionBranchPill(): SessionBranchPillUiState? {
+    if (!isAvailable || branch.isEmpty()) return null
+    return SessionBranchPillUiState(
+        branch = branch,
+        additions = files.sumOf { it.additions }.coerceAtLeast(0),
+        deletions = files.sumOf { it.deletions }.coerceAtLeast(0),
+    )
+}
 
 data class SessionChatInboxRegionState(
     val permissionRequests: List<PermissionRequest> = emptyList(),

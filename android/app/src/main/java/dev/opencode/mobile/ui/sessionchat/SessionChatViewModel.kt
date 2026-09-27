@@ -1003,10 +1003,6 @@ class SessionChatViewModel
             previous: SessionChatMessageItem? = null,
         ): SessionChatMessageItem? = timeline.toMessageItem(message, previous)
 
-        fun toggleRepoStrip() {
-            repoStrip.toggle()
-        }
-
         private fun publishUiState() {
             publishUiState(
                 timeline.state.value,
@@ -1300,15 +1296,7 @@ class SessionChatViewModel
                 projectLabel = projectLabel,
                 projectLetter = projectLetter,
                 projectLetterAccent = projectLetterAccent,
-                repoStrip =
-                    repoStrip.state.value.takeIf { it.isAvailable }?.let { strip ->
-                        SessionChatRepoStripUiState(
-                            branch = strip.branch,
-                            defaultBranch = strip.defaultBranch,
-                            files = strip.files,
-                            isExpanded = strip.isExpanded,
-                        )
-                    },
+                sessionBranchPill = repoStrip.state.value.toSessionBranchPill(),
             )
         }
 

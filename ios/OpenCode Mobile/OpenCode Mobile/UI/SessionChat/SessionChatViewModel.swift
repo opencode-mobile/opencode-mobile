@@ -876,10 +876,6 @@ final class SessionChatViewModel {
         repoStrip.stop()
     }
 
-    func toggleRepoStrip() {
-        repoStrip.toggle()
-    }
-
     private func refreshProjectIdentity() {
         projectIdentityTask?.cancel()
         guard !worktree.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -1112,14 +1108,7 @@ final class SessionChatViewModel {
             projectLabel: projectLabel,
             projectLetter: projectLetter,
             projectLetterAccent: projectLetterAccent,
-            repoStrip: repoStripState.isAvailable
-                ? SessionChatRepoStripUiState(
-                    branch: repoStripState.branch,
-                    defaultBranch: repoStripState.defaultBranch,
-                    files: repoStripState.files,
-                    isExpanded: repoStripState.isExpanded
-                )
-                : nil,
+            sessionBranchPill: SessionChatBranchPillUiState.resolved(from: repoStripState),
             timeline: timelineState.timeline,
             messages: timelineState.messages,
             pendingPrompts: Self.pendingPrompts(

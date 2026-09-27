@@ -71,9 +71,9 @@ import dev.opencode.mobile.ui.componentgallery.components.OverflowMenuGalleryScr
 import dev.opencode.mobile.ui.componentgallery.components.PendingPromptsStripGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.RenderedMarkdownGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ReorderableListGalleryScreen
-import dev.opencode.mobile.ui.componentgallery.components.RepoStripGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ReviewChangesPillGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ServerAddressInputGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.SessionBranchPillGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SessionComposerGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SessionListDockGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SessionListGalleryScreen
@@ -513,6 +513,8 @@ fun MainNavigation() {
                                                         ComponentGalleryEntryId.ComposerSuggestionOverlay ->
                                                             ComposerSuggestionOverlayGalleryScreen()
                                                         ComponentGalleryEntryId.ReviewChangesPill -> ReviewChangesPillGalleryScreen()
+                                                        ComponentGalleryEntryId.SessionBranchPill ->
+                                                            SessionBranchPillGalleryScreen()
                                                         ComponentGalleryEntryId.SessionTodosPill -> SessionTodosPillGalleryScreen()
                                                         ComponentGalleryEntryId.SessionTodoItem -> SessionTodoItemGalleryScreen()
                                                         ComponentGalleryEntryId.HunkNavigationPill -> HunkNavigationPillGalleryScreen()
@@ -529,7 +531,6 @@ fun MainNavigation() {
                                                             SessionListGalleryScreen()
                                                         ComponentGalleryEntryId.SessionListDock ->
                                                             SessionListDockGalleryScreen()
-                                                        ComponentGalleryEntryId.RepoStrip -> RepoStripGalleryScreen()
                                                         ComponentGalleryEntryId.SessionStatusBar ->
                                                             SessionStatusBarGalleryScreen()
                                                         ComponentGalleryEntryId.SessionComposer ->

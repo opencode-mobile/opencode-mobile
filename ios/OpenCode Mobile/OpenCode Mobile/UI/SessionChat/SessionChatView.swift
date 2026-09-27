@@ -130,23 +130,6 @@ struct SessionChatView: View {
                 )
             }
 
-            if let strip = viewModel.uiState.repoStrip {
-                OpenCodeRepoStrip(
-                    branch: strip.branch,
-                    defaultBranch: strip.defaultBranch,
-                    files: strip.files.map(\.repoStripFile),
-                    expanded: strip.isExpanded,
-                    onToggle: { viewModel.toggleRepoStrip() },
-                    onOpenChanges: {
-                        changesTarget = viewModel.uiState.changesNavigationTarget(worktree: session.worktree)
-                    }
-                )
-                .padding(.horizontal, 12)
-                .padding(.top, 6)
-                .padding(.bottom, 2)
-                .openCodeReadableColumn()
-            }
-
             // Hidden for now: status bar currently only shows context usage.
             // Session context remains available from the overflow menu.
             if Self.showsSessionStatusBar {
@@ -183,7 +166,7 @@ struct SessionChatView: View {
                         hasOlder: viewModel.uiState.hasOlder,
                         isLoadingOlder: viewModel.uiState.isLoadingOlder,
                         errorMessage: viewModel.uiState.errorMessage,
-                        reviewChangesSummary: viewModel.uiState.reviewChangesSummary,
+                        sessionBranchPill: viewModel.uiState.sessionBranchPill,
                         syncingIndicatorLabel: viewModel.uiState.syncingIndicatorLabel,
                         workingIndicatorLabel: viewModel.uiState.workingIndicatorLabel,
                         workingIndicatorCollapsed: viewModel.uiState.workingIndicatorCollapsed,
@@ -200,9 +183,9 @@ struct SessionChatView: View {
                             + keyboardOverlap,
                         onRefresh: { await viewModel.refreshMessages() },
                         onLoadOlder: { Task { await viewModel.loadOlderMessages() } },
-                        onReviewChangesTap: {
+                        onSessionBranchTap: {
                             logChatAction(ProductAnalytics.Action.chatOpenChanges)
-                            changesTarget = viewModel.uiState.reviewChangesNavigationTarget(worktree: session.worktree)
+                            changesTarget = viewModel.uiState.changesNavigationTarget(worktree: session.worktree)
                         },
                         onSessionTodosTap: {
                             guard !blocksSessionTodosSheet else { return }
@@ -1182,16 +1165,4 @@ private extension ClientSlashAction {
         )
     }
     .openCodeTheme()
-}
-
-private extension VcsFileStatus {
-    var repoStripFile: OpenCodeRepoStripFile {
-        let mapped: OpenCodeRepoStripFileStatus =
-            switch status {
-            case .added: .added
-            case .deleted: .deleted
-            case .modified: .modified
-            }
-        return OpenCodeRepoStripFile(path: path, status: mapped, additions: additions, deletions: deletions)
-    }
 }

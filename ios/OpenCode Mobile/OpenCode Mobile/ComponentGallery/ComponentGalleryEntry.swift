@@ -47,7 +47,7 @@ enum ComponentGalleryEntryID: String, Hashable {
     case sessionList
     case sessionListDock
     case sessionStatusBar
-    case repoStrip
+    case sessionBranchPill
     case sessionComposer
     case composerSuggestionOverlay
     case renderedMarkdown
@@ -267,9 +267,9 @@ let componentGalleryEntries = [
         category: .session
     ),
     ComponentGalleryEntry(
-        id: .repoStrip,
-        title: "Repo Strip",
-        description: "Collapsible branch and working-tree summary under the Session Chat header.",
+        id: .sessionBranchPill,
+        title: "Session Branch Pill",
+        description: "Floating branch and working-tree line totals over Session Chat.",
         category: .session
     ),
     ComponentGalleryEntry(

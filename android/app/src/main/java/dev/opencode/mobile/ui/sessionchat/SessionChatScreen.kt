@@ -45,10 +45,8 @@ import dev.opencode.mobile.domain.diagnostic.DiagnosticLogAttachment
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogBuffer
 import dev.opencode.mobile.domain.message.AttachmentIngestionService
 import dev.opencode.mobile.domain.preferences.DeveloperToolsPreferences
-import dev.opencode.mobile.domain.session.FileDiffStatus
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.SessionTodoList
-import dev.opencode.mobile.domain.session.VcsFileStatus
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
 import dev.opencode.mobile.ui.components.OpenCodeActionTile
@@ -68,9 +66,6 @@ import dev.opencode.mobile.ui.components.OpenCodeLayout
 import dev.opencode.mobile.ui.components.OpenCodeOverflowMenuEntry
 import dev.opencode.mobile.ui.components.OpenCodePendingPromptsStrip
 import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
-import dev.opencode.mobile.ui.components.OpenCodeRepoStrip
-import dev.opencode.mobile.ui.components.OpenCodeRepoStripFile
-import dev.opencode.mobile.ui.components.OpenCodeRepoStripFileStatus
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposer
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposerAction
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposerState
@@ -448,23 +443,6 @@ fun SessionChatScreen(
                     showDivider = true,
                 )
             }
-            uiState.repoStrip?.let { strip ->
-                OpenCodeRepoStrip(
-                    branch = strip.branch,
-                    defaultBranch = strip.defaultBranch,
-                    files = strip.files.map { it.toRepoStripFile() },
-                    expanded = strip.isExpanded,
-                    onToggle = viewModel::toggleRepoStrip,
-                    onOpenChanges = { onReviewChangesClick(uiState.changesNavigationTarget(worktree)) },
-                    modifier =
-                        Modifier
-                            .align(Alignment.CenterHorizontally)
-                            .widthIn(max = OpenCodeLayout.ContentMaxWidth)
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp)
-                            .padding(top = 6.dp, bottom = 2.dp),
-                )
-            }
             // Hidden for now: status bar currently only shows context usage.
             // Session context remains available from the overflow menu.
             if (ShowsSessionStatusBar) {
@@ -502,7 +480,7 @@ fun SessionChatScreen(
                             hasOlder = uiState.hasOlder,
                             isLoadingOlder = uiState.isLoadingOlder,
                             errorMessage = uiState.errorMessage,
-                            reviewChangesSummary = uiState.reviewChangesSummary,
+                            sessionBranchPill = uiState.sessionBranchPill,
                             syncingIndicatorLabel = uiState.syncingIndicatorLabel,
                             workingIndicatorLabel = uiState.workingIndicatorLabel,
                             workingIndicatorCollapsed = uiState.workingIndicatorCollapsed,
@@ -517,9 +495,9 @@ fun SessionChatScreen(
                             bottomOverlayInset = timelineBottomInset,
                             onRefresh = viewModel::refreshMessages,
                             onLoadOlder = viewModel::loadOlderMessages,
-                            onReviewChangesClick = {
+                            onSessionBranchClick = {
                                 logChatAction(ProductAnalytics.Action.CHAT_OPEN_CHANGES)
-                                uiState.reviewChangesNavigationTarget(worktree)?.let(onReviewChangesClick)
+                                onReviewChangesClick(uiState.changesNavigationTarget(worktree))
                             },
                             onSessionTodosClick = {
                                 logChatAction(ProductAnalytics.Action.CHAT_OPEN_TODOS)
@@ -1159,15 +1137,3 @@ private fun SessionChatScreenPreview() {
     }
 }
 
-private fun VcsFileStatus.toRepoStripFile(): OpenCodeRepoStripFile =
-    OpenCodeRepoStripFile(
-        path = path,
-        status =
-            when (status) {
-                FileDiffStatus.Added -> OpenCodeRepoStripFileStatus.Added
-                FileDiffStatus.Deleted -> OpenCodeRepoStripFileStatus.Deleted
-                FileDiffStatus.Modified -> OpenCodeRepoStripFileStatus.Modified
-            },
-        additions = additions,
-        deletions = deletions,
-    )

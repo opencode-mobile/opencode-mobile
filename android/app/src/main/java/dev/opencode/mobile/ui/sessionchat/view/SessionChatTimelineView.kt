@@ -67,8 +67,7 @@ import dev.opencode.mobile.ui.components.OpenCodeAssistantMessage
 import dev.opencode.mobile.ui.components.OpenCodeMessageAttachment
 import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessage
 import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessageContent
-import dev.opencode.mobile.ui.components.OpenCodeReviewChangesPill
-import dev.opencode.mobile.ui.components.OpenCodeReviewChangesPillVariant
+import dev.opencode.mobile.ui.components.OpenCodeSessionBranchPill
 import dev.opencode.mobile.ui.components.OpenCodeSessionTodosPill
 import dev.opencode.mobile.ui.components.OpenCodeStatusStack
 import dev.opencode.mobile.ui.components.OpenCodeSyncingPill
@@ -85,8 +84,8 @@ import dev.opencode.mobile.ui.scroll.messageListTimelineItemSpacing
 import dev.opencode.mobile.ui.scroll.rememberMessageListTimeline
 import dev.opencode.mobile.ui.scroll.rememberMessageListUserScroll
 import dev.opencode.mobile.ui.sessionchat.AttachmentPresentationMapper
-import dev.opencode.mobile.ui.sessionchat.ReviewChangesPillVisibility
-import dev.opencode.mobile.ui.sessionchat.ReviewChangesSummary
+import dev.opencode.mobile.ui.sessionchat.SessionBranchPillUiState
+import dev.opencode.mobile.ui.sessionchat.SessionBranchPillVisibility
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlock
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlocks
@@ -107,7 +106,7 @@ internal data class SessionChatTimelineViewProps(
     val hasOlder: Boolean = false,
     val isLoadingOlder: Boolean = false,
     val errorMessage: String?,
-    val reviewChangesSummary: ReviewChangesSummary?,
+    val sessionBranchPill: SessionBranchPillUiState? = null,
     val syncingIndicatorLabel: String? = null,
     val workingIndicatorLabel: String? = null,
     val workingIndicatorCollapsed: Boolean = false,
@@ -121,7 +120,7 @@ internal data class SessionChatTimelineViewProps(
     val bottomOverlayInset: Dp = 0.dp,
     val onRefresh: () -> Unit,
     val onLoadOlder: () -> Unit = {},
-    val onReviewChangesClick: () -> Unit,
+    val onSessionBranchClick: () -> Unit = {},
     val onSessionTodosClick: () -> Unit = {},
     val onMessageActionsTap: (SessionChatMessageActionsTarget) -> Unit,
     val onToolDetailTap: (SessionChatToolDetailTarget) -> Unit = {},
@@ -191,7 +190,7 @@ internal fun SessionChatTimelineView(
                 isRefreshing = props.isRefreshing,
                 hasOlder = props.hasOlder,
                 isLoadingOlder = props.isLoadingOlder,
-                reviewChangesSummary = props.reviewChangesSummary,
+                sessionBranchPill = props.sessionBranchPill,
                 syncingIndicatorLabel = props.syncingIndicatorLabel,
                 workingIndicatorLabel = props.workingIndicatorLabel,
                 workingIndicatorCollapsed = props.workingIndicatorCollapsed,
@@ -204,7 +203,7 @@ internal fun SessionChatTimelineView(
                 bottomOverlayInset = props.bottomOverlayInset,
                 onRefresh = props.onRefresh,
                 onLoadOlder = props.onLoadOlder,
-                onReviewChangesClick = props.onReviewChangesClick,
+                onSessionBranchClick = props.onSessionBranchClick,
                 onSessionTodosClick = props.onSessionTodosClick,
                 onMessageActionsTap = props.onMessageActionsTap,
                 onToolDetailTap = props.onToolDetailTap,
@@ -226,7 +225,7 @@ private fun SessionChatTimelineReadyView(
     isRefreshing: Boolean,
     hasOlder: Boolean,
     isLoadingOlder: Boolean,
-    reviewChangesSummary: ReviewChangesSummary?,
+    sessionBranchPill: SessionBranchPillUiState?,
     syncingIndicatorLabel: String?,
     workingIndicatorLabel: String?,
     workingIndicatorCollapsed: Boolean,
@@ -239,7 +238,7 @@ private fun SessionChatTimelineReadyView(
     bottomOverlayInset: Dp,
     onRefresh: () -> Unit,
     onLoadOlder: () -> Unit,
-    onReviewChangesClick: () -> Unit,
+    onSessionBranchClick: () -> Unit,
     onSessionTodosClick: () -> Unit,
     onMessageActionsTap: (SessionChatMessageActionsTarget) -> Unit,
     onToolDetailTap: (SessionChatToolDetailTarget) -> Unit,
@@ -434,11 +433,10 @@ private fun SessionChatTimelineReadyView(
         }
 
         val showScrollToEnd = !hideFloatStack && timeline.showScrollToEnd
-        val showReviewChanges =
-            !hideFloatStack && ReviewChangesPillVisibility.shouldShow(reviewChangesSummary)
+        val showSessionBranchPill = SessionBranchPillVisibility.shouldShow(sessionBranchPill, hideFloatStack)
         val showSessionTodosPill = !hideFloatStack && sessionTodosVisible && sessionTodoTotalCount > 0
         val showTopOverlayStack =
-            syncingIndicatorLabel != null || showSessionTodosPill || showReviewChanges
+            syncingIndicatorLabel != null || showSessionTodosPill || showSessionBranchPill
         LaunchedEffect(showTopOverlayStack) {
             if (!showTopOverlayStack) {
                 topOverlayInsetPx = 0
@@ -471,14 +469,13 @@ private fun SessionChatTimelineReadyView(
                     )
                 }
 
-                if (showReviewChanges) {
-                    reviewChangesSummary?.let { summary ->
-                        OpenCodeReviewChangesPill(
-                            variant = OpenCodeReviewChangesPillVariant.LatestTurn,
-                            changedFileCount = summary.fileCount,
-                            additions = summary.additions,
-                            deletions = summary.deletions,
-                            onClick = onReviewChangesClick,
+                if (showSessionBranchPill) {
+                    sessionBranchPill?.let { pill ->
+                        OpenCodeSessionBranchPill(
+                            branch = pill.branch,
+                            additions = pill.additions,
+                            deletions = pill.deletions,
+                            onClick = onSessionBranchClick,
                         )
                     }
                 }

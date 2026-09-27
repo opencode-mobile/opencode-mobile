@@ -195,7 +195,7 @@ struct SessionChatUiState: Equatable {
     var projectLabel: String? = nil
     var projectLetter: Character? = nil
     var projectLetterAccent: LetterAccent? = nil
-    var repoStrip: SessionChatRepoStripUiState? = nil
+    var sessionBranchPill: SessionChatBranchPillUiState? = nil
     var timeline: SessionChatTimelineState
     var messages: [SessionChatRow]
     var pendingPrompts: [PendingPrompt] = []
@@ -373,6 +373,12 @@ enum SessionChatComposerKind: Equatable {
 enum ReviewChangesPillVisibility {
     static func shouldShow(summary: ReviewChangesSummary?) -> Bool {
         (summary?.fileCount ?? 0) > 0
+    }
+}
+
+enum SessionBranchPillVisibility {
+    static func shouldShow(pill: SessionChatBranchPillUiState?, hideFloatStack: Bool) -> Bool {
+        pill != nil && !hideFloatStack
     }
 }
 
@@ -588,12 +594,20 @@ struct SessionChatRepoStripRegionState: Equatable {
     var isExpanded = false
 }
 
-/// Header repo strip: current branch and uncommitted working-tree changes. Nil hides the strip.
-struct SessionChatRepoStripUiState: Equatable {
+/// Floating session branch pill. Nil when the worktree branch is unknown.
+struct SessionChatBranchPillUiState: Equatable {
     let branch: String
-    let defaultBranch: String?
-    let files: [VcsFileStatus]
-    let isExpanded: Bool
+    let additions: Int
+    let deletions: Int
+
+    static func resolved(from region: SessionChatRepoStripRegionState) -> SessionChatBranchPillUiState? {
+        guard region.isAvailable, !region.branch.isEmpty else { return nil }
+        return SessionChatBranchPillUiState(
+            branch: region.branch,
+            additions: max(0, region.files.reduce(0) { $0 + $1.additions }),
+            deletions: max(0, region.files.reduce(0) { $0 + $1.deletions })
+        )
+    }
 }
 
 struct SessionChatCommandsRegionState: Equatable {
