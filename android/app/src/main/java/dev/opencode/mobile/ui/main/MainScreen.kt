@@ -47,6 +47,7 @@ import dev.opencode.mobile.ui.components.OpenCodeDialogOption
 import dev.opencode.mobile.ui.components.OpenCodeDialogTextField
 import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeListItemStyle
+import dev.opencode.mobile.ui.components.OpenCodeSectionHeader
 import dev.opencode.mobile.ui.components.OpenCodeSessionConnectionStatus
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarHost
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarMessage
@@ -431,12 +432,7 @@ internal fun MainScreen(
     ) {
         val active = serversChrome.active
         if (active != null) {
-            Text(
-                text = "USING NOW",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 4.dp),
-            )
+            OpenCodeSectionHeader(title = "Using now")
             OpenCodeListItem(
                 title = active.displayName,
                 subtitle = active.baseUrl.trimEnd('/'),
@@ -453,12 +449,7 @@ internal fun MainScreen(
             )
         }
         if (serversChrome.others.isNotEmpty()) {
-            Text(
-                text = "SWITCH TO",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 4.dp),
-            )
+            OpenCodeSectionHeader(title = "Switch to")
             serversChrome.others.forEach { profile ->
                 OpenCodeListItem(
                     title = profile.displayName,

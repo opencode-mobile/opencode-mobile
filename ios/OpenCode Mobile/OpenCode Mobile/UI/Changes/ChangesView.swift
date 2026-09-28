@@ -173,7 +173,12 @@ struct ChangesView: View {
                 } else {
                     ForEach(changeSet.fileGroups) { group in
                         VStack(alignment: .leading, spacing: 8) {
-                            folderHeader(group)
+                            OpenCodeSectionHeader(
+                                title: group.directory,
+                                variant: .plain,
+                                trailing: .count(group.files.count),
+                                inset: .flush
+                            )
                             OpenCodeListGroup(group.files, id: \.path) { file in
                                 fileRow(file, changeSet: changeSet)
                             }
@@ -223,21 +228,6 @@ struct ChangesView: View {
             }
         }
         .accessibilityElement(children: .combine)
-    }
-
-    private func folderHeader(_ group: ChangedFileGroup) -> some View {
-        HStack {
-            Text(group.directory)
-                .font(OpenCodeTypography.caption)
-                .foregroundStyle(OpenCodeColors.textBase)
-                .lineLimit(1)
-            Spacer(minLength: 8)
-            Text("\(group.files.count)")
-                .font(OpenCodeTypography.caption)
-                .foregroundStyle(OpenCodeColors.textWeak)
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(group.directory), \(group.files.count) \(group.files.count == 1 ? "file" : "files")")
     }
 
     private func fileRow(_ file: FileDiff, changeSet: ChangesContentState) -> some View {

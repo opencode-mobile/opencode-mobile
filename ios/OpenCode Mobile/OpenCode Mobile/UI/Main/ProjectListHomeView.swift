@@ -220,7 +220,7 @@ struct ProjectListHomeView: View {
             ) {
                 VStack(alignment: .leading, spacing: 0) {
                     if let active = viewModel.serversChrome.active {
-                        serversSheetSection("USING NOW")
+                        OpenCodeSectionHeader(title: "Using now")
                         OpenCodeListItem(
                             title: active.displayName,
                             subtitle: active.baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/")),
@@ -235,7 +235,7 @@ struct ProjectListHomeView: View {
                         )
                     }
                     if !viewModel.serversChrome.others.isEmpty {
-                        serversSheetSection("SWITCH TO")
+                        OpenCodeSectionHeader(title: "Switch to")
                         ForEach(viewModel.serversChrome.others, id: \.id) { profile in
                             OpenCodeListItem(
                                 title: profile.displayName,
@@ -612,15 +612,6 @@ struct ProjectListHomeView: View {
     }
 
     @ViewBuilder
-    private func serversSheetSection(_ title: String) -> some View {
-        Text(title)
-            .font(OpenCodeTypography.caption)
-            .foregroundStyle(OpenCodeColors.textWeak)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.top, 12)
-            .padding(.bottom, 4)
-            .padding(.horizontal, 4)
-    }
 
     private func presentConnectionSetup(mode: ConnectionSetupMode = .first) {
         switch mode {

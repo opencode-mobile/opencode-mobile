@@ -58,12 +58,7 @@ struct ServersView: View {
             VStack(spacing: 0) {
             ScrollView {
                 VStack(spacing: 8) {
-                    Text("SAVED")
-                        .font(OpenCodeTypography.caption)
-                        .foregroundStyle(OpenCodeColors.textBase)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 16)
-                        .padding(.top, 16)
+                    OpenCodeSectionHeader(title: "Saved")
                         .contentShape(Rectangle())
                         .onTapGesture {
                             let nowMs = Int64(Date().timeIntervalSince1970 * 1000)

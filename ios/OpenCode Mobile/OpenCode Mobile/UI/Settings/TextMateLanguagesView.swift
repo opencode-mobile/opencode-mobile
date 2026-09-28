@@ -44,7 +44,7 @@ struct TextMateLanguagesView: View {
 
             ScrollView {
                 LazyVStack(spacing: 8) {
-                    sectionHeader("Packaged")
+                    OpenCodeSectionHeader(title: "Packaged")
                     ForEach(languages, id: \.self) { language in
                         languageRow(language)
                     }
@@ -81,17 +81,6 @@ struct TextMateLanguagesView: View {
         MessageContentPreparer.shared.clearDocumentCache()
         BlockDecorationCache.shared.clear()
         refreshToken += 1
-    }
-
-    @ViewBuilder
-    private func sectionHeader(_ title: String) -> some View {
-        Text(title.uppercased())
-            .font(OpenCodeTypography.caption)
-            .foregroundStyle(OpenCodeColors.textBase)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 16)
-            .padding(.top, 16)
-            .padding(.bottom, 4)
     }
 
     @ViewBuilder
