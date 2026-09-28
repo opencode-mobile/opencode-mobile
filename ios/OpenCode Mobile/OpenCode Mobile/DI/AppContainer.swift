@@ -559,15 +559,6 @@ extension Container {
         }
     }
 
-    var connectionSetupViewModel: Factory<ConnectionSetupViewModel> {
-        self { @MainActor in
-            ConnectionSetupViewModel(
-                connectionProbeService: self.connectionProbing(),
-                connectionSessionCoordinator: self.connectionSessionCoordinator()
-            )
-        }
-    }
-
     var projectListHomeViewModel: Factory<ProjectListHomeViewModel> {
         self { @MainActor in
             ProjectListHomeViewModel(
@@ -579,16 +570,8 @@ extension Container {
                 activeConnectionManager: self.activeConnectionManager(),
                 sessionLiveStore: self.sessionLiveStore(),
                 sessionStatusLiveStore: self.sessionStatusLiveStore(),
-                permissionLiveStore: self.permissionLiveStore(),
-                questionLiveStore: self.questionLiveStore(),
-                sessionTodoLiveStore: self.sessionTodoLiveStore(),
                 sessionReadyStore: self.sessionReadyStore(),
-                foregroundEventStream: self.foregroundEventStream(),
                 connectionSessionCoordinator: self.connectionSessionCoordinator(),
-                newSessionModelSelectionResolver: NewSessionModelSelectionResolver(
-                    store: self.sessionModelSelectionStore(),
-                    modelRepository: self.modelRepository()
-                ),
                 sessionCache: self.sessionCache(),
                 liveUpdates: self.liveUpdates()
             )

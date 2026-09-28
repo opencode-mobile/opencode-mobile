@@ -4787,18 +4787,6 @@ private class FakeMessageRepository(
         return messages
     }
 
-    override suspend fun getMessage(
-        sessionId: String,
-        messageId: String,
-        directory: String?,
-    ): Message = error("unused")
-
-    override suspend fun sendMessage(
-        sessionId: String,
-        text: String,
-        directory: String?,
-    ): Message = error("unused")
-
     override suspend fun sendPromptAsync(
         sessionId: String,
         options: PromptSendOptions,

@@ -87,23 +87,6 @@ class DefaultMessageRepository
             return messages
         }
 
-        override suspend fun getMessage(
-            sessionId: String,
-            messageId: String,
-            directory: String?,
-        ): Message =
-            runCatching { adapter.toMessage(api.getMessage(sessionId, messageId, directory)) }
-                .getOrElse { throw adapter.mapError(it) }
-
-        override suspend fun sendMessage(
-            sessionId: String,
-            text: String,
-            directory: String?,
-        ): Message =
-            runCatching {
-                adapter.toMessage(api.sendMessage(sessionId, adapter.toSendRequest(text), directory))
-            }.getOrElse { throw adapter.mapError(it) }
-
         override suspend fun sendPromptAsync(
             sessionId: String,
             options: PromptSendOptions,

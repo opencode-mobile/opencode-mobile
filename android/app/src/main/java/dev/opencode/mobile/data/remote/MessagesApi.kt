@@ -118,29 +118,6 @@ class MessagesApi private constructor(
             .body<ApiListEnvelope<V2InboxItemDto>>()
             .data
 
-    suspend fun getMessage(
-        sessionId: String,
-        messageId: String,
-        directory: String? = null,
-    ): MessageDto =
-        httpClient
-            .get()
-            .get("session/$sessionId/message/$messageId") {
-                applyDirectory(directory)
-            }.body()
-
-    suspend fun sendMessage(
-        sessionId: String,
-        body: SendMessageRequestDto,
-        directory: String? = null,
-    ): MessageDto =
-        httpClient
-            .get()
-            .post("session/$sessionId/message") {
-                applyDirectory(directory)
-                setJsonBody(json, body)
-            }.body()
-
     suspend fun sendPromptAsync(
         sessionId: String,
         body: SendMessageRequestDto,

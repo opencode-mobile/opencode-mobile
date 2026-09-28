@@ -117,14 +117,9 @@ final class ProjectListHomeViewModel {
     private let connectionProfileStore: any ConnectionProfileStore
     private let activeConnectionManager: ActiveConnectionManager
     private let connectionSessionCoordinator: ConnectionSessionCoordinator
-    private let newSessionModelSelectionResolver: NewSessionModelSelectionResolver?
     private let sessionLiveStore: any SessionLiveStore
     private let sessionStatusLiveStore: any SessionStatusLiveStore
-    private let permissionLiveStore: any PermissionLiveStore
-    private let questionLiveStore: any QuestionLiveStore
-    private let sessionTodoLiveStore: any SessionTodoLiveStore
     private let sessionReadyStore: any SessionReadyStore
-    private let foregroundEventStream: any ForegroundEventStream
     private let liveUpdates: any LiveUpdates
     private let sessionCache: any SessionCache
     private let sessionAdapter = SessionDomainAdapter()
@@ -153,13 +148,8 @@ final class ProjectListHomeViewModel {
         activeConnectionManager: ActiveConnectionManager,
         sessionLiveStore: any SessionLiveStore,
         sessionStatusLiveStore: any SessionStatusLiveStore,
-        permissionLiveStore: any PermissionLiveStore,
-        questionLiveStore: any QuestionLiveStore,
-        sessionTodoLiveStore: any SessionTodoLiveStore,
         sessionReadyStore: any SessionReadyStore,
-        foregroundEventStream: any ForegroundEventStream,
         connectionSessionCoordinator: ConnectionSessionCoordinator,
-        newSessionModelSelectionResolver: NewSessionModelSelectionResolver? = nil,
         sessionCache: any SessionCache = NoOpSessionCache.shared,
         liveUpdates: any LiveUpdates = FixedLiveUpdates()
     ) {
@@ -171,14 +161,9 @@ final class ProjectListHomeViewModel {
         self.activeConnectionManager = activeConnectionManager
         self.sessionLiveStore = sessionLiveStore
         self.sessionStatusLiveStore = sessionStatusLiveStore
-        self.permissionLiveStore = permissionLiveStore
-        self.questionLiveStore = questionLiveStore
-        self.sessionTodoLiveStore = sessionTodoLiveStore
         self.sessionReadyStore = sessionReadyStore
-        self.foregroundEventStream = foregroundEventStream
         self.liveUpdates = liveUpdates
         self.connectionSessionCoordinator = connectionSessionCoordinator
-        self.newSessionModelSelectionResolver = newSessionModelSelectionResolver
         self.sessionCache = sessionCache
         self.sessionActionsRegion = HomeSessionActions(
             sessionRepository: sessionRepository,

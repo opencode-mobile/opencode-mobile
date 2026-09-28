@@ -956,20 +956,7 @@ private func previewProjectListHomeViewModel() -> ProjectListHomeViewModel {
         activeConnectionManager: manager,
         sessionLiveStore: sessionLiveStore,
         sessionStatusLiveStore: sessionStatusLiveStore,
-        permissionLiveStore: DefaultPermissionLiveStore(
-            sessionRepository: previewSessionRepository,
-            eventStream: previewEventStream
-        ),
-        questionLiveStore: DefaultQuestionLiveStore(
-            sessionRepository: previewSessionRepository,
-            eventStream: previewEventStream
-        ),
-        sessionTodoLiveStore: DefaultSessionTodoLiveStore(
-            sessionRepository: previewSessionRepository,
-            eventStream: previewEventStream
-        ),
         sessionReadyStore: sessionReadyStore,
-        foregroundEventStream: previewEventStream,
         connectionSessionCoordinator: coordinator
     )
 }

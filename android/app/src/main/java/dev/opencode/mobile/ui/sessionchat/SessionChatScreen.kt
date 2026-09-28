@@ -128,8 +128,9 @@ fun SessionChatScreen(
     LaunchedEffect(sessionId, sessionTitle, worktree) {
         viewModel.bind(sessionId, sessionTitle, worktree)
     }
-    // Nav keeps the chat ViewModel on the back stack; clear Ready focus when the
-    // screen leaves composition (parity with iOS stopObserving onDisappear).
+    // The entry stays on the back stack (and keeps its ViewModel) while a child route
+    // is on top, so clear Ready focus whenever the screen leaves composition, not only
+    // in onCleared (parity with iOS stopObserving onDisappear).
     DisposableEffect(viewModel) {
         onDispose {
             viewModel.clearSessionReadyFocus()
