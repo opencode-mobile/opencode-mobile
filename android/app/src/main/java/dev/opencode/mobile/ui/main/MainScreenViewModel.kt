@@ -10,21 +10,15 @@ import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.connection.userMessage
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
-import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.FixedLiveUpdates
-import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.event.LiveUpdates
 import dev.opencode.mobile.domain.filesystem.DirectoryListingPolicy
 import dev.opencode.mobile.domain.filesystem.FilesystemRepository
 import dev.opencode.mobile.domain.live.LiveStoreRefreshPolicy
-import dev.opencode.mobile.domain.live.PermissionLiveStore
-import dev.opencode.mobile.domain.live.QuestionLiveStore
 import dev.opencode.mobile.domain.live.SessionLiveStore
 import dev.opencode.mobile.domain.live.SessionReadyStore
 import dev.opencode.mobile.domain.live.SessionStatusLiveStore
-import dev.opencode.mobile.domain.live.SessionTodoLiveStore
 import dev.opencode.mobile.domain.message.MessageRepository
-import dev.opencode.mobile.domain.model.NewSessionModelSelectionResolver
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.project.ProjectDomainAdapter
 import dev.opencode.mobile.domain.project.ProjectRepository
@@ -73,17 +67,11 @@ class MainScreenViewModel
         private val messageRepository: MessageRepository,
         private val connectionProfileStore: ConnectionProfileStore,
         private val sessionDomainAdapter: SessionDomainAdapter,
-        private val eventDomainAdapter: EventDomainAdapter,
         private val sessionLiveStore: SessionLiveStore,
         private val sessionStatusLiveStore: SessionStatusLiveStore,
-        private val permissionLiveStore: PermissionLiveStore,
-        private val questionLiveStore: QuestionLiveStore,
-        private val sessionTodoLiveStore: SessionTodoLiveStore,
         private val sessionReadyStore: SessionReadyStore,
-        private val foregroundEventStream: ForegroundEventStream,
         private val activeConnectionManager: ActiveConnectionManager,
         private val connectionSessionCoordinator: ConnectionSessionCoordinator,
-        private val newSessionModelSelectionResolver: NewSessionModelSelectionResolver,
         private val sessionCache: SessionCache,
         private val liveUpdates: LiveUpdates = FixedLiveUpdates(),
     ) : ViewModel() {

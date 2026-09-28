@@ -32,8 +32,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
+import androidx.navigation3.runtime.NavEntryDecorator
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
+import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
 import dev.opencode.mobile.domain.app.AppVersion
 import dev.opencode.mobile.domain.connection.ConnectionProfile
@@ -118,6 +121,18 @@ import dev.opencode.mobile.ui.settings.TextMateLogbookViewModel
 import dev.opencode.mobile.ui.settings.ThemePickerScreen
 import dev.opencode.mobile.ui.terminal.TerminalScreen
 import dev.opencode.mobile.ui.terminal.TerminalsCatalogScreen
+
+/**
+ * Entry decorators for the root [NavDisplay]. The ViewModelStore decorator scopes every
+ * `hiltViewModel(key = …)` inside an entry to that entry, so screen ViewModels are cleared
+ * (and `onCleared` runs) when the entry is popped instead of accumulating in the Activity store.
+ */
+@Composable
+internal fun <T : Any> rememberMainNavEntryDecorators(): List<NavEntryDecorator<T>> =
+    listOf(
+        rememberSaveableStateHolderNavEntryDecorator(),
+        rememberViewModelStoreNavEntryDecorator(),
+    )
 
 @Composable
 fun MainNavigation() {
@@ -212,6 +227,7 @@ fun MainNavigation() {
                                 ),
                             backStack = backStack,
                             onBack = { backStack.removeLastOrNull() },
+                            entryDecorators = rememberMainNavEntryDecorators(),
                             transitionSpec = { forwardRouteTransition() },
                             popTransitionSpec = { backwardRouteTransition() },
                             predictivePopTransitionSpec = { backwardRouteTransition() },

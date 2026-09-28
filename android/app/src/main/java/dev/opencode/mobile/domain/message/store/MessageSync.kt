@@ -90,8 +90,6 @@ class MessageSync(
     private val quietRefreshDepth = ConcurrentHashMap<String, Int>()
 
     private val observationGeneration = AtomicInteger(0)
-    private val terminalSessionKeys = ConcurrentHashMap.newKeySet<MessageSessionKey>()
-    private val lastMessageEventAtMs = ConcurrentHashMap<String, Long>()
     private val lastPublishedProfileId = AtomicReference<String?>(null)
     private val restAttempts = CopyOnWriteArrayList<String>()
     private val historyWindows = ConcurrentHashMap<String, HistoryWindow>()
@@ -317,9 +315,8 @@ class MessageSync(
     private fun incrementalMessageFlow(key: MessageSessionKey): Flow<MessageListUpdate> =
         channelFlow {
             val startedGeneration = observationGeneration.get()
-            noteMessageActivity(key.storeSlot)
 
-            fun observationStillCurrent(): Boolean = observationGeneration.get() == startedGeneration && key !in terminalSessionKeys
+            fun observationStillCurrent(): Boolean = observationGeneration.get() == startedGeneration
 
             val staging = Channel<StagedItem>(capacity = eventStagingCapacity)
             val queued = AtomicInteger(0)
@@ -534,15 +531,6 @@ class MessageSync(
                 assertOffMainThread()
                 if (!observationStillCurrent()) return
                 if (event.sessionId != key.sessionId) return
-                when (event.type) {
-                    "message.updated",
-                    "message.part.updated",
-                    "message.part.delta",
-                    "message.removed",
-                    "message.part.removed",
-                    "session.idle",
-                    -> noteMessageActivity(storeSlot)
-                }
                 MessagePipelineProbe.emit(MessagePipelineProbe.Marker.EventAccepted)
 
                 var applyResult: MessageStoreApplyResult? = null
@@ -708,12 +696,6 @@ class MessageSync(
         ) : ReloadResult
     }
 
-    private suspend fun fetchMessages(
-        sessionId: String,
-        directory: String?,
-        reason: String,
-    ): List<Message> = fetchTail(sessionId, directory, reason).messages
-
     private suspend fun fetchTail(
         sessionId: String,
         directory: String?,
@@ -870,10 +852,6 @@ class MessageSync(
         if (identity == lastIdentities[storeSlot]) return false
         rememberPublishedFrame(storeSlot, messages)
         return true
-    }
-
-    private fun noteMessageActivity(storeSlot: String) {
-        lastMessageEventAtMs[storeSlot] = nowMs()
     }
 
     private fun logI(message: String) {

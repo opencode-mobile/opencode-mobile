@@ -65,18 +65,6 @@ interface MessageRepository {
         )
     }
 
-    suspend fun getMessage(
-        sessionId: String,
-        messageId: String,
-        directory: String? = null,
-    ): Message
-
-    suspend fun sendMessage(
-        sessionId: String,
-        text: String,
-        directory: String? = null,
-    ): Message
-
     suspend fun sendPromptAsync(
         sessionId: String,
         text: String,

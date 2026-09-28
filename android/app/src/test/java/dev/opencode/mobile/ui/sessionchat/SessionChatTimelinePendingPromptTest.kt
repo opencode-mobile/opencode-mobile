@@ -173,18 +173,6 @@ private class FakePendingPromptMessageRepository(
         directory: String?,
     ): OlderLoadResult = OlderLoadResult(messages = emptyList(), hasOlder = false, addedCount = 0)
 
-    override suspend fun getMessage(
-        sessionId: String,
-        messageId: String,
-        directory: String?,
-    ): Message = error("unused")
-
-    override suspend fun sendMessage(
-        sessionId: String,
-        text: String,
-        directory: String?,
-    ): Message = error("unused")
-
     override suspend fun sendPromptAsync(
         sessionId: String,
         options: PromptSendOptions,

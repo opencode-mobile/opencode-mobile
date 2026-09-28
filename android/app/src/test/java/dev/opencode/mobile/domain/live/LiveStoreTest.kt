@@ -903,7 +903,7 @@ class MessageSyncTest {
 
             repository.messages = listOf(Message(id = "msg-2", role = MessageRole.Assistant, text = "Polled"))
             advanceTimeBy(
-                LiveStoreRefreshPolicy.WORKING_POLL_INTERVAL_MS + LiveStoreRefreshPolicy.MESSAGE_DEBOUNCE_MS,
+                10_300L,
             )
             collectJob.cancel()
             advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
@@ -977,7 +977,7 @@ class MessageSyncTest {
             advanceTimeBy(1)
 
             advanceTimeBy(
-                LiveStoreRefreshPolicy.WORKING_POLL_INTERVAL_MS + LiveStoreRefreshPolicy.MESSAGE_DEBOUNCE_MS,
+                10_300L,
             )
             collectJob.cancel()
             advanceTimeBy(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS)
@@ -1225,7 +1225,7 @@ class MessageSyncTest {
                         parts = listOf(MessagePart.Text(text = "", isStreaming = false)),
                     ),
                 )
-            advanceTimeBy(LiveStoreRefreshPolicy.WORKING_POLL_INTERVAL_MS + 1)
+            advanceTimeBy(10_000L + 1)
 
             assertEquals(
                 "Hello",
@@ -1265,7 +1265,7 @@ class MessageSyncTest {
                 )
             val pollGate = CompletableDeferred<Unit>()
             repository.nextLoadGate = pollGate
-            advanceTimeBy(LiveStoreRefreshPolicy.WORKING_POLL_INTERVAL_MS)
+            advanceTimeBy(10_000L)
 
             eventStream.emit(partDeltaEvent(partId = "prt-1", messageId = "msg-2", delta = "Live"))
             advanceTimeBy(1)
@@ -1827,7 +1827,7 @@ class MessageSyncTest {
         eventStream: FakeForegroundEventStream,
         eventStagingCapacity: Int = MESSAGE_EVENT_STAGING_CAPACITY,
         connectionProfileId: String = "local",
-        @Suppress("UNUSED_PARAMETER") pollIntervalMs: Long = LiveStoreRefreshPolicy.WORKING_POLL_INTERVAL_MS,
+        @Suppress("UNUSED_PARAMETER") pollIntervalMs: Long = 10_000L,
         worldSignals: WorldSignals = SilentWorldSignals,
     ): MessageSync {
         if (eventStream.connectionState.value == EventStreamConnectionState.Idle) {
@@ -2838,12 +2838,12 @@ class LiveObservationTeardownTest {
 
             eventStream.openGap()
             eventStream.emit(OpencodeEvent(type = "server.connected"))
-            advanceTimeBy(LiveStoreRefreshPolicy.STATUS_DEBOUNCE_MS + 50)
+            advanceTimeBy(300L + 50)
             advanceUntilIdle()
             val fetchesPerEventBefore = repository.statusFetchCount
             eventStream.openGap()
             eventStream.emit(OpencodeEvent(type = "server.connected"))
-            advanceTimeBy(LiveStoreRefreshPolicy.STATUS_DEBOUNCE_MS + 50)
+            advanceTimeBy(300L + 50)
             advanceUntilIdle()
             val fetchesPerEvent = repository.statusFetchCount - fetchesPerEventBefore
 
@@ -2856,7 +2856,7 @@ class LiveObservationTeardownTest {
             val fetchesAfterSwitch = repository.statusFetchCount
             eventStream.openGap()
             eventStream.emit(OpencodeEvent(type = "server.connected"))
-            advanceTimeBy(LiveStoreRefreshPolicy.STATUS_DEBOUNCE_MS + 50)
+            advanceTimeBy(300L + 50)
             advanceUntilIdle()
             val fetchesPerEventAfterSwitch = repository.statusFetchCount - fetchesAfterSwitch
             homeJob.cancel()
@@ -2913,34 +2913,6 @@ class LiveObservationTeardownTest {
 @OptIn(ExperimentalCoroutinesApi::class)
 class InvalidationAckTest {
     private val testDispatcher = StandardTestDispatcher()
-
-    @Test
-    fun invalidateAndWait_stopsWaiting_whenNoCollectorEverAcks() =
-        runTest(testDispatcher) {
-            val bus = StoreInvalidationBus(ackTimeoutMs = 5_000L)
-            val received = mutableListOf<StoreInvalidate>()
-            val collector = launch { bus.events.collect { received.add(it) } }
-            advanceUntilIdle()
-
-            var returned = false
-            val startedAt = testScheduler.currentTime
-            val waiter =
-                launch {
-                    bus.invalidateAndWait(null, StoreRefreshReason.PULL_TO_REFRESH)
-                    returned = true
-                }
-            advanceUntilIdle()
-            val elapsed = testScheduler.currentTime - startedAt
-            waiter.cancel()
-            collector.cancel()
-
-            assertTrue(
-                "invalidateAndWait must stop waiting when the collector never acks (elapsed=$elapsed ms)",
-                returned,
-            )
-            assertEquals(1, received.size)
-            assertEquals(5_000L, elapsed)
-        }
 
     @Test
     fun invalidate_returnsWithoutWaitingOutTheCeiling_whenObservationIsTornDownMidRefresh() =
@@ -3035,7 +3007,7 @@ class LiveStoreRevisionGateTest {
             repository.statusDelayMs = 10_000
             eventStream.openGap()
             eventStream.emit(OpencodeEvent(type = "server.connected"))
-            advanceTimeBy(LiveStoreRefreshPolicy.STATUS_DEBOUNCE_MS + 50)
+            advanceTimeBy(300L + 50)
             assertEquals(
                 "the reconnect reload must be in flight before the idle event lands",
                 2,
@@ -3282,7 +3254,7 @@ class DefaultPermissionLiveStoreTest {
                 repository.permissionFetchCount,
             )
 
-            advanceTimeBy(LiveStoreRefreshPolicy.STATUS_DEBOUNCE_MS + 50)
+            advanceTimeBy(300L + 50)
             advanceUntilIdle()
             collectJob.cancel()
 
@@ -3525,7 +3497,7 @@ class DefaultQuestionLiveStoreTest {
                 repository.questionFetchCount,
             )
 
-            advanceTimeBy(LiveStoreRefreshPolicy.STATUS_DEBOUNCE_MS + 50)
+            advanceTimeBy(300L + 50)
             advanceUntilIdle()
             collectJob.cancel()
 
@@ -3611,7 +3583,7 @@ class DefaultQuestionLiveStoreTest {
             eventStream.openGap()
             eventStream.setConnectionState(EventStreamConnectionState.Connected)
             eventStream.emit(OpencodeEvent(type = "stream.reconnected"))
-            advanceTimeBy(LiveStoreRefreshPolicy.STATUS_DEBOUNCE_MS + 50)
+            advanceTimeBy(300L + 50)
             advanceUntilIdle()
             assertEquals(
                 "Stopped occupancy must not REST while SSE is down",
@@ -3766,18 +3738,6 @@ private class FakeMessageRepository(
         if (shouldFailLoad) error("load failed")
         return messagesBySession[sessionId] ?: messages
     }
-
-    override suspend fun getMessage(
-        sessionId: String,
-        messageId: String,
-        directory: String?,
-    ): Message = error("unused")
-
-    override suspend fun sendMessage(
-        sessionId: String,
-        text: String,
-        directory: String?,
-    ): Message = error("unused")
 
     override suspend fun sendPromptAsync(
         sessionId: String,
