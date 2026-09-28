@@ -84,6 +84,10 @@ struct V1SessionRemote: SessionRemote, Sendable {
         adapter.vcsInfo(from: try await api.getVcsInfo(directory: directory))
     }
 
+    func getVcsStatus(directory: String?) async throws -> [VcsFileStatus] {
+        try await api.getVcsStatus(directory: directory).map(adapter.vcsFileStatus)
+    }
+
     func getVcsDiff(mode: VcsDiffMode, directory: String?, context: Int) async throws -> [FileDiff] {
         try await api.getVcsDiff(mode: mode, directory: directory, context: context).map(adapter.fileDiff)
     }

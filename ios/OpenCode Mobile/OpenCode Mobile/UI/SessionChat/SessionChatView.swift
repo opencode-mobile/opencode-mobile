@@ -166,7 +166,7 @@ struct SessionChatView: View {
                         hasOlder: viewModel.uiState.hasOlder,
                         isLoadingOlder: viewModel.uiState.isLoadingOlder,
                         errorMessage: viewModel.uiState.errorMessage,
-                        reviewChangesSummary: viewModel.uiState.reviewChangesSummary,
+                        sessionBranchPill: viewModel.uiState.sessionBranchPill,
                         syncingIndicatorLabel: viewModel.uiState.syncingIndicatorLabel,
                         workingIndicatorLabel: viewModel.uiState.workingIndicatorLabel,
                         workingIndicatorCollapsed: viewModel.uiState.workingIndicatorCollapsed,
@@ -183,9 +183,9 @@ struct SessionChatView: View {
                             + keyboardOverlap,
                         onRefresh: { await viewModel.refreshMessages() },
                         onLoadOlder: { Task { await viewModel.loadOlderMessages() } },
-                        onReviewChangesTap: {
+                        onSessionBranchTap: {
                             logChatAction(ProductAnalytics.Action.chatOpenChanges)
-                            changesTarget = viewModel.uiState.reviewChangesNavigationTarget(worktree: session.worktree)
+                            changesTarget = viewModel.uiState.changesNavigationTarget(worktree: session.worktree)
                         },
                         onSessionTodosTap: {
                             guard !blocksSessionTodosSheet else { return }

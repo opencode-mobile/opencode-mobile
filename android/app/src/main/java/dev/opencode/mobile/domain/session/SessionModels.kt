@@ -165,6 +165,14 @@ data class FileDiff(
     val status: FileDiffStatus,
 )
 
+/** One uncommitted working-copy change reported by the server VCS status endpoint. */
+data class VcsFileStatus(
+    val path: String,
+    val status: FileDiffStatus,
+    val additions: Int,
+    val deletions: Int,
+)
+
 data class VcsInfo(
     val currentBranch: String?,
     val defaultBranch: String?,

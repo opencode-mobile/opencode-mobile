@@ -19,6 +19,7 @@ import dev.opencode.mobile.domain.session.FileDiff
 import dev.opencode.mobile.domain.session.PermissionRequest
 import dev.opencode.mobile.domain.session.QuestionRequest
 import dev.opencode.mobile.domain.session.SessionTodo
+import dev.opencode.mobile.domain.session.VcsFileStatus
 import dev.opencode.mobile.domain.text.TitleCaseIdentifier
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.ui.changes.ChangeSource
@@ -160,6 +161,7 @@ data class SessionChatUiState(
     val questionErrorMessage: String? = null,
     val reviewChangesMessageId: String? = null,
     val reviewChangesSummary: ReviewChangesSummary? = null,
+    val sessionBranchPill: SessionBranchPillUiState? = null,
     val supportsSessionMessageDiff: Boolean = true,
     val supportsSessionArchive: Boolean = true,
     val rename: SessionRenameUiState = SessionRenameUiState(),
@@ -290,6 +292,13 @@ enum class SessionChatComposerKind {
 
 object ReviewChangesPillVisibility {
     fun shouldShow(summary: ReviewChangesSummary?): Boolean = (summary?.fileCount ?: 0) > 0
+}
+
+object SessionBranchPillVisibility {
+    fun shouldShow(
+        pill: SessionBranchPillUiState?,
+        hideFloatStack: Boolean,
+    ): Boolean = !hideFloatStack && !pill?.branch.isNullOrEmpty()
 }
 
 data class ReviewChangesSummary(
@@ -447,6 +456,30 @@ data class SessionChatReviewChangesRegionState(
     val messageId: String? = null,
     val summary: ReviewChangesSummary? = null,
 )
+
+data class SessionChatRepoStripRegionState(
+    /** False until the server reports a current branch for the worktree. */
+    val isAvailable: Boolean = false,
+    val branch: String = "",
+    val defaultBranch: String? = null,
+    val files: List<VcsFileStatus> = emptyList(),
+    val isExpanded: Boolean = false,
+)
+
+data class SessionBranchPillUiState(
+    val branch: String,
+    val additions: Int,
+    val deletions: Int,
+)
+
+fun SessionChatRepoStripRegionState.toSessionBranchPill(): SessionBranchPillUiState? {
+    if (!isAvailable || branch.isEmpty()) return null
+    return SessionBranchPillUiState(
+        branch = branch,
+        additions = files.sumOf { it.additions }.coerceAtLeast(0),
+        deletions = files.sumOf { it.deletions }.coerceAtLeast(0),
+    )
+}
 
 data class SessionChatInboxRegionState(
     val permissionRequests: List<PermissionRequest> = emptyList(),

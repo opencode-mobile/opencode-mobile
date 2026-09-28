@@ -115,6 +115,8 @@ internal class V2SessionRemote(
 
     override suspend fun getVcsInfo(directory: String?): VcsInfo = adapter.toVcsInfo(api.getVcsInfoV2(directory))
 
+    override suspend fun getVcsStatus(directory: String?): List<VcsFileStatus> = api.getVcsStatusV2(directory).map(adapter::toVcsFileStatus)
+
     override suspend fun getVcsDiff(
         mode: VcsDiffMode,
         directory: String?,

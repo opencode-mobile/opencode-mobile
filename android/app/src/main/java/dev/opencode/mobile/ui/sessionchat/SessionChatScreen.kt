@@ -480,7 +480,7 @@ fun SessionChatScreen(
                             hasOlder = uiState.hasOlder,
                             isLoadingOlder = uiState.isLoadingOlder,
                             errorMessage = uiState.errorMessage,
-                            reviewChangesSummary = uiState.reviewChangesSummary,
+                            sessionBranchPill = uiState.sessionBranchPill,
                             syncingIndicatorLabel = uiState.syncingIndicatorLabel,
                             workingIndicatorLabel = uiState.workingIndicatorLabel,
                             workingIndicatorCollapsed = uiState.workingIndicatorCollapsed,
@@ -495,9 +495,9 @@ fun SessionChatScreen(
                             bottomOverlayInset = timelineBottomInset,
                             onRefresh = viewModel::refreshMessages,
                             onLoadOlder = viewModel::loadOlderMessages,
-                            onReviewChangesClick = {
+                            onSessionBranchClick = {
                                 logChatAction(ProductAnalytics.Action.CHAT_OPEN_CHANGES)
-                                uiState.reviewChangesNavigationTarget(worktree)?.let(onReviewChangesClick)
+                                onReviewChangesClick(uiState.changesNavigationTarget(worktree))
                             },
                             onSessionTodosClick = {
                                 logChatAction(ProductAnalytics.Action.CHAT_OPEN_TODOS)
@@ -1136,3 +1136,4 @@ private fun SessionChatScreenPreview() {
         )
     }
 }
+

@@ -14,6 +14,7 @@ final class SessionChatViewModel {
     private let composer: SessionChatComposer
     private let sessionInfo: SessionInfo
     private let reviewChanges: SessionChatReviewChanges
+    private let repoStrip: SessionChatRepoStrip
     private let commands: SessionChatCommands
     private let inbox: SessionChatInbox
     private let sessionRepository: any SessionRepository
@@ -123,6 +124,12 @@ final class SessionChatViewModel {
             supportsSessionMessageDiff: { activeConnectionManager.capabilities.supportsSessionMessageDiff },
             lastTurnReviewChangesStore: lastTurnReviewChangesStore ?? LastTurnReviewChangesStore()
         )
+        self.repoStrip = SessionChatRepoStrip(
+            worktree: worktree,
+            startExpanded: OptimisticSessionCreate.isPlaceholder(sessionID),
+            sessionRepository: sessionRepository,
+            foregroundEventStream: foregroundEventStream
+        )
         self.commands = SessionChatCommands(
             sessionID: sessionID,
             worktree: worktree,
@@ -156,6 +163,7 @@ final class SessionChatViewModel {
         }
         sessionInfo.onChange = { [weak self] in self?.publishUiState() }
         reviewChanges.onChange = { [weak self] in self?.publishUiState() }
+        repoStrip.onChange = { [weak self] in self?.publishUiState() }
         commands.onChange = { [weak self] in self?.publishUiState() }
         inbox.onChange = { [weak self] in self?.publishUiState() }
         refreshProjectIdentity()
@@ -165,6 +173,7 @@ final class SessionChatViewModel {
     func startObserving() {
         isSessionBound = true
         startCollapsePreferenceObservation()
+        repoStrip.start()
         if OptimisticSessionCreate.isPlaceholder(sessionID) {
             beginOptimisticCreate()
             return
@@ -864,6 +873,7 @@ final class SessionChatViewModel {
         sessionReadyStore.setFocusedSession(sessionID: nil, directory: nil)
         syncCoordinator?.markFocused(nil)
         reviewChanges.stop()
+        repoStrip.stop()
     }
 
     private func refreshProjectIdentity() {
@@ -1020,13 +1030,18 @@ final class SessionChatViewModel {
             || !inboxState.permissionRequests.isEmpty
             || !inboxState.questionRequests.isEmpty
         inbox.setLive(isLive)
+        let isTurnActive = infoState.sessionStatusLabel != nil || isCompacting
         reviewChanges.updateCandidate(
             messages: timelineState.messages,
             hasResolvedSessionStatus: infoState.hasResolvedSessionStatus,
-            isTurnActive: infoState.sessionStatusLabel != nil || isCompacting,
+            isTurnActive: isTurnActive,
             isSending: composerState.isSending
         )
+        if infoState.hasResolvedSessionStatus {
+            repoStrip.updateTurnActive(isTurnActive)
+        }
         let reviewChangesState = reviewChanges.state
+        let repoStripState = repoStrip.state
         let visibleQuestion = inboxState.visibleQuestionRequest
         let timelineEmptyError: String? = timelineState.timeline == .error ? timelineState.errorMessage : nil
         let transientError: String? = {
@@ -1093,6 +1108,7 @@ final class SessionChatViewModel {
             projectLabel: projectLabel,
             projectLetter: projectLetter,
             projectLetterAccent: projectLetterAccent,
+            sessionBranchPill: SessionChatBranchPillUiState.resolved(from: repoStripState),
             timeline: timelineState.timeline,
             messages: timelineState.messages,
             pendingPrompts: Self.pendingPrompts(

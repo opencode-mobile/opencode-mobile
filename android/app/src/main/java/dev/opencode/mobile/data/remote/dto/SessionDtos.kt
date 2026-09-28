@@ -201,6 +201,14 @@ data class FileDiffDto(
 }
 
 @Serializable
+data class VcsFileStatusDto(
+    val file: String,
+    val additions: Int = 0,
+    val deletions: Int = 0,
+    val status: String? = null,
+)
+
+@Serializable
 data class VcsInfoDto(
     val branch: String? = null,
     @SerialName("default_branch") val defaultBranch: String? = null,

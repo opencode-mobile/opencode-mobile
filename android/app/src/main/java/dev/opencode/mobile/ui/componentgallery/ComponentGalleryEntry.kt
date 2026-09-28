@@ -53,6 +53,7 @@ enum class ComponentGalleryEntryId {
     SessionList,
     SessionListDock,
     SessionStatusBar,
+    SessionBranchPill,
     SessionComposer,
     RenderedMarkdown,
     MessageList,
@@ -269,6 +270,12 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.SessionComposer,
             title = "Session Composer",
             description = "Prompt entry and blocking permission states in one persistent session surface.",
+            category = ComponentGalleryCategory.Session,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.SessionBranchPill,
+            title = "Session Branch Pill",
+            description = "Floating worktree branch and uncommitted line counts.",
             category = ComponentGalleryCategory.Session,
         ),
         ComponentGalleryEntry(

@@ -502,7 +502,7 @@ struct SessionChatViewModelTests {
         #expect(region.state.summary == nil)
     }
 
-    @Test func publishedLastTurnSummaryShowsPillWithoutBindFetch() async {
+    @Test func publishedLastTurnSummaryStaysOnRegionWithoutBindFetch() async {
         let store = LastTurnReviewChangesStore()
         let region = SessionChatReviewChanges(
             sessionID: "ses-1",
@@ -526,7 +526,6 @@ struct SessionChatViewModelTests {
 
         #expect(region.state.summary == ReviewChangesSummary(fileCount: 2, additions: 4, deletions: 1, messageID: "user-1"))
         #expect(region.state.messageID == "user-1")
-        #expect(ReviewChangesPillVisibility.shouldShow(summary: region.state.summary))
     }
 
     @Test func failedReviewChangesCountStaysHidden() async {

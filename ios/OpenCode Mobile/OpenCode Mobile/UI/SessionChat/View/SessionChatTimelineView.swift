@@ -8,7 +8,7 @@ struct SessionChatTimelineViewProps {
     let hasOlder: Bool
     let isLoadingOlder: Bool
     let errorMessage: String?
-    let reviewChangesSummary: ReviewChangesSummary?
+    let sessionBranchPill: SessionChatBranchPillUiState?
     let syncingIndicatorLabel: String?
     let workingIndicatorLabel: String?
     let workingIndicatorCollapsed: Bool
@@ -22,7 +22,7 @@ struct SessionChatTimelineViewProps {
     let bottomOverlayInset: CGFloat
     let onRefresh: () async -> Void
     let onLoadOlder: () -> Void
-    let onReviewChangesTap: () -> Void
+    let onSessionBranchTap: () -> Void
     let onSessionTodosTap: () -> Void
     let onMessageActionsTap: (SessionChatMessageActionsTarget) -> Void
     let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
@@ -40,7 +40,7 @@ struct SessionChatTimelineViewProps {
         hasOlder: Bool = false,
         isLoadingOlder: Bool = false,
         errorMessage: String?,
-        reviewChangesSummary: ReviewChangesSummary?,
+        sessionBranchPill: SessionChatBranchPillUiState? = nil,
         syncingIndicatorLabel: String? = nil,
         workingIndicatorLabel: String? = nil,
         workingIndicatorCollapsed: Bool = false,
@@ -53,7 +53,7 @@ struct SessionChatTimelineViewProps {
         bottomOverlayInset: CGFloat = 0,
         onRefresh: @escaping () async -> Void,
         onLoadOlder: @escaping () -> Void = {},
-        onReviewChangesTap: @escaping () -> Void,
+        onSessionBranchTap: @escaping () -> Void = {},
         onSessionTodosTap: @escaping () -> Void = {},
         onMessageActionsTap: @escaping (SessionChatMessageActionsTarget) -> Void,
         onToolDetailTap: @escaping (SessionChatToolDetailTarget) -> Void = { _ in },
@@ -70,7 +70,7 @@ struct SessionChatTimelineViewProps {
         self.hasOlder = hasOlder
         self.isLoadingOlder = isLoadingOlder
         self.errorMessage = errorMessage
-        self.reviewChangesSummary = reviewChangesSummary
+        self.sessionBranchPill = sessionBranchPill
         self.syncingIndicatorLabel = syncingIndicatorLabel
         self.workingIndicatorLabel = workingIndicatorLabel
         self.workingIndicatorCollapsed = workingIndicatorCollapsed
@@ -83,7 +83,7 @@ struct SessionChatTimelineViewProps {
         self.bottomOverlayInset = bottomOverlayInset
         self.onRefresh = onRefresh
         self.onLoadOlder = onLoadOlder
-        self.onReviewChangesTap = onReviewChangesTap
+        self.onSessionBranchTap = onSessionBranchTap
         self.onSessionTodosTap = onSessionTodosTap
         self.onMessageActionsTap = onMessageActionsTap
         self.onToolDetailTap = onToolDetailTap
@@ -158,8 +158,11 @@ private struct SessionChatTimelineReadyView: View {
         scrollController.shouldShowScrollToEnd
     }
 
-    private var showReviewChanges: Bool {
-        !props.hideFloatStack && ReviewChangesPillVisibility.shouldShow(summary: props.reviewChangesSummary)
+    private var showSessionBranchPill: Bool {
+        SessionBranchPillVisibility.shouldShow(
+            pill: props.sessionBranchPill,
+            hideFloatStack: props.hideFloatStack
+        )
     }
 
     private var showSessionTodosPill: Bool {
@@ -167,7 +170,7 @@ private struct SessionChatTimelineReadyView: View {
     }
 
     private var showTopOverlayStack: Bool {
-        props.syncingIndicatorLabel != nil || showSessionTodosPill || showReviewChanges
+        props.syncingIndicatorLabel != nil || showSessionTodosPill || showSessionBranchPill
     }
 
     private var mountedWorkingLabel: String? {
@@ -321,14 +324,14 @@ private struct SessionChatTimelineReadyView: View {
                 )
             }
 
-            if showReviewChanges, let summary = props.reviewChangesSummary {
-                OpenCodeReviewChangesPill(
-                    variant: .latestTurn,
-                    changedFileCount: summary.fileCount,
-                    additions: summary.additions,
-                    deletions: summary.deletions,
-                    action: props.onReviewChangesTap
+            if showSessionBranchPill, let pill = props.sessionBranchPill {
+                OpenCodeSessionBranchPill(
+                    branch: pill.branch,
+                    additions: pill.additions,
+                    deletions: pill.deletions,
+                    action: props.onSessionBranchTap
                 )
+                .padding(.horizontal, 16)
             }
         }
 

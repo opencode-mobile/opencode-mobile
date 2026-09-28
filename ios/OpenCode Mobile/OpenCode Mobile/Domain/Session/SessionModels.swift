@@ -220,6 +220,15 @@ struct FileDiff: Sendable, Equatable, Identifiable {
     let status: FileDiffStatus
 }
 
+/// One uncommitted working-copy change reported by the server VCS status endpoint.
+struct VcsFileStatus: Sendable, Equatable, Identifiable {
+    var id: String { path }
+    let path: String
+    let status: FileDiffStatus
+    let additions: Int
+    let deletions: Int
+}
+
 struct VcsInfo: Sendable, Equatable {
     let currentBranch: String?
     let defaultBranch: String?

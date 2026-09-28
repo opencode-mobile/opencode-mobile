@@ -92,6 +92,8 @@ internal class ProtocolSelectedSessionRemote(
 
     override suspend fun getVcsInfo(directory: String?): VcsInfo = selected().getVcsInfo(directory)
 
+    override suspend fun getVcsStatus(directory: String?): List<VcsFileStatus> = selected().getVcsStatus(directory)
+
     override suspend fun getVcsDiff(
         mode: VcsDiffMode,
         directory: String?,

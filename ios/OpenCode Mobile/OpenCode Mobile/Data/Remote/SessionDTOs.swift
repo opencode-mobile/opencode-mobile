@@ -273,6 +273,25 @@ nonisolated struct FileDiffDTO: Decodable, Sendable {
     }
 }
 
+nonisolated struct VcsFileStatusDTO: Decodable, Sendable {
+    let file: String
+    let additions: Int
+    let deletions: Int
+    let status: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case file, additions, deletions, status
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        file = try container.decode(String.self, forKey: .file)
+        additions = try container.decodeIfPresent(Int.self, forKey: .additions) ?? 0
+        deletions = try container.decodeIfPresent(Int.self, forKey: .deletions) ?? 0
+        status = try container.decodeIfPresent(String.self, forKey: .status)
+    }
+}
+
 struct VcsInfoDTO: Decodable, Sendable {
     let branch: String?
     let defaultBranch: String?

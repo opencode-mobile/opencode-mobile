@@ -47,6 +47,7 @@ enum ComponentGalleryEntryID: String, Hashable {
     case sessionList
     case sessionListDock
     case sessionStatusBar
+    case sessionBranchPill
     case sessionComposer
     case composerSuggestionOverlay
     case renderedMarkdown
@@ -263,6 +264,12 @@ let componentGalleryEntries = [
         id: .composerSuggestionOverlay,
         title: "Composer Suggestion Overlay",
         description: "Compact suggestion list anchored above the Session Chat composer for / commands.",
+        category: .session
+    ),
+    ComponentGalleryEntry(
+        id: .sessionBranchPill,
+        title: "Session Branch Pill",
+        description: "Floating branch and working-tree line totals over Session Chat.",
         category: .session
     ),
     ComponentGalleryEntry(

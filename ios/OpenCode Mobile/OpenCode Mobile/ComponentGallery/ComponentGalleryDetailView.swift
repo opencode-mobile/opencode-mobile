@@ -90,6 +90,8 @@ struct ComponentGalleryDetailView: View {
             OutgoingMessageGalleryView()
         case .pendingPromptsStrip:
             PendingPromptsStripGalleryView()
+        case .sessionBranchPill:
+            SessionBranchPillGalleryView()
         case .assistantMessage:
             AssistantMessageGalleryView()
         case .toolCallCard:
