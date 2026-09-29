@@ -27,6 +27,7 @@ struct SessionChatTimelineViewProps {
     let onMessageActionsTap: (SessionChatMessageActionsTarget) -> Void
     let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
     let onToolGroupTap: (SessionChatToolGroupTarget) -> Void
+    let onSkillsTap: (SessionChatSkillsTarget) -> Void
     let onChildSessionTap: (String, String) -> Void
     let onChangesReviewTap: (String, String?) -> Void
     let onUserScrollDismissKeyboard: () -> Void
@@ -62,6 +63,7 @@ struct SessionChatTimelineViewProps {
         onMessageActionsTap: @escaping (SessionChatMessageActionsTarget) -> Void,
         onToolDetailTap: @escaping (SessionChatToolDetailTarget) -> Void = { _ in },
         onToolGroupTap: @escaping (SessionChatToolGroupTarget) -> Void = { _ in },
+        onSkillsTap: @escaping (SessionChatSkillsTarget) -> Void = { _ in },
         onChildSessionTap: @escaping (String, String) -> Void = { _, _ in },
         onChangesReviewTap: @escaping (String, String?) -> Void = { _, _ in },
         onUserScrollDismissKeyboard: @escaping () -> Void = {},
@@ -94,6 +96,7 @@ struct SessionChatTimelineViewProps {
         self.onMessageActionsTap = onMessageActionsTap
         self.onToolDetailTap = onToolDetailTap
         self.onToolGroupTap = onToolGroupTap
+        self.onSkillsTap = onSkillsTap
         self.onChildSessionTap = onChildSessionTap
         self.onChangesReviewTap = onChangesReviewTap
         self.onUserScrollDismissKeyboard = onUserScrollDismissKeyboard
@@ -242,6 +245,7 @@ private struct SessionChatTimelineReadyView: View {
                     onMessageActionsTap: props.onMessageActionsTap,
                     onToolDetailTap: props.onToolDetailTap,
                     onToolGroupTap: props.onToolGroupTap,
+                    onSkillsTap: props.onSkillsTap,
                     onChildSessionTap: props.onChildSessionTap,
                     onChangesReviewTap: props.onChangesReviewTap,
                     supportsSessionMessageDiff: props.supportsSessionMessageDiff,
@@ -428,6 +432,7 @@ private struct SessionChatTimelineHostRow: View {
     let onMessageActionsTap: (SessionChatMessageActionsTarget) -> Void
     let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
     let onToolGroupTap: (SessionChatToolGroupTarget) -> Void
+    let onSkillsTap: (SessionChatSkillsTarget) -> Void
     let onChildSessionTap: (String, String) -> Void
     let onChangesReviewTap: (String, String?) -> Void
     let supportsSessionMessageDiff: Bool
@@ -449,6 +454,7 @@ private struct SessionChatTimelineHostRow: View {
                         onMessageActionsTap: onMessageActionsTap,
                         onToolDetailTap: onToolDetailTap,
                         onToolGroupTap: onToolGroupTap,
+                        onSkillsTap: onSkillsTap,
                         onChildSessionTap: onChildSessionTap,
                         onChangesReviewTap: onChangesReviewTap,
                         supportsSessionMessageDiff: supportsSessionMessageDiff,
@@ -463,6 +469,7 @@ private struct SessionChatTimelineHostRow: View {
                         onMessageActionsTap: onMessageActionsTap,
                         onToolDetailTap: onToolDetailTap,
                         onToolGroupTap: onToolGroupTap,
+                        onSkillsTap: onSkillsTap,
                         onChildSessionTap: onChildSessionTap,
                         onChangesReviewTap: onChangesReviewTap,
                         supportsSessionMessageDiff: supportsSessionMessageDiff,
@@ -561,6 +568,7 @@ private struct SessionChatMessageRow: View {
     let onMessageActionsTap: (SessionChatMessageActionsTarget) -> Void
     let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
     let onToolGroupTap: (SessionChatToolGroupTarget) -> Void
+    let onSkillsTap: (SessionChatSkillsTarget) -> Void
     let onChildSessionTap: (String, String) -> Void
     let onChangesReviewTap: (String, String?) -> Void
     let supportsSessionMessageDiff: Bool
@@ -603,6 +611,7 @@ private struct SessionChatMessageRow: View {
                     onOpenMessageActions: { openMessageActions(showsRevertMessage: false) },
                     onToolDetailTap: onToolDetailTap,
                     onToolGroupTap: onToolGroupTap,
+                    onSkillsTap: onSkillsTap,
                     onChildSessionTap: onChildSessionTap,
                     onChangesReviewTap: onChangesReviewTap,
                     supportsSessionMessageDiff: supportsSessionMessageDiff,
@@ -663,6 +672,7 @@ private struct AssistantMessageContent: View {
     let onOpenMessageActions: () -> Void
     let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
     let onToolGroupTap: (SessionChatToolGroupTarget) -> Void
+    let onSkillsTap: (SessionChatSkillsTarget) -> Void
     let onChildSessionTap: (String, String) -> Void
     let onChangesReviewTap: (String, String?) -> Void
     let supportsSessionMessageDiff: Bool
@@ -778,7 +788,16 @@ private struct AssistantMessageContent: View {
                         expandedThrough: expandedStepParagraphs[paragraph.id],
                         onOpenMessageActions: onOpenMessageActions,
                         onExpand: { onExpandStepParagraph(paragraph.id, paragraph.chips.count) },
-                        chipAction: { chip in toolCardAction(for: chip.card) },
+                        chipAction: { chip in
+                            if chip.kind == .skill {
+                                return {
+                                    onSkillsTap(
+                                        SessionChatSkillsTarget(skills: SessionChatTimelineBlocks.skillUses(in: blocks))
+                                    )
+                                }
+                            }
+                            return toolCardAction(for: chip.card)
+                        },
                         exploreAction: { summary in
                             onToolGroupTap(
                                 SessionChatToolGroupTarget(

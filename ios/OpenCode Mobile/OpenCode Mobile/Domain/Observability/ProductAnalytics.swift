@@ -66,6 +66,7 @@ enum ProductAnalytics {
         static let sessionPendingPrompts = "session_pending_prompts"
         static let sessionToolDetail = "session_tool_detail"
         static let sessionToolGroup = "session_tool_group"
+        static let sessionSkills = "session_skills"
         static let sessionTodos = "session_todos"
         static let sessionContext = "session_context"
         static let changes = "changes"
@@ -152,6 +153,7 @@ enum ProductAnalytics {
         static let chatOpenMessageActions = "chat_open_message_actions"
         static let chatOpenToolDetail = "chat_open_tool_detail"
         static let chatOpenToolGroup = "chat_open_tool_group"
+        static let chatOpenSkills = "chat_open_skills"
         static let chatDismissSnackbar = "chat_dismiss_snackbar"
         static let chatOverflowRename = "chat_overflow_rename"
         static let chatOverflowReviewChanges = "chat_overflow_review_changes"
@@ -227,6 +229,7 @@ enum ProductAnalytics {
         static let pendingPromptsDelete = "pending_prompts_delete"
         static let pendingPromptsClear = "pending_prompts_clear"
         static let toolDetailDismiss = "tool_detail_dismiss"
+        static let skillsDismiss = "skills_dismiss"
         static let sessionToolGroupBack = "session_tool_group_back"
         static let todosDismiss = "todos_dismiss"
 

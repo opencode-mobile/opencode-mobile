@@ -202,13 +202,25 @@ nonisolated struct SessionChatExploreSummaryBlock: Equatable, Sendable {
     let members: [SessionChatToolCardBlock]
 }
 
+/// One skill a message loaded, for the Skills sheet a skill chip opens.
+nonisolated struct SessionChatSkillUse: Equatable, Sendable, Identifiable {
+    /// Chip id of the first run of this skill in the message.
+    let id: String
+    /// Chip label (`/name`).
+    let label: String
+    /// Skill directory reported by the server, when it settled.
+    let directory: String?
+    let status: ToolStatus
+}
+
 nonisolated struct SessionChatToolChipBlock: Equatable, Sendable {
     /// First part id behind the chip; stays put while later identical runs fold into it.
     let id: String
     let kind: SessionChatToolChipKind
     let family: SessionChatToolChipFamily
     let label: String
-    /// Agent chips only: first line of the description / prompt.
+    /// Agent chips: first line of the description / prompt. Skill chips: the
+    /// skill directory the server reported.
     let brief: String?
     let additions: Int?
     let deletions: Int?
@@ -847,6 +859,44 @@ nonisolated enum SessionChatTimelineBlocks {
         }
     }
 
+    /// Skill name: the settled server output names it in metadata; before
+    /// that the request carries the skill id (older servers sent `name`).
+    private static func skillName(_ tool: ToolPart) -> String? {
+        metadataString(tool.metadata, keys: "name")
+            ?? inputString(tool.input, keys: "id", "name", "skill")
+    }
+
+    private static func skillDirectory(_ tool: ToolPart) -> String? {
+        metadataString(tool.metadata, keys: "directory")
+    }
+
+    /// Skills a message loaded, in first-use order across its step paragraphs.
+    /// Repeated loads of one skill collapse into one entry that keeps the
+    /// first chip's id and the latest run's status and directory.
+    static func skillUses(in blocks: [SessionChatTimelineBlock]) -> [SessionChatSkillUse] {
+        var uses: [SessionChatSkillUse] = []
+        var indexByLabel: [String: Int] = [:]
+        for block in blocks {
+            guard case .stepParagraph(_, let paragraph) = block else { continue }
+            for chip in paragraph.chips where chip.kind == .skill {
+                if let index = indexByLabel[chip.label] {
+                    uses[index] = SessionChatSkillUse(
+                        id: uses[index].id,
+                        label: chip.label,
+                        directory: chip.brief ?? uses[index].directory,
+                        status: chip.status
+                    )
+                } else {
+                    indexByLabel[chip.label] = uses.count
+                    uses.append(
+                        SessionChatSkillUse(id: chip.id, label: chip.label, directory: chip.brief, status: chip.status)
+                    )
+                }
+            }
+        }
+        return uses
+    }
+
     /// Fixed group order (explore, change, command, agent, skill), arrival order inside a group.
     static func orderedChips(_ chips: [SessionChatToolChipBlock]) -> [SessionChatToolChipBlock] {
         SessionChatToolChipFamily.allCases.flatMap { family in
@@ -973,7 +1023,8 @@ nonisolated enum SessionChatTimelineBlocks {
             case "skill":
                 kind = .skill
                 family = .skill
-                label = (inputString(tool.input, keys: "name", "skill") ?? card.subtitle).map { "/\($0)" }
+                label = (skillName(tool) ?? card.subtitle).map { "/\($0)" }
+                brief = skillDirectory(tool)
             default:
                 kind = .command
                 family = .command
@@ -1467,8 +1518,7 @@ nonisolated enum SessionChatTimelineBlocks {
         case "skill":
             return Chrome(
                 title: "Skill",
-                subtitle: inputString(tool.input, keys: "name", "skill")
-                    ?? runningTitleOverride(tool)
+                subtitle: skillName(tool) ?? runningTitleOverride(tool)
             )
         case "task", "subagent":
             return taskChrome(tool)

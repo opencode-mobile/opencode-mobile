@@ -68,6 +68,7 @@ object ProductAnalytics {
         const val SESSION_PENDING_PROMPTS = "session_pending_prompts"
         const val SESSION_TOOL_DETAIL = "session_tool_detail"
         const val SESSION_TOOL_GROUP = "session_tool_group"
+        const val SESSION_SKILLS = "session_skills"
         const val SESSION_TODOS = "session_todos"
         const val SESSION_CONTEXT = "session_context"
         const val CHANGES = "changes"
@@ -160,6 +161,7 @@ object ProductAnalytics {
         const val CHAT_OPEN_MESSAGE_ACTIONS = "chat_open_message_actions"
         const val CHAT_OPEN_TOOL_DETAIL = "chat_open_tool_detail"
         const val CHAT_OPEN_TOOL_GROUP = "chat_open_tool_group"
+        const val CHAT_OPEN_SKILLS = "chat_open_skills"
         const val CHAT_DISMISS_SNACKBAR = "chat_dismiss_snackbar"
         const val CHAT_OVERFLOW_RENAME = "chat_overflow_rename"
         const val CHAT_OVERFLOW_REVIEW_CHANGES = "chat_overflow_review_changes"
@@ -238,6 +240,7 @@ object ProductAnalytics {
         const val PENDING_PROMPTS_DELETE = "pending_prompts_delete"
         const val PENDING_PROMPTS_CLEAR = "pending_prompts_clear"
         const val TOOL_DETAIL_DISMISS = "tool_detail_dismiss"
+        const val SKILLS_DISMISS = "skills_dismiss"
         const val SESSION_TOOL_GROUP_BACK = "session_tool_group_back"
         const val TODOS_DISMISS = "todos_dismiss"
 

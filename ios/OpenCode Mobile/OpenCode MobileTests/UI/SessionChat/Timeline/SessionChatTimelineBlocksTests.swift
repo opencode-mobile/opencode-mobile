@@ -1765,6 +1765,63 @@ struct SessionChatTimelineBlocksTests {
         .text(TextPart(id: id, text: value, isStreaming: false))
     }
 
+    @Test func chipTimeline_skillChipNamesFromServerIdAndMetadata() throws {
+        let blocks = okBlocks(
+            parts: [
+                .tool(ToolPart(id: "s1", toolName: "skill", status: .running, input: ["id": .string("feature")])),
+                .tool(
+                    ToolPart(
+                        id: "s2",
+                        toolName: "skill",
+                        status: .completed,
+                        input: ["id": .string("linear")],
+                        metadata: [
+                            "name": .string("linear-project-tracking"),
+                            "directory": .string("/repo/.agents/skills/linear-project-tracking"),
+                        ]
+                    )
+                ),
+            ],
+            chipTimeline: true
+        )
+        guard let paragraph = paragraph(blocks.single) else { return }
+        #expect(paragraph.chips.map(\.label) == ["/feature", "/linear-project-tracking"])
+        #expect(paragraph.chips.map(\.kind) == [.skill, .skill])
+        #expect(paragraph.chips[0].brief == nil)
+        #expect(paragraph.chips[1].brief == "/repo/.agents/skills/linear-project-tracking")
+        #expect(paragraph.chips[1].card.subtitle == "linear-project-tracking")
+    }
+
+    @Test func skillUses_collectsAcrossParagraphsInFirstUseOrder() throws {
+        let blocks = okBlocks(
+            parts: [
+                text("t1", "Loading."),
+                .tool(
+                    ToolPart(
+                        id: "s1",
+                        toolName: "skill",
+                        status: .completed,
+                        input: ["id": .string("feature")],
+                        metadata: ["name": .string("feature"), "directory": .string("/repo/.agents/skills/feature")]
+                    )
+                ),
+                text("t2", "Again."),
+                .tool(ToolPart(id: "s2", toolName: "skill", status: .completed, input: ["id": .string("linear")])),
+                .tool(ToolPart(id: "s3", toolName: "skill", status: .error, error: "denied", input: ["id": .string("feature")])),
+                .tool(ToolPart(id: "b1", toolName: "bash", status: .completed, input: ["command": .string("ls")])),
+            ],
+            chipTimeline: true
+        )
+        let uses = SessionChatTimelineBlocks.skillUses(in: blocks)
+        #expect(uses.map(\.label) == ["/feature", "/linear"])
+        #expect(uses[0].id == PresentationBlockId.direct("s1"))
+        #expect(uses[0].status == .error)
+        #expect(uses[0].directory == "/repo/.agents/skills/feature")
+        #expect(uses[1].status == .completed)
+        #expect(uses[1].directory == nil)
+        #expect(SessionChatTimelineBlocks.skillUses(in: okBlocks(parts: [text("t", "No tools.")], chipTimeline: true)).isEmpty)
+    }
+
     // MARK: - Chip timeline (OPE-260)
 
     private func paragraph(

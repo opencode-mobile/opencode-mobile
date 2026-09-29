@@ -18,6 +18,7 @@ struct SessionChatView: View {
     @State private var showPendingPromptsSheet = false
     @State private var toolDetailTarget: SessionChatToolDetailTarget?
     @State private var toolGroupTarget: SessionChatToolGroupTarget?
+    @State private var skillsTarget: SessionChatSkillsTarget?
     @State private var childSessionTarget: ChildSessionNavigationTarget?
     @State private var terminalRoute: TerminalRoute?
     @State private var developerToolsPreferences = DeveloperToolsPreferences.shared
@@ -219,6 +220,15 @@ struct SessionChatView: View {
                             logChatAction(ProductAnalytics.Action.chatOpenToolGroup)
                             toolGroupTarget = target
                         },
+                        onSkillsTap: { target in
+                            logChatAction(ProductAnalytics.Action.chatOpenSkills)
+                            ProductAnalytics.logScreenView(
+                                screenId: ProductAnalytics.Screen.sessionSkills,
+                                presentation: ProductAnalytics.Presentation.sheet,
+                                trigger: ProductAnalytics.Trigger.present
+                            )
+                            skillsTarget = target
+                        },
                         onChildSessionTap: { sessionID, title in
                             logChatAction(ProductAnalytics.Action.chatOpenChildSession)
                             childSessionTarget = ChildSessionNavigationTarget(
@@ -372,6 +382,7 @@ struct SessionChatView: View {
             }
         }
         .sessionChatToolDetailSheet(target: $toolDetailTarget)
+        .sessionChatSkillsSheet(target: $skillsTarget)
         .sessionChatTodosSheet(
             isPresented: $showSessionTodosSheet,
             todos: viewModel.uiState.sessionTodos,
