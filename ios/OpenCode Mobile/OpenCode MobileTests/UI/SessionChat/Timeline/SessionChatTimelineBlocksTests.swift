@@ -2485,14 +2485,14 @@ struct SessionChatTimelineBlocksTests {
             ],
             chipTimeline: true
         )
-        let paragraph = try #require(paragraph(blocks.single))
-        let summary = try #require(paragraph.exploreSummary)
+        let step = try #require(paragraph(blocks.single))
+        let summary = try #require(step.exploreSummary)
         #expect(summary.label == "Exploring \u{00B7} 2 reads \u{00B7} 1 grep")
         #expect(summary.status == .running)
         #expect(summary.subtitle == "/a/b.swift")
         #expect(summary.blockID == PresentationBlockId.toolGroup(["r1", "r2", "g1"]))
         #expect(summary.members.count == 3)
-        #expect(paragraph.chips.map(\.label) == ["ls"])
+        #expect(step.chips.map(\.label) == ["ls"])
         #expect(blocks[0].blockID == PresentationBlockId.stepParagraph(["t1", "r1", "r2", "g1", "b1"]))
     }
 
@@ -2504,9 +2504,9 @@ struct SessionChatTimelineBlocksTests {
             ],
             chipTimeline: true
         )
-        let paragraph = try #require(paragraph(blocks.single))
-        #expect(paragraph.exploreSummary == nil)
-        #expect(paragraph.chips.map(\.label) == ["b.swift", "ls"])
+        let step = try #require(paragraph(blocks.single))
+        #expect(step.exploreSummary == nil)
+        #expect(step.chips.map(\.label) == ["b.swift", "ls"])
     }
 
     @Test func chipTimeline_failedExploreToolStaysAnAttentionChipOutsideTheSummary() throws {
@@ -2518,12 +2518,12 @@ struct SessionChatTimelineBlocksTests {
             ],
             chipTimeline: true
         )
-        let paragraph = try #require(paragraph(blocks.single))
-        #expect(paragraph.exploreSummary?.label == "Explored \u{00B7} 1 read \u{00B7} 1 grep")
-        #expect(paragraph.exploreSummary?.blockID == PresentationBlockId.toolGroup(["r1", "g1"]))
-        #expect(paragraph.chips.map(\.label) == ["missing.swift"])
-        #expect(paragraph.chips[0].status == .error)
-        #expect(paragraph.errorLines == ["missing.swift: ENOENT"])
+        let step = try #require(paragraph(blocks.single))
+        #expect(step.exploreSummary?.label == "Explored \u{00B7} 1 read \u{00B7} 1 grep")
+        #expect(step.exploreSummary?.blockID == PresentationBlockId.toolGroup(["r1", "g1"]))
+        #expect(step.chips.map(\.label) == ["missing.swift"])
+        #expect(step.chips[0].status == .error)
+        #expect(step.errorLines == ["missing.swift: ENOENT"])
     }
 
     @Test func chipTimeline_foldedChipKeepsFirstRunIdAndArrivalIndex() throws {
@@ -2535,10 +2535,10 @@ struct SessionChatTimelineBlocksTests {
             ],
             chipTimeline: true
         )
-        let paragraph = try #require(paragraph(blocks.single))
-        #expect(paragraph.chips.map(\.id) == ["p:b1", "p:b2"])
-        #expect(paragraph.chips[1].card.detailText == "run 2")
-        #expect(paragraph.chips.map(\.arrivalIndex) == [0, 1])
+        let step = try #require(paragraph(blocks.single))
+        #expect(step.chips.map(\.id) == ["p:b1", "p:b2"])
+        #expect(step.chips[1].card.detailText == "run 2")
+        #expect(step.chips.map(\.arrivalIndex) == [0, 1])
     }
 
     // MARK: - Repeat folding
@@ -2553,10 +2553,10 @@ struct SessionChatTimelineBlocksTests {
             chipTimeline: true
         )
         guard let paragraph = paragraph(blocks.single) else { return }
-        #expect(paragraph.chips.count == 1)
-        #expect(paragraph.chips[0].repeatCount == 3)
-        #expect(paragraph.chips[0].card.detailText == "run 3")
-        #expect(paragraph.chips[0].displayTrailingText == "\u{00D7}3")
+        #expect(step.chips.count == 1)
+        #expect(step.chips[0].repeatCount == 3)
+        #expect(step.chips[0].card.detailText == "run 3")
+        #expect(step.chips[0].displayTrailingText == "\u{00D7}3")
         // Block identity still covers every folded part.
         #expect(blocks[0].blockID == PresentationBlockId.stepParagraph(["b1", "b2", "b3"]))
         #expect(paragraph.id == PresentationBlockId.stepParagraphIdentity("b1"))
@@ -2577,9 +2577,9 @@ struct SessionChatTimelineBlocksTests {
             chipTimeline: true
         )
         guard let paragraph = paragraph(blocks.single) else { return }
-        #expect(paragraph.chips.map(\.status) == [.completed, .error, .error, .completed, .running, .running])
-        #expect(paragraph.chips.map(\.repeatCount) == [2, 1, 1, 2, 1, 1])
-        #expect(paragraph.errorLines.count == 2)
+        #expect(step.chips.map(\.status) == [.completed, .error, .error, .completed, .running, .running])
+        #expect(step.chips.map(\.repeatCount) == [2, 1, 1, 2, 1, 1])
+        #expect(step.errorLines.count == 2)
     }
 
     @Test func foldRepeatedChips_differentLabelOrKindBreaksRun() {
@@ -2619,11 +2619,11 @@ struct SessionChatTimelineBlocksTests {
             chipTimeline: true
         )
         guard let paragraph = paragraph(blocks.single) else { return }
-        #expect(paragraph.chips.map(\.family) == [.explore, .change])
-        #expect(paragraph.chips.map(\.repeatCount) == [1, 2])
-        #expect(paragraph.chips[1].additions == 7)
-        #expect(paragraph.chips[1].deletions == 3)
-        #expect(paragraph.chips[1].card.additions == 4)
+        #expect(step.chips.map(\.family) == [.explore, .change])
+        #expect(step.chips.map(\.repeatCount) == [1, 2])
+        #expect(step.chips[1].additions == 7)
+        #expect(step.chips[1].deletions == 3)
+        #expect(step.chips[1].card.additions == 4)
     }
 
     @Test func chipTimeline_executeChipUsesShortenedLabel() {
@@ -2635,7 +2635,7 @@ struct SessionChatTimelineBlocksTests {
             chipTimeline: true
         )
         guard let paragraph = paragraph(blocks.single) else { return }
-        #expect(paragraph.chips.map(\.label) == ["npm test"])
+        #expect(step.chips.map(\.label) == ["npm test"])
     }
 
     @Test func displayTrailingText_combinesRepeatCountWithExistingText() {
