@@ -2388,7 +2388,7 @@ class SessionChatTimelineBlocksTest {
     }
 
     @Test
-    fun chipTimeline_thoughtAfterPendingNarration_doesNotMerge() {
+    fun chipTimeline_thoughtAfterPendingNarration_collapsesIntoOneRow() {
         val blocks =
             buildBlocks(
                 role = MessageRole.Assistant,
@@ -2419,14 +2419,79 @@ class SessionChatTimelineBlocksTest {
                     ),
             )
 
-        assertEquals(3, blocks.size)
-        assertEquals(PresentationBlockId.direct("th1"), blocks[0].blockID)
-        assertEquals("First", (blocks[0] as SessionChatTimelineBlock.Reasoning).text)
-        assertEquals(PresentationBlockId.direct("th2"), blocks[1].blockID)
-        assertEquals("Second", (blocks[1] as SessionChatTimelineBlock.Reasoning).text)
-        val paragraph = blocks[2] as SessionChatTimelineBlock.StepParagraph
+        assertEquals(2, blocks.size)
+        val thought = blocks[0] as SessionChatTimelineBlock.Reasoning
+        assertEquals(PresentationBlockId.mergedThought(listOf(PresentationBlockId.direct("th1"), "th2")), thought.blockID)
+        assertEquals("First\n\nSecond", thought.text)
+        assertEquals(2_000L, thought.durationMs)
+        val paragraph = blocks[1] as SessionChatTimelineBlock.StepParagraph
         assertEquals("Narration", paragraph.text)
         assertEquals(listOf("a.kt"), paragraph.chips.map { it.label })
+    }
+
+    @Test
+    fun chipTimeline_consecutiveStepThoughts_collapseUntilAParagraphFlushes() {
+        val blocks =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                chipTimeline = true,
+                parts =
+                    listOf(
+                        MessagePart.Reasoning(
+                            text = "First",
+                            isStreaming = false,
+                            id = "th1",
+                            timeStartEpochMs = 0,
+                            timeEndEpochMs = 1_000,
+                        ),
+                        MessagePart.Text("Step one", id = "t1"),
+                        MessagePart.Tool(
+                            toolName = "read",
+                            status = ToolStatus.Completed,
+                            id = "r1",
+                            input = json("filePath" to "a.kt"),
+                        ),
+                        MessagePart.Reasoning(
+                            text = "Second",
+                            isStreaming = false,
+                            id = "th2",
+                            timeStartEpochMs = 1_000,
+                            timeEndEpochMs = 2_500,
+                        ),
+                        MessagePart.Text("Step two", id = "t2"),
+                        MessagePart.Tool(
+                            toolName = "read",
+                            status = ToolStatus.Completed,
+                            id = "r2",
+                            input = json("filePath" to "b.kt"),
+                        ),
+                        MessagePart.Reasoning(
+                            text = "Third",
+                            isStreaming = false,
+                            id = "th3",
+                            timeStartEpochMs = 2_500,
+                            timeEndEpochMs = 3_000,
+                        ),
+                        MessagePart.Text("Step three", id = "t3"),
+                    ),
+            )
+
+        assertEquals(5, blocks.size)
+        val thought = blocks[0] as SessionChatTimelineBlock.Reasoning
+        assertEquals("First\n\nSecond", thought.text)
+        assertEquals(2_500L, thought.durationMs)
+        val first = blocks[1] as SessionChatTimelineBlock.StepParagraph
+        assertEquals("Step one", first.text)
+        assertEquals(listOf("a.kt"), first.chips.map { it.label })
+        val laterThought = blocks[2] as SessionChatTimelineBlock.Reasoning
+        assertEquals("Third", laterThought.text)
+        assertEquals(500L, laterThought.durationMs)
+        val second = blocks[3] as SessionChatTimelineBlock.StepParagraph
+        assertEquals("Step two", second.text)
+        assertEquals(listOf("b.kt"), second.chips.map { it.label })
+        val third = blocks[4] as SessionChatTimelineBlock.StepParagraph
+        assertEquals("Step three", third.text)
+        assertEquals(emptyList<String>(), third.chips.map { it.label })
     }
 
     @Test

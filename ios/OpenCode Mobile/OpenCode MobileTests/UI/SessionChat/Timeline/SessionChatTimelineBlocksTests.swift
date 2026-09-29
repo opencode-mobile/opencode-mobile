@@ -1988,7 +1988,7 @@ struct SessionChatTimelineBlocksTests {
         #expect(second.chips.map(\.label) == ["c.swift"])
     }
 
-    @Test func chipTimeline_thoughtAfterPendingNarration_doesNotMerge() {
+    @Test func chipTimeline_thoughtAfterPendingNarration_collapsesIntoOneRow() {
         let blocks = okBlocks(
             parts: [
                 .reasoning(ReasoningPart(id: "th1", text: "First", isStreaming: false, timeStartEpochMs: 0, timeEndEpochMs: 1_000)),
@@ -1998,22 +1998,55 @@ struct SessionChatTimelineBlocksTests {
             ],
             chipTimeline: true
         )
-        #expect(blocks.count == 3)
-        guard case .reasoning(let firstID, let first, _, _) = blocks[0] else {
-            Issue.record("Expected the first thought")
+        #expect(blocks.count == 2)
+        guard case .reasoning(let id, let joined, false, let duration) = blocks[0] else {
+            Issue.record("Expected one merged reasoning row")
             return
         }
-        #expect(firstID == PresentationBlockId.direct("th1"))
-        #expect(first == "First")
-        guard case .reasoning(let secondID, let second, _, _) = blocks[1] else {
-            Issue.record("Expected the second thought")
-            return
-        }
-        #expect(secondID == PresentationBlockId.direct("th2"))
-        #expect(second == "Second")
-        guard let narration = paragraph(blocks[2]) else { return }
+        #expect(id == PresentationBlockId.mergedThought([PresentationBlockId.direct("th1"), "th2"]))
+        #expect(joined == "First\n\nSecond")
+        #expect(duration == 2_000)
+        guard let narration = paragraph(blocks[1]) else { return }
         #expect(narration.text == "Narration")
         #expect(narration.chips.map(\.label) == ["a.swift"])
+    }
+
+    @Test func chipTimeline_consecutiveStepThoughts_collapseUntilAParagraphFlushes() {
+        let blocks = okBlocks(
+            parts: [
+                .reasoning(ReasoningPart(id: "th1", text: "First", isStreaming: false, timeStartEpochMs: 0, timeEndEpochMs: 1_000)),
+                text("t1", "Step one"),
+                .tool(ToolPart(id: "r1", toolName: "read", status: .completed, input: ["filePath": .string("a.swift")])),
+                .reasoning(ReasoningPart(id: "th2", text: "Second", isStreaming: false, timeStartEpochMs: 1_000, timeEndEpochMs: 2_500)),
+                text("t2", "Step two"),
+                .tool(ToolPart(id: "r2", toolName: "read", status: .completed, input: ["filePath": .string("b.swift")])),
+                .reasoning(ReasoningPart(id: "th3", text: "Third", isStreaming: false, timeStartEpochMs: 2_500, timeEndEpochMs: 3_000)),
+                text("t3", "Step three"),
+            ],
+            chipTimeline: true
+        )
+        #expect(blocks.count == 5)
+        guard case .reasoning(_, let joined, false, let duration) = blocks[0] else {
+            Issue.record("Expected the opening thoughts merged")
+            return
+        }
+        #expect(joined == "First\n\nSecond")
+        #expect(duration == 2_500)
+        guard let first = paragraph(blocks[1]) else { return }
+        #expect(first.text == "Step one")
+        #expect(first.chips.map(\.label) == ["a.swift"])
+        guard case .reasoning(_, let third, false, let thirdDuration) = blocks[2] else {
+            Issue.record("Expected the thought after the flushed paragraph")
+            return
+        }
+        #expect(third == "Third")
+        #expect(thirdDuration == 500)
+        guard let second = paragraph(blocks[3]) else { return }
+        #expect(second.text == "Step two")
+        #expect(second.chips.map(\.label) == ["b.swift"])
+        guard let last = paragraph(blocks[4]) else { return }
+        #expect(last.text == "Step three")
+        #expect(last.chips.isEmpty)
     }
 
     @Test func streamingStepParagraphBlockID_marksOnlyTheLatestNarration() {

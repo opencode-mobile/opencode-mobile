@@ -591,10 +591,9 @@ nonisolated enum SessionChatTimelineBlocks {
                     start: reasoning.timeStartEpochMs,
                     end: reasoning.timeEndEpochMs
                 )
-                // A tool-only gap stays pending so step thoughts still merge.
-                // Narration already waiting in pendingText separates the run.
-                if pendingText.isEmpty,
-                   case .reasoning(let prevID, let prevText, false, let prevDuration)? = blocks.last {
+                // Pending narration and tools have not flushed a paragraph yet, so
+                // this thought is still consecutive with the previous row.
+                if case .reasoning(let prevID, let prevText, false, let prevDuration)? = blocks.last {
                     blocks[blocks.count - 1] = .reasoning(
                         blockID: PresentationBlockId.mergedThought([prevID, partId]),
                         text: joinThoughts(prevText, text),

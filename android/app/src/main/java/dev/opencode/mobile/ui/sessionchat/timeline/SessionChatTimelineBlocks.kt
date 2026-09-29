@@ -319,10 +319,10 @@ object SessionChatTimelineBlocks {
                         val partId = part.id ?: return SessionChatTimelineBlocksResult.MissingPartIds
                         val text = ThoughtPartChrome.displayText(part)
                         val duration = thoughtDurationMs(part.timeStartEpochMs, part.timeEndEpochMs)
-                        // A tool-only gap stays pending so step thoughts still merge.
-                        // Narration already waiting in pendingText separates the run.
+                        // Pending narration and tools have not flushed a paragraph yet, so
+                        // this thought is still consecutive with the previous row.
                         val previous = blocks.lastOrNull() as? SessionChatTimelineBlock.Reasoning
-                        if (previous != null && !previous.isStreaming && pendingText.isEmpty()) {
+                        if (previous != null && !previous.isStreaming) {
                             blocks[blocks.lastIndex] =
                                 SessionChatTimelineBlock.Reasoning(
                                     blockID = PresentationBlockId.mergedThought(listOf(previous.blockID, partId)),
