@@ -50,6 +50,8 @@ final class SessionChatViewModel {
     private var projectLetter: Character?
     private var projectLetterAccent: LetterAccent?
     private var projectIdentityTask: Task<Void, Never>?
+    /// Chip-timeline step paragraphs the user expanded past `+N more`.
+    private var expandedStepParagraphIDs: Set<String> = []
 
     init(
         sessionID: String,
@@ -530,6 +532,12 @@ final class SessionChatViewModel {
         await sessionInfo.confirmRenameSession()
     }
 
+    /// Chip timeline: show every chip of one step paragraph (its `+N more` tap).
+    func expandStepParagraph(_ paragraphID: String) {
+        guard expandedStepParagraphIDs.insert(paragraphID).inserted else { return }
+        publishUiState()
+    }
+
     func toggleFollowUp() {
         guard activeConnectionManager.capabilities.supportsFollowUpDelivery else { return }
         composer.toggleFollowUp()
@@ -993,6 +1001,7 @@ final class SessionChatViewModel {
     private func promoteOptimisticSession(id: String, title: String) {
         sessionID = id
         sessionTitle = title
+        expandedStepParagraphIDs = []
         resetWorkingFooter()
         sessionReadyStore.setFocusedSession(sessionID: id, directory: worktree)
         timeline.rebind(sessionID: id)
@@ -1193,7 +1202,8 @@ final class SessionChatViewModel {
             forkedSessionTitle: commandsState.forkedSessionTitle,
             pendingSessionReplace: commandsState.pendingSessionReplace,
             pendingTerminalOpen: commandsState.pendingTerminalOpen,
-            hasPendingRevert: commandsState.hasPendingRevert
+            hasPendingRevert: commandsState.hasPendingRevert,
+            expandedStepParagraphIDs: expandedStepParagraphIDs
         )
     }
 

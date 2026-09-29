@@ -36,6 +36,12 @@ nonisolated enum PresentationBlockId {
         return "s:" + orderedPartIds.joined(separator: sep)
     }
 
+    /// Chip-timeline step paragraph identity: its first part id. Unlike the
+    /// block id it does not change while later tools join the paragraph.
+    nonisolated static func stepParagraphIdentity(_ firstPartId: String) -> String {
+        "sp:" + firstPartId
+    }
+
     /// Unstructured fallback when displayable parts lack stable IDs.
     nonisolated static func messageFallback(_ messageId: String) -> String {
         "m:\(messageId)"

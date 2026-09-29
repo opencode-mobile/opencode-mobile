@@ -5,6 +5,18 @@ import Testing
 @Suite(.serialized)
 @MainActor
 struct SessionChatViewModelTests {
+    @Test func expandStepParagraph_publishesExpansionInUiState() {
+        let viewModel = makeViewModel(sessionRepository: FakeChatSessionRepository())
+        defer { viewModel.stopObserving() }
+        #expect(viewModel.uiState.expandedStepParagraphIDs.isEmpty)
+
+        viewModel.expandStepParagraph("sp:t1")
+        viewModel.expandStepParagraph("sp:t1")
+        viewModel.expandStepParagraph("sp:r9")
+
+        #expect(viewModel.uiState.expandedStepParagraphIDs == ["sp:t1", "sp:r9"])
+    }
+
     @Test func archiveSession_successLeavesSession() async {
         let sessionRepository = FakeChatSessionRepository()
         let viewModel = makeViewModel(sessionRepository: sessionRepository)

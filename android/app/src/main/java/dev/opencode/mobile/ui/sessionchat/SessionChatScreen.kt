@@ -546,6 +546,8 @@ fun SessionChatScreen(
                                     )?.let(onReviewChangesClick)
                             },
                             supportsSessionMessageDiff = uiState.supportsSessionMessageDiff,
+                            expandedStepParagraphIds = uiState.expandedStepParagraphIds,
+                            onExpandStepParagraph = viewModel::expandStepParagraph,
                         ),
                     modifier = Modifier.fillMaxSize(),
                 )

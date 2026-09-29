@@ -2218,7 +2218,7 @@ class SessionChatTimelineBlocksTest {
         val skill = byId.getValue(PresentationBlockId.direct("p6"))
         assertEquals("/feature", skill.label)
         assertEquals(ToolChipKind.Skill, skill.kind)
-        assertEquals("./gradlew :app:testDebugUnitTest --tests\u2026", byId.getValue(PresentationBlockId.direct("p7")).label)
+        assertEquals("./gradlew :app:testDebugUnitTest --tests Foo", byId.getValue(PresentationBlockId.direct("p7")).label)
         val generic = byId.getValue(PresentationBlockId.direct("p8"))
         assertEquals("linear_get_issue", generic.label)
         assertEquals(ToolChipFamily.Command, generic.family)
@@ -2262,10 +2262,101 @@ class SessionChatTimelineBlocksTest {
 
         val labels = (blocks.single() as SessionChatTimelineBlock.StepParagraph).chips.map { it.label }
         assertEquals("gh pr list --state open", labels[0])
-        assertEquals(41, labels[1].length)
-        assertEquals(sixtyChars.take(40) + "\u2026", labels[1])
+        // Never cut inside the first token; the long second token is dropped whole.
+        assertEquals("echo\u2026", labels[1])
         assertEquals("gh pr list --state open --limit 50", labels[2])
         assertEquals("for n in 1 2 3; do echo \$n; done", labels[3])
+    }
+
+    @Test
+    fun chipTimeline_commandLabels_stripCdAndEnvPrefixes_cardKeepsFullCommand() {
+        val command = "cd /repo/android && export JAVA_HOME=/jdk && CI=1 ./gradlew :app:assembleDebug"
+        val blocks =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                chipTimeline = true,
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "bash",
+                            status = ToolStatus.Completed,
+                            id = "p1",
+                            input = json("command" to command),
+                        ),
+                    ),
+            )
+
+        val chip = (blocks.single() as SessionChatTimelineBlock.StepParagraph).chips.single()
+        assertEquals("./gradlew :app:assembleDebug", chip.label)
+        assertEquals(command, chip.card.subtitle)
+    }
+
+    @Test
+    fun chipTimeline_identicalConsecutiveCompletedRuns_foldKeepingTheLastCard() {
+        val blocks =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                chipTimeline = true,
+                parts =
+                    listOf(
+                        MessagePart.Text("Testing", id = "t1"),
+                        bashTool("p1", "npm test"),
+                        bashTool("p2", "npm test"),
+                        bashTool("p3", "npm test"),
+                        bashTool("p4", "npm run lint"),
+                        bashTool("p5", "npm test"),
+                    ),
+            )
+
+        val paragraph = blocks.single() as SessionChatTimelineBlock.StepParagraph
+        assertEquals(listOf("npm test", "npm run lint", "npm test"), paragraph.chips.map { it.label })
+        assertEquals(listOf(3, 1, 1), paragraph.chips.map { it.repeatCount })
+        assertEquals(PresentationBlockId.direct("p3"), paragraph.chips[0].card.blockID)
+        assertEquals("\u00d73", paragraph.chips[0].displayTrailingText)
+        assertEquals(PresentationBlockId.stepParagraph(listOf("t1", "p1", "p2", "p3", "p4", "p5")), paragraph.blockID)
+    }
+
+    @Test
+    fun chipTimeline_failedOrRunningChip_breaksARepeatRunAndNeverFolds() {
+        val blocks =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                chipTimeline = true,
+                parts =
+                    listOf(
+                        bashTool("p1", "npm test"),
+                        bashTool("p2", "npm test", ToolStatus.Error),
+                        bashTool("p3", "npm test", ToolStatus.Error),
+                        bashTool("p4", "npm test"),
+                        bashTool("p5", "npm test"),
+                        bashTool("p6", "npm test", ToolStatus.Running),
+                    ),
+            )
+
+        val chips = (blocks.single() as SessionChatTimelineBlock.StepParagraph).chips
+        assertEquals(
+            listOf(ToolStatus.Completed, ToolStatus.Error, ToolStatus.Error, ToolStatus.Completed, ToolStatus.Running),
+            chips.map { it.status },
+        )
+        assertEquals(listOf(1, 1, 1, 2, 1), chips.map { it.repeatCount })
+        assertEquals(PresentationBlockId.direct("p5"), chips[3].card.blockID)
+    }
+
+    @Test
+    fun chipTimeline_expansionId_isStableAsTheParagraphGrows() {
+        fun paragraphs(parts: List<MessagePart>) =
+            buildBlocks(role = MessageRole.Assistant, chipTimeline = true, parts = parts)
+                .filterIsInstance<SessionChatTimelineBlock.StepParagraph>()
+
+        val placeholderEarly = paragraphs(listOf(bashTool("p1", "ls")))
+        val placeholderLater = paragraphs(listOf(bashTool("p1", "ls"), bashTool("p2", "pwd")))
+        assertNotEquals(placeholderEarly.single().blockID, placeholderLater.single().blockID)
+        assertEquals(placeholderEarly.single().expansionID, placeholderLater.single().expansionID)
+
+        val narratedEarly = paragraphs(listOf(MessagePart.Text("Look", id = "t1")))
+        val narratedLater = paragraphs(listOf(MessagePart.Text("Look", id = "t1"), bashTool("p1", "ls")))
+        assertEquals(narratedEarly.single().expansionID, narratedLater.single().expansionID)
+        assertNotEquals(placeholderEarly.single().expansionID, narratedLater.single().expansionID)
     }
 
     @Test
@@ -2840,6 +2931,19 @@ class SessionChatTimelineBlocksTest {
             blocks = buildBlocks(MessageRole.Assistant, parts, chipTimeline = chipTimeline),
         )
     }
+
+    private fun bashTool(
+        id: String,
+        command: String,
+        status: ToolStatus = ToolStatus.Completed,
+    ): MessagePart.Tool =
+        MessagePart.Tool(
+            toolName = "bash",
+            status = status,
+            id = id,
+            input = json("command" to command),
+            error = if (status == ToolStatus.Error) "exit code 1" else null,
+        )
 
     private fun json(vararg pairs: Pair<String, String>): JsonObject =
         JsonObject(pairs.associate { (key, value) -> key to JsonPrimitive(value) })

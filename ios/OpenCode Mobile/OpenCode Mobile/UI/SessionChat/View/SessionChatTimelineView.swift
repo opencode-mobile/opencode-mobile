@@ -31,6 +31,9 @@ struct SessionChatTimelineViewProps {
     let onChangesReviewTap: (String, String?) -> Void
     let onUserScrollDismissKeyboard: () -> Void
     let supportsSessionMessageDiff: Bool
+    /// Chip-timeline step paragraphs expanded past `+N more` (Screen Model state).
+    let expandedStepParagraphIDs: Set<String>
+    let onExpandStepParagraph: (String) -> Void
 
     init(
         timeline: SessionChatTimelineState,
@@ -61,7 +64,9 @@ struct SessionChatTimelineViewProps {
         onChildSessionTap: @escaping (String, String) -> Void = { _, _ in },
         onChangesReviewTap: @escaping (String, String?) -> Void = { _, _ in },
         onUserScrollDismissKeyboard: @escaping () -> Void = {},
-        supportsSessionMessageDiff: Bool = true
+        supportsSessionMessageDiff: Bool = true,
+        expandedStepParagraphIDs: Set<String> = [],
+        onExpandStepParagraph: @escaping (String) -> Void = { _ in }
     ) {
         self.timeline = timeline
         self.messages = messages
@@ -92,6 +97,8 @@ struct SessionChatTimelineViewProps {
         self.onChangesReviewTap = onChangesReviewTap
         self.onUserScrollDismissKeyboard = onUserScrollDismissKeyboard
         self.supportsSessionMessageDiff = supportsSessionMessageDiff
+        self.expandedStepParagraphIDs = expandedStepParagraphIDs
+        self.onExpandStepParagraph = onExpandStepParagraph
     }
 }
 
@@ -152,6 +159,7 @@ private struct SessionChatTimelineReadyView: View {
     @State private var sessionTodosPillActivePreview: String?
     @State private var previousMountedWorkingLabel: String?
     @State private var previousWorkingIndicatorFading = false
+    @State private var previousExpandedStepParagraphIDs: Set<String> = []
     @State private var topOverlayInset: CGFloat = 0
     /// Syncing label the top pill slot shows, lagging the prop by the show delay
     /// and minimum visible time in `SessionChatTopPill`.
@@ -212,6 +220,11 @@ private struct SessionChatTimelineReadyView: View {
                     previousWorkingIndicatorLabel: previousMountedWorkingLabel,
                     workingIndicatorFading: props.workingIndicatorFading,
                     previousWorkingIndicatorFading: previousWorkingIndicatorFading
+                )
+                .addingStepParagraphExpansion(
+                    rows: props.messages,
+                    expanded: props.expandedStepParagraphIDs,
+                    previousExpanded: previousExpandedStepParagraphIDs
                 ),
                 scrollController: scrollController,
                 onRefresh: props.onRefresh,
@@ -230,7 +243,9 @@ private struct SessionChatTimelineReadyView: View {
                     onToolGroupTap: props.onToolGroupTap,
                     onChildSessionTap: props.onChildSessionTap,
                     onChangesReviewTap: props.onChangesReviewTap,
-                    supportsSessionMessageDiff: props.supportsSessionMessageDiff
+                    supportsSessionMessageDiff: props.supportsSessionMessageDiff,
+                    expandedStepParagraphIDs: props.expandedStepParagraphIDs,
+                    onExpandStepParagraph: props.onExpandStepParagraph
                 )
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -292,6 +307,7 @@ private struct SessionChatTimelineReadyView: View {
         .onAppear {
             previousMountedWorkingLabel = mountedWorkingLabel
             previousWorkingIndicatorFading = props.workingIndicatorFading
+            previousExpandedStepParagraphIDs = props.expandedStepParagraphIDs
             refreshSessionTodosPillSnapshot(totalCount: props.sessionTodoTotalCount)
             updateDisplayedSyncingLabel(props.syncingIndicatorLabel)
             scrollController.autoFollowEnabled = true
@@ -308,6 +324,9 @@ private struct SessionChatTimelineReadyView: View {
         }
         .onChange(of: props.workingIndicatorFading) { _, newValue in
             previousWorkingIndicatorFading = newValue
+        }
+        .onChange(of: props.expandedStepParagraphIDs) { _, newValue in
+            previousExpandedStepParagraphIDs = newValue
         }
         .onChange(of: props.messages.count) { _, newCount in
             logScroll("message-count changed count=\(newCount)")
@@ -411,6 +430,8 @@ private struct SessionChatTimelineHostRow: View {
     let onChildSessionTap: (String, String) -> Void
     let onChangesReviewTap: (String, String?) -> Void
     let supportsSessionMessageDiff: Bool
+    let expandedStepParagraphIDs: Set<String>
+    let onExpandStepParagraph: (String) -> Void
 
     var body: some View {
         if message.id == SessionChatStatusChrome.workingRowID {
@@ -429,7 +450,9 @@ private struct SessionChatTimelineHostRow: View {
                         onToolGroupTap: onToolGroupTap,
                         onChildSessionTap: onChildSessionTap,
                         onChangesReviewTap: onChangesReviewTap,
-                        supportsSessionMessageDiff: supportsSessionMessageDiff
+                        supportsSessionMessageDiff: supportsSessionMessageDiff,
+                        expandedStepParagraphIDs: expandedStepParagraphIDs,
+                        onExpandStepParagraph: onExpandStepParagraph
                     )
                     Spacer(minLength: 0)
                 } else {
@@ -441,7 +464,9 @@ private struct SessionChatTimelineHostRow: View {
                         onToolGroupTap: onToolGroupTap,
                         onChildSessionTap: onChildSessionTap,
                         onChangesReviewTap: onChangesReviewTap,
-                        supportsSessionMessageDiff: supportsSessionMessageDiff
+                        supportsSessionMessageDiff: supportsSessionMessageDiff,
+                        expandedStepParagraphIDs: expandedStepParagraphIDs,
+                        onExpandStepParagraph: onExpandStepParagraph
                     )
                 }
             }
@@ -538,6 +563,8 @@ private struct SessionChatMessageRow: View {
     let onChildSessionTap: (String, String) -> Void
     let onChangesReviewTap: (String, String?) -> Void
     let supportsSessionMessageDiff: Bool
+    let expandedStepParagraphIDs: Set<String>
+    let onExpandStepParagraph: (String) -> Void
 
     private func openMessageActions(showsRevertMessage: Bool) {
         onMessageActionsTap(
@@ -577,7 +604,9 @@ private struct SessionChatMessageRow: View {
                     onToolGroupTap: onToolGroupTap,
                     onChildSessionTap: onChildSessionTap,
                     onChangesReviewTap: onChangesReviewTap,
-                    supportsSessionMessageDiff: supportsSessionMessageDiff
+                    supportsSessionMessageDiff: supportsSessionMessageDiff,
+                    expandedStepParagraphIDs: expandedStepParagraphIDs,
+                    onExpandStepParagraph: onExpandStepParagraph
                 )
                 .frame(maxWidth: .infinity, alignment: .leading)
             case .command, .tool, .unknown:
@@ -636,6 +665,8 @@ private struct AssistantMessageContent: View {
     let onChildSessionTap: (String, String) -> Void
     let onChangesReviewTap: (String, String?) -> Void
     let supportsSessionMessageDiff: Bool
+    let expandedStepParagraphIDs: Set<String>
+    let onExpandStepParagraph: (String) -> Void
 
     /// Rows never render empty — unpaintable blocks are filtered and an empty
     /// result falls back to the live placeholder.
@@ -741,7 +772,9 @@ private struct AssistantMessageContent: View {
                         paragraph: paragraph,
                         renderedMarkdown: renderedMarkdown(for: paragraph.renderedMarkdown),
                         isStreaming: block.blockID == streamingStepParagraphBlockID,
+                        isExpanded: expandedStepParagraphIDs.contains(paragraph.id),
                         onOpenMessageActions: onOpenMessageActions,
+                        onExpand: { onExpandStepParagraph(paragraph.id) },
                         chipAction: { chip in toolCardAction(for: chip.card) }
                     )
                 }
@@ -771,51 +804,36 @@ private struct AssistantMessageContent: View {
 }
 
 /// Chip timeline (OPE-260): narration, then the tools that followed it as
-/// chips, then one caption per failed tool. `+N more` expands in place; the
-/// expansion is view state keyed by the paragraph's block identity.
+/// chips, then one caption per failed tool. A single trailing `+N more`
+/// expands the whole paragraph; expansion lives in the Screen Model keyed by
+/// the paragraph's stable id so it survives cell reuse while scrolling.
 private struct StepParagraphBlock: View {
     let paragraph: SessionChatStepParagraphBlock
     let renderedMarkdown: NativeMarkdownDocument?
     let isStreaming: Bool
+    let isExpanded: Bool
     let onOpenMessageActions: () -> Void
+    let onExpand: () -> Void
     let chipAction: (SessionChatToolChipBlock) -> (() -> Void)?
-
-    @State private var expanded = false
 
     private enum ChipRowItem: Identifiable {
         case chip(index: Int, chip: SessionChatToolChipBlock)
-        case more(family: SessionChatToolChipFamily, count: Int)
+        case more(count: Int)
 
         var id: String {
             switch self {
             case .chip(let index, _): "chip:\(index)"
-            case .more(let family, _): "more:\(family.rawValue)"
+            case .more: "more"
             }
         }
     }
 
-    /// Family order is fixed by the builder; here only the per-family limit applies.
+    /// Limits, ceiling and the lone-hidden rule live in `chipRow`.
     private var rowItems: [ChipRowItem] {
-        var items: [ChipRowItem] = []
-        var shownPerFamily: [SessionChatToolChipFamily: Int] = [:]
-        var hiddenPerFamily: [SessionChatToolChipFamily: Int] = [:]
-        for (index, chip) in paragraph.chips.enumerated() {
-            let shown = shownPerFamily[chip.family, default: 0]
-            if !expanded, let limit = chip.family.visibleLimit, shown >= limit {
-                hiddenPerFamily[chip.family, default: 0] += 1
-                continue
-            }
-            shownPerFamily[chip.family] = shown + 1
-            items.append(.chip(index: index, chip: chip))
-        }
-        for family in SessionChatToolChipFamily.allCases.reversed() {
-            guard let hidden = hiddenPerFamily[family], hidden > 0 else { continue }
-            let lastOfFamily = items.lastIndex { item in
-                if case .chip(_, let chip) = item { return chip.family == family }
-                return false
-            }
-            let insertAt = lastOfFamily.map { $0 + 1 } ?? items.endIndex
-            items.insert(.more(family: family, count: hidden), at: insertAt)
+        let row = SessionChatTimelineBlocks.chipRow(paragraph.chips, expanded: isExpanded)
+        var items = row.visible.enumerated().map { ChipRowItem.chip(index: $0.offset, chip: $0.element) }
+        if row.hiddenCount > 0 {
+            items.append(.more(count: row.hiddenCount))
         }
         return items
     }
@@ -852,13 +870,13 @@ private struct StepParagraphBlock: View {
                             OpenCodeToolChip(
                                 variant: chip.variant,
                                 status: chip.status.toolChipStatus,
-                                trailingText: chip.trailingText,
+                                trailingText: chip.displayTrailingText,
                                 action: chipAction(chip)
                             )
-                        case .more(_, let count):
+                        case .more(let count):
                             OpenCodeToolChip(
                                 variant: .more(count: count),
-                                action: { expanded = true }
+                                action: onExpand
                             )
                         }
                     }

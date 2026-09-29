@@ -608,3 +608,61 @@ private struct EqualityCountingItem: Identifiable, Equatable {
         return lhs.id == rhs.id && lhs.label == rhs.label
     }
 }
+
+@MainActor
+struct SessionChatStepParagraphExpansionPacketTests {
+    private func row(_ id: String, paragraphID: String) -> SessionChatRow {
+        SessionChatRow(
+            id: id,
+            role: .assistant,
+            text: "",
+            metadataLabel: "",
+            blocks: [
+                .stepParagraph(
+                    blockID: "s:\(paragraphID)",
+                    paragraph: SessionChatStepParagraphBlock(
+                        id: paragraphID,
+                        textBlockID: nil,
+                        text: nil,
+                        renderedMarkdown: nil,
+                        chips: [],
+                        errorLines: []
+                    )
+                ),
+            ]
+        )
+    }
+
+    private let base = MessageListTimelineApplyPacket.from(
+        TimelineFrame(
+            frameRevision: 7,
+            rows: [],
+            insertedRowIDs: [],
+            changedRowIDs: [],
+            removedRowIDs: [],
+            layoutChangedRowIDs: [],
+            grewBottomRowIDs: [],
+            decorateRowIDs: [],
+            isRequired: false
+        )
+    )
+
+    @Test func noExpansion_leavesPacketUntouched() {
+        let rows = [row("m1", paragraphID: "sp:a")]
+        #expect(base.addingStepParagraphExpansion(rows: rows, expanded: [], previousExpanded: []) == base)
+    }
+
+    @Test func newlyExpandedParagraph_reconfiguresItsRowAndBumpsRevision() {
+        let rows = [row("m1", paragraphID: "sp:a"), row("m2", paragraphID: "sp:b")]
+        let packet = base.addingStepParagraphExpansion(rows: rows, expanded: ["sp:b"], previousExpanded: [])
+        #expect(packet.changedRowIDs == ["m2"])
+        #expect(packet.layoutChangedRowIDs == ["m2"])
+        #expect(packet.frameRevision != base.frameRevision)
+
+        // Once the view records the set as previous, the same set never re-applies.
+        let settled = base.addingStepParagraphExpansion(rows: rows, expanded: ["sp:b"], previousExpanded: ["sp:b"])
+        #expect(settled.changedRowIDs.isEmpty)
+        #expect(settled.frameRevision == packet.frameRevision)
+    }
+}
+

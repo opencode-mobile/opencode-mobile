@@ -166,12 +166,15 @@ nonisolated enum SessionChatToolChipFamily: String, Sendable, CaseIterable {
     case change
     case command
 
-    /// Chips shown before `+N more`; nil never truncates.
+    /// Chips shown before `+N more`; nil never truncates. Attention chips
+    /// (failed, running, pending) never count toward the limit.
     var visibleLimit: Int? {
         switch self {
-        case .explore: 2
         case .change: 3
-        case .skill, .agent, .command: nil
+        case .command: 3
+        case .explore: 2
+        case .agent: 2
+        case .skill: nil
         }
     }
 }
@@ -188,9 +191,77 @@ nonisolated struct SessionChatToolChipBlock: Equatable, Sendable {
     let trailingText: String?
     /// Carries detailText / childSessionId / changes review so chip taps reuse card actions.
     let card: SessionChatToolCardBlock
+    /// Identical consecutive completed runs folded into this chip (last run's card).
+    let repeatCount: Int
+
+    init(
+        kind: SessionChatToolChipKind,
+        family: SessionChatToolChipFamily,
+        label: String,
+        brief: String? = nil,
+        additions: Int? = nil,
+        deletions: Int? = nil,
+        status: ToolStatus,
+        trailingText: String? = nil,
+        card: SessionChatToolCardBlock,
+        repeatCount: Int = 1
+    ) {
+        self.kind = kind
+        self.family = family
+        self.label = label
+        self.brief = brief
+        self.additions = additions
+        self.deletions = deletions
+        self.status = status
+        self.trailingText = trailingText
+        self.card = card
+        self.repeatCount = repeatCount
+    }
+
+    /// Failed, running or pending chips are never hidden behind `+N more`
+    /// and never count toward a visible limit.
+    var needsAttention: Bool {
+        switch status {
+        case .error, .running, .pending: true
+        case .completed: false
+        }
+    }
+
+    /// Trailing text the chip shows: `×N` for folded repeats, joined with any
+    /// existing trailing text as `×N · text`.
+    var displayTrailingText: String? {
+        guard repeatCount > 1 else { return trailingText }
+        let count = "\u{00D7}\(repeatCount)"
+        guard let trailingText, !trailingText.isEmpty else { return count }
+        return "\(count) · \(trailingText)"
+    }
+
+    func withRepeatCount(_ repeatCount: Int) -> SessionChatToolChipBlock {
+        SessionChatToolChipBlock(
+            kind: kind,
+            family: family,
+            label: label,
+            brief: brief,
+            additions: additions,
+            deletions: deletions,
+            status: status,
+            trailingText: trailingText,
+            card: card,
+            repeatCount: repeatCount
+        )
+    }
+}
+
+/// Chips a step paragraph shows, plus how many sit behind its single `+N more`.
+nonisolated struct SessionChatToolChipRow: Equatable, Sendable {
+    let visible: [SessionChatToolChipBlock]
+    let hiddenCount: Int
 }
 
 nonisolated struct SessionChatStepParagraphBlock: Equatable, Sendable {
+    /// Stable identity across streaming growth (first part id of the paragraph);
+    /// keys the paragraph's `+N more` expansion in the Screen Model.
+    let id: String
     /// Merged-text id the equivalent `.text` block would have had; nil without text.
     let textBlockID: String?
     /// nil => placeholder paragraph ("Worked without commentary").
@@ -202,8 +273,12 @@ nonisolated struct SessionChatStepParagraphBlock: Equatable, Sendable {
 
     static let placeholderText = "Worked without commentary"
 
+    /// Paragraph-wide ceiling on visible counting chips before Explore trims.
+    static let visibleChipCeiling = 8
+
     func withRenderedMarkdown(_ document: NativeMarkdownDocument?) -> SessionChatStepParagraphBlock {
         SessionChatStepParagraphBlock(
+            id: id,
             textBlockID: textBlockID,
             text: text,
             renderedMarkdown: document,
@@ -213,7 +288,8 @@ nonisolated struct SessionChatStepParagraphBlock: Equatable, Sendable {
     }
 
     static func == (lhs: SessionChatStepParagraphBlock, rhs: SessionChatStepParagraphBlock) -> Bool {
-        lhs.textBlockID == rhs.textBlockID
+        lhs.id == rhs.id
+            && lhs.textBlockID == rhs.textBlockID
             && lhs.text == rhs.text
             && lhs.renderedMarkdown?.sourceHash == rhs.renderedMarkdown?.sourceHash
             && lhs.renderedMarkdown?.renderTreeVersion == rhs.renderedMarkdown?.renderTreeVersion
@@ -547,7 +623,10 @@ nonisolated enum SessionChatTimelineBlocks {
             let textIds = pendingText.map(\.id)
             let toolIds = pendingChips.map(\.id)
             let merged = pendingText.map(\.text).joined(separator: "\n")
-            let chips = orderedChips(pendingChips.map(\.chip))
+            let chips = orderedChips(foldRepeatedChips(pendingChips.map(\.chip)))
+            // Text always precedes chips inside one paragraph, so the first
+            // part id stays put while later tools stream in.
+            let firstPartId = textIds.first ?? toolIds[0]
             let errorLines = chips.compactMap { chip -> String? in
                 guard chip.status == .error else { return nil }
                 return "\(chip.label): \(chip.card.errorText ?? "Failed")"
@@ -558,6 +637,7 @@ nonisolated enum SessionChatTimelineBlocks {
                 .stepParagraph(
                     blockID: PresentationBlockId.stepParagraph(textIds + toolIds),
                     paragraph: SessionChatStepParagraphBlock(
+                        id: PresentationBlockId.stepParagraphIdentity(firstPartId),
                         textBlockID: textIds.isEmpty ? nil : PresentationBlockId.mergedText(textIds),
                         text: merged.isEmpty ? nil : merged,
                         renderedMarkdown: nil,
@@ -627,6 +707,88 @@ nonisolated enum SessionChatTimelineBlocks {
         }
     }
 
+    /// Chips consecutive in time (before the family sort) that are completed
+    /// and share kind, family and label fold into one chip with `repeatCount`;
+    /// the last run's card wins so a tap opens the latest output, and Change
+    /// chips sum their diff counts. Attention chips (failed, running, pending)
+    /// never fold and break a run.
+    static func foldRepeatedChips(_ chips: [SessionChatToolChipBlock]) -> [SessionChatToolChipBlock] {
+        var folded: [SessionChatToolChipBlock] = []
+        for chip in chips {
+            if let previous = folded.last,
+               !chip.needsAttention,
+               !previous.needsAttention,
+               previous.kind == chip.kind,
+               previous.family == chip.family,
+               previous.label == chip.label,
+               previous.status == chip.status
+            {
+                folded[folded.count - 1] = SessionChatToolChipBlock(
+                    kind: chip.kind,
+                    family: chip.family,
+                    label: chip.label,
+                    brief: chip.brief,
+                    additions: sumCounts(previous.additions, chip.additions),
+                    deletions: sumCounts(previous.deletions, chip.deletions),
+                    status: chip.status,
+                    trailingText: chip.trailingText,
+                    card: chip.card,
+                    repeatCount: previous.repeatCount + chip.repeatCount
+                )
+                continue
+            }
+            folded.append(chip)
+        }
+        return folded
+    }
+
+    private static func sumCounts(_ lhs: Int?, _ rhs: Int?) -> Int? {
+        switch (lhs, rhs) {
+        case (nil, nil): nil
+        case (let value?, nil), (nil, let value?): value
+        case (let first?, let second?): first + second
+        }
+    }
+
+    /// Visibility for one step paragraph's chip row:
+    /// 1. Per-family `visibleLimit` over counting chips (attention chips never
+    ///    hide and never count).
+    /// 2. At most `visibleChipCeiling` counting chips; Explore chips hide from
+    ///    the end of the paragraph until it fits (other families never trim).
+    /// 3. A lone hidden chip is shown instead of `+1 more`.
+    /// Order of the remaining chips is preserved.
+    static func chipRow(
+        _ chips: [SessionChatToolChipBlock],
+        expanded: Bool
+    ) -> SessionChatToolChipRow {
+        guard !expanded else { return SessionChatToolChipRow(visible: chips, hiddenCount: 0) }
+        var hidden = Array(repeating: false, count: chips.count)
+        var shownPerFamily: [SessionChatToolChipFamily: Int] = [:]
+        var visibleCounting = 0
+        for (index, chip) in chips.enumerated() where !chip.needsAttention {
+            let shown = shownPerFamily[chip.family, default: 0]
+            if let limit = chip.family.visibleLimit, shown >= limit {
+                hidden[index] = true
+                continue
+            }
+            shownPerFamily[chip.family] = shown + 1
+            visibleCounting += 1
+        }
+        var cursor = chips.count - 1
+        while visibleCounting > SessionChatStepParagraphBlock.visibleChipCeiling, cursor >= 0 {
+            let chip = chips[cursor]
+            if chip.family == .explore, !chip.needsAttention, !hidden[cursor] {
+                hidden[cursor] = true
+                visibleCounting -= 1
+            }
+            cursor -= 1
+        }
+        let hiddenCount = hidden.lazy.filter { $0 }.count
+        guard hiddenCount > 1 else { return SessionChatToolChipRow(visible: chips, hiddenCount: 0) }
+        let visible = chips.indices.filter { !hidden[$0] }.map { chips[$0] }
+        return SessionChatToolChipRow(visible: visible, hiddenCount: hiddenCount)
+    }
+
     private static func toToolChip(_ tool: ToolPart) -> SessionChatToolChipBlock? {
         guard case .toolCard(_, let card)? = toToolCard(tool) else { return nil }
         let name = tool.toolName.lowercased()
@@ -689,7 +851,8 @@ nonisolated enum SessionChatTimelineBlocks {
             deletions: family == .change ? card.deletions : nil,
             status: tool.status,
             trailingText: nil,
-            card: card
+            card: card,
+            repeatCount: 1
         )
     }
 
@@ -700,17 +863,109 @@ nonisolated enum SessionChatTimelineBlocks {
         return component.isEmpty ? trimmed : component
     }
 
-    static let commandChipLabelMaxLength = 40
+    static let commandChipLabelMaxLength = 48
 
-    /// First non-empty line, whitespace runs collapsed, trimmed, truncated to
-    /// `commandChipLabelMaxLength` characters with a trailing ellipsis.
+    /// Chip label for a shell command (the card keeps the full command):
+    /// first non-empty line with whitespace runs collapsed, leading `cd … &&`,
+    /// `export VAR=… &&` and `VAR=value ` prefixes stripped (the original is
+    /// kept if nothing would remain), then cut at the last whitespace before
+    /// `commandChipLabelMaxLength` with a trailing ellipsis. The first token is
+    /// never cut.
     static func commandChipLabel(_ command: String) -> String {
         let line = command
             .split(omittingEmptySubsequences: true, whereSeparator: \.isNewline)
             .map { $0.split(whereSeparator: \.isWhitespace).joined(separator: " ") }
             .first(where: { !$0.isEmpty }) ?? ""
-        guard line.count > commandChipLabelMaxLength else { return line }
-        return String(line.prefix(commandChipLabelMaxLength)) + "\u{2026}"
+        let stripped = stripCommandPrefixes(line)
+        let label = stripped.isEmpty ? line : stripped
+        return truncateCommandLabel(label)
+    }
+
+    private static func stripCommandPrefixes(_ line: String) -> String {
+        var rest = Substring(line)
+        while true {
+            rest = rest.drop(while: \.isWhitespace)
+            if let next = dropCdSegment(rest) ?? dropExportSegment(rest) ?? dropAssignment(rest) {
+                rest = next
+                continue
+            }
+            break
+        }
+        return rest.trimmingCharacters(in: .whitespaces)
+    }
+
+    /// `cd <dir> &&` / `cd <dir>;` → the text after the separator. The directory
+    /// runs to the first `;` or `&`, which must start the separator.
+    private static func dropCdSegment(_ text: Substring) -> Substring? {
+        guard text.hasPrefix("cd ") else { return nil }
+        let body = text.dropFirst(3)
+        guard let stop = body.firstIndex(where: { $0 == ";" || $0 == "&" }),
+              !body[..<stop].trimmingCharacters(in: .whitespaces).isEmpty
+        else { return nil }
+        return dropSeparator(body[stop...])
+    }
+
+    /// `export VAR=… [VAR=…] &&` / `…;` → the text after the separator.
+    private static func dropExportSegment(_ text: Substring) -> Substring? {
+        guard text.hasPrefix("export ") else { return nil }
+        var rest = text.dropFirst(7).drop(while: \.isWhitespace)
+        guard let first = assignmentEnd(rest) else { return nil }
+        rest = rest[first...].drop(while: \.isWhitespace)
+        while let end = assignmentEnd(rest) {
+            rest = rest[end...].drop(while: \.isWhitespace)
+        }
+        return dropSeparator(rest)
+    }
+
+    /// Leading `VAR=value ` environment assignment → the text after it.
+    private static func dropAssignment(_ text: Substring) -> Substring? {
+        guard let end = assignmentEnd(text), end < text.endIndex, text[end].isWhitespace else { return nil }
+        return text[end...].drop(while: \.isWhitespace)
+    }
+
+    private static func dropSeparator(_ text: Substring) -> Substring? {
+        if text.hasPrefix("&&") { return text.dropFirst(2) }
+        if text.hasPrefix(";") { return text.dropFirst() }
+        return nil
+    }
+
+    /// End of a leading `NAME=value` token. The value may hold quoted runs;
+    /// otherwise it stops at whitespace, `;` or `&`.
+    private static func assignmentEnd(_ text: Substring) -> Substring.Index? {
+        func isNameStart(_ c: Character) -> Bool { c == "_" || (c.isASCII && c.isLetter) }
+        func isNameChar(_ c: Character) -> Bool { isNameStart(c) || (c.isASCII && c.isNumber) }
+        guard let first = text.first, isNameStart(first) else { return nil }
+        var index = text.index(after: text.startIndex)
+        while index < text.endIndex, isNameChar(text[index]) {
+            index = text.index(after: index)
+        }
+        guard index < text.endIndex, text[index] == "=" else { return nil }
+        index = text.index(after: index)
+        while index < text.endIndex {
+            let c = text[index]
+            if c == "\"" || c == "'",
+               let close = text[text.index(after: index)...].firstIndex(of: c)
+            {
+                index = text.index(after: close)
+                continue
+            }
+            if c.isWhitespace || c == ";" || c == "&" { break }
+            index = text.index(after: index)
+        }
+        return index
+    }
+
+    private static func truncateCommandLabel(_ label: String) -> String {
+        guard label.count > commandChipLabelMaxLength else { return label }
+        let firstTokenEnd = label.firstIndex(of: " ") ?? label.endIndex
+        if label.distance(from: label.startIndex, to: firstTokenEnd) >= commandChipLabelMaxLength {
+            let firstToken = String(label[..<firstTokenEnd])
+            return firstTokenEnd == label.endIndex ? firstToken : firstToken + "\u{2026}"
+        }
+        // A space right at the limit still counts as a boundary.
+        let limit = label.index(label.startIndex, offsetBy: commandChipLabelMaxLength + 1)
+        let cut = label[..<limit].lastIndex(of: " ") ?? firstTokenEnd
+        return String(label[..<cut]) + "\u{2026}"
     }
 
     private static func firstLine(_ text: String) -> String? {

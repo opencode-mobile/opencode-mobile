@@ -269,6 +269,8 @@ struct SessionChatUiState: Equatable {
     var pendingSessionReplace: ChildSessionNavigationTarget?
     var pendingTerminalOpen: PendingTerminalOpen?
     var hasPendingRevert = false
+    /// Chip-timeline step paragraph ids (`SessionChatStepParagraphBlock.id`) shown in full.
+    var expandedStepParagraphIDs: Set<String> = []
 
     var latestCompletedUserMessageID: String? {
         var latest: String?

@@ -246,7 +246,11 @@ struct SessionChatView: View {
                                 for: nil
                             )
                         },
-                        supportsSessionMessageDiff: viewModel.uiState.supportsSessionMessageDiff
+                        supportsSessionMessageDiff: viewModel.uiState.supportsSessionMessageDiff,
+                        expandedStepParagraphIDs: viewModel.uiState.expandedStepParagraphIDs,
+                        onExpandStepParagraph: { paragraphID in
+                            viewModel.expandStepParagraph(paragraphID)
+                        }
                     )
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)

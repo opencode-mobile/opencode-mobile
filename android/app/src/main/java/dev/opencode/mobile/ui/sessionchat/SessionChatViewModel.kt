@@ -195,6 +195,9 @@ class SessionChatViewModel
         private var suppressedSnackbarKey: String? = null
         private var snackbarSequence: Long = 0L
 
+        // Chip-timeline paragraphs the user expanded past `+N more`; reset per session.
+        private var expandedStepParagraphIds: Set<String> = emptySet()
+
         // Title / custom-answer fields change per keystroke; report the first edit per
         // dialog appearance so analytics measures engagement instead of typing volume.
         private var renameDraftEditReported = false
@@ -302,6 +305,7 @@ class SessionChatViewModel
             lastSnackbarKey = null
             suppressedSnackbarKey = null
             snackbarSequence = 0L
+            expandedStepParagraphIds = emptySet()
             resetWorkingFooter()
             logI("bind session=$sessionId worktree=$worktree title=$sessionTitle")
             seedProjectIdentity(worktree)
@@ -339,6 +343,7 @@ class SessionChatViewModel
             lastSnackbarKey = null
             suppressedSnackbarKey = null
             snackbarSequence = 0L
+            expandedStepParagraphIds = emptySet()
             resetWorkingFooter()
             logI("bind optimistic create worktree=$worktree title=$sessionTitle")
             seedProjectIdentity(worktree)
@@ -428,6 +433,13 @@ class SessionChatViewModel
 
         fun loadMessages() {
             timeline.loadMessages()
+        }
+
+        /** Shows every chip of a chip-timeline paragraph (its `+N more` was tapped). */
+        fun expandStepParagraph(expansionId: String) {
+            if (expansionId in expandedStepParagraphIds) return
+            expandedStepParagraphIds = expandedStepParagraphIds + expansionId
+            _uiState.value = _uiState.value.copy(expandedStepParagraphIds = expandedStepParagraphIds)
         }
 
         fun refreshMessages() {
@@ -1298,6 +1310,7 @@ class SessionChatViewModel
                 forkResultVisible = commandsState.forkResultVisible,
                 forkedSessionTitle = commandsState.forkedSessionTitle,
                 pendingSessionReplace = commandsState.pendingSessionReplace,
+                expandedStepParagraphIds = expandedStepParagraphIds,
                 pendingTerminalOpen = commandsState.pendingTerminalOpen,
                 hasPendingRevert = commandsState.hasPendingRevert,
                 projectLabel = projectLabel,
