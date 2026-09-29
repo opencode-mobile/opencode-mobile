@@ -68,9 +68,22 @@ struct OpenCodeToolChip: View {
     private var chipContent: some View {
         HStack(spacing: Self.contentSpacing) {
             if let icon = leadingIcon {
-                OpenCodeIconImage(icon: icon, size: Self.iconSize)
-                    .foregroundStyle(iconColor)
-                    .fixedSize()
+                if case .agent = variant {
+                    // Agents get a tinted tile so the chip reads as "someone
+                    // else did this" without tinting the whole chip.
+                    OpenCodeIconImage(icon: icon, size: Self.iconSize)
+                        .foregroundStyle(iconColor)
+                        .fixedSize()
+                        .frame(width: Self.agentTileSize, height: Self.agentTileSize)
+                        .background(
+                            OpenCodeColors.info.opacity(Self.agentTileOpacity),
+                            in: RoundedRectangle(cornerRadius: Self.agentTileCornerRadius)
+                        )
+                } else {
+                    OpenCodeIconImage(icon: icon, size: Self.iconSize)
+                        .foregroundStyle(iconColor)
+                        .fixedSize()
+                }
             }
 
             // Label shrinks before anything else so a long path or command
@@ -86,7 +99,7 @@ struct OpenCodeToolChip: View {
             if case .agent(_, let brief?) = variant, !brief.isEmpty {
                 Text(brief)
                     .font(Self.briefFont)
-                    .foregroundStyle(OpenCodeColors.textWeak)
+                    .foregroundStyle(OpenCodeColors.textBase)
                     .lineLimit(1)
                     .truncationMode(.tail)
                     // Gives way first, so the agent name stays whole.
@@ -139,7 +152,7 @@ struct OpenCodeToolChip: View {
         case .command(let label):
             label
         case .agent(let name, _):
-            name
+            Self.displayAgentName(name)
         case .skill(let name):
             name.hasPrefix("/") ? name : "/\(name)"
         case .more(let count):
@@ -173,7 +186,7 @@ struct OpenCodeToolChip: View {
         case .command:
             .terminal
         case .agent:
-            .subdirectoryArrowRight
+            .callSplit
         case .skill:
             .list
         case .more:
@@ -230,7 +243,9 @@ struct OpenCodeToolChip: View {
         switch variant {
         case .file, .command, .skill:
             Self.monoLabelFont
-        case .agent, .more:
+        case .agent:
+            Self.agentLabelFont
+        case .more:
             Self.systemLabelFont
         }
     }
@@ -241,8 +256,6 @@ struct OpenCodeToolChip: View {
             OpenCodeColors.textBase
         case (_, .error?):
             OpenCodeColors.error
-        case (.agent, _):
-            OpenCodeColors.info
         case (.skill, _):
             OpenCodeColors.textInteractiveBase
         case (_, .pending?):
@@ -271,8 +284,6 @@ struct OpenCodeToolChip: View {
             OpenCodeColors.surfaceCriticalBase
         case (_, .running?):
             OpenCodeColors.warning.opacity(Self.runningBackgroundOpacity)
-        case (.agent, _):
-            OpenCodeColors.info.opacity(Self.agentBackgroundOpacity)
         case (.skill, _):
             OpenCodeColors.surfaceInteractiveWeak
         default:
@@ -305,7 +316,7 @@ struct OpenCodeToolChip: View {
         case .command(let label):
             parts.append("Command \(label)")
         case .agent(let name, let brief):
-            parts.append("Agent \(name)")
+            parts.append("Agent \(Self.displayAgentName(name))")
             if let brief, !brief.isEmpty { parts.append(brief) }
         case .skill(let name):
             parts.append("Skill \(name)")
@@ -321,6 +332,13 @@ struct OpenCodeToolChip: View {
         return parts.joined(separator: ", ")
     }
 
+    /// Server agent names are lowercase identifiers (`explore`, `build`);
+    /// the chip shows them as a name.
+    static func displayAgentName(_ name: String) -> String {
+        guard let first = name.first else { return name }
+        return first.uppercased() + name.dropFirst()
+    }
+
     // MARK: - Metrics
 
     private static let cornerRadius: CGFloat = 8
@@ -333,11 +351,14 @@ struct OpenCodeToolChip: View {
     private static let minHeight: CGFloat = 36
     private static let minTapTarget: CGFloat = 44
     private static let runningBackgroundOpacity = 0.12
-    private static let agentBackgroundOpacity = 0.14
+    private static let agentTileOpacity = 0.14
+    private static let agentTileSize: CGFloat = 18
+    private static let agentTileCornerRadius: CGFloat = 5
     private static let stateBorderOpacity = 0.4
     private static let agentBorderOpacity = 0.35
     private static let monoLabelFont = Font.system(size: 13, weight: .regular, design: .monospaced)
     private static let systemLabelFont = Font.system(size: 13, weight: .regular)
+    private static let agentLabelFont = Font.system(size: 13, weight: .semibold)
     private static let briefFont = Font.system(size: 12, weight: .regular)
     private static let diffFont = Font.system(size: 12, weight: .semibold)
     private static let trailingFont = Font.system(size: 12, weight: .regular)

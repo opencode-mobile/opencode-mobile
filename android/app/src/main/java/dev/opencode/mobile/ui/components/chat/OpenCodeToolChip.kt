@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
@@ -59,6 +60,9 @@ private val ToolChipSpinnerSize = 11.dp
 private val ToolChipContentSpacing = 6.dp
 private val ToolChipBriefMaxWidth = 160.dp
 private val ToolChipMinHeight = 36.dp
+private val ToolChipAgentTileSize = 18.dp
+private val ToolChipAgentTileCornerRadius = 5.dp
+private const val TOOL_CHIP_AGENT_TILE_ALPHA = 0.14f
 private val ToolChipMinTouchTarget = 48.dp
 
 /** Variant-first content of a [OpenCodeToolChip]; colours and radius are not exposed. */
@@ -169,12 +173,34 @@ fun OpenCodeToolChip(
         horizontalArrangement = Arrangement.spacedBy(ToolChipContentSpacing),
     ) {
         variant.leadingIcon()?.let { icon ->
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                modifier = Modifier.size(ToolChipIconSize),
-                tint = colors.icon,
-            )
+            if (variant is OpenCodeToolChipVariant.Agent) {
+                // Agents get a tinted tile so the chip reads as "someone else
+                // did this" without tinting the whole chip.
+                Box(
+                    modifier =
+                        Modifier
+                            .size(ToolChipAgentTileSize)
+                            .background(
+                                openCodeColor("info").copy(alpha = TOOL_CHIP_AGENT_TILE_ALPHA),
+                                RoundedCornerShape(ToolChipAgentTileCornerRadius),
+                            ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        modifier = Modifier.size(ToolChipIconSize),
+                        tint = colors.icon,
+                    )
+                }
+            } else {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(ToolChipIconSize),
+                    tint = colors.icon,
+                )
+            }
         }
 
         val labelStyle =
@@ -184,6 +210,7 @@ fun OpenCodeToolChip(
                 is OpenCodeToolChipVariant.Skill,
                 -> MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace, fontSize = 13.sp, lineHeight = 16.sp)
                 is OpenCodeToolChipVariant.Agent,
+                -> MaterialTheme.typography.labelSmall.copy(fontSize = 13.sp, lineHeight = 16.sp, fontWeight = FontWeight.SemiBold)
                 is OpenCodeToolChipVariant.More,
                 -> MaterialTheme.typography.labelSmall.copy(fontSize = 13.sp, lineHeight = 16.sp)
             }
@@ -203,7 +230,7 @@ fun OpenCodeToolChip(
             Text(
                 text = variant.brief,
                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp, lineHeight = 16.sp),
-                color = openCodeColor("text-weak"),
+                color = openCodeColor("text-base"),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.widthIn(max = ToolChipBriefMaxWidth),
@@ -225,7 +252,7 @@ fun OpenCodeToolChip(
             Text(
                 text = trailingText,
                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp, lineHeight = 16.sp),
-                color = openCodeColor("text-weak"),
+                color = openCodeColor("text-base"),
                 maxLines = 1,
             )
         }
@@ -283,7 +310,7 @@ private fun toolChipColors(
         when (variant) {
             is OpenCodeToolChipVariant.Agent -> {
                 val info = openCodeColor("info")
-                base.copy(background = info.copy(alpha = 0.14f), border = info.copy(alpha = 0.35f), icon = info, label = info)
+                base.copy(border = info.copy(alpha = 0.4f), icon = info)
             }
             is OpenCodeToolChipVariant.Skill ->
                 base.copy(
@@ -318,7 +345,7 @@ private fun OpenCodeToolChipVariant.leadingIcon(): ImageVector? =
         is OpenCodeToolChipVariant.File ->
             if (additions != null || deletions != null) OpenCodeIcons.Edit else OpenCodeIcons.Description
         is OpenCodeToolChipVariant.Command -> OpenCodeIcons.Terminal
-        is OpenCodeToolChipVariant.Agent -> OpenCodeIcons.SubdirectoryArrowRight
+        is OpenCodeToolChipVariant.Agent -> OpenCodeIcons.CallSplit
         is OpenCodeToolChipVariant.Skill -> OpenCodeIcons.List
         is OpenCodeToolChipVariant.More -> null
     }
@@ -327,7 +354,7 @@ private fun OpenCodeToolChipVariant.primaryText(): String =
     when (this) {
         is OpenCodeToolChipVariant.File -> label
         is OpenCodeToolChipVariant.Command -> label
-        is OpenCodeToolChipVariant.Agent -> name
+        is OpenCodeToolChipVariant.Agent -> displayAgentName(name)
         is OpenCodeToolChipVariant.Skill -> name
         is OpenCodeToolChipVariant.More -> "+$count more"
     }
@@ -474,3 +501,6 @@ private fun ToolChipPreviewColumn() {
         }
     }
 }
+
+/** Server agent names are lowercase identifiers (`explore`, `build`); the chip shows them as a name. */
+internal fun displayAgentName(name: String): String = name.replaceFirstChar { it.uppercase() }
