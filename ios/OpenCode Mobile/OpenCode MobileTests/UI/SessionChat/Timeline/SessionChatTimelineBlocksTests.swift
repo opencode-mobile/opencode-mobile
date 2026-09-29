@@ -1822,6 +1822,31 @@ struct SessionChatTimelineBlocksTests {
         #expect(SessionChatTimelineBlocks.skillUses(in: okBlocks(parts: [text("t", "No tools.")], chipTimeline: true)).isEmpty)
     }
 
+    @Test func skillUses_collapsesByRequestedIdWhenTheSettledNameDiffers() throws {
+        let blocks = okBlocks(
+            parts: [
+                .tool(
+                    ToolPart(
+                        id: "s1",
+                        toolName: "skill",
+                        status: .completed,
+                        input: ["id": .string("feature")],
+                        metadata: ["name": .string("feature-workflow"), "directory": .string("/repo/.agents/skills/feature")]
+                    )
+                ),
+                text("t", "Once more."),
+                .tool(ToolPart(id: "s2", toolName: "skill", status: .running, input: ["id": .string("feature")])),
+            ],
+            chipTimeline: true
+        )
+        let uses = SessionChatTimelineBlocks.skillUses(in: blocks)
+        #expect(uses.count == 1)
+        #expect(uses[0].id == PresentationBlockId.direct("s1"))
+        #expect(uses[0].label == "/feature")
+        #expect(uses[0].status == .running)
+        #expect(uses[0].directory == "/repo/.agents/skills/feature")
+    }
+
     // MARK: - Chip timeline (OPE-260)
 
     private func paragraph(

@@ -3088,6 +3088,39 @@ class SessionChatTimelineBlocksTest {
         )
     }
 
+    @Test
+    fun skillUses_collapsesByRequestedIdWhenTheSettledNameDiffers() {
+        val blocks =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "skill",
+                            status = ToolStatus.Completed,
+                            id = "s1",
+                            input = json("id" to "feature"),
+                            metadata = json("name" to "feature-workflow", "directory" to "/repo/.agents/skills/feature"),
+                        ),
+                        MessagePart.Text(id = "t", text = "Once more."),
+                        MessagePart.Tool(
+                            toolName = "skill",
+                            status = ToolStatus.Running,
+                            id = "s2",
+                            input = json("id" to "feature"),
+                        ),
+                    ),
+                chipTimeline = true,
+            )
+
+        val uses = SessionChatTimelineBlocks.skillUses(blocks)
+        assertEquals(1, uses.size)
+        assertEquals(PresentationBlockId.direct("s1"), uses[0].id)
+        assertEquals("/feature", uses[0].label)
+        assertEquals(ToolStatus.Running, uses[0].status)
+        assertEquals("/repo/.agents/skills/feature", uses[0].directory)
+    }
+
     private fun buildBlocks(
         role: MessageRole,
         parts: List<MessagePart>,

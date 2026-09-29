@@ -60,7 +60,11 @@ struct SyncCoordinatorTests {
             }
         }
         defer { env.coordinator.unregister(registration) }
-        env.coordinator.visible(key, true)
+        // The key stays invisible on purpose: the collectors replay the
+        // connected state on their own tasks, and a bootstrap they start would
+        // load visible keys concurrently with this retry sequence, consuming
+        // the failing attempts before the fake clock releases a backoff.
+        // `ensureFresh` and the retry do not need visibility.
 
         let states = StateCollector()
         let task = Task.detached { await states.collect(env.coordinator.observe(key)) }

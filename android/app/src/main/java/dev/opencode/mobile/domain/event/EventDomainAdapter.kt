@@ -477,7 +477,7 @@ class EventDomainAdapter(
                         }
                     }?.takeIf { it.isNotEmpty() }
         val input = jsonObjectInput(properties["input"])
-        val metadata = properties["structured"]?.jsonObject
+        val metadata = toolMetadata(properties)
         return toolLikePartUpdated(
             properties = properties,
             messageId = properties.string("assistantMessageID"),
@@ -490,6 +490,21 @@ class EventDomainAdapter(
             error = error,
             metadata = metadata,
         )
+    }
+
+    /**
+     * v2 tool events carry tool-reported metadata (a subagent's `sessionID`
+     * arrives on `tool.progress` while it is still running) under `metadata`;
+     * older betas used `structured`. Merge both so neither shape drops it.
+     */
+    private fun toolMetadata(properties: JsonObject): JsonObject? {
+        val structured = properties["structured"] as? JsonObject
+        val metadata = properties["metadata"] as? JsonObject
+        return when {
+            structured == null -> metadata
+            metadata == null -> structured
+            else -> JsonObject(structured + metadata)
+        }
     }
 
     private fun toolInputDelta(properties: JsonObject): OpencodeEvent {

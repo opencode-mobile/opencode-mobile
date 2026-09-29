@@ -132,6 +132,12 @@ sealed class SessionChatTimelineBlock {
         val label: String,
         /** Agent chips: first line of the description; skill chips: the skill directory. */
         val brief: String? = null,
+        /**
+         * Skill chips only: the requested skill id, stable from the first
+         * in-flight update on, while [label] switches to the server-reported
+         * name once the run settles.
+         */
+        val skillId: String? = null,
         val additions: Int? = null,
         val deletions: Int? = null,
         val status: ToolStatus,
@@ -493,15 +499,18 @@ object SessionChatTimelineBlocks {
      * Skill name: the settled server output names it in metadata; before that
      * the request carries the skill id (older servers sent `name`).
      */
-    private fun skillName(tool: MessagePart.Tool): String? =
-        metadataString(tool.metadata, "name") ?: inputString(tool.input, "id", "name", "skill")
+    private fun skillName(tool: MessagePart.Tool): String? = metadataString(tool.metadata, "name") ?: requestedSkillId(tool)
+
+    /** The skill the request asked for; present from the first update on. */
+    private fun requestedSkillId(tool: MessagePart.Tool): String? = inputString(tool.input, "id", "name", "skill")
 
     private fun skillDirectory(tool: MessagePart.Tool): String? = metadataString(tool.metadata, "directory")
 
     /**
      * Skills a message loaded, in first-use order across its step paragraphs.
-     * Repeated loads of one skill collapse into one entry that keeps the first
-     * chip's id and the latest run's status and directory.
+     * Repeated loads of one skill collapse into one entry, keyed by the
+     * requested skill id (the label once no id is known), that keeps the
+     * first chip's id and the latest run's label, status and directory.
      */
     fun skillUses(blocks: List<SessionChatTimelineBlock>): List<SessionChatSkillUse> {
         val uses = linkedMapOf<String, SessionChatSkillUse>()
@@ -510,8 +519,9 @@ object SessionChatTimelineBlocks {
             .flatMap { it.chips }
             .filter { it.kind == ToolChipKind.Skill }
             .forEach { chip ->
-                val previous = uses[chip.label]
-                uses[chip.label] =
+                val key = chip.skillId ?: chip.label
+                val previous = uses[key]
+                uses[key] =
                     SessionChatSkillUse(
                         id = previous?.id ?: chip.id,
                         label = chip.label,
@@ -555,6 +565,7 @@ object SessionChatTimelineBlocks {
                     ToolChipFamily.Skill -> skillDirectory(tool)
                     else -> null
                 },
+            skillId = if (family == ToolChipFamily.Skill) requestedSkillId(tool) else null,
             additions = card.additions.takeIf { isChange },
             deletions = card.deletions.takeIf { isChange },
             status = tool.status,

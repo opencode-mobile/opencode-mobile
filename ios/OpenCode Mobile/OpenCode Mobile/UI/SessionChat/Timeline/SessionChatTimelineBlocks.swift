@@ -222,6 +222,10 @@ nonisolated struct SessionChatToolChipBlock: Equatable, Sendable {
     /// Agent chips: first line of the description / prompt. Skill chips: the
     /// skill directory the server reported.
     let brief: String?
+    /// Skill chips only: the requested skill id, stable from the first
+    /// in-flight update on, while `label` switches to the server-reported
+    /// name once the run settles.
+    let skillID: String?
     let additions: Int?
     let deletions: Int?
     let status: ToolStatus
@@ -240,6 +244,7 @@ nonisolated struct SessionChatToolChipBlock: Equatable, Sendable {
         family: SessionChatToolChipFamily,
         label: String,
         brief: String? = nil,
+        skillID: String? = nil,
         additions: Int? = nil,
         deletions: Int? = nil,
         status: ToolStatus,
@@ -253,6 +258,7 @@ nonisolated struct SessionChatToolChipBlock: Equatable, Sendable {
         self.family = family
         self.label = label
         self.brief = brief
+        self.skillID = skillID
         self.additions = additions
         self.deletions = deletions
         self.status = status
@@ -304,6 +310,7 @@ nonisolated struct SessionChatToolChipBlock: Equatable, Sendable {
             family: family,
             label: label,
             brief: brief,
+            skillID: skillID,
             additions: additions,
             deletions: deletions,
             status: status,
@@ -862,8 +869,12 @@ nonisolated enum SessionChatTimelineBlocks {
     /// Skill name: the settled server output names it in metadata; before
     /// that the request carries the skill id (older servers sent `name`).
     private static func skillName(_ tool: ToolPart) -> String? {
-        metadataString(tool.metadata, keys: "name")
-            ?? inputString(tool.input, keys: "id", "name", "skill")
+        metadataString(tool.metadata, keys: "name") ?? requestedSkillID(tool)
+    }
+
+    /// The skill the request asked for; present from the first update on.
+    private static func requestedSkillID(_ tool: ToolPart) -> String? {
+        inputString(tool.input, keys: "id", "name", "skill")
     }
 
     private static func skillDirectory(_ tool: ToolPart) -> String? {
@@ -871,15 +882,17 @@ nonisolated enum SessionChatTimelineBlocks {
     }
 
     /// Skills a message loaded, in first-use order across its step paragraphs.
-    /// Repeated loads of one skill collapse into one entry that keeps the
-    /// first chip's id and the latest run's status and directory.
+    /// Repeated loads of one skill collapse into one entry, keyed by the
+    /// requested skill id (the label once no id is known), that keeps the
+    /// first chip's id and the latest run's label, status and directory.
     static func skillUses(in blocks: [SessionChatTimelineBlock]) -> [SessionChatSkillUse] {
         var uses: [SessionChatSkillUse] = []
-        var indexByLabel: [String: Int] = [:]
+        var indexByKey: [String: Int] = [:]
         for block in blocks {
             guard case .stepParagraph(_, let paragraph) = block else { continue }
             for chip in paragraph.chips where chip.kind == .skill {
-                if let index = indexByLabel[chip.label] {
+                let key = chip.skillID ?? chip.label
+                if let index = indexByKey[key] {
                     uses[index] = SessionChatSkillUse(
                         id: uses[index].id,
                         label: chip.label,
@@ -887,7 +900,7 @@ nonisolated enum SessionChatTimelineBlocks {
                         status: chip.status
                     )
                 } else {
-                    indexByLabel[chip.label] = uses.count
+                    indexByKey[key] = uses.count
                     uses.append(
                         SessionChatSkillUse(id: chip.id, label: chip.label, directory: chip.brief, status: chip.status)
                     )
@@ -927,6 +940,7 @@ nonisolated enum SessionChatTimelineBlocks {
                     family: chip.family,
                     label: chip.label,
                     brief: chip.brief,
+                    skillID: chip.skillID,
                     additions: sumCounts(previous.additions, chip.additions),
                     deletions: sumCounts(previous.deletions, chip.deletions),
                     status: chip.status,
@@ -984,6 +998,7 @@ nonisolated enum SessionChatTimelineBlocks {
         let family: SessionChatToolChipFamily
         var label: String?
         var brief: String?
+        var skillID: String?
         if isChildSessionTool(name) {
             kind = .agent
             family = .agent
@@ -1025,6 +1040,7 @@ nonisolated enum SessionChatTimelineBlocks {
                 family = .skill
                 label = (skillName(tool) ?? card.subtitle).map { "/\($0)" }
                 brief = skillDirectory(tool)
+                skillID = requestedSkillID(tool)
             default:
                 kind = .command
                 family = .command
@@ -1037,6 +1053,7 @@ nonisolated enum SessionChatTimelineBlocks {
             family: family,
             label: nonEmpty(label) ?? tool.toolName,
             brief: nonEmpty(brief),
+            skillID: nonEmpty(skillID),
             additions: family == .change ? card.additions : nil,
             deletions: family == .change ? card.deletions : nil,
             status: tool.status,
