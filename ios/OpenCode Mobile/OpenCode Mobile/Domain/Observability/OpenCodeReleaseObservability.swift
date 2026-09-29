@@ -43,12 +43,14 @@ enum OpenCodeReleaseObservability {
 import FirebaseAnalytics
 import FirebaseCore
 import FirebaseCrashlytics
+import FirebaseRemoteConfig
 
 private enum ReleaseFirebaseBootstrap {
     static func start() {
         if FirebaseApp.app() == nil {
             FirebaseApp.configure()
         }
+        activateFeatureFlags()
 
         let verificationEnabled = CrashlyticsVerificationPolicy.isEnabled(in: .main)
         let buildNumber = Bundle.main
@@ -78,6 +80,28 @@ private enum ReleaseFirebaseBootstrap {
 
     static func logProductEvent(name: String, parameters: [String: String]) {
         Analytics.logEvent(name, parameters: parameters.isEmpty ? nil : parameters)
+    }
+
+    /// OPE-269: activates values fetched during the previous launch, snapshots
+    /// them into `FeatureFlags` once for this session, then fetches for the next
+    /// launch. Not gated by product analytics consent (plain value fetch).
+    private static func activateFeatureFlags() {
+        let remoteConfig = RemoteConfig.remoteConfig()
+        remoteConfig.activate { _, _ in
+            FeatureFlags.shared.applyRemote(remoteFlagValues(remoteConfig))
+            remoteConfig.fetch { _, _ in }
+        }
+    }
+
+    private static func remoteFlagValues(_ remoteConfig: RemoteConfig) -> [String: Bool] {
+        var values: [String: Bool] = [:]
+        for flag in FeatureFlag.allCases {
+            let value = remoteConfig.configValue(forKey: flag.key)
+            if value.source == .remote {
+                values[flag.key] = value.boolValue
+            }
+        }
+        return values
     }
 }
 #endif

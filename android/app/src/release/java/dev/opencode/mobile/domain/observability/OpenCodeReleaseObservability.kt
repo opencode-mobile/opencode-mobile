@@ -7,6 +7,9 @@ import android.os.Build
 import android.os.Bundle
 import com.google.firebase.analytics.FirebaseAnalytics
 import com.google.firebase.crashlytics.FirebaseCrashlytics
+import com.google.firebase.remoteconfig.FirebaseRemoteConfig
+import dev.opencode.mobile.domain.featureflags.FeatureFlag
+import dev.opencode.mobile.domain.featureflags.FeatureFlags
 import dev.opencode.mobile.domain.preferences.AnalyticsConsentPreferences
 
 /**
@@ -20,6 +23,7 @@ internal object OpenCodeReleaseObservability {
 
     fun initialize(application: Application) {
         this.application = application
+        activateFeatureFlags()
         val enabled =
             application.packageManager
                 .getApplicationInfo(application.packageName, PackageManager.GET_META_DATA)
@@ -47,6 +51,32 @@ internal object OpenCodeReleaseObservability {
             .recordException(OpenCodeMobileCrashlyticsVerification())
         preferences.edit().putBoolean(markerKey, true).commit()
     }
+
+    /**
+     * OPE-269: activates values fetched during the previous launch, snapshots
+     * them into [FeatureFlags] once for this session, then fetches for the next
+     * launch. Not gated by product analytics consent (plain value fetch).
+     */
+    private fun activateFeatureFlags() {
+        val remoteConfig = FirebaseRemoteConfig.getInstance()
+        remoteConfig
+            .activate()
+            .addOnCompleteListener {
+                FeatureFlags.applyRemote(remoteFlagValues(remoteConfig))
+                remoteConfig.fetch()
+            }
+    }
+
+    private fun remoteFlagValues(remoteConfig: FirebaseRemoteConfig): Map<String, Boolean> =
+        FeatureFlag.entries
+            .mapNotNull { flag ->
+                val value = remoteConfig.getValue(flag.key)
+                if (value.source == FirebaseRemoteConfig.VALUE_SOURCE_REMOTE) {
+                    flag.key to value.asBoolean()
+                } else {
+                    null
+                }
+            }.toMap()
 
     fun isProductAnalyticsConsented(): Boolean = AnalyticsConsentPreferences.productAnalyticsConsented
 

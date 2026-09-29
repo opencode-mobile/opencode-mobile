@@ -704,6 +704,7 @@ extension Container {
             AppOnboardingPreferences.shared.clear()
             DeveloperToolsPreferences.shared.clear()
             SessionChatDisplayPreferences.shared.clear()
+            FeatureFlags.shared.clearOverrides()
             MessageContentPreparer.shared.clearDocumentCache()
             BlockDecorationCache.shared.clear()
             await TextMateLogbook.shared.clear()

@@ -25,6 +25,8 @@ import kotlinx.serialization.Serializable
 
 @Serializable data object TextMateLanguagesHome : NavKey
 
+@Serializable data object FeatureFlagsHome : NavKey
+
 @Serializable data object ComponentGalleryHome : NavKey
 
 @Serializable data class ComponentGalleryDetail(
