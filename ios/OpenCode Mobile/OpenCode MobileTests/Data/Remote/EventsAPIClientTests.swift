@@ -141,14 +141,58 @@ struct EventsAPIClientTests {
         }
     }
 
+    @Test func streamEvents_connectBudgetFailsHungHandshakeAsTransport() async throws {
+        let before = Set(DiagnosticLogBuffer.shared.snapshot().entries.map(\.id))
+        let client = makeClient(responseBody: "", hang: true)
+        let started = ContinuousClock.now
+        let outcome = try await client.streamEvents(
+            path: "api/event",
+            directory: nil,
+            connectBudget: .milliseconds(80)
+        ) { _ in }
+        let elapsed = ContinuousClock.now - started
+        guard case let .transport(error?) = outcome else {
+            Issue.record("Expected transport budget failure, got \(String(describing: outcome))")
+            return
+        }
+        #expect(error is SseConnectBudgetExceeded)
+        #expect(!(error is SseHandshakeError))
+        #expect(elapsed < .seconds(2))
+
+        let fresh = DiagnosticLogBuffer.shared.snapshot().entries.filter { !before.contains($0.id) }
+        #expect(fresh.contains {
+            $0.message == "SSE connect budget exceeded path=api/event budgetMs=80"
+        })
+        #expect(!fresh.contains { $0.message.contains("API failure") && $0.message.contains("/api/event") })
+
+        MockSSEURLProtocol.register(
+            responseBody: Data("data: {\"payload\":{\"type\":\"server.connected\",\"properties\":{}}}\n\n".utf8),
+            statusCode: 200
+        )
+        var lines: [String] = []
+        let followUp = try await client.streamEvents(path: "api/event", directory: nil) { line in
+            lines.append(line)
+        }
+        guard case .ended = followUp else {
+            Issue.record("Injected session should survive budget cancellation, got \(String(describing: followUp))")
+            return
+        }
+        #expect(lines.count == 1)
+    }
+
     private func makeClient(
         responseBody: String,
         serverProtocol: ServerProtocol? = nil,
-        statusCode: Int = 200
+        statusCode: Int = 200,
+        hang: Bool = false
     ) -> EventsAPIClient {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [MockSSEURLProtocol.self]
-        MockSSEURLProtocol.register(responseBody: Data(responseBody.utf8), statusCode: statusCode)
+        MockSSEURLProtocol.register(
+            responseBody: Data(responseBody.utf8),
+            statusCode: statusCode,
+            hang: hang
+        )
         let session = URLSession(configuration: configuration)
         let connection = ServerConnection(
             baseURL: URL(string: "http://127.0.0.1:4096/")!,
@@ -179,13 +223,15 @@ private final class MockSSEURLProtocol: URLProtocol {
     private static let lock = NSLock()
     nonisolated(unsafe) private static var responseBody = Data()
     nonisolated(unsafe) private static var statusCode = 200
+    nonisolated(unsafe) private static var hang = false
     nonisolated(unsafe) static var lastPath: String?
     nonisolated(unsafe) static var recordedRequests: [MockSSERequest] = []
 
-    static func register(responseBody: Data, statusCode: Int = 200) {
+    static func register(responseBody: Data, statusCode: Int = 200, hang: Bool = false) {
         lock.lock()
         self.responseBody = responseBody
         self.statusCode = statusCode
+        self.hang = hang
         self.lastPath = nil
         self.recordedRequests = []
         lock.unlock()
@@ -211,12 +257,17 @@ private final class MockSSEURLProtocol: URLProtocol {
         Self.lock.lock()
         let body = Self.responseBody
         let statusCode = Self.statusCode
+        let hang = Self.hang
         Self.lastPath = request.url?.path
         if let path = request.url?.path {
             Self.recordedRequests.append(MockSSERequest(path: path, query: request.url?.query))
         }
         Self.lock.unlock()
 
+        if hang {
+            return
+        }
+        finished = true
         let response = HTTPURLResponse(
             url: request.url!,
             statusCode: statusCode,
@@ -228,5 +279,11 @@ private final class MockSSEURLProtocol: URLProtocol {
         client?.urlProtocolDidFinishLoading(self)
     }
 
-    override func stopLoading() {}
+    override func stopLoading() {
+        guard !finished else { return }
+        finished = true
+        client?.urlProtocol(self, didFailWithError: URLError(.cancelled))
+    }
+
+    private var finished = false
 }

@@ -200,6 +200,8 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         appliedConfig = nil
         overall = LiveOverallFlags(wasFullyConnected: wasFullyConnected)
         lock.unlock()
+        api.retireStreamingSession(token: generation &- 1)
+        api.retireStreamingSessions(olderThan: generation)
         if hadTask || state != .idle {
             DiagnosticLog.info(.sse, "foreground SSE stream stopping")
         }
@@ -512,15 +514,20 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
                 await self.deviceNetworkPath.waitUntilReady()
                 guard generation == self.currentGeneration(), self.isRequired(target.key) else { return }
                 if self.isAuthTerminal() { return }
+                // A wake already pending before this attempt must not skip the backoff
+                // after it fails. A wake during the attempt sets pending again.
+                _ = self.reconnectWake.consumePending()
                 lease.activity.touch()
                 let attemptId = lease.nextAttempt()
                 let handshake = HandshakeBox()
                 let streamTask = Task<SseAttemptOutcome, Error> {
                     handshake.attachCurrentStream()
+                    self.api.installFreshStreamingSession(token: generation)
                     do {
                         return try await self.api.streamEvents(
                             path: target.path,
                             directory: target.directory,
+                            sessionToken: generation,
                             onHTTPResponse: { statusCode in
                                 guard lease.currentAttempt() == attemptId else { return }
                                 lease.activity.touch()
@@ -589,10 +596,13 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
                     let resolved = try await streamTask.value
                     if handshake.isConnected {
                         outcome = resolved
-                    } else if case .http = resolved {
-                        outcome = resolved
                     } else {
-                        outcome = .transport(handshake.error ?? SseHandshakeError(reason: .timeout))
+                        switch resolved {
+                        case .http, .transport:
+                            outcome = resolved
+                        case .ended:
+                            outcome = .transport(handshake.error ?? SseHandshakeError(reason: .timeout))
+                        }
                     }
                 } catch is CancellationError {
                     watchTask.cancel()
@@ -1172,6 +1182,15 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
             for continuation in waiting.values {
                 continuation.resume(returning: true)
             }
+        }
+
+        /// Clears a wake that arrived before the attempt. Does not affect `wait()`.
+        func consumePending() -> Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            let wasPending = pending
+            pending = false
+            return wasPending
         }
 
         func wait(milliseconds: Int) async -> Bool {

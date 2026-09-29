@@ -251,6 +251,7 @@ class DefaultForegroundEventStream
                 overall = LiveOverallFlags(wasFullyConnected = wasFullyConnected)
                 snapshot = buildSnapshotLocked(EventStreamConnectionState.Idle)
             }
+            eventsApi.retire(olderThan = generation)
             occupancyToJoin?.cancel()
             val toJoin =
                 buildList {
@@ -527,6 +528,7 @@ class DefaultForegroundEventStream
                                         eventsApi.streamEvents(
                                             path = target.path,
                                             directory = target.directory,
+                                            generation = generation,
                                             onHTTPResponse = { statusCode ->
                                                 if (lease.currentAttempt() == attemptId) {
                                                     lastActivityMs.set(System.currentTimeMillis())

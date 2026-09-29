@@ -1,6 +1,11 @@
 import Foundation
 
 nonisolated final class EventsAPIClient: @unchecked Sendable {
+    private struct OwnedDial {
+        let token: UInt64
+        let session: URLSession
+    }
+
     private static func makeStreamingSession() -> URLSession {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.timeoutIntervalForRequest = TimeInterval.infinity
@@ -14,8 +19,8 @@ nonisolated final class EventsAPIClient: @unchecked Sendable {
     private let connectionProvider: @Sendable () -> ServerConnection?
     private let injectedSession: URLSession?
     private let sessionLock = NSLock()
-    private var ownedSession: URLSession?
-    private var lastIdentity: String?
+    private var ownedDials: [OwnedDial] = []
+    private var installedToken: UInt64 = 0
 
     init(connectionProvider: @escaping @Sendable () -> ServerConnection?) {
         self.connectionProvider = connectionProvider
@@ -28,6 +33,56 @@ nonisolated final class EventsAPIClient: @unchecked Sendable {
     ) {
         self.connectionProvider = connectionProvider
         self.injectedSession = urlSession
+    }
+
+    deinit {
+        let sessions = ownedDials.map(\.session)
+        for session in sessions {
+            session.invalidateAndCancel()
+        }
+    }
+
+    /// Drops older owned pools and publishes `token`. Injected test sessions are untouched.
+    /// Same-token dials stay so concurrent leases do not cancel each other.
+    func installFreshStreamingSession(token: UInt64) {
+        guard injectedSession == nil else { return }
+        let previous = installedTokenSnapshot()
+        if previous < token {
+            retireStreamingSession(token: previous)
+        }
+        let stale = mutateDials { dials, installed in
+            if token >= installed {
+                installed = token
+            }
+            let stale = dials.filter { $0.token < token }.map(\.session)
+            dials.removeAll { $0.token < token }
+            return stale
+        }
+        invalidate(stale)
+    }
+
+    /// Invalidates dials for `token` only while that token is still installed.
+    /// A newer `start()` token therefore survives a late `stop()`.
+    func retireStreamingSession(token: UInt64) {
+        guard injectedSession == nil else { return }
+        let stale = mutateDials { dials, installed in
+            guard installed == token else { return [] }
+            let stale = dials.filter { $0.token == token }.map(\.session)
+            dials.removeAll { $0.token == token }
+            return stale
+        }
+        invalidate(stale)
+    }
+
+    /// `stop()` passes the generation it just published. Newer tokens survive.
+    func retireStreamingSessions(olderThan generation: UInt64) {
+        guard injectedSession == nil else { return }
+        let stale = mutateDials { dials, _ in
+            let stale = dials.filter { $0.token < generation }.map(\.session)
+            dials.removeAll { $0.token < generation }
+            return stale
+        }
+        invalidate(stale)
     }
 
     @discardableResult
@@ -81,6 +136,8 @@ nonisolated final class EventsAPIClient: @unchecked Sendable {
         connection: ServerConnection,
         path: String,
         directory: String?,
+        connectBudget: Duration = .seconds(5),
+        sessionToken: UInt64 = 0,
         onHTTPResponse: (@Sendable (Int) async -> Void)?,
         onActivity: (@Sendable () async -> Void)?,
         onDataLine: @escaping @Sendable (String) async -> Void
@@ -106,19 +163,84 @@ nonisolated final class EventsAPIClient: @unchecked Sendable {
             let encoded = Data(credentials.utf8).base64EncodedString()
             request.setValue("Basic \(encoded)", forHTTPHeaderField: "Authorization")
         }
+        // Do not shorten request.timeoutInterval. It resets on each body byte and would kill a quiet stream.
 
         let startedAt = OpenCodeAPITrace.start(request)
-        let session = streamingSession(for: connection)
-        let bytes: URLSession.AsyncBytes
-        let response: URLResponse
+        let token = sessionToken == 0 ? installedTokenSnapshot() : sessionToken
+        let session = openStreamingSession(token: token)
+        defer { retireOwned(session) }
+
+        let race = ConnectRace()
+        let bytesRef = TaskRef()
+        let budgetTask = Task {
+            do {
+                try await Task.sleep(for: connectBudget)
+            } catch is CancellationError {
+                return
+            } catch {
+                return
+            }
+            guard race.claimBudget() else { return }
+            bytesRef.cancel()
+        }
+        defer { budgetTask.cancel() }
+        let bytesTask = Task { () throws -> SseAttemptOutcome in
+            let (bytes, response) = try await session.bytes(for: request)
+            race.markHeaders()
+            budgetTask.cancel()
+            try Task.checkCancellation()
+            return try await self.readEventStream(
+                bytes: bytes,
+                response: response,
+                request: request,
+                startedAt: startedAt,
+                onHTTPResponse: onHTTPResponse,
+                onActivity: onActivity,
+                onDataLine: onDataLine
+            )
+        }
+        bytesRef.store(bytesTask)
+
         do {
-            (bytes, response) = try await session.bytes(for: request)
-        } catch is CancellationError {
-            throw CancellationError()
+            return try await withTaskCancellationHandler {
+                try await bytesTask.value
+            } onCancel: {
+                bytesTask.cancel()
+                budgetTask.cancel()
+            }
         } catch {
+            budgetTask.cancel()
+            bytesTask.cancel()
+            // Parent cancellation wins over a budget that also fired. A budget-only
+            // cancel of the bytes task is CancellationError and must not look like stop().
+            try Task.checkCancellation()
+            if race.budgetClaimed && !race.headersArrived {
+                DiagnosticLog.warning(
+                    .sse,
+                    "SSE connect budget exceeded path=\(path) budgetMs=\(Self.budgetMilliseconds(connectBudget))"
+                )
+                return .transport(SseConnectBudgetExceeded())
+            }
+            if error is CancellationError {
+                throw CancellationError()
+            }
+            if race.headersArrived {
+                throw error
+            }
             OpenCodeAPITrace.failure(request, error: error, startedAt: startedAt)
             return .transport(error)
         }
+    }
+
+    private func readEventStream(
+        bytes: URLSession.AsyncBytes,
+        response: URLResponse,
+        request: URLRequest,
+        startedAt: Date,
+        onHTTPResponse: (@Sendable (Int) async -> Void)?,
+        onActivity: (@Sendable () async -> Void)?,
+        onDataLine: @escaping @Sendable (String) async -> Void
+    ) async throws -> SseAttemptOutcome {
         guard let http = response as? HTTPURLResponse else {
             OpenCodeAPITrace.invalidResponse(request, startedAt: startedAt)
             throw EventsAPIError.invalidResponse
@@ -180,6 +302,8 @@ nonisolated final class EventsAPIClient: @unchecked Sendable {
     func streamEvents(
         path: String,
         directory: String?,
+        connectBudget: Duration = .seconds(5),
+        sessionToken: UInt64 = 0,
         onHTTPResponse: (@Sendable (Int) async -> Void)? = nil,
         onActivity: (@Sendable () async -> Void)? = nil,
         onDataLine: @escaping @Sendable (String) async -> Void
@@ -191,27 +315,61 @@ nonisolated final class EventsAPIClient: @unchecked Sendable {
             connection: connection,
             path: path,
             directory: directory,
+            connectBudget: connectBudget,
+            sessionToken: sessionToken,
             onHTTPResponse: onHTTPResponse,
             onActivity: onActivity,
             onDataLine: onDataLine
         )
     }
 
-    private func streamingSession(for connection: ServerConnection) -> URLSession {
+    private func openStreamingSession(token: UInt64) -> URLSession {
         if let injectedSession {
             return injectedSession
         }
-        let identity = Self.streamingSessionKey(for: connection)
+        let session = Self.makeStreamingSession()
+        sessionLock.lock()
+        ownedDials.append(OwnedDial(token: token, session: session))
+        sessionLock.unlock()
+        return session
+    }
+
+    private func retireOwned(_ session: URLSession) {
+        if injectedSession === session { return }
+        sessionLock.lock()
+        guard let index = ownedDials.firstIndex(where: { $0.session === session }) else {
+            sessionLock.unlock()
+            return
+        }
+        ownedDials.remove(at: index)
+        sessionLock.unlock()
+        session.invalidateAndCancel()
+    }
+
+    private func installedTokenSnapshot() -> UInt64 {
         sessionLock.lock()
         defer { sessionLock.unlock() }
-        if let ownedSession, lastIdentity == identity {
-            return ownedSession
+        return installedToken
+    }
+
+    private func mutateDials(
+        _ body: (inout [OwnedDial], inout UInt64) -> [URLSession]
+    ) -> [URLSession] {
+        sessionLock.lock()
+        let stale = body(&ownedDials, &installedToken)
+        sessionLock.unlock()
+        return stale
+    }
+
+    private func invalidate(_ sessions: [URLSession]) {
+        for session in sessions where session !== injectedSession {
+            session.invalidateAndCancel()
         }
-        ownedSession?.invalidateAndCancel()
-        let session = Self.makeStreamingSession()
-        ownedSession = session
-        lastIdentity = identity
-        return session
+    }
+
+    private static func budgetMilliseconds(_ budget: Duration) -> Int {
+        let (seconds, attoseconds) = budget.components
+        return Int(seconds * 1_000 + attoseconds / 1_000_000_000_000_000)
     }
 
     static func streamingSessionKey(for connection: ServerConnection) -> String {
@@ -224,6 +382,57 @@ nonisolated final class EventsAPIClient: @unchecked Sendable {
 
     private static func subscribePath(for serverProtocol: ServerProtocol?) -> String {
         serverProtocol == .v2 ? "api/event" : "global/event"
+    }
+
+    private final class ConnectRace: @unchecked Sendable {
+        private let lock = NSLock()
+        private var headers = false
+        private var budget = false
+
+        func markHeaders() {
+            lock.lock()
+            headers = true
+            lock.unlock()
+        }
+
+        /// True when this call won the race against headers.
+        func claimBudget() -> Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            if headers { return false }
+            budget = true
+            return true
+        }
+
+        var budgetClaimed: Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            return budget
+        }
+
+        var headersArrived: Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            return headers
+        }
+    }
+
+    private final class TaskRef: @unchecked Sendable {
+        private let lock = NSLock()
+        private var task: Task<SseAttemptOutcome, Error>?
+
+        func store(_ task: Task<SseAttemptOutcome, Error>) {
+            lock.lock()
+            self.task = task
+            lock.unlock()
+        }
+
+        func cancel() {
+            lock.lock()
+            let task = task
+            lock.unlock()
+            task?.cancel()
+        }
     }
 }
 
