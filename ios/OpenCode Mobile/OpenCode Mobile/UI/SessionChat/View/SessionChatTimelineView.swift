@@ -824,8 +824,8 @@ private struct StepParagraphBlock: View {
         }
     }
 
-    private static let sectionSpacing: CGFloat = 6
-    private static let chipSpacing: CGFloat = 4
+    private static let sectionSpacing: CGFloat = 8
+    private static let chipSpacing: CGFloat = 6
     private static let placeholderHorizontalPadding: CGFloat = 12
     private static let chipRowHorizontalPadding: CGFloat = 4
 }

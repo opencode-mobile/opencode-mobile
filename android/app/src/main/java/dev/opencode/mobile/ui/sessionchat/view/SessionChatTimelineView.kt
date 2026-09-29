@@ -802,7 +802,7 @@ private fun StepParagraphBlock(
     val hiddenCount = block.chips.size - visible.size
     Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         if (block.text != null) {
             AssistantMessageBubble(
@@ -827,8 +827,8 @@ private fun StepParagraphBlock(
         if (block.chips.isNotEmpty()) {
             FlowRow(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 visible.forEach { chip ->
                     key(chip.card.blockID) {

@@ -49,13 +49,13 @@ import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
-private val ToolChipCornerRadius = 7.dp
-private val ToolChipPaddingStart = 6.dp
-private val ToolChipPaddingEnd = 8.dp
-private val ToolChipPaddingVertical = 3.dp
+private val ToolChipCornerRadius = 8.dp
+private val ToolChipPaddingStart = 8.dp
+private val ToolChipPaddingEnd = 10.dp
+private val ToolChipPaddingVertical = 6.dp
 private val ToolChipIconSize = 12.dp
-private val ToolChipSpinnerSize = 10.dp
-private val ToolChipContentSpacing = 5.dp
+private val ToolChipSpinnerSize = 11.dp
+private val ToolChipContentSpacing = 6.dp
 private val ToolChipLabelMaxWidth = 170.dp
 private val ToolChipBriefMaxWidth = 130.dp
 private val ToolChipMinTouchTarget = 48.dp
@@ -157,7 +157,7 @@ fun OpenCodeToolChip(
                 ).then(
                     if (onClick != null) Modifier.indication(interactionSource, ripple()) else Modifier,
                 ).padding(
-                    start = ToolChipPaddingStart,
+                    start = if (variant.leadingIcon() != null) ToolChipPaddingStart else ToolChipPaddingEnd,
                     end = ToolChipPaddingEnd,
                     top = ToolChipPaddingVertical,
                     bottom = ToolChipPaddingVertical,
@@ -179,10 +179,10 @@ fun OpenCodeToolChip(
                 is OpenCodeToolChipVariant.File,
                 is OpenCodeToolChipVariant.Command,
                 is OpenCodeToolChipVariant.Skill,
-                -> MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace)
+                -> MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace, fontSize = 13.sp, lineHeight = 16.sp)
                 is OpenCodeToolChipVariant.Agent,
                 is OpenCodeToolChipVariant.More,
-                -> MaterialTheme.typography.labelSmall
+                -> MaterialTheme.typography.labelSmall.copy(fontSize = 13.sp, lineHeight = 16.sp)
             }
         Text(
             text = variant.primaryText(),
@@ -197,7 +197,7 @@ fun OpenCodeToolChip(
         if (variant is OpenCodeToolChipVariant.Agent && !variant.brief.isNullOrEmpty()) {
             Text(
                 text = variant.brief,
-                style = MaterialTheme.typography.labelSmall,
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp, lineHeight = 16.sp),
                 color = openCodeColor("text-weak"),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -207,7 +207,7 @@ fun OpenCodeToolChip(
 
         if (variant is OpenCodeToolChipVariant.File) {
             val countStyle =
-                MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.SemiBold)
             variant.additions?.takeIf { it > 0 }?.let { additions ->
                 Text(text = "+$additions", style = countStyle, color = openCodeColor("diff-add"), maxLines = 1)
             }
@@ -219,7 +219,7 @@ fun OpenCodeToolChip(
         if (!trailingText.isNullOrEmpty()) {
             Text(
                 text = trailingText,
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp, lineHeight = 16.sp),
                 color = openCodeColor("text-weak"),
                 maxLines = 1,
             )

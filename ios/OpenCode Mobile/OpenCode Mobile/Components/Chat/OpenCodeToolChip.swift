@@ -319,13 +319,13 @@ struct OpenCodeToolChip: View {
 
     // MARK: - Metrics
 
-    private static let cornerRadius: CGFloat = 7
-    private static let paddingHorizontal: CGFloat = 8
-    private static let paddingBeforeIcon: CGFloat = 6
-    private static let paddingVertical: CGFloat = 3
-    private static let contentSpacing: CGFloat = 5
-    private static let iconSize: CGFloat = 11
-    private static let glyphSize: CGFloat = 10
+    private static let cornerRadius: CGFloat = 8
+    private static let paddingHorizontal: CGFloat = 10
+    private static let paddingBeforeIcon: CGFloat = 8
+    private static let paddingVertical: CGFloat = 6
+    private static let contentSpacing: CGFloat = 6
+    private static let iconSize: CGFloat = 12
+    private static let glyphSize: CGFloat = 11
     private static let labelMaxWidth: CGFloat = 170
     private static let briefMaxWidth: CGFloat = 130
     private static let minTapTarget: CGFloat = 44
@@ -333,11 +333,11 @@ struct OpenCodeToolChip: View {
     private static let agentBackgroundOpacity = 0.14
     private static let stateBorderOpacity = 0.4
     private static let agentBorderOpacity = 0.35
-    private static let monoLabelFont = Font.system(size: 12, weight: .regular, design: .monospaced)
-    private static let systemLabelFont = Font.system(size: 12, weight: .regular)
-    private static let briefFont = Font.system(size: 11, weight: .regular)
-    private static let diffFont = Font.system(size: 11, weight: .semibold)
-    private static let trailingFont = Font.system(size: 11, weight: .regular)
+    private static let monoLabelFont = Font.system(size: 13, weight: .regular, design: .monospaced)
+    private static let systemLabelFont = Font.system(size: 13, weight: .regular)
+    private static let briefFont = Font.system(size: 12, weight: .regular)
+    private static let diffFont = Font.system(size: 12, weight: .semibold)
+    private static let trailingFont = Font.system(size: 12, weight: .regular)
 }
 
 /// Hit region that grows vertically to `minHeight` around the chip's bounds
