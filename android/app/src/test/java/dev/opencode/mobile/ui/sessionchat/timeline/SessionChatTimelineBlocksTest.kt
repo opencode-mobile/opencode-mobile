@@ -2719,6 +2719,29 @@ class SessionChatTimelineBlocksTest {
     }
 
     @Test
+    fun merge_chipTimelineOn_consecutiveThoughtOnlyMessagesCollapse() {
+        val bodies =
+            listOf(
+                thoughtOnlyBody("a1", "th1", "First", durationMs = 757, chipTimeline = true),
+                thoughtOnlyBody("a2", "th2", "Second", durationMs = 2_600, chipTimeline = true),
+                thoughtOnlyBody("a3", "th3", "Third", durationMs = 2_100, chipTimeline = true),
+                textBody("a4", "Now", chipTimeline = true),
+            )
+        val merged =
+            SessionChatTimelineBlocks.mergeConsecutiveToolOnlyAssistantBodies(
+                bodies,
+                collapseConsecutiveToolCalls = false,
+                chipTimeline = true,
+            )
+        assertEquals(1, merged.size)
+        assertEquals(2, merged[0].blocks.size)
+        val thought = merged[0].blocks[0] as SessionChatTimelineBlock.Reasoning
+        assertEquals("First\n\nSecond\n\nThird", thought.text)
+        assertEquals(5_457L, thought.durationMs)
+        assertEquals("Now", (merged[0].blocks[1] as SessionChatTimelineBlock.StepParagraph).text)
+    }
+
+    @Test
     fun merge_chipTimelineOff_unchanged() {
         val bodies = listOf(textBody("a1", "first"), toolOnlyBody("a2", "bash-2"))
         val merged =
@@ -2761,6 +2784,28 @@ class SessionChatTimelineBlocksTest {
                     collapseConsecutiveToolCalls = true,
                     chipTimeline = chipTimeline,
                 ),
+        )
+    }
+
+    private fun thoughtOnlyBody(
+        id: String,
+        partId: String,
+        text: String,
+        durationMs: Long? = null,
+        chipTimeline: Boolean = false,
+    ): DisplayMessageBody {
+        val parts =
+            listOf(
+                MessagePart.Reasoning(
+                    text = text,
+                    id = partId,
+                    timeStartEpochMs = durationMs?.let { 1_000L },
+                    timeEndEpochMs = durationMs?.let { 1_000L + it },
+                ),
+            )
+        return DisplayMessageBody(
+            message = Message(id = id, role = MessageRole.Assistant, text = "", parts = parts),
+            blocks = buildBlocks(MessageRole.Assistant, parts, chipTimeline = chipTimeline),
         )
     }
 
