@@ -153,24 +153,28 @@ private struct SessionChatTimelineReadyView: View {
     @State private var previousMountedWorkingLabel: String?
     @State private var previousWorkingIndicatorFading = false
     @State private var topOverlayInset: CGFloat = 0
+    /// Syncing label the top pill slot shows, lagging the prop by the show delay
+    /// and minimum visible time in `SessionChatTopPill`.
+    @State private var displayedSyncingLabel: String?
+    @State private var syncingShownAt: ContinuousClock.Instant?
+    @State private var syncingPillTask: Task<Void, Never>?
 
     private var showScrollToEnd: Bool {
         scrollController.shouldShowScrollToEnd
     }
 
-    private var showSessionBranchPill: Bool {
-        SessionBranchPillVisibility.shouldShow(
-            pill: props.sessionBranchPill,
+    private var topPill: SessionChatTopPill? {
+        SessionChatTopPill.resolve(
+            syncingLabel: displayedSyncingLabel,
+            todosVisible: props.sessionTodosVisible,
+            todoTotalCount: props.sessionTodoTotalCount,
+            branchPill: props.sessionBranchPill,
             hideFloatStack: props.hideFloatStack
         )
     }
 
-    private var showSessionTodosPill: Bool {
-        !props.hideFloatStack && props.sessionTodosVisible && props.sessionTodoTotalCount > 0
-    }
-
     private var showTopOverlayStack: Bool {
-        props.syncingIndicatorLabel != nil || showSessionTodosPill || showSessionBranchPill
+        topPill != nil
     }
 
     private var mountedWorkingLabel: String? {
@@ -289,8 +293,15 @@ private struct SessionChatTimelineReadyView: View {
             previousMountedWorkingLabel = mountedWorkingLabel
             previousWorkingIndicatorFading = props.workingIndicatorFading
             refreshSessionTodosPillSnapshot(totalCount: props.sessionTodoTotalCount)
+            updateDisplayedSyncingLabel(props.syncingIndicatorLabel)
             scrollController.autoFollowEnabled = true
             logScroll("appear count=\(props.messages.count) pinned=\(scrollController.isPinnedToEnd)")
+        }
+        .onChange(of: props.syncingIndicatorLabel) { _, label in
+            updateDisplayedSyncingLabel(label)
+        }
+        .onDisappear {
+            syncingPillTask?.cancel()
         }
         .onChange(of: mountedWorkingLabel) { _, newValue in
             previousMountedWorkingLabel = newValue
@@ -309,38 +320,41 @@ private struct SessionChatTimelineReadyView: View {
 
     @ViewBuilder
     private var topOverlayContent: some View {
-        let pills = VStack(spacing: 8) {
-            if let label = props.syncingIndicatorLabel {
+        let pill = ZStack {
+            switch topPill {
+            case let .syncing(label):
                 OpenCodeSyncingPill(label: label)
                     .allowsHitTesting(false)
-            }
-
-            if showSessionTodosPill {
+                    .transition(.opacity)
+            case .todos:
                 OpenCodeSessionTodosPill(
                     completedCount: sessionTodosPillCompletedCount,
                     totalCount: sessionTodosPillTotalCount,
                     activePreview: sessionTodosPillActivePreview,
                     action: props.onSessionTodosTap
                 )
-            }
-
-            if showSessionBranchPill, let pill = props.sessionBranchPill {
+                .transition(.opacity)
+            case let .branch(branchPill):
                 OpenCodeSessionBranchPill(
-                    branch: pill.branch,
-                    additions: pill.additions,
-                    deletions: pill.deletions,
+                    branch: branchPill.branch,
+                    additions: branchPill.additions,
+                    deletions: branchPill.deletions,
                     action: props.onSessionBranchTap
                 )
                 .padding(.horizontal, 16)
+                .transition(.opacity)
+            case nil:
+                EmptyView()
             }
         }
+        .animation(.easeInOut(duration: 0.2), value: topPill?.kind)
 
         if #available(iOS 26, *) {
-            GlassEffectContainer(spacing: 8) {
-                pills
+            GlassEffectContainer {
+                pill
             }
         } else {
-            pills
+            pill
         }
     }
 
@@ -349,6 +363,36 @@ private struct SessionChatTimelineReadyView: View {
         sessionTodosPillCompletedCount = props.sessionTodoCompletedCount
         sessionTodosPillTotalCount = totalCount
         sessionTodosPillActivePreview = props.sessionTodoActivePreview
+    }
+
+    private func updateDisplayedSyncingLabel(_ label: String?) {
+        syncingPillTask?.cancel()
+        syncingPillTask = nil
+        if let label {
+            guard displayedSyncingLabel == nil else {
+                displayedSyncingLabel = label
+                return
+            }
+            syncingPillTask = Task { @MainActor in
+                try? await Task.sleep(for: SessionChatTopPill.syncingShowDelay)
+                guard !Task.isCancelled else { return }
+                displayedSyncingLabel = label
+                syncingShownAt = .now
+            }
+            return
+        }
+        guard displayedSyncingLabel != nil else { return }
+        let remaining = SessionChatTopPill.syncingMinimumVisible
+            - (syncingShownAt.map { ContinuousClock.now - $0 } ?? SessionChatTopPill.syncingMinimumVisible)
+        guard remaining > .zero else {
+            displayedSyncingLabel = nil
+            return
+        }
+        syncingPillTask = Task { @MainActor in
+            try? await Task.sleep(for: remaining)
+            guard !Task.isCancelled else { return }
+            displayedSyncingLabel = nil
+        }
     }
 
     private func updateMeasuredTopOverlayInset(_ height: CGFloat) {

@@ -413,7 +413,7 @@ class DefaultSessionStatusLiveStore
             fromCache: Boolean,
         ): SessionActivitySnapshot {
             val now = nowMs()
-            val pending = optimistic[directory]?.toMap().orEmpty()
+            val pending = optimistic[directory]?.copyByEntryIteration().orEmpty()
             val entries = server.toMutableMap()
             for ((sessionId, record) in pending) {
                 if (now < record.expiresAtMs) {
@@ -551,3 +551,16 @@ class DefaultSessionStatusLiveStore
             ) : StatusMutation()
         }
     }
+
+/**
+ * Copy without [Map.toMap]. Kotlin's one-entry fast path calls `iterator().next()` after
+ * reading `size`, so a concurrent removal of the last optimistic row throws
+ * [NoSuchElementException].
+ */
+internal fun <K, V> Map<K, V>.copyByEntryIteration(): Map<K, V> {
+    val copy = LinkedHashMap<K, V>()
+    for (entry in entries) {
+        copy[entry.key] = entry.value
+    }
+    return copy
+}

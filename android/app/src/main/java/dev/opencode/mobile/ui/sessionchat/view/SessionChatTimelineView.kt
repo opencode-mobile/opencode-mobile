@@ -1,6 +1,8 @@
 package dev.opencode.mobile.ui.sessionchat.view
 
+import android.os.SystemClock
 import android.util.Log
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
@@ -8,6 +10,9 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -38,6 +43,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -94,11 +100,11 @@ import dev.opencode.mobile.ui.scroll.rememberMessageListTimeline
 import dev.opencode.mobile.ui.scroll.rememberMessageListUserScroll
 import dev.opencode.mobile.ui.sessionchat.AttachmentPresentationMapper
 import dev.opencode.mobile.ui.sessionchat.SessionBranchPillUiState
-import dev.opencode.mobile.ui.sessionchat.SessionBranchPillVisibility
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlock
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlocks
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineState
+import dev.opencode.mobile.ui.sessionchat.SessionChatTopPill
 import dev.opencode.mobile.ui.sessionchat.TimelineApply
 import dev.opencode.mobile.ui.sessionchat.TimelineFrame
 import dev.opencode.mobile.ui.sessionchat.ToolChipFamily
@@ -444,17 +450,26 @@ private fun SessionChatTimelineReadyView(
         }
 
         val showScrollToEnd = !hideFloatStack && timeline.showScrollToEnd
-        val showSessionBranchPill = SessionBranchPillVisibility.shouldShow(sessionBranchPill, hideFloatStack)
-        val showSessionTodosPill = !hideFloatStack && sessionTodosVisible && sessionTodoTotalCount > 0
-        val showTopOverlayStack =
-            syncingIndicatorLabel != null || showSessionTodosPill || showSessionBranchPill
+        val displayedSyncingLabel = rememberDisplayedSyncingLabel(syncingIndicatorLabel)
+        val topPill =
+            SessionChatTopPill.resolve(
+                syncingLabel = displayedSyncingLabel,
+                todosVisible = sessionTodosVisible,
+                todoTotalCount = sessionTodoTotalCount,
+                branchPill = sessionBranchPill,
+                hideFloatStack = hideFloatStack,
+                todoCompletedCount = sessionTodoCompletedCount,
+                todoActivePreview = sessionTodoActivePreview,
+            )
+        val showTopOverlayStack = topPill != null
         LaunchedEffect(showTopOverlayStack) {
             if (!showTopOverlayStack) {
                 topOverlayInsetPx = 0
             }
         }
-        if (showTopOverlayStack) {
-            Column(
+        if (topPill != null) {
+            AnimatedContent(
+                targetState = topPill,
                 modifier =
                     Modifier
                         .align(Alignment.TopCenter)
@@ -464,30 +479,31 @@ private fun SessionChatTimelineReadyView(
                                 topOverlayInsetPx = height
                             }
                         }.padding(top = 10.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                if (syncingIndicatorLabel != null) {
-                    OpenCodeSyncingPill(label = syncingIndicatorLabel)
-                }
-
-                if (showSessionTodosPill) {
-                    OpenCodeSessionTodosPill(
-                        completedCount = sessionTodoCompletedCount,
-                        totalCount = sessionTodoTotalCount,
-                        activePreview = sessionTodoActivePreview,
-                        onClick = onSessionTodosClick,
-                    )
-                }
-
-                if (showSessionBranchPill) {
-                    sessionBranchPill?.let { pill ->
-                        OpenCodeSessionBranchPill(
-                            branch = pill.branch,
-                            additions = pill.additions,
-                            deletions = pill.deletions,
-                            onClick = onSessionBranchClick,
-                        )
+                transitionSpec = {
+                    fadeIn(tween(durationMillis = 200)) togetherWith fadeOut(tween(durationMillis = 200))
+                },
+                contentAlignment = Alignment.Center,
+                label = "sessionChatTopPill",
+                // Swap only between pill kinds; label or count updates stay in place.
+                contentKey = { it::class },
+            ) { pill ->
+                Box(contentAlignment = Alignment.Center) {
+                    when (pill) {
+                        is SessionChatTopPill.Syncing -> OpenCodeSyncingPill(label = pill.label)
+                        is SessionChatTopPill.Todos ->
+                            OpenCodeSessionTodosPill(
+                                completedCount = pill.completedCount,
+                                totalCount = pill.totalCount,
+                                activePreview = pill.activePreview,
+                                onClick = onSessionTodosClick,
+                            )
+                        is SessionChatTopPill.Branch ->
+                            OpenCodeSessionBranchPill(
+                                branch = pill.pill.branch,
+                                additions = pill.pill.additions,
+                                deletions = pill.pill.deletions,
+                                onClick = onSessionBranchClick,
+                            )
                     }
                 }
             }
@@ -1150,4 +1166,29 @@ private fun FallbackMessageBubble(
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
+}
+
+/**
+ * Syncing label the top pill slot shows, lagging [label] by
+ * [SessionChatTopPill.SYNCING_SHOW_DELAY_MS] and held for
+ * [SessionChatTopPill.SYNCING_MINIMUM_VISIBLE_MS] once shown.
+ */
+@Composable
+private fun rememberDisplayedSyncingLabel(label: String?): String? {
+    var displayed by remember { mutableStateOf<String?>(null) }
+    var shownAtMs by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(label) {
+        if (label != null) {
+            if (displayed == null) {
+                delay(SessionChatTopPill.SYNCING_SHOW_DELAY_MS)
+                shownAtMs = SystemClock.uptimeMillis()
+            }
+            displayed = label
+        } else if (displayed != null) {
+            val shownForMs = SystemClock.uptimeMillis() - shownAtMs
+            delay((SessionChatTopPill.SYNCING_MINIMUM_VISIBLE_MS - shownForMs).coerceAtLeast(0L))
+            displayed = null
+        }
+    }
+    return displayed
 }

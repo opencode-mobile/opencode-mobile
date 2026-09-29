@@ -53,11 +53,28 @@ internal object TimelineDisplayOrder {
                     val leftTime = left.value.message.sentAtEpochMs
                     val rightTime = right.value.message.sentAtEpochMs
                     when {
-                        leftTime != null && rightTime != null && leftTime != rightTime -> leftTime.compareTo(rightTime)
-                        leftTime != null && rightTime != null ->
-                            left.value.message.id
-                                .compareTo(right.value.message.id)
-                        else -> left.index.compareTo(right.index)
+                        leftTime != null && rightTime != null -> {
+                            val byTime = leftTime.compareTo(rightTime)
+                            if (byTime != 0) {
+                                byTime
+                            } else {
+                                val byId =
+                                    left.value.message.id
+                                        .compareTo(right.value.message.id)
+                                if (byId != 0) byId else left.index.compareTo(right.index)
+                            }
+                        }
+                        leftTime != null -> -1
+                        rightTime != null -> 1
+                        else -> {
+                            val byIndex = left.index.compareTo(right.index)
+                            if (byIndex != 0) {
+                                byIndex
+                            } else {
+                                left.value.message.id
+                                    .compareTo(right.value.message.id)
+                            }
+                        }
                     }
                 }.map { it.value }
                 .toMutableList()
