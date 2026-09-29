@@ -214,7 +214,10 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
                     synced {
                         guard generation == currentGeneration else { return false }
                         if mode.replacesPreparedCache {
-                            previousByID = Dictionary(uniqueKeysWithValues: prepared.map { ($0.id, $0) })
+                            previousByID = Dictionary(
+                                prepared.map { ($0.id, $0) },
+                                uniquingKeysWith: { _, last in last }
+                            )
                             preparedHistoryCache.setMessages(previousByID, for: cacheKey)
                         } else {
                             for display in prepared where display.renderedMarkdown != nil {
@@ -385,7 +388,10 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
                     let frame = await buildStructureFirstStreamingFrame(messages: messages)
                     let published = synced { () -> Bool in
                         guard generation == currentGeneration else { return false }
-                        previousByID = Dictionary(uniqueKeysWithValues: frame.map { ($0.id, $0) })
+                        previousByID = Dictionary(
+                            frame.map { ($0.id, $0) },
+                            uniquingKeysWith: { _, last in last }
+                        )
                         preparedHistoryCache.setMessages(previousByID, for: cacheKey)
                         lastPublishedMessages = messages
                         lastPublishedAt = clock.now
@@ -496,14 +502,15 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
                         prepareTask = Task {
                             let previousSnapshot = synced { previousByID }
                             var byID = Dictionary(
-                                uniqueKeysWithValues: messages.map { message in
+                                messages.map { message in
                                     (
                                         message.id,
                                         previousSnapshot[message.id].flatMap { cached in
                                             cached.text == message.text ? cached : nil
                                         } ?? DisplayMessage(message: message, renderedMarkdown: nil)
                                     )
-                                }
+                                },
+                                uniquingKeysWith: { _, last in last }
                             )
 
                             func publish(label: String) {
@@ -620,14 +627,15 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
 
                         let previousSnapshot = synced { previousByID }
                         var byID = Dictionary(
-                            uniqueKeysWithValues: messages.map { message in
+                            messages.map { message in
                                 (
                                     message.id,
                                     previousSnapshot[message.id].flatMap { cached in
                                         cached.text == message.text ? cached : nil
                                     } ?? DisplayMessage(message: message, renderedMarkdown: nil)
                                 )
-                            }
+                            },
+                            uniquingKeysWith: { _, last in last }
                         )
                         var enrichedCount = 0
                         var viewportEnrichedCount = 0
@@ -639,7 +647,10 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
                             guard isCurrent(generation) else { return }
                             let snapshot = messages.map { byID[$0.id]! }
                             synced {
-                                previousByID = Dictionary(uniqueKeysWithValues: snapshot.map { ($0.id, $0) })
+                                previousByID = Dictionary(
+                                    snapshot.map { ($0.id, $0) },
+                                    uniquingKeysWith: { _, last in last }
+                                )
                                 preparedHistoryCache.setMessages(previousByID, for: cacheKey)
                                 lastPublishedMessages = messages
                                 lastPublishedAt = clock.now
