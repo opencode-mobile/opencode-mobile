@@ -158,6 +158,63 @@ class MessageSyncWindowedHistoryTest {
         }
 
     @Test
+    fun loadOlder_thenResubscribeWithinTimeout_keepsExpandedSnapshotNotStaleReplay() =
+        runTest(testDispatcher) {
+            val sync =
+                createSync(
+                    listMessageTail = { _, _ ->
+                        MessagePage(
+                            messages = listOf(user("c"), user("d")),
+                            olderCursor = "page-older",
+                            hasOlder = true,
+                        )
+                    },
+                    listOlderMessages = { _, _, _ ->
+                        MessagePage(
+                            messages = listOf(user("a"), user("b")),
+                            olderCursor = null,
+                            hasOlder = false,
+                        )
+                    },
+                )
+            val first =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { }
+                }
+            advanceUntilIdle()
+            sync.loadOlderMessages("ses-1", "/repo")
+            first.cancel()
+            // Stay inside WhileSubscribed timeout so the shared flow does not restart.
+            advanceTimeBy(1_000)
+
+            val replayed = mutableListOf<MessageListUpdate>()
+            val second =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { replayed += it }
+                }
+            advanceUntilIdle()
+            second.cancel()
+
+            val messages = replayed.filterIsInstance<MessageListUpdate.Messages>()
+            assertTrue(
+                "warm reopen after loadOlder must paint the expanded transcript. " +
+                    "got=${replayed.map { it::class.simpleName }}",
+                messages.isNotEmpty(),
+            )
+            assertEquals(listOf("a", "b", "c", "d"), messages.first().messages.map { it.id })
+            assertFalse(messages.first().hasOlder)
+            // Shared replay must not regress to the pre-loadOlder tail or stale hasOlder.
+            assertTrue(
+                messages.none { it.messages.map { message -> message.id } == listOf("c", "d") },
+            )
+            assertTrue(
+                replayed
+                    .filterIsInstance<MessageListUpdate.CacheSyncConfirmed>()
+                    .none { it.hasOlder },
+            )
+        }
+
+    @Test
     fun differingTail_mergesAndPublishesOnceAfterCache() =
         runTest(testDispatcher) {
             val cache = SeededSessionCache(listOf(user("m1")))

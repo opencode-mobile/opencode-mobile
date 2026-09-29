@@ -46,7 +46,9 @@ nonisolated final class SharedLiveObservation<Value: Sendable>: @unchecked Senda
         }
     }
 
-    func stream() -> AsyncStream<Value> {
+    /// - Parameter includeLastValue: When false, skip the buffered last value so
+    ///   a caller that already emitted a fresher snapshot is not overwritten.
+    func stream(includeLastValue: Bool = true) -> AsyncStream<Value> {
         AsyncStream { continuation in
             let id = UUID()
             lock.lock()
@@ -56,7 +58,7 @@ nonisolated final class SharedLiveObservation<Value: Sendable>: @unchecked Senda
                 return
             }
             continuations[id] = continuation
-            if let lastValue {
+            if includeLastValue, let lastValue {
                 continuation.yield(lastValue)
             }
             lock.unlock()

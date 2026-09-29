@@ -25,9 +25,10 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
-import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
@@ -111,10 +112,24 @@ class MessageSync(
                         replay = 1,
                     )
             }
-        return shared.onStart {
-            // replay=1 may be CacheSyncConfirmed. A new collector still needs the
-            // current transcript or Session Chat bind stays on Loading.
-            replayPublishedSnapshot(key)?.let { emit(it) }
+        return flow {
+            // replay=1 may be CacheSyncConfirmed or a Messages frame from before
+            // loadOlderMessages. Emit the current transcript first, then drop the
+            // shared replay so it cannot regress hasOlder or the painted list.
+            val snapshot = replayPublishedSnapshot(key)
+            if (snapshot != null) {
+                emit(snapshot)
+                var skipStaleReplay = shared.replayCache.isNotEmpty()
+                shared.collect { update ->
+                    if (skipStaleReplay) {
+                        skipStaleReplay = false
+                        return@collect
+                    }
+                    emit(update)
+                }
+            } else {
+                emitAll(shared)
+            }
         }
     }
 

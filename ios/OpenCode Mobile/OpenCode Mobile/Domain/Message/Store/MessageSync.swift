@@ -143,12 +143,13 @@ nonisolated final class MessageSync: @unchecked Sendable {
         lock.unlock()
         let snapshot = published.map { MessageListUpdate.messages($0, isFromCache: fromCache) }
         return AsyncStream { continuation in
-            // lastValue may be cacheSyncConfirmed. A new collector still needs the
-            // current transcript or Session Chat bind stays on Loading.
+            // lastValue may be cacheSyncConfirmed or a Messages frame from before
+            // loadOlderMessages. Emit the current transcript first and skip the
+            // shared replay so it cannot regress the painted list.
             if let snapshot {
                 continuation.yield(snapshot)
             }
-            let inner = observation.stream()
+            let inner = observation.stream(includeLastValue: snapshot == nil)
             let task = Task {
                 for await value in inner {
                     continuation.yield(value)
