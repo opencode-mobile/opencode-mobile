@@ -195,8 +195,9 @@ class SessionChatViewModel
         private var suppressedSnackbarKey: String? = null
         private var snackbarSequence: Long = 0L
 
-        // Chip-timeline paragraphs the user expanded past `+N more`; reset per session.
-        private var expandedStepParagraphIds: Set<String> = emptySet()
+        // Chip-timeline paragraphs the user expanded past `+N more`, keyed by
+        // expansion id with the chip count at tap time; reset per session.
+        private var expandedStepParagraphs: Map<String, Int> = emptyMap()
 
         // Title / custom-answer fields change per keystroke; report the first edit per
         // dialog appearance so analytics measures engagement instead of typing volume.
@@ -305,7 +306,7 @@ class SessionChatViewModel
             lastSnackbarKey = null
             suppressedSnackbarKey = null
             snackbarSequence = 0L
-            expandedStepParagraphIds = emptySet()
+            expandedStepParagraphs = emptyMap()
             resetWorkingFooter()
             logI("bind session=$sessionId worktree=$worktree title=$sessionTitle")
             seedProjectIdentity(worktree)
@@ -343,7 +344,7 @@ class SessionChatViewModel
             lastSnackbarKey = null
             suppressedSnackbarKey = null
             snackbarSequence = 0L
-            expandedStepParagraphIds = emptySet()
+            expandedStepParagraphs = emptyMap()
             resetWorkingFooter()
             logI("bind optimistic create worktree=$worktree title=$sessionTitle")
             seedProjectIdentity(worktree)
@@ -435,11 +436,17 @@ class SessionChatViewModel
             timeline.loadMessages()
         }
 
-        /** Shows every chip of a chip-timeline paragraph (its `+N more` was tapped). */
-        fun expandStepParagraph(expansionId: String) {
-            if (expansionId in expandedStepParagraphIds) return
-            expandedStepParagraphIds = expandedStepParagraphIds + expansionId
-            _uiState.value = _uiState.value.copy(expandedStepParagraphIds = expandedStepParagraphIds)
+        /**
+         * Shows the [chipCount] chips a chip-timeline paragraph had when its
+         * `+N more` was tapped; chips that arrive later still collapse.
+         */
+        fun expandStepParagraph(
+            expansionId: String,
+            chipCount: Int,
+        ) {
+            if ((expandedStepParagraphs[expansionId] ?: -1) >= chipCount) return
+            expandedStepParagraphs = expandedStepParagraphs + (expansionId to chipCount)
+            _uiState.value = _uiState.value.copy(expandedStepParagraphs = expandedStepParagraphs)
         }
 
         fun refreshMessages() {
@@ -1310,7 +1317,7 @@ class SessionChatViewModel
                 forkResultVisible = commandsState.forkResultVisible,
                 forkedSessionTitle = commandsState.forkedSessionTitle,
                 pendingSessionReplace = commandsState.pendingSessionReplace,
-                expandedStepParagraphIds = expandedStepParagraphIds,
+                expandedStepParagraphs = expandedStepParagraphs,
                 pendingTerminalOpen = commandsState.pendingTerminalOpen,
                 hasPendingRevert = commandsState.hasPendingRevert,
                 projectLabel = projectLabel,

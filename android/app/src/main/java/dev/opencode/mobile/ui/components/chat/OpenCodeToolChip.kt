@@ -87,6 +87,14 @@ sealed class OpenCodeToolChipVariant {
         val name: String,
     ) : OpenCodeToolChipVariant()
 
+    /**
+     * One chip for a paragraph's explore tools: `Explored · 4 reads · 2 greps`
+     * (or `Exploring · …` while running). Completed shows no check mark.
+     */
+    data class Explore(
+        val label: String,
+    ) : OpenCodeToolChipVariant()
+
     /** `+N more` expander; [OpenCodeToolChipStatus] is ignored. */
     data class More(
         val count: Int,
@@ -121,6 +129,7 @@ fun OpenCodeToolChip(
         is OpenCodeToolChipVariant.Command -> require(variant.label.isNotEmpty()) { "Tool Chip command label must not be empty" }
         is OpenCodeToolChipVariant.Agent -> require(variant.name.isNotEmpty()) { "Tool Chip agent name must not be empty" }
         is OpenCodeToolChipVariant.Skill -> require(variant.name.isNotEmpty()) { "Tool Chip skill name must not be empty" }
+        is OpenCodeToolChipVariant.Explore -> require(variant.label.isNotEmpty()) { "Tool Chip explore label must not be empty" }
         is OpenCodeToolChipVariant.More -> require(variant.count > 0) { "Tool Chip more count must be positive" }
     }
     val effectiveStatus = if (variant is OpenCodeToolChipVariant.More) OpenCodeToolChipStatus.Completed else status
@@ -212,6 +221,7 @@ fun OpenCodeToolChip(
                 is OpenCodeToolChipVariant.Agent,
                 -> MaterialTheme.typography.labelSmall.copy(fontSize = 13.sp, lineHeight = 16.sp, fontWeight = FontWeight.SemiBold)
                 is OpenCodeToolChipVariant.More,
+                is OpenCodeToolChipVariant.Explore,
                 -> MaterialTheme.typography.labelSmall.copy(fontSize = 13.sp, lineHeight = 16.sp)
             }
         Text(
@@ -319,7 +329,7 @@ private fun toolChipColors(
                     label = openCodeColor("text-interactive-base"),
                 )
             is OpenCodeToolChipVariant.More -> base.copy(label = openCodeColor("text-base"))
-            is OpenCodeToolChipVariant.File, is OpenCodeToolChipVariant.Command -> base
+            is OpenCodeToolChipVariant.File, is OpenCodeToolChipVariant.Command, is OpenCodeToolChipVariant.Explore -> base
         }
     return when (status) {
         OpenCodeToolChipStatus.Error -> {
@@ -347,6 +357,7 @@ private fun OpenCodeToolChipVariant.leadingIcon(): ImageVector? =
         is OpenCodeToolChipVariant.Command -> OpenCodeIcons.Terminal
         is OpenCodeToolChipVariant.Agent -> OpenCodeIcons.CallSplit
         is OpenCodeToolChipVariant.Skill -> OpenCodeIcons.List
+        is OpenCodeToolChipVariant.Explore -> OpenCodeIcons.Search
         is OpenCodeToolChipVariant.More -> null
     }
 
@@ -356,6 +367,7 @@ private fun OpenCodeToolChipVariant.primaryText(): String =
         is OpenCodeToolChipVariant.Command -> label
         is OpenCodeToolChipVariant.Agent -> displayAgentName(name)
         is OpenCodeToolChipVariant.Skill -> name
+        is OpenCodeToolChipVariant.Explore -> label
         is OpenCodeToolChipVariant.More -> "+$count more"
     }
 
@@ -380,6 +392,7 @@ internal fun toolChipAccessibilityLabel(
         is OpenCodeToolChipVariant.Agent ->
             parts += listOfNotNull("agent ${variant.name}", variant.brief?.takeIf { it.isNotEmpty() }).joinToString(" ")
         is OpenCodeToolChipVariant.Skill -> parts += "skill ${variant.name}"
+        is OpenCodeToolChipVariant.Explore -> parts += variant.label
         is OpenCodeToolChipVariant.More -> parts += "${variant.count} more tools"
     }
     if (variant !is OpenCodeToolChipVariant.More) parts += status.name.lowercase()
@@ -466,6 +479,8 @@ enum class ToolChipPreviewCase(
     Agent(OpenCodeToolChipVariant.Agent("Explore", "Find where the branch pill is rendered"), OpenCodeToolChipStatus.Completed, "1m 4s"),
     FailedAgent(OpenCodeToolChipVariant.Agent("Review", "Standards review"), OpenCodeToolChipStatus.Error),
     Skill(OpenCodeToolChipVariant.Skill("/feature"), OpenCodeToolChipStatus.Completed),
+    Explore(OpenCodeToolChipVariant.Explore("Explored \u00b7 4 reads \u00b7 2 greps"), OpenCodeToolChipStatus.Completed),
+    Exploring(OpenCodeToolChipVariant.Explore("Exploring \u00b7 3 reads"), OpenCodeToolChipStatus.Running),
     More(OpenCodeToolChipVariant.More(3), OpenCodeToolChipStatus.Completed),
 }
 

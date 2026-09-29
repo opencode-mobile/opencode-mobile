@@ -13,16 +13,17 @@ data class StepParagraphChipVisibility(
  * and tests share them.
  */
 object StepParagraphChips {
-    /** Paragraph-wide ceiling on counting chips once per-family limits apply. */
-    const val VISIBLE_CEILING = 8
-
-    /** Per-family visible limit; null means the family is never truncated. */
+    /**
+     * Per-family visible limit over completed chips; null means the family is
+     * never truncated. Explore tools fold into the paragraph's summary chip, so
+     * an individual Explore chip is a lone one or a failed one and never hides.
+     */
     fun familyLimit(family: ToolChipFamily): Int? =
         when (family) {
             ToolChipFamily.Change -> 3
             ToolChipFamily.Command -> 3
-            ToolChipFamily.Explore -> 2
-            ToolChipFamily.Agent -> 2
+            ToolChipFamily.Explore -> null
+            ToolChipFamily.Agent -> null
             ToolChipFamily.Skill -> null
         }
 
@@ -37,33 +38,26 @@ object StepParagraphChips {
         }
 
     /**
-     * Applies per-family limits, then trims Explore chips from the end until at
-     * most [VISIBLE_CEILING] counting chips remain. A lone hidden chip is shown
-     * instead of a `+1 more`. Order of the visible chips is preserved.
+     * Applies per-family limits. [expandedThrough] is the paragraph's chip
+     * count when its `+N more` was tapped, or null: chips whose
+     * [SessionChatTimelineBlock.ToolChip.arrivalIndex] is below it always
+     * show, so a tap reveals what existed then while later arrivals still
+     * collapse. A lone hidden chip is shown instead of a `+1 more`. Order of
+     * the visible chips is preserved.
      */
     fun visibility(
         chips: List<SessionChatTimelineBlock.ToolChip>,
-        expanded: Boolean,
+        expandedThrough: Int? = null,
     ): StepParagraphChipVisibility {
-        if (expanded) return StepParagraphChipVisibility(chips, hiddenCount = 0)
         val hidden = BooleanArray(chips.size)
         val seenByFamily = mutableMapOf<ToolChipFamily, Int>()
         chips.forEachIndexed { index, chip ->
             if (needsAttention(chip.status)) return@forEachIndexed
+            if (expandedThrough != null && chip.arrivalIndex < expandedThrough) return@forEachIndexed
             val seen = seenByFamily.getOrDefault(chip.family, 0)
             seenByFamily[chip.family] = seen + 1
             val limit = familyLimit(chip.family)
             if (limit != null && seen >= limit) hidden[index] = true
-        }
-        var counting = chips.indices.count { !hidden[it] && !needsAttention(chips[it].status) }
-        var index = chips.lastIndex
-        while (counting > VISIBLE_CEILING && index >= 0) {
-            val chip = chips[index]
-            if (!hidden[index] && chip.family == ToolChipFamily.Explore && !needsAttention(chip.status)) {
-                hidden[index] = true
-                counting -= 1
-            }
-            index -= 1
         }
         val hiddenCount = hidden.count { it }
         if (hiddenCount <= 1) return StepParagraphChipVisibility(chips, hiddenCount = 0)
@@ -87,12 +81,14 @@ object StepParagraphChips {
             previous.family == next.family &&
             previous.label == next.label
 
-    /** Folds [next] into [previous]: the latest run's card, one more repeat. */
+    /** Folds [next] into [previous]: the first run's id, the latest run's card, one more repeat. */
     fun fold(
         previous: SessionChatTimelineBlock.ToolChip,
         next: SessionChatTimelineBlock.ToolChip,
     ): SessionChatTimelineBlock.ToolChip =
         next.copy(
+            id = previous.id,
+            arrivalIndex = previous.arrivalIndex,
             additions = sumCounts(previous.additions, next.additions),
             deletions = sumCounts(previous.deletions, next.deletions),
             repeatCount = previous.repeatCount + next.repeatCount,

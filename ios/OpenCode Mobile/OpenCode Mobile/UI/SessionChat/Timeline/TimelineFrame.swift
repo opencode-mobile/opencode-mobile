@@ -316,11 +316,11 @@ struct MessageListTimelineApplyPacket: Equatable, Sendable {
     /// unchanged set never re-applies.
     func addingStepParagraphExpansion(
         rows: [SessionChatRow],
-        expanded: Set<String>,
-        previousExpanded: Set<String>
+        expanded: [String: Int],
+        previousExpanded: [String: Int]
     ) -> MessageListTimelineApplyPacket {
         let fingerprint = SessionChatStepParagraphExpansion.fingerprint(expanded)
-        let toggled = expanded.symmetricDifference(previousExpanded)
+        let toggled = SessionChatStepParagraphExpansion.changedParagraphIDs(expanded, previousExpanded)
         let rowIDs = SessionChatStepParagraphExpansion.rowIDs(containing: toggled, in: rows)
         guard fingerprint != 0 || !rowIDs.isEmpty else { return self }
         var nextKinds = kinds
@@ -477,15 +477,26 @@ extension TimelineRow {
 
 /// Chip-timeline `+N more` expansion helpers for the timeline host.
 enum SessionChatStepParagraphExpansion {
-    /// Order-independent, process-stable fingerprint; 0 for no expansion.
-    static func fingerprint(_ expanded: Set<String>) -> UInt64 {
-        expanded.reduce(UInt64(0)) { sum, id in
+    /// Order-independent, process-stable fingerprint over paragraph id and
+    /// chip count; 0 for no expansion.
+    static func fingerprint(_ expanded: [String: Int]) -> UInt64 {
+        expanded.reduce(UInt64(0)) { sum, entry in
             var value: UInt64 = 1
-            for scalar in id.unicodeScalars {
+            for scalar in entry.key.unicodeScalars {
                 value = value &* 31 &+ UInt64(scalar.value)
             }
+            value = value &* 31 &+ UInt64(max(0, entry.value))
             return sum &+ value
         }
+    }
+
+    /// Paragraphs whose expansion appeared, disappeared or changed its chip count.
+    static func changedParagraphIDs(_ expanded: [String: Int], _ previous: [String: Int]) -> Set<String> {
+        var changed: Set<String> = []
+        for key in Set(expanded.keys).union(previous.keys) where expanded[key] != previous[key] {
+            changed.insert(key)
+        }
+        return changed
     }
 
     /// Rows whose blocks hold a step paragraph with one of `paragraphIDs`.

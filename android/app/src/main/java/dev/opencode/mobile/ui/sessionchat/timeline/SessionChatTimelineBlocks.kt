@@ -87,6 +87,9 @@ sealed class SessionChatTimelineBlock {
      * so per-block rendered-markdown lookup keeps working.
      * [expansionID] is the paragraph's first part id: unlike [blockID] it does
      * not change as later tools stream in, so expansion state can key on it.
+     * [exploreSummary] folds two or more explore tools (read, glob, grep,
+     * search, fetch) that did not fail into one chip; those tools are not in
+     * [chips]. [chips] holds every remaining tool, one chip per tool.
      */
     data class StepParagraph(
         override val blockID: String,
@@ -96,14 +99,34 @@ sealed class SessionChatTimelineBlock {
         val errorLines: List<String>,
         val textBlockID: String? = null,
         val expansionID: String = blockID,
+        val exploreSummary: ExploreSummary? = null,
     ) : SessionChatTimelineBlock()
 
     /**
+     * The explore tools of a [StepParagraph] as one chip: `Explored · 4 reads ·
+     * 2 greps`, or `Exploring · …` while any member is still running. Tapping
+     * it opens the tool group sheet with [title], [subtitle] and [members].
+     */
+    data class ExploreSummary(
+        val blockID: String,
+        val label: String,
+        val title: String,
+        val subtitle: String?,
+        val status: ToolStatus,
+        val members: List<ToolCard>,
+    )
+
+    /**
      * One tool inside a [StepParagraph]; [card] keeps today's tap targets.
+     * [id] is the first part id behind the chip and stays put while later
+     * identical runs fold into it. [arrivalIndex] is the chip's position in
+     * arrival order before the family sort; `+N more` expansion is scoped to
+     * chips that existed at tap time by comparing against it.
      * [repeatCount] > 1 when identical consecutive completed runs were folded
      * into this chip; [card] is then the latest run.
      */
     data class ToolChip(
+        val id: String,
         val kind: ToolChipKind,
         val family: ToolChipFamily,
         val label: String,
@@ -114,6 +137,7 @@ sealed class SessionChatTimelineBlock {
         val trailingText: String? = null,
         val card: ToolCard,
         val repeatCount: Int = 1,
+        val arrivalIndex: Int = 0,
     ) {
         /** Chip trailing text with the `×N` repeat marker ahead of any existing text. */
         val displayTrailingText: String?
@@ -164,8 +188,12 @@ sealed class SessionChatTimelineBlock {
 
 enum class ToolChipKind { File, Command, Agent, Skill }
 
-/** Truncation family; chips inside a paragraph are ordered by [ordinal]. */
-enum class ToolChipFamily { Skill, Explore, Agent, Change, Command }
+/**
+ * Truncation family; chips inside a paragraph are grouped in declaration order
+ * (explore summary, changes, commands, agents, skills) so a new chip only
+ * appends at the end of its group.
+ */
+enum class ToolChipFamily { Explore, Change, Command, Agent, Skill }
 
 object SessionChatTimelineBlocks {
     private val contextToolNames = setOf("read", "glob", "grep", "websearch")
@@ -289,15 +317,25 @@ object SessionChatTimelineBlocks {
     private fun buildStepParagraphs(parts: List<MessagePart>): SessionChatTimelineBlocksResult {
         val blocks = mutableListOf<SessionChatTimelineBlock>()
         val pendingText = mutableListOf<Pair<String, String>>()
-        val pendingChipIds = mutableListOf<String>()
-        val pendingChips = mutableListOf<SessionChatTimelineBlock.ToolChip>()
+        val pendingTools = mutableListOf<MessagePart.Tool>()
 
-        fun flushParagraph() {
-            if (pendingText.isEmpty() && pendingChips.isEmpty()) return
+        fun flushParagraph(): Boolean {
+            if (pendingText.isEmpty() && pendingTools.isEmpty()) return true
             val textIds = pendingText.map { it.first }
             val text = pendingText.joinToString("\n") { it.second }.takeIf { it.isNotEmpty() }
-            val chips = pendingChips.sortedBy { it.family.ordinal }
-            val partIds = textIds + pendingChipIds
+            val toolIds = pendingTools.map { it.id ?: return false }
+            val summaryTools = exploreSummaryTools(pendingTools)
+            val summaryIds = summaryTools.mapTo(mutableSetOf()) { it.id }
+            val exploreSummary = if (summaryTools.isEmpty()) null else exploreSummary(summaryTools) ?: return false
+            val chips =
+                orderedChips(
+                    foldRepeatedChips(
+                        pendingTools
+                            .filter { it.id !in summaryIds }
+                            .map { toToolChip(it) ?: return false },
+                    ),
+                )
+            val partIds = textIds + toolIds
             blocks +=
                 SessionChatTimelineBlock.StepParagraph(
                     blockID = PresentationBlockId.stepParagraph(partIds),
@@ -306,10 +344,11 @@ object SessionChatTimelineBlocks {
                     errorLines = chips.mapNotNull(::chipErrorLine),
                     textBlockID = if (text != null) PresentationBlockId.mergedText(textIds) else null,
                     expansionID = PresentationBlockId.stepParagraph(listOf(partIds.first())),
+                    exploreSummary = exploreSummary,
                 )
             pendingText.clear()
-            pendingChipIds.clear()
-            pendingChips.clear()
+            pendingTools.clear()
+            return true
         }
 
         for (part in parts) {
@@ -319,21 +358,13 @@ object SessionChatTimelineBlocks {
                     val trimmed = part.text.trim()
                     if (trimmed.isEmpty()) continue
                     val partId = part.id ?: return SessionChatTimelineBlocksResult.MissingPartIds
-                    if (pendingChips.isNotEmpty()) flushParagraph()
+                    if (pendingTools.isNotEmpty() && !flushParagraph()) return SessionChatTimelineBlocksResult.MissingPartIds
                     pendingText += partId to trimmed
                 }
                 is MessagePart.Tool -> {
                     if (!isVisibleTool(part)) continue
-                    val partId = part.id ?: return SessionChatTimelineBlocksResult.MissingPartIds
-                    val chip = toToolChip(part) ?: return SessionChatTimelineBlocksResult.MissingPartIds
-                    pendingChipIds += partId
-                    // Identical consecutive completed runs fold into one chip (`×N`).
-                    val previous = pendingChips.lastOrNull()
-                    if (previous != null && StepParagraphChips.canFold(previous, chip)) {
-                        pendingChips[pendingChips.lastIndex] = StepParagraphChips.fold(previous, chip)
-                    } else {
-                        pendingChips += chip
-                    }
+                    if (part.id == null) return SessionChatTimelineBlocksResult.MissingPartIds
+                    pendingTools += part
                 }
                 is MessagePart.File ->
                     blocks +=
@@ -371,9 +402,83 @@ object SessionChatTimelineBlocks {
                 is MessagePart.Compaction -> Unit
             }
         }
-        flushParagraph()
+        if (!flushParagraph()) return SessionChatTimelineBlocksResult.MissingPartIds
         return SessionChatTimelineBlocksResult.Ok(blocks)
     }
+
+    /**
+     * Explore tools that fold into the paragraph's summary chip: two or more
+     * that did not fail. A single explore tool keeps its own chip (its path is
+     * more useful than `1 read`); a failed one stays an attention chip with
+     * its error line.
+     */
+    private fun exploreSummaryTools(tools: List<MessagePart.Tool>): List<MessagePart.Tool> {
+        val candidates =
+            tools.filter { chipFamily(it.toolName.lowercase()) == ToolChipFamily.Explore && it.status != ToolStatus.Error }
+        return if (candidates.size >= 2) candidates else emptyList()
+    }
+
+    private fun exploreSummary(tools: List<MessagePart.Tool>): SessionChatTimelineBlock.ExploreSummary? {
+        val memberIds = tools.map { it.id ?: return null }
+        val members = tools.map { toToolCard(it) ?: return null }
+        val running = tools.any { it.status == ToolStatus.Running || it.status == ToolStatus.Pending }
+        val counts = exploreCounts(tools)
+        return SessionChatTimelineBlock.ExploreSummary(
+            blockID = PresentationBlockId.toolGroup(memberIds),
+            label = (if (running) "Exploring" else "Explored") + " · " + counts,
+            title = "Explored — $counts",
+            subtitle = tools.firstNotNullOfOrNull(::contextSubtitle),
+            status = if (running) ToolStatus.Running else ToolStatus.Completed,
+            members = members,
+        )
+    }
+
+    /** `4 reads · 2 greps` in first-encounter order. */
+    private fun exploreCounts(tools: List<MessagePart.Tool>): String {
+        val order = mutableListOf<String>()
+        val counts = mutableMapOf<String, Int>()
+        for (tool in tools) {
+            val key = tool.toolName.lowercase()
+            if (key !in counts) order += key
+            counts[key] = (counts[key] ?: 0) + 1
+        }
+        return order.joinToString(" · ") { name -> exploreCountPhrase(name, counts.getValue(name)) }
+    }
+
+    private fun exploreCountPhrase(
+        name: String,
+        count: Int,
+    ): String =
+        when (name) {
+            "read" -> if (count == 1) "1 read" else "$count reads"
+            "grep" -> if (count == 1) "1 grep" else "$count greps"
+            "glob" -> if (count == 1) "1 glob" else "$count globs"
+            "websearch" -> if (count == 1) "1 search" else "$count searches"
+            "webfetch" -> if (count == 1) "1 fetch" else "$count fetches"
+            else -> "$count $name"
+        }
+
+    /**
+     * Identical consecutive completed runs fold into one chip (`×N`) that
+     * keeps the first run's id and the latest run's card. Chips are then
+     * numbered in arrival order so expansion can be scoped to them.
+     */
+    private fun foldRepeatedChips(chips: List<SessionChatTimelineBlock.ToolChip>): List<SessionChatTimelineBlock.ToolChip> {
+        val folded = mutableListOf<SessionChatTimelineBlock.ToolChip>()
+        for (chip in chips) {
+            val previous = folded.lastOrNull()
+            if (previous != null && StepParagraphChips.canFold(previous, chip)) {
+                folded[folded.lastIndex] = StepParagraphChips.fold(previous, chip)
+            } else {
+                folded += chip
+            }
+        }
+        return folded.mapIndexed { index, chip -> chip.copy(arrivalIndex = index) }
+    }
+
+    /** Fixed group order by [ToolChipFamily], arrival order inside a group. */
+    private fun orderedChips(chips: List<SessionChatTimelineBlock.ToolChip>): List<SessionChatTimelineBlock.ToolChip> =
+        chips.sortedBy { it.family.ordinal }
 
     private fun chipErrorLine(chip: SessionChatTimelineBlock.ToolChip): String? {
         if (chip.status != ToolStatus.Error) return null
@@ -381,6 +486,7 @@ object SessionChatTimelineBlocks {
     }
 
     private fun toToolChip(tool: MessagePart.Tool): SessionChatTimelineBlock.ToolChip? {
+        val partId = tool.id ?: return null
         val card = toToolCard(tool) ?: return null
         val name = tool.toolName.lowercase()
         val family = chipFamily(name)
@@ -393,6 +499,7 @@ object SessionChatTimelineBlocks {
             }
         val isChange = family == ToolChipFamily.Change
         return SessionChatTimelineBlock.ToolChip(
+            id = PresentationBlockId.direct(partId),
             kind = kind,
             family = family,
             label = chipLabel(name, tool, card),

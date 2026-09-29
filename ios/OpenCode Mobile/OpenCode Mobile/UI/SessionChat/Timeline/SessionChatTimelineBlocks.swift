@@ -34,6 +34,13 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
 
     /// Text-bearing blocks: a `.text` block or a step paragraph with narration.
     /// Used wherever "the sole text block" decides markdown attach and copy text.
+    /// Identity for view diffing: a step paragraph's stable paragraph id (its
+    /// block id changes as tools stream in); every other block's block id.
+    var rowIdentity: String {
+        if case .stepParagraph(_, let paragraph) = self { return paragraph.id }
+        return blockID
+    }
+
     var textContent: (blockID: String, text: String, renderedMarkdown: NativeMarkdownDocument?)? {
         switch self {
         case .text(let blockID, let text, let markdown):
@@ -158,28 +165,46 @@ nonisolated enum SessionChatToolChipKind: String, Sendable {
     case skill
 }
 
-/// Truncation family; declaration order is the chip display order.
+/// Truncation family; declaration order is the chip group order (explore
+/// summary, changes, commands, agents, skills) so a new chip only appends at
+/// the end of its group.
 nonisolated enum SessionChatToolChipFamily: String, Sendable, CaseIterable {
-    case skill
     case explore
-    case agent
     case change
     case command
+    case agent
+    case skill
 
-    /// Chips shown before `+N more`; nil never truncates. Attention chips
-    /// (failed, running, pending) never count toward the limit.
+    /// Completed chips shown before `+N more`; nil never truncates. Attention
+    /// chips (failed, running, pending) never count toward the limit. Explore
+    /// tools fold into the paragraph's summary chip, so an individual Explore
+    /// chip is a lone one or a failed one and never hides.
     var visibleLimit: Int? {
         switch self {
         case .change: 3
         case .command: 3
-        case .explore: 2
-        case .agent: 2
+        case .explore: nil
+        case .agent: nil
         case .skill: nil
         }
     }
 }
 
+/// The explore tools of a step paragraph as one chip: `Explored · 4 reads · 2
+/// greps`, or `Exploring · …` while any member is still running. Tapping it
+/// opens the tool group sheet with `title`, `subtitle` and `members`.
+nonisolated struct SessionChatExploreSummaryBlock: Equatable, Sendable {
+    let blockID: String
+    let label: String
+    let title: String
+    let subtitle: String?
+    let status: ToolStatus
+    let members: [SessionChatToolCardBlock]
+}
+
 nonisolated struct SessionChatToolChipBlock: Equatable, Sendable {
+    /// First part id behind the chip; stays put while later identical runs fold into it.
+    let id: String
     let kind: SessionChatToolChipKind
     let family: SessionChatToolChipFamily
     let label: String
@@ -193,8 +218,12 @@ nonisolated struct SessionChatToolChipBlock: Equatable, Sendable {
     let card: SessionChatToolCardBlock
     /// Identical consecutive completed runs folded into this chip (last run's card).
     let repeatCount: Int
+    /// Position in arrival order before the family sort; `+N more` expansion
+    /// is scoped to chips that existed at tap time by comparing against it.
+    let arrivalIndex: Int
 
     init(
+        id: String,
         kind: SessionChatToolChipKind,
         family: SessionChatToolChipFamily,
         label: String,
@@ -204,8 +233,10 @@ nonisolated struct SessionChatToolChipBlock: Equatable, Sendable {
         status: ToolStatus,
         trailingText: String? = nil,
         card: SessionChatToolCardBlock,
-        repeatCount: Int = 1
+        repeatCount: Int = 1,
+        arrivalIndex: Int = 0
     ) {
+        self.id = id
         self.kind = kind
         self.family = family
         self.label = label
@@ -216,6 +247,7 @@ nonisolated struct SessionChatToolChipBlock: Equatable, Sendable {
         self.trailingText = trailingText
         self.card = card
         self.repeatCount = repeatCount
+        self.arrivalIndex = arrivalIndex
     }
 
     /// Failed, running or pending chips are never hidden behind `+N more`
@@ -238,6 +270,7 @@ nonisolated struct SessionChatToolChipBlock: Equatable, Sendable {
 
     func withRepeatCount(_ repeatCount: Int) -> SessionChatToolChipBlock {
         SessionChatToolChipBlock(
+            id: id,
             kind: kind,
             family: family,
             label: label,
@@ -247,7 +280,25 @@ nonisolated struct SessionChatToolChipBlock: Equatable, Sendable {
             status: status,
             trailingText: trailingText,
             card: card,
-            repeatCount: repeatCount
+            repeatCount: repeatCount,
+            arrivalIndex: arrivalIndex
+        )
+    }
+
+    func withArrivalIndex(_ arrivalIndex: Int) -> SessionChatToolChipBlock {
+        SessionChatToolChipBlock(
+            id: id,
+            kind: kind,
+            family: family,
+            label: label,
+            brief: brief,
+            additions: additions,
+            deletions: deletions,
+            status: status,
+            trailingText: trailingText,
+            card: card,
+            repeatCount: repeatCount,
+            arrivalIndex: arrivalIndex
         )
     }
 }
@@ -267,14 +318,32 @@ nonisolated struct SessionChatStepParagraphBlock: Equatable, Sendable {
     /// nil => placeholder paragraph ("Worked without commentary").
     let text: String?
     let renderedMarkdown: NativeMarkdownDocument?
+    /// Every tool that is not in `exploreSummary`, one chip per tool.
     let chips: [SessionChatToolChipBlock]
     /// One per failed chip: "<label>: <error>".
     let errorLines: [String]
+    /// Two or more explore tools that did not fail, folded into one chip.
+    let exploreSummary: SessionChatExploreSummaryBlock?
+
+    init(
+        id: String,
+        textBlockID: String?,
+        text: String?,
+        renderedMarkdown: NativeMarkdownDocument?,
+        chips: [SessionChatToolChipBlock],
+        errorLines: [String],
+        exploreSummary: SessionChatExploreSummaryBlock? = nil
+    ) {
+        self.id = id
+        self.textBlockID = textBlockID
+        self.text = text
+        self.renderedMarkdown = renderedMarkdown
+        self.chips = chips
+        self.errorLines = errorLines
+        self.exploreSummary = exploreSummary
+    }
 
     static let placeholderText = "Worked without commentary"
-
-    /// Paragraph-wide ceiling on visible counting chips before Explore trims.
-    static let visibleChipCeiling = 8
 
     func withRenderedMarkdown(_ document: NativeMarkdownDocument?) -> SessionChatStepParagraphBlock {
         SessionChatStepParagraphBlock(
@@ -283,7 +352,8 @@ nonisolated struct SessionChatStepParagraphBlock: Equatable, Sendable {
             text: text,
             renderedMarkdown: document,
             chips: chips,
-            errorLines: errorLines
+            errorLines: errorLines,
+            exploreSummary: exploreSummary
         )
     }
 
@@ -295,6 +365,7 @@ nonisolated struct SessionChatStepParagraphBlock: Equatable, Sendable {
             && lhs.renderedMarkdown?.renderTreeVersion == rhs.renderedMarkdown?.renderTreeVersion
             && lhs.chips == rhs.chips
             && lhs.errorLines == rhs.errorLines
+            && lhs.exploreSummary == rhs.exploreSummary
     }
 }
 
@@ -616,14 +687,27 @@ nonisolated enum SessionChatTimelineBlocks {
     private static func buildStepParagraphs(parts: [MessagePart]) -> SessionChatTimelineBlocksResult {
         var blocks: [SessionChatTimelineBlock] = []
         var pendingText: [(id: String, text: String)] = []
-        var pendingChips: [(id: String, chip: SessionChatToolChipBlock)] = []
+        var pendingTools: [(id: String, tool: ToolPart)] = []
 
-        func flushParagraph() {
-            guard !pendingText.isEmpty || !pendingChips.isEmpty else { return }
+        /// False when a tool cannot become a chip (missing ids).
+        func flushParagraph() -> Bool {
+            guard !pendingText.isEmpty || !pendingTools.isEmpty else { return true }
             let textIds = pendingText.map(\.id)
-            let toolIds = pendingChips.map(\.id)
+            let toolIds = pendingTools.map(\.id)
             let merged = pendingText.map(\.text).joined(separator: "\n")
-            let chips = orderedChips(foldRepeatedChips(pendingChips.map(\.chip)))
+            let summaryTools = exploreSummaryTools(pendingTools.map(\.tool))
+            let summaryIds = Set(summaryTools.compactMap(\.id))
+            var summaryBlock: SessionChatExploreSummaryBlock?
+            if !summaryTools.isEmpty {
+                guard let summary = Self.exploreSummary(summaryTools) else { return false }
+                summaryBlock = summary
+            }
+            var chipInputs: [SessionChatToolChipBlock] = []
+            for entry in pendingTools where !summaryIds.contains(entry.id) {
+                guard let chip = toToolChip(entry.tool) else { return false }
+                chipInputs.append(chip)
+            }
+            let chips = orderedChips(foldRepeatedChips(chipInputs))
             // Text always precedes chips inside one paragraph, so the first
             // part id stays put while later tools stream in.
             let firstPartId = textIds.first ?? toolIds[0]
@@ -632,7 +716,7 @@ nonisolated enum SessionChatTimelineBlocks {
                 return "\(chip.label): \(chip.card.errorText ?? "Failed")"
             }
             pendingText.removeAll()
-            pendingChips.removeAll()
+            pendingTools.removeAll()
             blocks.append(
                 .stepParagraph(
                     blockID: PresentationBlockId.stepParagraph(textIds + toolIds),
@@ -642,10 +726,12 @@ nonisolated enum SessionChatTimelineBlocks {
                         text: merged.isEmpty ? nil : merged,
                         renderedMarkdown: nil,
                         chips: chips,
-                        errorLines: errorLines
+                        errorLines: errorLines,
+                        exploreSummary: summaryBlock
                     )
                 )
             )
+            return true
         }
 
         for part in parts {
@@ -655,8 +741,8 @@ nonisolated enum SessionChatTimelineBlocks {
                 let trimmed = textPart.text.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !trimmed.isEmpty else { continue }
                 guard let partId = textPart.id else { return .missingPartIds }
-                if !pendingChips.isEmpty {
-                    flushParagraph()
+                if !pendingTools.isEmpty, !flushParagraph() {
+                    return .missingPartIds
                 }
                 pendingText.append((id: partId, text: trimmed))
             case .file(let file):
@@ -692,15 +778,76 @@ nonisolated enum SessionChatTimelineBlocks {
                 )
             case .tool(let tool):
                 guard isVisibleTool(tool) else { continue }
-                guard let partId = tool.id, let chip = toToolChip(tool) else { return .missingPartIds }
-                pendingChips.append((id: partId, chip: chip))
+                guard let partId = tool.id else { return .missingPartIds }
+                pendingTools.append((id: partId, tool: tool))
             }
         }
-        flushParagraph()
+        guard flushParagraph() else { return .missingPartIds }
         return .ok(blocks)
     }
 
-    /// Stable family order (skill, explore, agent, change, command), encounter order inside a family.
+    /// Explore tools that fold into the paragraph's summary chip: two or more
+    /// that did not fail. A single explore tool keeps its own chip (its path is
+    /// more useful than `1 read`); a failed one stays an attention chip with
+    /// its error line.
+    private static func exploreSummaryTools(_ tools: [ToolPart]) -> [ToolPart] {
+        let candidates = tools.filter { isExploreTool($0.toolName) && $0.status != .error }
+        return candidates.count >= 2 ? candidates : []
+    }
+
+    private static func isExploreTool(_ toolName: String) -> Bool {
+        let name = toolName.lowercased()
+        return isContextTool(name) || name == "webfetch"
+    }
+
+    private static func exploreSummary(_ tools: [ToolPart]) -> SessionChatExploreSummaryBlock? {
+        let memberIds = tools.compactMap(\.id)
+        guard memberIds.count == tools.count else { return nil }
+        let members: [SessionChatToolCardBlock] = tools.compactMap { tool in
+            guard case .toolCard(_, let card) = toToolCard(tool) else { return nil }
+            return card
+        }
+        guard members.count == tools.count else { return nil }
+        let running = tools.contains { $0.status == .running || $0.status == .pending }
+        let counts = exploreCounts(tools)
+        return SessionChatExploreSummaryBlock(
+            blockID: PresentationBlockId.toolGroup(memberIds),
+            label: (running ? "Exploring" : "Explored") + " \u{00B7} " + counts,
+            title: "Explored \u{2014} \(counts)",
+            subtitle: tools.lazy.compactMap(contextSubtitle).first,
+            status: running ? .running : .completed,
+            members: members
+        )
+    }
+
+    /// `4 reads · 2 greps` in first-encounter order.
+    private static func exploreCounts(_ tools: [ToolPart]) -> String {
+        var order: [String] = []
+        var counts: [String: Int] = [:]
+        for tool in tools {
+            let key = tool.toolName.lowercased()
+            if counts[key] == nil {
+                order.append(key)
+            }
+            counts[key, default: 0] += 1
+        }
+        return order.map { name in
+            exploreCountPhrase(name, count: counts[name, default: 0])
+        }.joined(separator: " \u{00B7} ")
+    }
+
+    private static func exploreCountPhrase(_ name: String, count: Int) -> String {
+        switch name {
+        case "read": return count == 1 ? "1 read" : "\(count) reads"
+        case "grep": return count == 1 ? "1 grep" : "\(count) greps"
+        case "glob": return count == 1 ? "1 glob" : "\(count) globs"
+        case "websearch": return count == 1 ? "1 search" : "\(count) searches"
+        case "webfetch": return count == 1 ? "1 fetch" : "\(count) fetches"
+        default: return "\(count) \(name)"
+        }
+    }
+
+    /// Fixed group order (explore, change, command, agent, skill), arrival order inside a group.
     static func orderedChips(_ chips: [SessionChatToolChipBlock]) -> [SessionChatToolChipBlock] {
         SessionChatToolChipFamily.allCases.flatMap { family in
             chips.filter { $0.family == family }
@@ -709,9 +856,10 @@ nonisolated enum SessionChatTimelineBlocks {
 
     /// Chips consecutive in time (before the family sort) that are completed
     /// and share kind, family and label fold into one chip with `repeatCount`;
-    /// the last run's card wins so a tap opens the latest output, and Change
-    /// chips sum their diff counts. Attention chips (failed, running, pending)
-    /// never fold and break a run.
+    /// the first run's id and the last run's card win, so identity is stable
+    /// and a tap opens the latest output. Change chips sum their diff counts.
+    /// Attention chips (failed, running, pending) never fold and break a run.
+    /// Chips are then numbered in arrival order so expansion can be scoped.
     static func foldRepeatedChips(_ chips: [SessionChatToolChipBlock]) -> [SessionChatToolChipBlock] {
         var folded: [SessionChatToolChipBlock] = []
         for chip in chips {
@@ -724,6 +872,7 @@ nonisolated enum SessionChatTimelineBlocks {
                previous.status == chip.status
             {
                 folded[folded.count - 1] = SessionChatToolChipBlock(
+                    id: previous.id,
                     kind: chip.kind,
                     family: chip.family,
                     label: chip.label,
@@ -739,7 +888,7 @@ nonisolated enum SessionChatTimelineBlocks {
             }
             folded.append(chip)
         }
-        return folded
+        return folded.enumerated().map { index, chip in chip.withArrivalIndex(index) }
     }
 
     private static func sumCounts(_ lhs: Int?, _ rhs: Int?) -> Int? {
@@ -750,38 +899,27 @@ nonisolated enum SessionChatTimelineBlocks {
         }
     }
 
-    /// Visibility for one step paragraph's chip row:
-    /// 1. Per-family `visibleLimit` over counting chips (attention chips never
-    ///    hide and never count).
-    /// 2. At most `visibleChipCeiling` counting chips; Explore chips hide from
-    ///    the end of the paragraph until it fits (other families never trim).
-    /// 3. A lone hidden chip is shown instead of `+1 more`.
-    /// Order of the remaining chips is preserved.
+    /// Visibility for one step paragraph's chip row: per-family `visibleLimit`
+    /// over counting chips (attention chips never hide and never count).
+    /// `expandedThrough` is the paragraph's chip count when its `+N more` was
+    /// tapped, or nil: chips whose `arrivalIndex` is below it always show, so
+    /// a tap reveals what existed then while later arrivals still collapse. A
+    /// lone hidden chip is shown instead of `+1 more`. Order of the remaining
+    /// chips is preserved.
     static func chipRow(
         _ chips: [SessionChatToolChipBlock],
-        expanded: Bool
+        expandedThrough: Int? = nil
     ) -> SessionChatToolChipRow {
-        guard !expanded else { return SessionChatToolChipRow(visible: chips, hiddenCount: 0) }
         var hidden = Array(repeating: false, count: chips.count)
         var shownPerFamily: [SessionChatToolChipFamily: Int] = [:]
-        var visibleCounting = 0
         for (index, chip) in chips.enumerated() where !chip.needsAttention {
+            if let expandedThrough, chip.arrivalIndex < expandedThrough { continue }
             let shown = shownPerFamily[chip.family, default: 0]
             if let limit = chip.family.visibleLimit, shown >= limit {
                 hidden[index] = true
                 continue
             }
             shownPerFamily[chip.family] = shown + 1
-            visibleCounting += 1
-        }
-        var cursor = chips.count - 1
-        while visibleCounting > SessionChatStepParagraphBlock.visibleChipCeiling, cursor >= 0 {
-            let chip = chips[cursor]
-            if chip.family == .explore, !chip.needsAttention, !hidden[cursor] {
-                hidden[cursor] = true
-                visibleCounting -= 1
-            }
-            cursor -= 1
         }
         let hiddenCount = hidden.lazy.filter { $0 }.count
         guard hiddenCount > 1 else { return SessionChatToolChipRow(visible: chips, hiddenCount: 0) }
@@ -790,7 +928,7 @@ nonisolated enum SessionChatTimelineBlocks {
     }
 
     private static func toToolChip(_ tool: ToolPart) -> SessionChatToolChipBlock? {
-        guard case .toolCard(_, let card)? = toToolCard(tool) else { return nil }
+        guard let partId = tool.id, case .toolCard(_, let card)? = toToolCard(tool) else { return nil }
         let name = tool.toolName.lowercased()
         let kind: SessionChatToolChipKind
         let family: SessionChatToolChipFamily
@@ -843,6 +981,7 @@ nonisolated enum SessionChatTimelineBlocks {
             }
         }
         return SessionChatToolChipBlock(
+            id: PresentationBlockId.direct(partId),
             kind: kind,
             family: family,
             label: nonEmpty(label) ?? tool.toolName,

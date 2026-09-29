@@ -30,6 +30,7 @@ private enum class ToolChipGalleryVariant(
     Command("Command"),
     Agent("Agent"),
     Skill("Skill"),
+    Explore("Explore"),
     More("More"),
 }
 
@@ -40,6 +41,7 @@ private fun ToolChipGalleryVariant.toVariant(): OpenCodeToolChipVariant =
         ToolChipGalleryVariant.Command -> OpenCodeToolChipVariant.Command("./gradlew :app:testDebugUnitTest")
         ToolChipGalleryVariant.Agent -> OpenCodeToolChipVariant.Agent("Explore", "Find where the branch pill is rendered")
         ToolChipGalleryVariant.Skill -> OpenCodeToolChipVariant.Skill("/feature")
+        ToolChipGalleryVariant.Explore -> OpenCodeToolChipVariant.Explore("Explored \u00b7 4 reads \u00b7 2 greps")
         ToolChipGalleryVariant.More -> OpenCodeToolChipVariant.More(3)
     }
 

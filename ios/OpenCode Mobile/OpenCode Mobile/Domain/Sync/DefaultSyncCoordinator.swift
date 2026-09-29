@@ -285,8 +285,16 @@ nonisolated final class DefaultSyncCoordinator: SyncCoordinator, @unchecked Send
         lock.lock()
         let previous = lastConnectionState
         lastConnectionState = state
+        let dropped = previous == .connected && state != .connected
+        if dropped {
+            // The drop may already have recovered by the time it is handled
+            // (`canCatchUpNow` reads the live snapshot, not this state), so
+            // forget that catch-up was possible: the next evaluation must
+            // reload the projections this drop just made stale.
+            lastCouldCatchUp = false
+        }
         lock.unlock()
-        if previous == .connected, state != .connected {
+        if dropped {
             invalidate(nil)
         }
         onCatchUpMayHaveChanged()

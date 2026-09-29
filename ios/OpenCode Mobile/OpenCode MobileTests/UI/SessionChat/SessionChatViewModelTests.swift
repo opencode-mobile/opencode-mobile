@@ -8,13 +8,17 @@ struct SessionChatViewModelTests {
     @Test func expandStepParagraph_publishesExpansionInUiState() {
         let viewModel = makeViewModel(sessionRepository: FakeChatSessionRepository())
         defer { viewModel.stopObserving() }
-        #expect(viewModel.uiState.expandedStepParagraphIDs.isEmpty)
+        #expect(viewModel.uiState.expandedStepParagraphs.isEmpty)
 
-        viewModel.expandStepParagraph("sp:t1")
-        viewModel.expandStepParagraph("sp:t1")
-        viewModel.expandStepParagraph("sp:r9")
+        viewModel.expandStepParagraph("sp:t1", chipCount: 5)
+        // A tap with fewer chips than already revealed never shrinks the expansion.
+        viewModel.expandStepParagraph("sp:t1", chipCount: 4)
+        viewModel.expandStepParagraph("sp:r9", chipCount: 2)
+        #expect(viewModel.uiState.expandedStepParagraphs == ["sp:t1": 5, "sp:r9": 2])
 
-        #expect(viewModel.uiState.expandedStepParagraphIDs == ["sp:t1", "sp:r9"])
+        // A later tap on the grown paragraph reveals the new chips too.
+        viewModel.expandStepParagraph("sp:t1", chipCount: 9)
+        #expect(viewModel.uiState.expandedStepParagraphs == ["sp:t1": 9, "sp:r9": 2])
     }
 
     @Test func archiveSession_successLeavesSession() async {
