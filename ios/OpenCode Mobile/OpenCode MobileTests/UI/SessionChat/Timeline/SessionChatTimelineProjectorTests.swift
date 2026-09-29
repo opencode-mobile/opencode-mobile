@@ -359,6 +359,58 @@ struct SessionChatTimelineProjectorTests {
         #expect(frame.messages[0].renderedMarkdown == nil)
     }
 
+    @Test func displayFrameBuilder_chipTimeline_attachesRootAndCachedMarkdownToStepParagraph() {
+        let plain = "# Narration"
+        let toolPart: MessagePart = .tool(
+            ToolPart(id: "b1", toolName: "bash", status: .completed, input: ["command": .string("ls -la")])
+        )
+        let message = makeMessage(id: "chip-msg", parts: [text("t1", plain), toolPart], text: plain)
+        let root = NativeMarkdownDocument(
+            sourceHash: stableMarkdownSourceHash(plain),
+            blocks: [.paragraph([.text("Narration")])]
+        )
+
+        let frame = DisplayFrameBuilder.build(
+            sessionKey: "session-a",
+            frameRevision: 1,
+            sourceRevision: 1,
+            displayMessages: [DisplayMessage(message: message, renderedMarkdown: root)],
+            chipTimeline: true
+        )
+        #expect(frame.messages.count == 1)
+        guard case .stepParagraph(let blockID, let paragraph)? = frame.messages[0].blocks.first else {
+            Issue.record("Expected step paragraph")
+            return
+        }
+        #expect(blockID == PresentationBlockId.stepParagraph(["t1", "b1"]))
+        #expect(paragraph.textBlockID == PresentationBlockId.direct("t1"))
+        #expect(paragraph.renderedMarkdown?.sourceHash == root.sourceHash)
+        #expect(paragraph.chips.map(\.label) == ["ls -la"])
+
+        // Per-block cache lookup keys on the merged-text id a `.text` block would have had.
+        let cache = BlockDecorationCache(maxEntries: 4)
+        let cached = NativeMarkdownDocument(sourceHash: 77, blocks: [.paragraph([.text("Cached")])])
+        cache.put(
+            sessionKey: "session-a",
+            blockID: PresentationBlockId.direct("t1"),
+            contentRevision: ContentRevision.of(plain),
+            isStreaming: false,
+            document: cached
+        )
+        let attached = DisplayFrameBuilder.attachCachedBlockMarkdown(
+            [.stepParagraph(blockID: blockID, paragraph: paragraph.withRenderedMarkdown(nil))],
+            sessionKey: "session-a",
+            isStreaming: false,
+            cache: cache
+        )
+        #expect(attached[0].textContent?.renderedMarkdown?.sourceHash == 77)
+
+        // Projected row bridges the paragraph's markdown like a sole text block.
+        let projected = project(frame)
+        #expect(projected.rows[0].renderedMarkdown?.sourceHash == root.sourceHash)
+        #expect(projected.rows[0].text == plain)
+    }
+
     @Test func displayFrameBuilder_keepsEmptyStreamingAssistant() {
         let message = makeMessage(
             id: "msg-2",

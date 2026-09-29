@@ -33,6 +33,15 @@ class PresentationBlockIdTest {
     }
 
     @Test
+    fun stepParagraph_joinsTextThenToolPartIds() {
+        val sep = "\u001f"
+        assertEquals(
+            "s:prt-t${sep}prt-a${sep}prt-b",
+            PresentationBlockId.stepParagraph(listOf("prt-t", "prt-a", "prt-b")),
+        )
+    }
+
+    @Test
     fun messageFallback_prefixesMessageId() {
         assertEquals("m:msg-1", PresentationBlockId.messageFallback("msg-1"))
     }

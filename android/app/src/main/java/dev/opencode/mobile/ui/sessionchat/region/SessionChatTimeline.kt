@@ -52,6 +52,9 @@ class SessionChatTimeline(
     @Volatile
     var collapseConsecutiveToolCalls: Boolean = false
 
+    @Volatile
+    var chipTimeline: Boolean = false
+
     fun updateServerCommands(commands: List<ServerCommand>) {
         if (commands == serverCommands) return
         val wasEmpty = serverCommands.isEmpty()
@@ -82,6 +85,23 @@ class SessionChatTimeline(
                 sourceWorktree = worktree,
                 fromQuietRefresh = true,
                 source = "collapse-pref",
+                messagesFromCache = _state.value.messagesFromCache,
+            )
+        }
+    }
+
+    fun updateChipTimeline(enabled: Boolean) {
+        if (enabled == chipTimeline) return
+        chipTimeline = enabled
+        val sessionId = boundSessionId ?: return
+        val worktree = boundWorktree ?: return
+        if (lastLoadedDisplayMessages.isNotEmpty()) {
+            applyLoadedDisplayMessages(
+                displayMessages = lastLoadedDisplayMessages,
+                sourceSessionId = sessionId,
+                sourceWorktree = worktree,
+                fromQuietRefresh = true,
+                source = "chip-pref",
                 messagesFromCache = _state.value.messagesFromCache,
             )
         }
@@ -696,6 +716,7 @@ class SessionChatTimeline(
                             displayMessageBody(display, previousById[display.id])
                         },
                         collapseConsecutiveToolCalls,
+                        chipTimeline,
                     )
                 TimelineProjector.project(
                     frame =
@@ -857,7 +878,8 @@ class SessionChatTimeline(
     private fun shouldExpirePendingPromptPatches(source: String): Boolean =
         source != SOURCE_PENDING_PROMPT &&
             source != "commands-ready" &&
-            source != "collapse-pref"
+            source != "collapse-pref" &&
+            source != "chip-pref"
 
     private fun applyPendingPromptOverlay(
         incoming: List<DisplayMessage>,
@@ -933,6 +955,7 @@ class SessionChatTimeline(
                                 messageId = message.id,
                                 fallbackText = message.text,
                                 collapseConsecutiveToolCalls = collapseConsecutiveToolCalls,
+                                chipTimeline = chipTimeline,
                             ),
                         commands = serverCommands,
                     ),
@@ -943,23 +966,28 @@ class SessionChatTimeline(
         val isStreaming = display.isStreaming
         val blocksWithCache =
             resolvedBlocks.map { block ->
-                if (block !is SessionChatTimelineBlock.Text) {
+                // Per-block cache is keyed by the merged-text id; a step
+                // paragraph looks up the id its text block would have carried.
+                val cacheBlockID =
+                    when (block) {
+                        is SessionChatTimelineBlock.Text -> block.blockID
+                        is SessionChatTimelineBlock.StepParagraph -> block.textBlockID
+                        else -> null
+                    }
+                val text = block.markdownText
+                if (cacheBlockID == null || text == null || block.decoratedMarkdown != null) {
                     block
                 } else {
-                    val revision = ContentRevision.of(block.text)
+                    val revision = ContentRevision.of(text)
                     val cached =
                         BlockDecorationCache.get(
                             sessionKey = sessionKey,
-                            blockID = block.blockID,
+                            blockID = cacheBlockID,
                             textHash = revision.textHash,
                             textLength = revision.textLength,
                             isStreaming = isStreaming,
                         )
-                    if (cached != null && block.renderedMarkdown == null) {
-                        block.copy(renderedMarkdown = cached)
-                    } else {
-                        block
-                    }
+                    if (cached != null) block.withRenderedMarkdown(cached) else block
                 }
             }
 
@@ -993,15 +1021,15 @@ class SessionChatTimeline(
         if (renderedMarkdown == null) return blocks
         val textBlockIndexes =
             blocks.mapIndexedNotNull { index, block ->
-                index.takeIf { block is SessionChatTimelineBlock.Text }
+                index.takeIf { block.markdownText != null }
             }
         if (textBlockIndexes.size != 1) return blocks
         val textIndex = textBlockIndexes.single()
-        val textBlock = blocks[textIndex] as SessionChatTimelineBlock.Text
-        if (textBlock.renderedMarkdown != null) return blocks
-        if (isCollapsedAwayFromMessageText(message, textBlock.text)) return blocks
+        val textBlock = blocks[textIndex]
+        if (textBlock.decoratedMarkdown != null) return blocks
+        if (isCollapsedAwayFromMessageText(message, textBlock.markdownText.orEmpty())) return blocks
         return blocks.toMutableList().also {
-            it[textIndex] = textBlock.copy(renderedMarkdown = renderedMarkdown)
+            it[textIndex] = textBlock.withRenderedMarkdown(renderedMarkdown)
         }
     }
 
@@ -1012,9 +1040,9 @@ class SessionChatTimeline(
     ): MarkdownDocument? {
         if (candidate == null) return null
         val soleText =
-            blocks.filterIsInstance<SessionChatTimelineBlock.Text>().singleOrNull()
+            blocks.mapNotNull { it.markdownText }.singleOrNull()
                 ?: return candidate
-        return candidate.takeUnless { isCollapsedAwayFromMessageText(message, soleText.text) }
+        return candidate.takeUnless { isCollapsedAwayFromMessageText(message, soleText) }
     }
 
     private fun isCollapsedAwayFromMessageText(

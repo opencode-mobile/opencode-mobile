@@ -263,6 +263,13 @@ class SessionChatViewModel
                         timeline.updateCollapseConsecutiveToolCalls(enabled)
                     }
             }
+            viewModelScope.launch {
+                snapshotFlow { SessionChatDisplayPreferences.chipTimeline }
+                    .distinctUntilChanged()
+                    .collect { enabled ->
+                        timeline.updateChipTimeline(enabled)
+                    }
+            }
         }
 
         fun bind(

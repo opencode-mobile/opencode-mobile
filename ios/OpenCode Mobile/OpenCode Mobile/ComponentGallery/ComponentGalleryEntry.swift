@@ -20,6 +20,7 @@ enum ComponentGalleryEntryID: String, Hashable {
     case pendingPromptsStrip
     case assistantMessage
     case toolCallCard
+    case toolChip
     case childSessionRow
     case topBar
     case overflowMenu
@@ -234,6 +235,12 @@ let componentGalleryEntries = [
         id: .toolCallCard,
         title: "Tool Call Card",
         description: "Collapsed tool-agnostic assistant tool row with status variants.",
+        category: .chat
+    ),
+    ComponentGalleryEntry(
+        id: .toolChip,
+        title: "Tool Chip",
+        description: "Compact tool reference under a narration paragraph, by variant and status.",
         category: .chat
     ),
     ComponentGalleryEntry(

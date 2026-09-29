@@ -554,7 +554,7 @@ private extension SessionChatRow {
                 .text(id: blockID, text: text)
             case .attachment(_, let file):
                 .attachment(file.attachmentPresentation)
-            case .toolCard, .toolGroup, .childSessionRow, .reasoning:
+            case .toolCard, .toolGroup, .childSessionRow, .reasoning, .stepParagraph:
                 nil
             }
         }
@@ -603,8 +603,7 @@ private struct AssistantMessageContent: View {
     /// only when the block has none and exactly one text block remains.
     private var textBlockCount: Int {
         blocks.reduce(0) { count, block in
-            if case .text = block { return count + 1 }
-            return count
+            block.textContent != nil ? count + 1 : count
         }
     }
 
@@ -686,6 +685,14 @@ private struct AssistantMessageContent: View {
                             )
                         }
                     )
+                case .stepParagraph(_, let paragraph):
+                    StepParagraphBlock(
+                        paragraph: paragraph,
+                        renderedMarkdown: renderedMarkdown(for: paragraph.renderedMarkdown),
+                        isStreaming: message.isStreaming,
+                        onOpenMessageActions: onOpenMessageActions,
+                        chipAction: { chip in toolCardAction(for: chip.card) }
+                    )
                 }
             }
         }
@@ -709,6 +716,139 @@ private struct AssistantMessageContent: View {
             }
         }
         return nil
+    }
+}
+
+/// Chip timeline (OPE-260): narration, then the tools that followed it as
+/// chips, then one caption per failed tool. `+N more` expands in place; the
+/// expansion is view state keyed by the paragraph's block identity.
+private struct StepParagraphBlock: View {
+    let paragraph: SessionChatStepParagraphBlock
+    let renderedMarkdown: NativeMarkdownDocument?
+    let isStreaming: Bool
+    let onOpenMessageActions: () -> Void
+    let chipAction: (SessionChatToolChipBlock) -> (() -> Void)?
+
+    @State private var expanded = false
+
+    private enum ChipRowItem: Identifiable {
+        case chip(index: Int, chip: SessionChatToolChipBlock)
+        case more(family: SessionChatToolChipFamily, count: Int)
+
+        var id: String {
+            switch self {
+            case .chip(let index, _): "chip:\(index)"
+            case .more(let family, _): "more:\(family.rawValue)"
+            }
+        }
+    }
+
+    /// Family order is fixed by the builder; here only the per-family limit applies.
+    private var rowItems: [ChipRowItem] {
+        var items: [ChipRowItem] = []
+        var shownPerFamily: [SessionChatToolChipFamily: Int] = [:]
+        var hiddenPerFamily: [SessionChatToolChipFamily: Int] = [:]
+        for (index, chip) in paragraph.chips.enumerated() {
+            let shown = shownPerFamily[chip.family, default: 0]
+            if !expanded, let limit = chip.family.visibleLimit, shown >= limit {
+                hiddenPerFamily[chip.family, default: 0] += 1
+                continue
+            }
+            shownPerFamily[chip.family] = shown + 1
+            items.append(.chip(index: index, chip: chip))
+        }
+        for family in SessionChatToolChipFamily.allCases.reversed() {
+            guard let hidden = hiddenPerFamily[family], hidden > 0 else { continue }
+            let lastOfFamily = items.lastIndex { item in
+                if case .chip(_, let chip) = item { return chip.family == family }
+                return false
+            }
+            let insertAt = lastOfFamily.map { $0 + 1 } ?? items.endIndex
+            items.insert(.more(family: family, count: hidden), at: insertAt)
+        }
+        return items
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Self.sectionSpacing) {
+            if let text = paragraph.text {
+                AssistantMessageBubble(
+                    text: text,
+                    renderedMarkdown: renderedMarkdown,
+                    isStreaming: isStreaming
+                )
+                .modifier(
+                    SessionChatMessageActionsGestureModifier(
+                        renderedMarkdown: renderedMarkdown,
+                        accessibilityLabel: "Assistant message",
+                        onOpenMessageActions: onOpenMessageActions
+                    )
+                )
+            } else {
+                Text(SessionChatStepParagraphBlock.placeholderText)
+                    .font(OpenCodeTypography.bodySecondary)
+                    .italic()
+                    .foregroundStyle(OpenCodeColors.textWeak)
+                    .padding(.horizontal, Self.placeholderHorizontalPadding)
+            }
+
+            if !paragraph.chips.isEmpty {
+                OpenCodeChipFlowLayout(spacing: Self.chipSpacing, lineSpacing: Self.chipSpacing) {
+                    ForEach(rowItems) { item in
+                        switch item {
+                        case .chip(_, let chip):
+                            OpenCodeToolChip(
+                                variant: chip.variant,
+                                status: chip.status.toolChipStatus,
+                                trailingText: chip.trailingText,
+                                action: chipAction(chip)
+                            )
+                        case .more(_, let count):
+                            OpenCodeToolChip(
+                                variant: .more(count: count),
+                                action: { expanded = true }
+                            )
+                        }
+                    }
+                }
+                .padding(.horizontal, Self.chipRowHorizontalPadding)
+            }
+
+            ForEach(Array(paragraph.errorLines.enumerated()), id: \.offset) { _, line in
+                Text(line)
+                    .font(OpenCodeTypography.caption)
+                    .foregroundStyle(OpenCodeColors.error)
+                    .lineLimit(3)
+                    .padding(.horizontal, Self.chipRowHorizontalPadding)
+            }
+        }
+    }
+
+    private static let sectionSpacing: CGFloat = 6
+    private static let chipSpacing: CGFloat = 4
+    private static let placeholderHorizontalPadding: CGFloat = 12
+    private static let chipRowHorizontalPadding: CGFloat = 4
+}
+
+private extension SessionChatToolChipBlock {
+    var variant: OpenCodeToolChipVariant {
+        switch kind {
+        case .file: .file(label: label, additions: additions, deletions: deletions)
+        case .command: .command(label: label)
+        case .agent: .agent(name: label, brief: brief)
+        case .skill: .skill(name: label)
+        }
+    }
+}
+
+private extension ToolStatus {
+    var toolChipStatus: OpenCodeToolChipStatus {
+        switch self {
+        case .pending: .pending
+        case .running: .running
+        case .completed: .completed
+        case .error: .error
+        }
     }
 }
 

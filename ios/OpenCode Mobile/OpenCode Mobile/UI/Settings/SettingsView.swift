@@ -195,6 +195,30 @@ struct SettingsView: View {
                     .padding(.horizontal, 16)
 
                     OpenCodeListItem(
+                        title: "Chip Timeline",
+                        subtitle: "Show the tools an agent used as chips under its narration",
+                        style: .card,
+                        startDecorator: .icon(.widgets, accessibilityLabel: "Chip Timeline"),
+                        trailing: {
+                            Toggle(
+                                "Chip Timeline",
+                                isOn: Binding(
+                                    get: { sessionChatDisplayPreferences.chipTimeline },
+                                    set: { newValue in
+                                        logSettingsAction(
+                                            ProductAnalytics.Action.settingsToggleChipTimeline
+                                        )
+                                        sessionChatDisplayPreferences.setChipTimeline(newValue)
+                                    }
+                                )
+                            )
+                            .labelsHidden()
+                            .tint(OpenCodeColors.interactive)
+                        }
+                    )
+                    .padding(.horizontal, 16)
+
+                    OpenCodeListItem(
                         title: "Smooth Streaming",
                         subtitle: "Paint assistant text in short chunks instead of every token",
                         style: .card,

@@ -19,6 +19,12 @@ object PresentationBlockId {
         }
     }
 
+    /** Chip timeline paragraph: narration text part ids followed by tool part ids. */
+    fun stepParagraph(orderedPartIds: List<String>): String {
+        require(orderedPartIds.isNotEmpty()) { "step paragraph requires at least one part id" }
+        return "s:" + orderedPartIds.joinToString(SEP)
+    }
+
     fun toolGroup(orderedMemberIds: List<String>): String {
         require(orderedMemberIds.size >= 2) { "tool group requires at least two member ids" }
         return "g:" + orderedMemberIds.joinToString(SEP)

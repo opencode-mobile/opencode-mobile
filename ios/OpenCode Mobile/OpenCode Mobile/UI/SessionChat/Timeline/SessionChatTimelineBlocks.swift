@@ -10,6 +10,8 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
     case toolGroup(blockID: String, group: SessionChatToolGroupBlock)
     case childSessionRow(blockID: String, row: SessionChatChildSessionRowBlock)
     case reasoning(blockID: String, text: String, isStreaming: Bool, durationMs: Int64?)
+    /// Chip timeline (OPE-260): narration plus the tools that followed it.
+    case stepParagraph(blockID: String, paragraph: SessionChatStepParagraphBlock)
 
     var blockID: String {
         switch self {
@@ -25,6 +27,34 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
             blockID
         case .reasoning(let blockID, _, _, _):
             blockID
+        case .stepParagraph(let blockID, _):
+            blockID
+        }
+    }
+
+    /// Text-bearing blocks: a `.text` block or a step paragraph with narration.
+    /// Used wherever "the sole text block" decides markdown attach and copy text.
+    var textContent: (blockID: String, text: String, renderedMarkdown: NativeMarkdownDocument?)? {
+        switch self {
+        case .text(let blockID, let text, let markdown):
+            return (blockID, text, markdown)
+        case .stepParagraph(_, let paragraph):
+            guard let textBlockID = paragraph.textBlockID, let text = paragraph.text else { return nil }
+            return (textBlockID, text, paragraph.renderedMarkdown)
+        case .attachment, .toolCard, .toolGroup, .childSessionRow, .reasoning:
+            return nil
+        }
+    }
+
+    /// Same block with `renderedMarkdown` replaced; no-op for blocks without text.
+    func withRenderedMarkdown(_ document: NativeMarkdownDocument?) -> SessionChatTimelineBlock {
+        switch self {
+        case .text(let blockID, let text, _):
+            return .text(blockID: blockID, text: text, renderedMarkdown: document)
+        case .stepParagraph(let blockID, let paragraph):
+            return .stepParagraph(blockID: blockID, paragraph: paragraph.withRenderedMarkdown(document))
+        case .attachment, .toolCard, .toolGroup, .childSessionRow, .reasoning:
+            return self
         }
     }
 
@@ -52,6 +82,8 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
             lID == rID && lRow == rRow
         case let (.reasoning(lID, lText, lStreaming, lDuration), .reasoning(rID, rText, rStreaming, rDuration)):
             lID == rID && lText == rText && lStreaming == rStreaming && lDuration == rDuration
+        case let (.stepParagraph(lID, lParagraph), .stepParagraph(rID, rParagraph)):
+            lID == rID && lParagraph == rParagraph
         default:
             false
         }
@@ -119,15 +151,90 @@ nonisolated struct SessionChatChildSessionRowBlock: Equatable, Sendable {
     let childSessionId: String?
 }
 
+nonisolated enum SessionChatToolChipKind: String, Sendable {
+    case file
+    case command
+    case agent
+    case skill
+}
+
+/// Truncation family; declaration order is the chip display order.
+nonisolated enum SessionChatToolChipFamily: String, Sendable, CaseIterable {
+    case skill
+    case explore
+    case agent
+    case change
+    case command
+
+    /// Chips shown before `+N more`; nil never truncates.
+    var visibleLimit: Int? {
+        switch self {
+        case .explore: 2
+        case .change: 3
+        case .skill, .agent, .command: nil
+        }
+    }
+}
+
+nonisolated struct SessionChatToolChipBlock: Equatable, Sendable {
+    let kind: SessionChatToolChipKind
+    let family: SessionChatToolChipFamily
+    let label: String
+    /// Agent chips only: first line of the description / prompt.
+    let brief: String?
+    let additions: Int?
+    let deletions: Int?
+    let status: ToolStatus
+    let trailingText: String?
+    /// Carries detailText / childSessionId / changes review so chip taps reuse card actions.
+    let card: SessionChatToolCardBlock
+}
+
+nonisolated struct SessionChatStepParagraphBlock: Equatable, Sendable {
+    /// Merged-text id the equivalent `.text` block would have had; nil without text.
+    let textBlockID: String?
+    /// nil => placeholder paragraph ("Worked without commentary").
+    let text: String?
+    let renderedMarkdown: NativeMarkdownDocument?
+    let chips: [SessionChatToolChipBlock]
+    /// One per failed chip: "<label>: <error>".
+    let errorLines: [String]
+
+    static let placeholderText = "Worked without commentary"
+
+    func withRenderedMarkdown(_ document: NativeMarkdownDocument?) -> SessionChatStepParagraphBlock {
+        SessionChatStepParagraphBlock(
+            textBlockID: textBlockID,
+            text: text,
+            renderedMarkdown: document,
+            chips: chips,
+            errorLines: errorLines
+        )
+    }
+
+    static func == (lhs: SessionChatStepParagraphBlock, rhs: SessionChatStepParagraphBlock) -> Bool {
+        lhs.textBlockID == rhs.textBlockID
+            && lhs.text == rhs.text
+            && lhs.renderedMarkdown?.sourceHash == rhs.renderedMarkdown?.sourceHash
+            && lhs.renderedMarkdown?.renderTreeVersion == rhs.renderedMarkdown?.renderTreeVersion
+            && lhs.chips == rhs.chips
+            && lhs.errorLines == rhs.errorLines
+    }
+}
+
 nonisolated enum SessionChatTimelineBlocks {
     private static let contextToolNames: Set<String> = ["read", "glob", "grep", "websearch"]
 
     static func build(
         role: MessageRole,
         parts: [MessagePart],
-        collapseConsecutiveToolCalls: Bool = false
+        collapseConsecutiveToolCalls: Bool = false,
+        chipTimeline: Bool = false
     ) -> SessionChatTimelineBlocksResult {
         guard !parts.isEmpty else { return .ok([]) }
+        if chipTimeline, role == .assistant {
+            return buildStepParagraphs(parts: parts)
+        }
 
         let allowToolCards = role == .assistant
         var blocks: [SessionChatTimelineBlock] = []
@@ -240,7 +347,8 @@ nonisolated enum SessionChatTimelineBlocks {
         parts: [MessagePart],
         messageId: String,
         fallbackText: String,
-        collapseConsecutiveToolCalls: Bool = false
+        collapseConsecutiveToolCalls: Bool = false,
+        chipTimeline: Bool = false
     ) -> [SessionChatTimelineBlock] {
         func fallbackBlocks() -> [SessionChatTimelineBlock] {
             let trimmed = fallbackText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -254,7 +362,12 @@ nonisolated enum SessionChatTimelineBlocks {
             ]
         }
 
-        switch build(role: role, parts: parts, collapseConsecutiveToolCalls: collapseConsecutiveToolCalls) {
+        switch build(
+            role: role,
+            parts: parts,
+            collapseConsecutiveToolCalls: collapseConsecutiveToolCalls,
+            chipTimeline: chipTimeline
+        ) {
         case .ok(let blocks):
             return blocks.isEmpty ? fallbackBlocks() : blocks
         case .missingPartIds:
@@ -302,21 +415,31 @@ nonisolated enum SessionChatTimelineBlocks {
     /// sequential tool step as its own assistant message (`parentID` = user
     /// turn); grouping only inside one message would leave a stack of Shell
     /// cards. Visible text, attachments, and `task` tools still break a run.
+    ///
+    /// With `chipTimeline` every run of consecutive assistant bodies (text
+    /// included) merges so a paragraph joins the tools of the next model step.
     static func mergeConsecutiveToolOnlyAssistantBodies(
         _ bodies: [DisplayMessageBody],
-        collapseConsecutiveToolCalls: Bool
+        collapseConsecutiveToolCalls: Bool,
+        chipTimeline: Bool = false
     ) -> [DisplayMessageBody] {
-        guard collapseConsecutiveToolCalls, bodies.count >= 2 else { return bodies }
+        guard collapseConsecutiveToolCalls || chipTimeline, bodies.count >= 2 else { return bodies }
+        func isMergeable(_ body: DisplayMessageBody) -> Bool {
+            if chipTimeline {
+                return body.message.role == .assistant && !body.blocks.isEmpty
+            }
+            return isMergeableToolOnlyAssistant(body)
+        }
         var merged: [DisplayMessageBody] = []
         var index = 0
         while index < bodies.count {
-            guard isMergeableToolOnlyAssistant(bodies[index]) else {
+            guard isMergeable(bodies[index]) else {
                 merged.append(bodies[index])
                 index += 1
                 continue
             }
             var end = index + 1
-            while end < bodies.count, isMergeableToolOnlyAssistant(bodies[end]) {
+            while end < bodies.count, isMergeable(bodies[end]) {
                 end += 1
             }
             if end == index + 1 {
@@ -327,13 +450,19 @@ nonisolated enum SessionChatTimelineBlocks {
             let run = bodies[index..<end]
             let parts = run.flatMap(\.message.parts)
             let first = bodies[index]
-            let blocks = buildOrFallback(
+            var blocks = buildOrFallback(
                 role: .assistant,
                 parts: parts,
                 messageId: first.message.id,
                 fallbackText: "",
-                collapseConsecutiveToolCalls: true
+                collapseConsecutiveToolCalls: collapseConsecutiveToolCalls,
+                chipTimeline: chipTimeline
             )
+            if blocks.isEmpty {
+                blocks = run.flatMap(\.blocks)
+            } else if chipTimeline {
+                blocks = attachMemberRootMarkdown(blocks, members: Array(run))
+            }
             merged.append(
                 DisplayMessageBody(
                     message: first.message,
@@ -347,6 +476,31 @@ nonisolated enum SessionChatTimelineBlocks {
         return merged
     }
 
+    /// History markdown rides on each member's message root; after a chip
+    /// merge, hand it to the paragraph whose text id is that member's sole text run.
+    private static func attachMemberRootMarkdown(
+        _ blocks: [SessionChatTimelineBlock],
+        members: [DisplayMessageBody]
+    ) -> [SessionChatTimelineBlock] {
+        var rootByTextBlockID: [String: NativeMarkdownDocument] = [:]
+        for member in members {
+            guard let root = member.renderedMarkdown,
+                  StreamingTextBlockIdentity.isSoleTextBlock(message: member.message),
+                  let primary = StreamingTextBlockIdentity.resolvePrimary(message: member.message)
+            else { continue }
+            rootByTextBlockID[primary.blockID] = root
+        }
+        guard !rootByTextBlockID.isEmpty else { return blocks }
+        return blocks.map { block in
+            guard case .stepParagraph(_, let paragraph) = block,
+                  paragraph.renderedMarkdown == nil,
+                  let textBlockID = paragraph.textBlockID,
+                  let root = rootByTextBlockID[textBlockID]
+            else { return block }
+            return block.withRenderedMarkdown(root)
+        }
+    }
+
     private static func isMergeableToolOnlyAssistant(_ body: DisplayMessageBody) -> Bool {
         guard body.message.role == .assistant, !body.blocks.isEmpty else { return false }
         return body.blocks.allSatisfy(isGroupableToolBlock)
@@ -358,9 +512,191 @@ nonisolated enum SessionChatTimelineBlocks {
             true
         case .toolCard(_, let card):
             !Self.isChildSessionTool(card.toolName)
-        case .text, .attachment, .childSessionRow, .reasoning:
+        case .text, .attachment, .childSessionRow, .reasoning, .stepParagraph:
             false
         }
+    }
+
+    // MARK: - Chip timeline (OPE-260)
+
+    /// Narration accumulates into the pending paragraph; visible tools become
+    /// chips on it. Text arriving after chips closes the paragraph. Attachments
+    /// and settled thoughts are emitted as today without closing it.
+    private static func buildStepParagraphs(parts: [MessagePart]) -> SessionChatTimelineBlocksResult {
+        var blocks: [SessionChatTimelineBlock] = []
+        var pendingText: [(id: String, text: String)] = []
+        var pendingChips: [(id: String, chip: SessionChatToolChipBlock)] = []
+
+        func flushParagraph() {
+            guard !pendingText.isEmpty || !pendingChips.isEmpty else { return }
+            let textIds = pendingText.map(\.id)
+            let toolIds = pendingChips.map(\.id)
+            let merged = pendingText.map(\.text).joined(separator: "\n")
+            let chips = orderedChips(pendingChips.map(\.chip))
+            let errorLines = chips.compactMap { chip -> String? in
+                guard chip.status == .error else { return nil }
+                return "\(chip.label): \(chip.card.errorText ?? "Failed")"
+            }
+            pendingText.removeAll()
+            pendingChips.removeAll()
+            blocks.append(
+                .stepParagraph(
+                    blockID: PresentationBlockId.stepParagraph(textIds + toolIds),
+                    paragraph: SessionChatStepParagraphBlock(
+                        textBlockID: textIds.isEmpty ? nil : PresentationBlockId.mergedText(textIds),
+                        text: merged.isEmpty ? nil : merged,
+                        renderedMarkdown: nil,
+                        chips: chips,
+                        errorLines: errorLines
+                    )
+                )
+            )
+        }
+
+        for part in parts {
+            switch part {
+            case .text(let textPart):
+                guard textPart.isDisplayable else { continue }
+                let trimmed = textPart.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else { continue }
+                guard let partId = textPart.id else { return .missingPartIds }
+                if !pendingChips.isEmpty {
+                    flushParagraph()
+                }
+                pendingText.append((id: partId, text: trimmed))
+            case .file(let file):
+                blocks.append(.attachment(blockID: PresentationBlockId.direct(file.id), file: file))
+            case .compaction:
+                continue
+            case .reasoning(let reasoning):
+                guard ThoughtPartChrome.isVisible(reasoning), !reasoning.isStreaming else { continue }
+                guard let partId = reasoning.id else { return .missingPartIds }
+                blocks.append(
+                    .reasoning(
+                        blockID: PresentationBlockId.direct(partId),
+                        text: ThoughtPartChrome.displayText(reasoning),
+                        isStreaming: reasoning.isStreaming,
+                        durationMs: thoughtDurationMs(
+                            start: reasoning.timeStartEpochMs,
+                            end: reasoning.timeEndEpochMs
+                        )
+                    )
+                )
+            case .tool(let tool):
+                guard isVisibleTool(tool) else { continue }
+                guard let partId = tool.id, let chip = toToolChip(tool) else { return .missingPartIds }
+                pendingChips.append((id: partId, chip: chip))
+            }
+        }
+        flushParagraph()
+        return .ok(blocks)
+    }
+
+    /// Stable family order (skill, explore, agent, change, command), encounter order inside a family.
+    static func orderedChips(_ chips: [SessionChatToolChipBlock]) -> [SessionChatToolChipBlock] {
+        SessionChatToolChipFamily.allCases.flatMap { family in
+            chips.filter { $0.family == family }
+        }
+    }
+
+    private static func toToolChip(_ tool: ToolPart) -> SessionChatToolChipBlock? {
+        guard case .toolCard(_, let card)? = toToolCard(tool) else { return nil }
+        let name = tool.toolName.lowercased()
+        let kind: SessionChatToolChipKind
+        let family: SessionChatToolChipFamily
+        var label: String?
+        var brief: String?
+        if isChildSessionTool(name) {
+            kind = .agent
+            family = .agent
+            label = taskAgentName(tool)
+            brief = (inputString(tool.input, keys: "description", "prompt") ?? childSessionTitle(tool))
+                .flatMap(firstLine)
+        } else {
+            switch name {
+            case "read":
+                kind = .file
+                family = .explore
+                label = readPathSubtitle(tool.input).map(lastPathComponent)
+            case "glob":
+                kind = .file
+                family = .explore
+                label = inputString(tool.input, keys: "pattern") ?? patternPathSubtitle(tool.input)
+            case "grep":
+                kind = .file
+                family = .explore
+                label = inputString(tool.input, keys: "pattern") ?? patternPathSubtitle(tool.input)
+            case "websearch":
+                kind = .file
+                family = .explore
+                label = inputString(tool.input, keys: "query")
+            case "webfetch":
+                kind = .file
+                family = .explore
+                label = inputString(tool.input, keys: "url").map(hostLabel)
+            case "edit", "write", "apply_patch":
+                kind = .file
+                family = .change
+                label = card.subtitle.map(lastPathComponent)
+            case "bash", "shell", "execute":
+                kind = .command
+                family = .command
+                label = (inputString(tool.input, keys: "command") ?? card.subtitle).map(commandChipLabel)
+            case "skill":
+                kind = .skill
+                family = .skill
+                label = (inputString(tool.input, keys: "name", "skill") ?? card.subtitle).map { "/\($0)" }
+            default:
+                kind = .command
+                family = .command
+                label = nil
+            }
+        }
+        return SessionChatToolChipBlock(
+            kind: kind,
+            family: family,
+            label: nonEmpty(label) ?? tool.toolName,
+            brief: nonEmpty(brief),
+            additions: family == .change ? card.additions : nil,
+            deletions: family == .change ? card.deletions : nil,
+            status: tool.status,
+            trailingText: nil,
+            card: card
+        )
+    }
+
+    private static func lastPathComponent(_ path: String) -> String {
+        let trimmed = path.hasSuffix("/") ? String(path.dropLast()) : path
+        guard let slash = trimmed.lastIndex(of: "/") else { return trimmed }
+        let component = String(trimmed[trimmed.index(after: slash)...])
+        return component.isEmpty ? trimmed : component
+    }
+
+    static let commandChipLabelMaxLength = 40
+
+    /// First non-empty line, whitespace runs collapsed, trimmed, truncated to
+    /// `commandChipLabelMaxLength` characters with a trailing ellipsis.
+    static func commandChipLabel(_ command: String) -> String {
+        let line = command
+            .split(omittingEmptySubsequences: true, whereSeparator: \.isNewline)
+            .map { $0.split(whereSeparator: \.isWhitespace).joined(separator: " ") }
+            .first(where: { !$0.isEmpty }) ?? ""
+        guard line.count > commandChipLabelMaxLength else { return line }
+        return String(line.prefix(commandChipLabelMaxLength)) + "\u{2026}"
+    }
+
+    private static func firstLine(_ text: String) -> String? {
+        let line = text
+            .split(omittingEmptySubsequences: true, whereSeparator: \.isNewline)
+            .first
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+        return nonEmpty(line)
+    }
+
+    private static func hostLabel(_ url: String) -> String {
+        if let host = URL(string: url)?.host, !host.isEmpty { return host }
+        let stripped = url.replacingOccurrences(of: "^[a-zA-Z]+://", with: "", options: .regularExpression)
+        return stripped.split(separator: "/").first.map(String.init) ?? url
     }
 
     /// Rewrites user text blocks that are expanded slash-command / skill

@@ -23,6 +23,12 @@ nonisolated enum PresentationBlockId {
         return "g:" + orderedMemberIds.joined(separator: sep)
     }
 
+    /// Chip-timeline step paragraph: its text part ids followed by its tool part ids.
+    nonisolated static func stepParagraph(_ orderedPartIds: [String]) -> String {
+        precondition(!orderedPartIds.isEmpty, "step paragraph requires at least one part id")
+        return "s:" + orderedPartIds.joined(separator: sep)
+    }
+
     /// Unstructured fallback when displayable parts lack stable IDs.
     nonisolated static func messageFallback(_ messageId: String) -> String {
         "m:\(messageId)"

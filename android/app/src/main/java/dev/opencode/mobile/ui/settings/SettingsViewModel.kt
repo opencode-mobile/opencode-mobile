@@ -117,6 +117,10 @@ class SettingsViewModel
             SessionChatDisplayPreferences.updateCollapseConsecutiveToolCalls(enabled)
         }
 
+        fun setChipTimeline(enabled: Boolean) {
+            SessionChatDisplayPreferences.updateChipTimeline(enabled)
+        }
+
         fun setSmoothStreamingUpdates(enabled: Boolean) {
             SessionChatDisplayPreferences.updateSmoothStreamingUpdates(enabled)
         }

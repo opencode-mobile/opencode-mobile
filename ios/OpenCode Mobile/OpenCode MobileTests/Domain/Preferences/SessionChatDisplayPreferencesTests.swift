@@ -42,6 +42,42 @@ import Testing
         #expect(defaults.object(forKey: "followUpDelivery") == nil)
     }
 
+    @Test func chipTimeline_defaultsOff() {
+        let suite = "SessionChatDisplayPreferencesTests.chipDefault"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+
+        let preferences = SessionChatDisplayPreferences(defaults: defaults)
+
+        #expect(preferences.chipTimeline == false)
+    }
+
+    @Test func chipTimeline_setPersistsAndReloads() {
+        let suite = "SessionChatDisplayPreferencesTests.chipStored"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        let preferences = SessionChatDisplayPreferences(defaults: defaults)
+
+        preferences.setChipTimeline(true)
+
+        #expect(preferences.chipTimeline == true)
+        #expect(defaults.bool(forKey: "chipTimeline") == true)
+        #expect(SessionChatDisplayPreferences(defaults: defaults).chipTimeline == true)
+    }
+
+    @Test func chipTimeline_clearResetsOff() {
+        let suite = "SessionChatDisplayPreferencesTests.chipClear"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        let preferences = SessionChatDisplayPreferences(defaults: defaults)
+        preferences.setChipTimeline(true)
+
+        preferences.clear()
+
+        #expect(preferences.chipTimeline == false)
+        #expect(defaults.object(forKey: "chipTimeline") == nil)
+    }
+
     @Test func followUpDelivery_defaultsSteerAndPersistsQueue() {
         let suite = "SessionChatDisplayPreferencesTests.followUp"
         let defaults = UserDefaults(suiteName: suite)!
