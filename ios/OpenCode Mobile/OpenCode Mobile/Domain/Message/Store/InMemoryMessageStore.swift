@@ -88,7 +88,9 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
         let parts = partsCache[sessionID] ?? [:]
         let orders = partOrder[sessionID] ?? [:]
         let base = baseMessages[sessionID] ?? []
-        let baseByID = Dictionary(uniqueKeysWithValues: base.map { ($0.id, $0) })
+        // Last-write-wins, matching Android associateBy. History refresh can
+        // leave duplicate ids in baseMessages, and uniqueKeysWithValues traps.
+        let baseByID = Dictionary(base.map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
 
         if let infoValue = infos[messageID], case .dictionary(let infoDict) = infoValue,
            let info = decodeInfo(from: infoDict) {
@@ -845,7 +847,10 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
         guard !prepended.isEmpty else { return }
         let previousStarts = toolStartTimesLocked(sessionID: sessionID)
         messageOrder[sessionID] = prepended.map(\.id) + order
-        var byID = Dictionary(uniqueKeysWithValues: (baseMessages[sessionID] ?? []).map { ($0.id, $0) })
+        var byID = Dictionary(
+            (baseMessages[sessionID] ?? []).map { ($0.id, $0) },
+            uniquingKeysWith: { _, last in last }
+        )
         for message in prepended {
             byID[message.id] = message
         }

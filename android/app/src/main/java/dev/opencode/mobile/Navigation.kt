@@ -127,6 +127,12 @@ import dev.opencode.mobile.ui.terminal.TerminalsCatalogScreen
  * `hiltViewModel(key = …)` inside an entry to that entry, so screen ViewModels are cleared
  * (and `onCleared` runs) when the entry is popped instead of accumulating in the Activity store.
  */
+internal fun <T> MutableList<T>.popRouteUnlessRoot() {
+    if (size > 1) {
+        removeAt(lastIndex)
+    }
+}
+
 @Composable
 internal fun <T : Any> rememberMainNavEntryDecorators(): List<NavEntryDecorator<T>> =
     listOf(
@@ -160,7 +166,7 @@ fun MainNavigation() {
                 is SessionToolGroup,
                 is Terminal,
                 is TerminalsCatalog,
-                -> backStack.removeLastOrNull()
+                -> backStack.popRouteUnlessRoot()
                 else -> break
             }
         }
@@ -226,7 +232,7 @@ fun MainNavigation() {
                                         .only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top),
                                 ),
                             backStack = backStack,
-                            onBack = { backStack.removeLastOrNull() },
+                            onBack = { backStack.popRouteUnlessRoot() },
                             entryDecorators = rememberMainNavEntryDecorators(),
                             transitionSpec = { forwardRouteTransition() },
                             popTransitionSpec = { backwardRouteTransition() },
@@ -279,7 +285,7 @@ fun MainNavigation() {
                                                 onTextMateLanguagesClick = { backStack.add(TextMateLanguagesHome) },
                                                 onTextMateLogbookClick = { backStack.add(TextMateLogbookHome) },
                                                 onDiagnosticLogsClick = { backStack.add(DiagnosticLogsHome) },
-                                                onNavigateBack = { backStack.removeLastOrNull() },
+                                                onNavigateBack = { backStack.popRouteUnlessRoot() },
                                                 onServersClick = {
                                                     serversViewModel.refresh()
                                                     if (backStack.lastOrNull() != ServersHome) {
@@ -338,7 +344,7 @@ fun MainNavigation() {
                                                 screenId = ProductAnalytics.Screen.SETTINGS_APPEARANCE,
                                             )
                                             AppearanceSettingsScreen(
-                                                onNavigateBack = { backStack.removeLastOrNull() },
+                                                onNavigateBack = { backStack.popRouteUnlessRoot() },
                                                 onThemeClick = {
                                                     if (backStack.lastOrNull() != ThemePickerHome) {
                                                         backStack.add(ThemePickerHome)
@@ -358,7 +364,7 @@ fun MainNavigation() {
                                                 screenId = ProductAnalytics.Screen.SETTINGS_THEME_PICKER,
                                             )
                                             ThemePickerScreen(
-                                                onNavigateBack = { backStack.removeLastOrNull() },
+                                                onNavigateBack = { backStack.popRouteUnlessRoot() },
                                                 onSelect = settingsViewModel::applyPreset,
                                             )
                                         }
@@ -369,7 +375,7 @@ fun MainNavigation() {
                                                 screenId = ProductAnalytics.Screen.SETTINGS_SYNTAX_PICKER,
                                             )
                                             SyntaxHighlightPickerScreen(
-                                                onNavigateBack = { backStack.removeLastOrNull() },
+                                                onNavigateBack = { backStack.popRouteUnlessRoot() },
                                                 onSelect = settingsViewModel::applySyntaxPreset,
                                             )
                                         }
@@ -381,7 +387,7 @@ fun MainNavigation() {
                                             }
                                             ServersScreen(
                                                 uiState = serversUiState,
-                                                onNavigateBack = { backStack.removeLastOrNull() },
+                                                onNavigateBack = { backStack.popRouteUnlessRoot() },
                                                 onAddServer = {
                                                     presentConnectionSetup(
                                                         initialProfile = null,
@@ -407,7 +413,7 @@ fun MainNavigation() {
                                             )
                                             ConnectionSetupScreen(
                                                 uiState = setupUiState,
-                                                onNavigateBack = { backStack.removeLastOrNull() },
+                                                onNavigateBack = { backStack.popRouteUnlessRoot() },
                                                 onNameChanged = setupViewModel::onNameChanged,
                                                 onBaseUrlChanged = setupViewModel::onBaseUrlChanged,
                                                 onUsernameChanged = setupViewModel::onUsernameChanged,
@@ -420,7 +426,7 @@ fun MainNavigation() {
                                                     setupViewModel.submit {
                                                         serversViewModel.refresh()
                                                         settingsViewModel.refreshServersSummary()
-                                                        backStack.removeLastOrNull()
+                                                        backStack.popRouteUnlessRoot()
                                                     }
                                                 },
                                                 onSnackbarDismissed = setupViewModel::consumeSnackbar,
@@ -433,7 +439,7 @@ fun MainNavigation() {
                                                     setupViewModel.removeConnection {
                                                         serversViewModel.refresh()
                                                         settingsViewModel.refreshServersSummary()
-                                                        backStack.removeLastOrNull()
+                                                        backStack.popRouteUnlessRoot()
                                                     }
                                                 },
                                             )
@@ -442,7 +448,7 @@ fun MainNavigation() {
                                     entry<TextMateLanguagesHome> {
                                         RouteSurface {
                                             TextMateLanguagesRoute(
-                                                onNavigateBack = { backStack.removeLastOrNull() },
+                                                onNavigateBack = { backStack.popRouteUnlessRoot() },
                                             )
                                         }
                                     }
@@ -452,7 +458,7 @@ fun MainNavigation() {
                                             val logbookState by logbookViewModel.state.collectAsStateWithLifecycle()
                                             TextMateLogbookScreen(
                                                 state = logbookState,
-                                                onNavigateBack = { backStack.removeLastOrNull() },
+                                                onNavigateBack = { backStack.popRouteUnlessRoot() },
                                                 onRefresh = logbookViewModel::refresh,
                                                 onClear = logbookViewModel::clear,
                                             )
@@ -466,7 +472,7 @@ fun MainNavigation() {
                                             val context = LocalContext.current
                                             DiagnosticLogsScreen(
                                                 state = diagnosticLogsState,
-                                                onNavigateBack = { backStack.removeLastOrNull() },
+                                                onNavigateBack = { backStack.popRouteUnlessRoot() },
                                                 onShareViaApps = {
                                                     diagnosticLogsViewModel.shareViaApps { intent ->
                                                         context.startActivity(intent)
@@ -482,7 +488,7 @@ fun MainNavigation() {
                                         RouteSurface {
                                             ComponentGalleryScreen(
                                                 onEntryClick = { entryId -> backStack.add(ComponentGalleryDetail(entryId)) },
-                                                onNavigateBack = { backStack.removeLastOrNull() },
+                                                onNavigateBack = { backStack.popRouteUnlessRoot() },
                                             )
                                         }
                                     }
@@ -491,14 +497,14 @@ fun MainNavigation() {
                                             val entry = ComponentGalleryEntries.first { it.id == key.entryId }
                                             if (key.entryId == ComponentGalleryEntryId.MessageList) {
                                                 MessageListGalleryDetailScreen(
-                                                    onNavigateBack = { backStack.removeLastOrNull() },
+                                                    onNavigateBack = { backStack.popRouteUnlessRoot() },
                                                 )
                                             } else {
                                                 ComponentGalleryDetailScreen(
                                                     entry = entry,
                                                     themeMode = themeMode,
                                                     onThemeModeChange = { themeMode = it },
-                                                    onNavigateBack = { backStack.removeLastOrNull() },
+                                                    onNavigateBack = { backStack.popRouteUnlessRoot() },
                                                 ) {
                                                     when (key.entryId) {
                                                         ComponentGalleryEntryId.Colors -> ColorGalleryScreen()
@@ -565,7 +571,7 @@ fun MainNavigation() {
                                                 screenId = ProductAnalytics.Screen.TERMINALS_CATALOG,
                                             )
                                             TerminalsCatalogScreen(
-                                                onNavigateBack = { backStack.removeLastOrNull() },
+                                                onNavigateBack = { backStack.popRouteUnlessRoot() },
                                                 onOpenTerminal = { worktree, projectTitle, ptyId ->
                                                     backStack.add(
                                                         Terminal(
@@ -587,7 +593,7 @@ fun MainNavigation() {
                                                 worktree = key.worktree,
                                                 projectTitle = key.projectTitle,
                                                 ptyId = key.ptyId,
-                                                onNavigateBack = { backStack.removeLastOrNull() },
+                                                onNavigateBack = { backStack.popRouteUnlessRoot() },
                                             )
                                         }
                                     }
@@ -602,7 +608,7 @@ fun MainNavigation() {
                                                 worktree = key.worktree,
                                                 optimisticNavigationInstanceId = key.optimisticNavigationInstanceId,
                                                 parentId = key.parentId,
-                                                onNavigateBack = { backStack.removeLastOrNull() },
+                                                onNavigateBack = { backStack.popRouteUnlessRoot() },
                                                 onSessionContextClick = {
                                                     backStack.add(SessionContext(key.sessionId, key.worktree))
                                                 },
@@ -640,7 +646,7 @@ fun MainNavigation() {
                                                     )
                                                 },
                                                 onSessionReplaceRequested = { target ->
-                                                    backStack.removeLastOrNull()
+                                                    backStack.popRouteUnlessRoot()
                                                     backStack.add(
                                                         SessionChat(
                                                             sessionId = target.sessionId,
@@ -661,7 +667,7 @@ fun MainNavigation() {
                                             SessionContextScreen(
                                                 sessionId = key.sessionId,
                                                 worktree = key.worktree,
-                                                onNavigateBack = { backStack.removeLastOrNull() },
+                                                onNavigateBack = { backStack.popRouteUnlessRoot() },
                                             )
                                         }
                                     }
@@ -673,7 +679,7 @@ fun MainNavigation() {
                                                 messageId = key.messageId,
                                                 initialSource = key.initialSource,
                                                 initialFilePath = key.initialFilePath,
-                                                onNavigateBack = { backStack.removeLastOrNull() },
+                                                onNavigateBack = { backStack.popRouteUnlessRoot() },
                                             )
                                         }
                                     }
@@ -685,7 +691,7 @@ fun MainNavigation() {
                                             SessionChatToolGroupScreen(
                                                 target = key.toTarget(),
                                                 supportsSessionMessageDiff = key.supportsSessionMessageDiff,
-                                                onNavigateBack = { backStack.removeLastOrNull() },
+                                                onNavigateBack = { backStack.popRouteUnlessRoot() },
                                                 onToolDetailTap = {
                                                     ProductAnalytics.logUserAction(
                                                         screenId = ProductAnalytics.Screen.SESSION_CHAT,
