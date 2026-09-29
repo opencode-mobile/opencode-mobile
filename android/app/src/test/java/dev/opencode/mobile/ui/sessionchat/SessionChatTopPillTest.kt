@@ -32,7 +32,26 @@ class SessionChatTopPillTest {
                 hideFloatStack = false,
             )
 
-        assertEquals(SessionChatTopPill.Todos, pill)
+        assertEquals(SessionChatTopPill.Todos(completedCount = 0, totalCount = 2, activePreview = null), pill)
+    }
+
+    @Test
+    fun todosPillCarriesCountsSoTheCrossfadeDoesNotReadAClearedList() {
+        val pill =
+            SessionChatTopPill.resolve(
+                syncingLabel = null,
+                todosVisible = true,
+                todoTotalCount = 4,
+                branchPill = null,
+                hideFloatStack = false,
+                todoCompletedCount = 1,
+                todoActivePreview = "Ship it",
+            )
+
+        assertEquals(
+            SessionChatTopPill.Todos(completedCount = 1, totalCount = 4, activePreview = "Ship it"),
+            pill,
+        )
     }
 
     @Test

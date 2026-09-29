@@ -310,7 +310,15 @@ sealed interface SessionChatTopPill {
         val label: String,
     ) : SessionChatTopPill
 
-    data object Todos : SessionChatTopPill
+    /**
+     * Counts live on the pill so the outgoing ToDo in a kind crossfade keeps
+     * the last positive total after the session list is cleared.
+     */
+    data class Todos(
+        val completedCount: Int,
+        val totalCount: Int,
+        val activePreview: String?,
+    ) : SessionChatTopPill
 
     data class Branch(
         val pill: SessionBranchPillUiState,
@@ -332,10 +340,17 @@ sealed interface SessionChatTopPill {
             todoTotalCount: Int,
             branchPill: SessionBranchPillUiState?,
             hideFloatStack: Boolean,
+            todoCompletedCount: Int = 0,
+            todoActivePreview: String? = null,
         ): SessionChatTopPill? =
             when {
                 syncingLabel != null -> Syncing(syncingLabel)
-                !hideFloatStack && todosVisible && todoTotalCount > 0 -> Todos
+                !hideFloatStack && todosVisible && todoTotalCount > 0 ->
+                    Todos(
+                        completedCount = todoCompletedCount,
+                        totalCount = todoTotalCount,
+                        activePreview = todoActivePreview,
+                    )
                 branchPill != null && SessionBranchPillVisibility.shouldShow(branchPill, hideFloatStack) ->
                     Branch(branchPill)
                 else -> null

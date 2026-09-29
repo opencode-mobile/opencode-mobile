@@ -447,6 +447,8 @@ private fun SessionChatTimelineReadyView(
                 todoTotalCount = sessionTodoTotalCount,
                 branchPill = sessionBranchPill,
                 hideFloatStack = hideFloatStack,
+                todoCompletedCount = sessionTodoCompletedCount,
+                todoActivePreview = sessionTodoActivePreview,
             )
         val showTopOverlayStack = topPill != null
         LaunchedEffect(showTopOverlayStack) {
@@ -477,11 +479,11 @@ private fun SessionChatTimelineReadyView(
                 Box(contentAlignment = Alignment.Center) {
                     when (pill) {
                         is SessionChatTopPill.Syncing -> OpenCodeSyncingPill(label = pill.label)
-                        SessionChatTopPill.Todos ->
+                        is SessionChatTopPill.Todos ->
                             OpenCodeSessionTodosPill(
-                                completedCount = sessionTodoCompletedCount,
-                                totalCount = sessionTodoTotalCount,
-                                activePreview = sessionTodoActivePreview,
+                                completedCount = pill.completedCount,
+                                totalCount = pill.totalCount,
+                                activePreview = pill.activePreview,
                                 onClick = onSessionTodosClick,
                             )
                         is SessionChatTopPill.Branch ->
