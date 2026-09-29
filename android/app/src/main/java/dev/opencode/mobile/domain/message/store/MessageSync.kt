@@ -25,6 +25,8 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.shareIn
@@ -101,13 +103,33 @@ class MessageSync(
         directory: String?,
     ): Flow<MessageListUpdate> {
         val key = sessionKey(sessionId, directory)
-        return observationCache.getOrPut(key) {
-            buildMessageFlow(key)
-                .shareIn(
-                    scope = liveStoreScope.coroutineScope,
-                    started = SharingStarted.WhileSubscribed(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS),
-                    replay = 1,
-                )
+        val shared =
+            observationCache.getOrPut(key) {
+                buildMessageFlow(key)
+                    .shareIn(
+                        scope = liveStoreScope.coroutineScope,
+                        started = SharingStarted.WhileSubscribed(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS),
+                        replay = 1,
+                    )
+            }
+        return flow {
+            // replay=1 may be CacheSyncConfirmed or a Messages frame from before
+            // loadOlderMessages. Emit the current transcript first, then drop the
+            // shared replay so it cannot regress hasOlder or the painted list.
+            val snapshot = replayPublishedSnapshot(key)
+            if (snapshot != null) {
+                emit(snapshot)
+                var skipStaleReplay = shared.replayCache.isNotEmpty()
+                shared.collect { update ->
+                    if (skipStaleReplay) {
+                        skipStaleReplay = false
+                        return@collect
+                    }
+                    emit(update)
+                }
+            } else {
+                emitAll(shared)
+            }
         }
     }
 
@@ -258,6 +280,16 @@ class MessageSync(
         )
 
     private fun transcriptKey(key: MessageSessionKey) = ProjectionKey.Transcript(key.directory, key.sessionId)
+
+    private fun replayPublishedSnapshot(key: MessageSessionKey): MessageListUpdate.Messages? {
+        val storeSlot = key.storeSlot
+        val published = lastPublishedFrames[storeSlot] ?: return null
+        return MessageListUpdate.Messages(
+            messages = published,
+            isFromCache = storeSlot in awaitingCacheSyncConfirm,
+            hasOlder = historyWindow(storeSlot).hasOlder,
+        )
+    }
 
     private fun buildMessageFlow(key: MessageSessionKey): Flow<MessageListUpdate> =
         merge(

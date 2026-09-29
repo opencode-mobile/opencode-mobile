@@ -456,6 +456,117 @@ struct MessageSyncTests {
         #expect(collector.emissions.count == 1)
     }
 
+    @Test func identicalTail_resubscribeWithinTimeout_replaysMessagesNotOnlyCacheSyncConfirmed() async {
+        let repo = FakeLiveMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        eventStream.setConnectionState(.connected)
+        let cached = repo.messages
+        let sync = MessageSync(
+            listMessages: { sessionID, directory in
+                try await repo.listMessages(sessionID: sessionID, directory: directory)
+            },
+            store: SessionMessageEngine(store: InMemoryMessageStore()),
+            eventStream: eventStream,
+            connectionProfileIDProvider: { "local" },
+            recoveryDelay: { _ in try? await Task.sleep(for: .milliseconds(1)) },
+            sessionCache: SeedingSessionCache(messages: cached)
+        )
+        let first = CacheConfirmAwareCollector()
+        let firstTask = Task {
+            await first.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo"))
+        }
+        _ = await waitUntil { first.sawCacheSyncConfirmed }
+        firstTask.cancel()
+        try? await Task.sleep(for: .milliseconds(200))
+
+        let second = CacheConfirmAwareCollector()
+        let secondTask = Task {
+            await second.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo"))
+        }
+        let painted = await waitUntil { second.latest()?.first?.text == "Hello" }
+        secondTask.cancel()
+        #expect(painted)
+    }
+
+    @Test func loadOlder_thenResubscribeWithinTimeout_keepsExpandedSnapshotNotStaleReplay() async {
+        let eventStream = FakeForegroundEventStream()
+        eventStream.setConnectionState(.connected)
+        let tail = [
+            Message(
+                id: "c",
+                role: .user,
+                text: "c",
+                parts: [.text(TextPart(text: "c", isStreaming: false))],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: 3
+            ),
+            Message(
+                id: "d",
+                role: .user,
+                text: "d",
+                parts: [.text(TextPart(text: "d", isStreaming: false))],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: 4
+            ),
+        ]
+        let older = [
+            Message(
+                id: "a",
+                role: .user,
+                text: "a",
+                parts: [.text(TextPart(text: "a", isStreaming: false))],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: 1
+            ),
+            Message(
+                id: "b",
+                role: .user,
+                text: "b",
+                parts: [.text(TextPart(text: "b", isStreaming: false))],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: 2
+            ),
+        ]
+        let sync = MessageSync(
+            listMessages: { _, _ in tail },
+            listMessagePage: { _, _, query in
+                switch query {
+                case .newest:
+                    return MessageHistoryPage(messages: tail, olderCursor: "page-older", hasOlder: true)
+                case .older:
+                    return MessageHistoryPage(messages: older, olderCursor: nil, hasOlder: false)
+                }
+            },
+            store: SessionMessageEngine(store: InMemoryMessageStore()),
+            eventStream: eventStream,
+            connectionProfileIDProvider: { "local" },
+            recoveryDelay: { _ in try? await Task.sleep(for: .milliseconds(1)) }
+        )
+        let first = CacheConfirmAwareCollector()
+        let firstTask = Task {
+            await first.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo"))
+        }
+        _ = await waitUntil { first.latest()?.map(\.id) == ["c", "d"] }
+        _ = try? await sync.loadOlderMessages(sessionID: "ses-1", directory: "/repo")
+        firstTask.cancel()
+        try? await Task.sleep(for: .milliseconds(200))
+
+        let second = CacheConfirmAwareCollector()
+        let secondTask = Task {
+            await second.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo"))
+        }
+        let painted = await waitUntil { second.latest()?.map(\.id) == ["a", "b", "c", "d"] }
+        secondTask.cancel()
+        #expect(painted)
+        #expect(!sync.hasOlderMessages(sessionID: "ses-1", directory: "/repo"))
+        // Shared lastValue must not regress to the pre-loadOlder tail.
+        #expect(second.emissions.map { $0.map(\.id) }.allSatisfy { $0 != ["c", "d"] })
+    }
+
     @Test func differingTailMergesAndPublishesOnce() async {
         let repo = FakeLiveMessageRepository()
         repo.holdNextListMessages()
