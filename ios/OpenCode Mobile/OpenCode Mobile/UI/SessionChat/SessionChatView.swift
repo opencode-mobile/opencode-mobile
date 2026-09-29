@@ -247,9 +247,9 @@ struct SessionChatView: View {
                             )
                         },
                         supportsSessionMessageDiff: viewModel.uiState.supportsSessionMessageDiff,
-                        expandedStepParagraphIDs: viewModel.uiState.expandedStepParagraphIDs,
-                        onExpandStepParagraph: { paragraphID in
-                            viewModel.expandStepParagraph(paragraphID)
+                        expandedStepParagraphs: viewModel.uiState.expandedStepParagraphs,
+                        onExpandStepParagraph: { paragraphID, chipCount in
+                            viewModel.expandStepParagraph(paragraphID, chipCount: chipCount)
                         }
                     )
                 )

@@ -144,9 +144,12 @@ internal data class SessionChatTimelineViewProps(
     val onChildSessionTap: (sessionId: String, sessionTitle: String) -> Unit = { _, _ -> },
     val onChangesReviewTap: (assistantMessageId: String, initialFilePath: String?) -> Unit = { _, _ -> },
     val supportsSessionMessageDiff: Boolean = true,
-    /** Chip-timeline paragraphs shown in full; owned by the Session Chat screen model. */
-    val expandedStepParagraphIds: Set<String> = emptySet(),
-    val onExpandStepParagraph: (expansionId: String) -> Unit = {},
+    /**
+     * Chip-timeline paragraphs expanded past `+N more` (expansion id to chip
+     * count at tap time); owned by the Session Chat screen model.
+     */
+    val expandedStepParagraphs: Map<String, Int> = emptyMap(),
+    val onExpandStepParagraph: (expansionId: String, chipCount: Int) -> Unit = { _, _ -> },
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -230,7 +233,7 @@ internal fun SessionChatTimelineView(
                 onChildSessionTap = props.onChildSessionTap,
                 onChangesReviewTap = props.onChangesReviewTap,
                 supportsSessionMessageDiff = props.supportsSessionMessageDiff,
-                expandedStepParagraphIds = props.expandedStepParagraphIds,
+                expandedStepParagraphs = props.expandedStepParagraphs,
                 onExpandStepParagraph = props.onExpandStepParagraph,
                 modifier = modifier,
             )
@@ -267,8 +270,8 @@ private fun SessionChatTimelineReadyView(
     onChildSessionTap: (sessionId: String, sessionTitle: String) -> Unit,
     onChangesReviewTap: (assistantMessageId: String, initialFilePath: String?) -> Unit,
     supportsSessionMessageDiff: Boolean,
-    expandedStepParagraphIds: Set<String>,
-    onExpandStepParagraph: (expansionId: String) -> Unit,
+    expandedStepParagraphs: Map<String, Int>,
+    onExpandStepParagraph: (expansionId: String, chipCount: Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
@@ -446,7 +449,7 @@ private fun SessionChatTimelineReadyView(
                     onChildSessionTap = onChildSessionTap,
                     onChangesReviewTap = onChangesReviewTap,
                     supportsSessionMessageDiff = supportsSessionMessageDiff,
-                    expandedStepParagraphIds = expandedStepParagraphIds,
+                    expandedStepParagraphs = expandedStepParagraphs,
                     onExpandStepParagraph = onExpandStepParagraph,
                     // Streaming height growth is GrowBottom + unanimated layout; do not
                     // animateContentSize on production Session Chat (gallery may still demo it).
@@ -550,8 +553,8 @@ private fun SessionChatMessageRow(
     onChildSessionTap: (sessionId: String, sessionTitle: String) -> Unit,
     onChangesReviewTap: (assistantMessageId: String, initialFilePath: String?) -> Unit,
     supportsSessionMessageDiff: Boolean,
-    expandedStepParagraphIds: Set<String>,
-    onExpandStepParagraph: (expansionId: String) -> Unit,
+    expandedStepParagraphs: Map<String, Int>,
+    onExpandStepParagraph: (expansionId: String, chipCount: Int) -> Unit,
     animateSizeChanges: Boolean,
     onContentSizeAnimationFinished: (() -> Unit)?,
     modifier: Modifier = Modifier,
@@ -609,7 +612,7 @@ private fun SessionChatMessageRow(
                     onChildSessionTap = onChildSessionTap,
                     onChangesReviewTap = onChangesReviewTap,
                     supportsSessionMessageDiff = supportsSessionMessageDiff,
-                    expandedStepParagraphIds = expandedStepParagraphIds,
+                    expandedStepParagraphs = expandedStepParagraphs,
                     onExpandStepParagraph = onExpandStepParagraph,
                 )
 
@@ -675,8 +678,8 @@ private fun AssistantMessageContent(
     onChildSessionTap: (sessionId: String, sessionTitle: String) -> Unit,
     onChangesReviewTap: (assistantMessageId: String, initialFilePath: String?) -> Unit,
     supportsSessionMessageDiff: Boolean,
-    expandedStepParagraphIds: Set<String>,
-    onExpandStepParagraph: (expansionId: String) -> Unit,
+    expandedStepParagraphs: Map<String, Int>,
+    onExpandStepParagraph: (expansionId: String, chipCount: Int) -> Unit,
 ) {
     // Rows never render empty — unpaintable blocks are filtered and an empty
     // result falls back to the live placeholder.
@@ -717,7 +720,10 @@ private fun AssistantMessageContent(
         horizontalAlignment = Alignment.Start,
     ) {
         blocks.forEach { block ->
-            key(block.blockID) {
+            // A step paragraph's block id grows with every tool; key on its
+            // stable expansion id so a new chip updates the row in place.
+            val rowKey = if (block is SessionChatTimelineBlock.StepParagraph) block.expansionID else block.blockID
+            key(rowKey) {
                 when (block) {
                     is SessionChatTimelineBlock.Text -> {
                         val renderedMarkdown =
@@ -804,8 +810,19 @@ private fun AssistantMessageContent(
                             isStreaming = block.blockID == streamingStepParagraphBlockId,
                             onOpenMessageActions = onOpenMessageActions,
                             chipAction = { chip -> toolCardAction(chip.card) },
-                            expanded = block.expansionID in expandedStepParagraphIds,
-                            onExpand = { onExpandStepParagraph(block.expansionID) },
+                            exploreAction = { summary ->
+                                onToolGroupTap(
+                                    SessionChatToolGroupTarget(
+                                        blockID = summary.blockID,
+                                        title = summary.title,
+                                        subtitle = summary.subtitle,
+                                        members = summary.members,
+                                        messageId = message.id,
+                                    ),
+                                )
+                            },
+                            expandedThrough = expandedStepParagraphs[block.expansionID],
+                            onExpand = { onExpandStepParagraph(block.expansionID, block.chips.size) },
                         )
                 }
             }
@@ -818,8 +835,9 @@ private val StepParagraphTextPaddingHorizontal = 4.dp
 
 /**
  * Chip timeline paragraph: narration (or the muted placeholder), a wrapping
- * chip row collapsed by [StepParagraphChips.visibility] with one trailing
- * `+N more`, then one error caption per failed chip.
+ * chip row led by the explore summary and collapsed by
+ * [StepParagraphChips.visibility] with one trailing `+N more`, then one error
+ * caption per failed chip.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -829,10 +847,11 @@ private fun StepParagraphBlock(
     isStreaming: Boolean,
     onOpenMessageActions: () -> Unit,
     chipAction: (SessionChatTimelineBlock.ToolChip) -> (() -> Unit)?,
-    expanded: Boolean,
+    exploreAction: (SessionChatTimelineBlock.ExploreSummary) -> Unit,
+    expandedThrough: Int?,
     onExpand: () -> Unit,
 ) {
-    val (visible, hiddenCount) = StepParagraphChips.visibility(block.chips, expanded)
+    val (visible, hiddenCount) = StepParagraphChips.visibility(block.chips, expandedThrough)
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -858,14 +877,23 @@ private fun StepParagraphBlock(
                 modifier = Modifier.padding(horizontal = StepParagraphTextPaddingHorizontal),
             )
         }
-        if (block.chips.isNotEmpty()) {
+        if (block.chips.isNotEmpty() || block.exploreSummary != null) {
             FlowRow(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = StepParagraphTextPaddingHorizontal),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
+                block.exploreSummary?.let { summary ->
+                    key("explore") {
+                        OpenCodeToolChip(
+                            variant = OpenCodeToolChipVariant.Explore(summary.label),
+                            status = summary.status.toToolChipStatus(),
+                            onClick = { exploreAction(summary) },
+                        )
+                    }
+                }
                 visible.forEach { chip ->
-                    key(chip.card.blockID) {
+                    key(chip.id) {
                         OpenCodeToolChip(
                             variant = chip.toToolChipVariant(),
                             status = chip.status.toToolChipStatus(),

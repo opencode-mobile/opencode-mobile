@@ -190,8 +190,11 @@ data class SessionChatUiState(
     val projectLabel: String? = null,
     val projectLetter: Char? = null,
     val projectLetterAccent: dev.opencode.mobile.theme.LetterAccent? = null,
-    /** Chip-timeline paragraph [SessionChatTimelineBlock.StepParagraph.expansionID]s shown in full. */
-    val expandedStepParagraphIds: Set<String> = emptySet(),
+    /**
+     * Chip-timeline paragraphs expanded past `+N more`:
+     * [SessionChatTimelineBlock.StepParagraph.expansionID] to the chip count at tap time.
+     */
+    val expandedStepParagraphs: Map<String, Int> = emptyMap(),
 ) {
     val latestCompletedUserMessageId: String?
         get() {

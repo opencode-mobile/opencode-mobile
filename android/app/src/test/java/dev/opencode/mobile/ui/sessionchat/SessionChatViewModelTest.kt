@@ -1068,20 +1068,24 @@ class SessionChatViewModelTest {
             viewModel.bind("ses-1", "First", "/repo")
             advanceUntilIdle()
 
-            viewModel.expandStepParagraph("s:p1")
-            viewModel.expandStepParagraph("s:p1")
-            assertEquals(setOf("s:p1"), viewModel.uiState.value.expandedStepParagraphIds)
+            viewModel.expandStepParagraph("s:p1", chipCount = 5)
+            // A tap with fewer chips than already revealed never shrinks the expansion.
+            viewModel.expandStepParagraph("s:p1", chipCount = 4)
+            assertEquals(mapOf("s:p1" to 5), viewModel.uiState.value.expandedStepParagraphs)
+            // A later tap on the grown paragraph reveals the new chips too.
+            viewModel.expandStepParagraph("s:p1", chipCount = 9)
+            assertEquals(mapOf("s:p1" to 9), viewModel.uiState.value.expandedStepParagraphs)
 
             // Region republishes and a same-session rebind keep the expansion.
             viewModel.updateComposerText("draft")
             viewModel.bind("ses-1", "First", "/repo")
             advanceUntilIdle()
-            assertEquals(setOf("s:p1"), viewModel.uiState.value.expandedStepParagraphIds)
+            assertEquals(mapOf("s:p1" to 9), viewModel.uiState.value.expandedStepParagraphs)
 
             viewModel.bind("ses-2", "Second", "/repo")
-            assertEquals(emptySet<String>(), viewModel.uiState.value.expandedStepParagraphIds)
+            assertEquals(emptyMap<String, Int>(), viewModel.uiState.value.expandedStepParagraphs)
             advanceUntilIdle()
-            assertEquals(emptySet<String>(), viewModel.uiState.value.expandedStepParagraphIds)
+            assertEquals(emptyMap<String, Int>(), viewModel.uiState.value.expandedStepParagraphs)
         }
 
     @Test

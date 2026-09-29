@@ -2203,12 +2203,16 @@ class SessionChatTimelineBlocksTest {
                     ),
             )
 
-        val chips = (blocks.single() as SessionChatTimelineBlock.StepParagraph).chips
+        val paragraph = blocks.single() as SessionChatTimelineBlock.StepParagraph
+        val summary = requireNotNull(paragraph.exploreSummary)
+        assertEquals("Explored \u00b7 1 glob \u00b7 1 grep \u00b7 1 search \u00b7 1 fetch", summary.label)
+        assertEquals("Explored \u2014 1 glob \u00b7 1 grep \u00b7 1 search \u00b7 1 fetch", summary.title)
+        assertEquals(ToolStatus.Completed, summary.status)
+        assertEquals(PresentationBlockId.toolGroup(listOf("p1", "p2", "p3", "p4")), summary.blockID)
+        assertEquals(listOf("p1", "p2", "p3", "p4").map(PresentationBlockId::direct), summary.members.map { it.blockID })
+        val chips = paragraph.chips
         val byId = chips.associateBy { it.card.blockID }
-        assertEquals("**/*.kt", byId.getValue(PresentationBlockId.direct("p1")).label)
-        assertEquals("chipTimeline", byId.getValue(PresentationBlockId.direct("p2")).label)
-        assertEquals("compose flow row", byId.getValue(PresentationBlockId.direct("p3")).label)
-        assertEquals("developer.android.com", byId.getValue(PresentationBlockId.direct("p4")).label)
+        assertEquals(listOf("p5", "p6", "p7", "p8").map(PresentationBlockId::direct).toSet(), byId.keys)
         val edit = byId.getValue(PresentationBlockId.direct("p5"))
         assertEquals("Navigation.kt", edit.label)
         assertEquals(4, edit.additions)
@@ -2376,20 +2380,123 @@ class SessionChatTimelineBlocksTest {
                     ),
             )
 
-        val chips = (blocks.single() as SessionChatTimelineBlock.StepParagraph).chips
+        val paragraph = blocks.single() as SessionChatTimelineBlock.StepParagraph
+        // Explore tools fold into the summary; the rest keep a fixed group order.
+        assertEquals("Explored \u00b7 1 read \u00b7 1 grep", paragraph.exploreSummary?.label)
         assertEquals(
-            listOf(
-                ToolChipFamily.Skill,
-                ToolChipFamily.Explore,
-                ToolChipFamily.Explore,
-                ToolChipFamily.Agent,
-                ToolChipFamily.Change,
-                ToolChipFamily.Command,
-            ),
-            chips.map { it.family },
+            listOf(ToolChipFamily.Change, ToolChipFamily.Command, ToolChipFamily.Agent, ToolChipFamily.Skill),
+            paragraph.chips.map { it.family },
         )
-        // Stable within a family.
-        assertEquals(listOf("p4", "p6"), chips.filter { it.family == ToolChipFamily.Explore }.map { it.card.blockID.removePrefix("p:") })
+        // Arrival order is kept on each chip for scoped expansion.
+        assertEquals(listOf(1, 0, 2, 3), paragraph.chips.map { it.arrivalIndex })
+    }
+
+    @Test
+    fun chipTimeline_exploreSummary_runningWhileAnyMemberIsInFlight() {
+        val blocks =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                chipTimeline = true,
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "read",
+                            status = ToolStatus.Completed,
+                            id = "p1",
+                            input = json("filePath" to "/a/b.kt"),
+                        ),
+                        MessagePart.Tool(
+                            toolName = "read",
+                            status = ToolStatus.Completed,
+                            id = "p2",
+                            input = json("filePath" to "/a/c.kt"),
+                        ),
+                        MessagePart.Tool(toolName = "grep", status = ToolStatus.Running, id = "p3", input = json("pattern" to "foo")),
+                    ),
+            )
+
+        val summary = requireNotNull((blocks.single() as SessionChatTimelineBlock.StepParagraph).exploreSummary)
+        assertEquals("Exploring \u00b7 2 reads \u00b7 1 grep", summary.label)
+        assertEquals(ToolStatus.Running, summary.status)
+        assertEquals("/a/b.kt", summary.subtitle)
+        assertEquals(3, summary.members.size)
+    }
+
+    @Test
+    fun chipTimeline_singleExploreTool_keepsItsOwnChip() {
+        val blocks =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                chipTimeline = true,
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "read",
+                            status = ToolStatus.Completed,
+                            id = "p1",
+                            input = json("filePath" to "/a/b.kt"),
+                        ),
+                        MessagePart.Tool(toolName = "bash", status = ToolStatus.Completed, id = "p2", input = json("command" to "ls")),
+                    ),
+            )
+
+        val paragraph = blocks.single() as SessionChatTimelineBlock.StepParagraph
+        assertNull(paragraph.exploreSummary)
+        assertEquals(listOf("b.kt", "ls"), paragraph.chips.map { it.label })
+    }
+
+    @Test
+    fun chipTimeline_failedExploreTool_staysAnAttentionChipOutsideTheSummary() {
+        val blocks =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                chipTimeline = true,
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "read",
+                            status = ToolStatus.Completed,
+                            id = "p1",
+                            input = json("filePath" to "/a/b.kt"),
+                        ),
+                        MessagePart.Tool(
+                            toolName = "read",
+                            status = ToolStatus.Error,
+                            id = "p2",
+                            input = json("filePath" to "/a/missing.kt"),
+                            error = "ENOENT",
+                        ),
+                        MessagePart.Tool(toolName = "grep", status = ToolStatus.Completed, id = "p3", input = json("pattern" to "foo")),
+                    ),
+            )
+
+        val paragraph = blocks.single() as SessionChatTimelineBlock.StepParagraph
+        assertEquals("Explored \u00b7 1 read \u00b7 1 grep", paragraph.exploreSummary?.label)
+        assertEquals(PresentationBlockId.toolGroup(listOf("p1", "p3")), paragraph.exploreSummary?.blockID)
+        val failed = paragraph.chips.single()
+        assertEquals("missing.kt", failed.label)
+        assertEquals(ToolStatus.Error, failed.status)
+        assertEquals(listOf("missing.kt: ENOENT"), paragraph.errorLines)
+    }
+
+    @Test
+    fun chipTimeline_foldedChip_keepsTheFirstRunIdAndArrivalIndex() {
+        val blocks =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                chipTimeline = true,
+                parts =
+                    listOf(
+                        bashTool("p1", "npm lint"),
+                        bashTool("p2", "npm test"),
+                        bashTool("p3", "npm test"),
+                    ),
+            )
+
+        val chips = (blocks.single() as SessionChatTimelineBlock.StepParagraph).chips
+        assertEquals(listOf(PresentationBlockId.direct("p1"), PresentationBlockId.direct("p2")), chips.map { it.id })
+        assertEquals(PresentationBlockId.direct("p3"), chips[1].card.blockID)
+        assertEquals(listOf(0, 1), chips.map { it.arrivalIndex })
     }
 
     @Test
@@ -2471,7 +2578,8 @@ class SessionChatTimelineBlocksTest {
         assertEquals(3_000L, (blocks[0] as SessionChatTimelineBlock.Reasoning).durationMs)
         val first = blocks[1] as SessionChatTimelineBlock.StepParagraph
         assertEquals(null, first.text)
-        assertEquals(listOf("a.kt", "b.kt"), first.chips.map { it.label })
+        assertEquals("Explored \u00b7 2 reads", first.exploreSummary?.label)
+        assertTrue(first.chips.isEmpty())
         assertEquals(PresentationBlockId.direct("th3"), blocks[2].blockID)
         val second = blocks[3] as SessionChatTimelineBlock.StepParagraph
         assertEquals("Now narration", second.text)

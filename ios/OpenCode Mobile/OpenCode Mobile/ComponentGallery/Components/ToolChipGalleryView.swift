@@ -7,6 +7,7 @@ struct ToolChipGalleryView: View {
         case command
         case agent
         case skill
+        case explore
         case more
 
         var id: String { rawValue }
@@ -18,6 +19,7 @@ struct ToolChipGalleryView: View {
             case .command: "Command"
             case .agent: "Agent"
             case .skill: "Skill"
+            case .explore: "Explore"
             case .more: "More"
             }
         }
@@ -29,6 +31,7 @@ struct ToolChipGalleryView: View {
             case .command: .command(label: "xcodebuild test")
             case .agent: .agent(name: "Explore", brief: "Find the session list")
             case .skill: .skill(name: "feature")
+            case .explore: .explore(label: "Explored \u{00B7} 4 reads \u{00B7} 2 greps")
             case .more: .more(count: 3)
             }
         }

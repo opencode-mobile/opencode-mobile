@@ -649,20 +649,31 @@ struct SessionChatStepParagraphExpansionPacketTests {
 
     @Test func noExpansion_leavesPacketUntouched() {
         let rows = [row("m1", paragraphID: "sp:a")]
-        #expect(base.addingStepParagraphExpansion(rows: rows, expanded: [], previousExpanded: []) == base)
+        #expect(base.addingStepParagraphExpansion(rows: rows, expanded: [:], previousExpanded: [:]) == base)
     }
 
     @Test func newlyExpandedParagraph_reconfiguresItsRowAndBumpsRevision() {
         let rows = [row("m1", paragraphID: "sp:a"), row("m2", paragraphID: "sp:b")]
-        let packet = base.addingStepParagraphExpansion(rows: rows, expanded: ["sp:b"], previousExpanded: [])
+        let packet = base.addingStepParagraphExpansion(rows: rows, expanded: ["sp:b": 4], previousExpanded: [:])
         #expect(packet.changedRowIDs == ["m2"])
         #expect(packet.layoutChangedRowIDs == ["m2"])
         #expect(packet.frameRevision != base.frameRevision)
 
-        // Once the view records the set as previous, the same set never re-applies.
-        let settled = base.addingStepParagraphExpansion(rows: rows, expanded: ["sp:b"], previousExpanded: ["sp:b"])
+        // Once the view records the map as previous, the same map never re-applies.
+        let settled = base.addingStepParagraphExpansion(rows: rows, expanded: ["sp:b": 4], previousExpanded: ["sp:b": 4])
         #expect(settled.changedRowIDs.isEmpty)
         #expect(settled.frameRevision == packet.frameRevision)
+    }
+
+    @Test func expandingTheSameParagraphFurther_reconfiguresItsRowAgain() {
+        let rows = [row("m1", paragraphID: "sp:a"), row("m2", paragraphID: "sp:b")]
+        let grown = base.addingStepParagraphExpansion(rows: rows, expanded: ["sp:b": 9], previousExpanded: ["sp:b": 4])
+        #expect(grown.changedRowIDs == ["m2"])
+        #expect(grown.layoutChangedRowIDs == ["m2"])
+        #expect(
+            SessionChatStepParagraphExpansion.fingerprint(["sp:b": 9])
+                != SessionChatStepParagraphExpansion.fingerprint(["sp:b": 4])
+        )
     }
 }
 

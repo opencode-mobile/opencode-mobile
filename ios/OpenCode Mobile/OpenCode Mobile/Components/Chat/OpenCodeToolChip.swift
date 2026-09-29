@@ -11,6 +11,9 @@ enum OpenCodeToolChipVariant: Equatable, Sendable {
     case agent(name: String, brief: String? = nil)
     /// A skill invocation (`/name`).
     case skill(name: String)
+    /// One chip for a paragraph's explore tools: `Explored · 4 reads · 2 greps`
+    /// (or `Exploring · …` while running). Completed shows no check mark.
+    case explore(label: String)
     /// Truncation affordance: `+N more`.
     case more(count: Int)
 }
@@ -40,6 +43,8 @@ struct OpenCodeToolChip: View {
             precondition(deletions.map { $0 >= 0 } ?? true, "Tool Chip deletions must be nonnegative")
         case .more(let count):
             precondition(count > 0, "Tool Chip more count must be positive")
+        case .explore(let label):
+            precondition(!label.isEmpty, "Tool Chip explore label must not be empty")
         case .command, .agent, .skill:
             break
         }
@@ -155,6 +160,8 @@ struct OpenCodeToolChip: View {
             Self.displayAgentName(name)
         case .skill(let name):
             name.hasPrefix("/") ? name : "/\(name)"
+        case .explore(let label):
+            label
         case .more(let count):
             "+\(count) more"
         }
@@ -189,6 +196,8 @@ struct OpenCodeToolChip: View {
             .callSplit
         case .skill:
             .list
+        case .explore:
+            .search
         case .more:
             nil
         }
@@ -245,7 +254,7 @@ struct OpenCodeToolChip: View {
             Self.monoLabelFont
         case .agent:
             Self.agentLabelFont
-        case .more:
+        case .more, .explore:
             Self.systemLabelFont
         }
     }
@@ -320,6 +329,8 @@ struct OpenCodeToolChip: View {
             if let brief, !brief.isEmpty { parts.append(brief) }
         case .skill(let name):
             parts.append("Skill \(name)")
+        case .explore(let label):
+            parts.append(label)
         case .more(let count):
             parts.append("\(count) more")
         }
@@ -389,6 +400,8 @@ private struct ToolChipHitShape: Shape {
             OpenCodeToolChip(variant: .agent(name: "Build", brief: "Android half"), status: .running)
             OpenCodeToolChip(variant: .agent(name: "Review"), status: .error)
             OpenCodeToolChip(variant: .skill(name: "feature"))
+            OpenCodeToolChip(variant: .explore(label: "Explored \u{00B7} 4 reads \u{00B7} 2 greps"), action: {})
+            OpenCodeToolChip(variant: .explore(label: "Exploring \u{00B7} 3 reads"), status: .running, action: {})
             OpenCodeToolChip(variant: .more(count: 3), action: {})
         }
         .padding()

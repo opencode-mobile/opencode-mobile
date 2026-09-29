@@ -50,8 +50,9 @@ final class SessionChatViewModel {
     private var projectLetter: Character?
     private var projectLetterAccent: LetterAccent?
     private var projectIdentityTask: Task<Void, Never>?
-    /// Chip-timeline step paragraphs the user expanded past `+N more`.
-    private var expandedStepParagraphIDs: Set<String> = []
+    /// Chip-timeline step paragraphs the user expanded past `+N more`:
+    /// paragraph id to the chip count at tap time.
+    private var expandedStepParagraphs: [String: Int] = [:]
 
     init(
         sessionID: String,
@@ -532,9 +533,11 @@ final class SessionChatViewModel {
         await sessionInfo.confirmRenameSession()
     }
 
-    /// Chip timeline: show every chip of one step paragraph (its `+N more` tap).
-    func expandStepParagraph(_ paragraphID: String) {
-        guard expandedStepParagraphIDs.insert(paragraphID).inserted else { return }
+    /// Chip timeline: show the `chipCount` chips one step paragraph had when
+    /// its `+N more` was tapped; chips that arrive later still collapse.
+    func expandStepParagraph(_ paragraphID: String, chipCount: Int) {
+        guard expandedStepParagraphs[paragraphID, default: -1] < chipCount else { return }
+        expandedStepParagraphs[paragraphID] = chipCount
         publishUiState()
     }
 
@@ -1001,7 +1004,7 @@ final class SessionChatViewModel {
     private func promoteOptimisticSession(id: String, title: String) {
         sessionID = id
         sessionTitle = title
-        expandedStepParagraphIDs = []
+        expandedStepParagraphs = [:]
         resetWorkingFooter()
         sessionReadyStore.setFocusedSession(sessionID: id, directory: worktree)
         timeline.rebind(sessionID: id)
@@ -1203,7 +1206,7 @@ final class SessionChatViewModel {
             pendingSessionReplace: commandsState.pendingSessionReplace,
             pendingTerminalOpen: commandsState.pendingTerminalOpen,
             hasPendingRevert: commandsState.hasPendingRevert,
-            expandedStepParagraphIDs: expandedStepParagraphIDs
+            expandedStepParagraphs: expandedStepParagraphs
         )
     }
 

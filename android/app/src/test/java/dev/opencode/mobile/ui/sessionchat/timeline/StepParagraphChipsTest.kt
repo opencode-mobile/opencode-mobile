@@ -9,34 +9,20 @@ class StepParagraphChipsTest {
     // --- visibility ---
 
     @Test
-    fun perFamilyLimits_changeCommandThree_exploreAgentTwo_skillUnlimited() {
+    fun perFamilyLimits_changeCommandThree_othersUnlimited() {
         val chips =
-            (1..4).map { chip("s$it", ToolChipFamily.Skill) } +
-                (1..3).map { chip("e$it", ToolChipFamily.Explore) } +
-                (1..3).map { chip("a$it", ToolChipFamily.Agent) } +
+            (1..2).map { chip("e$it", ToolChipFamily.Explore) } +
                 (1..4).map { chip("c$it", ToolChipFamily.Change) } +
-                (1..4).map { chip("x$it", ToolChipFamily.Command) }
+                (1..4).map { chip("x$it", ToolChipFamily.Command) } +
+                (1..3).map { chip("a$it", ToolChipFamily.Agent) } +
+                (1..4).map { chip("s$it", ToolChipFamily.Skill) }
 
-        val result = StepParagraphChips.visibility(chips, expanded = false)
+        val result = StepParagraphChips.visibility(chips)
 
-        // Counting chips after family limits: 4 + 2 + 2 + 3 + 3 = 14 > 8; the
-        // ceiling can only trim the two remaining Explore chips.
         assertEquals(
-            listOf("s1", "s2", "s3", "s4", "a1", "a2", "c1", "c2", "c3", "x1", "x2", "x3"),
+            listOf("e1", "e2", "c1", "c2", "c3", "x1", "x2", "x3", "a1", "a2", "a3", "s1", "s2", "s3", "s4"),
             result.visible.map { it.label },
         )
-        assertEquals(6, result.hiddenCount)
-    }
-
-    @Test
-    fun withinCeiling_onlyFamilyLimitsApply() {
-        val chips =
-            (1..3).map { chip("e$it", ToolChipFamily.Explore) } +
-                (1..4).map { chip("c$it", ToolChipFamily.Change) }
-
-        val result = StepParagraphChips.visibility(chips, expanded = false)
-
-        assertEquals(listOf("e1", "e2", "c1", "c2", "c3"), result.visible.map { it.label })
         assertEquals(2, result.hiddenCount)
     }
 
@@ -44,59 +30,32 @@ class StepParagraphChipsTest {
     fun attentionChips_neverHidden_andNotCounted() {
         val chips =
             listOf(
-                chip("e1", ToolChipFamily.Explore, ToolStatus.Error),
-                chip("e2", ToolChipFamily.Explore, ToolStatus.Running),
-                chip("e3", ToolChipFamily.Explore),
-                chip("e4", ToolChipFamily.Explore, ToolStatus.Pending),
-                chip("e5", ToolChipFamily.Explore),
-                chip("e6", ToolChipFamily.Explore),
-                chip("e7", ToolChipFamily.Explore),
+                chip("x1", ToolChipFamily.Command, ToolStatus.Error),
+                chip("x2", ToolChipFamily.Command, ToolStatus.Running),
+                chip("x3", ToolChipFamily.Command),
+                chip("x4", ToolChipFamily.Command, ToolStatus.Pending),
+                chip("x5", ToolChipFamily.Command),
+                chip("x6", ToolChipFamily.Command),
+                chip("x7", ToolChipFamily.Command),
+                chip("x8", ToolChipFamily.Command),
             )
 
-        val result = StepParagraphChips.visibility(chips, expanded = false)
+        val result = StepParagraphChips.visibility(chips)
 
-        // e3 and e5 are the first two counting Explore chips; attention chips ride along in order.
-        assertEquals(listOf("e1", "e2", "e3", "e4", "e5"), result.visible.map { it.label })
+        // x3, x5 and x6 are the three counting Command chips; attention chips ride along in order.
+        assertEquals(listOf("x1", "x2", "x3", "x4", "x5", "x6"), result.visible.map { it.label })
         assertEquals(2, result.hiddenCount)
     }
 
     @Test
-    fun ceiling_trimsExploreFromTheEnd_andNeverOtherFamilies() {
+    fun noParagraphCeiling_manyChipsAcrossFamiliesStayVisible() {
         val chips =
-            (1..2).map { chip("e$it", ToolChipFamily.Explore) } +
-                (1..2).map { chip("a$it", ToolChipFamily.Agent) } +
-                (1..3).map { chip("c$it", ToolChipFamily.Change) } +
-                (1..3).map { chip("x$it", ToolChipFamily.Command) }
+            (1..3).map { chip("c$it", ToolChipFamily.Change) } +
+                (1..3).map { chip("x$it", ToolChipFamily.Command) } +
+                (1..4).map { chip("a$it", ToolChipFamily.Agent) } +
+                (1..4).map { chip("s$it", ToolChipFamily.Skill) }
 
-        val result = StepParagraphChips.visibility(chips, expanded = false)
-
-        // 10 counting chips: both Explore chips go (from the end) to meet the ceiling of 8.
-        assertEquals(listOf("a1", "a2", "c1", "c2", "c3", "x1", "x2", "x3"), result.visible.map { it.label })
-        assertEquals(2, result.hiddenCount)
-    }
-
-    @Test
-    fun ceiling_trimsOnlyAsManyExploreAsNeeded_fromTheEnd() {
-        val chips =
-            (1..2).map { chip("e$it", ToolChipFamily.Explore) } +
-                (1..2).map { chip("a$it", ToolChipFamily.Agent) } +
-                (1..3).map { chip("c$it", ToolChipFamily.Change) } +
-                (1..2).map { chip("x$it", ToolChipFamily.Command) } +
-                chip("x3", ToolChipFamily.Command, ToolStatus.Error)
-
-        val result = StepParagraphChips.visibility(chips, expanded = false)
-
-        // 9 counting chips (x3 needs attention): only e2 is trimmed, but a lone
-        // hidden chip is shown instead of `+1 more`.
-        assertEquals(chips, result.visible)
-        assertEquals(0, result.hiddenCount)
-    }
-
-    @Test
-    fun ceiling_cannotBeMetWithoutExplore_leavesOtherFamiliesVisible() {
-        val chips = (1..10).map { chip("s$it", ToolChipFamily.Skill) }
-
-        val result = StepParagraphChips.visibility(chips, expanded = false)
+        val result = StepParagraphChips.visibility(chips)
 
         assertEquals(chips, result.visible)
         assertEquals(0, result.hiddenCount)
@@ -104,9 +63,9 @@ class StepParagraphChipsTest {
 
     @Test
     fun singleHiddenChip_showsEverythingInsteadOfPlusOneMore() {
-        val chips = (1..3).map { chip("e$it", ToolChipFamily.Explore) }
+        val chips = (1..4).map { chip("c$it", ToolChipFamily.Change) }
 
-        val result = StepParagraphChips.visibility(chips, expanded = false)
+        val result = StepParagraphChips.visibility(chips)
 
         assertEquals(chips, result.visible)
         assertEquals(0, result.hiddenCount)
@@ -115,24 +74,54 @@ class StepParagraphChipsTest {
     @Test
     fun hiddenCount_isTheSingleExpanderTotalAcrossFamilies() {
         val chips =
-            (1..4).map { chip("e$it", ToolChipFamily.Explore) } +
+            (1..5).map { chip("c$it", ToolChipFamily.Change) } +
                 (1..5).map { chip("x$it", ToolChipFamily.Command) }
 
-        val result = StepParagraphChips.visibility(chips, expanded = false)
+        val result = StepParagraphChips.visibility(chips)
 
-        assertEquals(listOf("e1", "e2", "x1", "x2", "x3"), result.visible.map { it.label })
+        assertEquals(listOf("c1", "c2", "c3", "x1", "x2", "x3"), result.visible.map { it.label })
         assertEquals(chips.size - result.visible.size, result.hiddenCount)
         assertEquals(4, result.hiddenCount)
     }
 
     @Test
-    fun expanded_showsEveryChip() {
-        val chips = (1..5).map { chip("e$it", ToolChipFamily.Explore) }
+    fun expandedThrough_showsChipsThatExistedAtTapTime_andCollapsesLaterArrivals() {
+        val atTap = (1..5).map { chip("x$it", ToolChipFamily.Command, arrivalIndex = it - 1) }
 
-        val result = StepParagraphChips.visibility(chips, expanded = true)
+        val expanded = StepParagraphChips.visibility(atTap, expandedThrough = atTap.size)
+        assertEquals(atTap, expanded.visible)
+        assertEquals(0, expanded.hiddenCount)
 
-        assertEquals(chips, result.visible)
-        assertEquals(0, result.hiddenCount)
+        // Five more commands arrive after the tap: the first five stay, the
+        // new ones get their own limit of three and a fresh `+2 more`.
+        val later = atTap + (6..10).map { chip("x$it", ToolChipFamily.Command, arrivalIndex = it - 1) }
+        val result = StepParagraphChips.visibility(later, expandedThrough = atTap.size)
+        assertEquals(listOf("x1", "x2", "x3", "x4", "x5", "x6", "x7", "x8"), result.visible.map { it.label })
+        assertEquals(2, result.hiddenCount)
+    }
+
+    @Test
+    fun expandedThrough_countsByArrivalIndexNotRowPosition() {
+        // Family order puts the later Change chip ahead of earlier Commands in
+        // the row; expansion still follows arrival order.
+        val chips =
+            listOf(
+                chip("c1", ToolChipFamily.Change, arrivalIndex = 4),
+                chip("x1", ToolChipFamily.Command, arrivalIndex = 0),
+                chip("x2", ToolChipFamily.Command, arrivalIndex = 1),
+                chip("x3", ToolChipFamily.Command, arrivalIndex = 2),
+                chip("x4", ToolChipFamily.Command, arrivalIndex = 3),
+                chip("x5", ToolChipFamily.Command, arrivalIndex = 5),
+                chip("x6", ToolChipFamily.Command, arrivalIndex = 6),
+                chip("x7", ToolChipFamily.Command, arrivalIndex = 7),
+                chip("x8", ToolChipFamily.Command, arrivalIndex = 8),
+                chip("x9", ToolChipFamily.Command, arrivalIndex = 9),
+            )
+
+        val result = StepParagraphChips.visibility(chips, expandedThrough = 4)
+
+        assertEquals(listOf("c1", "x1", "x2", "x3", "x4", "x5", "x6", "x7"), result.visible.map { it.label })
+        assertEquals(2, result.hiddenCount)
     }
 
     // --- repeat marker ---
@@ -205,8 +194,11 @@ class StepParagraphChipsTest {
         label: String,
         family: ToolChipFamily,
         status: ToolStatus = ToolStatus.Completed,
+        arrivalIndex: Int = 0,
     ): SessionChatTimelineBlock.ToolChip =
         SessionChatTimelineBlock.ToolChip(
+            id = PresentationBlockId.direct(label),
+            arrivalIndex = arrivalIndex,
             kind = ToolChipKind.Command,
             family = family,
             label = label,
