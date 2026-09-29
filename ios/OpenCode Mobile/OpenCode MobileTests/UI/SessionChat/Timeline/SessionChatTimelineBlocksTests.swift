@@ -1910,13 +1910,64 @@ struct SessionChatTimelineBlocksTests {
         #expect(SessionChatTimelineBlocks.commandChipLabel("  gh   pr\tlist  ") == "gh pr list")
     }
 
-    @Test func chipTimeline_commandLabel_truncatesTo40WithEllipsis() {
-        let command = String(repeating: "abcdef ", count: 8).trimmingCharacters(in: .whitespaces) + "12345"
-        #expect(command.count == 60)
+    @Test func chipTimeline_commandLabel_cutsAtLastWhitespaceBefore48() {
+        let command = "git log --oneline --decorate --graph --all --since=2.weeks --author=ivan"
+        #expect(command.count > 48)
         let label = SessionChatTimelineBlocks.commandChipLabel(command)
-        #expect(label.count == 41)
-        #expect(label.hasSuffix("\u{2026}"))
-        #expect(label == String(command.prefix(40)) + "\u{2026}")
+        #expect(label == "git log --oneline --decorate --graph --all\u{2026}")
+        #expect(label.count <= 49)
+    }
+
+    @Test func chipTimeline_commandLabel_spaceAtLimitIsABoundary() {
+        // 48 characters, then a space, then more.
+        let head = String(repeating: "abcdefg ", count: 6) // 48 chars, ends with a space
+        let command = String(head.dropLast()) + "X more words"
+        #expect(command.count > 48)
+        let label = SessionChatTimelineBlocks.commandChipLabel(command)
+        #expect(label == String(head.dropLast()) + "X\u{2026}")
+    }
+
+    @Test func chipTimeline_commandLabel_neverCutsInsideFirstToken() {
+        let token = String(repeating: "a", count: 60)
+        #expect(SessionChatTimelineBlocks.commandChipLabel(token) == token)
+        #expect(SessionChatTimelineBlocks.commandChipLabel(token + " --flag") == token + "\u{2026}")
+    }
+
+    @Test func chipTimeline_commandLabel_stripsCdExportAndAssignmentPrefixes() {
+        #expect(SessionChatTimelineBlocks.commandChipLabel("cd /Users/ivan/repo && npm test") == "npm test")
+        #expect(SessionChatTimelineBlocks.commandChipLabel("cd ios; xcodebuild test") == "xcodebuild test")
+        #expect(SessionChatTimelineBlocks.commandChipLabel("cd a && cd b; make check") == "make check")
+        #expect(SessionChatTimelineBlocks.commandChipLabel("export JAVA_HOME=/opt/jdk && ./gradlew test") == "./gradlew test")
+        #expect(SessionChatTimelineBlocks.commandChipLabel("export CI=1; npm run build") == "npm run build")
+        #expect(SessionChatTimelineBlocks.commandChipLabel("FOO=1 BAR=two ./gradlew test") == "./gradlew test")
+        #expect(SessionChatTimelineBlocks.commandChipLabel("cd repo && FOO=1 swift test") == "swift test")
+        #expect(SessionChatTimelineBlocks.commandChipLabel("  cd repo  &&   npm   test  ") == "npm test")
+        // Quoted values may hold spaces (parity with Android).
+        #expect(SessionChatTimelineBlocks.commandChipLabel("CI=1 NODE_ENV=\"test env\" npm test") == "npm test")
+        #expect(SessionChatTimelineBlocks.commandChipLabel("export A=1 B='x y'; npm test") == "npm test")
+        #expect(SessionChatTimelineBlocks.commandChipLabel("cd \"a b\" && cd sub && make") == "make")
+        // `export` without an assignment is not a prefix to strip.
+        #expect(SessionChatTimelineBlocks.commandChipLabel("export FOO && make") == "export FOO && make")
+    }
+
+    @Test func chipTimeline_commandLabel_keepsOriginalWhenStrippingLeavesNothing() {
+        #expect(SessionChatTimelineBlocks.commandChipLabel("cd /tmp &&") == "cd /tmp &&")
+        #expect(SessionChatTimelineBlocks.commandChipLabel("FOO=1") == "FOO=1")
+        #expect(SessionChatTimelineBlocks.commandChipLabel("cd /tmp") == "cd /tmp")
+        #expect(SessionChatTimelineBlocks.commandChipLabel("git commit -m \"a=b c\"") == "git commit -m \"a=b c\"")
+    }
+
+    @Test func chipTimeline_commandChip_cardKeepsFullCommand() {
+        let command = "cd /Users/ivan/repo && npm test"
+        let blocks = okBlocks(
+            parts: [
+                .tool(ToolPart(id: "b1", toolName: "bash", status: .completed, input: ["command": .string(command)])),
+            ],
+            chipTimeline: true
+        )
+        guard let paragraph = paragraph(blocks.single) else { return }
+        #expect(paragraph.chips.map(\.label) == ["npm test"])
+        #expect(paragraph.chips[0].card.subtitle == command)
     }
 
     @Test func chipTimeline_commandLabel_shortCommandUnchanged() {
@@ -2053,6 +2104,7 @@ struct SessionChatTimelineBlocksTests {
         let earlier = SessionChatTimelineBlock.stepParagraph(
             blockID: "earlier",
             paragraph: SessionChatStepParagraphBlock(
+                id: "sp:earlier",
                 textBlockID: nil,
                 text: "Done",
                 renderedMarkdown: nil,
@@ -2063,6 +2115,7 @@ struct SessionChatTimelineBlocksTests {
         let later = SessionChatTimelineBlock.stepParagraph(
             blockID: "later",
             paragraph: SessionChatStepParagraphBlock(
+                id: "sp:later",
                 textBlockID: nil,
                 text: "Live",
                 renderedMarkdown: nil,
@@ -2192,7 +2245,9 @@ struct SessionChatTimelineBlocksTests {
         #expect(merged[0].message.id == "a1")
         guard let paragraph = paragraph(merged[0].blocks.single) else { return }
         #expect(paragraph.text == "Looking around")
-        #expect(paragraph.chips.count == 2)
+        // Two identical completed `bash` runs fold into one chip.
+        #expect(paragraph.chips.count == 1)
+        #expect(paragraph.chips.first?.repeatCount == 2)
         #expect(merged[0].blocks[0].blockID == PresentationBlockId.stepParagraph(["a1-t", "bash-1", "bash-2"]))
     }
 
@@ -2296,6 +2351,257 @@ struct SessionChatTimelineBlocksTests {
             blocks: okBlocks(parts: [part]),
             renderedMarkdown: nil
         )
+    }
+
+    // MARK: - Chip row visibility (collapse rules)
+
+    private func chip(
+        _ family: SessionChatToolChipFamily,
+        _ label: String,
+        status: ToolStatus = .completed
+    ) -> SessionChatToolChipBlock {
+        let kind: SessionChatToolChipKind =
+            switch family {
+            case .explore, .change: .file
+            case .command: .command
+            case .agent: .agent
+            case .skill: .skill
+            }
+        return SessionChatToolChipBlock(
+            kind: kind,
+            family: family,
+            label: label,
+            status: status,
+            card: SessionChatToolCardBlock(toolName: label, status: status, title: label)
+        )
+    }
+
+    private func chips(_ family: SessionChatToolChipFamily, _ prefix: String, _ count: Int) -> [SessionChatToolChipBlock] {
+        (1...count).map { chip(family, "\(prefix)\($0)") }
+    }
+
+    @Test func chipRow_familyLimits() {
+        #expect(SessionChatToolChipFamily.change.visibleLimit == 3)
+        #expect(SessionChatToolChipFamily.command.visibleLimit == 3)
+        #expect(SessionChatToolChipFamily.explore.visibleLimit == 2)
+        #expect(SessionChatToolChipFamily.agent.visibleLimit == 2)
+        #expect(SessionChatToolChipFamily.skill.visibleLimit == nil)
+
+        let first = SessionChatTimelineBlocks.chipRow(
+            chips(.skill, "s", 3) + chips(.explore, "e", 3) + chips(.agent, "a", 3),
+            expanded: false
+        )
+        #expect(first.visible.map(\.label) == ["s1", "s2", "s3", "e1", "e2", "a1", "a2"])
+        #expect(first.hiddenCount == 2)
+
+        let second = SessionChatTimelineBlocks.chipRow(
+            chips(.change, "c", 4) + chips(.command, "b", 4),
+            expanded: false
+        )
+        #expect(second.visible.map(\.label) == ["c1", "c2", "c3", "b1", "b2", "b3"])
+        #expect(second.hiddenCount == 2)
+    }
+
+    @Test func chipRow_attentionChipsNeverHiddenAndNotCounted() {
+        let row = SessionChatTimelineBlocks.chipRow(
+            [
+                chip(.explore, "e1"),
+                chip(.explore, "e2", status: .running),
+                chip(.explore, "e3"),
+                chip(.explore, "e4", status: .error),
+                chip(.explore, "e5"),
+                chip(.explore, "e6", status: .pending),
+                chip(.explore, "e7"),
+            ],
+            expanded: false
+        )
+        #expect(row.visible.map(\.label) == ["e1", "e2", "e3", "e4", "e6"])
+        #expect(row.hiddenCount == 2)
+    }
+
+    @Test func chipRow_attentionChipsDoNotCountTowardCeiling() {
+        let running = (1...4).map { chip(.command, "r\($0)", status: .running) }
+        let input = chips(.skill, "s", 6) + chips(.explore, "e", 2) + running
+        let row = SessionChatTimelineBlocks.chipRow(input, expanded: false)
+        #expect(row.visible == input)
+        #expect(row.hiddenCount == 0)
+    }
+
+    @Test func chipRow_ceilingTrimsExploreFromEndOnly() {
+        // 12 counting chips after family limits; only two are Explore.
+        let row = SessionChatTimelineBlocks.chipRow(
+            chips(.skill, "s", 5) + chips(.explore, "e", 2) + chips(.agent, "a", 2) + chips(.change, "c", 3),
+            expanded: false
+        )
+        #expect(row.visible.map(\.label) == ["s1", "s2", "s3", "s4", "s5", "a1", "a2", "c1", "c2", "c3"])
+        #expect(row.hiddenCount == 2)
+
+        // Family limit hides e3, the ceiling then hides e2 (from the end) and stops at 8.
+        let second = SessionChatTimelineBlocks.chipRow(
+            chips(.skill, "s", 6) + chips(.explore, "e", 3) + chips(.command, "b", 1),
+            expanded: false
+        )
+        #expect(second.visible.map(\.label) == ["s1", "s2", "s3", "s4", "s5", "s6", "e1", "b1"])
+        #expect(second.hiddenCount == 2)
+    }
+
+    @Test func chipRow_singleHiddenChipShowsEverything() {
+        let fourChanges = chips(.change, "c", 4)
+        let row = SessionChatTimelineBlocks.chipRow(fourChanges, expanded: false)
+        #expect(row.visible == fourChanges)
+        #expect(row.hiddenCount == 0)
+
+        // Ceiling alone hides one Explore chip: shown instead of `+1 more`.
+        let ceiling = chips(.skill, "s", 5) + chips(.explore, "e", 2) + chips(.change, "c", 2)
+        let ceilingRow = SessionChatTimelineBlocks.chipRow(ceiling, expanded: false)
+        #expect(ceilingRow.visible == ceiling)
+        #expect(ceilingRow.hiddenCount == 0)
+    }
+
+    @Test func chipRow_oneExpanderCountsAllFamilies() {
+        let input = chips(.explore, "e", 4) + chips(.change, "c", 5)
+        let row = SessionChatTimelineBlocks.chipRow(input, expanded: false)
+        #expect(row.visible.map(\.label) == ["e1", "e2", "c1", "c2", "c3"])
+        #expect(row.hiddenCount == 4)
+
+        let expanded = SessionChatTimelineBlocks.chipRow(input, expanded: true)
+        #expect(expanded.visible == input)
+        #expect(expanded.hiddenCount == 0)
+    }
+
+    // MARK: - Repeat folding
+
+    @Test func chipTimeline_identicalCompletedRepeatsFoldKeepingLastCard() {
+        let blocks = okBlocks(
+            parts: [
+                .tool(ToolPart(id: "b1", toolName: "bash", status: .completed, input: ["command": .string("npm test")], output: "run 1")),
+                .tool(ToolPart(id: "b2", toolName: "bash", status: .completed, input: ["command": .string("npm test")], output: "run 2")),
+                .tool(ToolPart(id: "b3", toolName: "bash", status: .completed, input: ["command": .string("npm test")], output: "run 3")),
+            ],
+            chipTimeline: true
+        )
+        guard let paragraph = paragraph(blocks.single) else { return }
+        #expect(paragraph.chips.count == 1)
+        #expect(paragraph.chips[0].repeatCount == 3)
+        #expect(paragraph.chips[0].card.detailText == "run 3")
+        #expect(paragraph.chips[0].displayTrailingText == "\u{00D7}3")
+        // Block identity still covers every folded part.
+        #expect(blocks[0].blockID == PresentationBlockId.stepParagraph(["b1", "b2", "b3"]))
+        #expect(paragraph.id == PresentationBlockId.stepParagraphIdentity("b1"))
+    }
+
+    @Test func chipTimeline_failedChipBreaksRepeatRun() {
+        let blocks = okBlocks(
+            parts: [
+                .tool(ToolPart(id: "b1", toolName: "bash", status: .completed, input: ["command": .string("npm test")])),
+                .tool(ToolPart(id: "b2", toolName: "bash", status: .completed, input: ["command": .string("npm test")])),
+                .tool(ToolPart(id: "b3", toolName: "bash", status: .error, error: "exit 1", input: ["command": .string("npm test")])),
+                .tool(ToolPart(id: "b4", toolName: "bash", status: .error, error: "exit 1", input: ["command": .string("npm test")])),
+                .tool(ToolPart(id: "b5", toolName: "bash", status: .completed, input: ["command": .string("npm test")])),
+                .tool(ToolPart(id: "b6", toolName: "bash", status: .completed, input: ["command": .string("npm test")])),
+                .tool(ToolPart(id: "b7", toolName: "bash", status: .running, input: ["command": .string("npm test")])),
+                .tool(ToolPart(id: "b8", toolName: "bash", status: .running, input: ["command": .string("npm test")])),
+            ],
+            chipTimeline: true
+        )
+        guard let paragraph = paragraph(blocks.single) else { return }
+        #expect(paragraph.chips.map(\.status) == [.completed, .error, .error, .completed, .running, .running])
+        #expect(paragraph.chips.map(\.repeatCount) == [2, 1, 1, 2, 1, 1])
+        #expect(paragraph.errorLines.count == 2)
+    }
+
+    @Test func foldRepeatedChips_differentLabelOrKindBreaksRun() {
+        let folded = SessionChatTimelineBlocks.foldRepeatedChips([
+            chip(.explore, "a.swift"),
+            chip(.explore, "b.swift"),
+            chip(.explore, "b.swift"),
+            chip(.change, "b.swift"),
+            chip(.command, "b.swift"),
+        ])
+        #expect(folded.map(\.label) == ["a.swift", "b.swift", "b.swift", "b.swift"])
+        #expect(folded.map(\.repeatCount) == [1, 2, 1, 1])
+    }
+
+    @Test func chipTimeline_foldedEditsSumDiffCountsAndReadDoesNotFoldWithEdit() {
+        func edit(_ id: String, additions: Int, deletions: Int) -> MessagePart {
+            .tool(
+                ToolPart(
+                    id: id,
+                    toolName: "edit",
+                    status: .completed,
+                    input: ["filePath": .string("dir/a.swift")],
+                    metadata: ["filediff": .dictionary([
+                        "file": .string("dir/a.swift"),
+                        "additions": .int(additions),
+                        "deletions": .int(deletions),
+                    ])]
+                )
+            )
+        }
+        let blocks = okBlocks(
+            parts: [
+                .tool(ToolPart(id: "r1", toolName: "read", status: .completed, input: ["filePath": .string("dir/a.swift")])),
+                edit("e1", additions: 3, deletions: 1),
+                edit("e2", additions: 4, deletions: 2),
+            ],
+            chipTimeline: true
+        )
+        guard let paragraph = paragraph(blocks.single) else { return }
+        #expect(paragraph.chips.map(\.family) == [.explore, .change])
+        #expect(paragraph.chips.map(\.repeatCount) == [1, 2])
+        #expect(paragraph.chips[1].additions == 7)
+        #expect(paragraph.chips[1].deletions == 3)
+        #expect(paragraph.chips[1].card.additions == 4)
+    }
+
+    @Test func chipTimeline_executeChipUsesShortenedLabel() {
+        let command = "cd /Users/ivan/repo && npm test"
+        let blocks = okBlocks(
+            parts: [
+                .tool(ToolPart(id: "x1", toolName: "execute", status: .completed, input: ["command": .string(command)])),
+            ],
+            chipTimeline: true
+        )
+        guard let paragraph = paragraph(blocks.single) else { return }
+        #expect(paragraph.chips.map(\.label) == ["npm test"])
+    }
+
+    @Test func displayTrailingText_combinesRepeatCountWithExistingText() {
+        let base = SessionChatToolChipBlock(
+            kind: .command,
+            family: .command,
+            label: "npm test",
+            status: .completed,
+            trailingText: "12s",
+            card: SessionChatToolCardBlock(toolName: "bash", status: .completed, title: "Shell")
+        )
+        #expect(base.displayTrailingText == "12s")
+        #expect(base.withRepeatCount(2).displayTrailingText == "\u{00D7}2 · 12s")
+        #expect(chip(.command, "x").displayTrailingText == nil)
+    }
+
+    // MARK: - Paragraph identity
+
+    @Test func chipTimeline_paragraphIdentityStableWhileToolsStreamIn() {
+        let early = okBlocks(
+            parts: [
+                text("t1", "Looking"),
+                .tool(ToolPart(id: "r1", toolName: "read", status: .completed, input: ["filePath": .string("a.swift")])),
+            ],
+            chipTimeline: true
+        )
+        let later = okBlocks(
+            parts: [
+                text("t1", "Looking"),
+                .tool(ToolPart(id: "r1", toolName: "read", status: .completed, input: ["filePath": .string("a.swift")])),
+                .tool(ToolPart(id: "r2", toolName: "read", status: .completed, input: ["filePath": .string("b.swift")])),
+            ],
+            chipTimeline: true
+        )
+        guard let first = paragraph(early.single), let second = paragraph(later.single) else { return }
+        #expect(early[0].blockID != later[0].blockID)
+        #expect(first.id == second.id)
+        #expect(first.id == PresentationBlockId.stepParagraphIdentity("t1"))
     }
 
     private func okBlocks(

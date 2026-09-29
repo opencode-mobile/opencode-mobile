@@ -1062,6 +1062,29 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun expandStepParagraph_survivesRepublish_sameSessionRebind_andResetsOnSessionChange() =
+        runTest(testDispatcher) {
+            val viewModel = createViewModel(FakeMessageRepository())
+            viewModel.bind("ses-1", "First", "/repo")
+            advanceUntilIdle()
+
+            viewModel.expandStepParagraph("s:p1")
+            viewModel.expandStepParagraph("s:p1")
+            assertEquals(setOf("s:p1"), viewModel.uiState.value.expandedStepParagraphIds)
+
+            // Region republishes and a same-session rebind keep the expansion.
+            viewModel.updateComposerText("draft")
+            viewModel.bind("ses-1", "First", "/repo")
+            advanceUntilIdle()
+            assertEquals(setOf("s:p1"), viewModel.uiState.value.expandedStepParagraphIds)
+
+            viewModel.bind("ses-2", "Second", "/repo")
+            assertEquals(emptySet<String>(), viewModel.uiState.value.expandedStepParagraphIds)
+            advanceUntilIdle()
+            assertEquals(emptySet<String>(), viewModel.uiState.value.expandedStepParagraphIds)
+        }
+
+    @Test
     fun composerDraft_restoresTextAndMentionsForSameSessionOnly() =
         runTest(testDispatcher) {
             val draftStore =

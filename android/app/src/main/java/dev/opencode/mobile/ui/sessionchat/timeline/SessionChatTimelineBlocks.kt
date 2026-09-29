@@ -85,6 +85,8 @@ sealed class SessionChatTimelineBlock {
      * used under it. [text] is null for a paragraph that only holds chips.
      * [textBlockID] is the merged-text id the equivalent [Text] block would carry
      * so per-block rendered-markdown lookup keeps working.
+     * [expansionID] is the paragraph's first part id: unlike [blockID] it does
+     * not change as later tools stream in, so expansion state can key on it.
      */
     data class StepParagraph(
         override val blockID: String,
@@ -93,9 +95,14 @@ sealed class SessionChatTimelineBlock {
         val chips: List<ToolChip>,
         val errorLines: List<String>,
         val textBlockID: String? = null,
+        val expansionID: String = blockID,
     ) : SessionChatTimelineBlock()
 
-    /** One tool inside a [StepParagraph]; [card] keeps today's tap targets. */
+    /**
+     * One tool inside a [StepParagraph]; [card] keeps today's tap targets.
+     * [repeatCount] > 1 when identical consecutive completed runs were folded
+     * into this chip; [card] is then the latest run.
+     */
     data class ToolChip(
         val kind: ToolChipKind,
         val family: ToolChipFamily,
@@ -106,7 +113,17 @@ sealed class SessionChatTimelineBlock {
         val status: ToolStatus,
         val trailingText: String? = null,
         val card: ToolCard,
-    )
+        val repeatCount: Int = 1,
+    ) {
+        /** Chip trailing text with the `×N` repeat marker ahead of any existing text. */
+        val displayTrailingText: String?
+            get() {
+                val repeat = if (repeatCount > 1) "\u00d7$repeatCount" else null
+                return listOfNotNull(repeat, trailingText?.takeIf { it.isNotEmpty() })
+                    .takeIf { it.isNotEmpty() }
+                    ?.joinToString(" \u00b7 ")
+            }
+    }
 
     /**
      * False for blocks the timeline paints as nothing (a live thought is footer
@@ -152,7 +169,6 @@ enum class ToolChipFamily { Skill, Explore, Agent, Change, Command }
 
 object SessionChatTimelineBlocks {
     private val contextToolNames = setOf("read", "glob", "grep", "websearch")
-    private const val COMMAND_LABEL_MAX_LENGTH = 40
 
     fun build(
         role: MessageRole,
@@ -273,22 +289,26 @@ object SessionChatTimelineBlocks {
     private fun buildStepParagraphs(parts: List<MessagePart>): SessionChatTimelineBlocksResult {
         val blocks = mutableListOf<SessionChatTimelineBlock>()
         val pendingText = mutableListOf<Pair<String, String>>()
-        val pendingChips = mutableListOf<Pair<String, SessionChatTimelineBlock.ToolChip>>()
+        val pendingChipIds = mutableListOf<String>()
+        val pendingChips = mutableListOf<SessionChatTimelineBlock.ToolChip>()
 
         fun flushParagraph() {
             if (pendingText.isEmpty() && pendingChips.isEmpty()) return
             val textIds = pendingText.map { it.first }
             val text = pendingText.joinToString("\n") { it.second }.takeIf { it.isNotEmpty() }
-            val chips = pendingChips.map { it.second }.sortedBy { it.family.ordinal }
+            val chips = pendingChips.sortedBy { it.family.ordinal }
+            val partIds = textIds + pendingChipIds
             blocks +=
                 SessionChatTimelineBlock.StepParagraph(
-                    blockID = PresentationBlockId.stepParagraph(textIds + pendingChips.map { it.first }),
+                    blockID = PresentationBlockId.stepParagraph(partIds),
                     text = text,
                     chips = chips,
                     errorLines = chips.mapNotNull(::chipErrorLine),
                     textBlockID = if (text != null) PresentationBlockId.mergedText(textIds) else null,
+                    expansionID = PresentationBlockId.stepParagraph(listOf(partIds.first())),
                 )
             pendingText.clear()
+            pendingChipIds.clear()
             pendingChips.clear()
         }
 
@@ -306,7 +326,14 @@ object SessionChatTimelineBlocks {
                     if (!isVisibleTool(part)) continue
                     val partId = part.id ?: return SessionChatTimelineBlocksResult.MissingPartIds
                     val chip = toToolChip(part) ?: return SessionChatTimelineBlocksResult.MissingPartIds
-                    pendingChips += partId to chip
+                    pendingChipIds += partId
+                    // Identical consecutive completed runs fold into one chip (`×N`).
+                    val previous = pendingChips.lastOrNull()
+                    if (previous != null && StepParagraphChips.canFold(previous, chip)) {
+                        pendingChips[pendingChips.lastIndex] = StepParagraphChips.fold(previous, chip)
+                    } else {
+                        pendingChips += chip
+                    }
                 }
                 is MessagePart.File ->
                     blocks +=
@@ -398,8 +425,8 @@ object SessionChatTimelineBlocks {
             "glob", "grep" -> inputString(tool.input, "pattern") ?: inputString(tool.input, "path", "directory")
             "websearch" -> inputString(tool.input, "query")
             "webfetch" -> inputString(tool.input, "url")?.let(::urlHost)
-            "bash", "shell" -> inputString(tool.input, "command")?.let(::commandHead)
-            "execute" -> card.subtitle?.let(::commandHead)
+            "bash", "shell" -> inputString(tool.input, "command")?.let(StepParagraphChips::commandLabel)
+            "execute" -> card.subtitle?.let(StepParagraphChips::commandLabel)
             "task", "subagent" -> taskAgentName(tool)
             "skill" -> "/" + (inputString(tool.input, "name", "skill") ?: name)
             "lsp", "plan_exit" -> card.title
@@ -414,20 +441,6 @@ object SessionChatTimelineBlocks {
             ?.takeIf { it.isNotEmpty() }
 
     private fun lastPathComponent(path: String): String = path.trimEnd('/').substringAfterLast('/').ifEmpty { path }
-
-    /**
-     * Command chip label: first non-empty line, whitespace runs collapsed,
-     * truncated to [COMMAND_LABEL_MAX_LENGTH] characters with a trailing "…".
-     */
-    private fun commandHead(command: String): String {
-        val line =
-            command
-                .lineSequence()
-                .map { it.replace(Regex("\\s+"), " ").trim() }
-                .firstOrNull { it.isNotEmpty() }
-                ?: return command
-        return if (line.length <= COMMAND_LABEL_MAX_LENGTH) line else line.take(COMMAND_LABEL_MAX_LENGTH) + "\u2026"
-    }
 
     private fun urlHost(url: String): String =
         runCatching { java.net.URI(url).host }

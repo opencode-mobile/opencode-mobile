@@ -309,6 +309,38 @@ struct MessageListTimelineApplyPacket: Equatable, Sendable {
         )
     }
 
+    /// Chip timeline: a step paragraph expanded past `+N more` lives in the
+    /// Screen Model, not the projected frame. Rows holding a paragraph whose
+    /// expansion changed reconfigure as a layout change (the chip row grows),
+    /// and the expansion set folds into revision like Working chrome so an
+    /// unchanged set never re-applies.
+    func addingStepParagraphExpansion(
+        rows: [SessionChatRow],
+        expanded: Set<String>,
+        previousExpanded: Set<String>
+    ) -> MessageListTimelineApplyPacket {
+        let fingerprint = SessionChatStepParagraphExpansion.fingerprint(expanded)
+        let toggled = expanded.symmetricDifference(previousExpanded)
+        let rowIDs = SessionChatStepParagraphExpansion.rowIDs(containing: toggled, in: rows)
+        guard fingerprint != 0 || !rowIDs.isEmpty else { return self }
+        var nextKinds = kinds
+        if !rowIDs.isEmpty {
+            nextKinds.insert(.structure)
+            nextKinds.insert(.content)
+        }
+        return MessageListTimelineApplyPacket(
+            frameRevision: frameRevision &+ (fingerprint &* 998_244_353),
+            insertedRowIDs: insertedRowIDs,
+            changedRowIDs: changedRowIDs.union(rowIDs),
+            removedRowIDs: removedRowIDs,
+            layoutChangedRowIDs: layoutChangedRowIDs.union(rowIDs),
+            grewBottomRowIDs: grewBottomRowIDs,
+            decorateRowIDs: decorateRowIDs,
+            isRequired: isRequired,
+            kinds: nextKinds
+        )
+    }
+
     /// Gallery / non-projector path: treat every surviving ID as needing reconfigure.
     static func reconfigureAllSurviving(
         frameRevision: UInt64,
@@ -440,5 +472,33 @@ extension TimelineRow {
             contentRevision: ContentRevision.of(row.text),
             layoutRevision: layoutRevision
         )
+    }
+}
+
+/// Chip-timeline `+N more` expansion helpers for the timeline host.
+enum SessionChatStepParagraphExpansion {
+    /// Order-independent, process-stable fingerprint; 0 for no expansion.
+    static func fingerprint(_ expanded: Set<String>) -> UInt64 {
+        expanded.reduce(UInt64(0)) { sum, id in
+            var value: UInt64 = 1
+            for scalar in id.unicodeScalars {
+                value = value &* 31 &+ UInt64(scalar.value)
+            }
+            return sum &+ value
+        }
+    }
+
+    /// Rows whose blocks hold a step paragraph with one of `paragraphIDs`.
+    static func rowIDs(containing paragraphIDs: Set<String>, in rows: [SessionChatRow]) -> Set<String> {
+        guard !paragraphIDs.isEmpty else { return [] }
+        var result: Set<String> = []
+        for row in rows {
+            let holds = row.blocks.contains { block in
+                guard case .stepParagraph(_, let paragraph) = block else { return false }
+                return paragraphIDs.contains(paragraph.id)
+            }
+            if holds { result.insert(row.id) }
+        }
+        return result
     }
 }

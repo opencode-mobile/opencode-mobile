@@ -47,7 +47,6 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
@@ -105,9 +104,9 @@ import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlock
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlocks
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineState
 import dev.opencode.mobile.ui.sessionchat.SessionChatTopPill
+import dev.opencode.mobile.ui.sessionchat.StepParagraphChips
 import dev.opencode.mobile.ui.sessionchat.TimelineApply
 import dev.opencode.mobile.ui.sessionchat.TimelineFrame
-import dev.opencode.mobile.ui.sessionchat.ToolChipFamily
 import dev.opencode.mobile.ui.sessionchat.ToolChipKind
 import dev.opencode.mobile.ui.sessionchat.WorkingTurnIndicator
 import dev.opencode.mobile.ui.sessionchat.displayLabel
@@ -145,6 +144,9 @@ internal data class SessionChatTimelineViewProps(
     val onChildSessionTap: (sessionId: String, sessionTitle: String) -> Unit = { _, _ -> },
     val onChangesReviewTap: (assistantMessageId: String, initialFilePath: String?) -> Unit = { _, _ -> },
     val supportsSessionMessageDiff: Boolean = true,
+    /** Chip-timeline paragraphs shown in full; owned by the Session Chat screen model. */
+    val expandedStepParagraphIds: Set<String> = emptySet(),
+    val onExpandStepParagraph: (expansionId: String) -> Unit = {},
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -228,6 +230,8 @@ internal fun SessionChatTimelineView(
                 onChildSessionTap = props.onChildSessionTap,
                 onChangesReviewTap = props.onChangesReviewTap,
                 supportsSessionMessageDiff = props.supportsSessionMessageDiff,
+                expandedStepParagraphIds = props.expandedStepParagraphIds,
+                onExpandStepParagraph = props.onExpandStepParagraph,
                 modifier = modifier,
             )
         }
@@ -263,6 +267,8 @@ private fun SessionChatTimelineReadyView(
     onChildSessionTap: (sessionId: String, sessionTitle: String) -> Unit,
     onChangesReviewTap: (assistantMessageId: String, initialFilePath: String?) -> Unit,
     supportsSessionMessageDiff: Boolean,
+    expandedStepParagraphIds: Set<String>,
+    onExpandStepParagraph: (expansionId: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
@@ -440,6 +446,8 @@ private fun SessionChatTimelineReadyView(
                     onChildSessionTap = onChildSessionTap,
                     onChangesReviewTap = onChangesReviewTap,
                     supportsSessionMessageDiff = supportsSessionMessageDiff,
+                    expandedStepParagraphIds = expandedStepParagraphIds,
+                    onExpandStepParagraph = onExpandStepParagraph,
                     // Streaming height growth is GrowBottom + unanimated layout; do not
                     // animateContentSize on production Session Chat (gallery may still demo it).
                     animateSizeChanges = false,
@@ -542,6 +550,8 @@ private fun SessionChatMessageRow(
     onChildSessionTap: (sessionId: String, sessionTitle: String) -> Unit,
     onChangesReviewTap: (assistantMessageId: String, initialFilePath: String?) -> Unit,
     supportsSessionMessageDiff: Boolean,
+    expandedStepParagraphIds: Set<String>,
+    onExpandStepParagraph: (expansionId: String) -> Unit,
     animateSizeChanges: Boolean,
     onContentSizeAnimationFinished: (() -> Unit)?,
     modifier: Modifier = Modifier,
@@ -599,6 +609,8 @@ private fun SessionChatMessageRow(
                     onChildSessionTap = onChildSessionTap,
                     onChangesReviewTap = onChangesReviewTap,
                     supportsSessionMessageDiff = supportsSessionMessageDiff,
+                    expandedStepParagraphIds = expandedStepParagraphIds,
+                    onExpandStepParagraph = onExpandStepParagraph,
                 )
 
             MessageRole.Command, MessageRole.Tool, MessageRole.Unknown ->
@@ -663,6 +675,8 @@ private fun AssistantMessageContent(
     onChildSessionTap: (sessionId: String, sessionTitle: String) -> Unit,
     onChangesReviewTap: (assistantMessageId: String, initialFilePath: String?) -> Unit,
     supportsSessionMessageDiff: Boolean,
+    expandedStepParagraphIds: Set<String>,
+    onExpandStepParagraph: (expansionId: String) -> Unit,
 ) {
     // Rows never render empty — unpaintable blocks are filtered and an empty
     // result falls back to the live placeholder.
@@ -790,6 +804,8 @@ private fun AssistantMessageContent(
                             isStreaming = block.blockID == streamingStepParagraphBlockId,
                             onOpenMessageActions = onOpenMessageActions,
                             chipAction = { chip -> toolCardAction(chip.card) },
+                            expanded = block.expansionID in expandedStepParagraphIds,
+                            onExpand = { onExpandStepParagraph(block.expansionID) },
                         )
                 }
             }
@@ -798,14 +814,12 @@ private fun AssistantMessageContent(
 }
 
 private const val STEP_PARAGRAPH_PLACEHOLDER = "Worked without commentary"
-private const val STEP_PARAGRAPH_EXPLORE_LIMIT = 2
-private const val STEP_PARAGRAPH_CHANGE_LIMIT = 3
 private val StepParagraphTextPaddingHorizontal = 4.dp
 
 /**
  * Chip timeline paragraph: narration (or the muted placeholder), a wrapping
- * chip row truncated per family with an in-place `+N more`, then one error
- * caption per failed chip.
+ * chip row collapsed by [StepParagraphChips.visibility] with one trailing
+ * `+N more`, then one error caption per failed chip.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -815,10 +829,10 @@ private fun StepParagraphBlock(
     isStreaming: Boolean,
     onOpenMessageActions: () -> Unit,
     chipAction: (SessionChatTimelineBlock.ToolChip) -> (() -> Unit)?,
+    expanded: Boolean,
+    onExpand: () -> Unit,
 ) {
-    var showAll by rememberSaveable(block.blockID) { mutableStateOf(false) }
-    val visible = visibleStepParagraphChips(block.chips, showAll)
-    val hiddenCount = block.chips.size - visible.size
+    val (visible, hiddenCount) = StepParagraphChips.visibility(block.chips, expanded)
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -855,7 +869,7 @@ private fun StepParagraphBlock(
                         OpenCodeToolChip(
                             variant = chip.toToolChipVariant(),
                             status = chip.status.toToolChipStatus(),
-                            trailingText = chip.trailingText,
+                            trailingText = chip.displayTrailingText,
                             onClick = chipAction(chip),
                         )
                     }
@@ -863,7 +877,7 @@ private fun StepParagraphBlock(
                 if (hiddenCount > 0) {
                     OpenCodeToolChip(
                         variant = OpenCodeToolChipVariant.More(hiddenCount),
-                        onClick = { showAll = true },
+                        onClick = onExpand,
                     )
                 }
             }
@@ -875,24 +889,6 @@ private fun StepParagraphBlock(
                 color = openCodeColor("error"),
                 modifier = Modifier.padding(horizontal = StepParagraphTextPaddingHorizontal),
             )
-        }
-    }
-}
-
-/** Explore shows the first 2 and change the first 3 until the paragraph is expanded. */
-internal fun visibleStepParagraphChips(
-    chips: List<SessionChatTimelineBlock.ToolChip>,
-    showAll: Boolean,
-): List<SessionChatTimelineBlock.ToolChip> {
-    if (showAll) return chips
-    val seen = mutableMapOf<ToolChipFamily, Int>()
-    return chips.filter { chip ->
-        val index = seen.getOrDefault(chip.family, 0)
-        seen[chip.family] = index + 1
-        when (chip.family) {
-            ToolChipFamily.Explore -> index < STEP_PARAGRAPH_EXPLORE_LIMIT
-            ToolChipFamily.Change -> index < STEP_PARAGRAPH_CHANGE_LIMIT
-            ToolChipFamily.Skill, ToolChipFamily.Agent, ToolChipFamily.Command -> true
         }
     }
 }
