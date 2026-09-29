@@ -8,6 +8,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -57,6 +58,7 @@ private val ToolChipIconSize = 12.dp
 private val ToolChipSpinnerSize = 11.dp
 private val ToolChipContentSpacing = 6.dp
 private val ToolChipBriefMaxWidth = 160.dp
+private val ToolChipMinHeight = 36.dp
 private val ToolChipMinTouchTarget = 48.dp
 
 /** Variant-first content of a [OpenCodeToolChip]; colours and radius are not exposed. */
@@ -145,6 +147,8 @@ fun OpenCodeToolChip(
     Row(
         modifier =
             chipModifier
+                // Never shorter than the other pills (branch, review changes, action pill).
+                .defaultMinSize(minHeight = ToolChipMinHeight)
                 .clip(shape)
                 .background(colors.background, shape)
                 .then(

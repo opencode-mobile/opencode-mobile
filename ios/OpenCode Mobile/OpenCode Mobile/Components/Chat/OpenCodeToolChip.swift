@@ -113,6 +113,8 @@ struct OpenCodeToolChip: View {
         .padding(.leading, leadingIcon == nil ? Self.paddingHorizontal : Self.paddingBeforeIcon)
         .padding(.trailing, Self.paddingHorizontal)
         .padding(.vertical, Self.paddingVertical)
+        // Never shorter than the other pills (branch, review changes, action pill).
+        .frame(minHeight: Self.minHeight)
         .background {
             RoundedRectangle(cornerRadius: Self.cornerRadius)
                 .fill(backgroundColor)
@@ -328,6 +330,7 @@ struct OpenCodeToolChip: View {
     private static let contentSpacing: CGFloat = 6
     private static let iconSize: CGFloat = 12
     private static let glyphSize: CGFloat = 11
+    private static let minHeight: CGFloat = 36
     private static let minTapTarget: CGFloat = 44
     private static let runningBackgroundOpacity = 0.12
     private static let agentBackgroundOpacity = 0.14
