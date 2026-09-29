@@ -2,23 +2,6 @@ import Factory
 import SwiftUI
 import UIKit
 
-private struct SectionHeader: View {
-    let title: String
-
-    var body: some View {
-        HStack {
-            Text(title)
-                .font(OpenCodeTypography.caption)
-                .foregroundStyle(OpenCodeColors.textBase)
-                .textCase(.uppercase)
-            Spacer()
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 24)
-        .padding(.bottom, 4)
-    }
-}
-
 struct SettingsView: View {
     var onAddServer: () -> Void = {}
     var onEditProfile: (ConnectionProfile) -> Void = { _ in }
@@ -64,7 +47,7 @@ struct SettingsView: View {
 
             ScrollView {
                 VStack(spacing: 8) {
-                    SectionHeader(title: "Server")
+                    OpenCodeSectionHeader(title: "Server")
 
                     OpenCodeListItem(
                         title: "Servers",
@@ -85,7 +68,7 @@ struct SettingsView: View {
                     )
                     .padding(.horizontal, 16)
 
-                    SectionHeader(title: "Appearance")
+                    OpenCodeSectionHeader(title: "Appearance")
 
                     OpenCodeListItem(
                         title: "Appearance",
@@ -240,7 +223,7 @@ struct SettingsView: View {
                             .padding(.top, 4)
                     }
 
-                    SectionHeader(title: "Session Cache")
+                    OpenCodeSectionHeader(title: "Session Cache")
 
                     OpenCodeListItem(
                         title: "Size",
@@ -267,7 +250,7 @@ struct SettingsView: View {
                     )
                     .padding(.horizontal, 16)
 
-                    SectionHeader(title: "Privacy")
+                    OpenCodeSectionHeader(title: "Privacy")
 
                     OpenCodeListItem(
                         title: "Privacy Policy",
@@ -338,7 +321,7 @@ struct SettingsView: View {
                     )
                     .padding(.horizontal, 16)
 
-                    SectionHeader(title: "About")
+                    OpenCodeSectionHeader(title: "About")
 
                     OpenCodeListItem(
                         title: "Version",
@@ -359,7 +342,7 @@ struct SettingsView: View {
                     .padding(.horizontal, 16)
 
                     if developerToolsPreferences.unlocked {
-                        SectionHeader(title: "Developer Tools")
+                        OpenCodeSectionHeader(title: "Developer Tools")
 
                         OpenCodeListItem(
                             title: "Component Gallery",

@@ -28,6 +28,7 @@ enum ComponentGalleryEntryID: String, Hashable {
     case snackbar
     case listItem
     case listGroup
+    case sectionHeader
     case reorderableList
     case choiceBadge
     case filterTabs
@@ -156,6 +157,12 @@ let componentGalleryEntries = [
         id: .listItem,
         title: "List Item",
         description: "Reusable project and session row treatment.",
+        category: .lists
+    ),
+    ComponentGalleryEntry(
+        id: .sectionHeader,
+        title: "Section Header",
+        description: "Caption title above a group of rows with optional count or action.",
         category: .lists
     ),
     ComponentGalleryEntry(

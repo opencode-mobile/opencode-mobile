@@ -29,11 +29,7 @@ struct SessionChatMcpServersSheetContent: View {
             )
         } else {
             VStack(alignment: .leading, spacing: 4) {
-                Text(summary.headline)
-                    .font(OpenCodeTypography.caption)
-                    .foregroundStyle(OpenCodeColors.textBase)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
+                OpenCodeSectionHeader(title: summary.headline, variant: .plain)
                 ForEach(servers, id: \.name) { server in
                     OpenCodeListItem(
                         title: server.name,

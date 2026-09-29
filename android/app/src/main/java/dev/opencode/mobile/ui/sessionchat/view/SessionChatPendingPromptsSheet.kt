@@ -27,6 +27,9 @@ import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonContrast
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
+import dev.opencode.mobile.ui.components.OpenCodeSectionHeader
+import dev.opencode.mobile.ui.components.OpenCodeSectionHeaderTrailing
+import dev.opencode.mobile.ui.components.OpenCodeSectionHeaderVariant
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.sessionchat.PendingPrompt
 
@@ -58,33 +61,15 @@ internal fun SessionChatPendingPromptsSheet(
             onDismiss()
         },
     ) {
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text(
-                text = "${prompts.size} waiting",
-                style = MaterialTheme.typography.labelSmall,
-                color = openCodeColor("text-weak"),
-            )
-            Text(
-                text = "Clear all",
-                style = MaterialTheme.typography.labelSmall,
-                color = openCodeColor("text-weak"),
-                modifier =
-                    Modifier.clickable(
-                        role = Role.Button,
-                        onClick = {
-                            logPendingPromptsAction(ProductAnalytics.Action.PENDING_PROMPTS_CLEAR)
-                            onClearAll()
-                        },
-                    ),
-            )
-        }
+        OpenCodeSectionHeader(
+            title = "${prompts.size} waiting",
+            variant = OpenCodeSectionHeaderVariant.Plain,
+            trailing =
+                OpenCodeSectionHeaderTrailing.Action("Clear all") {
+                    logPendingPromptsAction(ProductAnalytics.Action.PENDING_PROMPTS_CLEAR)
+                    onClearAll()
+                },
+        )
         var queuedIndex = 0
         prompts.forEach { prompt ->
             val queuePosition =

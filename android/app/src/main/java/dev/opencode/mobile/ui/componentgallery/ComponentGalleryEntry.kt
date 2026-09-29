@@ -33,6 +33,7 @@ enum class ComponentGalleryEntryId {
     Snackbar,
     ListItem,
     ListGroup,
+    SectionHeader,
     ReorderableList,
     ChoiceBadge,
     FilterTabs,
@@ -168,6 +169,12 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.ListItem,
             title = "List Item",
             description = "Reusable project and session row treatment.",
+            category = ComponentGalleryCategory.Lists,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.SectionHeader,
+            title = "Section Header",
+            description = "Caption title above a group of rows with optional count or action.",
             category = ComponentGalleryCategory.Lists,
         ),
         ComponentGalleryEntry(
