@@ -48,7 +48,10 @@ nonisolated enum MessageHistoryMerge {
     }
 
     private static func overlapIndex(local: [Message], tail: [Message], reversed: Bool) -> Int? {
-        let localIndex = Dictionary(uniqueKeysWithValues: local.enumerated().map { ($1.id, $0) })
+        let localIndex = Dictionary(
+            local.enumerated().map { ($1.id, $0) },
+            uniquingKeysWith: { _, last in last }
+        )
         let sequence = reversed ? Array(tail.reversed()) : tail
         for message in sequence {
             if let index = localIndex[message.id] {

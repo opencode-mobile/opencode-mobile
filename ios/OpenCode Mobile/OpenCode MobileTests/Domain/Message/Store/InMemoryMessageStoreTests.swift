@@ -25,7 +25,8 @@ import Testing
         store.replaceAll(sessionID: "ses-1", messages: [first, second])
 
         let messages = store.messages(sessionID: "ses-1")
-        #expect(messages.map(\.text) == ["second", "second"])
+        #expect(messages.map(\.id) == [first.id])
+        #expect(messages.map(\.text) == ["second"])
         #expect(store.message(sessionID: "ses-1", messageID: first.id)?.text == "second")
     }
 
@@ -50,7 +51,7 @@ import Testing
 
         #expect(accepted)
         let messages = store.messages(sessionID: "ses-1")
-        #expect(messages.map(\.id) == ["msg_older", duplicateID, duplicateID])
-        #expect(messages.map(\.text) == ["older", "b", "b"])
+        #expect(messages.map(\.id) == ["msg_older", duplicateID])
+        #expect(messages.map(\.text) == ["older", "b"])
     }
 }
