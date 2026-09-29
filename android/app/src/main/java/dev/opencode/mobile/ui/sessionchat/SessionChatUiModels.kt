@@ -301,6 +301,48 @@ object SessionBranchPillVisibility {
     ): Boolean = !hideFloatStack && !pill?.branch.isNullOrEmpty()
 }
 
+/**
+ * The one pill shown at the top of the Session Chat timeline.
+ * Priority: Syncing, then ToDo, then Branch / Changes.
+ */
+sealed interface SessionChatTopPill {
+    data class Syncing(
+        val label: String,
+    ) : SessionChatTopPill
+
+    data object Todos : SessionChatTopPill
+
+    data class Branch(
+        val pill: SessionBranchPillUiState,
+    ) : SessionChatTopPill
+
+    companion object {
+        /**
+         * Syncing waits this long before it takes the slot, so a fast catch-up
+         * does not flash the ToDo or Branch pill out and back in.
+         */
+        const val SYNCING_SHOW_DELAY_MS = 400L
+
+        /** Once shown, Syncing keeps the slot at least this long. */
+        const val SYNCING_MINIMUM_VISIBLE_MS = 600L
+
+        fun resolve(
+            syncingLabel: String?,
+            todosVisible: Boolean,
+            todoTotalCount: Int,
+            branchPill: SessionBranchPillUiState?,
+            hideFloatStack: Boolean,
+        ): SessionChatTopPill? =
+            when {
+                syncingLabel != null -> Syncing(syncingLabel)
+                !hideFloatStack && todosVisible && todoTotalCount > 0 -> Todos
+                branchPill != null && SessionBranchPillVisibility.shouldShow(branchPill, hideFloatStack) ->
+                    Branch(branchPill)
+                else -> null
+            }
+    }
+}
+
 data class ReviewChangesSummary(
     val fileCount: Int,
     val additions: Int,
