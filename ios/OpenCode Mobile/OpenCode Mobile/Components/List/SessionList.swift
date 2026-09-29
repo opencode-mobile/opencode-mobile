@@ -302,14 +302,7 @@ struct SessionList<EmptyContent: View>: View {
 
     @ViewBuilder
     private func recentStack(_ section: HomeSessionLadderSection<SessionListSession>) -> some View {
-        Text("RECENT")
-            .font(OpenCodeTypography.caption.weight(.semibold))
-            .foregroundStyle(OpenCodeColors.textBase)
-            .tracking(0.5)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
-            .padding(.bottom, 6)
+        OpenCodeSectionHeader(title: "Recent")
 
         ForEach(Array(section.items.enumerated()), id: \.element.id) { index, session in
             sessionRow(session, showStatusDot: true)
@@ -323,14 +316,7 @@ struct SessionList<EmptyContent: View>: View {
 
     @ViewBuilder
     private func dayOrWeekSection(_ section: HomeSessionLadderSection<SessionListSession>) -> some View {
-        Text(section.title.uppercased())
-            .font(OpenCodeTypography.caption.weight(.semibold))
-            .foregroundStyle(OpenCodeColors.textBase)
-            .tracking(0.5)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 16)
-            .padding(.top, 16)
-            .padding(.bottom, 6)
+        OpenCodeSectionHeader(title: section.title)
 
         ForEach(Array(section.items.enumerated()), id: \.element.id) { index, session in
             sessionRow(session, showStatusDot: false)

@@ -15,7 +15,6 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -29,11 +28,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import dev.opencode.mobile.domain.home.HomeSessionLadder
 import dev.opencode.mobile.domain.home.HomeSessionLadderKind
 import dev.opencode.mobile.domain.home.HomeSessionLadderSection
@@ -355,7 +352,7 @@ private fun SessionListFeed(
                 when (section.kind) {
                     HomeSessionLadderKind.Recent -> {
                         item(key = "header-${section.id}") {
-                            SessionListSectionHeader(title = "Recent")
+                            OpenCodeSectionHeader(title = "Recent")
                         }
                         itemsIndexed(
                             section.items,
@@ -375,7 +372,7 @@ private fun SessionListFeed(
                     HomeSessionLadderKind.Week,
                     -> {
                         item(key = "header-${section.id}") {
-                            SessionListSectionHeader(title = section.title)
+                            OpenCodeSectionHeader(title = section.title)
                         }
                         itemsIndexed(
                             section.items,
@@ -395,21 +392,6 @@ private fun SessionListFeed(
             }
         }
     }
-}
-
-@Composable
-private fun SessionListSectionHeader(title: String) {
-    Text(
-        text = title.uppercase(),
-        color = openCodeColor("text-base"),
-        fontSize = 12.sp,
-        fontWeight = FontWeight.SemiBold,
-        letterSpacing = 0.5.sp,
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 6.dp),
-    )
 }
 
 @Composable

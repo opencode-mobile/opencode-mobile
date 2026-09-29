@@ -6,9 +6,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -22,7 +20,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
@@ -46,6 +43,7 @@ import dev.opencode.mobile.ui.components.OpenCodeDialogOption
 import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeListItemStyle
 import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
+import dev.opencode.mobile.ui.components.OpenCodeSectionHeader
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
 import dev.opencode.mobile.ui.components.StartDecorator
@@ -139,7 +137,7 @@ fun SettingsScreen(
                         .padding(top = 16.dp, bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                SectionHeader(title = "Server")
+                OpenCodeSectionHeader(title = "Server")
 
                 OpenCodeListItem(
                     title = "Servers",
@@ -164,7 +162,7 @@ fun SettingsScreen(
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
 
-                SectionHeader(title = "Appearance")
+                OpenCodeSectionHeader(title = "Appearance")
 
                 OpenCodeListItem(
                     title = "Appearance",
@@ -346,7 +344,7 @@ fun SettingsScreen(
                     )
                 }
 
-                SectionHeader(title = "Session Cache")
+                OpenCodeSectionHeader(title = "Session Cache")
 
                 OpenCodeListItem(
                     title = "Size",
@@ -368,7 +366,7 @@ fun SettingsScreen(
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
 
-                SectionHeader(title = "Privacy")
+                OpenCodeSectionHeader(title = "Privacy")
 
                 OpenCodeListItem(
                     title = "Privacy Policy",
@@ -434,7 +432,7 @@ fun SettingsScreen(
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
 
-                SectionHeader(title = "About")
+                OpenCodeSectionHeader(title = "About")
 
                 OpenCodeListItem(
                     title = "Version",
@@ -455,7 +453,7 @@ fun SettingsScreen(
                 )
 
                 if (DeveloperToolsPreferences.unlocked) {
-                    SectionHeader(title = "Developer Tools")
+                    OpenCodeSectionHeader(title = "Developer Tools")
 
                     OpenCodeListItem(
                         title = "TextMate Highlighting",
@@ -655,23 +653,6 @@ private fun logSettingsToggle(
         actionId = actionId,
         parameters = mapOf(ProductAnalytics.Param.OUTCOME to if (enabled) "enabled" else "disabled"),
     )
-}
-
-@Composable
-private fun SectionHeader(
-    title: String,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
 }
 
 @Preview(showBackground = true)

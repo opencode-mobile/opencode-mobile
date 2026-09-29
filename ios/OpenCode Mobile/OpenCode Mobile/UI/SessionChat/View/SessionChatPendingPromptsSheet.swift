@@ -31,23 +31,14 @@ struct SessionChatPendingPromptsSheetModifier: ViewModifier {
 
     private var sheetContent: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text("\(prompts.count) waiting")
-                    .font(OpenCodeTypography.caption)
-                    .foregroundStyle(OpenCodeColors.textWeak)
-                Spacer()
-                Button(action: {
+            OpenCodeSectionHeader(
+                title: "\(prompts.count) waiting",
+                variant: .plain,
+                trailing: .action("Clear all", {
                     logAction(ProductAnalytics.Action.pendingPromptsClear)
                     onClearAll()
-                }) {
-                    Text("Clear all")
-                        .font(OpenCodeTypography.caption)
-                        .foregroundStyle(OpenCodeColors.textWeak)
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 4)
+                })
+            )
 
             ScrollView {
                 VStack(spacing: 0) {
