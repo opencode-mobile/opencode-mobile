@@ -317,13 +317,30 @@ object SessionChatTimelineBlocks {
                 is MessagePart.Reasoning -> {
                     if (ThoughtPartChrome.isVisible(part) && !part.isStreaming) {
                         val partId = part.id ?: return SessionChatTimelineBlocksResult.MissingPartIds
-                        blocks +=
-                            SessionChatTimelineBlock.Reasoning(
-                                blockID = PresentationBlockId.direct(partId),
-                                text = ThoughtPartChrome.displayText(part),
-                                isStreaming = part.isStreaming,
-                                durationMs = thoughtDurationMs(part.timeStartEpochMs, part.timeEndEpochMs),
-                            )
+                        val text = ThoughtPartChrome.displayText(part)
+                        val duration = thoughtDurationMs(part.timeStartEpochMs, part.timeEndEpochMs)
+                        // One stretch of thinking arrives as several settled parts; a
+                        // run of them reads as one thought with the durations summed.
+                        // Until narration flushes a paragraph, the run of step
+                        // thoughts reads as one row.
+                        val previous = blocks.lastOrNull() as? SessionChatTimelineBlock.Reasoning
+                        if (previous != null && !previous.isStreaming) {
+                            blocks[blocks.lastIndex] =
+                                SessionChatTimelineBlock.Reasoning(
+                                    blockID = PresentationBlockId.mergedThought(listOf(previous.blockID, partId)),
+                                    text = joinThoughts(previous.text, text),
+                                    isStreaming = false,
+                                    durationMs = sumThoughtDurations(previous.durationMs, duration),
+                                )
+                        } else {
+                            blocks +=
+                                SessionChatTimelineBlock.Reasoning(
+                                    blockID = PresentationBlockId.direct(partId),
+                                    text = text,
+                                    isStreaming = false,
+                                    durationMs = duration,
+                                )
+                        }
                     }
                 }
                 is MessagePart.Compaction -> Unit
@@ -669,6 +686,26 @@ object SessionChatTimelineBlocks {
             }
         }
     }
+
+    private fun joinThoughts(
+        first: String,
+        second: String,
+    ): String =
+        when {
+            first.isEmpty() -> second
+            second.isEmpty() -> first
+            else -> first + "\n\n" + second
+        }
+
+    private fun sumThoughtDurations(
+        first: Long?,
+        second: Long?,
+    ): Long? =
+        when {
+            first == null -> second
+            second == null -> first
+            else -> first + second
+        }
 
     private fun thoughtDurationMs(
         start: Long?,

@@ -1930,6 +1930,74 @@ struct SessionChatTimelineBlocksTests {
         #expect(paragraph.chips.map(\.label) == ["gh pr list --state open --limit 50"])
     }
 
+    @Test func chipTimeline_consecutiveThoughts_collapseIntoOneRowWithSummedDuration() {
+        let blocks = okBlocks(
+            parts: [
+                .reasoning(ReasoningPart(id: "th1", text: "First", isStreaming: false, timeStartEpochMs: 0, timeEndEpochMs: 1_200)),
+                .reasoning(ReasoningPart(id: "th2", text: "Second", isStreaming: false, timeStartEpochMs: 1_200, timeEndEpochMs: 6_000)),
+                .reasoning(ReasoningPart(id: "th3", text: "", isStreaming: false, timeStartEpochMs: 6_000, timeEndEpochMs: 6_500)),
+                text("t1", "Now"),
+                .tool(ToolPart(id: "r1", toolName: "read", status: .completed, input: ["filePath": .string("a.swift")])),
+            ],
+            chipTimeline: true
+        )
+        #expect(blocks.count == 2)
+        guard case .reasoning(let id, let joined, false, let duration) = blocks[0] else {
+            Issue.record("Expected one merged reasoning row")
+            return
+        }
+        // th3 is blank, so the visibility rule hides it; two settled thoughts merge.
+        #expect(id == PresentationBlockId.mergedThought([PresentationBlockId.direct("th1"), "th2"]))
+        #expect(joined == "First\n\nSecond")
+        #expect(duration == 6_000)
+        guard let paragraph = paragraph(blocks[1]) else { return }
+        #expect(paragraph.text == "Now")
+    }
+
+    @Test func chipTimeline_thoughtsAroundOneParagraph_mergeAboveIt() {
+        let blocks = okBlocks(
+            parts: [
+                .reasoning(ReasoningPart(id: "th1", text: "First", isStreaming: false, timeStartEpochMs: 0, timeEndEpochMs: 1_000)),
+                .tool(ToolPart(id: "r1", toolName: "read", status: .completed, input: ["filePath": .string("a.swift")])),
+                .reasoning(ReasoningPart(id: "th2", text: "Second", isStreaming: false, timeStartEpochMs: 1_000, timeEndEpochMs: 3_000)),
+                .tool(ToolPart(id: "r2", toolName: "read", status: .completed, input: ["filePath": .string("b.swift")])),
+                text("t1", "Now narration"),
+                .reasoning(ReasoningPart(id: "th3", text: "Third", isStreaming: false, timeStartEpochMs: 3_000, timeEndEpochMs: 4_000)),
+                .tool(ToolPart(id: "r3", toolName: "read", status: .completed, input: ["filePath": .string("c.swift")])),
+            ],
+            chipTimeline: true
+        )
+        // Rows: one merged thought for the tool-only stretch, its paragraph,
+        // then the thought that followed the narration and the final paragraph.
+        #expect(blocks.count == 4)
+        guard case .reasoning(_, _, false, let firstDuration) = blocks[0] else {
+            Issue.record("Expected merged reasoning first")
+            return
+        }
+        #expect(firstDuration == 3_000)
+        guard let first = paragraph(blocks[1]) else { return }
+        #expect(first.text == nil)
+        #expect(first.chips.map(\.label) == ["a.swift", "b.swift"])
+        guard case .reasoning(let thirdID, _, _, _) = blocks[2] else {
+            Issue.record("Expected the post-narration thought third")
+            return
+        }
+        #expect(thirdID == PresentationBlockId.direct("th3"))
+        guard let second = paragraph(blocks[3]) else { return }
+        #expect(second.text == "Now narration")
+        #expect(second.chips.map(\.label) == ["c.swift"])
+    }
+
+    @Test func build_collapseOff_consecutiveThoughts_stayAsSeparateRows() {
+        let blocks = okBlocks(
+            parts: [
+                .reasoning(ReasoningPart(id: "th1", text: "First", isStreaming: false)),
+                .reasoning(ReasoningPart(id: "th2", text: "Second", isStreaming: false)),
+            ]
+        )
+        #expect(blocks.count == 2)
+    }
+
     @Test func chipTimeline_attachmentAndReasoning_emittedSeparatelyWithoutClosingParagraph() {
         let file = FilePart(id: "f1", filename: "shot.png", mime: "image/png", kind: .image, dataURL: "data:image/png;base64,")
         let blocks = okBlocks(

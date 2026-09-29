@@ -2302,6 +2302,107 @@ class SessionChatTimelineBlocksTest {
     }
 
     @Test
+    fun chipTimeline_consecutiveThoughts_collapseIntoOneRowWithSummedDuration() {
+        val blocks =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                chipTimeline = true,
+                parts =
+                    listOf(
+                        MessagePart.Reasoning(
+                            text = "First",
+                            isStreaming = false,
+                            id = "th1",
+                            timeStartEpochMs = 0,
+                            timeEndEpochMs = 1_200,
+                        ),
+                        MessagePart.Reasoning(
+                            text = "Second",
+                            isStreaming = false,
+                            id = "th2",
+                            timeStartEpochMs = 1_200,
+                            timeEndEpochMs = 6_000,
+                        ),
+                        MessagePart.Reasoning(text = "", isStreaming = false, id = "th3", timeStartEpochMs = 6_000, timeEndEpochMs = 6_500),
+                        MessagePart.Text("Now", id = "t1"),
+                        MessagePart.Tool(toolName = "bash", status = ToolStatus.Completed, id = "p1"),
+                    ),
+            )
+
+        assertEquals(2, blocks.size)
+        val thought = blocks[0] as SessionChatTimelineBlock.Reasoning
+        // th3 is blank, so the visibility rule hides it; two settled thoughts merge.
+        assertEquals(PresentationBlockId.mergedThought(listOf(PresentationBlockId.direct("th1"), "th2")), thought.blockID)
+        assertEquals("First\n\nSecond", thought.text)
+        assertEquals(6_000L, thought.durationMs)
+        assertEquals("Now", (blocks[1] as SessionChatTimelineBlock.StepParagraph).text)
+    }
+
+    @Test
+    fun chipTimeline_thoughtsAroundOneParagraph_mergeAboveIt() {
+        val blocks =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                chipTimeline = true,
+                parts =
+                    listOf(
+                        MessagePart.Reasoning(
+                            text = "First",
+                            isStreaming = false,
+                            id = "th1",
+                            timeStartEpochMs = 0,
+                            timeEndEpochMs = 1_000,
+                        ),
+                        MessagePart.Tool(toolName = "read", status = ToolStatus.Completed, id = "r1", input = json("filePath" to "a.kt")),
+                        MessagePart.Reasoning(
+                            text = "Second",
+                            isStreaming = false,
+                            id = "th2",
+                            timeStartEpochMs = 1_000,
+                            timeEndEpochMs = 3_000,
+                        ),
+                        MessagePart.Tool(toolName = "read", status = ToolStatus.Completed, id = "r2", input = json("filePath" to "b.kt")),
+                        MessagePart.Text("Now narration", id = "t1"),
+                        MessagePart.Reasoning(
+                            text = "Third",
+                            isStreaming = false,
+                            id = "th3",
+                            timeStartEpochMs = 3_000,
+                            timeEndEpochMs = 4_000,
+                        ),
+                        MessagePart.Tool(toolName = "read", status = ToolStatus.Completed, id = "r3", input = json("filePath" to "c.kt")),
+                    ),
+            )
+
+        // Rows: one merged thought for the tool-only stretch, its paragraph,
+        // then the thought that followed the narration and the final paragraph.
+        assertEquals(4, blocks.size)
+        assertEquals(3_000L, (blocks[0] as SessionChatTimelineBlock.Reasoning).durationMs)
+        val first = blocks[1] as SessionChatTimelineBlock.StepParagraph
+        assertEquals(null, first.text)
+        assertEquals(listOf("a.kt", "b.kt"), first.chips.map { it.label })
+        assertEquals(PresentationBlockId.direct("th3"), blocks[2].blockID)
+        val second = blocks[3] as SessionChatTimelineBlock.StepParagraph
+        assertEquals("Now narration", second.text)
+        assertEquals(listOf("c.kt"), second.chips.map { it.label })
+    }
+
+    @Test
+    fun build_chipTimelineOff_consecutiveThoughts_stayAsSeparateRows() {
+        val blocks =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Reasoning(text = "First", isStreaming = false, id = "th1"),
+                        MessagePart.Reasoning(text = "Second", isStreaming = false, id = "th2"),
+                    ),
+            )
+
+        assertEquals(2, blocks.size)
+    }
+
+    @Test
     fun chipTimeline_attachmentAndReasoning_emittedSeparatelyWithoutClosingParagraph() {
         val blocks =
             buildBlocks(

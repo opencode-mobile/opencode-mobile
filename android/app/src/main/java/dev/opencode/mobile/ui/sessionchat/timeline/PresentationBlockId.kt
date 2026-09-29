@@ -25,6 +25,12 @@ object PresentationBlockId {
         return "s:" + orderedPartIds.joinToString(SEP)
     }
 
+    /**
+     * Chip timeline: a run of settled thoughts rendered as one row. The id is the
+     * previous row id followed by the new part id, so a growing run keeps a stable prefix.
+     */
+    fun mergedThought(ids: List<String>): String = "th:" + ids.joinToString("+")
+
     fun toolGroup(orderedMemberIds: List<String>): String {
         require(orderedMemberIds.size >= 2) { "tool group requires at least two member ids" }
         return "g:" + orderedMemberIds.joinToString(SEP)

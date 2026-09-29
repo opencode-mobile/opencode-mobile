@@ -24,6 +24,13 @@ nonisolated enum PresentationBlockId {
     }
 
     /// Chip-timeline step paragraph: its text part ids followed by its tool part ids.
+    /// Chip timeline: a run of settled thoughts rendered as one row. The id is
+    /// the previous row id followed by the new part id, so a growing run keeps a
+    /// stable prefix.
+    nonisolated static func mergedThought(_ ids: [String]) -> String {
+        "th:" + ids.joined(separator: sep)
+    }
+
     nonisolated static func stepParagraph(_ orderedPartIds: [String]) -> String {
         precondition(!orderedPartIds.isEmpty, "step paragraph requires at least one part id")
         return "s:" + orderedPartIds.joined(separator: sep)

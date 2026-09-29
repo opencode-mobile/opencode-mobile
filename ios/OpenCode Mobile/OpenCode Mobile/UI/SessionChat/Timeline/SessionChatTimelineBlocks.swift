@@ -571,15 +571,29 @@ nonisolated enum SessionChatTimelineBlocks {
             case .reasoning(let reasoning):
                 guard ThoughtPartChrome.isVisible(reasoning), !reasoning.isStreaming else { continue }
                 guard let partId = reasoning.id else { return .missingPartIds }
+                let text = ThoughtPartChrome.displayText(reasoning)
+                let duration = thoughtDurationMs(
+                    start: reasoning.timeStartEpochMs,
+                    end: reasoning.timeEndEpochMs
+                )
+                // Thinking arrives as one settled part per model step, with the
+                // step's tools between. Until narration flushes a paragraph, the
+                // run reads as one thought row with the durations summed.
+                if case .reasoning(let prevID, let prevText, false, let prevDuration)? = blocks.last {
+                    blocks[blocks.count - 1] = .reasoning(
+                        blockID: PresentationBlockId.mergedThought([prevID, partId]),
+                        text: joinThoughts(prevText, text),
+                        isStreaming: false,
+                        durationMs: sumThoughtDurations(prevDuration, duration)
+                    )
+                    continue
+                }
                 blocks.append(
                     .reasoning(
                         blockID: PresentationBlockId.direct(partId),
-                        text: ThoughtPartChrome.displayText(reasoning),
-                        isStreaming: reasoning.isStreaming,
-                        durationMs: thoughtDurationMs(
-                            start: reasoning.timeStartEpochMs,
-                            end: reasoning.timeEndEpochMs
-                        )
+                        text: text,
+                        isStreaming: false,
+                        durationMs: duration
                     )
                 )
             case .tool(let tool):
@@ -733,6 +747,22 @@ nonisolated enum SessionChatTimelineBlocks {
         let hours = duration / 3_600_000
         let minutes = (duration % 3_600_000) / 60_000
         return "\(hours)h \(minutes)m"
+    }
+
+    private static func joinThoughts(_ lhs: String, _ rhs: String) -> String {
+        switch (lhs.isEmpty, rhs.isEmpty) {
+        case (true, _): return rhs
+        case (_, true): return lhs
+        default: return lhs + "\n\n" + rhs
+        }
+    }
+
+    private static func sumThoughtDurations(_ lhs: Int64?, _ rhs: Int64?) -> Int64? {
+        switch (lhs, rhs) {
+        case (nil, nil): return nil
+        case (let value?, nil), (nil, let value?): return value
+        case (let first?, let second?): return first + second
+        }
     }
 
     private static func thoughtDurationMs(start: Int64?, end: Int64?) -> Int64? {
