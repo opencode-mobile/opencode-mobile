@@ -82,15 +82,16 @@ private enum ReleaseFirebaseBootstrap {
         Analytics.logEvent(name, parameters: parameters.isEmpty ? nil : parameters)
     }
 
-    /// OPE-269: activates values fetched during the previous launch, snapshots
-    /// them into `FeatureFlags` once for this session, then fetches for the next
-    /// launch. Not gated by product analytics consent (plain value fetch).
+    /// OPE-269: snapshots the values activated during a previous launch into
+    /// `FeatureFlags` synchronously on the launching thread, before any feature
+    /// reads a flag, then fetches and activates for the next launch. Nothing
+    /// writes `FeatureFlags` after this call, so a flag never flips mid-session
+    /// and no Firebase queue touches the store. Not gated by product analytics
+    /// consent (plain value fetch).
     private static func activateFeatureFlags() {
         let remoteConfig = RemoteConfig.remoteConfig()
-        remoteConfig.activate { _, _ in
-            FeatureFlags.shared.applyRemote(remoteFlagValues(remoteConfig))
-            remoteConfig.fetch { _, _ in }
-        }
+        FeatureFlags.shared.applyRemote(remoteFlagValues(remoteConfig))
+        remoteConfig.fetchAndActivate { _, _ in }
     }
 
     private static func remoteFlagValues(_ remoteConfig: RemoteConfig) -> [String: Bool] {
