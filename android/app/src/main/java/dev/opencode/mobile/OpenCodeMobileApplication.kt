@@ -8,6 +8,7 @@ import dagger.hilt.android.HiltAndroidApp
 import dagger.hilt.components.SingletonComponent
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogBuffer
 import dev.opencode.mobile.domain.diagnostic.MainThreadHangWatchdog
+import dev.opencode.mobile.domain.featureflags.FeatureFlags
 import dev.opencode.mobile.domain.preferences.AnalyticsConsentPreferences
 import dev.opencode.mobile.domain.preferences.AppOnboardingPreferences
 import dev.opencode.mobile.domain.preferences.DeveloperToolsPreferences
@@ -29,6 +30,7 @@ class OpenCodeMobileApplication : Application() {
         AppOnboardingPreferences.initialize(this)
         DeveloperToolsPreferences.initialize(this)
         SessionChatDisplayPreferences.initialize(this)
+        FeatureFlags.initialize(this)
         OpenCodeAndroidMarkdownAssets.init(this)
         OpenCodeReleaseObservability.initialize(this)
         EntryPointAccessors

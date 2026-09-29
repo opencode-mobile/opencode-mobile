@@ -43,12 +43,14 @@ enum OpenCodeReleaseObservability {
 import FirebaseAnalytics
 import FirebaseCore
 import FirebaseCrashlytics
+import FirebaseRemoteConfig
 
 private enum ReleaseFirebaseBootstrap {
     static func start() {
         if FirebaseApp.app() == nil {
             FirebaseApp.configure()
         }
+        activateFeatureFlags()
 
         let verificationEnabled = CrashlyticsVerificationPolicy.isEnabled(in: .main)
         let buildNumber = Bundle.main
@@ -78,6 +80,29 @@ private enum ReleaseFirebaseBootstrap {
 
     static func logProductEvent(name: String, parameters: [String: String]) {
         Analytics.logEvent(name, parameters: parameters.isEmpty ? nil : parameters)
+    }
+
+    /// OPE-269: snapshots the values activated during a previous launch into
+    /// `FeatureFlags` synchronously on the launching thread, before any feature
+    /// reads a flag, then fetches and activates for the next launch. Nothing
+    /// writes `FeatureFlags` after this call, so a flag never flips mid-session
+    /// and no Firebase queue touches the store. Not gated by product analytics
+    /// consent (plain value fetch).
+    private static func activateFeatureFlags() {
+        let remoteConfig = RemoteConfig.remoteConfig()
+        FeatureFlags.shared.applyRemote(remoteFlagValues(remoteConfig))
+        remoteConfig.fetchAndActivate { _, _ in }
+    }
+
+    private static func remoteFlagValues(_ remoteConfig: RemoteConfig) -> [String: Bool] {
+        var values: [String: Bool] = [:]
+        for flag in FeatureFlag.allCases {
+            let value = remoteConfig.configValue(forKey: flag.key)
+            if value.source == .remote {
+                values[flag.key] = value.boolValue
+            }
+        }
+        return values
     }
 }
 #endif

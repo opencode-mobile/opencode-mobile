@@ -211,4 +211,5 @@ dependencies {
     releaseImplementation(platform(libs.firebase.bom))
     releaseImplementation(libs.firebase.crashlytics)
     releaseImplementation(libs.firebase.analytics)
+    releaseImplementation(libs.firebase.config)
 }

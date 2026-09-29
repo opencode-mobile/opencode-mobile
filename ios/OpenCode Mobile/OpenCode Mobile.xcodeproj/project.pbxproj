@@ -11,6 +11,7 @@
 		638DA94D2FCB348E0055985D /* Factory in Frameworks */ = {isa = PBXBuildFile; productRef = 63OC00022FA93400002BDFFC /* Factory */; };
 		63OCFIREBF00100002BDFFC /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = 63OCFIREPROD001002BDFFC /* FirebaseAnalytics */; };
 		63OCFIREBF00200002BDFFC /* FirebaseCrashlytics in Frameworks */ = {isa = PBXBuildFile; productRef = 63OCFIREPROD002002BDFFC /* FirebaseCrashlytics */; };
+		63OCFIREBF00300002BDFFC /* FirebaseRemoteConfig in Frameworks */ = {isa = PBXBuildFile; productRef = 63OCFIREPROD003002BDFFC /* FirebaseRemoteConfig */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -62,6 +63,7 @@
 				638DA94C2FCB348E0055985D /* Factory in Frameworks */,
 				63OCFIREBF00100002BDFFC /* FirebaseAnalytics in Frameworks */,
 				63OCFIREBF00200002BDFFC /* FirebaseCrashlytics in Frameworks */,
+				63OCFIREBF00300002BDFFC /* FirebaseRemoteConfig in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -130,6 +132,7 @@
 				63OC00022FA93400002BDFFC /* Factory */,
 				63OCFIREPROD001002BDFFC /* FirebaseAnalytics */,
 				63OCFIREPROD002002BDFFC /* FirebaseCrashlytics */,
+				63OCFIREPROD003002BDFFC /* FirebaseRemoteConfig */,
 			);
 			productName = "OpenCode Mobile";
 			productReference = 63369C0F2FA933AE002BDFFC /* OpenCode Mobile.app */;
@@ -743,6 +746,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 63OCFIREPKG00100002BDFFC /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseCrashlytics;
+		};
+		63OCFIREPROD003002BDFFC /* FirebaseRemoteConfig */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 63OCFIREPKG00100002BDFFC /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseRemoteConfig;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -117,6 +117,7 @@ import dev.opencode.mobile.ui.settings.ServersViewModel
 import dev.opencode.mobile.ui.settings.SettingsScreen
 import dev.opencode.mobile.ui.settings.SettingsViewModel
 import dev.opencode.mobile.ui.settings.SyntaxHighlightPickerScreen
+import dev.opencode.mobile.ui.settings.FeatureFlagsRoute
 import dev.opencode.mobile.ui.settings.TextMateLanguagesRoute
 import dev.opencode.mobile.ui.settings.TextMateLogbookScreen
 import dev.opencode.mobile.ui.settings.TextMateLogbookViewModel
@@ -285,6 +286,7 @@ fun MainNavigation() {
                                             SettingsScreen(
                                                 onComponentGalleryClick = { backStack.add(ComponentGalleryHome) },
                                                 onTextMateLanguagesClick = { backStack.add(TextMateLanguagesHome) },
+                                                onFeatureFlagsClick = { backStack.add(FeatureFlagsHome) },
                                                 onTextMateLogbookClick = { backStack.add(TextMateLogbookHome) },
                                                 onDiagnosticLogsClick = { backStack.add(DiagnosticLogsHome) },
                                                 onNavigateBack = { backStack.popRouteUnlessRoot() },
@@ -323,6 +325,8 @@ fun MainNavigation() {
                                                     settingsViewModel::setCollapseConsecutiveToolCalls,
                                                 chipTimeline = SessionChatDisplayPreferences.chipTimeline,
                                                 onChipTimelineChange = settingsViewModel::setChipTimeline,
+                                                chipTimelineAvailable =
+                                                    SessionChatDisplayPreferences.chipTimelineAvailable,
                                                 smoothStreamingUpdates =
                                                     SessionChatDisplayPreferences.smoothStreamingUpdates,
                                                 onSmoothStreamingUpdatesChange =
@@ -452,6 +456,13 @@ fun MainNavigation() {
                                     entry<TextMateLanguagesHome> {
                                         RouteSurface {
                                             TextMateLanguagesRoute(
+                                                onNavigateBack = { backStack.popRouteUnlessRoot() },
+                                            )
+                                        }
+                                    }
+                                    entry<FeatureFlagsHome> {
+                                        RouteSurface {
+                                            FeatureFlagsRoute(
                                                 onNavigateBack = { backStack.popRouteUnlessRoot() },
                                             )
                                         }

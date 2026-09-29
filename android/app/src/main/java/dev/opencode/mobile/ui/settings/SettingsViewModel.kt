@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogBuffer
+import dev.opencode.mobile.domain.featureflags.FeatureFlags
 import dev.opencode.mobile.domain.live.ProjectionCaches
 import dev.opencode.mobile.domain.message.BlockDecorationCache
 import dev.opencode.mobile.domain.message.FollowUpDelivery
@@ -85,6 +86,7 @@ class SettingsViewModel
                 AppOnboardingPreferences.clear()
                 DeveloperToolsPreferences.clear()
                 SessionChatDisplayPreferences.clear()
+                FeatureFlags.clearOverrides()
                 messageContentPreparer.clearDocumentCache()
                 BlockDecorationCache.clear()
                 textMateLogbook.clear()

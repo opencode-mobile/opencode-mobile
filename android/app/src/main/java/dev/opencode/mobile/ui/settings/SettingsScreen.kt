@@ -53,6 +53,7 @@ import dev.opencode.mobile.ui.icons.OpenCodeIcons
 fun SettingsScreen(
     onComponentGalleryClick: () -> Unit,
     onTextMateLanguagesClick: () -> Unit,
+    onFeatureFlagsClick: () -> Unit = {},
     onTextMateLogbookClick: () -> Unit,
     onDiagnosticLogsClick: () -> Unit,
     onNavigateBack: () -> Unit,
@@ -74,6 +75,7 @@ fun SettingsScreen(
     onCollapseConsecutiveToolCallsChange: (Boolean) -> Unit,
     chipTimeline: Boolean,
     onChipTimelineChange: (Boolean) -> Unit,
+    chipTimelineAvailable: Boolean = true,
     smoothStreamingUpdates: Boolean,
     onSmoothStreamingUpdatesChange: (Boolean) -> Unit,
     followUpDelivery: FollowUpDelivery,
@@ -256,22 +258,24 @@ fun SettingsScreen(
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
 
-                OpenCodeListItem(
-                    title = "Chip Timeline",
-                    subtitle = "Show the tools an agent used as chips under its narration",
-                    style = OpenCodeListItemStyle.Card,
-                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Widgets, "Chip Timeline"),
-                    trailing = {
-                        Switch(
-                            checked = chipTimeline,
-                            onCheckedChange = { enabled ->
-                                logSettingsToggle(ProductAnalytics.Action.SETTINGS_TOGGLE_CHIP_TIMELINE, enabled)
-                                onChipTimelineChange(enabled)
-                            },
-                        )
-                    },
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                )
+                if (chipTimelineAvailable) {
+                    OpenCodeListItem(
+                        title = "Chip Timeline",
+                        subtitle = "Show the tools an agent used as chips under its narration",
+                        style = OpenCodeListItemStyle.Card,
+                        startDecorator = StartDecorator.Icon(OpenCodeIcons.Widgets, "Chip Timeline"),
+                        trailing = {
+                            Switch(
+                                checked = chipTimeline,
+                                onCheckedChange = { enabled ->
+                                    logSettingsToggle(ProductAnalytics.Action.SETTINGS_TOGGLE_CHIP_TIMELINE, enabled)
+                                    onChipTimelineChange(enabled)
+                                },
+                            )
+                        },
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    )
+                }
 
                 OpenCodeListItem(
                     title = "Smooth Streaming",
@@ -493,6 +497,15 @@ fun SettingsScreen(
                         style = OpenCodeListItemStyle.Card,
                         startDecorator = StartDecorator.Icon(OpenCodeIcons.Description, "TextMate Logbook"),
                         onClick = onTextMateLogbookClick,
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    )
+
+                    OpenCodeListItem(
+                        title = "Feature Flags",
+                        subtitle = "Remote flags with device overrides",
+                        style = OpenCodeListItemStyle.Card,
+                        startDecorator = StartDecorator.Icon(OpenCodeIcons.Settings, "Feature Flags"),
+                        onClick = onFeatureFlagsClick,
                         modifier = Modifier.padding(horizontal = 16.dp),
                     )
                 }

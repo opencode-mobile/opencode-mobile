@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import dev.opencode.mobile.domain.featureflags.FeatureFlag
+import dev.opencode.mobile.domain.featureflags.FeatureFlags
 import dev.opencode.mobile.domain.message.FollowUpDelivery
 
 /**
@@ -34,9 +36,22 @@ object SessionChatDisplayPreferences {
     var followUpDelivery: FollowUpDelivery by mutableStateOf(DEFAULT_FOLLOW_UP_DELIVERY)
         private set
 
-    /** When true, Session Chat shows the tools an agent used as chips under its narration (OPE-260). */
-    var chipTimeline: Boolean by mutableStateOf(DEFAULT_CHIP_TIMELINE)
+    /** Stored "Chip timeline" preference, independent of the remote flag. */
+    var chipTimelinePreference: Boolean by mutableStateOf(DEFAULT_CHIP_TIMELINE)
         private set
+
+    /** True while the `session_chat_chip_timeline` flag allows the mode at all (OPE-269). */
+    val chipTimelineAvailable: Boolean
+        get() = FeatureFlags.isEnabled(FeatureFlag.SessionChatChipTimeline)
+
+    /**
+     * When true, Session Chat shows the tools an agent used as chips under its
+     * narration (OPE-260). Effective value: the stored preference gated by
+     * [chipTimelineAvailable]; a remotely disabled flag renders the standard
+     * timeline regardless of the stored preference.
+     */
+    val chipTimeline: Boolean
+        get() = chipTimelinePreference && chipTimelineAvailable
 
     private var appContext: Context? = null
 
@@ -58,7 +73,7 @@ object SessionChatDisplayPreferences {
         followUpDelivery =
             FollowUpDelivery.fromWire(prefs.getString(KEY_FOLLOW_UP_DELIVERY, null))
                 ?: DEFAULT_FOLLOW_UP_DELIVERY
-        chipTimeline = prefs.getBoolean(KEY_CHIP_TIMELINE, DEFAULT_CHIP_TIMELINE)
+        chipTimelinePreference = prefs.getBoolean(KEY_CHIP_TIMELINE, DEFAULT_CHIP_TIMELINE)
     }
 
     fun updateCollapseConsecutiveToolCalls(value: Boolean) {
@@ -77,7 +92,7 @@ object SessionChatDisplayPreferences {
     }
 
     fun updateChipTimeline(value: Boolean) {
-        chipTimeline = value
+        chipTimelinePreference = value
         prefs()?.edit()?.putBoolean(KEY_CHIP_TIMELINE, value)?.apply()
     }
 
@@ -92,7 +107,7 @@ object SessionChatDisplayPreferences {
         collapseConsecutiveToolCalls = DEFAULT_COLLAPSE_CONSECUTIVE_TOOL_CALLS
         smoothStreamingUpdates = DEFAULT_SMOOTH_STREAMING_UPDATES
         followUpDelivery = DEFAULT_FOLLOW_UP_DELIVERY
-        chipTimeline = DEFAULT_CHIP_TIMELINE
+        chipTimelinePreference = DEFAULT_CHIP_TIMELINE
     }
 
     private fun prefs() = appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)

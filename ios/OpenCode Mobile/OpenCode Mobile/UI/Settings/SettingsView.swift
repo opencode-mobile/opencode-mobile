@@ -14,6 +14,7 @@ struct SettingsView: View {
     @State private var showTextMateLogbook = false
     @State private var showDiagnosticLogs = false
     @State private var showTextMateLanguages = false
+    @State private var showFeatureFlags = false
     @State private var showClearConfirmation = false
     @State private var showClearSessionCacheConfirmation = false
     @State private var sessionCacheSizeLabel = "Empty"
@@ -177,29 +178,31 @@ struct SettingsView: View {
                     )
                     .padding(.horizontal, 16)
 
-                    OpenCodeListItem(
-                        title: "Chip Timeline",
-                        subtitle: "Show the tools an agent used as chips under its narration",
-                        style: .card,
-                        startDecorator: .icon(.widgets, accessibilityLabel: "Chip Timeline"),
-                        trailing: {
-                            Toggle(
-                                "Chip Timeline",
-                                isOn: Binding(
-                                    get: { sessionChatDisplayPreferences.chipTimeline },
-                                    set: { newValue in
-                                        logSettingsAction(
-                                            ProductAnalytics.Action.settingsToggleChipTimeline
-                                        )
-                                        sessionChatDisplayPreferences.setChipTimeline(newValue)
-                                    }
+                    if sessionChatDisplayPreferences.chipTimelineAvailable {
+                        OpenCodeListItem(
+                            title: "Chip Timeline",
+                            subtitle: "Show the tools an agent used as chips under its narration",
+                            style: .card,
+                            startDecorator: .icon(.widgets, accessibilityLabel: "Chip Timeline"),
+                            trailing: {
+                                Toggle(
+                                    "Chip Timeline",
+                                    isOn: Binding(
+                                        get: { sessionChatDisplayPreferences.chipTimeline },
+                                        set: { newValue in
+                                            logSettingsAction(
+                                                ProductAnalytics.Action.settingsToggleChipTimeline
+                                            )
+                                            sessionChatDisplayPreferences.setChipTimeline(newValue)
+                                        }
+                                    )
                                 )
-                            )
-                            .labelsHidden()
-                            .tint(OpenCodeColors.interactive)
-                        }
-                    )
-                    .padding(.horizontal, 16)
+                                .labelsHidden()
+                                .tint(OpenCodeColors.interactive)
+                            }
+                        )
+                        .padding(.horizontal, 16)
+                    }
 
                     OpenCodeListItem(
                         title: "Smooth Streaming",
@@ -417,6 +420,15 @@ struct SettingsView: View {
                             action: { showTextMateLogbook = true }
                         )
                         .padding(.horizontal, 16)
+
+                        OpenCodeListItem(
+                            title: "Feature Flags",
+                            subtitle: "Remote flags with device overrides",
+                            style: .card,
+                            startDecorator: .icon(.settings, accessibilityLabel: "Feature Flags"),
+                            action: { showFeatureFlags = true }
+                        )
+                        .padding(.horizontal, 16)
                     }
                 }
             }
@@ -434,6 +446,9 @@ struct SettingsView: View {
         }
         .navigationDestination(isPresented: $showTextMateLogbook) {
             TextMateLogbookView()
+        }
+        .navigationDestination(isPresented: $showFeatureFlags) {
+            FeatureFlagsView()
         }
         .navigationDestination(isPresented: $showDiagnosticLogs) {
             DiagnosticLogsView()
