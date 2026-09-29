@@ -319,12 +319,10 @@ object SessionChatTimelineBlocks {
                         val partId = part.id ?: return SessionChatTimelineBlocksResult.MissingPartIds
                         val text = ThoughtPartChrome.displayText(part)
                         val duration = thoughtDurationMs(part.timeStartEpochMs, part.timeEndEpochMs)
-                        // One stretch of thinking arrives as several settled parts; a
-                        // run of them reads as one thought with the durations summed.
-                        // Until narration flushes a paragraph, the run of step
-                        // thoughts reads as one row.
+                        // A tool-only gap stays pending so step thoughts still merge.
+                        // Narration already waiting in pendingText separates the run.
                         val previous = blocks.lastOrNull() as? SessionChatTimelineBlock.Reasoning
-                        if (previous != null && !previous.isStreaming) {
+                        if (previous != null && !previous.isStreaming && pendingText.isEmpty()) {
                             blocks[blocks.lastIndex] =
                                 SessionChatTimelineBlock.Reasoning(
                                     blockID = PresentationBlockId.mergedThought(listOf(previous.blockID, partId)),
@@ -463,6 +461,18 @@ object SessionChatTimelineBlocks {
                 result.blocks.ifEmpty { fallbackBlocks() }
             SessionChatTimelineBlocksResult.MissingPartIds -> fallbackBlocks()
         }
+    }
+
+    /**
+     * Only the latest narration paragraph is live. Earlier paragraphs in a
+     * merged row stay settled while a later step is still streaming.
+     */
+    fun streamingStepParagraphBlockId(
+        blocks: List<SessionChatTimelineBlock>,
+        messageIsStreaming: Boolean,
+    ): String? {
+        if (!messageIsStreaming) return null
+        return blocks.lastOrNull { it is SessionChatTimelineBlock.StepParagraph && it.text != null }?.blockID
     }
 
     /**

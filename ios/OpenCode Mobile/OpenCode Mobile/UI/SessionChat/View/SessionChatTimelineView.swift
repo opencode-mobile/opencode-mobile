@@ -612,6 +612,13 @@ private struct AssistantMessageContent: View {
         return textBlockCount == 1 ? message.renderedMarkdown : nil
     }
 
+    private var streamingStepParagraphBlockID: String? {
+        SessionChatTimelineBlocks.streamingStepParagraphBlockID(
+            blocks: blocks,
+            messageIsStreaming: message.isStreaming
+        )
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             ForEach(blocks, id: \.blockID) { block in
@@ -689,7 +696,7 @@ private struct AssistantMessageContent: View {
                     StepParagraphBlock(
                         paragraph: paragraph,
                         renderedMarkdown: renderedMarkdown(for: paragraph.renderedMarkdown),
-                        isStreaming: message.isStreaming,
+                        isStreaming: block.blockID == streamingStepParagraphBlockID,
                         onOpenMessageActions: onOpenMessageActions,
                         chipAction: { chip in toolCardAction(for: chip.card) }
                     )

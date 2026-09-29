@@ -248,14 +248,22 @@ object TimelineProjector {
         if (body.blocks.isEmpty()) return null
         val attachments =
             body.blocks.mapNotNull { (it as? SessionChatTimelineBlock.Attachment)?.attachment }
-        // Prefer sole text-block copy so slash-command collapse is what chat shows
+        // Prefer sole narration copy so slash-command collapse is what chat shows
         // and copies, not the server-expanded template still on Message.text.
+        // A chip-merged run spans messages; Message.text only covers the first.
         val displayText =
-            body.blocks
-                .filterIsInstance<SessionChatTimelineBlock.Text>()
-                .singleOrNull()
-                ?.text
-                ?: message.text
+            run {
+                val texts = body.blocks.mapNotNull { it.markdownText }
+                if (texts.size == 1) {
+                    texts[0]
+                } else {
+                    val paragraphTexts =
+                        body.blocks.mapNotNull { block ->
+                            (block as? SessionChatTimelineBlock.StepParagraph)?.text
+                        }
+                    if (paragraphTexts.size > 1) paragraphTexts.joinToString("\n\n") else message.text
+                }
+            }
         val draft =
             TimelineRow(
                 id = message.id,

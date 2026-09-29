@@ -1988,6 +1988,69 @@ struct SessionChatTimelineBlocksTests {
         #expect(second.chips.map(\.label) == ["c.swift"])
     }
 
+    @Test func chipTimeline_thoughtAfterPendingNarration_doesNotMerge() {
+        let blocks = okBlocks(
+            parts: [
+                .reasoning(ReasoningPart(id: "th1", text: "First", isStreaming: false, timeStartEpochMs: 0, timeEndEpochMs: 1_000)),
+                text("t1", "Narration"),
+                .reasoning(ReasoningPart(id: "th2", text: "Second", isStreaming: false, timeStartEpochMs: 1_000, timeEndEpochMs: 2_000)),
+                .tool(ToolPart(id: "r1", toolName: "read", status: .completed, input: ["filePath": .string("a.swift")])),
+            ],
+            chipTimeline: true
+        )
+        #expect(blocks.count == 3)
+        guard case .reasoning(let firstID, let first, _, _) = blocks[0] else {
+            Issue.record("Expected the first thought")
+            return
+        }
+        #expect(firstID == PresentationBlockId.direct("th1"))
+        #expect(first == "First")
+        guard case .reasoning(let secondID, let second, _, _) = blocks[1] else {
+            Issue.record("Expected the second thought")
+            return
+        }
+        #expect(secondID == PresentationBlockId.direct("th2"))
+        #expect(second == "Second")
+        guard let narration = paragraph(blocks[2]) else { return }
+        #expect(narration.text == "Narration")
+        #expect(narration.chips.map(\.label) == ["a.swift"])
+    }
+
+    @Test func streamingStepParagraphBlockID_marksOnlyTheLatestNarration() {
+        let earlier = SessionChatTimelineBlock.stepParagraph(
+            blockID: "earlier",
+            paragraph: SessionChatStepParagraphBlock(
+                textBlockID: nil,
+                text: "Done",
+                renderedMarkdown: nil,
+                chips: [],
+                errorLines: []
+            )
+        )
+        let later = SessionChatTimelineBlock.stepParagraph(
+            blockID: "later",
+            paragraph: SessionChatStepParagraphBlock(
+                textBlockID: nil,
+                text: "Live",
+                renderedMarkdown: nil,
+                chips: [],
+                errorLines: []
+            )
+        )
+        #expect(
+            SessionChatTimelineBlocks.streamingStepParagraphBlockID(
+                blocks: [earlier, later],
+                messageIsStreaming: true
+            ) == "later"
+        )
+        #expect(
+            SessionChatTimelineBlocks.streamingStepParagraphBlockID(
+                blocks: [earlier, later],
+                messageIsStreaming: false
+            ) == nil
+        )
+    }
+
     @Test func build_collapseOff_consecutiveThoughts_stayAsSeparateRows() {
         let blocks = okBlocks(
             parts: [

@@ -651,6 +651,8 @@ private fun AssistantMessageContent(
     // Rows never render empty — unpaintable blocks are filtered and an empty
     // result falls back to the live placeholder.
     val blocks = SessionChatTimelineBlocks.paintedBlocks(message)
+    val streamingStepParagraphBlockId =
+        SessionChatTimelineBlocks.streamingStepParagraphBlockId(blocks, message.isStreaming)
     // A sole narration carrier (text block or step paragraph with text) takes
     // the message-scoped markdown, as before the chip timeline.
     val textBlockCount = blocks.count { it.markdownText != null }
@@ -769,7 +771,7 @@ private fun AssistantMessageContent(
                             renderedMarkdown =
                                 block.renderedMarkdown
                                     ?: message.renderedMarkdown.takeIf { textBlockCount == 1 && block.text != null },
-                            isStreaming = message.isStreaming,
+                            isStreaming = block.blockID == streamingStepParagraphBlockId,
                             onOpenMessageActions = onOpenMessageActions,
                             chipAction = { chip -> toolCardAction(chip.card) },
                         )

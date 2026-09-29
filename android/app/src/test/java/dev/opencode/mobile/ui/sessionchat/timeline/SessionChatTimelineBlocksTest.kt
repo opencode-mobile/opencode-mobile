@@ -2388,6 +2388,74 @@ class SessionChatTimelineBlocksTest {
     }
 
     @Test
+    fun chipTimeline_thoughtAfterPendingNarration_doesNotMerge() {
+        val blocks =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                chipTimeline = true,
+                parts =
+                    listOf(
+                        MessagePart.Reasoning(
+                            text = "First",
+                            isStreaming = false,
+                            id = "th1",
+                            timeStartEpochMs = 0,
+                            timeEndEpochMs = 1_000,
+                        ),
+                        MessagePart.Text("Narration", id = "t1"),
+                        MessagePart.Reasoning(
+                            text = "Second",
+                            isStreaming = false,
+                            id = "th2",
+                            timeStartEpochMs = 1_000,
+                            timeEndEpochMs = 2_000,
+                        ),
+                        MessagePart.Tool(
+                            toolName = "read",
+                            status = ToolStatus.Completed,
+                            id = "r1",
+                            input = json("filePath" to "a.kt"),
+                        ),
+                    ),
+            )
+
+        assertEquals(3, blocks.size)
+        assertEquals(PresentationBlockId.direct("th1"), blocks[0].blockID)
+        assertEquals("First", (blocks[0] as SessionChatTimelineBlock.Reasoning).text)
+        assertEquals(PresentationBlockId.direct("th2"), blocks[1].blockID)
+        assertEquals("Second", (blocks[1] as SessionChatTimelineBlock.Reasoning).text)
+        val paragraph = blocks[2] as SessionChatTimelineBlock.StepParagraph
+        assertEquals("Narration", paragraph.text)
+        assertEquals(listOf("a.kt"), paragraph.chips.map { it.label })
+    }
+
+    @Test
+    fun streamingStepParagraphBlockId_marksOnlyTheLatestNarration() {
+        val earlier =
+            SessionChatTimelineBlock.StepParagraph(
+                blockID = "earlier",
+                text = "Done",
+                chips = emptyList(),
+                errorLines = emptyList(),
+            )
+        val later =
+            SessionChatTimelineBlock.StepParagraph(
+                blockID = "later",
+                text = "Live",
+                chips = emptyList(),
+                errorLines = emptyList(),
+            )
+
+        assertEquals(
+            "later",
+            SessionChatTimelineBlocks.streamingStepParagraphBlockId(listOf(earlier, later), messageIsStreaming = true),
+        )
+        assertNull(
+            SessionChatTimelineBlocks.streamingStepParagraphBlockId(listOf(earlier, later), messageIsStreaming = false),
+        )
+    }
+
+    @Test
     fun build_chipTimelineOff_consecutiveThoughts_stayAsSeparateRows() {
         val blocks =
             buildBlocks(
@@ -2574,6 +2642,34 @@ class SessionChatTimelineBlocksTest {
         val joined = merged[2].blocks.single() as SessionChatTimelineBlock.StepParagraph
         assertEquals("second", joined.text)
         assertEquals(1, joined.chips.size)
+    }
+
+    @Test
+    fun project_chipMergedRun_joinsLaterParagraphText() {
+        val merged =
+            SessionChatTimelineBlocks.mergeConsecutiveToolOnlyAssistantBodies(
+                listOf(
+                    textBody("a1", "First step", chipTimeline = true),
+                    toolOnlyBody("a2", "bash-2", chipTimeline = true),
+                    textBody("a3", "Second step", chipTimeline = true),
+                ),
+                collapseConsecutiveToolCalls = false,
+                chipTimeline = true,
+            )
+        val frame =
+            TimelineProjector.project(
+                frame =
+                    DisplayFrame(
+                        sessionKey = "session",
+                        frameRevision = 1L,
+                        sourceRevision = 0L,
+                        messages = merged,
+                    ),
+            )
+
+        assertEquals(1, frame.rows.size)
+        assertEquals("First step\n\nSecond step", frame.rows.single().text)
+        assertEquals(ContentRevision.of("First step\n\nSecond step"), frame.rows.single().contentRevision)
     }
 
     @Test

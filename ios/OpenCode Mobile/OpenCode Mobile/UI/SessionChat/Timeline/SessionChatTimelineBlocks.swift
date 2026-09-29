@@ -517,6 +517,21 @@ nonisolated enum SessionChatTimelineBlocks {
         }
     }
 
+    /// Only the latest narration paragraph is live. Earlier paragraphs in a
+    /// merged row stay settled while a later step is still streaming.
+    static func streamingStepParagraphBlockID(
+        blocks: [SessionChatTimelineBlock],
+        messageIsStreaming: Bool
+    ) -> String? {
+        guard messageIsStreaming else { return nil }
+        for block in blocks.reversed() {
+            if case .stepParagraph(_, let paragraph) = block, paragraph.text != nil {
+                return block.blockID
+            }
+        }
+        return nil
+    }
+
     // MARK: - Chip timeline (OPE-260)
 
     /// Narration accumulates into the pending paragraph; visible tools become
@@ -576,10 +591,10 @@ nonisolated enum SessionChatTimelineBlocks {
                     start: reasoning.timeStartEpochMs,
                     end: reasoning.timeEndEpochMs
                 )
-                // Thinking arrives as one settled part per model step, with the
-                // step's tools between. Until narration flushes a paragraph, the
-                // run reads as one thought row with the durations summed.
-                if case .reasoning(let prevID, let prevText, false, let prevDuration)? = blocks.last {
+                // A tool-only gap stays pending so step thoughts still merge.
+                // Narration already waiting in pendingText separates the run.
+                if pendingText.isEmpty,
+                   case .reasoning(let prevID, let prevText, false, let prevDuration)? = blocks.last {
                     blocks[blocks.count - 1] = .reasoning(
                         blockID: PresentationBlockId.mergedThought([prevID, partId]),
                         text: joinThoughts(prevText, text),
