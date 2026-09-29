@@ -77,17 +77,21 @@ nonisolated final class DefaultSessionCache: SessionCache, @unchecked Sendable {
         pendingActivity[directory] = normalized
         activityDebounceTasks[directory]?.cancel()
         let delay = activityDebounceNanoseconds
+        if delay == 0 {
+            // Flush inline and only inline: a parallel task could take the
+            // pending entries first and still be committing when the caller
+            // returns, so a read straight after would miss them.
+            activityDebounceTasks[directory] = nil
+            activityLock.unlock()
+            await flushActivity(directory: directory)
+            return
+        }
         activityDebounceTasks[directory] = Task { [weak self] in
-            if delay > 0 {
-                try? await Task.sleep(nanoseconds: delay)
-            }
+            try? await Task.sleep(nanoseconds: delay)
             guard !Task.isCancelled else { return }
             await self?.flushActivity(directory: directory)
         }
         activityLock.unlock()
-        if delay == 0 {
-            await flushActivity(directory: directory)
-        }
     }
 
     private func flushActivity(directory: String) async {

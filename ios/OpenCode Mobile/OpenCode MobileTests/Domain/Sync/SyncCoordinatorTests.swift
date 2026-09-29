@@ -66,7 +66,9 @@ struct SyncCoordinatorTests {
         let task = Task.detached { await states.collect(env.coordinator.observe(key)) }
         let load = Task.detached { await env.coordinator.ensureFresh(key) }
         _ = await coordinatorWaitUntil { attempts.value == 1 }
-        #expect(states.latest == .stale)
+        // The observer runs on its own task; wait for the first state to land.
+        let sawStale = await coordinatorWaitUntil { states.latest == .stale }
+        #expect(sawStale)
         _ = await coordinatorWaitUntil { clock.waitersCount > 0 }
         clock.releaseNextSleep()
         _ = await coordinatorWaitUntil { attempts.value == 2 }
