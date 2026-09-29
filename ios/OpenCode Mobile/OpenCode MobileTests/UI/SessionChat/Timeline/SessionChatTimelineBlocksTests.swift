@@ -2553,10 +2553,10 @@ struct SessionChatTimelineBlocksTests {
             chipTimeline: true
         )
         guard let paragraph = paragraph(blocks.single) else { return }
-        #expect(step.chips.count == 1)
-        #expect(step.chips[0].repeatCount == 3)
-        #expect(step.chips[0].card.detailText == "run 3")
-        #expect(step.chips[0].displayTrailingText == "\u{00D7}3")
+        #expect(paragraph.chips.count == 1)
+        #expect(paragraph.chips[0].repeatCount == 3)
+        #expect(paragraph.chips[0].card.detailText == "run 3")
+        #expect(paragraph.chips[0].displayTrailingText == "\u{00D7}3")
         // Block identity still covers every folded part.
         #expect(blocks[0].blockID == PresentationBlockId.stepParagraph(["b1", "b2", "b3"]))
         #expect(paragraph.id == PresentationBlockId.stepParagraphIdentity("b1"))
@@ -2577,9 +2577,9 @@ struct SessionChatTimelineBlocksTests {
             chipTimeline: true
         )
         guard let paragraph = paragraph(blocks.single) else { return }
-        #expect(step.chips.map(\.status) == [.completed, .error, .error, .completed, .running, .running])
-        #expect(step.chips.map(\.repeatCount) == [2, 1, 1, 2, 1, 1])
-        #expect(step.errorLines.count == 2)
+        #expect(paragraph.chips.map(\.status) == [.completed, .error, .error, .completed, .running, .running])
+        #expect(paragraph.chips.map(\.repeatCount) == [2, 1, 1, 2, 1, 1])
+        #expect(paragraph.errorLines.count == 2)
     }
 
     @Test func foldRepeatedChips_differentLabelOrKindBreaksRun() {
@@ -2619,11 +2619,11 @@ struct SessionChatTimelineBlocksTests {
             chipTimeline: true
         )
         guard let paragraph = paragraph(blocks.single) else { return }
-        #expect(step.chips.map(\.family) == [.explore, .change])
-        #expect(step.chips.map(\.repeatCount) == [1, 2])
-        #expect(step.chips[1].additions == 7)
-        #expect(step.chips[1].deletions == 3)
-        #expect(step.chips[1].card.additions == 4)
+        #expect(paragraph.chips.map(\.family) == [.explore, .change])
+        #expect(paragraph.chips.map(\.repeatCount) == [1, 2])
+        #expect(paragraph.chips[1].additions == 7)
+        #expect(paragraph.chips[1].deletions == 3)
+        #expect(paragraph.chips[1].card.additions == 4)
     }
 
     @Test func chipTimeline_executeChipUsesShortenedLabel() {
@@ -2635,7 +2635,7 @@ struct SessionChatTimelineBlocksTests {
             chipTimeline: true
         )
         guard let paragraph = paragraph(blocks.single) else { return }
-        #expect(step.chips.map(\.label) == ["npm test"])
+        #expect(paragraph.chips.map(\.label) == ["npm test"])
     }
 
     @Test func displayTrailingText_combinesRepeatCountWithExistingText() {
