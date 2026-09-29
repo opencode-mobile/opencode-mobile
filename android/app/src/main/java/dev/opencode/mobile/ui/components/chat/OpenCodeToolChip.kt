@@ -56,8 +56,7 @@ private val ToolChipPaddingVertical = 6.dp
 private val ToolChipIconSize = 12.dp
 private val ToolChipSpinnerSize = 11.dp
 private val ToolChipContentSpacing = 6.dp
-private val ToolChipLabelMaxWidth = 170.dp
-private val ToolChipBriefMaxWidth = 130.dp
+private val ToolChipBriefMaxWidth = 160.dp
 private val ToolChipMinTouchTarget = 48.dp
 
 /** Variant-first content of a [OpenCodeToolChip]; colours and radius are not exposed. */
@@ -191,7 +190,9 @@ fun OpenCodeToolChip(
             maxLines = 1,
             overflow =
                 if (variant is OpenCodeToolChipVariant.File) TextOverflow.MiddleEllipsis else TextOverflow.Ellipsis,
-            modifier = Modifier.widthIn(max = ToolChipLabelMaxWidth),
+            // Shrinks before the other slots, so a long label truncates instead of
+            // pushing the status glyph out; the chip may take the whole row.
+            modifier = Modifier.weight(1f, fill = false),
         )
 
         if (variant is OpenCodeToolChipVariant.Agent && !variant.brief.isNullOrEmpty()) {

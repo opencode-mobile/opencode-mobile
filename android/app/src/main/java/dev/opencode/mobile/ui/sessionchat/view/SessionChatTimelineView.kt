@@ -69,6 +69,7 @@ import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.OpenCodeActionPill
 import dev.opencode.mobile.ui.components.OpenCodeActionPillVariant
 import dev.opencode.mobile.ui.components.OpenCodeAssistantMessage
+import dev.opencode.mobile.ui.components.OpenCodeAssistantMessagePresentation
 import dev.opencode.mobile.ui.components.OpenCodeMessageAttachment
 import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessage
 import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessageContent
@@ -781,7 +782,7 @@ private fun AssistantMessageContent(
 private const val STEP_PARAGRAPH_PLACEHOLDER = "Worked without commentary"
 private const val STEP_PARAGRAPH_EXPLORE_LIMIT = 2
 private const val STEP_PARAGRAPH_CHANGE_LIMIT = 3
-private val StepParagraphTextPaddingHorizontal = 12.dp
+private val StepParagraphTextPaddingHorizontal = 4.dp
 
 /**
  * Chip timeline paragraph: narration (or the muted placeholder), a wrapping
@@ -815,6 +816,7 @@ private fun StepParagraphBlock(
                         onOpenMessageActions = onOpenMessageActions,
                         messageDescription = "Assistant message",
                     ),
+                presentation = OpenCodeAssistantMessagePresentation.Plain,
             )
         } else {
             Text(
@@ -826,7 +828,7 @@ private fun StepParagraphBlock(
         }
         if (block.chips.isNotEmpty()) {
             FlowRow(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = StepParagraphTextPaddingHorizontal),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
@@ -899,6 +901,7 @@ private fun AssistantMessageBubble(
     renderedMarkdown: MarkdownDocument?,
     isStreaming: Boolean = false,
     modifier: Modifier = Modifier,
+    presentation: OpenCodeAssistantMessagePresentation = OpenCodeAssistantMessagePresentation.Bubble,
 ) {
     val shouldDeferMarkdown =
         SessionChatMarkdownPaint.shouldDefer(
@@ -936,6 +939,7 @@ private fun AssistantMessageBubble(
         renderedMarkdown = renderedMarkdown.takeIf { paintMarkdown },
         isStreaming = isStreaming,
         modifier = modifier,
+        presentation = presentation,
     )
 }
 

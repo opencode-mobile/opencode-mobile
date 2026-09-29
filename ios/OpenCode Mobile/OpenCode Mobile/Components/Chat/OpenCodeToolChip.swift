@@ -73,13 +73,15 @@ struct OpenCodeToolChip: View {
                     .fixedSize()
             }
 
+            // Label shrinks before anything else so a long path or command
+            // truncates instead of pushing the status glyph off the chip; the
+            // chip itself may take the whole row (see OpenCodeChipFlowLayout).
             Text(label)
                 .font(labelFont)
                 .foregroundStyle(labelColor)
                 .lineLimit(1)
                 .truncationMode(labelTruncationMode)
-                .frame(maxWidth: Self.labelMaxWidth, alignment: .leading)
-                .fixedSize(horizontal: true, vertical: false)
+                .layoutPriority(1)
 
             if case .agent(_, let brief?) = variant, !brief.isEmpty {
                 Text(brief)
@@ -87,8 +89,8 @@ struct OpenCodeToolChip: View {
                     .foregroundStyle(OpenCodeColors.textWeak)
                     .lineLimit(1)
                     .truncationMode(.tail)
-                    .frame(maxWidth: Self.briefMaxWidth, alignment: .leading)
-                    .fixedSize(horizontal: true, vertical: false)
+                    // Gives way first, so the agent name stays whole.
+                    .layoutPriority(-1)
             }
 
             if let diffCounts {
@@ -326,8 +328,6 @@ struct OpenCodeToolChip: View {
     private static let contentSpacing: CGFloat = 6
     private static let iconSize: CGFloat = 12
     private static let glyphSize: CGFloat = 11
-    private static let labelMaxWidth: CGFloat = 170
-    private static let briefMaxWidth: CGFloat = 130
     private static let minTapTarget: CGFloat = 44
     private static let runningBackgroundOpacity = 0.12
     private static let agentBackgroundOpacity = 0.14

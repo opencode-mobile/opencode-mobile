@@ -775,7 +775,8 @@ private struct StepParagraphBlock: View {
                 AssistantMessageBubble(
                     text: text,
                     renderedMarkdown: renderedMarkdown,
-                    isStreaming: isStreaming
+                    isStreaming: isStreaming,
+                    presentation: .plain
                 )
                 .modifier(
                     SessionChatMessageActionsGestureModifier(
@@ -826,7 +827,7 @@ private struct StepParagraphBlock: View {
 
     private static let sectionSpacing: CGFloat = 8
     private static let chipSpacing: CGFloat = 6
-    private static let placeholderHorizontalPadding: CGFloat = 12
+    private static let placeholderHorizontalPadding: CGFloat = 4
     private static let chipRowHorizontalPadding: CGFloat = 4
 }
 
@@ -867,13 +868,20 @@ private struct AssistantMessageBubble: View {
     let text: String
     let renderedMarkdown: NativeMarkdownDocument?
     var isStreaming: Bool = false
+    var presentation: OpenCodeAssistantMessagePresentation = .bubble
 
     @State private var paintMarkdown: Bool
 
-    init(text: String, renderedMarkdown: NativeMarkdownDocument?, isStreaming: Bool = false) {
+    init(
+        text: String,
+        renderedMarkdown: NativeMarkdownDocument?,
+        isStreaming: Bool = false,
+        presentation: OpenCodeAssistantMessagePresentation = .bubble
+    ) {
         self.text = text
         self.renderedMarkdown = renderedMarkdown
         self.isStreaming = isStreaming
+        self.presentation = presentation
         // If the pipeline already prepared markdown (including hold-ready open),
         // paint it immediately. Defer only applies when a doc arrives later on an
         // already-visible plain bubble (enrich / stream) — see .task below.
@@ -884,7 +892,8 @@ private struct AssistantMessageBubble: View {
         OpenCodeAssistantMessage(
             text: text,
             renderedMarkdown: paintMarkdown ? renderedMarkdown : nil,
-            isStreaming: isStreaming
+            isStreaming: isStreaming,
+            presentation: presentation
         )
         .task(id: paintTaskID) {
             guard renderedMarkdown != nil, !paintMarkdown else { return }
