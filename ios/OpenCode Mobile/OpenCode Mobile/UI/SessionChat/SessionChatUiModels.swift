@@ -491,18 +491,22 @@ struct SessionChatTimelineRegionState: Equatable {
     var knownChildSessionIDs: Set<String> {
         Set(
             messages.flatMap { message in
-                message.blocks.compactMap { block -> String? in
+                message.blocks.flatMap { block -> [String] in
                     switch block {
                     case .childSessionRow(_, let row):
-                        row.childSessionId
+                        [row.childSessionId].compactMap { $0 }
                     case .toolCard(_, let card):
                         if card.status == .pending || card.status == .running {
-                            card.childSessionId
+                            [card.childSessionId].compactMap { $0 }
                         } else {
-                            nil
+                            []
+                        }
+                    case .stepParagraph(_, let paragraph):
+                        paragraph.chips.compactMap { chip in
+                            chip.status == .pending || chip.status == .running ? chip.card.childSessionId : nil
                         }
                     default:
-                        nil
+                        []
                     }
                 }
             }

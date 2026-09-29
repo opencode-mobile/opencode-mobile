@@ -19,6 +19,8 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -45,6 +47,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
@@ -61,15 +64,18 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.markdown.MarkdownDocument
+import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.OpenCodeActionPill
 import dev.opencode.mobile.ui.components.OpenCodeActionPillVariant
 import dev.opencode.mobile.ui.components.OpenCodeAssistantMessage
+import dev.opencode.mobile.ui.components.OpenCodeAssistantMessagePresentation
 import dev.opencode.mobile.ui.components.OpenCodeMessageAttachment
 import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessage
 import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessageContent
@@ -79,6 +85,9 @@ import dev.opencode.mobile.ui.components.OpenCodeStatusStack
 import dev.opencode.mobile.ui.components.OpenCodeSyncingPill
 import dev.opencode.mobile.ui.components.OpenCodeToolCallCard
 import dev.opencode.mobile.ui.components.OpenCodeToolCallCardStatus
+import dev.opencode.mobile.ui.components.OpenCodeToolChip
+import dev.opencode.mobile.ui.components.OpenCodeToolChipStatus
+import dev.opencode.mobile.ui.components.OpenCodeToolChipVariant
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.scroll.MessageListOlderHistory
 import dev.opencode.mobile.ui.scroll.MessageListOlderLoadIntent
@@ -98,6 +107,8 @@ import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineState
 import dev.opencode.mobile.ui.sessionchat.SessionChatTopPill
 import dev.opencode.mobile.ui.sessionchat.TimelineApply
 import dev.opencode.mobile.ui.sessionchat.TimelineFrame
+import dev.opencode.mobile.ui.sessionchat.ToolChipFamily
+import dev.opencode.mobile.ui.sessionchat.ToolChipKind
 import dev.opencode.mobile.ui.sessionchat.WorkingTurnIndicator
 import dev.opencode.mobile.ui.sessionchat.displayLabel
 import kotlinx.coroutines.delay
@@ -615,6 +626,7 @@ private fun SessionChatMessageItem.outgoingContent(): List<OpenCodeOutgoingMessa
             is SessionChatTimelineBlock.ToolCard, is SessionChatTimelineBlock.ToolGroup,
             is SessionChatTimelineBlock.ChildSessionRow,
             is SessionChatTimelineBlock.Reasoning,
+            is SessionChatTimelineBlock.StepParagraph,
             -> null
         }
     }
@@ -655,7 +667,36 @@ private fun AssistantMessageContent(
     // Rows never render empty — unpaintable blocks are filtered and an empty
     // result falls back to the live placeholder.
     val blocks = SessionChatTimelineBlocks.paintedBlocks(message)
-    val textBlockCount = blocks.count { it is SessionChatTimelineBlock.Text }
+    val streamingStepParagraphBlockId =
+        SessionChatTimelineBlocks.streamingStepParagraphBlockId(blocks, message.isStreaming)
+    // A sole narration carrier (text block or step paragraph with text) takes
+    // the message-scoped markdown, as before the chip timeline.
+    val textBlockCount = blocks.count { it.markdownText != null }
+
+    fun toolCardAction(block: SessionChatTimelineBlock.ToolCard): (() -> Unit)? =
+        when {
+            block.childSessionId != null -> {
+                {
+                    onChildSessionTap(block.childSessionId, block.title)
+                }
+            }
+            block.opensChangesReview && supportsSessionMessageDiff -> {
+                {
+                    onChangesReviewTap(message.id, block.changesInitialFilePath)
+                }
+            }
+            block.detailText != null -> {
+                {
+                    onToolDetailTap(
+                        SessionChatToolDetailTarget(
+                            title = block.title,
+                            body = block.detailText,
+                        ),
+                    )
+                }
+            }
+            else -> null
+        }
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -690,30 +731,7 @@ private fun AssistantMessageContent(
                             additions = block.additions,
                             deletions = block.deletions,
                             errorText = block.errorText,
-                            onClick =
-                                when {
-                                    block.childSessionId != null -> {
-                                        {
-                                            onChildSessionTap(block.childSessionId, block.title)
-                                        }
-                                    }
-                                    block.opensChangesReview && supportsSessionMessageDiff -> {
-                                        {
-                                            onChangesReviewTap(message.id, block.changesInitialFilePath)
-                                        }
-                                    }
-                                    block.detailText != null -> {
-                                        {
-                                            onToolDetailTap(
-                                                SessionChatToolDetailTarget(
-                                                    title = block.title,
-                                                    body = block.detailText,
-                                                ),
-                                            )
-                                        }
-                                    }
-                                    else -> null
-                                },
+                            onClick = toolCardAction(block),
                         )
                     is SessionChatTimelineBlock.ToolGroup ->
                         OpenCodeToolCallCard(
@@ -763,11 +781,137 @@ private fun AssistantMessageContent(
                                     }
                                 },
                         )
+                    is SessionChatTimelineBlock.StepParagraph ->
+                        StepParagraphBlock(
+                            block = block,
+                            renderedMarkdown =
+                                block.renderedMarkdown
+                                    ?: message.renderedMarkdown.takeIf { textBlockCount == 1 && block.text != null },
+                            isStreaming = block.blockID == streamingStepParagraphBlockId,
+                            onOpenMessageActions = onOpenMessageActions,
+                            chipAction = { chip -> toolCardAction(chip.card) },
+                        )
                 }
             }
         }
     }
 }
+
+private const val STEP_PARAGRAPH_PLACEHOLDER = "Worked without commentary"
+private const val STEP_PARAGRAPH_EXPLORE_LIMIT = 2
+private const val STEP_PARAGRAPH_CHANGE_LIMIT = 3
+private val StepParagraphTextPaddingHorizontal = 4.dp
+
+/**
+ * Chip timeline paragraph: narration (or the muted placeholder), a wrapping
+ * chip row truncated per family with an in-place `+N more`, then one error
+ * caption per failed chip.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun StepParagraphBlock(
+    block: SessionChatTimelineBlock.StepParagraph,
+    renderedMarkdown: MarkdownDocument?,
+    isStreaming: Boolean,
+    onOpenMessageActions: () -> Unit,
+    chipAction: (SessionChatTimelineBlock.ToolChip) -> (() -> Unit)?,
+) {
+    var showAll by rememberSaveable(block.blockID) { mutableStateOf(false) }
+    val visible = visibleStepParagraphChips(block.chips, showAll)
+    val hiddenCount = block.chips.size - visible.size
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        if (block.text != null) {
+            AssistantMessageBubble(
+                text = block.text,
+                renderedMarkdown = renderedMarkdown,
+                isStreaming = isStreaming,
+                modifier =
+                    messageActionsModifier(
+                        renderedMarkdown = renderedMarkdown,
+                        onOpenMessageActions = onOpenMessageActions,
+                        messageDescription = "Assistant message",
+                    ),
+                presentation = OpenCodeAssistantMessagePresentation.Plain,
+            )
+        } else {
+            Text(
+                text = STEP_PARAGRAPH_PLACEHOLDER,
+                style = MaterialTheme.typography.bodyMedium.copy(fontStyle = FontStyle.Italic),
+                color = openCodeColor("text-weak"),
+                modifier = Modifier.padding(horizontal = StepParagraphTextPaddingHorizontal),
+            )
+        }
+        if (block.chips.isNotEmpty()) {
+            FlowRow(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = StepParagraphTextPaddingHorizontal),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                visible.forEach { chip ->
+                    key(chip.card.blockID) {
+                        OpenCodeToolChip(
+                            variant = chip.toToolChipVariant(),
+                            status = chip.status.toToolChipStatus(),
+                            trailingText = chip.trailingText,
+                            onClick = chipAction(chip),
+                        )
+                    }
+                }
+                if (hiddenCount > 0) {
+                    OpenCodeToolChip(
+                        variant = OpenCodeToolChipVariant.More(hiddenCount),
+                        onClick = { showAll = true },
+                    )
+                }
+            }
+        }
+        block.errorLines.forEach { line ->
+            Text(
+                text = line,
+                style = MaterialTheme.typography.bodySmall,
+                color = openCodeColor("error"),
+                modifier = Modifier.padding(horizontal = StepParagraphTextPaddingHorizontal),
+            )
+        }
+    }
+}
+
+/** Explore shows the first 2 and change the first 3 until the paragraph is expanded. */
+internal fun visibleStepParagraphChips(
+    chips: List<SessionChatTimelineBlock.ToolChip>,
+    showAll: Boolean,
+): List<SessionChatTimelineBlock.ToolChip> {
+    if (showAll) return chips
+    val seen = mutableMapOf<ToolChipFamily, Int>()
+    return chips.filter { chip ->
+        val index = seen.getOrDefault(chip.family, 0)
+        seen[chip.family] = index + 1
+        when (chip.family) {
+            ToolChipFamily.Explore -> index < STEP_PARAGRAPH_EXPLORE_LIMIT
+            ToolChipFamily.Change -> index < STEP_PARAGRAPH_CHANGE_LIMIT
+            ToolChipFamily.Skill, ToolChipFamily.Agent, ToolChipFamily.Command -> true
+        }
+    }
+}
+
+private fun SessionChatTimelineBlock.ToolChip.toToolChipVariant(): OpenCodeToolChipVariant =
+    when (kind) {
+        ToolChipKind.File -> OpenCodeToolChipVariant.File(label = label, additions = additions, deletions = deletions)
+        ToolChipKind.Command -> OpenCodeToolChipVariant.Command(label = label)
+        ToolChipKind.Agent -> OpenCodeToolChipVariant.Agent(name = label, brief = brief)
+        ToolChipKind.Skill -> OpenCodeToolChipVariant.Skill(name = label)
+    }
+
+private fun ToolStatus.toToolChipStatus(): OpenCodeToolChipStatus =
+    when (this) {
+        ToolStatus.Pending -> OpenCodeToolChipStatus.Pending
+        ToolStatus.Running -> OpenCodeToolChipStatus.Running
+        ToolStatus.Completed -> OpenCodeToolChipStatus.Completed
+        ToolStatus.Error -> OpenCodeToolChipStatus.Error
+    }
 
 @Composable
 private fun AssistantMessageBubble(
@@ -775,6 +919,7 @@ private fun AssistantMessageBubble(
     renderedMarkdown: MarkdownDocument?,
     isStreaming: Boolean = false,
     modifier: Modifier = Modifier,
+    presentation: OpenCodeAssistantMessagePresentation = OpenCodeAssistantMessagePresentation.Bubble,
 ) {
     val shouldDeferMarkdown =
         SessionChatMarkdownPaint.shouldDefer(
@@ -812,6 +957,7 @@ private fun AssistantMessageBubble(
         renderedMarkdown = renderedMarkdown.takeIf { paintMarkdown },
         isStreaming = isStreaming,
         modifier = modifier,
+        presentation = presentation,
     )
 }
 

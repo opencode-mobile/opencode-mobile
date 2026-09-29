@@ -5,6 +5,7 @@ import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.ToolStatus
+import dev.opencode.mobile.markdown.MarkdownDocument
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.add
@@ -2004,14 +2005,740 @@ class SessionChatTimelineBlocksTest {
         assertTrue(merged[1].blocks.single() is SessionChatTimelineBlock.ChildSessionRow)
     }
 
+    // --- Chip timeline (OPE-260) ---
+
+    @Test
+    fun chipTimeline_textThenTools_oneParagraphWithChips() {
+        val blocks =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                chipTimeline = true,
+                parts =
+                    listOf(
+                        MessagePart.Text("Looking at the timeline", id = "t1"),
+                        MessagePart.Tool(
+                            toolName = "read",
+                            status = ToolStatus.Completed,
+                            id = "p1",
+                            input = json("filePath" to "/repo/ios/SessionChatView.swift"),
+                        ),
+                        MessagePart.Tool(
+                            toolName = "bash",
+                            status = ToolStatus.Completed,
+                            id = "p2",
+                            input = json("command" to "xcodebuild test -scheme App"),
+                        ),
+                    ),
+            )
+
+        val paragraph = blocks.single() as SessionChatTimelineBlock.StepParagraph
+        assertEquals(PresentationBlockId.stepParagraph(listOf("t1", "p1", "p2")), paragraph.blockID)
+        assertEquals(PresentationBlockId.mergedText(listOf("t1")), paragraph.textBlockID)
+        assertEquals("Looking at the timeline", paragraph.text)
+        assertEquals(listOf("SessionChatView.swift", "xcodebuild test -scheme App"), paragraph.chips.map { it.label })
+        assertEquals(listOf(ToolChipKind.File, ToolChipKind.Command), paragraph.chips.map { it.kind })
+        assertTrue(paragraph.errorLines.isEmpty())
+    }
+
+    @Test
+    fun chipTimeline_toolsThenTextThenTools_twoParagraphs() {
+        val blocks =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                chipTimeline = true,
+                parts =
+                    listOf(
+                        MessagePart.Tool(toolName = "bash", status = ToolStatus.Completed, id = "p1"),
+                        MessagePart.Text("Now the fix", id = "t1"),
+                        MessagePart.Tool(toolName = "edit", status = ToolStatus.Completed, id = "p2"),
+                    ),
+            )
+
+        assertEquals(2, blocks.size)
+        val first = blocks[0] as SessionChatTimelineBlock.StepParagraph
+        val second = blocks[1] as SessionChatTimelineBlock.StepParagraph
+        assertNull(first.text)
+        assertNull(first.textBlockID)
+        assertEquals(PresentationBlockId.stepParagraph(listOf("p1")), first.blockID)
+        assertEquals("Now the fix", second.text)
+        assertEquals(PresentationBlockId.stepParagraph(listOf("t1", "p2")), second.blockID)
+        assertEquals(1, second.chips.size)
+    }
+
+    @Test
+    fun chipTimeline_multipleTextPartsMergeLikeTextBlock() {
+        val blocks =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                chipTimeline = true,
+                parts =
+                    listOf(
+                        MessagePart.Text("One", id = "t1"),
+                        MessagePart.Text(" Two ", id = "t2"),
+                        MessagePart.Tool(toolName = "bash", status = ToolStatus.Completed, id = "p1"),
+                    ),
+            )
+
+        val paragraph = blocks.single() as SessionChatTimelineBlock.StepParagraph
+        assertEquals("One\nTwo", paragraph.text)
+        assertEquals(PresentationBlockId.mergedText(listOf("t1", "t2")), paragraph.textBlockID)
+    }
+
+    @Test
+    fun chipTimeline_childSessionTool_becomesAgentChip() {
+        val blocks =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                chipTimeline = true,
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "task",
+                            status = ToolStatus.Running,
+                            id = "p1",
+                            input = json("subagent_type" to "Explore", "description" to "Find the pill\nmore"),
+                            metadata = json("sessionId" to "ses-child"),
+                        ),
+                    ),
+            )
+
+        val paragraph = blocks.single() as SessionChatTimelineBlock.StepParagraph
+        val chip = paragraph.chips.single()
+        assertEquals(ToolChipKind.Agent, chip.kind)
+        assertEquals(ToolChipFamily.Agent, chip.family)
+        assertEquals("Explore", chip.label)
+        assertEquals("Find the pill", chip.brief)
+        assertEquals(ToolStatus.Running, chip.status)
+        assertNull(chip.trailingText)
+        assertEquals("ses-child", chip.card.childSessionId)
+        assertTrue(blocks.none { it is SessionChatTimelineBlock.ChildSessionRow })
+    }
+
+    @Test
+    fun chipTimeline_failedTool_errorStatusAndErrorLine() {
+        val blocks =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                chipTimeline = true,
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "bash",
+                            status = ToolStatus.Error,
+                            id = "p1",
+                            input = json("command" to "npm test --silent"),
+                            error = "exit code 1",
+                        ),
+                        MessagePart.Tool(toolName = "read", status = ToolStatus.Error, id = "p2"),
+                    ),
+            )
+
+        val paragraph = blocks.single() as SessionChatTimelineBlock.StepParagraph
+        assertEquals(listOf(ToolStatus.Error, ToolStatus.Error), paragraph.chips.map { it.status })
+        assertEquals(listOf("read: Failed", "npm test --silent: exit code 1"), paragraph.errorLines)
+    }
+
+    @Test
+    fun chipTimeline_labelsPerTool() {
+        val blocks =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                chipTimeline = true,
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "glob",
+                            status = ToolStatus.Completed,
+                            id = "p1",
+                            input = json("pattern" to "**/*.kt", "path" to "/repo"),
+                        ),
+                        MessagePart.Tool(
+                            toolName = "grep",
+                            status = ToolStatus.Completed,
+                            id = "p2",
+                            input = json("pattern" to "chipTimeline", "path" to "/repo/android"),
+                        ),
+                        MessagePart.Tool(
+                            toolName = "websearch",
+                            status = ToolStatus.Completed,
+                            id = "p3",
+                            input = json("query" to "compose flow row"),
+                        ),
+                        MessagePart.Tool(
+                            toolName = "webfetch",
+                            status = ToolStatus.Completed,
+                            id = "p4",
+                            input = json("url" to "https://developer.android.com/jetpack/compose"),
+                        ),
+                        MessagePart.Tool(
+                            toolName = "edit",
+                            status = ToolStatus.Completed,
+                            id = "p5",
+                            input = json("filePath" to "/repo/android/Navigation.kt"),
+                            metadata =
+                                buildJsonObject {
+                                    put(
+                                        "filediff",
+                                        buildJsonObject {
+                                            put("file", "/repo/android/Navigation.kt")
+                                            put("additions", 4)
+                                            put("deletions", 1)
+                                        },
+                                    )
+                                },
+                        ),
+                        MessagePart.Tool(
+                            toolName = "skill",
+                            status = ToolStatus.Completed,
+                            id = "p6",
+                            input = json("name" to "feature"),
+                        ),
+                        MessagePart.Tool(
+                            toolName = "shell",
+                            status = ToolStatus.Completed,
+                            id = "p7",
+                            input = json("command" to "  ./gradlew   :app:testDebugUnitTest --tests Foo"),
+                        ),
+                        MessagePart.Tool(toolName = "linear_get_issue", status = ToolStatus.Completed, id = "p8"),
+                    ),
+            )
+
+        val chips = (blocks.single() as SessionChatTimelineBlock.StepParagraph).chips
+        val byId = chips.associateBy { it.card.blockID }
+        assertEquals("**/*.kt", byId.getValue(PresentationBlockId.direct("p1")).label)
+        assertEquals("chipTimeline", byId.getValue(PresentationBlockId.direct("p2")).label)
+        assertEquals("compose flow row", byId.getValue(PresentationBlockId.direct("p3")).label)
+        assertEquals("developer.android.com", byId.getValue(PresentationBlockId.direct("p4")).label)
+        val edit = byId.getValue(PresentationBlockId.direct("p5"))
+        assertEquals("Navigation.kt", edit.label)
+        assertEquals(4, edit.additions)
+        assertEquals(1, edit.deletions)
+        assertEquals(ToolChipFamily.Change, edit.family)
+        assertTrue(edit.card.opensChangesReview)
+        val skill = byId.getValue(PresentationBlockId.direct("p6"))
+        assertEquals("/feature", skill.label)
+        assertEquals(ToolChipKind.Skill, skill.kind)
+        assertEquals("./gradlew :app:testDebugUnitTest --tests\u2026", byId.getValue(PresentationBlockId.direct("p7")).label)
+        val generic = byId.getValue(PresentationBlockId.direct("p8"))
+        assertEquals("linear_get_issue", generic.label)
+        assertEquals(ToolChipFamily.Command, generic.family)
+    }
+
+    @Test
+    fun chipTimeline_commandLabels_firstLineCollapsedAndTruncated() {
+        val sixtyChars = "echo " + "x".repeat(55)
+        val blocks =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                chipTimeline = true,
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "bash",
+                            status = ToolStatus.Completed,
+                            id = "p1",
+                            input = json("command" to "\n\n  gh   pr list \t--state open\ncd repo && ls"),
+                        ),
+                        MessagePart.Tool(
+                            toolName = "bash",
+                            status = ToolStatus.Completed,
+                            id = "p2",
+                            input = json("command" to sixtyChars),
+                        ),
+                        MessagePart.Tool(
+                            toolName = "bash",
+                            status = ToolStatus.Completed,
+                            id = "p3",
+                            input = json("command" to "gh pr list --state open --limit 50"),
+                        ),
+                        MessagePart.Tool(
+                            toolName = "bash",
+                            status = ToolStatus.Completed,
+                            id = "p4",
+                            input = json("command" to "for n in 1 2 3; do echo \$n; done"),
+                        ),
+                    ),
+            )
+
+        val labels = (blocks.single() as SessionChatTimelineBlock.StepParagraph).chips.map { it.label }
+        assertEquals("gh pr list --state open", labels[0])
+        assertEquals(41, labels[1].length)
+        assertEquals(sixtyChars.take(40) + "\u2026", labels[1])
+        assertEquals("gh pr list --state open --limit 50", labels[2])
+        assertEquals("for n in 1 2 3; do echo \$n; done", labels[3])
+    }
+
+    @Test
+    fun chipTimeline_chipsOrderedByFamily() {
+        val blocks =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                chipTimeline = true,
+                parts =
+                    listOf(
+                        MessagePart.Tool(toolName = "bash", status = ToolStatus.Completed, id = "p1"),
+                        MessagePart.Tool(toolName = "edit", status = ToolStatus.Completed, id = "p2"),
+                        MessagePart.Tool(toolName = "task", status = ToolStatus.Completed, id = "p3"),
+                        MessagePart.Tool(toolName = "read", status = ToolStatus.Completed, id = "p4"),
+                        MessagePart.Tool(toolName = "skill", status = ToolStatus.Completed, id = "p5"),
+                        MessagePart.Tool(toolName = "grep", status = ToolStatus.Completed, id = "p6"),
+                    ),
+            )
+
+        val chips = (blocks.single() as SessionChatTimelineBlock.StepParagraph).chips
+        assertEquals(
+            listOf(
+                ToolChipFamily.Skill,
+                ToolChipFamily.Explore,
+                ToolChipFamily.Explore,
+                ToolChipFamily.Agent,
+                ToolChipFamily.Change,
+                ToolChipFamily.Command,
+            ),
+            chips.map { it.family },
+        )
+        // Stable within a family.
+        assertEquals(listOf("p4", "p6"), chips.filter { it.family == ToolChipFamily.Explore }.map { it.card.blockID.removePrefix("p:") })
+    }
+
+    @Test
+    fun chipTimeline_consecutiveThoughts_collapseIntoOneRowWithSummedDuration() {
+        val blocks =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                chipTimeline = true,
+                parts =
+                    listOf(
+                        MessagePart.Reasoning(
+                            text = "First",
+                            isStreaming = false,
+                            id = "th1",
+                            timeStartEpochMs = 0,
+                            timeEndEpochMs = 1_200,
+                        ),
+                        MessagePart.Reasoning(
+                            text = "Second",
+                            isStreaming = false,
+                            id = "th2",
+                            timeStartEpochMs = 1_200,
+                            timeEndEpochMs = 6_000,
+                        ),
+                        MessagePart.Reasoning(text = "", isStreaming = false, id = "th3", timeStartEpochMs = 6_000, timeEndEpochMs = 6_500),
+                        MessagePart.Text("Now", id = "t1"),
+                        MessagePart.Tool(toolName = "bash", status = ToolStatus.Completed, id = "p1"),
+                    ),
+            )
+
+        assertEquals(2, blocks.size)
+        val thought = blocks[0] as SessionChatTimelineBlock.Reasoning
+        // th3 is blank, so the visibility rule hides it; two settled thoughts merge.
+        assertEquals(PresentationBlockId.mergedThought(listOf(PresentationBlockId.direct("th1"), "th2")), thought.blockID)
+        assertEquals("First\n\nSecond", thought.text)
+        assertEquals(6_000L, thought.durationMs)
+        assertEquals("Now", (blocks[1] as SessionChatTimelineBlock.StepParagraph).text)
+    }
+
+    @Test
+    fun chipTimeline_thoughtsAroundOneParagraph_mergeAboveIt() {
+        val blocks =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                chipTimeline = true,
+                parts =
+                    listOf(
+                        MessagePart.Reasoning(
+                            text = "First",
+                            isStreaming = false,
+                            id = "th1",
+                            timeStartEpochMs = 0,
+                            timeEndEpochMs = 1_000,
+                        ),
+                        MessagePart.Tool(toolName = "read", status = ToolStatus.Completed, id = "r1", input = json("filePath" to "a.kt")),
+                        MessagePart.Reasoning(
+                            text = "Second",
+                            isStreaming = false,
+                            id = "th2",
+                            timeStartEpochMs = 1_000,
+                            timeEndEpochMs = 3_000,
+                        ),
+                        MessagePart.Tool(toolName = "read", status = ToolStatus.Completed, id = "r2", input = json("filePath" to "b.kt")),
+                        MessagePart.Text("Now narration", id = "t1"),
+                        MessagePart.Reasoning(
+                            text = "Third",
+                            isStreaming = false,
+                            id = "th3",
+                            timeStartEpochMs = 3_000,
+                            timeEndEpochMs = 4_000,
+                        ),
+                        MessagePart.Tool(toolName = "read", status = ToolStatus.Completed, id = "r3", input = json("filePath" to "c.kt")),
+                    ),
+            )
+
+        // Rows: one merged thought for the tool-only stretch, its paragraph,
+        // then the thought that followed the narration and the final paragraph.
+        assertEquals(4, blocks.size)
+        assertEquals(3_000L, (blocks[0] as SessionChatTimelineBlock.Reasoning).durationMs)
+        val first = blocks[1] as SessionChatTimelineBlock.StepParagraph
+        assertEquals(null, first.text)
+        assertEquals(listOf("a.kt", "b.kt"), first.chips.map { it.label })
+        assertEquals(PresentationBlockId.direct("th3"), blocks[2].blockID)
+        val second = blocks[3] as SessionChatTimelineBlock.StepParagraph
+        assertEquals("Now narration", second.text)
+        assertEquals(listOf("c.kt"), second.chips.map { it.label })
+    }
+
+    @Test
+    fun chipTimeline_thoughtAfterPendingNarration_doesNotMerge() {
+        val blocks =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                chipTimeline = true,
+                parts =
+                    listOf(
+                        MessagePart.Reasoning(
+                            text = "First",
+                            isStreaming = false,
+                            id = "th1",
+                            timeStartEpochMs = 0,
+                            timeEndEpochMs = 1_000,
+                        ),
+                        MessagePart.Text("Narration", id = "t1"),
+                        MessagePart.Reasoning(
+                            text = "Second",
+                            isStreaming = false,
+                            id = "th2",
+                            timeStartEpochMs = 1_000,
+                            timeEndEpochMs = 2_000,
+                        ),
+                        MessagePart.Tool(
+                            toolName = "read",
+                            status = ToolStatus.Completed,
+                            id = "r1",
+                            input = json("filePath" to "a.kt"),
+                        ),
+                    ),
+            )
+
+        assertEquals(3, blocks.size)
+        assertEquals(PresentationBlockId.direct("th1"), blocks[0].blockID)
+        assertEquals("First", (blocks[0] as SessionChatTimelineBlock.Reasoning).text)
+        assertEquals(PresentationBlockId.direct("th2"), blocks[1].blockID)
+        assertEquals("Second", (blocks[1] as SessionChatTimelineBlock.Reasoning).text)
+        val paragraph = blocks[2] as SessionChatTimelineBlock.StepParagraph
+        assertEquals("Narration", paragraph.text)
+        assertEquals(listOf("a.kt"), paragraph.chips.map { it.label })
+    }
+
+    @Test
+    fun streamingStepParagraphBlockId_marksOnlyTheLatestNarration() {
+        val earlier =
+            SessionChatTimelineBlock.StepParagraph(
+                blockID = "earlier",
+                text = "Done",
+                chips = emptyList(),
+                errorLines = emptyList(),
+            )
+        val later =
+            SessionChatTimelineBlock.StepParagraph(
+                blockID = "later",
+                text = "Live",
+                chips = emptyList(),
+                errorLines = emptyList(),
+            )
+
+        assertEquals(
+            "later",
+            SessionChatTimelineBlocks.streamingStepParagraphBlockId(listOf(earlier, later), messageIsStreaming = true),
+        )
+        assertNull(
+            SessionChatTimelineBlocks.streamingStepParagraphBlockId(listOf(earlier, later), messageIsStreaming = false),
+        )
+    }
+
+    @Test
+    fun build_chipTimelineOff_consecutiveThoughts_stayAsSeparateRows() {
+        val blocks =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Reasoning(text = "First", isStreaming = false, id = "th1"),
+                        MessagePart.Reasoning(text = "Second", isStreaming = false, id = "th2"),
+                    ),
+            )
+
+        assertEquals(2, blocks.size)
+    }
+
+    @Test
+    fun chipTimeline_attachmentAndReasoning_emittedSeparatelyWithoutClosingParagraph() {
+        val blocks =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                chipTimeline = true,
+                parts =
+                    listOf(
+                        MessagePart.Reasoning(
+                            text = "thinking",
+                            isStreaming = false,
+                            id = "r1",
+                            timeStartEpochMs = 1,
+                            timeEndEpochMs = 2,
+                        ),
+                        MessagePart.Text("Intro", id = "t1"),
+                        MessagePart.File(
+                            id = "f1",
+                            filename = "notes.txt",
+                            mime = "text/plain",
+                            kind = AttachmentKind.Text,
+                            dataUrl = "data:text/plain;base64,aGk=",
+                        ),
+                        MessagePart.Tool(toolName = "bash", status = ToolStatus.Completed, id = "p1"),
+                    ),
+            )
+
+        assertEquals(3, blocks.size)
+        assertTrue(blocks[0] is SessionChatTimelineBlock.Reasoning)
+        assertTrue(blocks[1] is SessionChatTimelineBlock.Attachment)
+        val paragraph = blocks[2] as SessionChatTimelineBlock.StepParagraph
+        assertEquals("Intro", paragraph.text)
+        assertEquals(1, paragraph.chips.size)
+    }
+
+    @Test
+    fun chipTimeline_hiddenToolsAndBlankTextSkipped() {
+        val blocks =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                chipTimeline = true,
+                parts =
+                    listOf(
+                        MessagePart.Tool(toolName = "todowrite", status = ToolStatus.Completed, id = "p1"),
+                        MessagePart.Text("   ", id = "t1"),
+                        MessagePart.Text("hidden", id = "t2", isIgnored = true),
+                        MessagePart.Tool(toolName = "read", status = ToolStatus.Completed, id = "p2"),
+                    ),
+            )
+
+        val paragraph = blocks.single() as SessionChatTimelineBlock.StepParagraph
+        assertNull(paragraph.text)
+        assertEquals(PresentationBlockId.stepParagraph(listOf("p2")), paragraph.blockID)
+    }
+
+    @Test
+    fun chipTimeline_onlyHiddenParts_emptyBlocks() {
+        val blocks =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                chipTimeline = true,
+                parts = listOf(MessagePart.Tool(toolName = "todowrite", status = ToolStatus.Completed, id = "p1")),
+            )
+        assertTrue(blocks.isEmpty())
+    }
+
+    @Test
+    fun chipTimeline_missingPartIds_usesFallbackText() {
+        val blocks =
+            SessionChatTimelineBlocks.buildOrFallback(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Text("Hello", id = "t1"),
+                        MessagePart.Tool(toolName = "bash", status = ToolStatus.Completed, id = null),
+                    ),
+                messageId = "msg-1",
+                fallbackText = "Hello",
+                chipTimeline = true,
+            )
+        assertEquals(
+            listOf(
+                SessionChatTimelineBlock.Text(
+                    blockID = PresentationBlockId.messageFallback("msg-1"),
+                    text = "Hello",
+                ),
+            ),
+            blocks,
+        )
+    }
+
+    @Test
+    fun chipTimeline_userRole_unchanged() {
+        val parts =
+            listOf(
+                MessagePart.Text("Hi", id = "t1"),
+                MessagePart.Tool(toolName = "bash", status = ToolStatus.Completed, id = "p1"),
+            )
+        assertEquals(
+            buildBlocks(MessageRole.User, parts),
+            buildBlocks(MessageRole.User, parts, chipTimeline = true),
+        )
+    }
+
+    @Test
+    fun chipTimeline_off_keepsTextAndToolCards() {
+        val blocks =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                chipTimeline = false,
+                parts =
+                    listOf(
+                        MessagePart.Text("Hi", id = "t1"),
+                        MessagePart.Tool(toolName = "bash", status = ToolStatus.Completed, id = "p1"),
+                    ),
+            )
+        assertEquals(2, blocks.size)
+        assertTrue(blocks[0] is SessionChatTimelineBlock.Text)
+        assertTrue(blocks[1] is SessionChatTimelineBlock.ToolCard)
+    }
+
+    @Test
+    fun merge_chipTimelineOn_consecutiveAssistantBodiesJoinIntoOneParagraph() {
+        val bodies =
+            listOf(
+                textBody("a1", "Looking", chipTimeline = true),
+                toolOnlyBody("a2", "bash-2", chipTimeline = true),
+                toolOnlyBody("a3", "read-3", toolName = "read", chipTimeline = true),
+            )
+        val merged =
+            SessionChatTimelineBlocks.mergeConsecutiveToolOnlyAssistantBodies(
+                bodies,
+                collapseConsecutiveToolCalls = false,
+                chipTimeline = true,
+            )
+
+        assertEquals(1, merged.size)
+        assertEquals("a1", merged[0].message.id)
+        val paragraph = merged[0].blocks.single() as SessionChatTimelineBlock.StepParagraph
+        assertEquals("Looking", paragraph.text)
+        assertEquals(2, paragraph.chips.size)
+        assertEquals(PresentationBlockId.stepParagraph(listOf("a1-t", "bash-2", "read-3")), paragraph.blockID)
+        assertEquals(3, merged[0].message.parts.size)
+    }
+
+    @Test
+    fun merge_chipTimelineOn_userBodyBreaksRun() {
+        val userParts = listOf(MessagePart.Text("question", id = "u-t"))
+        val user =
+            DisplayMessageBody(
+                message = Message(id = "u1", role = MessageRole.User, text = "question", parts = userParts),
+                blocks = buildBlocks(MessageRole.User, userParts),
+            )
+        val bodies =
+            listOf(
+                textBody("a1", "first", chipTimeline = true),
+                user,
+                textBody("a2", "second", chipTimeline = true),
+                toolOnlyBody("a3", "bash-3", chipTimeline = true),
+            )
+        val merged =
+            SessionChatTimelineBlocks.mergeConsecutiveToolOnlyAssistantBodies(
+                bodies,
+                collapseConsecutiveToolCalls = false,
+                chipTimeline = true,
+            )
+
+        assertEquals(3, merged.size)
+        assertEquals(listOf("a1", "u1", "a2"), merged.map { it.message.id })
+        val joined = merged[2].blocks.single() as SessionChatTimelineBlock.StepParagraph
+        assertEquals("second", joined.text)
+        assertEquals(1, joined.chips.size)
+    }
+
+    @Test
+    fun project_chipMergedRun_joinsLaterParagraphText() {
+        val merged =
+            SessionChatTimelineBlocks.mergeConsecutiveToolOnlyAssistantBodies(
+                listOf(
+                    textBody("a1", "First step", chipTimeline = true),
+                    toolOnlyBody("a2", "bash-2", chipTimeline = true),
+                    textBody("a3", "Second step", chipTimeline = true),
+                ),
+                collapseConsecutiveToolCalls = false,
+                chipTimeline = true,
+            )
+        val frame =
+            TimelineProjector.project(
+                frame =
+                    DisplayFrame(
+                        sessionKey = "session",
+                        frameRevision = 1L,
+                        sourceRevision = 0L,
+                        messages = merged,
+                    ),
+            )
+
+        assertEquals(1, frame.rows.size)
+        assertEquals("First step\n\nSecond step", frame.rows.single().text)
+        assertEquals(ContentRevision.of("First step\n\nSecond step"), frame.rows.single().contentRevision)
+    }
+
+    @Test
+    fun merge_chipTimelineOn_keepsRenderedMarkdownOnJoinedParagraph() {
+        val document = MarkdownDocument(sourceHash = 7, blocks = emptyList())
+        val text = textBody("a1", "Looking", chipTimeline = true)
+        val decorated =
+            text.copy(
+                blocks =
+                    text.blocks.map { block ->
+                        (block as SessionChatTimelineBlock.StepParagraph).copy(renderedMarkdown = document)
+                    },
+            )
+        val merged =
+            SessionChatTimelineBlocks.mergeConsecutiveToolOnlyAssistantBodies(
+                listOf(decorated, toolOnlyBody("a2", "bash-2", chipTimeline = true)),
+                collapseConsecutiveToolCalls = false,
+                chipTimeline = true,
+            )
+
+        val paragraph = merged.single().blocks.single() as SessionChatTimelineBlock.StepParagraph
+        assertEquals(document, paragraph.renderedMarkdown)
+    }
+
+    @Test
+    fun merge_chipTimelineOn_missingPartIdsLeaveRunUnmerged() {
+        val partsWithoutIds = listOf(MessagePart.Tool(toolName = "bash", status = ToolStatus.Completed, id = null))
+        val fallback =
+            DisplayMessageBody(
+                message = Message(id = "a2", role = MessageRole.Assistant, text = "", parts = partsWithoutIds),
+                blocks =
+                    SessionChatTimelineBlocks.buildOrFallback(
+                        role = MessageRole.Assistant,
+                        parts = partsWithoutIds,
+                        messageId = "a2",
+                        fallbackText = "raw",
+                        chipTimeline = true,
+                    ),
+            )
+        val merged =
+            SessionChatTimelineBlocks.mergeConsecutiveToolOnlyAssistantBodies(
+                listOf(textBody("a1", "first", chipTimeline = true), fallback),
+                collapseConsecutiveToolCalls = false,
+                chipTimeline = true,
+            )
+        assertEquals(2, merged.size)
+    }
+
+    @Test
+    fun merge_chipTimelineOff_unchanged() {
+        val bodies = listOf(textBody("a1", "first"), toolOnlyBody("a2", "bash-2"))
+        val merged =
+            SessionChatTimelineBlocks.mergeConsecutiveToolOnlyAssistantBodies(
+                bodies,
+                collapseConsecutiveToolCalls = false,
+                chipTimeline = false,
+            )
+        assertEquals(bodies, merged)
+    }
+
     private fun buildBlocks(
         role: MessageRole,
         parts: List<MessagePart>,
         collapseConsecutiveToolCalls: Boolean = false,
+        chipTimeline: Boolean = false,
     ): List<SessionChatTimelineBlock> =
         when (
             val result =
-                SessionChatTimelineBlocks.build(role, parts, collapseConsecutiveToolCalls)
+                SessionChatTimelineBlocks.build(role, parts, collapseConsecutiveToolCalls, chipTimeline)
         ) {
             is SessionChatTimelineBlocksResult.Ok -> result.blocks
             SessionChatTimelineBlocksResult.MissingPartIds -> error("expected Ok, got MissingPartIds")
@@ -2022,22 +2749,30 @@ class SessionChatTimelineBlocksTest {
         toolId: String,
         toolName: String = "bash",
         status: ToolStatus = ToolStatus.Completed,
+        chipTimeline: Boolean = false,
     ): DisplayMessageBody {
         val parts = listOf(MessagePart.Tool(toolName = toolName, status = status, id = toolId))
         return DisplayMessageBody(
             message = Message(id = id, role = MessageRole.Assistant, text = "", parts = parts),
-            blocks = buildBlocks(MessageRole.Assistant, parts, collapseConsecutiveToolCalls = true),
+            blocks =
+                buildBlocks(
+                    MessageRole.Assistant,
+                    parts,
+                    collapseConsecutiveToolCalls = true,
+                    chipTimeline = chipTimeline,
+                ),
         )
     }
 
     private fun textBody(
         id: String,
         text: String,
+        chipTimeline: Boolean = false,
     ): DisplayMessageBody {
         val parts = listOf(MessagePart.Text(text, id = "$id-t"))
         return DisplayMessageBody(
             message = Message(id = id, role = MessageRole.Assistant, text = text, parts = parts),
-            blocks = buildBlocks(MessageRole.Assistant, parts),
+            blocks = buildBlocks(MessageRole.Assistant, parts, chipTimeline = chipTimeline),
         )
     }
 

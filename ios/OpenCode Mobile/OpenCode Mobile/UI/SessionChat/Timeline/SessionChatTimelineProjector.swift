@@ -132,7 +132,8 @@ nonisolated enum SessionChatTimelineProjector {
         fromDisplayMessages messages: [DisplayMessage],
         sessionKey: String,
         serverCommands: [ServerCommand] = [],
-        collapseConsecutiveToolCalls: Bool = false
+        collapseConsecutiveToolCalls: Bool = false,
+        chipTimeline: Bool = false
     ) -> [String: Int] {
         let frame = DisplayFrameBuilder.build(
             sessionKey: sessionKey,
@@ -140,7 +141,8 @@ nonisolated enum SessionChatTimelineProjector {
             sourceRevision: 0,
             displayMessages: messages,
             serverCommands: serverCommands,
-            collapseConsecutiveToolCalls: collapseConsecutiveToolCalls
+            collapseConsecutiveToolCalls: collapseConsecutiveToolCalls,
+            chipTimeline: chipTimeline
         )
         return signatureCounts(serverRows(from: frame))
     }
@@ -185,11 +187,14 @@ nonisolated enum SessionChatTimelineProjector {
         // Prefer sole text-block copy so slash-command collapse is what chat shows
         // and copies, not the server-expanded template still on Message.text.
         let displayText: String = {
-            let texts = body.blocks.compactMap { block -> String? in
-                if case .text(_, let text, _) = block { return text }
+            let texts = body.blocks.compactMap { $0.textContent?.text }
+            if texts.count == 1 { return texts[0] }
+            // A chip-merged run spans messages; `Message.text` only covers the first.
+            let paragraphTexts = body.blocks.compactMap { block -> String? in
+                if case .stepParagraph = block { return block.textContent?.text }
                 return nil
             }
-            return texts.count == 1 ? texts[0] : message.text
+            return paragraphTexts.count > 1 ? paragraphTexts.joined(separator: "\n\n") : message.text
         }()
         let contentRevision = ContentRevision.of(displayText)
         let bridgeMarkdown = bridgeRenderedMarkdown(body: body, previous: previous)
@@ -270,7 +275,10 @@ nonisolated enum SessionChatTimelineProjector {
         var found: NativeMarkdownDocument?
         var textCount = 0
         for block in blocks {
-            guard case .text(_, _, let markdown) = block else { continue }
+            guard let markdown = block.textContent?.renderedMarkdown else {
+                if block.textContent != nil { textCount += 1 }
+                continue
+            }
             textCount += 1
             if textCount > 1 { return nil }
             found = markdown
@@ -472,7 +480,7 @@ nonisolated enum SessionChatTimelineProjector {
             case .attachment(_, let file):
                 let name = file.filename.trimmingCharacters(in: .whitespacesAndNewlines)
                 return name.isEmpty ? "file:\(file.mime)" : "file:\(name):\(file.mime)"
-            case .toolCard, .toolGroup, .childSessionRow, .reasoning:
+            case .toolCard, .toolGroup, .childSessionRow, .reasoning, .stepParagraph:
                 return nil
             }
         }
@@ -543,10 +551,7 @@ nonisolated enum SessionChatTimelineProjector {
     /// Text length is content-only while streaming; GrowBottom declares height growth.
     private static func layoutFingerprint(_ row: TimelineRow) -> String {
         let markdownPresent = row.renderedMarkdown != nil
-            || row.blocks.contains { block in
-                if case .text(_, _, let doc) = block { return doc != nil }
-                return false
-            }
+            || row.blocks.contains { $0.textContent?.renderedMarkdown != nil }
         let blockKey = row.blocks.map { block -> String in
             switch block {
             case .text(let id, _, let doc):
@@ -561,6 +566,11 @@ nonisolated enum SessionChatTimelineProjector {
                 "r:\(id):\(row.childSessionId != nil)"
             case .reasoning(let id, _, _, _):
                 "n:\(id)"
+            case .stepParagraph(let id, let paragraph):
+                "s:\(id):\(paragraph.text != nil):\(paragraph.renderedMarkdown != nil):\(paragraph.errorLines.count):"
+                    + paragraph.chips.map {
+                        "\($0.status.rawValue)/\($0.additions ?? -1)/\($0.deletions ?? -1)"
+                    }.joined(separator: ",")
             }
         }.joined(separator: "|")
         return "\(row.isStreaming):\(markdownPresent):\(row.blocks.count):\(row.metadataLabel.isEmpty ? "0" : "1"):\(row.pendingDelivery == nil ? "0" : "1"):\(blockKey)"
@@ -593,6 +603,8 @@ nonisolated enum SessionChatTimelineProjector {
                 "r:\(id):\(row.childSessionId != nil)"
             case .reasoning(let id, _, _, _):
                 "n:\(id)"
+            case .stepParagraph(let id, let paragraph):
+                "s:\(id):\(paragraph.chips.count)"
             }
         }.joined(separator: "|")
         return "\(row.blocks.count)|\(attachments)|\(blocks)"
@@ -600,8 +612,9 @@ nonisolated enum SessionChatTimelineProjector {
 
     private static func markdownFingerprint(_ row: TimelineRow) -> String {
         row.blocks.compactMap { block -> String? in
-            guard case .text(let id, _, let doc) = block else { return nil }
-            return "\(id):\(doc != nil):\(doc?.sourceHash ?? 0):\(doc?.renderTreeVersion ?? 0)"
+            guard let content = block.textContent else { return nil }
+            let doc = content.renderedMarkdown
+            return "\(block.blockID):\(doc != nil):\(doc?.sourceHash ?? 0):\(doc?.renderTreeVersion ?? 0)"
         }.joined(separator: "|")
     }
 

@@ -416,17 +416,19 @@ data class SessionChatTimelineRegionState(
 fun SessionChatTimelineRegionState.knownChildSessionIds(): Set<String> =
     messages
         .flatMap { message ->
-            message.blocks.mapNotNull { block ->
+            message.blocks.flatMap { block ->
                 when (block) {
-                    is SessionChatTimelineBlock.ChildSessionRow -> block.childSessionId
-                    is SessionChatTimelineBlock.ToolCard ->
-                        block.childSessionId?.takeIf {
-                            block.status == ToolStatus.Pending || block.status == ToolStatus.Running
-                        }
-                    else -> null
+                    is SessionChatTimelineBlock.ChildSessionRow -> listOfNotNull(block.childSessionId)
+                    is SessionChatTimelineBlock.ToolCard -> listOfNotNull(block.liveChildSessionId())
+                    is SessionChatTimelineBlock.StepParagraph ->
+                        block.chips.mapNotNull { chip -> chip.card.liveChildSessionId() }
+                    else -> emptyList()
                 }
             }
         }.toSet()
+
+private fun SessionChatTimelineBlock.ToolCard.liveChildSessionId(): String? =
+    childSessionId?.takeIf { status == ToolStatus.Pending || status == ToolStatus.Running }
 
 data class SessionChatSlashSuggestion(
     val id: String,

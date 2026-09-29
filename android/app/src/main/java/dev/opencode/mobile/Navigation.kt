@@ -90,6 +90,7 @@ import dev.opencode.mobile.ui.componentgallery.components.StatusStackGalleryScre
 import dev.opencode.mobile.ui.componentgallery.components.SyncingPillGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.TextInputGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ToolCallCardGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.ToolChipGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.TopBarGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.UnifiedDiffGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.foundation.ColorGalleryScreen
@@ -320,6 +321,8 @@ fun MainNavigation() {
                                                     SessionChatDisplayPreferences.collapseConsecutiveToolCalls,
                                                 onCollapseConsecutiveToolCallsChange =
                                                     settingsViewModel::setCollapseConsecutiveToolCalls,
+                                                chipTimeline = SessionChatDisplayPreferences.chipTimeline,
+                                                onChipTimelineChange = settingsViewModel::setChipTimeline,
                                                 smoothStreamingUpdates =
                                                     SessionChatDisplayPreferences.smoothStreamingUpdates,
                                                 onSmoothStreamingUpdatesChange =
@@ -519,6 +522,7 @@ fun MainNavigation() {
                                                             PendingPromptsStripGalleryScreen()
                                                         ComponentGalleryEntryId.AssistantMessage -> AssistantMessageGalleryScreen()
                                                         ComponentGalleryEntryId.ToolCallCard -> ToolCallCardGalleryScreen()
+                                                        ComponentGalleryEntryId.ToolChip -> ToolChipGalleryScreen()
                                                         ComponentGalleryEntryId.ChildSessionRow -> ChildSessionRowGalleryScreen()
                                                         ComponentGalleryEntryId.TopBar -> TopBarGalleryScreen()
                                                         ComponentGalleryEntryId.OverflowMenu -> OverflowMenuGalleryScreen()

@@ -172,9 +172,9 @@ object TimelineProjector {
     fun toMessageItem(row: TimelineRow): SessionChatMessageItem {
         val soleDecoratedText =
             row.blocks
-                .filterIsInstance<SessionChatTimelineBlock.Text>()
+                .filter { it.markdownText != null }
                 .singleOrNull()
-                ?.renderedMarkdown
+                ?.decoratedMarkdown
         return SessionChatMessageItem(
             id = row.id,
             role = row.role,
@@ -248,14 +248,22 @@ object TimelineProjector {
         if (body.blocks.isEmpty()) return null
         val attachments =
             body.blocks.mapNotNull { (it as? SessionChatTimelineBlock.Attachment)?.attachment }
-        // Prefer sole text-block copy so slash-command collapse is what chat shows
+        // Prefer sole narration copy so slash-command collapse is what chat shows
         // and copies, not the server-expanded template still on Message.text.
+        // A chip-merged run spans messages; Message.text only covers the first.
         val displayText =
-            body.blocks
-                .filterIsInstance<SessionChatTimelineBlock.Text>()
-                .singleOrNull()
-                ?.text
-                ?: message.text
+            run {
+                val texts = body.blocks.mapNotNull { it.markdownText }
+                if (texts.size == 1) {
+                    texts[0]
+                } else {
+                    val paragraphTexts =
+                        body.blocks.mapNotNull { block ->
+                            (block as? SessionChatTimelineBlock.StepParagraph)?.text
+                        }
+                    if (paragraphTexts.size > 1) paragraphTexts.joinToString("\n\n") else message.text
+                }
+            }
         val draft =
             TimelineRow(
                 id = message.id,
@@ -313,10 +321,7 @@ object TimelineProjector {
     private fun layoutKey(row: TimelineRow): LayoutKey =
         LayoutKey(
             blockCount = row.blocks.size,
-            hasMarkdown =
-                row.blocks.any {
-                    it is SessionChatTimelineBlock.Text && it.renderedMarkdown != null
-                },
+            hasMarkdown = row.blocks.any { it.decoratedMarkdown != null },
             isStreaming = row.isStreaming,
             hasMetadata = row.metadataLabel.isNotEmpty(),
             hasWaiting = row.pendingDelivery != null,
@@ -339,7 +344,15 @@ object TimelineProjector {
                 "r:${block.blockID}:${block.childSessionId != null}"
             is SessionChatTimelineBlock.Reasoning ->
                 "n:${block.blockID}"
+            is SessionChatTimelineBlock.StepParagraph ->
+                "s:${block.blockID}:${block.renderedMarkdown != null}:${stepParagraphChipFingerprint(block)}"
         }
+
+    /** Chip status / counts change chip width and error captions, so they are layout. */
+    private fun stepParagraphChipFingerprint(block: SessionChatTimelineBlock.StepParagraph): String =
+        block.chips.joinToString(",") { chip ->
+            "${chip.status.ordinal}:${chip.additions}:${chip.deletions}:${chip.trailingText != null}"
+        } + ":${block.errorLines.size}"
 
     private data class LayoutKey(
         val blockCount: Int,
@@ -568,19 +581,22 @@ object TimelineProjector {
                 "r:${block.blockID}:${block.childSessionId != null}"
             is SessionChatTimelineBlock.Reasoning ->
                 "n:${block.blockID}"
+            is SessionChatTimelineBlock.StepParagraph ->
+                "s:${block.blockID}:${stepParagraphChipFingerprint(block)}"
         }
 
     private fun markdownFingerprint(row: TimelineRow): String =
         buildString {
             row.blocks.forEach { block ->
-                if (block is SessionChatTimelineBlock.Text) {
+                if (block.markdownText != null) {
+                    val document = block.decoratedMarkdown
                     append(block.blockID)
                     append(':')
-                    append(block.renderedMarkdown != null)
+                    append(document != null)
                     append(':')
-                    append(block.renderedMarkdown?.sourceHash ?: 0)
+                    append(document?.sourceHash ?: 0)
                     append(':')
-                    append(block.renderedMarkdown?.renderTreeVersion ?: 0)
+                    append(document?.renderTreeVersion ?: 0)
                     append('|')
                 }
             }

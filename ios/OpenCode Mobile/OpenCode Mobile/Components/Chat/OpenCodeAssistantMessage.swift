@@ -1,9 +1,17 @@
 import SwiftUI
 
+/// How the assistant text sits in the timeline: the raised bubble, or plain
+/// prose for the chip timeline where the tool chips follow the paragraph.
+enum OpenCodeAssistantMessagePresentation: Sendable {
+    case bubble
+    case plain
+}
+
 struct OpenCodeAssistantMessage: View {
     let text: String
     var renderedMarkdown: NativeMarkdownDocument? = nil
     var isStreaming: Bool = false
+    var presentation: OpenCodeAssistantMessagePresentation = .bubble
 
     var body: some View {
         Group {
@@ -20,9 +28,14 @@ struct OpenCodeAssistantMessage: View {
                     .foregroundStyle(OpenCodeColors.textStrong)
             }
         }
-        .padding(.horizontal, Self.paddingHorizontal)
-        .padding(.vertical, Self.paddingVertical)
-        .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: Self.cornerRadius))
+        .padding(.horizontal, presentation == .bubble ? Self.paddingHorizontal : Self.plainPaddingHorizontal)
+        .padding(.vertical, presentation == .bubble ? Self.paddingVertical : 0)
+        .background {
+            if presentation == .bubble {
+                RoundedRectangle(cornerRadius: Self.cornerRadius)
+                    .fill(OpenCodeColors.surfaceRaisedBase)
+            }
+        }
         .frame(maxWidth: OpenCodeLayout.assistantMessageMaxWidth, alignment: .leading)
     }
 
@@ -35,6 +48,7 @@ struct OpenCodeAssistantMessage: View {
     private static let cornerRadius: CGFloat = 8
     private static let paddingHorizontal: CGFloat = 12
     private static let paddingVertical: CGFloat = 8
+    private static let plainPaddingHorizontal: CGFloat = 4
 }
 
 #if DEBUG

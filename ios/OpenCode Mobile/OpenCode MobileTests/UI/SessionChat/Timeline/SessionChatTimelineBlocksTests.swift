@@ -1765,6 +1765,463 @@ struct SessionChatTimelineBlocksTests {
         .text(TextPart(id: id, text: value, isStreaming: false))
     }
 
+    // MARK: - Chip timeline (OPE-260)
+
+    private func paragraph(
+        _ block: SessionChatTimelineBlock?,
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) -> SessionChatStepParagraphBlock? {
+        guard case .stepParagraph(_, let paragraph)? = block else {
+            Issue.record("Expected step paragraph, got \(String(describing: block))", sourceLocation: sourceLocation)
+            return nil
+        }
+        return paragraph
+    }
+
+    @Test func chipTimeline_textThenTools_oneParagraphWithChips() {
+        let blocks = okBlocks(
+            parts: [
+                text("t1", "Looking at the view"),
+                .tool(ToolPart(id: "r1", toolName: "read", status: .completed, input: ["filePath": .string("ios/App/SessionChatView.swift")])),
+                .tool(ToolPart(id: "b1", toolName: "bash", status: .completed, input: ["command": .string("xcodebuild test -scheme App")])),
+            ],
+            chipTimeline: true
+        )
+        #expect(blocks.count == 1)
+        #expect(blocks[0].blockID == PresentationBlockId.stepParagraph(["t1", "r1", "b1"]))
+        guard let paragraph = paragraph(blocks.single) else { return }
+        #expect(paragraph.text == "Looking at the view")
+        #expect(paragraph.textBlockID == PresentationBlockId.mergedText(["t1"]))
+        #expect(paragraph.chips.map(\.label) == ["SessionChatView.swift", "xcodebuild test -scheme App"])
+        #expect(paragraph.chips.map(\.kind) == [.file, .command])
+        #expect(paragraph.chips.map(\.family) == [.explore, .command])
+        #expect(paragraph.errorLines.isEmpty)
+        #expect(blocks[0].textContent?.blockID == PresentationBlockId.direct("t1"))
+    }
+
+    @Test func chipTimeline_toolsTextTools_twoParagraphs() {
+        let blocks = okBlocks(
+            parts: [
+                .tool(ToolPart(id: "r1", toolName: "read", status: .completed, input: ["filePath": .string("a.swift")])),
+                text("t1", "Now editing"),
+                .tool(ToolPart(id: "e1", toolName: "edit", status: .completed, input: ["filePath": .string("dir/b.swift")])),
+            ],
+            chipTimeline: true
+        )
+        #expect(blocks.count == 2)
+        guard let first = paragraph(blocks[0]), let second = paragraph(blocks[1]) else { return }
+        #expect(first.text == nil)
+        #expect(first.textBlockID == nil)
+        #expect(first.chips.map(\.label) == ["a.swift"])
+        #expect(blocks[0].blockID == PresentationBlockId.stepParagraph(["r1"]))
+        #expect(second.text == "Now editing")
+        #expect(second.chips.map(\.label) == ["b.swift"])
+        #expect(second.chips[0].family == .change)
+        #expect(blocks[1].blockID == PresentationBlockId.stepParagraph(["t1", "e1"]))
+    }
+
+    @Test func chipTimeline_adjacentTextMergesLikeTextBlock() {
+        let blocks = okBlocks(
+            parts: [text("t1", "One"), text("t2", "Two")],
+            chipTimeline: true
+        )
+        guard let paragraph = paragraph(blocks.single) else { return }
+        #expect(paragraph.text == "One\nTwo")
+        #expect(paragraph.textBlockID == PresentationBlockId.mergedText(["t1", "t2"]))
+        #expect(paragraph.chips.isEmpty)
+    }
+
+    @Test func chipTimeline_childSessionTool_becomesAgentChip() {
+        let blocks = okBlocks(
+            parts: [
+                .tool(
+                    ToolPart(
+                        id: "task-1",
+                        toolName: "task",
+                        status: .running,
+                        input: [
+                            "agent": .string("Explore"),
+                            "description": .string("Find the session list\nand report back"),
+                        ],
+                        metadata: ["sessionId": .string("child-1")]
+                    )
+                ),
+            ],
+            chipTimeline: true
+        )
+        guard let paragraph = paragraph(blocks.single) else { return }
+        #expect(paragraph.chips.count == 1)
+        let chip = paragraph.chips[0]
+        #expect(chip.kind == .agent)
+        #expect(chip.family == .agent)
+        #expect(chip.label == "Explore")
+        #expect(chip.brief == "Find the session list")
+        #expect(chip.status == .running)
+        #expect(chip.trailingText == nil)
+        #expect(chip.card.childSessionId == "child-1")
+    }
+
+    @Test func chipTimeline_failedTool_errorStatusAndLine() {
+        let blocks = okBlocks(
+            parts: [
+                text("t1", "Running tests"),
+                .tool(ToolPart(id: "b1", toolName: "bash", status: .error, error: "exit 1", input: ["command": .string("npm test")])),
+            ],
+            chipTimeline: true
+        )
+        guard let paragraph = paragraph(blocks.single) else { return }
+        #expect(paragraph.chips[0].status == .error)
+        #expect(paragraph.errorLines == ["npm test: exit 1"])
+    }
+
+    @Test func chipTimeline_labelsPerTool() {
+        let blocks = okBlocks(
+            parts: [
+                .tool(ToolPart(id: "g1", toolName: "glob", status: .completed, input: ["pattern": .string("**/*.kt"), "path": .string("/repo")])),
+                .tool(ToolPart(id: "gr", toolName: "grep", status: .completed, input: ["pattern": .string("chipTimeline"), "path": .string("/repo")])),
+                .tool(ToolPart(id: "ws", toolName: "websearch", status: .completed, input: ["query": .string("swift layout")])),
+                .tool(ToolPart(id: "wf", toolName: "webfetch", status: .completed, input: ["url": .string("https://developer.apple.com/docs/layout")])),
+                .tool(ToolPart(id: "w1", toolName: "write", status: .completed, input: ["filePath": .string("a/b/New.swift")], metadata: ["filediff": .dictionary(["file": .string("a/b/New.swift"), "additions": .int(20)])])),
+                .tool(ToolPart(id: "b1", toolName: "bash", status: .completed, input: ["command": .string("./gradlew :app:testDebugUnitTest --info")])),
+                .tool(ToolPart(id: "s1", toolName: "skill", status: .completed, input: ["name": .string("feature")])),
+                .tool(ToolPart(id: "x1", toolName: "linear_get_issue", status: .completed, input: ["id": .string("OPE-260")])),
+            ],
+            chipTimeline: true
+        )
+        guard let paragraph = paragraph(blocks.single) else { return }
+        // Family order: skill, explore, agent, change, command.
+        #expect(paragraph.chips.map(\.label) == [
+            "/feature",
+            "**/*.kt", "chipTimeline", "swift layout", "developer.apple.com",
+            "New.swift",
+            "./gradlew :app:testDebugUnitTest --info", "linear_get_issue",
+        ])
+        #expect(paragraph.chips.map(\.family) == [.skill, .explore, .explore, .explore, .explore, .change, .command, .command])
+        let write = paragraph.chips[5]
+        #expect(write.additions == 20)
+        #expect(write.deletions == nil)
+        #expect(write.card.opensChangesReview)
+        #expect(paragraph.chips[6].kind == .command)
+    }
+
+    @Test func chipTimeline_commandLabel_firstNonEmptyLineCollapsedAndTrimmed() {
+        let command = "\n   \n  for n in 1 2 3; do\n    echo $n\n  done\n"
+        #expect(SessionChatTimelineBlocks.commandChipLabel(command) == "for n in 1 2 3; do")
+        #expect(SessionChatTimelineBlocks.commandChipLabel("  gh   pr\tlist  ") == "gh pr list")
+    }
+
+    @Test func chipTimeline_commandLabel_truncatesTo40WithEllipsis() {
+        let command = String(repeating: "abcdef ", count: 8).trimmingCharacters(in: .whitespaces) + "12345"
+        #expect(command.count == 60)
+        let label = SessionChatTimelineBlocks.commandChipLabel(command)
+        #expect(label.count == 41)
+        #expect(label.hasSuffix("\u{2026}"))
+        #expect(label == String(command.prefix(40)) + "\u{2026}")
+    }
+
+    @Test func chipTimeline_commandLabel_shortCommandUnchanged() {
+        let blocks = okBlocks(
+            parts: [
+                .tool(ToolPart(id: "b1", toolName: "bash", status: .completed, input: ["command": .string("gh pr list --state open --limit 50")])),
+            ],
+            chipTimeline: true
+        )
+        guard let paragraph = paragraph(blocks.single) else { return }
+        #expect(paragraph.chips.map(\.label) == ["gh pr list --state open --limit 50"])
+    }
+
+    @Test func chipTimeline_consecutiveThoughts_collapseIntoOneRowWithSummedDuration() {
+        let blocks = okBlocks(
+            parts: [
+                .reasoning(ReasoningPart(id: "th1", text: "First", isStreaming: false, timeStartEpochMs: 0, timeEndEpochMs: 1_200)),
+                .reasoning(ReasoningPart(id: "th2", text: "Second", isStreaming: false, timeStartEpochMs: 1_200, timeEndEpochMs: 6_000)),
+                .reasoning(ReasoningPart(id: "th3", text: "", isStreaming: false, timeStartEpochMs: 6_000, timeEndEpochMs: 6_500)),
+                text("t1", "Now"),
+                .tool(ToolPart(id: "r1", toolName: "read", status: .completed, input: ["filePath": .string("a.swift")])),
+            ],
+            chipTimeline: true
+        )
+        #expect(blocks.count == 2)
+        guard case .reasoning(let id, let joined, false, let duration) = blocks[0] else {
+            Issue.record("Expected one merged reasoning row")
+            return
+        }
+        // th3 is blank, so the visibility rule hides it; two settled thoughts merge.
+        #expect(id == PresentationBlockId.mergedThought([PresentationBlockId.direct("th1"), "th2"]))
+        #expect(joined == "First\n\nSecond")
+        #expect(duration == 6_000)
+        guard let paragraph = paragraph(blocks[1]) else { return }
+        #expect(paragraph.text == "Now")
+    }
+
+    @Test func chipTimeline_thoughtsAroundOneParagraph_mergeAboveIt() {
+        let blocks = okBlocks(
+            parts: [
+                .reasoning(ReasoningPart(id: "th1", text: "First", isStreaming: false, timeStartEpochMs: 0, timeEndEpochMs: 1_000)),
+                .tool(ToolPart(id: "r1", toolName: "read", status: .completed, input: ["filePath": .string("a.swift")])),
+                .reasoning(ReasoningPart(id: "th2", text: "Second", isStreaming: false, timeStartEpochMs: 1_000, timeEndEpochMs: 3_000)),
+                .tool(ToolPart(id: "r2", toolName: "read", status: .completed, input: ["filePath": .string("b.swift")])),
+                text("t1", "Now narration"),
+                .reasoning(ReasoningPart(id: "th3", text: "Third", isStreaming: false, timeStartEpochMs: 3_000, timeEndEpochMs: 4_000)),
+                .tool(ToolPart(id: "r3", toolName: "read", status: .completed, input: ["filePath": .string("c.swift")])),
+            ],
+            chipTimeline: true
+        )
+        // Rows: one merged thought for the tool-only stretch, its paragraph,
+        // then the thought that followed the narration and the final paragraph.
+        #expect(blocks.count == 4)
+        guard case .reasoning(_, _, false, let firstDuration) = blocks[0] else {
+            Issue.record("Expected merged reasoning first")
+            return
+        }
+        #expect(firstDuration == 3_000)
+        guard let first = paragraph(blocks[1]) else { return }
+        #expect(first.text == nil)
+        #expect(first.chips.map(\.label) == ["a.swift", "b.swift"])
+        guard case .reasoning(let thirdID, _, _, _) = blocks[2] else {
+            Issue.record("Expected the post-narration thought third")
+            return
+        }
+        #expect(thirdID == PresentationBlockId.direct("th3"))
+        guard let second = paragraph(blocks[3]) else { return }
+        #expect(second.text == "Now narration")
+        #expect(second.chips.map(\.label) == ["c.swift"])
+    }
+
+    @Test func chipTimeline_thoughtAfterPendingNarration_doesNotMerge() {
+        let blocks = okBlocks(
+            parts: [
+                .reasoning(ReasoningPart(id: "th1", text: "First", isStreaming: false, timeStartEpochMs: 0, timeEndEpochMs: 1_000)),
+                text("t1", "Narration"),
+                .reasoning(ReasoningPart(id: "th2", text: "Second", isStreaming: false, timeStartEpochMs: 1_000, timeEndEpochMs: 2_000)),
+                .tool(ToolPart(id: "r1", toolName: "read", status: .completed, input: ["filePath": .string("a.swift")])),
+            ],
+            chipTimeline: true
+        )
+        #expect(blocks.count == 3)
+        guard case .reasoning(let firstID, let first, _, _) = blocks[0] else {
+            Issue.record("Expected the first thought")
+            return
+        }
+        #expect(firstID == PresentationBlockId.direct("th1"))
+        #expect(first == "First")
+        guard case .reasoning(let secondID, let second, _, _) = blocks[1] else {
+            Issue.record("Expected the second thought")
+            return
+        }
+        #expect(secondID == PresentationBlockId.direct("th2"))
+        #expect(second == "Second")
+        guard let narration = paragraph(blocks[2]) else { return }
+        #expect(narration.text == "Narration")
+        #expect(narration.chips.map(\.label) == ["a.swift"])
+    }
+
+    @Test func streamingStepParagraphBlockID_marksOnlyTheLatestNarration() {
+        let earlier = SessionChatTimelineBlock.stepParagraph(
+            blockID: "earlier",
+            paragraph: SessionChatStepParagraphBlock(
+                textBlockID: nil,
+                text: "Done",
+                renderedMarkdown: nil,
+                chips: [],
+                errorLines: []
+            )
+        )
+        let later = SessionChatTimelineBlock.stepParagraph(
+            blockID: "later",
+            paragraph: SessionChatStepParagraphBlock(
+                textBlockID: nil,
+                text: "Live",
+                renderedMarkdown: nil,
+                chips: [],
+                errorLines: []
+            )
+        )
+        #expect(
+            SessionChatTimelineBlocks.streamingStepParagraphBlockID(
+                blocks: [earlier, later],
+                messageIsStreaming: true
+            ) == "later"
+        )
+        #expect(
+            SessionChatTimelineBlocks.streamingStepParagraphBlockID(
+                blocks: [earlier, later],
+                messageIsStreaming: false
+            ) == nil
+        )
+    }
+
+    @Test func build_collapseOff_consecutiveThoughts_stayAsSeparateRows() {
+        let blocks = okBlocks(
+            parts: [
+                .reasoning(ReasoningPart(id: "th1", text: "First", isStreaming: false)),
+                .reasoning(ReasoningPart(id: "th2", text: "Second", isStreaming: false)),
+            ]
+        )
+        #expect(blocks.count == 2)
+    }
+
+    @Test func chipTimeline_attachmentAndReasoning_emittedSeparatelyWithoutClosingParagraph() {
+        let file = FilePart(id: "f1", filename: "shot.png", mime: "image/png", kind: .image, dataURL: "data:image/png;base64,")
+        let blocks = okBlocks(
+            parts: [
+                text("t1", "Before"),
+                .tool(ToolPart(id: "r1", toolName: "read", status: .completed, input: ["filePath": .string("a.swift")])),
+                .file(file),
+                .reasoning(ReasoningPart(id: "th1", text: "Considered options", isStreaming: false)),
+                .tool(ToolPart(id: "r2", toolName: "read", status: .completed, input: ["filePath": .string("b.swift")])),
+            ],
+            chipTimeline: true
+        )
+        #expect(blocks.count == 3)
+        guard case .attachment(let attachmentID, _) = blocks[0] else {
+            Issue.record("Expected attachment first")
+            return
+        }
+        #expect(attachmentID == PresentationBlockId.direct("f1"))
+        guard case .reasoning(let reasoningID, _, _, _) = blocks[1] else {
+            Issue.record("Expected reasoning second")
+            return
+        }
+        #expect(reasoningID == PresentationBlockId.direct("th1"))
+        guard let paragraph = paragraph(blocks[2]) else { return }
+        #expect(paragraph.text == "Before")
+        #expect(paragraph.chips.map(\.label) == ["a.swift", "b.swift"])
+        #expect(blocks[2].blockID == PresentationBlockId.stepParagraph(["t1", "r1", "r2"]))
+    }
+
+    @Test func chipTimeline_hiddenToolsSkipped() {
+        let blocks = okBlocks(
+            parts: [
+                text("t1", "Visible"),
+                .tool(ToolPart(id: "todo-1", toolName: "todowrite", status: .completed)),
+            ],
+            chipTimeline: true
+        )
+        guard let paragraph = paragraph(blocks.single) else { return }
+        #expect(paragraph.chips.isEmpty)
+        #expect(blocks[0].blockID == PresentationBlockId.stepParagraph(["t1"]))
+    }
+
+    @Test func chipTimeline_missingPartIds_fallsBackLikeToday() {
+        let result = SessionChatTimelineBlocks.build(
+            role: .assistant,
+            parts: [
+                text("t1", "Visible"),
+                .tool(ToolPart(id: nil, toolName: "bash", status: .completed, input: ["command": .string("ls")])),
+            ],
+            chipTimeline: true
+        )
+        #expect(result == .missingPartIds)
+        let fallback = SessionChatTimelineBlocks.buildOrFallback(
+            role: .assistant,
+            parts: [
+                text("t1", "Visible"),
+                .tool(ToolPart(id: nil, toolName: "bash", status: .completed, input: ["command": .string("ls")])),
+            ],
+            messageId: "m1",
+            fallbackText: "Visible",
+            chipTimeline: true
+        )
+        #expect(fallback == [.text(blockID: PresentationBlockId.messageFallback("m1"), text: "Visible", renderedMarkdown: nil)])
+    }
+
+    @Test func chipTimeline_userRole_unchanged() {
+        let blocks = okBlocks(
+            role: .user,
+            parts: [text("t1", "Hello")],
+            chipTimeline: true
+        )
+        #expect(blocks == [.text(blockID: "p:t1", text: "Hello", renderedMarkdown: nil)])
+    }
+
+    @Test func chipTimeline_off_outputUnchanged() {
+        let parts: [MessagePart] = [
+            text("t1", "Before"),
+            .tool(ToolPart(id: "bash-1", toolName: "bash", status: .completed, input: ["command": .string("ls")])),
+        ]
+        #expect(okBlocks(parts: parts) == okBlocks(parts: parts, chipTimeline: false))
+        #expect(okBlocks(parts: parts).count == 2)
+    }
+
+    @Test func merge_chipTimeline_joinsConsecutiveAssistantBodiesIncludingText() {
+        let bodies = [
+            textBody(id: "a1", text: "Looking around"),
+            toolOnlyBody(id: "a2", toolID: "bash-1"),
+            toolOnlyBody(id: "a3", toolID: "bash-2"),
+        ]
+        let merged = SessionChatTimelineBlocks.mergeConsecutiveToolOnlyAssistantBodies(
+            bodies,
+            collapseConsecutiveToolCalls: false,
+            chipTimeline: true
+        )
+        #expect(merged.count == 1)
+        #expect(merged[0].message.id == "a1")
+        guard let paragraph = paragraph(merged[0].blocks.single) else { return }
+        #expect(paragraph.text == "Looking around")
+        #expect(paragraph.chips.count == 2)
+        #expect(merged[0].blocks[0].blockID == PresentationBlockId.stepParagraph(["a1-t", "bash-1", "bash-2"]))
+    }
+
+    @Test func merge_chipTimeline_userBodyBreaksRun() {
+        let userPart = text("u-t", "Question")
+        let user = DisplayMessageBody(
+            message: Message(id: "u1", role: .user, text: "Question", parts: [userPart], model: nil, mode: nil, sentAtEpochMs: nil),
+            isStreaming: false,
+            blocks: okBlocks(role: .user, parts: [userPart]),
+            renderedMarkdown: nil
+        )
+        let bodies = [
+            textBody(id: "a1", text: "First"),
+            user,
+            textBody(id: "a2", text: "Second"),
+            toolOnlyBody(id: "a3", toolID: "bash-1"),
+        ]
+        let merged = SessionChatTimelineBlocks.mergeConsecutiveToolOnlyAssistantBodies(
+            bodies,
+            collapseConsecutiveToolCalls: false,
+            chipTimeline: true
+        )
+        #expect(merged.map(\.message.id) == ["a1", "u1", "a2"])
+        #expect(merged[2].isStreaming == false)
+        guard let paragraph = paragraph(merged[2].blocks.single) else { return }
+        #expect(paragraph.text == "Second")
+        #expect(paragraph.chips.count == 1)
+    }
+
+    @Test func merge_chipTimeline_off_textBodiesStaySeparate() {
+        let bodies = [
+            textBody(id: "a1", text: "First"),
+            toolOnlyBody(id: "a2", toolID: "bash-1"),
+        ]
+        let merged = SessionChatTimelineBlocks.mergeConsecutiveToolOnlyAssistantBodies(
+            bodies,
+            collapseConsecutiveToolCalls: true
+        )
+        #expect(merged.count == 2)
+    }
+
+    @Test func merge_chipTimeline_carriesMemberRootMarkdownOntoParagraph() {
+        let document = NativeMarkdownDocument(
+            sourceHash: stableMarkdownSourceHash("# Looking"),
+            blocks: [.paragraph([.text("Looking")])]
+        )
+        let part = text("a1-t", "# Looking")
+        let withMarkdown = DisplayMessageBody(
+            message: Message(id: "a1", role: .assistant, text: "# Looking", parts: [part], model: nil, mode: nil, sentAtEpochMs: nil),
+            isStreaming: false,
+            blocks: okBlocks(parts: [part], chipTimeline: true),
+            renderedMarkdown: document
+        )
+        let merged = SessionChatTimelineBlocks.mergeConsecutiveToolOnlyAssistantBodies(
+            [withMarkdown, toolOnlyBody(id: "a2", toolID: "bash-1")],
+            collapseConsecutiveToolCalls: false,
+            chipTimeline: true
+        )
+        guard let paragraph = paragraph(merged.first?.blocks.single) else { return }
+        #expect(paragraph.renderedMarkdown?.sourceHash == document.sourceHash)
+    }
+
     private func toolOnlyBody(
         id: String,
         toolID: String,
@@ -1812,12 +2269,14 @@ struct SessionChatTimelineBlocksTests {
         role: MessageRole = .assistant,
         parts: [MessagePart],
         collapseConsecutiveToolCalls: Bool = false,
+        chipTimeline: Bool = false,
         sourceLocation: SourceLocation = #_sourceLocation
     ) -> [SessionChatTimelineBlock] {
         let result = SessionChatTimelineBlocks.build(
             role: role,
             parts: parts,
-            collapseConsecutiveToolCalls: collapseConsecutiveToolCalls
+            collapseConsecutiveToolCalls: collapseConsecutiveToolCalls,
+            chipTimeline: chipTimeline
         )
         guard case .ok(let blocks) = result else {
             Issue.record("Expected Ok", sourceLocation: sourceLocation)

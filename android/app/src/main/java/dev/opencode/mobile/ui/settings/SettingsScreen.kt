@@ -72,6 +72,8 @@ fun SettingsScreen(
     onSessionListProjectPickerEnabledChange: (Boolean) -> Unit,
     collapseConsecutiveToolCalls: Boolean,
     onCollapseConsecutiveToolCallsChange: (Boolean) -> Unit,
+    chipTimeline: Boolean,
+    onChipTimelineChange: (Boolean) -> Unit,
     smoothStreamingUpdates: Boolean,
     onSmoothStreamingUpdatesChange: (Boolean) -> Unit,
     followUpDelivery: FollowUpDelivery,
@@ -248,6 +250,23 @@ fun SettingsScreen(
                                     enabled,
                                 )
                                 onCollapseConsecutiveToolCallsChange(enabled)
+                            },
+                        )
+                    },
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+
+                OpenCodeListItem(
+                    title = "Chip Timeline",
+                    subtitle = "Show the tools an agent used as chips under its narration",
+                    style = OpenCodeListItemStyle.Card,
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Widgets, "Chip Timeline"),
+                    trailing = {
+                        Switch(
+                            checked = chipTimeline,
+                            onCheckedChange = { enabled ->
+                                logSettingsToggle(ProductAnalytics.Action.SETTINGS_TOGGLE_CHIP_TIMELINE, enabled)
+                                onChipTimelineChange(enabled)
                             },
                         )
                     },
@@ -663,6 +682,8 @@ private fun SettingsScreenLightPreview() {
             collapseConsecutiveToolCalls =
                 SessionChatDisplayPreferences.collapseConsecutiveToolCalls,
             onCollapseConsecutiveToolCallsChange = {},
+            chipTimeline = SessionChatDisplayPreferences.chipTimeline,
+            onChipTimelineChange = {},
             smoothStreamingUpdates =
                 SessionChatDisplayPreferences.smoothStreamingUpdates,
             onSmoothStreamingUpdatesChange = {},
@@ -704,6 +725,8 @@ private fun SettingsScreenDarkPreview() {
             collapseConsecutiveToolCalls =
                 SessionChatDisplayPreferences.collapseConsecutiveToolCalls,
             onCollapseConsecutiveToolCallsChange = {},
+            chipTimeline = SessionChatDisplayPreferences.chipTimeline,
+            onChipTimelineChange = {},
             smoothStreamingUpdates =
                 SessionChatDisplayPreferences.smoothStreamingUpdates,
             onSmoothStreamingUpdatesChange = {},

@@ -24,22 +24,41 @@ internal const val ASSISTANT_MESSAGE_EMPTY_PLACEHOLDER = "…"
 
 internal fun assistantMessageDisplayText(text: String): String = text.ifBlank { ASSISTANT_MESSAGE_EMPTY_PLACEHOLDER }
 
+/**
+ * How the assistant text sits in the timeline: the raised bubble, or plain
+ * prose for the chip timeline where the tool chips follow the paragraph.
+ */
+enum class OpenCodeAssistantMessagePresentation {
+    Bubble,
+    Plain,
+}
+
+private val AssistantMessagePlainPaddingHorizontal = 4.dp
+
 @Composable
 fun OpenCodeAssistantMessage(
     text: String,
     modifier: Modifier = Modifier,
     renderedMarkdown: MarkdownDocument? = null,
     isStreaming: Boolean = false,
+    presentation: OpenCodeAssistantMessagePresentation = OpenCodeAssistantMessagePresentation.Bubble,
 ) {
     val shape = RoundedCornerShape(AssistantMessageCornerRadius)
     val bubbleModifier =
-        modifier
-            .widthIn(max = OpenCodeLayout.AssistantMessageMaxWidth)
-            .background(openCodeColor("surface-raised-base"), shape)
-            .padding(
-                horizontal = AssistantMessagePaddingHorizontal,
-                vertical = AssistantMessagePaddingVertical,
-            )
+        when (presentation) {
+            OpenCodeAssistantMessagePresentation.Bubble ->
+                modifier
+                    .widthIn(max = OpenCodeLayout.AssistantMessageMaxWidth)
+                    .background(openCodeColor("surface-raised-base"), shape)
+                    .padding(
+                        horizontal = AssistantMessagePaddingHorizontal,
+                        vertical = AssistantMessagePaddingVertical,
+                    )
+            OpenCodeAssistantMessagePresentation.Plain ->
+                modifier
+                    .widthIn(max = OpenCodeLayout.AssistantMessageMaxWidth)
+                    .padding(horizontal = AssistantMessagePlainPaddingHorizontal)
+        }
 
     if (renderedMarkdown != null) {
         OpenCodeRenderedMarkdown(

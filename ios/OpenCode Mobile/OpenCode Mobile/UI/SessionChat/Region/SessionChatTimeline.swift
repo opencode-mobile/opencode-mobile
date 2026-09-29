@@ -31,6 +31,8 @@ final class SessionChatTimeline {
     private(set) var serverCommands: [ServerCommand] = []
     /// Collapse-consecutive-tool-calls preference (OPE-144); widens grouping.
     private(set) var collapseConsecutiveToolCalls = false
+    /// Chip-timeline preference (OPE-260); narration paragraphs with tool chips.
+    private(set) var chipTimeline = false
     /// Test-only: runs after a frame revision is taken, before off-main build.
     static var applyTestGate: (@MainActor () async -> Void)?
 
@@ -65,6 +67,23 @@ final class SessionChatTimeline {
     func updateCollapseConsecutiveToolCalls(_ enabled: Bool) {
         guard enabled != collapseConsecutiveToolCalls else { return }
         collapseConsecutiveToolCalls = enabled
+        guard !lastLoadedDisplayMessages.isEmpty else { return }
+        let snapshot = lastLoadedDisplayMessages
+        let fromCache = state.messagesFromCache
+        Task {
+            await applyLoadedDisplayMessagesTransform(
+                snapshot,
+                isRefreshing: false,
+                fromQuietRefresh: true,
+                messagesFromCache: fromCache,
+                expirePendingPromptPatches: false
+            )
+        }
+    }
+
+    func updateChipTimeline(_ enabled: Bool) {
+        guard enabled != chipTimeline else { return }
+        chipTimeline = enabled
         guard !lastLoadedDisplayMessages.isEmpty else { return }
         let snapshot = lastLoadedDisplayMessages
         let fromCache = state.messagesFromCache
@@ -307,7 +326,8 @@ final class SessionChatTimeline {
             fromDisplayMessages: lastLoadedDisplayMessages,
             sessionKey: sessionID,
             serverCommands: serverCommands,
-            collapseConsecutiveToolCalls: collapseConsecutiveToolCalls
+            collapseConsecutiveToolCalls: collapseConsecutiveToolCalls,
+            chipTimeline: chipTimeline
         )
         let displayed = SessionChatTimelineProjector.displayedOptimisticSendRows(rows)
         let hadPriorRows = !state.messages.isEmpty || !timelineFrame.rows.isEmpty
@@ -442,7 +462,8 @@ final class SessionChatTimeline {
             sourceRevision: 0,
             displayMessages: [display],
             serverCommands: serverCommands,
-            collapseConsecutiveToolCalls: collapseConsecutiveToolCalls
+            collapseConsecutiveToolCalls: collapseConsecutiveToolCalls,
+            chipTimeline: chipTimeline
         )
         guard !frame.messages.isEmpty else { return nil }
         let previousTimeline: TimelineFrame? =
@@ -508,6 +529,7 @@ final class SessionChatTimeline {
         let sessionKey = sessionID
         let commands = serverCommands
         let collapse = collapseConsecutiveToolCalls
+        let chips = chipTimeline
 
         let pendingRows: [TimelineRow]
         if mergePendingWhileSending {
@@ -532,7 +554,8 @@ final class SessionChatTimeline {
                 sourceRevision: frameRevision,
                 displayMessages: displayMessages,
                 serverCommands: commands,
-                collapseConsecutiveToolCalls: collapse
+                collapseConsecutiveToolCalls: collapse,
+                chipTimeline: chips
             )
             return SessionChatTimelineProjector.project(
                 frame: frame,
@@ -647,7 +670,8 @@ final class SessionChatTimeline {
             sourceRevision: 0,
             displayMessages: lastLoadedDisplayMessages,
             serverCommands: serverCommands,
-            collapseConsecutiveToolCalls: collapseConsecutiveToolCalls
+            collapseConsecutiveToolCalls: collapseConsecutiveToolCalls,
+            chipTimeline: chipTimeline
         )
         let stillUnacked = SessionChatTimelineProjector.unmatchedPending(
             pendingItems.map { TimelineRow.fromSessionChatRow($0) },

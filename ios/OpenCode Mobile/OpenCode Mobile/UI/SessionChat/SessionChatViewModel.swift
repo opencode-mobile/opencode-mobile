@@ -804,6 +804,7 @@ final class SessionChatViewModel {
         timeline.updateCollapseConsecutiveToolCalls(
             SessionChatDisplayPreferences.shared.collapseConsecutiveToolCalls
         )
+        timeline.updateChipTimeline(SessionChatDisplayPreferences.shared.chipTimeline)
         observeCollapsePreference()
     }
 
@@ -814,12 +815,14 @@ final class SessionChatViewModel {
         let generation = collapsePreferenceGeneration
         withObservationTracking {
             _ = SessionChatDisplayPreferences.shared.collapseConsecutiveToolCalls
+            _ = SessionChatDisplayPreferences.shared.chipTimeline
         } onChange: { [weak self] in
             Task { @MainActor in
                 guard let self, self.collapsePreferenceGeneration == generation else { return }
                 self.timeline.updateCollapseConsecutiveToolCalls(
                     SessionChatDisplayPreferences.shared.collapseConsecutiveToolCalls
                 )
+                self.timeline.updateChipTimeline(SessionChatDisplayPreferences.shared.chipTimeline)
                 self.observeCollapsePreference()
             }
         }

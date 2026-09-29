@@ -46,7 +46,8 @@ nonisolated enum DisplayFrameBuilder {
         sourceRevision: UInt64,
         displayMessages: [DisplayMessage],
         serverCommands: [ServerCommand] = [],
-        collapseConsecutiveToolCalls: Bool = false
+        collapseConsecutiveToolCalls: Bool = false,
+        chipTimeline: Bool = false
     ) -> DisplayFrame {
         // pthread_main_np avoids the async-context warning on Thread.isMainThread.
         lastBuildWasOnMainThread = pthread_main_np() != 0
@@ -61,7 +62,8 @@ nonisolated enum DisplayFrameBuilder {
                 parts: message.parts,
                 messageId: message.id,
                 fallbackText: message.text,
-                collapseConsecutiveToolCalls: collapseConsecutiveToolCalls
+                collapseConsecutiveToolCalls: collapseConsecutiveToolCalls,
+                chipTimeline: chipTimeline
             )
             blocks = SessionChatTimelineBlocks.collapseCommandInvocations(
                 role: message.role,
@@ -92,8 +94,24 @@ nonisolated enum DisplayFrameBuilder {
         }
         bodies = SessionChatTimelineBlocks.mergeConsecutiveToolOnlyAssistantBodies(
             bodies,
-            collapseConsecutiveToolCalls: collapseConsecutiveToolCalls
+            collapseConsecutiveToolCalls: collapseConsecutiveToolCalls,
+            chipTimeline: chipTimeline
         )
+        if chipTimeline {
+            // Merged runs rebuilt their paragraphs; pick up per-block cache hits again.
+            bodies = bodies.map { body in
+                DisplayMessageBody(
+                    message: body.message,
+                    isStreaming: body.isStreaming,
+                    blocks: attachCachedBlockMarkdown(
+                        body.blocks,
+                        sessionKey: sessionKey,
+                        isStreaming: body.isStreaming
+                    ),
+                    renderedMarkdown: body.renderedMarkdown
+                )
+            }
+        }
         return DisplayFrame(
             sessionKey: sessionKey,
             frameRevision: frameRevision,
@@ -111,16 +129,15 @@ nonisolated enum DisplayFrameBuilder {
     ) -> [SessionChatTimelineBlock] {
         var result = blocks
         for index in result.indices {
-            guard case .text(let blockID, let text, let existing) = result[index] else { continue }
-            if existing != nil { continue }
-            let revision = ContentRevision.of(text)
+            guard let content = result[index].textContent, content.renderedMarkdown == nil else { continue }
+            let revision = ContentRevision.of(content.text)
             guard let document = cache.get(
                 sessionKey: sessionKey,
-                blockID: blockID,
+                blockID: content.blockID,
                 contentRevision: revision,
                 isStreaming: isStreaming
             ) else { continue }
-            result[index] = .text(blockID: blockID, text: text, renderedMarkdown: document)
+            result[index] = result[index].withRenderedMarkdown(document)
         }
         return result
     }
@@ -138,16 +155,13 @@ nonisolated enum DisplayFrameBuilder {
         message: Message
     ) -> [SessionChatTimelineBlock] {
         guard let markdown else { return blocks }
-        let textIndices = blocks.indices.filter { index in
-            if case .text = blocks[index] { return true }
-            return false
-        }
+        let textIndices = blocks.indices.filter { blocks[$0].textContent != nil }
         guard textIndices.count == 1, let index = textIndices.first else { return blocks }
-        guard case .text(let blockID, let text, let existing) = blocks[index] else { return blocks }
-        if existing != nil { return blocks }
-        if isCollapsedAwayFromMessageText(message: message, soleText: text) { return blocks }
+        guard let content = blocks[index].textContent else { return blocks }
+        if content.renderedMarkdown != nil { return blocks }
+        if isCollapsedAwayFromMessageText(message: message, soleText: content.text) { return blocks }
         var result = blocks
-        result[index] = .text(blockID: blockID, text: text, renderedMarkdown: markdown)
+        result[index] = blocks[index].withRenderedMarkdown(markdown)
         return result
     }
 
@@ -157,10 +171,7 @@ nonisolated enum DisplayFrameBuilder {
         blocks: [SessionChatTimelineBlock]
     ) -> NativeMarkdownDocument? {
         guard let markdown else { return nil }
-        let texts = blocks.compactMap { block -> String? in
-            if case .text(_, let text, _) = block { return text }
-            return nil
-        }
+        let texts = blocks.compactMap { $0.textContent?.text }
         guard texts.count == 1, let text = texts.first else { return markdown }
         return isCollapsedAwayFromMessageText(message: message, soleText: text) ? nil : markdown
     }
