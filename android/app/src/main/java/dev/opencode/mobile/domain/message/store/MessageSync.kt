@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
@@ -101,13 +102,19 @@ class MessageSync(
         directory: String?,
     ): Flow<MessageListUpdate> {
         val key = sessionKey(sessionId, directory)
-        return observationCache.getOrPut(key) {
-            buildMessageFlow(key)
-                .shareIn(
-                    scope = liveStoreScope.coroutineScope,
-                    started = SharingStarted.WhileSubscribed(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS),
-                    replay = 1,
-                )
+        val shared =
+            observationCache.getOrPut(key) {
+                buildMessageFlow(key)
+                    .shareIn(
+                        scope = liveStoreScope.coroutineScope,
+                        started = SharingStarted.WhileSubscribed(LiveStoreRefreshPolicy.SUBSCRIBER_STOP_TIMEOUT_MS),
+                        replay = 1,
+                    )
+            }
+        return shared.onStart {
+            // replay=1 may be CacheSyncConfirmed. A new collector still needs the
+            // current transcript or Session Chat bind stays on Loading.
+            replayPublishedSnapshot(key)?.let { emit(it) }
         }
     }
 
@@ -258,6 +265,16 @@ class MessageSync(
         )
 
     private fun transcriptKey(key: MessageSessionKey) = ProjectionKey.Transcript(key.directory, key.sessionId)
+
+    private fun replayPublishedSnapshot(key: MessageSessionKey): MessageListUpdate.Messages? {
+        val storeSlot = key.storeSlot
+        val published = lastPublishedFrames[storeSlot] ?: return null
+        return MessageListUpdate.Messages(
+            messages = published,
+            isFromCache = storeSlot in awaitingCacheSyncConfirm,
+            hasOlder = historyWindow(storeSlot).hasOlder,
+        )
+    }
 
     private fun buildMessageFlow(key: MessageSessionKey): Flow<MessageListUpdate> =
         merge(

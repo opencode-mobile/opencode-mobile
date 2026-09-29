@@ -456,6 +456,38 @@ struct MessageSyncTests {
         #expect(collector.emissions.count == 1)
     }
 
+    @Test func identicalTail_resubscribeWithinTimeout_replaysMessagesNotOnlyCacheSyncConfirmed() async {
+        let repo = FakeLiveMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        eventStream.setConnectionState(.connected)
+        let cached = repo.messages
+        let sync = MessageSync(
+            listMessages: { sessionID, directory in
+                try await repo.listMessages(sessionID: sessionID, directory: directory)
+            },
+            store: SessionMessageEngine(store: InMemoryMessageStore()),
+            eventStream: eventStream,
+            connectionProfileIDProvider: { "local" },
+            recoveryDelay: { _ in try? await Task.sleep(for: .milliseconds(1)) },
+            sessionCache: SeedingSessionCache(messages: cached)
+        )
+        let first = CacheConfirmAwareCollector()
+        let firstTask = Task {
+            await first.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo"))
+        }
+        _ = await waitUntil { first.sawCacheSyncConfirmed }
+        firstTask.cancel()
+        try? await Task.sleep(for: .milliseconds(200))
+
+        let second = CacheConfirmAwareCollector()
+        let secondTask = Task {
+            await second.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo"))
+        }
+        let painted = await waitUntil { second.latest()?.first?.text == "Hello" }
+        secondTask.cancel()
+        #expect(painted)
+    }
+
     @Test func differingTailMergesAndPublishesOnce() async {
         let repo = FakeLiveMessageRepository()
         repo.holdNextListMessages()

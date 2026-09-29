@@ -138,8 +138,25 @@ nonisolated final class MessageSync: @unchecked Sendable {
             }
         }
         let observation = observationCache[key]!
+        let published = lastPublishedFrame[key.storeSlot]
+        let fromCache = awaitingCacheSyncConfirm.contains(key.storeSlot)
         lock.unlock()
-        return observation.stream()
+        let snapshot = published.map { MessageListUpdate.messages($0, isFromCache: fromCache) }
+        return AsyncStream { continuation in
+            // lastValue may be cacheSyncConfirmed. A new collector still needs the
+            // current transcript or Session Chat bind stays on Loading.
+            if let snapshot {
+                continuation.yield(snapshot)
+            }
+            let inner = observation.stream()
+            let task = Task {
+                for await value in inner {
+                    continuation.yield(value)
+                }
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
     }
 
     func refreshMessages(
