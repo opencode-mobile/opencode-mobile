@@ -682,7 +682,13 @@ private fun BottomSheetWindowOverlay(
         overlay.requestFocus()
         onDispose {
             restoreDecorSiblingAccessibility(hiddenSiblings)
+            // Removing the focused overlay makes Android hand focus to the first
+            // focusable view; Compose forwards it to the first text field (the
+            // Session Chat composer) and opens the keyboard. Block that handoff.
+            val descendantFocusability = root.descendantFocusability
+            root.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
             root.removeView(overlay)
+            root.descendantFocusability = descendantFocusability
         }
     }
 }
