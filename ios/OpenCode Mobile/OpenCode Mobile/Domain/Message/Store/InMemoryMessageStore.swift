@@ -35,9 +35,10 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
         ignoredPartIDs[sessionID] = [:]
         deltaChunks[sessionID] = [:]
         absorbedReplayChars[sessionID] = [:]
-        messageOrder[sessionID] = messages.map(\.id)
-        baseMessages[sessionID] = messages
-        seedPartIdentities(sessionID: sessionID, messages: messages, previousStarts: previousStarts)
+        let unique = collapsingDuplicateIDs(messages)
+        messageOrder[sessionID] = unique.map(\.id)
+        baseMessages[sessionID] = unique
+        seedPartIdentities(sessionID: sessionID, messages: unique, previousStarts: previousStarts)
         bumpRevision(sessionID: sessionID)
     }
 
@@ -70,7 +71,11 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
         lock.lock()
         defer { lock.unlock() }
         let order = messageOrder[sessionID] ?? []
-        return order.compactMap { rebuildMessageLocked(sessionID: sessionID, messageID: $0) }
+        var seen = Set<String>()
+        return order.compactMap { messageID -> Message? in
+            guard seen.insert(messageID).inserted else { return nil }
+            return rebuildMessageLocked(sessionID: sessionID, messageID: messageID)
+        }
     }
 
     /// Rebuild one message with the same base+live parts overlay as `messages()`.
@@ -88,7 +93,9 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
         let parts = partsCache[sessionID] ?? [:]
         let orders = partOrder[sessionID] ?? [:]
         let base = baseMessages[sessionID] ?? []
-        let baseByID = Dictionary(uniqueKeysWithValues: base.map { ($0.id, $0) })
+        // Last copy wins, matching Android associateBy. `messages()` also
+        // drops repeated ids so session open can dictionary the list.
+        let baseByID = Dictionary(base.map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
 
         if let infoValue = infos[messageID], case .dictionary(let infoDict) = infoValue,
            let info = decodeInfo(from: infoDict) {
@@ -841,15 +848,20 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
         ensureCaches(sessionID: sessionID)
         let order = messageOrder[sessionID] ?? []
         let existing = Set(order)
-        let prepended = older.filter { !existing.contains($0.id) }
+        let prepended = collapsingDuplicateIDs(older).filter { !existing.contains($0.id) }
         guard !prepended.isEmpty else { return }
         let previousStarts = toolStartTimesLocked(sessionID: sessionID)
-        messageOrder[sessionID] = prepended.map(\.id) + order
-        var byID = Dictionary(uniqueKeysWithValues: (baseMessages[sessionID] ?? []).map { ($0.id, $0) })
+        var byID = Dictionary(
+            (baseMessages[sessionID] ?? []).map { ($0.id, $0) },
+            uniquingKeysWith: { _, last in last }
+        )
         for message in prepended {
             byID[message.id] = message
         }
-        baseMessages[sessionID] = (messageOrder[sessionID] ?? []).compactMap { byID[$0] }
+        var seen = Set<String>()
+        let uniqueIDs = (prepended.map(\.id) + order).filter { seen.insert($0).inserted }
+        messageOrder[sessionID] = uniqueIDs
+        baseMessages[sessionID] = uniqueIDs.compactMap { byID[$0] }
         seedPartIdentities(sessionID: sessionID, messages: prepended, previousStarts: previousStarts)
         bumpRevision(sessionID: sessionID)
     }
@@ -905,8 +917,9 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
             ignored = ignored.filter { incomingIDs.contains($0.key) }
             ignoredPartIDs[sessionID] = ignored
         }
-        messageOrder[sessionID] = messages.map(\.id)
-        baseMessages[sessionID] = messages
+        let unique = collapsingDuplicateIDs(messages)
+        messageOrder[sessionID] = unique.map(\.id)
+        baseMessages[sessionID] = unique
         deltaChunks[sessionID] = [:]
         absorbedReplayChars[sessionID] = [:]
         bumpRevision(sessionID: sessionID)
@@ -1086,6 +1099,24 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
         default:
             return true
         }
+    }
+
+    /// History can repeat a message id. Keep the first slot and the last copy
+    /// so `messages()` is safe to turn into a dictionary.
+    private func collapsingDuplicateIDs(_ messages: [Message]) -> [Message] {
+        var indexByID: [String: Int] = [:]
+        indexByID.reserveCapacity(messages.count)
+        var collapsed: [Message] = []
+        collapsed.reserveCapacity(messages.count)
+        for message in messages {
+            if let index = indexByID[message.id] {
+                collapsed[index] = message
+            } else {
+                indexByID[message.id] = collapsed.count
+                collapsed.append(message)
+            }
+        }
+        return collapsed
     }
 
     private func seedPartIdentities(

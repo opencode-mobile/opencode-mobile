@@ -260,6 +260,28 @@ class TimelineProjectorTest {
     }
 
     @Test
+    fun orderedDisplayMessages_ordersNullTimestampConsistentlyWithTimedMessages() {
+        val ordered =
+            TimelineDisplayOrder.ordered(
+                listOf(
+                    DisplayMessage(
+                        Message(id = "msg-null", role = MessageRole.Assistant, text = "N", sentAtEpochMs = null),
+                    ),
+                    DisplayMessage(
+                        Message(id = "msg-a", role = MessageRole.Assistant, text = "A", sentAtEpochMs = 100L),
+                    ),
+                    DisplayMessage(
+                        Message(id = "msg-b", role = MessageRole.Assistant, text = "B", sentAtEpochMs = null),
+                    ),
+                    DisplayMessage(
+                        Message(id = "msg-c", role = MessageRole.Assistant, text = "C", sentAtEpochMs = 50L),
+                    ),
+                ),
+            )
+        assertEquals(listOf("msg-c", "msg-a", "msg-null", "msg-b"), ordered.map { it.id })
+    }
+
+    @Test
     fun project_optimisticFile_reconcilesWhenLocalDataUrlDiffersFromServer() {
         val pendingAttachment =
             SessionChatAttachmentItem(
