@@ -30,7 +30,7 @@ struct SessionChatView: View {
     @State private var holdingFinishedTodos = false
     @State private var sawUnfinishedTodos = false
     @State private var finishedHoldTask: Task<Void, Never>?
-    /// Measured floating composer stack height (composer + optional suggestions).
+    /// Measured floating composer chrome height (composer + optional pending-prompts strip).
     @State private var composerOverlayHeight: CGFloat = 0
     @State private var bottomSafeAreaInset: CGFloat = 0
     /// Keyboard overlap reported by `keyboardOverlapPadding`. Zero when hidden.
@@ -317,7 +317,17 @@ struct SessionChatView: View {
                             )
                             .padding(.horizontal, 12)
                             .padding(.bottom, 4)
-                        } else if !viewModel.uiState.pendingPrompts.isEmpty {
+                        }
+                    }
+                    VStack(spacing: 0) {
+                        if SessionChatComposerKind.resolve(
+                            isChildSession: session.parentID != nil,
+                            hasPermission: viewModel.uiState.permissionRequest != nil,
+                            hasQuestion: viewModel.uiState.questionRequest != nil
+                        ) == .prompt,
+                            !viewModel.uiState.atSuggestionsVisible,
+                            !viewModel.uiState.slashSuggestionsVisible,
+                            !viewModel.uiState.pendingPrompts.isEmpty {
                             OpenCodePendingPromptsStrip(
                                 prompts: viewModel.uiState.pendingPrompts,
                                 onTap: {
@@ -332,20 +342,20 @@ struct SessionChatView: View {
                             .padding(.horizontal, 12)
                             .padding(.bottom, 6)
                         }
+                        composer
                     }
-                    composer
-                }
-                // Match home SessionList dock measurement — preference keys from a
-                // background GeometryReader were staying at 0, so timeline clearance
-                // never applied (LLDB: adjustedContentInset all zero, no footer).
-                .background {
-                    GeometryReader { geometry in
-                        Color.clear
-                            .onAppear { composerOverlayHeight = geometry.size.height }
-                            .onChange(of: geometry.size.height) { _, height in
-                                guard abs(composerOverlayHeight - height) > 0.5 else { return }
-                                composerOverlayHeight = height
-                            }
+                    // Match home SessionList dock measurement — preference keys from a
+                    // background GeometryReader were staying at 0, so timeline clearance
+                    // never applied (LLDB: adjustedContentInset all zero, no footer).
+                    .background {
+                        GeometryReader { geometry in
+                            Color.clear
+                                .onAppear { composerOverlayHeight = geometry.size.height }
+                                .onChange(of: geometry.size.height) { _, height in
+                                    guard abs(composerOverlayHeight - height) > 0.5 else { return }
+                                    composerOverlayHeight = height
+                                }
+                        }
                     }
                 }
                 .padding(.bottom, composerHomeIndicatorLift)
