@@ -99,7 +99,7 @@ struct CommandDomainAdapter: Sendable {
         if error is DecodingError {
             return .decoding(error.localizedDescription)
         }
-        return .transport(error.localizedDescription)
+        return .transport(TransportFailure.captured(from: error))
     }
 
     private func toSource(_ raw: String?) -> ServerCommandSource {

@@ -1364,8 +1364,7 @@ class SessionChatComposer(
         }
 
     private fun logSendFailure(throwable: Throwable) {
-        val detail = throwable.message ?: throwable::class.simpleName
-        DiagnosticLog.error(DiagnosticLogArea.Chat, "sendPromptAsync failed error=$detail", throwable)
+        DiagnosticLog.error(DiagnosticLogArea.Chat, "sendPromptAsync failed", throwable)
     }
 
     private fun logI(message: String) {

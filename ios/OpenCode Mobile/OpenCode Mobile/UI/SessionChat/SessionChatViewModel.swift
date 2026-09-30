@@ -681,7 +681,6 @@ final class SessionChatViewModel {
                 )
             },
             onSendFailed: { [weak self] optimisticID, error in
-                DiagnosticLog.warning(.chat, "sendPrompt failed error=\(error)")
                 self?.armedSendAcceptance = nil
                 self?.pendingSend = nil
                 self?.composer.setSendError(error)
