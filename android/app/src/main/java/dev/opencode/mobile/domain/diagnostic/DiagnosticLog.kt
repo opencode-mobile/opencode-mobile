@@ -43,7 +43,7 @@ object DiagnosticLog {
         message: String,
         throwable: Throwable? = null,
     ) {
-        val redacted = DiagnosticLogRedactor.redact(message)
+        val redacted = DiagnosticLogRedactor.redact(DiagnosticLogCause.appendTo(message, throwable))
         if (level != DiagnosticLogLevel.Debug) {
             DiagnosticLogBuffer.shared.append(area = area, level = level, message = redacted)
         }

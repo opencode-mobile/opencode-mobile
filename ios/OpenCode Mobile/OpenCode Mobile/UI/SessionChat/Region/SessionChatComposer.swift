@@ -777,6 +777,7 @@ final class SessionChatComposer {
                 submittedAttachments: submittedAttachments,
                 submittedAttachmentRevisions: submittedAttachmentRevisions
             )
+            DiagnosticLog.warning(.chat, "sendPrompt failed", error: error)
             let message = errorMessage(error)
             setSendError(message)
             onSendFailed(optimistic.id, message)

@@ -13,16 +13,21 @@ nonisolated enum DiagnosticLog {
         write(area: area, level: .info, message: message)
     }
 
-    static func warning(_ area: DiagnosticLogArea, _ message: String) {
-        write(area: area, level: .warning, message: message)
+    static func warning(_ area: DiagnosticLogArea, _ message: String, error: Error? = nil) {
+        write(area: area, level: .warning, message: message, error: error)
     }
 
-    static func error(_ area: DiagnosticLogArea, _ message: String) {
-        write(area: area, level: .error, message: message)
+    static func error(_ area: DiagnosticLogArea, _ message: String, error: Error? = nil) {
+        write(area: area, level: .error, message: message, error: error)
     }
 
-    private static func write(area: DiagnosticLogArea, level: DiagnosticLogLevel, message: String) {
-        let redacted = DiagnosticLogRedactor.redact(message)
+    private static func write(
+        area: DiagnosticLogArea,
+        level: DiagnosticLogLevel,
+        message: String,
+        error: Error? = nil
+    ) {
+        let redacted = DiagnosticLogRedactor.redact(DiagnosticLogCause.appendTo(message, error: error))
         if level != .debug {
             DiagnosticLogBuffer.shared.append(area: area, level: level, message: redacted)
         }
