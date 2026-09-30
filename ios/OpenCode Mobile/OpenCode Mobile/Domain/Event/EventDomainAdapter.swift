@@ -462,8 +462,22 @@ nonisolated struct EventDomainAdapter: Sendable {
             input: objectInput(properties["input"]),
             output: output,
             error: error,
-            metadata: properties["structured"] as? [String: Any]
+            metadata: toolMetadata(properties)
         )
+    }
+
+    /// v2 tool events carry tool-reported metadata (a subagent's `sessionID`
+    /// arrives on `tool.progress` while it is still running) under `metadata`;
+    /// older betas used `structured`. Merge both so neither shape drops it.
+    private func toolMetadata(_ properties: [String: Any]) -> [String: Any]? {
+        let structured = properties["structured"] as? [String: Any]
+        let metadata = properties["metadata"] as? [String: Any]
+        switch (structured, metadata) {
+        case (nil, nil): return nil
+        case (let structured?, nil): return structured
+        case (nil, let metadata?): return metadata
+        case (let structured?, let metadata?): return structured.merging(metadata) { _, new in new }
+        }
     }
 
     private func toolInputDelta(_ properties: [String: Any]) -> OpencodeEvent {

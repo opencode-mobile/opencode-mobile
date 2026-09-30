@@ -1187,6 +1187,34 @@ class EventDomainAdapterTest {
     }
 
     @Test
+    fun parseEvent_toolProgressMetadataCarriesSubagentSessionId() {
+        val event =
+            adapter.parseEvent(
+                """{"type":"session.tool.progress","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","id":"prt-1","metadata":{"sessionID":"child-1","status":"running"}}}""",
+            )
+
+        val state = event?.rawProperties?.get("part")?.jsonObject?.get("state")?.jsonObject
+        assertEquals("running", state?.get("status")?.jsonPrimitive?.content)
+        assertEquals(
+            "child-1",
+            state?.get("metadata")?.jsonObject?.get("sessionID")?.jsonPrimitive?.content,
+        )
+    }
+
+    @Test
+    fun parseEvent_toolSuccessMergesStructuredAndMetadata() {
+        val event =
+            adapter.parseEvent(
+                """{"type":"session.tool.success","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","id":"prt-1","structured":{"count":2},"metadata":{"sessionID":"child-1"}}}""",
+            )
+
+        val metadata =
+            event?.rawProperties?.get("part")?.jsonObject?.get("state")?.jsonObject?.get("metadata")?.jsonObject
+        assertEquals("child-1", metadata?.get("sessionID")?.jsonPrimitive?.content)
+        assertEquals("2", metadata?.get("count")?.jsonPrimitive?.content)
+    }
+
+    @Test
     fun parseEvent_infersWebsearchToolFromInputQuery() {
         val event =
             adapter.parseEvent(

@@ -487,6 +487,26 @@ struct EventDomainAdapterTests {
         #expect(event?.rawProperties?["part"]?.dictionaryValue?["tool"]?.stringValue == "question")
     }
 
+    @Test func parseEvent_toolProgressMetadataCarriesSubagentSessionID() {
+        let adapter = EventDomainAdapter()
+        let event = adapter.parseEvent(
+            dataLine: #"{"type":"session.tool.progress","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","id":"prt-1","metadata":{"sessionID":"child-1","status":"running"}}}"#
+        )
+        let state = event?.rawProperties?["part"]?.dictionaryValue?["state"]?.dictionaryValue
+        #expect(state?["status"]?.stringValue == "running")
+        #expect(state?["metadata"]?.dictionaryValue?["sessionID"]?.stringValue == "child-1")
+    }
+
+    @Test func parseEvent_toolSuccessMergesStructuredAndMetadata() {
+        let adapter = EventDomainAdapter()
+        let event = adapter.parseEvent(
+            dataLine: #"{"type":"session.tool.success","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","id":"prt-1","structured":{"count":2},"metadata":{"sessionID":"child-1"}}}"#
+        )
+        let metadata = event?.rawProperties?["part"]?.dictionaryValue?["state"]?.dictionaryValue?["metadata"]?.dictionaryValue
+        #expect(metadata?["sessionID"]?.stringValue == "child-1")
+        #expect(metadata?["count"]?.int64Value == 2)
+    }
+
     @Test func parseEvent_infersWebsearchToolFromInputQuery() {
         let adapter = EventDomainAdapter()
         let event = adapter.parseEvent(
