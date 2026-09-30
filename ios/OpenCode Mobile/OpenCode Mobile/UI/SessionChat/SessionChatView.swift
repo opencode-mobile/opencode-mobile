@@ -320,13 +320,13 @@ struct SessionChatView: View {
                         }
                     }
                     VStack(spacing: 0) {
+                        // Suggestions float above this stack. Keep the pending strip
+                        // in the measured height so the timeline inset does not jump.
                         if SessionChatComposerKind.resolve(
                             isChildSession: session.parentID != nil,
                             hasPermission: viewModel.uiState.permissionRequest != nil,
                             hasQuestion: viewModel.uiState.questionRequest != nil
                         ) == .prompt,
-                            !viewModel.uiState.atSuggestionsVisible,
-                            !viewModel.uiState.slashSuggestionsVisible,
                             !viewModel.uiState.pendingPrompts.isEmpty {
                             OpenCodePendingPromptsStrip(
                                 prompts: viewModel.uiState.pendingPrompts,

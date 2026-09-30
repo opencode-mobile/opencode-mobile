@@ -644,9 +644,9 @@ fun SessionChatScreen(
                                     WindowInsets.ime.union(WindowInsets.navigationBars),
                                 ),
                     ) {
+                        // Suggestions float above this column. Keep the pending strip
+                        // in the measured height so the timeline inset does not jump.
                         if (overlayComposerKind == SessionChatComposerKind.Prompt &&
-                            !uiState.atSuggestionsVisible &&
-                            !uiState.slashSuggestionsVisible &&
                             uiState.pendingPrompts.isNotEmpty()
                         ) {
                             OpenCodePendingPromptsStrip(
