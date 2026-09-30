@@ -61,8 +61,8 @@ enum ComposerSubmitIntent: Equatable, Sendable {
     case serverCommand(command: String, arguments: String)
 }
 
-enum CommandError: Error, Equatable {
-    case transport(String)
+nonisolated enum CommandError: Error, Equatable {
+    case transport(TransportFailure)
     case http(statusCode: Int, message: String?)
     case decoding(String)
 }
