@@ -42,7 +42,7 @@ object KtorClientFactory {
                     // Keep connect fail-fast. Read/call stay open so Ktor HttpTimeout (and
                     // per-request overrides) can bound normal calls without OkHttp's 10s default
                     // cutting long ops like POST …/summarize mid-compaction.
-                    connectTimeout(if (probe) 3 else 10, TimeUnit.SECONDS)
+                    connectTimeout(if (probe) 3 else if (sse) 5 else 10, TimeUnit.SECONDS)
                     readTimeout(0, TimeUnit.MILLISECONDS)
                     writeTimeout(if (probe) 60 else 0, TimeUnit.SECONDS)
                     callTimeout(0, TimeUnit.MILLISECONDS)
@@ -50,7 +50,7 @@ object KtorClientFactory {
                 }
             }
             install(HttpTimeout) {
-                connectTimeoutMillis = if (probe) 3_000 else 10_000
+                connectTimeoutMillis = if (probe) 3_000 else if (sse) 5_000 else 10_000
                 if (sse) {
                     requestTimeoutMillis = HttpTimeoutConfig.INFINITE_TIMEOUT_MS
                     socketTimeoutMillis = HttpTimeoutConfig.INFINITE_TIMEOUT_MS

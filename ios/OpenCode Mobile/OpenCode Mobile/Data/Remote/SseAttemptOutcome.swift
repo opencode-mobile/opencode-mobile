@@ -14,3 +14,6 @@ nonisolated struct SseHandshakeError: Error, Sendable, Equatable {
 
     let reason: Reason
 }
+
+/// Headers did not arrive within the connect budget. Not a first-frame handshake timeout.
+nonisolated struct SseConnectBudgetExceeded: Error, Sendable, Equatable {}

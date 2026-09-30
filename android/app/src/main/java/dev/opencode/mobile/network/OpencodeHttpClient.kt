@@ -43,11 +43,42 @@ class OpencodeSseHttpClient
     ) {
         @Volatile
         private var delegate: HttpClient = createClient(activeConnectionManager.current())
+        private val dials = mutableListOf<Dial>()
+        private var retiredBefore: Long = 0L
 
         @Synchronized
         fun rebuild() {
-            delegate.close()
+            val previous = delegate
+            val open = dials.toList()
+            dials.clear()
             delegate = createClient(activeConnectionManager.current())
+            previous.close()
+            open.forEach { it.client.close() }
+        }
+
+        @Synchronized
+        fun openDial(token: Long): HttpClient {
+            val client = createClient(activeConnectionManager.current())
+            if (token < retiredBefore) {
+                client.close()
+                return client
+            }
+            dials.add(Dial(token, client))
+            return client
+        }
+
+        @Synchronized
+        fun closeDial(client: HttpClient) {
+            dials.removeAll { it.client === client }
+            client.close()
+        }
+
+        @Synchronized
+        fun retire(olderThan: Long) {
+            retiredBefore = maxOf(retiredBefore, olderThan)
+            val stale = dials.filter { it.token < olderThan }
+            dials.removeAll { it.token < olderThan }
+            stale.forEach { it.client.close() }
         }
 
         fun get(): HttpClient = delegate
@@ -66,4 +97,9 @@ class OpencodeSseHttpClient
                 sse = true,
             )
         }
+
+        private data class Dial(
+            val token: Long,
+            val client: HttpClient,
+        )
     }

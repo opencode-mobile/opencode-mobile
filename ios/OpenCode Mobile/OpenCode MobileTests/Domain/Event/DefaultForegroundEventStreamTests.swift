@@ -122,6 +122,55 @@ struct DefaultForegroundEventStreamTests {
         #expect(second)
     }
 
+    @Test func reconnectWakePendingBeforeStartDoesNotSkipBackoff() async {
+        let harness = makeStream(responses: [""], statusCode: 500)
+        harness.stream.onReconnectWake()
+        harness.stream.start()
+        let first = await waitUntil(timeoutMs: 2_000) {
+            MockForegroundSSEURLProtocol.requestCount(streamID: harness.streamID) >= 1
+        }
+        #expect(first)
+        let earlySecond = await waitUntil(timeoutMs: 400) {
+            MockForegroundSSEURLProtocol.requestCount(streamID: harness.streamID) >= 2
+        }
+        #expect(!earlySecond)
+        let second = await waitUntil(timeoutMs: 1_600) {
+            MockForegroundSSEURLProtocol.requestCount(streamID: harness.streamID) >= 2
+        }
+        let firstAt = MockForegroundSSEURLProtocol.requestDate(streamID: harness.streamID, index: 0)
+        let secondAt = MockForegroundSSEURLProtocol.requestDate(streamID: harness.streamID, index: 1)
+        await harness.stream.stop()
+        #expect(second)
+        if let firstAt, let secondAt {
+            let delta = secondAt.timeIntervalSince(firstAt)
+            #expect(delta >= 0.70)
+            #expect(delta < 1.80)
+        } else {
+            Issue.record("Expected request timestamps for both dials")
+        }
+    }
+
+    @Test func transportFailureBeforeHeadersKeepsTransportError() async {
+        let before = Set(DiagnosticLogBuffer.shared.snapshot().entries.map(\.id))
+        let harness = makeStream(responses: [""], failBeforeHeaders: true)
+        harness.stream.start()
+        let logged = await waitUntil(timeoutMs: 3_000) {
+            DiagnosticLogBuffer.shared.snapshot().entries.contains { entry in
+                !before.contains(entry.id)
+                    && entry.message.contains("SSE attempt transport")
+                    && entry.message.contains("SSEPreHandshake")
+            }
+        }
+        await harness.stream.stop()
+        let fresh = DiagnosticLogBuffer.shared.snapshot().entries.filter { !before.contains($0.id) }
+        let transport = fresh.filter {
+            $0.message.contains("SSE attempt transport") && $0.message.contains("SSEPreHandshake")
+        }
+        #expect(logged)
+        #expect(!transport.isEmpty)
+        #expect(transport.allSatisfy { !$0.message.contains("SseHandshakeError") })
+    }
+
     @Test func coldStartWaitsForProbeBeforeOpeningV2Lease() async {
         let gate = ProbeGate()
         let harness = makeStream(
@@ -223,7 +272,8 @@ struct DefaultForegroundEventStreamTests {
         protocolProbe: (@Sendable () async -> ServerProtocol)? = nil,
         profileID: (@Sendable () async -> String)? = nil,
         connectionIdentity: (@Sendable () async -> String)? = nil,
-        credentialFingerprint: (@Sendable () async -> String)? = nil
+        credentialFingerprint: (@Sendable () async -> String)? = nil,
+        failBeforeHeaders: Bool = false
     ) -> StreamHarness {
         let streamID = UUID().uuidString
         let configuration = URLSessionConfiguration.ephemeral
@@ -232,7 +282,8 @@ struct DefaultForegroundEventStreamTests {
             streamID: streamID,
             responses: responses.map { Data($0.utf8) },
             statusCode: statusCode,
-            holdOpen: holdOpen
+            holdOpen: holdOpen,
+            failBeforeHeaders: failBeforeHeaders
         )
         let session = URLSession(configuration: configuration)
         let connection = ServerConnection(
@@ -391,16 +442,35 @@ private final class MockForegroundSSEURLProtocol: URLProtocol {
         var responses: [Data]
         var statusCode: Int
         var holdOpen: Bool
+        var failBeforeHeaders: Bool = false
         var paths: [String] = []
+        var requestDates: [Date] = []
         var liveClients: [MockForegroundSSEURLProtocol] = []
     }
 
     private static let lock = NSLock()
     nonisolated(unsafe) private static var streams: [String: StreamState] = [:]
 
-    static func register(streamID: String, responses: [Data], statusCode: Int, holdOpen: Bool) {
+    static let preHandshakeError = NSError(
+        domain: "SSEPreHandshake",
+        code: 60,
+        userInfo: [NSLocalizedDescriptionKey: "pre-handshake transport timeout"]
+    )
+
+    static func register(
+        streamID: String,
+        responses: [Data],
+        statusCode: Int,
+        holdOpen: Bool,
+        failBeforeHeaders: Bool = false
+    ) {
         lock.lock()
-        streams[streamID] = StreamState(responses: responses, statusCode: statusCode, holdOpen: holdOpen)
+        streams[streamID] = StreamState(
+            responses: responses,
+            statusCode: statusCode,
+            holdOpen: holdOpen,
+            failBeforeHeaders: failBeforeHeaders
+        )
         lock.unlock()
     }
 
@@ -414,6 +484,14 @@ private final class MockForegroundSSEURLProtocol: URLProtocol {
         lock.lock()
         defer { lock.unlock() }
         return streams[streamID]?.paths ?? []
+    }
+
+    static func requestDate(streamID: String, index: Int) -> Date? {
+        lock.lock()
+        defer { lock.unlock() }
+        let dates = streams[streamID]?.requestDates ?? []
+        guard dates.indices.contains(index) else { return nil }
+        return dates[index]
     }
 
     private static func streamID(from request: URLRequest) -> String? {
@@ -436,12 +514,19 @@ private final class MockForegroundSSEURLProtocol: URLProtocol {
         let body = state.responses.isEmpty ? Data() : state.responses.removeFirst()
         let statusCode = state.statusCode
         let holdOpen = state.holdOpen
+        let failBeforeHeaders = state.failBeforeHeaders
         state.paths.append(request.url?.path ?? "")
+        state.requestDates.append(Date())
         if holdOpen {
             state.liveClients.append(self)
         }
         Self.streams[streamID] = state
         Self.lock.unlock()
+
+        if failBeforeHeaders {
+            client?.urlProtocol(self, didFailWithError: Self.preHandshakeError)
+            return
+        }
 
         let response = HTTPURLResponse(
             url: request.url!,

@@ -18,6 +18,7 @@ import io.ktor.http.headersOf
 import io.ktor.utils.io.ByteChannel
 import io.ktor.utils.io.writeStringUtf8
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -619,6 +620,53 @@ class DefaultForegroundEventStreamTest {
                 stream.start()
                 delay(1_000)
                 assertTrue(stream.connectionState.value != EventStreamConnectionState.Connected)
+            } finally {
+                stream.stop()
+                client.close()
+            }
+        }
+
+    @Test
+    fun connectBudgetExceeded_retriesAndEvicts() =
+        runBlocking {
+            val attempts = AtomicInteger(0)
+            val evicted = AtomicInteger(0)
+            val client =
+                HttpClient(
+                    MockEngine {
+                        attempts.incrementAndGet()
+                        awaitCancellation()
+                    },
+                )
+            val store = FakeProfileStore()
+            val manager =
+                ActiveConnectionManager(
+                    store,
+                    ConnectionProbing { ServerProtocol.V2 },
+                )
+            manager.applyProfile(sampleProfile, serverProtocol = ServerProtocol.V2)
+            val stream =
+                DefaultForegroundEventStream(
+                    eventsApi =
+                        EventsApi(
+                            httpClient = client,
+                            onEvict = { evicted.incrementAndGet() },
+                            connectBudgetMs = 80L,
+                        ),
+                    eventDomainAdapter = EventDomainAdapter(Json { ignoreUnknownKeys = true }),
+                    diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
+                    activeConnectionManager = manager,
+                    connectionProfileStore = store,
+                )
+            try {
+                stream.start()
+                withTimeout(4_000) {
+                    while (attempts.get() < 2) {
+                        delay(20)
+                    }
+                }
+                assertTrue(attempts.get() >= 2)
+                assertTrue(evicted.get() >= 1)
             } finally {
                 stream.stop()
                 client.close()
