@@ -21,6 +21,7 @@ nonisolated final class EventsAPIClient: @unchecked Sendable {
     private let sessionLock = NSLock()
     private var ownedDials: [OwnedDial] = []
     private var installedToken: UInt64 = 0
+    private var retiredBefore: UInt64 = 0
 
     init(connectionProvider: @escaping @Sendable () -> ServerConnection?) {
         self.connectionProvider = connectionProvider
@@ -51,6 +52,9 @@ nonisolated final class EventsAPIClient: @unchecked Sendable {
             retireStreamingSession(token: previous)
         }
         let stale = mutateDials { dials, installed in
+            if token < retiredBefore {
+                return []
+            }
             if token >= installed {
                 installed = token
             }
@@ -78,6 +82,9 @@ nonisolated final class EventsAPIClient: @unchecked Sendable {
     func retireStreamingSessions(olderThan generation: UInt64) {
         guard injectedSession == nil else { return }
         let stale = mutateDials { dials, _ in
+            if generation > retiredBefore {
+                retiredBefore = generation
+            }
             let stale = dials.filter { $0.token < generation }.map(\.session)
             dials.removeAll { $0.token < generation }
             return stale
@@ -186,7 +193,9 @@ nonisolated final class EventsAPIClient: @unchecked Sendable {
         defer { budgetTask.cancel() }
         let bytesTask = Task { () throws -> SseAttemptOutcome in
             let (bytes, response) = try await session.bytes(for: request)
-            race.markHeaders()
+            guard race.markHeaders() else {
+                throw SseConnectBudgetExceeded()
+            }
             budgetTask.cancel()
             try Task.checkCancellation()
             return try await self.readEventStream(
@@ -323,15 +332,27 @@ nonisolated final class EventsAPIClient: @unchecked Sendable {
         )
     }
 
-    private func openStreamingSession(token: UInt64) -> URLSession {
+    func openStreamingSession(token: UInt64) -> URLSession {
         if let injectedSession {
             return injectedSession
         }
         let session = Self.makeStreamingSession()
         sessionLock.lock()
-        ownedDials.append(OwnedDial(token: token, session: session))
+        let rejected = token < retiredBefore
+        if !rejected {
+            ownedDials.append(OwnedDial(token: token, session: session))
+        }
         sessionLock.unlock()
+        if rejected {
+            session.invalidateAndCancel()
+        }
         return session
+    }
+
+    var ownedStreamingDialCount: Int {
+        sessionLock.lock()
+        defer { sessionLock.unlock() }
+        return ownedDials.count
     }
 
     private func retireOwned(_ session: URLSession) {
@@ -389,10 +410,13 @@ nonisolated final class EventsAPIClient: @unchecked Sendable {
         private var headers = false
         private var budget = false
 
-        func markHeaders() {
+        /// False when the budget already won, so a late header mark cannot hide that cancel.
+        func markHeaders() -> Bool {
             lock.lock()
+            defer { lock.unlock() }
+            if budget { return false }
             headers = true
-            lock.unlock()
+            return true
         }
 
         /// True when this call won the race against headers.

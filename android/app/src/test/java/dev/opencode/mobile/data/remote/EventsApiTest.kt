@@ -13,6 +13,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -152,6 +153,53 @@ class EventsApiTest {
                 assertTrue(job.isCancelled)
                 assertNull(outcome)
                 assertEquals(0, evicted.get())
+            } finally {
+                client.close()
+            }
+        }
+
+    @Test
+    fun markHeadersAndClaimBudgetAreExclusive() {
+        val headersFirst = SseConnectRace()
+        assertTrue(headersFirst.markHeaders())
+        assertFalse(headersFirst.claimBudget())
+        assertTrue(headersFirst.headersArrived())
+        assertFalse(headersFirst.budgetClaimed())
+
+        val budgetFirst = SseConnectRace()
+        assertTrue(budgetFirst.claimBudget())
+        assertFalse(budgetFirst.markHeaders())
+        assertTrue(budgetFirst.budgetClaimed())
+        assertFalse(budgetFirst.headersArrived())
+    }
+
+    @Test
+    fun streamEvents_headersWin_budgetDoesNotEvictOrCancel() =
+        runBlocking {
+            val evicted = AtomicInteger(0)
+            val race = SseConnectRace()
+            assertTrue(race.markHeaders())
+            val client =
+                HttpClient(
+                    MockEngine {
+                        awaitCancellation()
+                    },
+                )
+            try {
+                val job =
+                    launch {
+                        EventsApi(
+                            httpClient = client,
+                            onEvict = { evicted.incrementAndGet() },
+                            connectBudgetMs = 50L,
+                            newConnectRace = { race },
+                        ).streamEvents(path = "global/event") { }
+                    }
+                delay(200)
+                assertTrue(job.isActive)
+                assertEquals(0, evicted.get())
+                job.cancel()
+                job.join()
             } finally {
                 client.close()
             }

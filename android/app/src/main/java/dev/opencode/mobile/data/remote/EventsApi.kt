@@ -20,13 +20,14 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 
 class EventsApi private constructor(
     private val fallbackClient: HttpClient? = null,
     private val sseClient: OpencodeSseHttpClient? = null,
     private val onEvict: () -> Unit = {},
     private val connectBudgetMs: Long = CONNECT_BUDGET_MS,
+    private val newConnectRace: () -> SseConnectRace = { SseConnectRace() },
 ) {
     constructor(httpClient: OpencodeSseHttpClient) : this(sseClient = httpClient)
 
@@ -34,10 +35,12 @@ class EventsApi private constructor(
         httpClient: HttpClient,
         onEvict: () -> Unit = {},
         connectBudgetMs: Long = CONNECT_BUDGET_MS,
+        newConnectRace: () -> SseConnectRace = { SseConnectRace() },
     ) : this(
         fallbackClient = httpClient,
         onEvict = onEvict,
         connectBudgetMs = connectBudgetMs,
+        newConnectRace = newConnectRace,
     )
 
     fun retire(olderThan: Long) {
@@ -66,8 +69,7 @@ class EventsApi private constructor(
         onActivity: suspend () -> Unit = {},
         onDataLine: suspend (String) -> Unit,
     ): SseAttemptOutcome {
-        val headersArrived = AtomicBoolean(false)
-        val budgetExceeded = AtomicBoolean(false)
+        val connectRace = newConnectRace()
         val client = sseClient?.openDial(generation) ?: requireNotNull(fallbackClient)
         return try {
             coroutineScope {
@@ -75,8 +77,7 @@ class EventsApi private constructor(
                 val budgetJob =
                     launch {
                         delay(connectBudgetMs)
-                        if (!headersArrived.get()) {
-                            budgetExceeded.set(true)
+                        if (connectRace.claimBudget()) {
                             DiagnosticLog.warning(
                                 DiagnosticLogArea.Sse,
                                 "SSE connect budget exceeded path=$path budgetMs=$connectBudgetMs",
@@ -94,7 +95,9 @@ class EventsApi private constructor(
                             header(HttpHeaders.AcceptEncoding, "identity")
                             applyDirectory(directory)
                         }.execute { response ->
-                            headersArrived.set(true)
+                            if (!connectRace.markHeaders()) {
+                                throw CancellationException(CONNECT_BUDGET_EXCEEDED)
+                            }
                             budgetJob.cancel()
                             val statusCode = response.status.value
                             onHTTPResponse(statusCode)
@@ -126,8 +129,8 @@ class EventsApi private constructor(
                 }
             }
         } catch (error: CancellationException) {
-            if (budgetExceeded.get() &&
-                !headersArrived.get() &&
+            if (connectRace.budgetClaimed() &&
+                !connectRace.headersArrived() &&
                 currentCoroutineContext().isActive
             ) {
                 SseAttemptOutcome.Transport(error)
@@ -144,5 +147,25 @@ class EventsApi private constructor(
     internal companion object {
         const val CONNECT_BUDGET_MS = 5_000L
         const val CONNECT_BUDGET_EXCEEDED = "SSE connect budget exceeded"
+    }
+}
+
+internal class SseConnectRace {
+    private val state = AtomicInteger(PENDING)
+
+    /** True when headers won. A budget claim that already won leaves this false. */
+    fun markHeaders(): Boolean = state.compareAndSet(PENDING, HEADERS)
+
+    /** True when the budget won. Headers that already arrived leave this false. */
+    fun claimBudget(): Boolean = state.compareAndSet(PENDING, BUDGET)
+
+    fun headersArrived(): Boolean = state.get() == HEADERS
+
+    fun budgetClaimed(): Boolean = state.get() == BUDGET
+
+    private companion object {
+        const val PENDING = 0
+        const val HEADERS = 1
+        const val BUDGET = 2
     }
 }

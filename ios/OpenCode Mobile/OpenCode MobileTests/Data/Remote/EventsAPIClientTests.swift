@@ -180,6 +180,26 @@ struct EventsAPIClientTests {
         #expect(lines.count == 1)
     }
 
+    @Test func retireStreamingSessions_rejectsLaterOpenOfOlderToken() {
+        let connection = ServerConnection(
+            baseURL: URL(string: "http://127.0.0.1:4096/")!,
+            password: "secret"
+        )
+        let client = EventsAPIClient(connectionProvider: { connection })
+        _ = client.openStreamingSession(token: 2)
+        client.retireStreamingSessions(olderThan: 2)
+        #expect(client.ownedStreamingDialCount == 1)
+
+        client.retireStreamingSessions(olderThan: 3)
+        #expect(client.ownedStreamingDialCount == 0)
+
+        _ = client.openStreamingSession(token: 2)
+        #expect(client.ownedStreamingDialCount == 0)
+
+        _ = client.openStreamingSession(token: 3)
+        #expect(client.ownedStreamingDialCount == 1)
+    }
+
     private func makeClient(
         responseBody: String,
         serverProtocol: ServerProtocol? = nil,

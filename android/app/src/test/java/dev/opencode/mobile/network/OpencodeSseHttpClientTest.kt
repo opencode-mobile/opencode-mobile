@@ -45,6 +45,22 @@ class OpencodeSseHttpClientTest {
     }
 
     @Test
+    fun openDialAfterRetireDoesNotKeepAnOlderToken() {
+        val json = Json { ignoreUnknownKeys = true }
+        val sse = OpencodeSseHttpClient(json, ActiveConnectionManager(FakeProfileStore()))
+        sse.retire(olderThan = 3)
+        val stale = sse.openDial(2)
+        val current = sse.openDial(3)
+        try {
+            assertFalse(stale.isOpen())
+            assertTrue(current.isOpen())
+        } finally {
+            sse.closeDial(stale)
+            sse.closeDial(current)
+        }
+    }
+
+    @Test
     fun closeDialDoesNotCloseSiblingOnSameGeneration() {
         val json = Json { ignoreUnknownKeys = true }
         val sse = OpencodeSseHttpClient(json, ActiveConnectionManager(FakeProfileStore()))
