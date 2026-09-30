@@ -91,6 +91,8 @@ import dev.opencode.mobile.ui.sessionchat.view.SessionChatPickerSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatTimelineView
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatTimelineViewProps
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatTodosSheet
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatSkillsSheet
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatSkillsTarget
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolDetailSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolDetailTarget
 import dev.opencode.mobile.ui.sessionchat.view.toActionTileBadge
@@ -147,6 +149,7 @@ fun SessionChatScreen(
     var messageActionsTarget by remember { mutableStateOf<SessionChatMessageActionsTarget?>(null) }
     var showPendingPromptsSheet by rememberSaveable { mutableStateOf(false) }
     var toolDetailTarget by remember { mutableStateOf<SessionChatToolDetailTarget?>(null) }
+    var skillsTarget by remember { mutableStateOf<SessionChatSkillsTarget?>(null) }
     var showSessionTodosSheet by rememberSaveable { mutableStateOf(false) }
     var holdingFinishedTodos by remember { mutableStateOf(false) }
     var sawUnfinishedTodos by remember { mutableStateOf(false) }
@@ -514,6 +517,10 @@ fun SessionChatScreen(
                                 logChatAction(ProductAnalytics.Action.CHAT_OPEN_TOOL_DETAIL)
                                 toolDetailTarget = it
                             },
+                            onSkillsTap = {
+                                logChatAction(ProductAnalytics.Action.CHAT_OPEN_SKILLS)
+                                skillsTarget = it
+                            },
                             onToolGroupTap = { target ->
                                 logChatAction(ProductAnalytics.Action.CHAT_OPEN_TOOL_GROUP)
                                 onToolGroupClick(
@@ -833,6 +840,11 @@ fun SessionChatScreen(
         SessionChatToolDetailSheet(
             target = toolDetailTarget,
             onDismiss = { toolDetailTarget = null },
+        )
+
+        SessionChatSkillsSheet(
+            target = skillsTarget,
+            onDismiss = { skillsTarget = null },
         )
 
         SessionChatTodosSheet(

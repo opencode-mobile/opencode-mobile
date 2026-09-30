@@ -2994,6 +2994,133 @@ class SessionChatTimelineBlocksTest {
         assertEquals(bodies, merged)
     }
 
+    @Test
+    fun chipTimeline_skillChipNamesFromServerIdAndMetadata() {
+        val blocks =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "skill",
+                            status = ToolStatus.Running,
+                            id = "s1",
+                            input = json("id" to "feature"),
+                        ),
+                        MessagePart.Tool(
+                            toolName = "skill",
+                            status = ToolStatus.Completed,
+                            id = "s2",
+                            input = json("id" to "linear"),
+                            metadata =
+                                json(
+                                    "name" to "linear-project-tracking",
+                                    "directory" to "/repo/.agents/skills/linear-project-tracking",
+                                ),
+                        ),
+                    ),
+                chipTimeline = true,
+            )
+
+        val paragraph = blocks.single() as SessionChatTimelineBlock.StepParagraph
+        assertEquals(listOf("/feature", "/linear-project-tracking"), paragraph.chips.map { it.label })
+        assertEquals(listOf(ToolChipKind.Skill, ToolChipKind.Skill), paragraph.chips.map { it.kind })
+        assertNull(paragraph.chips[0].brief)
+        assertEquals("/repo/.agents/skills/linear-project-tracking", paragraph.chips[1].brief)
+        assertEquals("linear-project-tracking", paragraph.chips[1].card.subtitle)
+    }
+
+    @Test
+    fun skillUses_collectsAcrossParagraphsInFirstUseOrder() {
+        val blocks =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Text(id = "t1", text = "Loading."),
+                        MessagePart.Tool(
+                            toolName = "skill",
+                            status = ToolStatus.Completed,
+                            id = "s1",
+                            input = json("id" to "feature"),
+                            metadata = json("name" to "feature", "directory" to "/repo/.agents/skills/feature"),
+                        ),
+                        MessagePart.Text(id = "t2", text = "Again."),
+                        MessagePart.Tool(
+                            toolName = "skill",
+                            status = ToolStatus.Completed,
+                            id = "s2",
+                            input = json("id" to "linear"),
+                        ),
+                        MessagePart.Tool(
+                            toolName = "skill",
+                            status = ToolStatus.Error,
+                            error = "denied",
+                            id = "s3",
+                            input = json("id" to "feature"),
+                        ),
+                        MessagePart.Tool(
+                            toolName = "bash",
+                            status = ToolStatus.Completed,
+                            id = "b1",
+                            input = json("command" to "ls"),
+                        ),
+                    ),
+                chipTimeline = true,
+            )
+
+        val uses = SessionChatTimelineBlocks.skillUses(blocks)
+        assertEquals(listOf("/feature", "/linear"), uses.map { it.label })
+        assertEquals(PresentationBlockId.direct("s1"), uses[0].id)
+        assertEquals(ToolStatus.Error, uses[0].status)
+        assertEquals("/repo/.agents/skills/feature", uses[0].directory)
+        assertEquals(ToolStatus.Completed, uses[1].status)
+        assertNull(uses[1].directory)
+        assertTrue(
+            SessionChatTimelineBlocks
+                .skillUses(
+                    buildBlocks(
+                        role = MessageRole.Assistant,
+                        parts = listOf(MessagePart.Text(id = "t", text = "No tools.")),
+                        chipTimeline = true,
+                    ),
+                ).isEmpty(),
+        )
+    }
+
+    @Test
+    fun skillUses_collapsesByRequestedIdWhenTheSettledNameDiffers() {
+        val blocks =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "skill",
+                            status = ToolStatus.Completed,
+                            id = "s1",
+                            input = json("id" to "feature"),
+                            metadata = json("name" to "feature-workflow", "directory" to "/repo/.agents/skills/feature"),
+                        ),
+                        MessagePart.Text(id = "t", text = "Once more."),
+                        MessagePart.Tool(
+                            toolName = "skill",
+                            status = ToolStatus.Running,
+                            id = "s2",
+                            input = json("id" to "feature"),
+                        ),
+                    ),
+                chipTimeline = true,
+            )
+
+        val uses = SessionChatTimelineBlocks.skillUses(blocks)
+        assertEquals(1, uses.size)
+        assertEquals(PresentationBlockId.direct("s1"), uses[0].id)
+        assertEquals("/feature", uses[0].label)
+        assertEquals(ToolStatus.Running, uses[0].status)
+        assertEquals("/repo/.agents/skills/feature", uses[0].directory)
+    }
+
     private fun buildBlocks(
         role: MessageRole,
         parts: List<MessagePart>,

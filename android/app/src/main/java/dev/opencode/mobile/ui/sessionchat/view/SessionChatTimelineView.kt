@@ -141,6 +141,7 @@ internal data class SessionChatTimelineViewProps(
     val onMessageActionsTap: (SessionChatMessageActionsTarget) -> Unit,
     val onToolDetailTap: (SessionChatToolDetailTarget) -> Unit = {},
     val onToolGroupTap: (SessionChatToolGroupTarget) -> Unit = {},
+    val onSkillsTap: (SessionChatSkillsTarget) -> Unit = {},
     val onChildSessionTap: (sessionId: String, sessionTitle: String) -> Unit = { _, _ -> },
     val onChangesReviewTap: (assistantMessageId: String, initialFilePath: String?) -> Unit = { _, _ -> },
     val supportsSessionMessageDiff: Boolean = true,
@@ -230,6 +231,7 @@ internal fun SessionChatTimelineView(
                 onMessageActionsTap = props.onMessageActionsTap,
                 onToolDetailTap = props.onToolDetailTap,
                 onToolGroupTap = props.onToolGroupTap,
+                onSkillsTap = props.onSkillsTap,
                 onChildSessionTap = props.onChildSessionTap,
                 onChangesReviewTap = props.onChangesReviewTap,
                 supportsSessionMessageDiff = props.supportsSessionMessageDiff,
@@ -267,6 +269,7 @@ private fun SessionChatTimelineReadyView(
     onMessageActionsTap: (SessionChatMessageActionsTarget) -> Unit,
     onToolDetailTap: (SessionChatToolDetailTarget) -> Unit,
     onToolGroupTap: (SessionChatToolGroupTarget) -> Unit,
+    onSkillsTap: (SessionChatSkillsTarget) -> Unit,
     onChildSessionTap: (sessionId: String, sessionTitle: String) -> Unit,
     onChangesReviewTap: (assistantMessageId: String, initialFilePath: String?) -> Unit,
     supportsSessionMessageDiff: Boolean,
@@ -446,6 +449,7 @@ private fun SessionChatTimelineReadyView(
                     onMessageActionsTap = onMessageActionsTap,
                     onToolDetailTap = onToolDetailTap,
                     onToolGroupTap = onToolGroupTap,
+                    onSkillsTap = onSkillsTap,
                     onChildSessionTap = onChildSessionTap,
                     onChangesReviewTap = onChangesReviewTap,
                     supportsSessionMessageDiff = supportsSessionMessageDiff,
@@ -550,6 +554,7 @@ private fun SessionChatMessageRow(
     onMessageActionsTap: (SessionChatMessageActionsTarget) -> Unit,
     onToolDetailTap: (SessionChatToolDetailTarget) -> Unit,
     onToolGroupTap: (SessionChatToolGroupTarget) -> Unit,
+    onSkillsTap: (SessionChatSkillsTarget) -> Unit,
     onChildSessionTap: (sessionId: String, sessionTitle: String) -> Unit,
     onChangesReviewTap: (assistantMessageId: String, initialFilePath: String?) -> Unit,
     supportsSessionMessageDiff: Boolean,
@@ -609,6 +614,7 @@ private fun SessionChatMessageRow(
                     onOpenMessageActions = { openMessageActions(showsRevertMessage = false) },
                     onToolDetailTap = onToolDetailTap,
                     onToolGroupTap = onToolGroupTap,
+                    onSkillsTap = onSkillsTap,
                     onChildSessionTap = onChildSessionTap,
                     onChangesReviewTap = onChangesReviewTap,
                     supportsSessionMessageDiff = supportsSessionMessageDiff,
@@ -675,6 +681,7 @@ private fun AssistantMessageContent(
     onOpenMessageActions: () -> Unit,
     onToolDetailTap: (SessionChatToolDetailTarget) -> Unit,
     onToolGroupTap: (SessionChatToolGroupTarget) -> Unit,
+    onSkillsTap: (SessionChatSkillsTarget) -> Unit,
     onChildSessionTap: (sessionId: String, sessionTitle: String) -> Unit,
     onChangesReviewTap: (assistantMessageId: String, initialFilePath: String?) -> Unit,
     supportsSessionMessageDiff: Boolean,
@@ -809,7 +816,13 @@ private fun AssistantMessageContent(
                                     ?: message.renderedMarkdown.takeIf { textBlockCount == 1 && block.text != null },
                             isStreaming = block.blockID == streamingStepParagraphBlockId,
                             onOpenMessageActions = onOpenMessageActions,
-                            chipAction = { chip -> toolCardAction(chip.card) },
+                            chipAction = { chip ->
+                                if (chip.kind == ToolChipKind.Skill) {
+                                    { onSkillsTap(SessionChatSkillsTarget(SessionChatTimelineBlocks.skillUses(blocks))) }
+                                } else {
+                                    toolCardAction(chip.card)
+                                }
+                            },
                             exploreAction = { summary ->
                                 onToolGroupTap(
                                     SessionChatToolGroupTarget(

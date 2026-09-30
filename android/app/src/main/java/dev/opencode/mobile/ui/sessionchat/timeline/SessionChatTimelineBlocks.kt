@@ -130,7 +130,14 @@ sealed class SessionChatTimelineBlock {
         val kind: ToolChipKind,
         val family: ToolChipFamily,
         val label: String,
+        /** Agent chips: first line of the description; skill chips: the skill directory. */
         val brief: String? = null,
+        /**
+         * Skill chips only: the requested skill id, stable from the first
+         * in-flight update on, while [label] switches to the server-reported
+         * name once the run settles.
+         */
+        val skillId: String? = null,
         val additions: Int? = null,
         val deletions: Int? = null,
         val status: ToolStatus,
@@ -187,6 +194,18 @@ sealed class SessionChatTimelineBlock {
 }
 
 enum class ToolChipKind { File, Command, Agent, Skill }
+
+/**
+ * One skill a message loaded, for the Skills sheet a skill chip opens. [id]
+ * is the chip id of the first run; [directory] is the server-reported skill
+ * directory once the run settled.
+ */
+data class SessionChatSkillUse(
+    val id: String,
+    val label: String,
+    val directory: String?,
+    val status: ToolStatus,
+)
 
 /**
  * Truncation family; chips inside a paragraph are grouped in declaration order
@@ -476,6 +495,43 @@ object SessionChatTimelineBlocks {
         return folded.mapIndexed { index, chip -> chip.copy(arrivalIndex = index) }
     }
 
+    /**
+     * Skill name: the settled server output names it in metadata; before that
+     * the request carries the skill id (older servers sent `name`).
+     */
+    private fun skillName(tool: MessagePart.Tool): String? = metadataString(tool.metadata, "name") ?: requestedSkillId(tool)
+
+    /** The skill the request asked for; present from the first update on. */
+    private fun requestedSkillId(tool: MessagePart.Tool): String? = inputString(tool.input, "id", "name", "skill")
+
+    private fun skillDirectory(tool: MessagePart.Tool): String? = metadataString(tool.metadata, "directory")
+
+    /**
+     * Skills a message loaded, in first-use order across its step paragraphs.
+     * Repeated loads of one skill collapse into one entry, keyed by the
+     * requested skill id (the label once no id is known), that keeps the
+     * first chip's id and the latest run's label, status and directory.
+     */
+    fun skillUses(blocks: List<SessionChatTimelineBlock>): List<SessionChatSkillUse> {
+        val uses = linkedMapOf<String, SessionChatSkillUse>()
+        blocks
+            .filterIsInstance<SessionChatTimelineBlock.StepParagraph>()
+            .flatMap { it.chips }
+            .filter { it.kind == ToolChipKind.Skill }
+            .forEach { chip ->
+                val key = chip.skillId ?: chip.label
+                val previous = uses[key]
+                uses[key] =
+                    SessionChatSkillUse(
+                        id = previous?.id ?: chip.id,
+                        label = chip.label,
+                        directory = chip.brief ?: previous?.directory,
+                        status = chip.status,
+                    )
+            }
+        return uses.values.toList()
+    }
+
     /** Fixed group order by [ToolChipFamily], arrival order inside a group. */
     private fun orderedChips(chips: List<SessionChatTimelineBlock.ToolChip>): List<SessionChatTimelineBlock.ToolChip> =
         chips.sortedBy { it.family.ordinal }
@@ -503,7 +559,13 @@ object SessionChatTimelineBlocks {
             kind = kind,
             family = family,
             label = chipLabel(name, tool, card),
-            brief = if (family == ToolChipFamily.Agent) chipBrief(tool) else null,
+            brief =
+                when (family) {
+                    ToolChipFamily.Agent -> chipBrief(tool)
+                    ToolChipFamily.Skill -> skillDirectory(tool)
+                    else -> null
+                },
+            skillId = if (family == ToolChipFamily.Skill) requestedSkillId(tool) else null,
             additions = card.additions.takeIf { isChange },
             deletions = card.deletions.takeIf { isChange },
             status = tool.status,
@@ -535,7 +597,7 @@ object SessionChatTimelineBlocks {
             "bash", "shell" -> inputString(tool.input, "command")?.let(StepParagraphChips::commandLabel)
             "execute" -> card.subtitle?.let(StepParagraphChips::commandLabel)
             "task", "subagent" -> taskAgentName(tool)
-            "skill" -> "/" + (inputString(tool.input, "name", "skill") ?: name)
+            "skill" -> "/" + (skillName(tool) ?: name)
             "lsp", "plan_exit" -> card.title
             else -> if (isQuestionTool(tool)) card.title else null
         } ?: tool.toolName
@@ -1094,9 +1156,7 @@ object SessionChatTimelineBlocks {
             "skill" ->
                 Chrome(
                     title = "Skill",
-                    subtitle =
-                        inputString(tool.input, "name", "skill")
-                            ?: runningTitleOverride(tool),
+                    subtitle = skillName(tool) ?: runningTitleOverride(tool),
                 )
             "task", "subagent" -> taskChrome(tool)
             "edit" -> fileChangeChrome(tool, displayTitle = "Edit")
