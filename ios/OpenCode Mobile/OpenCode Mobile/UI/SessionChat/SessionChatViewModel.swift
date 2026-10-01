@@ -78,7 +78,8 @@ final class SessionChatViewModel {
         lastTurnReviewChangesStore: LastTurnReviewChangesStore? = nil,
         syncCoordinator: (any SyncCoordinator)? = nil,
         clock: any SyncClock = SystemSyncClock(),
-        mcpRepository: (any McpRepository)? = nil
+        mcpRepository: (any McpRepository)? = nil,
+        catalogRetryDelaysMs: [Int] = SessionChatComposer.defaultCatalogRetryDelaysMs
     ) {
         self.sessionID = sessionID
         self.sessionTitle = sessionTitle
@@ -113,7 +114,8 @@ final class SessionChatViewModel {
             sessionModelSelectionStore: sessionModelSelectionStore,
             composerDraftStore: composerDraftStore,
             activeConnectionManager: activeConnectionManager,
-            foregroundEventStream: foregroundEventStream
+            foregroundEventStream: foregroundEventStream,
+            catalogRetryDelaysMs: catalogRetryDelaysMs
         )
         self.sessionInfo = SessionInfo(
             worktree: worktree,

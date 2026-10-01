@@ -2535,6 +2535,94 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun streamReconnect_refetchesCatalogThatWasEmptyAfterServerRestart() =
+        runTest(testDispatcher) {
+            // The restart's catalog events fired while the stream was still down; only the
+            // reconnect tells the composer the server is back.
+            val repository = FakeMessageRepository(messages = emptyList())
+            val models = FakeModelRepository(queued = listOf(ModelSelectionCatalog(emptyList(), null)))
+            val viewModel = createViewModel(repository, modelRepository = models)
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            assertEquals(false, viewModel.uiState.value.composer.isModelSelectionReady)
+
+            repository.eventStream.emit(OpencodeEvent(type = "server.connected"))
+            advanceUntilIdle()
+
+            assertEquals(true, viewModel.uiState.value.composer.isModelSelectionReady)
+            assertNull(viewModel.uiState.value.composer.modelCatalogError)
+            assertEquals(
+                "claude-sonnet",
+                viewModel.uiState.value.composer.selectedModel
+                    ?.option
+                    ?.modelId,
+            )
+        }
+
+    @Test
+    fun emptyCatalog_isRetriedWithBackoffUntilModelsArrive() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository(messages = emptyList())
+            val empty = ModelSelectionCatalog(emptyList(), null)
+            val models = FakeModelRepository(queued = listOf(empty, empty))
+            val viewModel = createViewModel(repository, modelRepository = models, catalogRetryDelaysMs = listOf(1_000L, 2_000L, 4_000L))
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            runCurrent()
+            assertEquals(false, viewModel.uiState.value.composer.isModelSelectionReady)
+            assertEquals(1, models.calls)
+
+            advanceTimeBy(1_001)
+            assertEquals(2, models.calls)
+            assertEquals(false, viewModel.uiState.value.composer.isModelSelectionReady)
+
+            advanceTimeBy(2_001)
+            advanceUntilIdle()
+            assertEquals(3, models.calls)
+            assertEquals(true, viewModel.uiState.value.composer.isModelSelectionReady)
+            assertNull(viewModel.uiState.value.composer.modelCatalogError)
+        }
+
+    @Test
+    fun emptyCatalog_stopsRetryingAfterTheLastBackoffStep() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository(messages = emptyList())
+            val empty = ModelSelectionCatalog(emptyList(), null)
+            val models = FakeModelRepository(queued = listOf(empty, empty, empty, empty))
+            val viewModel = createViewModel(repository, modelRepository = models, catalogRetryDelaysMs = listOf(10L, 10L))
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertEquals(3, models.calls)
+            assertEquals(
+                "No usable models are available. Tap Model to retry.",
+                viewModel.uiState.value.composer.modelCatalogError,
+            )
+        }
+
+    @Test
+    fun reconnectRefreshThatComesBackEmpty_keepsTheLoadedCatalog() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository(messages = emptyList())
+            val models = FakeModelRepository()
+            val viewModel = createViewModel(repository, modelRepository = models, catalogRetryDelaysMs = listOf(10L))
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            assertEquals(true, viewModel.uiState.value.composer.isModelSelectionReady)
+
+            models.enqueue(ModelSelectionCatalog(emptyList(), null))
+            repository.eventStream.emit(OpencodeEvent(type = "stream.reconnected"))
+            advanceUntilIdle()
+
+            assertEquals(3, models.calls)
+            assertEquals(true, viewModel.uiState.value.composer.isModelSelectionReady)
+            assertNull(viewModel.uiState.value.composer.modelCatalogError)
+        }
+
+    @Test
     fun unrelatedEvent_doesNotRefetchCatalog() =
         runTest(testDispatcher) {
             val repository = FakeMessageRepository(messages = emptyList())
@@ -4431,6 +4519,7 @@ class SessionChatViewModelTest {
         connectionProfileStore: FakeConnectionProfileStore = FakeConnectionProfileStore(),
         serverProtocol: ServerProtocol = ServerProtocol.V1,
         liveUpdates: LiveUpdates = FixedLiveUpdates(),
+        catalogRetryDelaysMs: List<Long> = emptyList(),
     ): SessionChatViewModel {
         val eventStream = repository.eventStream
         val liveStoreScope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
@@ -4502,6 +4591,7 @@ class SessionChatViewModelTest {
         ).apply {
             ioDispatcher = testDispatcher
             nowMs = { testDispatcher.scheduler.currentTime }
+            this.catalogRetryDelaysMs = catalogRetryDelaysMs
             // Mutations (send/rename/fork/new) require Live; default fakes start Connected.
             eventStream.setConnectionState(EventStreamConnectionState.Connected)
         }
@@ -4917,6 +5007,11 @@ private class FakeModelRepository(
     queued: List<ModelSelectionCatalog> = emptyList(),
 ) : ModelRepository {
     private val queued = ArrayDeque(queued)
+
+    fun enqueue(catalog: ModelSelectionCatalog) {
+        queued.addLast(catalog)
+    }
+
     var calls = 0
         private set
 

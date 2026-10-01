@@ -1467,6 +1467,73 @@ struct SessionChatViewModelTests {
         #expect(models.calls >= 2)
     }
 
+    @Test func streamReconnect_refetchesCatalogThatWasEmptyAfterServerRestart() async {
+        // The restart's catalog events fired while the stream was still down; only the
+        // reconnect tells the composer the server is back.
+        let events = FakeForegroundEventStream()
+        let models = SequencedModelRepository(catalogs: [ModelSelectionCatalog(options: [], serverDefault: nil)])
+        let viewModel = makeViewModel(eventStream: events, modelRepository: models)
+        defer { viewModel.stopObserving() }
+
+        await viewModel.loadMessages()
+        #expect(viewModel.uiState.composer.isModelSelectionReady == false)
+
+        events.emit(OpencodeEvent(type: "server.connected", sessionID: nil))
+        _ = await waitUntil { viewModel.uiState.composer.isModelSelectionReady }
+
+        #expect(viewModel.uiState.composer.isModelSelectionReady)
+        #expect(viewModel.uiState.composer.modelCatalogError == nil)
+        #expect(viewModel.uiState.composer.selectedModel?.option.modelID == "claude-sonnet")
+    }
+
+    @Test func emptyCatalog_isRetriedWithBackoffUntilModelsArrive() async {
+        let empty = ModelSelectionCatalog(options: [], serverDefault: nil)
+        let models = SequencedModelRepository(catalogs: [empty, empty])
+        let viewModel = makeViewModel(modelRepository: models, catalogRetryDelaysMs: [10, 10, 10])
+        defer { viewModel.stopObserving() }
+
+        await viewModel.loadMessages()
+        _ = await waitUntil { viewModel.uiState.composer.isModelSelectionReady }
+
+        #expect(viewModel.uiState.composer.isModelSelectionReady)
+        #expect(viewModel.uiState.composer.modelCatalogError == nil)
+        #expect(models.calls == 3)
+    }
+
+    @Test func emptyCatalog_stopsRetryingAfterTheLastBackoffStep() async {
+        let empty = ModelSelectionCatalog(options: [], serverDefault: nil)
+        let models = SequencedModelRepository(catalogs: [empty, empty, empty, empty])
+        let viewModel = makeViewModel(modelRepository: models, catalogRetryDelaysMs: [10, 10])
+        defer { viewModel.stopObserving() }
+
+        await viewModel.loadMessages()
+        _ = await waitUntil { models.calls >= 3 }
+        try? await Task.sleep(for: .milliseconds(100))
+
+        #expect(models.calls == 3)
+        #expect(viewModel.uiState.composer.modelCatalogError == "No usable models are available. Tap Model to retry.")
+    }
+
+    @Test func reconnectRefreshThatComesBackEmpty_keepsTheLoadedCatalog() async {
+        let events = FakeForegroundEventStream()
+        let models = SequencedModelRepository(catalogs: [
+            FakeModelRepository().catalog,
+            ModelSelectionCatalog(options: [], serverDefault: nil),
+        ])
+        let viewModel = makeViewModel(eventStream: events, modelRepository: models, catalogRetryDelaysMs: [10])
+        defer { viewModel.stopObserving() }
+
+        await viewModel.loadMessages()
+        #expect(viewModel.uiState.composer.isModelSelectionReady)
+
+        events.emit(OpencodeEvent(type: "stream.reconnected", sessionID: nil))
+        _ = await waitUntil { models.calls >= 3 }
+
+        #expect(viewModel.uiState.composer.isModelSelectionReady)
+        #expect(viewModel.uiState.composer.modelCatalogError == nil)
+        #expect(viewModel.uiState.composer.selectedModel?.option.modelID == "claude-sonnet")
+    }
+
     @Test func unrelatedEvent_doesNotRefetchCatalog() async {
         let events = FakeForegroundEventStream()
         let models = SequencedModelRepository(catalogs: [ModelSelectionCatalog(options: [], serverDefault: nil)])
@@ -3036,7 +3103,8 @@ struct SessionChatViewModelTests {
         sessionTitle: String = "Title",
         serverProtocol: ServerProtocol = .v1,
         liveUpdates: any LiveUpdates = FixedLiveUpdates(),
-        clock: any SyncClock = SystemSyncClock()
+        clock: any SyncClock = SystemSyncClock(),
+        catalogRetryDelaysMs: [Int] = []
     ) -> SessionChatViewModel {
         let eventStream = eventStream ?? FakeForegroundEventStream()
         // Mutations (send/rename/fork/new/permissions) require Connected; default fakes start Idle.
@@ -3087,7 +3155,8 @@ struct SessionChatViewModelTests {
                 modelRepository: modelRepository
             ),
             liveUpdates: liveUpdates,
-            clock: clock
+            clock: clock,
+            catalogRetryDelaysMs: catalogRetryDelaysMs
         )
         viewModel.startObserving()
         return viewModel
