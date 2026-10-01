@@ -309,7 +309,7 @@ struct SessionProtocolRepositoryTests {
         #expect(queryValue(url, "location[directory]") == "/repo")
     }
 
-    @Test func v2RespondToPermissionPostsReplyBody() async throws {
+    @Test func v2RespondToPermissionPostsDecisionBody() async throws {
         ProtocolRoutingURLProtocol.reset(responses: [.noContent])
         let repository = makeSessionRepository(serverProtocol: .v2)
 
@@ -324,7 +324,29 @@ struct SessionProtocolRepositoryTests {
         let request = try #require(ProtocolRoutingURLProtocol.requests.first)
         #expect(request.httpMethod == "POST")
         #expect(request.url?.path.hasSuffix("/api/session/ses_1/permission/per_1/reply") == true)
-        #expect(ProtocolRoutingURLProtocol.bodies.first??.contains(#""reply":"once""#) == true)
+        let body = try #require(ProtocolRoutingURLProtocol.bodies.first ?? nil)
+        #expect(body.contains(#""decision":"once""#))
+        #expect(!body.contains(#""reply""#))
+    }
+
+    @Test func v2RespondToPermissionDenyPostsRejectDecision() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [.noContent])
+        let repository = makeSessionRepository(serverProtocol: .v2)
+
+        let ok = try await repository.respondToPermission(
+            sessionID: "ses_1",
+            permissionID: "per_1",
+            decision: .deny,
+            directory: "/repo"
+        )
+
+        #expect(ok)
+        let request = try #require(ProtocolRoutingURLProtocol.requests.first)
+        #expect(request.httpMethod == "POST")
+        #expect(request.url?.path.hasSuffix("/api/session/ses_1/permission/per_1/reply") == true)
+        let body = try #require(ProtocolRoutingURLProtocol.bodies.first ?? nil)
+        #expect(body.contains(#""decision":"reject""#))
+        #expect(!body.contains(#""reply""#))
     }
 
     @Test func v2ListPendingQuestionsFallsBackToFormsWhenQuestionRoute404s() async throws {

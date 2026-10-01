@@ -433,7 +433,7 @@ class SessionProtocolRepositoryTest {
         }
 
     @Test
-    fun v2RespondToPermission_postsReplyBody() =
+    fun v2RespondToPermission_postsDecisionBody() =
         runTest {
             val requests = mutableListOf<HttpRequestData>()
             val client =
@@ -457,7 +457,39 @@ class SessionProtocolRepositoryTest {
                     .url.encodedPath
                     .contains("/api/session/ses_1/permission/per_1/reply"),
             )
-            assertTrue(requests.single().requestBodyText().contains("\"reply\":\"once\""))
+            val body = requests.single().requestBodyText()
+            assertTrue(body.contains("\"decision\":\"once\""))
+            assertFalse(body.contains("\"reply\""))
+        }
+
+    @Test
+    fun v2RespondToPermission_denyPostsRejectDecision() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respond("", HttpStatusCode.NoContent)
+                }
+            val repository =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V2),
+                )
+
+            val ok = repository.respondToPermission("ses_1", "per_1", PermissionDecision.Deny, "/repo")
+
+            assertTrue(ok)
+            assertTrue(
+                requests
+                    .single()
+                    .url.encodedPath
+                    .contains("/api/session/ses_1/permission/per_1/reply"),
+            )
+            val body = requests.single().requestBodyText()
+            assertTrue(body.contains("\"decision\":\"reject\""))
+            assertFalse(body.contains("\"reply\""))
         }
 
     @Test

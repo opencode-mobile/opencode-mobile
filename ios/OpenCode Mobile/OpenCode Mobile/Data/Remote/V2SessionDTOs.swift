@@ -165,7 +165,7 @@ nonisolated struct V2PermissionSourceDTO: Decodable, Sendable {
 }
 
 nonisolated struct V2PermissionReplyRequestDTO: Encodable, Sendable {
-    let reply: String
+    let decision: String
 }
 
 nonisolated struct V2CompactSessionRequestDTO: Encodable, Sendable {

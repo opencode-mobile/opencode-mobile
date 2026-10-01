@@ -72,7 +72,7 @@ data class V2PermissionSourceDto(
 
 @Serializable
 data class V2PermissionReplyRequestDto(
-    val reply: String,
+    val decision: String,
 )
 
 @Serializable
