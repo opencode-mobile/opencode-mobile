@@ -2355,6 +2355,7 @@ struct SessionChatViewModelTests {
         #expect(viewModel.uiState.pendingSessionReplace?.sessionTitle == "New Session")
         #expect(viewModel.uiState.pendingSessionReplace?.worktree == "/repo")
         #expect(viewModel.uiState.pendingSessionReplace?.optimisticNavigationInstanceID != nil)
+        #expect(viewModel.uiState.pendingSessionReplace?.sessionListItem.parentID == nil)
         #expect(viewModel.uiState.composer.text == "draft that should survive")
         #expect(commandRepository.runCommandCalled == false)
 
@@ -2495,6 +2496,31 @@ struct SessionChatViewModelTests {
             worktree: "/repo",
             optimisticNavigationInstanceID: nil
         ))
+        // A fork is a top-level session: opening it must not lock the composer as a child.
+        let opened = viewModel.uiState.pendingSessionReplace?.sessionListItem
+        #expect(opened?.id == "ses-3")
+        #expect(opened?.parentID == nil)
+        #expect(SessionChatComposerKind.resolve(
+            isChildSession: opened?.parentID != nil,
+            hasPermission: false,
+            hasQuestion: false
+        ) == .prompt)
+    }
+
+    @Test func childSessionTarget_opensAsAChildOfItsParent() {
+        let target = ChildSessionNavigationTarget(
+            sessionID: "ses-child",
+            sessionTitle: "Explore",
+            worktree: "/repo",
+            optimisticNavigationInstanceID: nil,
+            parentID: "ses-1"
+        )
+        #expect(target.sessionListItem.parentID == "ses-1")
+        #expect(SessionChatComposerKind.resolve(
+            isChildSession: target.sessionListItem.parentID != nil,
+            hasPermission: false,
+            hasQuestion: false
+        ) == .childLockout)
     }
 
     @Test func runClientSlashAction_fork_stay_dismissesWithoutNavigating() async {

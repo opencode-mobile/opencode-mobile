@@ -80,15 +80,7 @@ struct SessionChatToolGroupView: View {
             )
         }
         .navigationDestination(item: $childSessionTarget) { destination in
-            SessionChatView(
-                session: SessionListItem(
-                    id: destination.sessionID,
-                    title: destination.sessionTitle,
-                    worktree: destination.worktree,
-                    optimisticNavigationInstanceID: destination.optimisticNavigationInstanceID,
-                    parentID: parentSessionID
-                )
-            )
+            SessionChatView(session: destination.sessionListItem)
         }
         .task {
             ProductAnalytics.logScreenView(
@@ -109,7 +101,8 @@ struct SessionChatToolGroupView: View {
                     sessionID: childSessionId,
                     sessionTitle: card.title,
                     worktree: worktree,
-                    optimisticNavigationInstanceID: nil
+                    optimisticNavigationInstanceID: nil,
+                    parentID: parentSessionID
                 )
             }
         }

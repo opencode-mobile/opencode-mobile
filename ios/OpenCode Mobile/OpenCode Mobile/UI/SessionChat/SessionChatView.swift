@@ -235,7 +235,8 @@ struct SessionChatView: View {
                                 sessionID: sessionID,
                                 sessionTitle: title,
                                 worktree: session.worktree,
-                                optimisticNavigationInstanceID: nil
+                                optimisticNavigationInstanceID: nil,
+                                parentID: session.id
                             )
                         },
                         onChangesReviewTap: { assistantMessageID, initialFilePath in
@@ -507,15 +508,7 @@ struct SessionChatView: View {
             )
         }
         .navigationDestination(item: $childSessionTarget) { target in
-            SessionChatView(
-                session: SessionListItem(
-                    id: target.sessionID,
-                    title: target.sessionTitle,
-                    worktree: target.worktree,
-                    optimisticNavigationInstanceID: target.optimisticNavigationInstanceID,
-                    parentID: session.id
-                )
-            )
+            SessionChatView(session: target.sessionListItem)
         }
         .onChange(of: activePicker) { _, picker in
             if picker != .model {

@@ -474,11 +474,38 @@ struct ChangesNavigationTarget: Hashable {
     }
 }
 
+/// A session Session Chat pushes: a child (subagent) session, a fork, or a new session.
+/// Only a child carries `parentID`; forks and new sessions are top-level and promptable.
 struct ChildSessionNavigationTarget: Hashable {
     let sessionID: String
     let sessionTitle: String
     let worktree: String
     let optimisticNavigationInstanceID: UUID?
+    let parentID: String?
+
+    init(
+        sessionID: String,
+        sessionTitle: String,
+        worktree: String,
+        optimisticNavigationInstanceID: UUID?,
+        parentID: String? = nil
+    ) {
+        self.sessionID = sessionID
+        self.sessionTitle = sessionTitle
+        self.worktree = worktree
+        self.optimisticNavigationInstanceID = optimisticNavigationInstanceID
+        self.parentID = parentID
+    }
+
+    var sessionListItem: SessionListItem {
+        SessionListItem(
+            id: sessionID,
+            title: sessionTitle,
+            worktree: worktree,
+            optimisticNavigationInstanceID: optimisticNavigationInstanceID,
+            parentID: parentID
+        )
+    }
 }
 
 struct SessionChatTimelineRegionState: Equatable {
