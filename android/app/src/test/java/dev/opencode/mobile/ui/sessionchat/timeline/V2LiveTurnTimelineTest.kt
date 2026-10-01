@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.sessionchat
 
+import dev.opencode.mobile.data.remote.dto.V2InboxItemDto
 import dev.opencode.mobile.data.remote.dto.V2SessionMessageDto
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.message.DisplayMessage
@@ -111,6 +112,70 @@ class V2LiveTurnTimelineTest {
         apply(idle(at = 1_530))
 
         val ordered = displayOrder(store.messages(SESSION))
+        assertEquals(listOf("u1", "a1", "u2", "a2", "u3", "a3"), ordered.map { it.id })
+        val merged = chipBodies(ordered)
+        assertEquals(listOf("u1", "a1", "u2", "a2", "u3", "a3"), merged.map { it.message.id })
+        assertEquals(
+            listOf("Answer to the first prompt.", "Answer to the steer prompt.", "Answer to the queued prompt."),
+            merged.filter { it.message.role == MessageRole.Assistant }.map { it.message.text },
+        )
+    }
+
+    @Test
+    fun senderReloadsWithInboxPrompts_keepEnqueueTimeAndDeliveryOrder() {
+        // The sending app reloads REST after every POST, so each follow-up is
+        // first seen as an inbox item merged into the tail, not as a live info.
+        apply(prompt("u1", "First prompt", at = 1_000))
+        apply(step("a1", at = 1_100))
+        apply(enqueued("u2", "Steer prompt", at = 1_150))
+        reload(
+            """
+            [
+              {"id":"u1","type":"user","text":"First prompt","time":{"created":1000}},
+              {"id":"a1","type":"assistant","content":[{"type":"text","text":""}],"time":{"created":1100}}
+            ]
+            """,
+            inbox =
+                """[{"id":"u2","sessionID":"$SESSION","time":{"created":1150},"type":"user",""" +
+                    """"payload":{"text":"Steer prompt"},"delivery":"steer"}]""",
+        )
+        val steerWaiting = store.messages(SESSION).single { it.id == "u2" }
+        assertTrue(steerWaiting.isWaitingForPickup)
+        assertEquals(1_150L, steerWaiting.sentAtEpochMs)
+
+        apply(text("a1", "Answer to the first prompt.", at = 1_200))
+        apply(stepEnded("a1", "stop", at = 1_210))
+        apply(delivered("u2", at = 1_220))
+        apply(enqueued("u3", "Queued prompt", at = 1_250, delivery = "queue"))
+        // Manual reply mode: the steer reply has not started, so REST has no a2 yet.
+        reload(
+            """
+            [
+              {"id":"u1","type":"user","text":"First prompt","time":{"created":1000}},
+              {"id":"a1","type":"assistant","content":[{"type":"text","text":"Answer to the first prompt."}],
+               "time":{"created":1100,"completed":1210}},
+              {"id":"u2","type":"user","text":"Steer prompt","time":{"created":1150}}
+            ]
+            """,
+            inbox =
+                """[{"id":"u3","sessionID":"$SESSION","time":{"created":1250},"type":"user",""" +
+                    """"payload":{"text":"Queued prompt"},"delivery":"queue"}]""",
+        )
+        assertTrue(store.messages(SESSION).single { it.id == "u3" }.isWaitingForPickup)
+
+        apply(step("a2", at = 1_300))
+        apply(text("a2", "Answer to the steer prompt.", at = 1_400))
+        apply(stepEnded("a2", "stop", at = 1_410))
+        apply(delivered("u3", at = 1_420))
+        apply(step("a3", at = 1_500))
+        apply(text("a3", "Answer to the queued prompt.", at = 1_510))
+        apply(stepEnded("a3", "stop", at = 1_520))
+        apply(idle(at = 1_530))
+
+        val messages = store.messages(SESSION)
+        assertTrue(messages.all { (it.sentAtEpochMs ?: 0) >= 1_000 })
+        assertTrue(messages.none { it.isWaitingForPickup })
+        val ordered = displayOrder(messages)
         assertEquals(listOf("u1", "a1", "u2", "a2", "u3", "a3"), ordered.map { it.id })
         val merged = chipBodies(ordered)
         assertEquals(listOf("u1", "a1", "u2", "a2", "u3", "a3"), merged.map { it.message.id })
@@ -319,12 +384,13 @@ class V2LiveTurnTimelineTest {
         id: String,
         text: String,
         at: Long,
+        delivery: String = "steer",
     ): List<String> =
         listOf(
             envelope(
                 "session.inbox.enqueued",
                 at,
-                """"inboxID":"$id","item":{"id":"$id","type":"user","payload":{"text":"$text"},"delivery":"steer"}""",
+                """"inboxID":"$id","item":{"id":"$id","type":"user","payload":{"text":"$text"},"delivery":"$delivery"}""",
             ),
         )
 
@@ -455,6 +521,16 @@ class V2LiveTurnTimelineTest {
 
     private fun List<SessionChatTimelineBlock>.stepParagraphs(): List<SessionChatTimelineBlock.StepParagraph> =
         filterIsInstance<SessionChatTimelineBlock.StepParagraph>()
+
+    /** Tail reload the way the message sync applies it: REST page plus inbox, merged over local rows. */
+    private fun reload(
+        body: String,
+        inbox: String,
+    ) {
+        val items = json.decodeFromString<List<V2InboxItemDto>>(inbox)
+        val tail = adapter.mergeInbox(restMessages(body), items)
+        assertTrue(store.mergeTailAuthoritativeIfRevision(SESSION, tail, store.revision(SESSION)))
+    }
 
     private fun restMessages(body: String): List<Message> =
         adapter.projectV2(json.decodeFromString<List<V2SessionMessageDto>>(body.trimIndent()))

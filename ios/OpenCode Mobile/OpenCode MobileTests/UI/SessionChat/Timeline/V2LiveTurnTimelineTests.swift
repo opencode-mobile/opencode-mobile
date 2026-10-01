@@ -90,6 +90,65 @@ struct V2LiveTurnTimelineTests {
         ])
     }
 
+    @Test func senderReloadsWithInboxPrompts_keepEnqueueTimeAndDeliveryOrder() throws {
+        // The sending app reloads REST after every POST, so each follow-up is
+        // first seen as an inbox item merged into the tail, not as a live info.
+        apply(prompt("u1", "First prompt", at: 1_000))
+        apply(step("a1", at: 1_100))
+        apply(enqueued("u2", "Steer prompt", at: 1_150))
+        try reload(
+            """
+            [
+              {"id":"u1","type":"user","text":"First prompt","time":{"created":1000}},
+              {"id":"a1","type":"assistant","content":[{"type":"text","text":""}],"time":{"created":1100}}
+            ]
+            """,
+            inbox: #"[{"id":"u2","sessionID":"ses_v2","time":{"created":1150},"type":"user","payload":{"text":"Steer prompt"},"delivery":"steer"}]"#
+        )
+        let steerWaiting = try #require(store.messages(sessionID: Self.session).first { $0.id == "u2" })
+        #expect(steerWaiting.isWaitingForPickup)
+        #expect(steerWaiting.followUpDelivery == .steer)
+        #expect(steerWaiting.sentAtEpochMs == 1_150)
+
+        apply(text("a1", "Answer to the first prompt.", at: 1_200))
+        apply(stepEnded("a1", finish: "stop", at: 1_210))
+        apply(delivered("u2", at: 1_220))
+        apply(enqueued("u3", "Queued prompt", delivery: "queue", at: 1_250))
+        // Manual reply mode: the steer reply has not started, so REST has no a2 yet.
+        try reload(
+            """
+            [
+              {"id":"u1","type":"user","text":"First prompt","time":{"created":1000}},
+              {"id":"a1","type":"assistant","content":[{"type":"text","text":"Answer to the first prompt."}],
+               "time":{"created":1100,"completed":1210}},
+              {"id":"u2","type":"user","text":"Steer prompt","time":{"created":1150}}
+            ]
+            """,
+            inbox: #"[{"id":"u3","sessionID":"ses_v2","time":{"created":1250},"type":"user","payload":{"text":"Queued prompt"},"delivery":"queue"}]"#
+        )
+        #expect(store.messages(sessionID: Self.session).first { $0.id == "u3" }?.isWaitingForPickup == true)
+
+        apply(step("a2", at: 1_300))
+        apply(text("a2", "Answer to the steer prompt.", at: 1_400))
+        apply(stepEnded("a2", finish: "stop", at: 1_410))
+        apply(delivered("u3", at: 1_420))
+        apply(step("a3", at: 1_500))
+        apply(text("a3", "Answer to the queued prompt.", at: 1_510))
+        apply(stepEnded("a3", finish: "stop", at: 1_520))
+        apply(idle(at: 1_530))
+
+        let messages = store.messages(sessionID: Self.session)
+        #expect(messages.allSatisfy { ($0.sentAtEpochMs ?? 0) >= 1_000 })
+        #expect(messages.allSatisfy { !$0.isWaitingForPickup })
+        let frame = chipFrame(messages)
+        #expect(frame.messages.map(\.id) == ["u1", "a1", "u2", "a2", "u3", "a3"])
+        #expect(frame.messages.filter { $0.message.role == .assistant }.map(\.message.text) == [
+            "Answer to the first prompt.",
+            "Answer to the steer prompt.",
+            "Answer to the queued prompt.",
+        ])
+    }
+
     @Test func restReloadAfterLiveTurn_replacesLivePartsInPlace() throws {
         apply(prompt("u1", "Explore", at: 1_000))
         apply(step("a1", at: 1_100))
@@ -265,11 +324,11 @@ struct V2LiveTurnTimelineTests {
         enqueued(id, text, at: at) + delivered(id, at: at + 10)
     }
 
-    private func enqueued(_ id: String, _ text: String, at: Int64) -> [String] {
+    private func enqueued(_ id: String, _ text: String, delivery: String = "steer", at: Int64) -> [String] {
         [envelope(
             "session.inbox.enqueued",
             at,
-            #""inboxID":"\#(id)","item":{"id":"\#(id)","type":"user","payload":{"text":"\#(text)"},"delivery":"steer"}"#
+            #""inboxID":"\#(id)","item":{"id":"\#(id)","type":"user","payload":{"text":"\#(text)"},"delivery":"\#(delivery)"}"#
         )]
     }
 
@@ -394,6 +453,18 @@ struct V2LiveTurnTimelineTests {
     private func toolCard(_ blocks: [SessionChatTimelineBlock]) -> SessionChatToolCardBlock? {
         guard blocks.count == 1, case .toolCard(_, let card) = blocks[0] else { return nil }
         return card
+    }
+
+    /// Tail reload the way `MessageSync` applies it: REST page plus inbox, merged over local rows.
+    private func reload(_ body: String, inbox: String) throws {
+        let items = try JSONDecoder().decode([V2InboxItemDTO].self, from: Data(inbox.utf8))
+        let tail = adapter.mergeInbox(messages: try restMessages(body), inbox: items)
+        let merged = MessageHistoryMerge.applyTail(local: store.messages(sessionID: Self.session), tail: tail)
+        #expect(store.mergeAuthoritativeIfRevision(
+            sessionID: Self.session,
+            messages: merged,
+            expectedRevision: store.revision(sessionID: Self.session)
+        ))
     }
 
     private func restMessages(_ body: String) throws -> [Message] {

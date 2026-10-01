@@ -313,7 +313,7 @@ class MessageDomainAdapter {
         val userItems =
             inbox
                 .filter { it.type == "user" }
-                .sortedBy { it.timeCreated }
+                .sortedBy { it.createdAtEpochMs }
         if (userItems.isEmpty()) return messages
         val existingIds = messages.map { it.id }.toSet()
         val itemsById = userItems.associateBy { it.id }
@@ -335,7 +335,7 @@ class MessageDomainAdapter {
                         role = MessageRole.User,
                         text = text,
                         parts = listOf(MessagePart.Text(text = text, id = "${item.id}:text:0")),
-                        sentAtEpochMs = item.timeCreated,
+                        sentAtEpochMs = item.createdAtEpochMs,
                         followUpDelivery = FollowUpDelivery.fromWire(item.delivery),
                         isWaitingForPickup = true,
                     )

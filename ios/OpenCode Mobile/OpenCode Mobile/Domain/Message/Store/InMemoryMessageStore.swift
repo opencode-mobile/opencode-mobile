@@ -134,7 +134,9 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
             sentAtEpochMs: baseMessage.sentAtEpochMs,
             completedAtEpochMs: baseMessage.completedAtEpochMs,
             contextInputTokens: baseMessage.contextInputTokens,
-            contextEstimate: baseMessage.contextEstimate
+            contextEstimate: baseMessage.contextEstimate,
+            followUpDelivery: baseMessage.followUpDelivery,
+            isWaitingForPickup: baseMessage.isWaitingForPickup
         )
     }
 
@@ -308,7 +310,10 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
         let waiting = decodeInfo(from: merged)?.waiting == true
         // A queued v2 prompt is hidden until delivered, then it belongs after
         // whatever the session produced meanwhile, not where it was enqueued.
-        let delivered = !inserted && isUserInfo && priorInfo?.waiting == true && !waiting
+        // A REST-seeded inbox prompt has no cached info yet; its base copy says whether it was waiting.
+        let wasWaiting = priorInfo.map { $0.waiting == true }
+            ?? (baseMessages[sessionID]?.last(where: { $0.id == messageID })?.isWaitingForPickup == true)
+        let delivered = !inserted && isUserInfo && wasWaiting && !waiting
         if inserted && isUserInfo && waiting {
             messageOrder[sessionID]?.append(messageID)
         } else if inserted {

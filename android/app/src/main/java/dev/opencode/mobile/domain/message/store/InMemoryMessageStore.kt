@@ -301,7 +301,11 @@ class InMemoryMessageStore
             val waiting = merged.isWaiting()
             // A queued v2 prompt is hidden until delivered, then it belongs after
             // whatever the session produced meanwhile, not where it was enqueued.
-            val delivered = !inserted && isUserInfo && previous?.isWaiting() == true && !waiting
+            // A REST-seeded inbox prompt has no cached info yet; its base copy says whether it was waiting.
+            val wasWaiting =
+                previous?.isWaiting()
+                    ?: (baseMessages[sessionId]?.lastOrNull { it.id == messageId }?.isWaitingForPickup == true)
+            val delivered = !inserted && isUserInfo && wasWaiting && !waiting
             if (inserted && isUserInfo && waiting) {
                 order.add(messageId)
             } else if (inserted) {

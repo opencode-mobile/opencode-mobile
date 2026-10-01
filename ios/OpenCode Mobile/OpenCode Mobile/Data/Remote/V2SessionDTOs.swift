@@ -226,13 +226,22 @@ nonisolated struct V2InboxItemDTO: Decodable, Sendable, Equatable {
         case type
         case payload
         case delivery
+        case time
+    }
+
+    private enum TimeKeys: String, CodingKey {
+        case created
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(String.self, forKey: .id)
         sessionID = try container.decodeIfPresent(String.self, forKey: .sessionID)
-        timeCreated = try container.decodeIfPresent(Int64.self, forKey: .timeCreated) ?? 0
+        // `Session.Inbox.User` nests the enqueue time as `time.created`.
+        let time = try? container.nestedContainer(keyedBy: TimeKeys.self, forKey: .time)
+        let nestedCreated = try? time?.decodeIfPresent(Int64.self, forKey: .created)
+        let flatCreated = try container.decodeIfPresent(Int64.self, forKey: .timeCreated)
+        timeCreated = nestedCreated ?? flatCreated ?? 0
         type = try container.decodeIfPresent(String.self, forKey: .type) ?? ""
         payload = try? container.decodeIfPresent(V2InboxUserPayloadDTO.self, forKey: .payload) ?? nil
         delivery = try container.decodeIfPresent(String.self, forKey: .delivery)
