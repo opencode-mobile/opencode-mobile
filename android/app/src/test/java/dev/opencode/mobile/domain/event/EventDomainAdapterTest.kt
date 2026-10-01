@@ -862,6 +862,27 @@ class EventDomainAdapterTest {
     }
 
     @Test
+    fun parseEvents_projectsV2RevertCommittedWithItsRevertPoint() {
+        val events =
+            adapter.parseEvents(
+                """{"id":"evt_00d055e78001","created":1786924850808,"type":"session.revert.committed",""" +
+                    """"data":{"sessionID":"ses-1","to":"msg_00cf91b85001"}}""",
+            )
+
+        assertEquals(listOf("session.revert.committed"), events.map { it.type })
+        assertEquals("ses-1", events.single().sessionId)
+        assertEquals(
+            "msg_00cf91b85001",
+            events
+                .single()
+                .rawProperties
+                ?.get("messageID")
+                ?.jsonPrimitive
+                ?.content,
+        )
+    }
+
+    @Test
     fun parseEvents_projectsLiveCompactionFailedIntoPartErrorAndIdle() {
         val events =
             adapter.parseEvents(

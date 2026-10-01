@@ -408,6 +408,16 @@ struct EventDomainAdapterTests {
         #expect(!events.contains(where: { $0.type == "session.active.snapshot" }))
     }
 
+    @Test func parseEvents_projectsV2RevertCommittedWithItsRevertPoint() {
+        let events = EventDomainAdapter().parseEvents(
+            dataLine: #"{"id":"evt_00d055e78001","created":1786924850808,"type":"session.revert.committed","#
+                + #""data":{"sessionID":"ses-1","to":"msg_00cf91b85001"}}"#
+        )
+        #expect(events.map(\.type) == ["session.revert.committed"])
+        #expect(events.first?.sessionID == "ses-1")
+        #expect(events.first?.rawProperties?["messageID"]?.stringValue == "msg_00cf91b85001")
+    }
+
     @Test func parseEvents_projectsLiveCompactionFailedIntoPartErrorAndIdle() {
         let adapter = EventDomainAdapter()
         let events = adapter.parseEvents(

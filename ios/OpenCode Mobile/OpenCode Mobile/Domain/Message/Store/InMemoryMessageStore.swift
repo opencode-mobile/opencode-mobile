@@ -55,6 +55,8 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
                 return applyPartDelta(sessionID: sessionID, messageID: messageID, partID: partID, delta: delta)
             case .removed(let messageID):
                 return applyMessageRemoved(sessionID: sessionID, messageID: messageID)
+            case .removedFrom(let messageID):
+                return applyMessagesRemovedFrom(sessionID: sessionID, messageID: messageID)
             case .partRemoved(let messageID, let partID):
                 return applyPartRemoved(sessionID: sessionID, messageID: messageID, partID: partID)
             }
@@ -549,6 +551,19 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
         return SessionChangeSet(
             sessionRevision: 0,
             removedMessageIDs: [messageID],
+            structuralChange: true
+        )
+    }
+
+    private func applyMessagesRemovedFrom(sessionID: String, messageID: String) -> SessionChangeSet? {
+        guard let order = messageOrder[sessionID], let start = order.firstIndex(of: messageID) else { return nil }
+        let removed = Array(order[start...])
+        for id in removed {
+            _ = applyMessageRemoved(sessionID: sessionID, messageID: id)
+        }
+        return SessionChangeSet(
+            sessionRevision: 0,
+            removedMessageIDs: Set(removed),
             structuralChange: true
         )
     }

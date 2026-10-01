@@ -23,6 +23,11 @@ sealed interface MessagePatch {
         val messageId: String,
     ) : MessagePatch
 
+    /** A committed revert: drop [messageId] and every message after it. */
+    data class RemovedFrom(
+        val messageId: String,
+    ) : MessagePatch
+
     data class PartRemoved(
         val messageId: String,
         val partId: String,

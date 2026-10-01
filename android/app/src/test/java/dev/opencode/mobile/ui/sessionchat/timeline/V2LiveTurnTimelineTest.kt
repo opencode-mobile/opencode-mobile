@@ -210,6 +210,28 @@ class V2LiveTurnTimelineTest {
         assertEquals(listOf("u1", "a1", "u2"), ordered.map { it.id })
     }
 
+    @Test
+    fun revertCommitted_dropsTheRevertedTurnAndEverythingAfterIt() {
+        apply(prompt("u1", "First prompt", at = 1_000))
+        apply(step("a1", at = 1_100))
+        apply(text("a1", "Answer one.", at = 1_110))
+        apply(stepEnded("a1", "stop", at = 1_120))
+        apply(idle(at = 1_130))
+        apply(prompt("u2", "Queued prompt", at = 2_000))
+        apply(step("a2", at = 2_100))
+        apply(text("a2", "Answer two.", at = 2_110))
+        apply(stepEnded("a2", "stop", at = 2_120))
+        apply(idle(at = 2_130))
+        // Captured shape: staged on "Revert message", committed when the edit is sent.
+        apply(listOf(envelope("session.revert.staged", 3_000, """"revert":{"messageID":"u2","files":[]}""")))
+        assertEquals(listOf("u1", "a1", "u2", "a2"), store.messages(SESSION).map { it.id })
+
+        apply(listOf(envelope("session.revert.committed", 3_100, """"to":"u2"""")))
+        apply(prompt("u3", "Queued prompt v2", at = 3_110))
+
+        assertEquals(listOf("u1", "a1", "u3"), store.messages(SESSION).map { it.id })
+    }
+
     // MARK: Wire events
 
     private fun prompt(
@@ -317,6 +339,8 @@ class V2LiveTurnTimelineTest {
                     val delta = properties.string("delta") ?: return@forEach
                     store.apply(SESSION, MessagePatch.PartDelta(messageId, partId, delta))
                 }
+                "session.revert.committed" ->
+                    store.apply(SESSION, MessagePatch.RemovedFrom(properties.string("messageID")!!))
                 "session.idle" -> store.finishStreamingText(SESSION)
             }
         }

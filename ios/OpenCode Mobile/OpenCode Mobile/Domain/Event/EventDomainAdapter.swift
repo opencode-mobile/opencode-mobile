@@ -216,6 +216,8 @@ nonisolated struct EventDomainAdapter: Sendable {
                 event(type: "session.error", properties: properties),
                 event(type: "session.idle", properties: properties),
             ]
+        case "session.revert.committed":
+            [revertCommitted(properties)].compactMap { $0 }
         case "session.next.reasoning.started", "session.reasoning.started":
             reasoningStarted(properties)
         case "session.next.reasoning.delta", "session.reasoning.delta":
@@ -563,6 +565,20 @@ nonisolated struct EventDomainAdapter: Sendable {
             projected["delta"] = text
         }
         return event(type: "message.part.delta", properties: projected)
+    }
+
+    /// v2 announces a committed revert only as `session.revert.committed {to}`:
+    /// the server dropped `to` and every later message, with no per-message
+    /// `message.removed` (v1 sends those instead).
+    private func revertCommitted(_ properties: [String: Any]) -> OpencodeEvent? {
+        guard let messageID = string(in: properties, key: "to") ?? string(in: properties, key: "messageID") else {
+            return nil
+        }
+        var projected: [String: Any] = ["messageID": messageID]
+        if let sessionID = sessionID(from: properties) {
+            projected["sessionID"] = sessionID
+        }
+        return event(type: "session.revert.committed", properties: projected)
     }
 
     private func toolLikePartUpdated(

@@ -601,6 +601,19 @@ class MessageSync(
                                 ?.contentOrNull ?: return
                         applyResult = engine.apply(storeSlot, MessagePatch.Removed(messageId))
                     }
+                    "session.revert.committed" -> {
+                        val messageId =
+                            event.rawProperties
+                                ?.get("messageID")
+                                ?.jsonPrimitive
+                                ?.contentOrNull ?: return
+                        applyResult = engine.apply(storeSlot, MessagePatch.RemovedFrom(messageId))
+                        if (applyResult == MessageStoreApplyResult.NoChange) {
+                            // The revert point is outside the loaded window: let REST settle it.
+                            requestCatchUp()
+                            return
+                        }
+                    }
                     "message.part.removed" -> {
                         if (requiresFullReloadForRestSeededPartRemoval(event.rawProperties, storeSlot)) {
                             requestCatchUp()

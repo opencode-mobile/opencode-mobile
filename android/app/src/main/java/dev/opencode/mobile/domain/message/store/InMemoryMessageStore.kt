@@ -79,6 +79,7 @@ class InMemoryMessageStore
                     is MessagePatch.PartUpdated -> applyPartUpdated(sessionId, patch.partJson, patch.delta)
                     is MessagePatch.PartDelta -> applyPartDelta(sessionId, patch.messageId, patch.partId, patch.delta)
                     is MessagePatch.Removed -> applyMessageRemoved(sessionId, patch.messageId)
+                    is MessagePatch.RemovedFrom -> applyMessagesRemovedFrom(sessionId, patch.messageId)
                     is MessagePatch.PartRemoved -> applyPartRemoved(sessionId, patch.messageId, patch.partId)
                 } ?: return MessageStoreApplyResult.NoChange
             bumpRevision(sessionId)
@@ -519,6 +520,22 @@ class InMemoryMessageStore
             return SessionChangeSet(
                 sessionRevision = 0,
                 removedMessageIds = setOf(messageId),
+                structuralChange = true,
+            )
+        }
+
+        private fun applyMessagesRemovedFrom(
+            sessionId: String,
+            messageId: String,
+        ): SessionChangeSet? {
+            val order = messageOrders[sessionId] ?: return null
+            val start = order.indexOf(messageId)
+            if (start < 0) return null
+            val removed = order.subList(start, order.size).toList()
+            removed.forEach { id -> applyMessageRemoved(sessionId, id) }
+            return SessionChangeSet(
+                sessionRevision = 0,
+                removedMessageIds = removed.toSet(),
                 structuralChange = true,
             )
         }

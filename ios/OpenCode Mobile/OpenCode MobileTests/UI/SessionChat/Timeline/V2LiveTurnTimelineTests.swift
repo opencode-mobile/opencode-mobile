@@ -178,6 +178,27 @@ struct V2LiveTurnTimelineTests {
         #expect(chipFrame(messages).messages.map(\.id) == ["u1", "a1", "u2"])
     }
 
+    @Test func revertCommitted_dropsTheRevertedTurnAndEverythingAfterIt() {
+        apply(prompt("u1", "First prompt", at: 1_000))
+        apply(step("a1", at: 1_100))
+        apply(text("a1", "Answer one.", at: 1_110))
+        apply(stepEnded("a1", finish: "stop", at: 1_120))
+        apply(idle(at: 1_130))
+        apply(prompt("u2", "Queued prompt", at: 2_000))
+        apply(step("a2", at: 2_100))
+        apply(text("a2", "Answer two.", at: 2_110))
+        apply(stepEnded("a2", finish: "stop", at: 2_120))
+        apply(idle(at: 2_130))
+        // Captured shape: staged on "Revert message", committed when the edit is sent.
+        apply([envelope("session.revert.staged", 3_000, #""revert":{"messageID":"u2","files":[]}"#)])
+        #expect(store.messages(sessionID: Self.session).map(\.id) == ["u1", "a1", "u2", "a2"])
+
+        apply([envelope("session.revert.committed", 3_100, #""to":"u2""#)])
+        apply(prompt("u3", "Queued prompt v2", at: 3_110))
+
+        #expect(store.messages(sessionID: Self.session).map(\.id) == ["u1", "a1", "u3"])
+    }
+
     // MARK: Wire events
 
     private func prompt(_ id: String, _ text: String, at: Int64) -> [String] {
@@ -267,6 +288,9 @@ struct V2LiveTurnTimelineTests {
                     sessionID: Self.session,
                     patch: .partDelta(messageID: messageID, partID: partID, delta: delta)
                 )
+            case "session.revert.committed":
+                guard let messageID = properties["messageID"]?.stringValue else { continue }
+                _ = store.apply(sessionID: Self.session, patch: .removedFrom(messageID: messageID))
             case "session.idle":
                 store.finishStreamingText(sessionID: Self.session)
             default:

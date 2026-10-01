@@ -242,6 +242,7 @@ class EventDomainAdapter(
                     event("session.error", properties),
                     event("session.idle", properties),
                 )
+            "session.revert.committed" -> listOfNotNull(revertCommitted(properties))
             "session.next.reasoning.started",
             "session.reasoning.started",
             -> reasoningStarted(properties)
@@ -595,6 +596,21 @@ class EventDomainAdapter(
                 properties.string("text")?.let { put("delta", it) }
             }
         return event("message.part.delta", projected)
+    }
+
+    /**
+     * v2 announces a committed revert only as `session.revert.committed {to}`:
+     * the server dropped `to` and every later message, with no per-message
+     * `message.removed` (v1 sends those instead).
+     */
+    private fun revertCommitted(properties: JsonObject): OpencodeEvent? {
+        val messageId = properties.string("to") ?: properties.string("messageID") ?: return null
+        val projected =
+            buildJsonObject {
+                sessionIdFromProperties(properties)?.let { put("sessionID", it) }
+                put("messageID", messageId)
+            }
+        return event("session.revert.committed", projected)
     }
 
     private fun toolLikePartUpdated(
