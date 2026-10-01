@@ -939,10 +939,10 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
 
         partsCache[sessionID] = nextParts
         partOrder[sessionID] = nextOrders
-        if var infos = infoCache[sessionID] {
-            infos = infos.filter { incomingIDs.contains($0.key) }
-            infoCache[sessionID] = infos
-        }
+        // REST is the authority for message info: a live info cached before
+        // the reload (a v2 prompt still `waiting`, a partial v2 assistant info
+        // without times) must not shadow the reloaded message.
+        infoCache[sessionID] = [:]
         if var ignored = ignoredPartIDs[sessionID] {
             ignored = ignored.filter { incomingIDs.contains($0.key) }
             ignoredPartIDs[sessionID] = ignored

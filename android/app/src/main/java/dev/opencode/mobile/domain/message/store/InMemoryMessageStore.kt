@@ -837,7 +837,10 @@ class InMemoryMessageStore
 
             partsCaches[sessionId] = nextParts
             partOrders[sessionId] = nextOrders
-            infoCaches[sessionId]!!.keys.retainAll(incomingIds)
+            // REST is the authority for message info: a live info cached before
+            // the reload (a v2 prompt still `waiting`, a partial v2 assistant
+            // info without times) must not shadow the reloaded message.
+            infoCaches[sessionId]!!.clear()
             ignoredPartIds[sessionId]!!.keys.retainAll(incomingIds)
             messageOrders[sessionId] = messages.map { it.id }.toMutableList()
             baseMessages[sessionId] = messages

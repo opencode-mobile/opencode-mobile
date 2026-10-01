@@ -125,6 +125,40 @@ struct V2LiveTurnTimelineTests {
         #expect(messages[2].text == "Done.")
     }
 
+    @Test func catchUpReload_dropsStaleWaitingPromptAndKeepsTurnsApart() throws {
+        // Foreground catch-up: SSE saw turn 1 and the enqueue of prompt 2, then
+        // dropped. REST has the whole second turn.
+        apply(prompt("u1", "Tell me about the handler", at: 1_000))
+        apply(step("a1", at: 1_100))
+        apply(text("a1", "Reply `one`.", at: 1_110))
+        apply(stepEnded("a1", finish: "stop", at: 1_120))
+        apply(idle(at: 1_130))
+        apply(enqueued("u2", "Second turn while backgrounded", at: 2_000))
+
+        let rest = try restMessages(
+            """
+            [
+              {"id":"u1","type":"user","text":"Tell me about the handler","time":{"created":1000}},
+              {"id":"a1","type":"assistant","content":[{"type":"text","text":"Reply `one`."}],
+               "time":{"created":1100,"completed":1120}},
+              {"id":"u2","type":"user","text":"Second turn while backgrounded","time":{"created":2000}},
+              {"id":"a2","type":"assistant","content":[{"type":"text","text":"Answer two."}],
+               "time":{"created":2100,"completed":2120}}
+            ]
+            """
+        )
+        #expect(store.mergeAuthoritativeIfRevision(
+            sessionID: Self.session,
+            messages: rest,
+            expectedRevision: store.revision(sessionID: Self.session)
+        ))
+
+        let messages = store.messages(sessionID: Self.session)
+        #expect(messages.map(\.id) == ["u1", "a1", "u2", "a2"])
+        #expect(messages[2].isWaitingForPickup == false)
+        #expect(chipFrame(messages).messages.map(\.id) == ["u1", "a1", "u2", "a2"])
+    }
+
     @Test func liveInfoAfterRestSeed_keepsTheReloadedTimestamp() throws {
         let rest = try restMessages(
             """
