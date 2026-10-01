@@ -2,6 +2,8 @@ package dev.opencode.mobile.domain.session
 
 import dev.opencode.mobile.data.remote.dto.SessionDto
 import dev.opencode.mobile.data.remote.dto.SessionTimeDto
+import dev.opencode.mobile.data.remote.dto.V2SessionDto
+import dev.opencode.mobile.data.remote.dto.V2SessionForkDto
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -58,5 +60,24 @@ class SessionDomainAdapterTest {
         val child = Session(id = "child", title = "Child", parentId = "root")
 
         assertEquals(listOf(root), listOf(root, child).rootSessions())
+    }
+
+    @Test
+    fun v2ForkIsTopLevelSession() {
+        val fork =
+            adapter.toSession(
+                V2SessionDto(id = "ses_fork", title = "Fork", fork = V2SessionForkDto(sessionId = "ses_src")),
+            )
+
+        assertNull(fork.parentId)
+        assertEquals(listOf(fork), listOf(fork).rootSessions())
+    }
+
+    @Test
+    fun v2ParentIdStillMarksChildSession() {
+        val child = adapter.toSession(V2SessionDto(id = "ses_child", title = "Child", parentId = "ses_1"))
+
+        assertEquals("ses_1", child.parentId)
+        assertEquals(emptyList<Session>(), listOf(child).rootSessions())
     }
 }

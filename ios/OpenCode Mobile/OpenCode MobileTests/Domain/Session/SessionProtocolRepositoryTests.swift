@@ -121,14 +121,14 @@ struct SessionProtocolRepositoryTests {
 
     @Test func v2ForkPostsBoundaryEnvelope() async throws {
         ProtocolRoutingURLProtocol.reset(responses: [
-            .json(sessionEnvelope(id: "ses_fork", title: "Fork", parentID: "ses_1"))
+            .json(sessionEnvelope(id: "ses_fork", title: "Fork", forkSourceID: "ses_1"))
         ])
         let repository = makeSessionRepository(serverProtocol: .v2)
 
         let forked = try await repository.forkSession(id: "ses_1", atMessageID: "msg_1")
 
         #expect(forked.id == "ses_fork")
-        #expect(forked.parentID == "ses_1")
+        #expect(forked.parentID == nil)
         let request = try #require(ProtocolRoutingURLProtocol.requests.first)
         #expect(request.httpMethod == "POST")
         #expect(request.url?.path.hasSuffix("/api/session/ses_1/fork") == true)
@@ -801,11 +801,15 @@ struct SessionProtocolRepositoryTests {
         id: String,
         title: String?,
         parentID: String? = nil,
+        forkSourceID: String? = nil,
         archived: Int64? = nil,
         wrapInData: Bool = true
     ) -> String {
         let titleField = title.map { "\"title\":\"\($0)\"," } ?? ""
-        let parentField = parentID.map { ",\"parentID\":\"\($0)\"" } ?? ""
+        let parentField = (parentID.map { ",\"parentID\":\"\($0)\"" } ?? "")
+            + (forkSourceID.map {
+                ",\"fork\":{\"sessionID\":\"\($0)\",\"boundary\":{\"type\":\"before\",\"messageID\":\"msg_1\"}}"
+            } ?? "")
         let archivedField = archived.map { ",\"archived\":\($0)" } ?? ""
         let session = "{"
             + "\"id\":\"\(id)\",\(titleField)\"projectID\":\"p\",\"cost\":0,"

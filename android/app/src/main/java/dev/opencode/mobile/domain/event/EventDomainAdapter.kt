@@ -268,6 +268,7 @@ class EventDomainAdapter(
             "session.model.selected",
             -> listOf(event("session.updated", properties))
             "session.renamed" -> listOf(renamedToUpdated(properties))
+            "session.forked" -> listOf(forkedToCreated(properties))
             "session.usage.updated",
             "session.next.usage.updated",
             -> listOfNotNull(usageUpdated(properties))
@@ -308,6 +309,21 @@ class EventDomainAdapter(
                 properties.string("title")?.let { put("title", it) }
             }
         return event("session.updated", buildJsonObject { put("info", info) })
+    }
+
+    /**
+     * v2 announces a fork only as `session.forked`, whose `parentID` is the fork source.
+     * A fork is a new top-level session, so it is projected as `session.created` without
+     * `parentID`, keeping it from reading as a subagent child.
+     */
+    private fun forkedToCreated(properties: JsonObject): OpencodeEvent {
+        val sessionId = sessionIdFromProperties(properties)
+        val projected =
+            buildJsonObject {
+                sessionId?.let { put("sessionID", it) }
+                properties.string("parentID")?.let { put("forkedFromSessionID", it) }
+            }
+        return event("session.created", projected)
     }
 
     private fun inboxCancelled(properties: JsonObject): OpencodeEvent {

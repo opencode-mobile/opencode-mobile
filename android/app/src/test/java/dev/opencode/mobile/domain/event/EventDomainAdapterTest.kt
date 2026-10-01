@@ -1012,6 +1012,21 @@ class EventDomainAdapterTest {
     }
 
     @Test
+    fun parseEvent_projectsForkedIntoTopLevelSessionCreated() {
+        val event =
+            adapter.parseEvent(
+                """{"type":"session.forked","data":{"sessionID":"ses_fork","parentID":"ses_src","boundary":{"type":"through","messageID":"msg_1"}}}""",
+            )
+
+        assertEquals("session.created", event?.type)
+        assertEquals("ses_fork", event?.sessionId)
+        assertTrue(event?.triggersHomeRefresh == true)
+        assertNull(event?.rawProperties?.get("parentID"))
+        val forkedFrom = event?.rawProperties?.get("forkedFromSessionID")
+        assertEquals("ses_src", forkedFrom?.jsonPrimitive?.content)
+    }
+
+    @Test
     fun parseEvent_projectsLiveRenamedIntoSessionUpdated() {
         val event =
             adapter.parseEvent(

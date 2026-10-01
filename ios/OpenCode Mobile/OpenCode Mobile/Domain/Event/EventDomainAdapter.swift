@@ -233,6 +233,8 @@ nonisolated struct EventDomainAdapter: Sendable {
             [event(type: "session.updated", properties: properties)]
         case "session.renamed":
             [renamedToUpdated(properties)]
+        case "session.forked":
+            [forkedToCreated(properties)]
         case "session.usage.updated", "session.next.usage.updated":
             [usageUpdated(properties)].compactMap { $0 }
         default:
@@ -276,6 +278,20 @@ nonisolated struct EventDomainAdapter: Sendable {
             info["title"] = title
         }
         return event(type: "session.updated", properties: ["info": info])
+    }
+
+    /// v2 announces a fork only as `session.forked`, whose `parentID` is the fork source.
+    /// A fork is a new top-level session, so it is projected as `session.created` without
+    /// `parentID`, keeping it from reading as a subagent child.
+    private func forkedToCreated(_ properties: [String: Any]) -> OpencodeEvent {
+        var projected: [String: Any] = [:]
+        if let sessionID = sessionID(from: properties) {
+            projected["sessionID"] = sessionID
+        }
+        if let source = string(in: properties, key: "parentID") {
+            projected["forkedFromSessionID"] = source
+        }
+        return event(type: "session.created", properties: projected)
     }
 
     private func inboxCancelled(_ properties: [String: Any]) -> OpencodeEvent {

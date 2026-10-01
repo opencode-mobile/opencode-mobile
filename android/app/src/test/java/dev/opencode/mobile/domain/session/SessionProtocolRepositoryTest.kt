@@ -202,7 +202,7 @@ class SessionProtocolRepositoryTest {
                 testClient { request ->
                     captured = request
                     respondJson(
-                        """{"data":{"id":"ses_fork","title":"Fork","projectID":"p","cost":0,"tokens":{"input":0,"output":0,"reasoning":0,"cache":{"read":0,"write":0}},"time":{"created":1,"updated":2},"location":{"directory":"/repo"},"parentID":"ses_1"}}""",
+                        """{"data":{"id":"ses_fork","title":"Fork","projectID":"p","cost":0,"tokens":{"input":0,"output":0,"reasoning":0,"cache":{"read":0,"write":0}},"time":{"created":1,"updated":2},"location":{"directory":"/repo"},"fork":{"sessionID":"ses_1","boundary":{"type":"before","messageID":"msg_1"}}}}""",
                     )
                 }
             val repository =
@@ -215,7 +215,7 @@ class SessionProtocolRepositoryTest {
             val forked = repository.forkSession("ses_1", atMessageId = "msg_1", directory = "/repo")
 
             assertEquals("ses_fork", forked.id)
-            assertEquals("ses_1", forked.parentId)
+            assertNull(forked.parentId)
             assertEquals(HttpMethod.Post, captured?.method)
             assertTrue(captured!!.url.encodedPath.endsWith("/api/session/ses_1/fork"))
             assertTrue(captured.requestBodyText().contains("\"boundary\""))
@@ -867,6 +867,7 @@ class SessionProtocolRepositoryTest {
             val children = repository.listChildSessions("ses_1", "/repo")
 
             assertEquals("ses_child", children.single().id)
+            assertEquals("ses_1", children.single().parentId)
             assertEquals("ses_1", requests.single().url.parameters["parentID"])
         }
 

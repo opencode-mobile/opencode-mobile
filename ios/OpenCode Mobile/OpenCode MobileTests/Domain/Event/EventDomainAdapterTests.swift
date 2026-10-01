@@ -635,6 +635,18 @@ struct EventDomainAdapterTests {
         #expect(event?.rawProperties?["info"]?.dictionaryValue?["title"]?.stringValue == "Testing conversation")
     }
 
+    @Test func parseEvent_projectsForkedIntoTopLevelSessionCreated() {
+        let adapter = EventDomainAdapter()
+        let event = adapter.parseEvent(
+            dataLine: #"{"type":"session.forked","data":{"sessionID":"ses_fork","parentID":"ses_src","boundary":{"type":"through","messageID":"msg_1"}}}"#
+        )
+        #expect(event?.type == "session.created")
+        #expect(event?.sessionID == "ses_fork")
+        #expect(event?.triggersHomeRefresh == true)
+        #expect(event?.rawProperties?["parentID"] == nil)
+        #expect(event?.rawProperties?["forkedFromSessionID"]?.stringValue == "ses_src")
+    }
+
     @Test func parseEvent_remapsPermissionV2Asked() {
         let adapter = EventDomainAdapter()
         let event = adapter.parseEvent(

@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import OpenCode_Mobile
 
@@ -47,5 +48,25 @@ struct SessionModelsTests {
         )
 
         #expect([root, child].rootSessions() == [root])
+    }
+
+    @Test func v2ForkIsTopLevelSession() throws {
+        let json = #"{"id":"ses_fork","title":"Fork","fork":{"sessionID":"ses_src","boundary":{"type":"through","messageID":"msg_1"}}}"#
+        let dto = try JSONDecoder().decode(V2SessionDTO.self, from: Data(json.utf8))
+
+        let fork = SessionDomainAdapter().session(from: dto)
+
+        #expect(fork.parentID == nil)
+        #expect([fork].rootSessions() == [fork])
+    }
+
+    @Test func v2ParentIDStillMarksChildSession() throws {
+        let json = #"{"id":"ses_child","title":"Child","parentID":"ses_1"}"#
+        let dto = try JSONDecoder().decode(V2SessionDTO.self, from: Data(json.utf8))
+
+        let child = SessionDomainAdapter().session(from: dto)
+
+        #expect(child.parentID == "ses_1")
+        #expect([child].rootSessions().isEmpty)
     }
 }
