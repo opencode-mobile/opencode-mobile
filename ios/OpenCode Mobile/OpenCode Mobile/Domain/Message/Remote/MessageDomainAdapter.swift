@@ -71,7 +71,14 @@ nonisolated struct MessageDomainAdapter: Sendable {
             let toolName = ToolPartIdentity.resolvedName(explicit: dto.tool ?? dto.name, input: dto.state?.input)
             return .tool(toolPart(id: dto.id, toolName: toolName, callID: dto.callID, state: dto.state))
         case "compaction":
-            return .compaction(CompactionPart(id: dto.id, auto: dto.auto == true, completed: dto.completed == true))
+            return .compaction(
+                CompactionPart(
+                    id: dto.id,
+                    auto: dto.auto == true,
+                    completed: dto.completed == true,
+                    summary: dto.summary.flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 }
+                )
+            )
         case "reasoning":
             return .reasoning(
                 ReasoningPart(
@@ -418,18 +425,18 @@ nonisolated struct MessageDomainAdapter: Sendable {
 
     private func projectV2Compaction(_ dto: V2SessionMessageDTO) -> Message {
         let summary = dto.summary ?? ""
-        var parts: [MessagePart] = [
+        // The summary is model context, not a reply: it rides on the compaction
+        // part so the timeline shows a compaction row instead of reply text.
+        let parts: [MessagePart] = [
             .compaction(
                 CompactionPart(
                     id: dto.id,
                     auto: dto.reason == "auto",
-                    completed: dto.status?.caseInsensitiveCompare("completed") == .orderedSame
+                    completed: dto.status?.caseInsensitiveCompare("completed") == .orderedSame,
+                    summary: summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : summary
                 )
             )
         ]
-        if !summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            parts.append(.text(TextPart(id: "\(dto.id):text:0", text: summary, isStreaming: false)))
-        }
         return messageFromV2(
             id: dto.id,
             role: .assistant,

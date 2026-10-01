@@ -1102,7 +1102,8 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
                 CompactionPart(
                     id: prior.id,
                     auto: prior.auto || next.auto,
-                    completed: prior.completed || next.completed
+                    completed: prior.completed || next.completed,
+                    summary: next.summary ?? prior.summary
                 )
             )
         default:

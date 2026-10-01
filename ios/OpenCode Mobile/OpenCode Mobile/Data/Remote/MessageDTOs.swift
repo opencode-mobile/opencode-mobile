@@ -82,6 +82,7 @@ nonisolated struct MessagePartDTO: Codable, Sendable {
     let files: [String]?
     let auto: Bool?
     let completed: Bool?
+    let summary: String?
     let subtask: String?
     let mime: String?
     let filename: String?

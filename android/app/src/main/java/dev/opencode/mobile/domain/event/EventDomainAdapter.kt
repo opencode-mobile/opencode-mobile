@@ -19,10 +19,17 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
+import java.util.concurrent.ConcurrentHashMap
 
 class EventDomainAdapter(
     private val json: Json,
 ) {
+    /**
+     * v2 compaction message id per session, remembered from `compaction.started`:
+     * `ended` / `failed` carry no id, while the server updates the running item.
+     */
+    private val runningCompactionIds = ConcurrentHashMap<String, String>()
+
     fun parseEvent(dataLine: String): OpencodeEvent? = parseEvents(dataLine).firstOrNull()
 
     fun parseEvents(dataLine: String): List<OpencodeEvent> = (parse(dataLine) as? EventParseOutcome.Events)?.events ?: emptyList()
@@ -42,10 +49,11 @@ class EventDomainAdapter(
                     ?: return EventParseOutcome.Unrecognized
             val innerType = stringIn(syncEvent, "type") ?: return EventParseOutcome.Unrecognized
             val data = propertiesFromData(syncEvent["data"]) ?: JsonObject(emptyMap())
+            val envelopeId = stringIn(syncEvent, "id") ?: stringIn(payload, "id") ?: stringIn(raw, "id")
             val stamped =
                 stampEnvelopeId(
-                    project(canonicalEventType(innerType), data),
-                    stringIn(syncEvent, "id") ?: stringIn(payload, "id") ?: stringIn(raw, "id"),
+                    project(canonicalEventType(innerType), data, envelopeId),
+                    envelopeId,
                 )
             return if (stamped.isEmpty()) {
                 EventParseOutcome.Dropped(canonicalEventType(innerType))
@@ -53,10 +61,11 @@ class EventDomainAdapter(
                 EventParseOutcome.Events(stamped)
             }
         }
+        val envelopeId = stringIn(payload, "id") ?: stringIn(raw, "id")
         val stamped =
             stampEnvelopeId(
-                project(canonicalEventType(type), properties),
-                stringIn(payload, "id") ?: stringIn(raw, "id"),
+                project(canonicalEventType(type), properties, envelopeId),
+                envelopeId,
             )
         return if (stamped.isEmpty()) {
             EventParseOutcome.Dropped(canonicalEventType(type))
@@ -149,6 +158,7 @@ class EventDomainAdapter(
     private fun project(
         type: String,
         properties: JsonObject,
+        envelopeId: String? = null,
     ): List<OpencodeEvent> =
         when (type) {
             "permission.v2.asked" -> listOf(event("permission.asked", properties))
@@ -224,24 +234,23 @@ class EventDomainAdapter(
             "session.next.compaction.started",
             "session.compaction.started",
             ->
-                listOf(
-                    statusEvent(properties, "busy"),
-                    compactionPartUpdated(properties, completed = false),
-                )
+                listOf(statusEvent(properties, "busy")) +
+                    compactionUpdated(properties, envelopeId, phase = CompactionPhase.Started)
+            // The summary streams as model context; the timeline never shows it as text.
             "session.next.compaction.delta",
             "session.compaction.delta",
-            -> listOf(compactionTextDelta(properties))
+            -> emptyList()
             "session.next.compaction.ended",
             "session.compaction.ended",
-            -> listOf(compactionPartUpdated(properties, completed = true))
+            -> compactionUpdated(properties, envelopeId, phase = CompactionPhase.Ended)
             "session.next.compaction.failed",
             "session.compaction.failed",
             ->
-                listOf(
-                    compactionPartUpdated(properties, completed = true),
-                    event("session.error", properties),
-                    event("session.idle", properties),
-                )
+                compactionUpdated(properties, envelopeId, phase = CompactionPhase.Failed) +
+                    listOf(
+                        event("session.error", properties),
+                        event("session.idle", properties),
+                    )
             "session.revert.committed" -> listOfNotNull(revertCommitted(properties))
             "session.next.reasoning.started",
             "session.reasoning.started",
@@ -566,36 +575,62 @@ class EventDomainAdapter(
             title = "Shell",
         )
 
-    private fun compactionPartUpdated(
+    private enum class CompactionPhase { Started, Ended, Failed }
+
+    /**
+     * v2 compaction is its own transcript item (`type: compaction`). Its id is
+     * `inputID` or the `started` envelope id with `evt_` swapped for `msg_`; a
+     * finished one without a remembered start uses its own envelope id, as the
+     * server does when it appends a completed item.
+     */
+    private fun compactionUpdated(
         properties: JsonObject,
-        completed: Boolean,
-    ): OpencodeEvent {
+        envelopeId: String?,
+        phase: CompactionPhase,
+    ): List<OpencodeEvent> {
         val sessionId = sessionIdFromProperties(properties)
-        val messageId = properties.string("messageID")
+        val fromEnvelope = envelopeId?.let { id -> if (id.startsWith("evt_")) "msg_" + id.removePrefix("evt_") else id }
+        val remembered = sessionId?.let { runningCompactionIds[it] }
+        val messageId =
+            when (phase) {
+                CompactionPhase.Started -> properties.string("inputID") ?: properties.string("messageID") ?: fromEnvelope
+                else -> properties.string("inputID") ?: properties.string("messageID") ?: remembered ?: fromEnvelope
+            } ?: return emptyList()
+        if (sessionId != null) {
+            if (phase == CompactionPhase.Started) {
+                runningCompactionIds[sessionId] = messageId
+            } else {
+                runningCompactionIds.remove(sessionId)
+            }
+        }
+        val info =
+            buildJsonObject {
+                put("id", messageId)
+                sessionId?.let { put("sessionID", it) }
+                put("role", "assistant")
+                put("mode", "compaction")
+                if (phase == CompactionPhase.Started) {
+                    properties.long("created")?.let { created ->
+                        put("time", buildJsonObject { put("created", created) })
+                    }
+                }
+            }
         val part =
             buildJsonObject {
-                messageId?.let { put("id", it) }
+                put("id", messageId)
                 sessionId?.let { put("sessionID", it) }
-                messageId?.let { put("messageID", it) }
+                put("messageID", messageId)
                 put("type", "compaction")
                 put("auto", properties.string("reason") == "auto")
-                put("completed", completed)
+                put("completed", phase != CompactionPhase.Started)
+                if (phase == CompactionPhase.Ended) {
+                    properties.string("text")?.takeIf { it.isNotBlank() }?.let { put("summary", it) }
+                }
             }
-        return event("message.part.updated", buildJsonObject { put("part", part) })
-    }
-
-    private fun compactionTextDelta(properties: JsonObject): OpencodeEvent {
-        val sessionId = sessionIdFromProperties(properties)
-        val messageId = properties.string("messageID")
-        val projected =
-            buildJsonObject {
-                sessionId?.let { put("sessionID", it) }
-                messageId?.let { put("messageID", it) }
-                messageId?.let { put("partID", "$it:text:0") }
-                put("field", "text")
-                properties.string("text")?.let { put("delta", it) }
-            }
-        return event("message.part.delta", projected)
+        return listOf(
+            event("message.updated", buildJsonObject { put("info", info) }),
+            event("message.part.updated", buildJsonObject { put("part", part) }),
+        )
     }
 
     /**

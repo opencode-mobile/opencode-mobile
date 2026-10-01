@@ -263,6 +263,7 @@ nonisolated private struct CachedMessagePartPayload: Codable, Sendable {
     let dataUrl: String?
     let timeStartEpochMs: Int64?
     let timeEndEpochMs: Int64?
+    let auto: Bool?
 
     init(
         kind: String,
@@ -284,7 +285,8 @@ nonisolated private struct CachedMessagePartPayload: Codable, Sendable {
         attachmentKind: String? = nil,
         dataUrl: String? = nil,
         timeStartEpochMs: Int64? = nil,
-        timeEndEpochMs: Int64? = nil
+        timeEndEpochMs: Int64? = nil,
+        auto: Bool? = nil
     ) {
         self.kind = kind
         self.id = id
@@ -306,6 +308,7 @@ nonisolated private struct CachedMessagePartPayload: Codable, Sendable {
         self.dataUrl = dataUrl
         self.timeStartEpochMs = timeStartEpochMs
         self.timeEndEpochMs = timeEndEpochMs
+        self.auto = auto
     }
 
     init(from decoder: Decoder) throws {
@@ -330,6 +333,7 @@ nonisolated private struct CachedMessagePartPayload: Codable, Sendable {
         dataUrl = try container.decodeIfPresent(String.self, forKey: .dataUrl)
         timeStartEpochMs = try container.decodeIfPresent(Int64.self, forKey: .timeStartEpochMs)
         timeEndEpochMs = try container.decodeIfPresent(Int64.self, forKey: .timeEndEpochMs)
+        auto = try container.decodeIfPresent(Bool.self, forKey: .auto)
     }
 }
 
@@ -598,9 +602,14 @@ private extension MessagePart {
                 attachmentKind: part.kind.rawValue,
                 dataUrl: AttachmentLimits.persistedDataURL(part.dataURL)
             )
-        case .compaction:
-            // Live marker only; rehydrated from SSE / refresh while session is open.
-            return nil
+        case let .compaction(part):
+            return CachedMessagePartPayload(
+                kind: "compaction",
+                id: part.id,
+                text: part.summary,
+                status: part.completed ? "completed" : "running",
+                auto: part.auto
+            )
         case let .reasoning(part):
             return CachedMessagePartPayload(
                 kind: "reasoning",
@@ -661,6 +670,15 @@ private extension CachedMessagePartPayload {
                     isStreaming: isStreaming,
                     timeStartEpochMs: timeStartEpochMs,
                     timeEndEpochMs: timeEndEpochMs
+                )
+            )
+        case "compaction":
+            return .compaction(
+                CompactionPart(
+                    id: id,
+                    auto: auto ?? false,
+                    completed: status == "completed",
+                    summary: text.flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 }
                 )
             )
         default:

@@ -1,8 +1,12 @@
 import Foundation
 
 /// Status-chrome copy for Session Compact (OPE-116, prototype B).
-enum SessionCompactChrome {
+nonisolated enum SessionCompactChrome {
     static let statusLabel = "Compacting…"
+    /// Timeline marker for a server compaction item; the summary opens from it.
+    static let markerTitle = "Context compacted"
+    static let markerAutoSubtitle = "Automatic"
+    static let markerToolName = "compaction"
     static let fallbackSuccess = "Session compacted."
     static let failure = "Couldn't compact session context."
 

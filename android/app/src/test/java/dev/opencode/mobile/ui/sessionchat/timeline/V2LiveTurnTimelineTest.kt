@@ -232,6 +232,81 @@ class V2LiveTurnTimelineTest {
         assertEquals(listOf("u1", "a1", "u3"), store.messages(SESSION).map { it.id })
     }
 
+    @Test
+    fun restCompaction_isACompactionRowNotReplyText() {
+        // `GET /api/session/:id/message` from the sim server, oldest first.
+        val rest =
+            restMessages(
+                """
+                [
+                  {"id":"u1","type":"user","text":"Say hi","time":{"created":1000}},
+                  {"id":"a1","type":"assistant","agent":"build","content":[{"type":"text","text":"Hi there."}],
+                   "finish":"stop","time":{"created":1100,"completed":1200}},
+                  {"id":"i1","type":"idle","outcome":"succeeded","time":{"created":1201}},
+                  {"type":"compaction","id":"c1","time":{"created":1300},"status":"completed","reason":"manual",
+                   "summary":"## Objective\n- Exercise queue and steer prompts.\n\n## Next Move\n- Wait.",
+                   "recent":"","cost":0},
+                  {"id":"i2","type":"idle","outcome":"succeeded","time":{"created":1400}}
+                ]
+                """,
+            )
+        store.replaceAll(SESSION, rest)
+
+        val messages = store.messages(SESSION)
+        val compaction = messages.single { it.id == "c1" }
+        assertEquals(listOf(MessagePart.Compaction(id = "c1", completed = true, summary = SUMMARY)), compaction.parts)
+        assertEquals("", compaction.text)
+
+        val merged = chipBodies(displayOrder(messages))
+        assertEquals(listOf("u1", "a1", "c1"), merged.map { it.message.id })
+        assertEquals(
+            listOf("Hi there."),
+            merged[1].blocks.stepParagraphs().map { it.text },
+        )
+        val marker = merged[2].blocks.single() as SessionChatTimelineBlock.ToolCard
+        assertEquals(SessionCompactChrome.MARKER_TITLE, marker.title)
+        assertEquals(SUMMARY, marker.detailText)
+    }
+
+    @Test
+    fun liveCompaction_startedThenEnded_isOneCompactionRowAfterTheReply() {
+        apply(prompt("u1", "Say hi", at = 1_000))
+        apply(step("a1", at = 1_100))
+        apply(text("a1", "Hi there.", at = 1_110))
+        apply(stepEnded("a1", "stop", at = 1_120))
+        apply(idle(at = 1_130))
+        apply(
+            listOf(
+                envelope("session.compaction.started", 2_000, """"reason":"manual","recent":"","inputID":"msg_c1""""),
+                envelope("session.compaction.delta", 2_010, """"text":"## Objective""""),
+            ),
+        )
+        val running = store.messages(SESSION).single { it.id == "msg_c1" }
+        assertEquals(listOf(MessagePart.Compaction(id = "msg_c1")), running.parts)
+        assertTrue(SessionCompactionPresence.isActive(store.messages(SESSION), isSessionBusy = true))
+
+        apply(
+            listOf(
+                envelope(
+                    "session.compaction.ended",
+                    2_100,
+                    """"reason":"manual","text":${Json.encodeToString(SUMMARY)},"recent":"","cost":0""",
+                ),
+            ),
+        )
+
+        val messages = displayOrder(store.messages(SESSION))
+        assertEquals(listOf("u1", "a1", "msg_c1"), messages.map { it.id })
+        assertEquals(
+            listOf(MessagePart.Compaction(id = "msg_c1", completed = true, summary = SUMMARY)),
+            messages[2].parts,
+        )
+        val merged = chipBodies(messages)
+        assertEquals(listOf("u1", "a1", "msg_c1"), merged.map { it.message.id })
+        assertEquals("Hi there.", merged[1].message.text)
+        assertEquals(SUMMARY, (merged[2].blocks.single() as SessionChatTimelineBlock.ToolCard).detailText)
+    }
+
     // MARK: Wire events
 
     private fun prompt(
@@ -397,5 +472,6 @@ class V2LiveTurnTimelineTest {
 
     private companion object {
         const val SESSION = "ses_v2"
+        const val SUMMARY = "## Objective\n- Exercise queue and steer prompts.\n\n## Next Move\n- Wait."
     }
 }

@@ -120,7 +120,9 @@ nonisolated enum MessagePart: Equatable, Sendable {
     case text(TextPart)
     case file(FilePart)
     case tool(ToolPart)
-    /// Server compaction marker. Kept for live Compacting… detection; not rendered in timeline.
+    /// Server compaction marker. Drives live Compacting… detection; on an
+    /// assistant (v2) message it renders as a compaction row whose summary stays
+    /// behind a disclosure, never as reply text.
     case compaction(CompactionPart)
     case reasoning(ReasoningPart)
 }
@@ -293,11 +295,13 @@ nonisolated struct CompactionPart: Equatable, Sendable {
     let id: String?
     let auto: Bool
     let completed: Bool
+    let summary: String?
 
-    init(id: String? = nil, auto: Bool = false, completed: Bool = false) {
+    init(id: String? = nil, auto: Bool = false, completed: Bool = false, summary: String? = nil) {
         self.id = id
         self.auto = auto
         self.completed = completed
+        self.summary = summary
     }
 }
 

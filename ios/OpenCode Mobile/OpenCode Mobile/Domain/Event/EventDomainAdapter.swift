@@ -1,6 +1,10 @@
 import Foundation
 
 nonisolated struct EventDomainAdapter: Sendable {
+    /// v2 compaction item id per session, remembered from `compaction.started`:
+    /// `ended` / `failed` carry no id while the server updates the running item.
+    private let runningCompactionIDs = RunningCompactionIDs()
+
     func parseEvent(dataLine: String) -> OpencodeEvent? {
         parseEvents(dataLine: dataLine).first
     }
@@ -36,17 +40,19 @@ nonisolated struct EventDomainAdapter: Sendable {
                 return .unrecognized
             }
             let data = properties(fromData: syncEvent["data"]) ?? [:]
+            let envelopeID = string(in: syncEvent, key: "id") ?? string(in: payload, key: "id") ?? json["id"] as? String
             let stamped = stampEnvelopeId(
-                project(type: canonicalEventType(innerType), properties: data),
-                id: string(in: syncEvent, key: "id") ?? string(in: payload, key: "id") ?? json["id"] as? String
+                project(type: canonicalEventType(innerType), properties: data, envelopeID: envelopeID),
+                id: envelopeID
             )
             return stamped.isEmpty
                 ? .dropped(type: canonicalEventType(innerType))
                 : .events(stamped)
         }
+        let envelopeID = string(in: payload, key: "id") ?? json["id"] as? String
         let stamped = stampEnvelopeId(
-            project(type: canonicalEventType(type), properties: eventProperties),
-            id: string(in: payload, key: "id") ?? json["id"] as? String
+            project(type: canonicalEventType(type), properties: eventProperties, envelopeID: envelopeID),
+            id: envelopeID
         )
         return stamped.isEmpty
             ? .dropped(type: canonicalEventType(type))
@@ -145,7 +151,7 @@ nonisolated struct EventDomainAdapter: Sendable {
         return String(type[..<dot])
     }
 
-    private func project(type: String, properties: [String: Any]) -> [OpencodeEvent] {
+    private func project(type: String, properties: [String: Any], envelopeID: String? = nil) -> [OpencodeEvent] {
         switch type {
         case "permission.v2.asked":
             [event(type: "permission.asked", properties: properties)]
@@ -202,17 +208,15 @@ nonisolated struct EventDomainAdapter: Sendable {
         case "session.next.shell.ended", "session.shell.ended":
             [shellPartUpdated(properties, status: "completed")]
         case "session.next.compaction.started", "session.compaction.started":
-            [
-                statusEvent(properties, statusType: "busy"),
-                compactionPartUpdated(properties, completed: false),
-            ]
+            [statusEvent(properties, statusType: "busy")]
+                + compactionUpdated(properties, envelopeID: envelopeID, phase: .started)
         case "session.next.compaction.delta", "session.compaction.delta":
-            [compactionTextDelta(properties)]
+            // The summary streams as model context; the timeline never shows it as text.
+            []
         case "session.next.compaction.ended", "session.compaction.ended":
-            [compactionPartUpdated(properties, completed: true)]
+            compactionUpdated(properties, envelopeID: envelopeID, phase: .ended)
         case "session.next.compaction.failed", "session.compaction.failed":
-            [
-                compactionPartUpdated(properties, completed: true),
+            compactionUpdated(properties, envelopeID: envelopeID, phase: .failed) + [
                 event(type: "session.error", properties: properties),
                 event(type: "session.idle", properties: properties),
             ]
@@ -534,37 +538,57 @@ nonisolated struct EventDomainAdapter: Sendable {
         )
     }
 
-    private func compactionPartUpdated(_ properties: [String: Any], completed: Bool) -> OpencodeEvent {
+    private enum CompactionPhase { case started, ended, failed }
+
+    /// v2 compaction is its own transcript item (`type: compaction`). Its id is
+    /// `inputID` or the `started` envelope id with `evt_` swapped for `msg_`; a
+    /// finished one without a remembered start uses its own envelope id, as the
+    /// server does when it appends a completed item.
+    private func compactionUpdated(
+        _ properties: [String: Any],
+        envelopeID: String?,
+        phase: CompactionPhase
+    ) -> [OpencodeEvent] {
         let sessionID = sessionID(from: properties)
-        let messageID = string(in: properties, key: "messageID")
+        let fromEnvelope = envelopeID.map { id -> String in
+            id.hasPrefix("evt_") ? "msg_" + String(id.dropFirst("evt_".count)) : id
+        }
+        let explicit = string(in: properties, key: "inputID") ?? string(in: properties, key: "messageID")
+        let resolved: String?
+        switch phase {
+        case .started:
+            resolved = explicit ?? fromEnvelope
+        case .ended, .failed:
+            resolved = explicit ?? sessionID.flatMap { runningCompactionIDs.id(for: $0) } ?? fromEnvelope
+        }
+        guard let messageID = resolved else { return [] }
+        if let sessionID {
+            runningCompactionIDs.set(phase == .started ? messageID : nil, for: sessionID)
+        }
+        var info: [String: Any] = ["id": messageID, "role": "assistant", "mode": "compaction"]
         var part: [String: Any] = [
+            "id": messageID,
+            "messageID": messageID,
             "type": "compaction",
             "auto": string(in: properties, key: "reason") == "auto",
-            "completed": completed,
+            "completed": phase != .started,
         ]
-        if let messageID {
-            part["id"] = messageID
-            part["messageID"] = messageID
-        }
         if let sessionID {
+            info["sessionID"] = sessionID
             part["sessionID"] = sessionID
         }
-        return event(type: "message.part.updated", properties: ["part": part])
-    }
-
-    private func compactionTextDelta(_ properties: [String: Any]) -> OpencodeEvent {
-        var projected: [String: Any] = ["field": "text"]
-        if let sessionID = sessionID(from: properties) {
-            projected["sessionID"] = sessionID
+        if phase == .started, let created = int64(in: properties, key: "created") {
+            info["time"] = ["created": created]
         }
-        if let messageID = string(in: properties, key: "messageID") {
-            projected["messageID"] = messageID
-            projected["partID"] = "\(messageID):text:0"
+        if phase == .ended, let summary = string(in: properties, key: "text"),
+           !summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        {
+            part["summary"] = summary
         }
-        if let text = string(in: properties, key: "text") {
-            projected["delta"] = text
-        }
-        return event(type: "message.part.delta", properties: projected)
+        return [
+            event(type: "message.updated", properties: ["info": info]),
+            event(type: "message.part.updated", properties: ["part": part]),
+        ]
     }
 
     /// v2 announces a committed revert only as `session.revert.committed {to}`:
@@ -944,4 +968,22 @@ nonisolated enum EventParseOutcome: Sendable {
 nonisolated struct SessionTitleUpdate: Equatable, Sendable {
     let sessionID: String
     let title: String
+}
+
+/// Session → running v2 compaction item id, shared by copies of the adapter.
+nonisolated final class RunningCompactionIDs: @unchecked Sendable {
+    private let lock = NSLock()
+    private var ids: [String: String] = [:]
+
+    func id(for sessionID: String) -> String? {
+        lock.lock()
+        defer { lock.unlock() }
+        return ids[sessionID]
+    }
+
+    func set(_ id: String?, for sessionID: String) {
+        lock.lock()
+        defer { lock.unlock() }
+        ids[sessionID] = id
+    }
 }

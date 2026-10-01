@@ -443,7 +443,14 @@ nonisolated enum SessionChatTimelineBlocks {
                     )
                 )
                 index += 1
-            case .compaction:
+            case .compaction(let compaction):
+                // v1 marks compaction on the user message that asked for it;
+                // only the v2 compaction item (an assistant row) gets a marker.
+                if allowToolCards {
+                    flushText()
+                    guard let card = compactionCard(compaction) else { return .missingPartIds }
+                    blocks.append(card)
+                }
                 index += 1
             case .reasoning(let reasoning):
                 flushText()
@@ -591,6 +598,8 @@ nonisolated enum SessionChatTimelineBlocks {
     ) -> [DisplayMessageBody] {
         guard collapseConsecutiveToolCalls || chipTimeline, bodies.count >= 2 else { return bodies }
         func isMergeable(_ body: DisplayMessageBody) -> Bool {
+            // A message that carries a compaction marker stays its own row.
+            if isCompactionBody(body) { return false }
             if chipTimeline {
                 return body.message.role == .assistant && !body.blocks.isEmpty
             }
@@ -665,6 +674,27 @@ nonisolated enum SessionChatTimelineBlocks {
             else { return block }
             return block.withRenderedMarkdown(root)
         }
+    }
+
+    private static func isCompactionBody(_ body: DisplayMessageBody) -> Bool {
+        body.message.parts.contains { if case .compaction = $0 { return true }; return false }
+    }
+
+    /// The compaction marker: a card that opens the summary in the tool detail
+    /// sheet, so the summary never reads as reply text.
+    private static func compactionCard(_ part: CompactionPart) -> SessionChatTimelineBlock? {
+        guard let partId = part.id else { return nil }
+        let summary = part.summary.flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 }
+        return .toolCard(
+            blockID: PresentationBlockId.direct(partId),
+            card: SessionChatToolCardBlock(
+                toolName: SessionCompactChrome.markerToolName,
+                status: part.completed ? .completed : .running,
+                title: part.completed ? SessionCompactChrome.markerTitle : SessionCompactChrome.statusLabel,
+                subtitle: part.auto ? SessionCompactChrome.markerAutoSubtitle : nil,
+                detailText: summary
+            )
+        )
     }
 
     private static func isMergeableToolOnlyAssistant(_ body: DisplayMessageBody) -> Bool {
@@ -766,8 +796,9 @@ nonisolated enum SessionChatTimelineBlocks {
                 pendingText.append((id: partId, text: trimmed))
             case .file(let file):
                 blocks.append(.attachment(blockID: PresentationBlockId.direct(file.id), file: file))
-            case .compaction:
-                continue
+            case .compaction(let compaction):
+                guard flushParagraph(), let card = compactionCard(compaction) else { return .missingPartIds }
+                blocks.append(card)
             case .reasoning(let reasoning):
                 guard ThoughtPartChrome.isVisible(reasoning), !reasoning.isStreaming else { continue }
                 guard let partId = reasoning.id else { return .missingPartIds }

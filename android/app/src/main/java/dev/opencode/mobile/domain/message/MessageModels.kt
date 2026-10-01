@@ -102,11 +102,16 @@ sealed class MessagePart {
         val dataUrl: String,
     ) : MessagePart()
 
-    /** Server compaction marker. Kept for live Compacting… detection; not rendered in timeline. */
+    /**
+     * Server compaction marker. Drives live Compacting… detection; on an
+     * assistant (v2) message it renders as a compaction row whose [summary]
+     * stays behind a disclosure, never as reply text.
+     */
     data class Compaction(
         val id: String? = null,
         val auto: Boolean = false,
         val completed: Boolean = false,
+        val summary: String? = null,
     ) : MessagePart()
 
     data class Reasoning(

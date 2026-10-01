@@ -403,9 +403,42 @@ struct EventDomainAdapterTests {
         let events = adapter.parseEvents(
             dataLine: #"{"type":"session.compaction.ended","data":{"sessionID":"ses-1","messageID":"msg-c"}}"#
         )
-        #expect(events.map(\.type) == ["message.part.updated"])
+        #expect(events.map(\.type) == ["message.updated", "message.part.updated"])
         #expect(!events.contains(where: { $0.type == "session.idle" }))
         #expect(!events.contains(where: { $0.type == "session.active.snapshot" }))
+    }
+
+    @Test func parseEvents_keysLiveCompactionToTheStartedItemAndCarriesTheSummary() {
+        let adapter = EventDomainAdapter()
+        func part(_ line: String) -> [String: AnySendable]? {
+            adapter.parseEvents(dataLine: line)
+                .first { $0.type == "message.part.updated" }?
+                .rawProperties?["part"]?.dictionaryValue
+        }
+        // Captured v2 shapes: `started` carries the inbox `inputID`, `ended` no id at all.
+        let started = part(
+            #"{"id":"evt_0f9026d76001","created":1790884081021,"type":"session.compaction.started","#
+                + #""data":{"sessionID":"ses-1","reason":"manual","recent":"","inputID":"msg_0f9026d76001"}}"#
+        )
+        let ended = part(
+            #"{"id":"evt_0f9027b10001","created":1790884084400,"type":"session.compaction.ended","#
+                + ###""data":{"sessionID":"ses-1","reason":"manual","text":"## Objective\n- Hi.","recent":""}}"###
+        )
+        let autoEnded = part(
+            #"{"id":"evt_0f9030000001","created":1790884090000,"type":"session.compaction.ended","#
+                + ###""data":{"sessionID":"ses-1","reason":"auto","text":"## Objective","recent":""}}"###
+        )
+
+        #expect(started?["messageID"]?.stringValue == "msg_0f9026d76001")
+        #expect(started?["completed"] == .bool(false))
+        #expect(ended?["messageID"]?.stringValue == "msg_0f9026d76001")
+        #expect(ended?["completed"] == .bool(true))
+        #expect(ended?["summary"]?.stringValue == "## Objective\n- Hi.")
+        // Without a started item the server appends one keyed by the ended event.
+        #expect(autoEnded?["messageID"]?.stringValue == "msg_0f9030000001")
+        #expect(adapter.parseEvents(
+            dataLine: ###"{"type":"session.compaction.delta","data":{"sessionID":"ses-1","text":"## Obj"}}"###
+        ).isEmpty)
     }
 
     @Test func parseEvents_projectsV2RevertCommittedWithItsRevertPoint() {
@@ -423,7 +456,7 @@ struct EventDomainAdapterTests {
         let events = adapter.parseEvents(
             dataLine: #"{"type":"session.compaction.failed","data":{"sessionID":"ses-1","messageID":"msg-c"}}"#
         )
-        #expect(events.map(\.type) == ["message.part.updated", "session.error", "session.idle"])
+        #expect(events.map(\.type) == ["message.updated", "message.part.updated", "session.error", "session.idle"])
         #expect(events.last?.triggersStatusRefresh == true)
     }
 

@@ -894,13 +894,16 @@ struct MessageDomainAdapterTests {
         #expect(shellTool.toolName == "bash")
         #expect(shellTool.output == "/repo")
         #expect(messages[2].mode == "compaction")
-        #expect(messages[2].text == "Earlier work summarized")
+        // The summary is model context: it rides on the compaction part, never as reply text.
+        #expect(messages[2].text.isEmpty)
+        #expect(messages[2].parts.count == 1)
         guard case let .compaction(part) = messages[2].parts.first else {
             Issue.record("expected compaction part")
             return
         }
         #expect(part.auto)
         #expect(part.completed == false)
+        #expect(part.summary == "Earlier work summarized")
     }
 
     @Test func projectV2CompactionStatusCompletedMarksPartComplete() throws {

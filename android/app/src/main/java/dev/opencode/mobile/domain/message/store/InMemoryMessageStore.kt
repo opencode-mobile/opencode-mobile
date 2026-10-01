@@ -961,6 +961,7 @@ class InMemoryMessageStore
                         existing.copy(
                             auto = existing.auto || incoming.auto,
                             completed = existing.completed || incoming.completed,
+                            summary = incoming.summary ?: existing.summary,
                         )
                     else -> incoming
                 }

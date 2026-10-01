@@ -110,6 +110,7 @@ class MessageDomainAdapter {
                     id = dto.id,
                     auto = dto.auto == true,
                     completed = dto.completed == true,
+                    summary = dto.summary?.takeIf { it.isNotBlank() },
                 )
             "reasoning" ->
                 MessagePart.Reasoning(
@@ -515,17 +516,17 @@ class MessageDomainAdapter {
 
     private fun projectV2Compaction(dto: V2SessionMessageDto): Message {
         val summary = dto.summary.orEmpty()
+        // The summary is model context, not a reply: it rides on the compaction
+        // part so the timeline shows a compaction row instead of reply text.
         val parts =
-            mutableListOf<MessagePart>(
+            listOf<MessagePart>(
                 MessagePart.Compaction(
                     id = dto.id,
                     auto = dto.reason == "auto",
                     completed = dto.status.equals("completed", ignoreCase = true),
+                    summary = summary.takeIf { it.isNotBlank() },
                 ),
             )
-        if (summary.isNotBlank()) {
-            parts += MessagePart.Text(text = summary, id = "${dto.id}:text:0")
-        }
         return messageFromV2(
             id = dto.id,
             role = MessageRole.Assistant,

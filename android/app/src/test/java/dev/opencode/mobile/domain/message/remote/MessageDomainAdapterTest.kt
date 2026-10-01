@@ -1092,10 +1092,12 @@ class MessageDomainAdapterTest {
         assertEquals("bash", shellTool.toolName)
         assertEquals("/repo", shellTool.output)
         assertEquals("compaction", messages[2].mode)
-        assertEquals("Earlier work summarized", messages[2].text)
-        val compaction = messages[2].parts.filterIsInstance<MessagePart.Compaction>().single()
+        // The summary is model context: it rides on the compaction part, never as reply text.
+        assertEquals("", messages[2].text)
+        val compaction = messages[2].parts.single() as MessagePart.Compaction
         assertTrue(compaction.auto)
         assertFalse(compaction.completed)
+        assertEquals("Earlier work summarized", compaction.summary)
     }
 
     @Test

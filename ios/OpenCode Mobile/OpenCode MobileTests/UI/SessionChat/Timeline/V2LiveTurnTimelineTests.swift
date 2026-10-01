@@ -7,6 +7,7 @@ import Testing
 /// frame, then a REST reload over the live state.
 struct V2LiveTurnTimelineTests {
     private static let session = "ses_v2"
+    private static let summary = "## Objective\n- Exercise queue and steer prompts.\n\n## Next Move\n- Wait."
     private let events = EventDomainAdapter()
     private let adapter = MessageDomainAdapter()
     private let store = InMemoryMessageStore()
@@ -199,6 +200,65 @@ struct V2LiveTurnTimelineTests {
         #expect(store.messages(sessionID: Self.session).map(\.id) == ["u1", "a1", "u3"])
     }
 
+    @Test func restCompaction_isACompactionRowNotReplyText() throws {
+        // `GET /api/session/:id/message` from the sim server, oldest first.
+        let rest = try restMessages(
+            """
+            [
+              {"id":"u1","type":"user","text":"Say hi","time":{"created":1000}},
+              {"id":"a1","type":"assistant","agent":"build","content":[{"type":"text","text":"Hi there."}],
+               "finish":"stop","time":{"created":1100,"completed":1200}},
+              {"id":"i1","type":"idle","outcome":"succeeded","time":{"created":1201}},
+              {"type":"compaction","id":"c1","time":{"created":1300},"status":"completed","reason":"manual",
+               "summary":\(jsonString(Self.summary)),"recent":"","cost":0},
+              {"id":"i2","type":"idle","outcome":"succeeded","time":{"created":1400}}
+            ]
+            """
+        )
+        store.replaceAll(sessionID: Self.session, messages: rest)
+
+        let messages = store.messages(sessionID: Self.session)
+        let compaction = try #require(messages.first { $0.id == "c1" })
+        #expect(compaction.parts == [.compaction(CompactionPart(id: "c1", completed: true, summary: Self.summary))])
+        #expect(compaction.text.isEmpty)
+
+        let frame = chipFrame(messages)
+        #expect(frame.messages.map(\.id) == ["u1", "a1", "c1"])
+        #expect(stepParagraphs(frame.messages[1].blocks).map(\.paragraph.text) == ["Hi there."])
+        let card = try #require(toolCard(frame.messages[2].blocks))
+        #expect(card.title == SessionCompactChrome.markerTitle)
+        #expect(card.detailText == Self.summary)
+    }
+
+    @Test func liveCompaction_startedThenEnded_isOneCompactionRowAfterTheReply() throws {
+        apply(prompt("u1", "Say hi", at: 1_000))
+        apply(step("a1", at: 1_100))
+        apply(text("a1", "Hi there.", at: 1_110))
+        apply(stepEnded("a1", finish: "stop", at: 1_120))
+        apply(idle(at: 1_130))
+        apply([
+            envelope("session.compaction.started", 2_000, #""reason":"manual","recent":"","inputID":"msg_c1""#),
+            envelope("session.compaction.delta", 2_010, ###""text":"## Objective""###),
+        ])
+        let running = try #require(store.messages(sessionID: Self.session).first { $0.id == "msg_c1" })
+        #expect(running.parts == [.compaction(CompactionPart(id: "msg_c1"))])
+        #expect(SessionCompactionPresence.isActive(messages: store.messages(sessionID: Self.session), isSessionBusy: true))
+
+        apply([envelope(
+            "session.compaction.ended",
+            2_100,
+            #""reason":"manual","text":\#(jsonString(Self.summary)),"recent":"","cost":0"#
+        )])
+
+        let messages = store.messages(sessionID: Self.session)
+        #expect(messages.map(\.id) == ["u1", "a1", "msg_c1"])
+        #expect(messages[2].parts == [.compaction(CompactionPart(id: "msg_c1", completed: true, summary: Self.summary))])
+        let frame = chipFrame(messages)
+        #expect(frame.messages.map(\.id) == ["u1", "a1", "msg_c1"])
+        #expect(frame.messages[1].message.text == "Hi there.")
+        #expect(toolCard(frame.messages[2].blocks)?.detailText == Self.summary)
+    }
+
     // MARK: Wire events
 
     private func prompt(_ id: String, _ text: String, at: Int64) -> [String] {
@@ -329,6 +389,11 @@ struct V2LiveTurnTimelineTests {
             guard case .stepParagraph(_, let paragraph) = block else { return nil }
             return (block.blockID, paragraph)
         }
+    }
+
+    private func toolCard(_ blocks: [SessionChatTimelineBlock]) -> SessionChatToolCardBlock? {
+        guard blocks.count == 1, case .toolCard(_, let card) = blocks[0] else { return nil }
+        return card
     }
 
     private func restMessages(_ body: String) throws -> [Message] {

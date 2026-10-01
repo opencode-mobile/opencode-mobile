@@ -856,9 +856,49 @@ class EventDomainAdapterTest {
                 """{"type":"session.compaction.ended","data":{"sessionID":"ses-1","messageID":"msg-c"}}""",
             )
 
-        assertEquals(listOf("message.part.updated"), events.map { it.type })
+        assertEquals(listOf("message.updated", "message.part.updated"), events.map { it.type })
         assertTrue(events.none { it.type == "session.idle" })
         assertTrue(events.none { it.type == "session.active.snapshot" })
+    }
+
+    @Test
+    fun parseEvents_keysLiveCompactionToTheStartedItemAndCarriesTheSummary() {
+        fun part(line: String) =
+            adapter
+                .parseEvents(line)
+                .single { it.type == "message.part.updated" }
+                .rawProperties!!["part"]!!
+                .jsonObject
+
+        // Captured v2 shapes: `started` carries the inbox `inputID`, `ended` no id at all.
+        val started =
+            part(
+                """{"id":"evt_0f9026d76001","created":1790884081021,"type":"session.compaction.started",""" +
+                    """"data":{"sessionID":"ses-1","reason":"manual","recent":"","inputID":"msg_0f9026d76001"}}""",
+            )
+        val ended =
+            part(
+                """{"id":"evt_0f9027b10001","created":1790884084400,"type":"session.compaction.ended",""" +
+                    """"data":{"sessionID":"ses-1","reason":"manual","text":"## Objective\n- Hi.","recent":""}}""",
+            )
+        val autoEnded =
+            part(
+                """{"id":"evt_0f9030000001","created":1790884090000,"type":"session.compaction.ended",""" +
+                    """"data":{"sessionID":"ses-1","reason":"auto","text":"## Objective","recent":""}}""",
+            )
+
+        assertEquals("msg_0f9026d76001", started["messageID"]?.jsonPrimitive?.content)
+        assertEquals("false", started["completed"]?.jsonPrimitive?.content)
+        assertEquals("msg_0f9026d76001", ended["messageID"]?.jsonPrimitive?.content)
+        assertEquals("true", ended["completed"]?.jsonPrimitive?.content)
+        assertEquals("## Objective\n- Hi.", ended["summary"]?.jsonPrimitive?.content)
+        // Without a started item the server appends one keyed by the ended event.
+        assertEquals("msg_0f9030000001", autoEnded["messageID"]?.jsonPrimitive?.content)
+        assertTrue(
+            adapter
+                .parseEvents("""{"type":"session.compaction.delta","data":{"sessionID":"ses-1","text":"## Obj"}}""")
+                .isEmpty(),
+        )
     }
 
     @Test
@@ -889,7 +929,10 @@ class EventDomainAdapterTest {
                 """{"type":"session.compaction.failed","data":{"sessionID":"ses-1","messageID":"msg-c"}}""",
             )
 
-        assertEquals(listOf("message.part.updated", "session.error", "session.idle"), events.map { it.type })
+        assertEquals(
+            listOf("message.updated", "message.part.updated", "session.error", "session.idle"),
+            events.map { it.type },
+        )
         assertTrue(events.last().triggersStatusRefresh)
     }
 
