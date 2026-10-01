@@ -112,7 +112,8 @@ final class SessionChatViewModel {
             sessionRepository: sessionRepository,
             sessionModelSelectionStore: sessionModelSelectionStore,
             composerDraftStore: composerDraftStore,
-            activeConnectionManager: activeConnectionManager
+            activeConnectionManager: activeConnectionManager,
+            foregroundEventStream: foregroundEventStream
         )
         self.sessionInfo = SessionInfo(
             worktree: worktree,
@@ -887,6 +888,7 @@ final class SessionChatViewModel {
         syncCoordinator?.markFocused(nil)
         reviewChanges.stop()
         repoStrip.stop()
+        composer.stopCatalogEventRefresh()
     }
 
     private func refreshProjectIdentity() {

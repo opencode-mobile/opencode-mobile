@@ -132,6 +132,7 @@ class SessionChatViewModel
                 sessionModelSelectionStore = sessionModelSelectionStore,
                 composerDraftStore = composerDraftStore,
                 scope = viewModelScope,
+                foregroundEventStream = foregroundEventStream,
             )
         private val sessionInfo =
             SessionInfo(

@@ -2505,6 +2505,54 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun modelUpdatedEvent_refetchesCatalogThatWasEmptyAfterServerRestart() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository(messages = emptyList())
+            val models = FakeModelRepository(queued = listOf(ModelSelectionCatalog(emptyList(), null)))
+            val viewModel = createViewModel(repository, modelRepository = models)
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertEquals(
+                "No usable models are available. Tap Model to retry.",
+                viewModel.uiState.value.composer.modelCatalogError,
+            )
+            assertEquals(false, viewModel.uiState.value.composer.isModelSelectionReady)
+
+            repository.eventStream.emit(OpencodeEvent(type = "provider.updated"))
+            repository.eventStream.emit(OpencodeEvent(type = "model.updated"))
+            advanceUntilIdle()
+
+            assertEquals(true, viewModel.uiState.value.composer.isModelSelectionReady)
+            assertNull(viewModel.uiState.value.composer.modelCatalogError)
+            assertEquals(
+                "claude-sonnet",
+                viewModel.uiState.value.composer.selectedModel
+                    ?.option
+                    ?.modelId,
+            )
+        }
+
+    @Test
+    fun unrelatedEvent_doesNotRefetchCatalog() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository(messages = emptyList())
+            val models = FakeModelRepository(queued = listOf(ModelSelectionCatalog(emptyList(), null)))
+            val viewModel = createViewModel(repository, modelRepository = models)
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            val callsAfterBind = models.calls
+
+            repository.eventStream.emit(OpencodeEvent(type = "skill.updated"))
+            advanceUntilIdle()
+
+            assertEquals(callsAfterBind, models.calls)
+            assertEquals(false, viewModel.uiState.value.composer.isModelSelectionReady)
+        }
+
+    @Test
     fun initialization_waitsForLateCacheAndPublishesSelectionOnceReady() =
         runTest(testDispatcher) {
             val defaultOption =
@@ -4865,8 +4913,16 @@ private fun testAttachment(
 
 private class FakeModelRepository(
     private val catalog: ModelSelectionCatalog? = null,
+    /** Answers returned once each, in order, before falling back to [catalog]. */
+    queued: List<ModelSelectionCatalog> = emptyList(),
 ) : ModelRepository {
+    private val queued = ArrayDeque(queued)
+    var calls = 0
+        private set
+
     override suspend fun listModelOptions(directory: String?): ModelSelectionCatalog {
+        calls += 1
+        queued.removeFirstOrNull()?.let { return it }
         catalog?.let { return it }
         val option =
             ModelSelectionOption(

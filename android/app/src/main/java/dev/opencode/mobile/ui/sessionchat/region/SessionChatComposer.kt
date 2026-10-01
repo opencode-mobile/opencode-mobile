@@ -15,6 +15,7 @@ import dev.opencode.mobile.domain.composer.ComposerDraftStore
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
+import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.message.Attachment
 import dev.opencode.mobile.domain.message.AttachmentKind
 import dev.opencode.mobile.domain.message.AttachmentLimits
@@ -60,6 +61,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -79,6 +81,7 @@ class SessionChatComposer(
     private val sessionModelSelectionStore: SessionModelSelectionStore,
     private val composerDraftStore: ComposerDraftStore,
     private val scope: CoroutineScope,
+    private val foregroundEventStream: ForegroundEventStream? = null,
 ) {
     var ioDispatcher: CoroutineDispatcher = kotlinx.coroutines.Dispatchers.IO
 
@@ -100,6 +103,8 @@ class SessionChatComposer(
     private var persistDraftJob: Job? = null
     private var nextAttachmentRevision = 1
     private val attachmentRevisions = mutableMapOf<String, Int>()
+    private var catalogLoadGeneration = 0
+    private var catalogEventJob: Job? = null
 
     fun bind(
         sessionId: String,
@@ -159,6 +164,25 @@ class SessionChatComposer(
         loadMentionableAgents()
         loadSelectableAgents()
         applyOrLoadDraft(preserve)
+        startCatalogEventRefresh()
+    }
+
+    /**
+     * Refetches the model catalog when the server announces a provider or model change, so
+     * an empty answer from a server that was still starting recovers without a manual retry.
+     */
+    private fun startCatalogEventRefresh() {
+        val stream = foregroundEventStream ?: return
+        if (catalogEventJob?.isActive == true) return
+        catalogEventJob =
+            scope.launch {
+                stream.events
+                    .filter { it.type in CATALOG_UPDATE_EVENTS }
+                    .collect { event ->
+                        logI("model catalog refresh reason=${event.type}")
+                        loadCatalog(keepLoadedCatalogOnFailure = true)
+                    }
+            }
     }
 
     fun loadServerCommands(force: Boolean = false) {
@@ -245,14 +269,19 @@ class SessionChatComposer(
         }
     }
 
-    fun loadCatalog() {
+    fun loadCatalog() = loadCatalog(keepLoadedCatalogOnFailure = false)
+
+    private fun loadCatalog(keepLoadedCatalogOnFailure: Boolean) {
         val worktree = boundWorktree ?: return
+        val generation = ++catalogLoadGeneration
         scope.launch {
             runCatching {
                 withContext(ioDispatcher) {
                     modelRepository.listModelOptions(worktree)
                 }
             }.onSuccess { catalog ->
+                // An older request must not overwrite the answer to a newer one.
+                if (generation != catalogLoadGeneration) return@onSuccess
                 if (boundWorktree == worktree) {
                     logI(
                         "loadCatalog options=${catalog.options.size} " +
@@ -261,7 +290,9 @@ class SessionChatComposer(
                     applyCatalog(catalog)
                 }
             }.onFailure { throwable ->
+                if (generation != catalogLoadGeneration) return@onFailure
                 logW("loadCatalog failed error=${throwable.message ?: throwable::class.simpleName}")
+                if (keepLoadedCatalogOnFailure && loadedCatalog?.options?.isNotEmpty() == true) return@onFailure
                 if (boundWorktree == worktree) {
                     updateComposer {
                         it.copy(
@@ -1376,6 +1407,11 @@ class SessionChatComposer(
     }
 
     companion object {
+        /**
+         * Server catalog events after which the model list is refetched. A freshly started
+         * server can answer the first `GET model` before its catalog is ready, then announce it.
+         */
+        val CATALOG_UPDATE_EVENTS = setOf("model.updated", "provider.updated")
         private const val DRAFT_PERSIST_DEBOUNCE_MS = 300L
         const val ModelFilterThreshold = 10
         const val PENDING_SEND_TIMEOUT_ERROR = "Couldn't send. Try again."

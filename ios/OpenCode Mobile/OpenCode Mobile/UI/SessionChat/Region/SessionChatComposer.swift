@@ -2,6 +2,10 @@ import Foundation
 
 @MainActor
 final class SessionChatComposer {
+    /// Server catalog events after which the model list is refetched. A freshly started
+    /// server can answer the first `GET model` before its catalog is ready, then announce it.
+    static let catalogUpdateEvents: Set<String> = ["model.updated", "provider.updated"]
+
     var onChange: (() -> Void)?
 
     private(set) var state = SessionChatComposerRegionState()
@@ -16,6 +20,7 @@ final class SessionChatComposer {
     private let sessionModelSelectionStore: any SessionModelSelectionStore
     private let composerDraftStore: any ComposerDraftStore
     private let activeConnectionManager: ActiveConnectionManager
+    private let foregroundEventStream: (any ForegroundEventStream)?
     private let sentTimeFormatter: DateFormatter
     private var loadedCatalog: ModelSelectionCatalog?
     private var cachedSelection: SessionModelSelection?
@@ -33,6 +38,9 @@ final class SessionChatComposer {
     private var mentionableAgentsTask: Task<Void, Never>?
     private var selectableAgentsTask: Task<Void, Never>?
     private var loadedSelectableAgents = false
+    private var catalogLoadGeneration = 0
+    private var catalogEventTask: Task<Void, Never>?
+    private var catalogRefreshTask: Task<Void, Never>?
 
     init(
         sessionID: String,
@@ -44,7 +52,8 @@ final class SessionChatComposer {
         sessionRepository: any SessionRepository,
         sessionModelSelectionStore: any SessionModelSelectionStore,
         composerDraftStore: any ComposerDraftStore,
-        activeConnectionManager: ActiveConnectionManager
+        activeConnectionManager: ActiveConnectionManager,
+        foregroundEventStream: (any ForegroundEventStream)? = nil
     ) {
         self.sessionID = sessionID
         self.worktree = worktree
@@ -56,6 +65,7 @@ final class SessionChatComposer {
         self.sessionModelSelectionStore = sessionModelSelectionStore
         self.composerDraftStore = composerDraftStore
         self.activeConnectionManager = activeConnectionManager
+        self.foregroundEventStream = foregroundEventStream
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "h:mm a"
@@ -109,6 +119,35 @@ final class SessionChatComposer {
         loadServerCommands()
         loadMentionableAgents()
         loadSelectableAgents()
+        startCatalogEventRefresh()
+    }
+
+    func stopCatalogEventRefresh() {
+        catalogEventTask?.cancel()
+        catalogEventTask = nil
+        catalogRefreshTask?.cancel()
+        catalogRefreshTask = nil
+    }
+
+    /// Refetches the model catalog when the server announces a provider or model change, so
+    /// an empty answer from a server that was still starting recovers without a manual retry.
+    private func startCatalogEventRefresh() {
+        guard let foregroundEventStream, catalogEventTask == nil else { return }
+        catalogEventTask = Task { [weak self] in
+            for await event in foregroundEventStream.events() {
+                if Task.isCancelled { return }
+                guard Self.catalogUpdateEvents.contains(event.type) else { continue }
+                self?.refreshCatalogAfterServerUpdate(reason: event.type)
+            }
+        }
+    }
+
+    private func refreshCatalogAfterServerUpdate(reason: String) {
+        OpenCodeLog.sessionChat.info("model catalog refresh reason=\(reason)")
+        catalogRefreshTask?.cancel()
+        catalogRefreshTask = Task { [weak self] in
+            await self?.loadCatalog(keepLoadedCatalogOnFailure: true)
+        }
     }
 
     func reset() {
@@ -129,11 +168,22 @@ final class SessionChatComposer {
     }
 
     func loadCatalog() async {
+        await loadCatalog(keepLoadedCatalogOnFailure: false)
+    }
+
+    private func loadCatalog(keepLoadedCatalogOnFailure: Bool) async {
+        catalogLoadGeneration += 1
+        let generation = catalogLoadGeneration
         do {
             let catalog = try await modelRepository.listModelOptions(directory: worktree)
+            // An older request must not overwrite the answer to a newer one.
+            guard generation == catalogLoadGeneration else { return }
             applyCatalog(catalog)
         } catch {
+            // A superseded refresh is cancelled; its failure is not the catalog's state.
+            guard generation == catalogLoadGeneration, !Task.isCancelled else { return }
             OpenCodeLog.sessionChat.warning("loadCatalog failed error=\(error.localizedDescription)")
+            if keepLoadedCatalogOnFailure, loadedCatalog?.options.isEmpty == false { return }
             updateComposer {
                 $0.isModelSelectionReady = false
                 $0.modelCatalogError = "Unable to load models. Tap Model to retry."

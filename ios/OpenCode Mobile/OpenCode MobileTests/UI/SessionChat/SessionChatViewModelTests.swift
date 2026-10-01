@@ -1447,6 +1447,41 @@ struct SessionChatViewModelTests {
         #expect(viewModel.uiState.composer.selectedMode == "plan")
     }
 
+    @Test func modelUpdatedEvent_refetchesCatalogThatWasEmptyAfterServerRestart() async {
+        let events = FakeForegroundEventStream()
+        let models = SequencedModelRepository(catalogs: [ModelSelectionCatalog(options: [], serverDefault: nil)])
+        let viewModel = makeViewModel(eventStream: events, modelRepository: models)
+        defer { viewModel.stopObserving() }
+
+        await viewModel.loadMessages()
+        #expect(viewModel.uiState.composer.modelCatalogError == "No usable models are available. Tap Model to retry.")
+        #expect(viewModel.uiState.composer.isModelSelectionReady == false)
+
+        events.emit(OpencodeEvent(type: "provider.updated", sessionID: nil))
+        events.emit(OpencodeEvent(type: "model.updated", sessionID: nil))
+        _ = await waitUntil { viewModel.uiState.composer.isModelSelectionReady }
+
+        #expect(viewModel.uiState.composer.isModelSelectionReady)
+        #expect(viewModel.uiState.composer.modelCatalogError == nil)
+        #expect(viewModel.uiState.composer.selectedModel?.option.modelID == "claude-sonnet")
+        #expect(models.calls >= 2)
+    }
+
+    @Test func unrelatedEvent_doesNotRefetchCatalog() async {
+        let events = FakeForegroundEventStream()
+        let models = SequencedModelRepository(catalogs: [ModelSelectionCatalog(options: [], serverDefault: nil)])
+        let viewModel = makeViewModel(eventStream: events, modelRepository: models)
+        defer { viewModel.stopObserving() }
+
+        await viewModel.loadMessages()
+        let callsAfterLoad = models.calls
+        events.emit(OpencodeEvent(type: "skill.updated", sessionID: nil))
+        try? await Task.sleep(for: .milliseconds(100))
+
+        #expect(models.calls == callsAfterLoad)
+        #expect(viewModel.uiState.composer.isModelSelectionReady == false)
+    }
+
     @Test func selectMode_persistsAgentForTheSessionWithoutNewSessionPreference() async {
         let selectionStore = InMemorySessionModelSelectionStore()
         let viewModel = makeViewModel(sessionModelSelectionStore: selectionStore)
@@ -2991,7 +3026,7 @@ struct SessionChatViewModelTests {
         eventStream: FakeForegroundEventStream? = nil,
         sessionModelSelectionStore: (any SessionModelSelectionStore)? = nil,
         composerDraftStore: (any ComposerDraftStore)? = nil,
-        modelRepository: FakeModelRepository = FakeModelRepository(),
+        modelRepository: any ModelRepository = FakeModelRepository(),
         commandRepository: FakeCommandRepository = FakeCommandRepository(),
         agentRepository: FakeAgentRepository = FakeAgentRepository(),
         sessionRepository: FakeChatSessionRepository? = nil,
@@ -3462,6 +3497,31 @@ private struct FakeModelRepository: ModelRepository {
 
     func listModelOptions(directory: String?) async throws -> ModelSelectionCatalog {
         catalog
+    }
+}
+
+/// Returns each queued catalog once, then the default single-model catalog.
+private final class SequencedModelRepository: ModelRepository, @unchecked Sendable {
+    private let lock = NSLock()
+    private var catalogs: [ModelSelectionCatalog]
+    private var _calls = 0
+    private let fallback = FakeModelRepository().catalog
+
+    init(catalogs: [ModelSelectionCatalog]) {
+        self.catalogs = catalogs
+    }
+
+    var calls: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return _calls
+    }
+
+    func listModelOptions(directory: String?) async throws -> ModelSelectionCatalog {
+        lock.lock()
+        defer { lock.unlock() }
+        _calls += 1
+        return catalogs.isEmpty ? fallback : catalogs.removeFirst()
     }
 }
 
