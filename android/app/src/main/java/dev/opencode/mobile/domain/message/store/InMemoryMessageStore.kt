@@ -6,6 +6,8 @@ import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.decodeFromJsonElement
@@ -276,32 +278,58 @@ class InMemoryMessageStore
             val order = messageOrders[sessionId]!!
             val inserted = messageId !in order
             val previous = infoCaches[sessionId]!![messageId]
+            // v2 infos are partial projections: keep fields an update omits.
+            val priorTime = previous?.get("time") ?: baseTimeJson(sessionId, messageId)
             val merged =
-                if (previous == null) {
-                    infoJson
-                } else {
-                    buildJsonObject {
-                        infoJson.forEach { (key, value) -> put(key, value) }
-                        if (!infoJson.containsKey("waiting")) {
-                            previous["waiting"]?.let { put("waiting", it) }
-                        }
-                        if (!infoJson.containsKey("delivery")) {
-                            previous["delivery"]?.let { put("delivery", it) }
-                        }
+                buildJsonObject {
+                    infoJson.forEach { (key, value) -> put(key, value) }
+                    if (!infoJson.containsKey("time")) {
+                        priorTime?.let { put("time", it) }
+                    }
+                    if (previous != null && !infoJson.containsKey("waiting")) {
+                        previous["waiting"]?.let { put("waiting", it) }
+                    }
+                    if (previous != null && !infoJson.containsKey("delivery")) {
+                        previous["delivery"]?.let { put("delivery", it) }
                     }
                 }
             infoCaches[sessionId]!![messageId] = merged
             partsCaches[sessionId]!!.getOrPut(messageId) { mutableMapOf() }
             partOrders[sessionId]!!.getOrPut(messageId) { mutableListOf() }
-            if (inserted) {
+            val isUserInfo = info.role.equals("user", ignoreCase = true)
+            val waiting = merged.isWaiting()
+            // A queued v2 prompt is hidden until delivered, then it belongs after
+            // whatever the session produced meanwhile, not where it was enqueued.
+            val delivered = !inserted && isUserInfo && previous?.isWaiting() == true && !waiting
+            if (inserted && isUserInfo && waiting) {
+                order.add(messageId)
+            } else if (inserted) {
+                insertMessage(sessionId, order, messageId, info.role)
+            } else if (delivered) {
+                order.remove(messageId)
                 insertMessage(sessionId, order, messageId, info.role)
             }
             return SessionChangeSet(
                 sessionRevision = 0,
                 insertedMessageIds = if (inserted) setOf(messageId) else emptySet(),
                 changedMessageIds = if (inserted) emptySet() else setOf(messageId),
-                structuralChange = inserted,
+                structuralChange = inserted || delivered,
             )
+        }
+
+        private fun JsonObject.isWaiting(): Boolean = (this["waiting"] as? JsonPrimitive)?.booleanOrNull == true
+
+        /** REST-seeded rows have no cached info; carry their times into the first live info. */
+        private fun baseTimeJson(
+            sessionId: String,
+            messageId: String,
+        ): JsonObject? {
+            val base = baseMessages[sessionId]?.firstOrNull { it.id == messageId } ?: return null
+            val created = base.sentAtEpochMs ?: return null
+            return buildJsonObject {
+                put("created", created)
+                base.completedAtEpochMs?.let { put("completed", it) }
+            }
         }
 
         private fun insertMessage(

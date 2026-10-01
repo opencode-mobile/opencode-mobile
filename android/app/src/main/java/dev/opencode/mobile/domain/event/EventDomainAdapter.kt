@@ -430,11 +430,19 @@ class EventDomainAdapter(
 
     private fun stepStarted(properties: JsonObject): List<OpencodeEvent> =
         listOfNotNull(
-            assistantMessageUpdated(properties),
+            assistantMessageUpdated(properties, stampCreated = true),
             statusEvent(properties, "busy"),
         )
 
-    private fun assistantMessageUpdated(properties: JsonObject): OpencodeEvent? {
+    /**
+     * v2 has no assistant `message.updated`; synthesize one. Only `step.started`
+     * stamps `time.created` (the envelope time) so a live reply orders after the
+     * prompt it answers; later partial infos omit `time` and the store keeps it.
+     */
+    private fun assistantMessageUpdated(
+        properties: JsonObject,
+        stampCreated: Boolean = false,
+    ): OpencodeEvent? {
         val sessionId = sessionIdFromProperties(properties)
         val assistantId = properties.string("assistantMessageID") ?: properties.string("messageID") ?: return null
         val info =
@@ -442,6 +450,11 @@ class EventDomainAdapter(
                 put("id", assistantId)
                 sessionId?.let { put("sessionID", it) }
                 put("role", "assistant")
+                if (stampCreated) {
+                    properties.long("created")?.let { created ->
+                        put("time", buildJsonObject { put("created", created) })
+                    }
+                }
             }
         return event("message.updated", buildJsonObject { put("info", info) })
     }

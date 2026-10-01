@@ -535,6 +535,15 @@ struct EventDomainAdapterTests {
         #expect(ids == ["msg-a:text:0", "msg-a:text:0", "msg-b:text:0", "msg-a:reasoning:0", "msg-b:reasoning:1"])
     }
 
+    @Test func parseEvents_stepStartedStampsAssistantCreatedTime() {
+        let adapter = EventDomainAdapter()
+        let events = adapter.parseEvents(
+            dataLine: #"{"id":"evt_1","created":1786924698081,"type":"session.step.started","data":{"sessionID":"ses-1","agent":"build","assistantMessageID":"msg-a"}}"#
+        )
+        let info = events.first { $0.type == "message.updated" }?.rawProperties?["info"]?.dictionaryValue
+        #expect(info?["time"]?.dictionaryValue?["created"]?.int64Value == 1786924698081)
+    }
+
     @Test func parseEvent_projectsLiveTextDeltaUsingOrdinalPartID() {
         let adapter = EventDomainAdapter()
         let event = adapter.parseEvent(

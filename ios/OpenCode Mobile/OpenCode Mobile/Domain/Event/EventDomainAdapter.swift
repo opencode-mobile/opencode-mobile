@@ -414,18 +414,24 @@ nonisolated struct EventDomainAdapter: Sendable {
 
     private func stepStarted(_ properties: [String: Any]) -> [OpencodeEvent] {
         [
-            assistantMessageUpdated(properties),
+            assistantMessageUpdated(properties, stampCreated: true),
             statusEvent(properties, statusType: "busy"),
         ].compactMap { $0 }
     }
 
-    private func assistantMessageUpdated(_ properties: [String: Any]) -> OpencodeEvent? {
+    /// v2 has no assistant `message.updated`; synthesize one. Only `step.started`
+    /// stamps `time.created` (the envelope time) so a live reply orders after the
+    /// prompt it answers; later partial infos omit `time` and the store keeps it.
+    private func assistantMessageUpdated(_ properties: [String: Any], stampCreated: Bool = false) -> OpencodeEvent? {
         guard let assistantID = string(in: properties, key: "assistantMessageID") ?? string(in: properties, key: "messageID") else {
             return nil
         }
         var info: [String: Any] = ["id": assistantID, "role": "assistant"]
         if let sessionID = sessionID(from: properties) {
             info["sessionID"] = sessionID
+        }
+        if stampCreated, let created = int64(in: properties, key: "created") {
+            info["time"] = ["created": created]
         }
         return event(type: "message.updated", properties: ["info": info])
     }

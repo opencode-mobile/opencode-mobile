@@ -277,13 +277,22 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
         ensureCaches(sessionID: sessionID)
         let inserted = !(messageOrder[sessionID]?.contains(messageID) ?? false)
         var merged = infoDict
+        var priorInfo: MessageInfoDTO?
         if case let .dictionary(prior) = infoCache[sessionID]?[messageID] {
+            priorInfo = decodeInfo(from: prior)
             if infoDict["waiting"] == nil, let waiting = prior["waiting"] {
                 merged["waiting"] = waiting
             }
             if infoDict["delivery"] == nil, let delivery = prior["delivery"] {
                 merged["delivery"] = delivery
             }
+            // v2 infos are partial projections: keep the times an update omits.
+            if infoDict["time"] == nil, let time = prior["time"] {
+                merged["time"] = time
+            }
+        } else if infoDict["time"] == nil, let time = baseTime(sessionID: sessionID, messageID: messageID) {
+            // REST-seeded rows have no cached info; carry their times into the first live info.
+            merged["time"] = time
         }
         infoCache[sessionID]?[messageID] = .dictionary(merged)
 
@@ -293,15 +302,36 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
         if partOrder[sessionID]?[messageID] == nil {
             partOrder[sessionID]?[messageID] = []
         }
-        if inserted {
+        let isUserInfo = info.role.lowercased() == "user"
+        let waiting = decodeInfo(from: merged)?.waiting == true
+        // A queued v2 prompt is hidden until delivered, then it belongs after
+        // whatever the session produced meanwhile, not where it was enqueued.
+        let delivered = !inserted && isUserInfo && priorInfo?.waiting == true && !waiting
+        if inserted && isUserInfo && waiting {
+            messageOrder[sessionID]?.append(messageID)
+        } else if inserted {
+            insertMessage(sessionID: sessionID, messageID: messageID, role: info.role)
+        } else if delivered {
+            messageOrder[sessionID]?.removeAll { $0 == messageID }
             insertMessage(sessionID: sessionID, messageID: messageID, role: info.role)
         }
         return SessionChangeSet(
             sessionRevision: 0,
             insertedMessageIDs: inserted ? [messageID] : [],
             changedMessageIDs: inserted ? [] : [messageID],
-            structuralChange: inserted
+            structuralChange: inserted || delivered
         )
+    }
+
+    private func baseTime(sessionID: String, messageID: String) -> AnySendable? {
+        guard let base = baseMessages[sessionID]?.last(where: { $0.id == messageID }),
+              let created = base.sentAtEpochMs
+        else { return nil }
+        var time: [String: AnySendable] = ["created": .int64(created)]
+        if let completed = base.completedAtEpochMs {
+            time["completed"] = .int64(completed)
+        }
+        return .dictionary(time)
     }
 
     private func insertMessage(sessionID: String, messageID: String, role: String) {
