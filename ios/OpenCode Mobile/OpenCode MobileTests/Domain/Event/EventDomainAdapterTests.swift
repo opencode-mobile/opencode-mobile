@@ -515,6 +515,26 @@ struct EventDomainAdapterTests {
         #expect(event?.rawProperties?["part"]?.dictionaryValue?["tool"]?.stringValue == "websearch")
     }
 
+    @Test func parseEvents_scopesV2OrdinalPartIDsToTheirAssistantMessage() {
+        // Captured v2 shape: each step's first text and reasoning are ordinal 0
+        // and carry no part id, so the id must include the assistant message.
+        let adapter = EventDomainAdapter()
+        func partID(_ line: String) -> String? {
+            adapter.parseEvents(dataLine: line).lazy.compactMap { event in
+                event.rawProperties?["part"]?.dictionaryValue?["id"]?.stringValue
+                    ?? event.rawProperties?["partID"]?.stringValue
+            }.first
+        }
+        let ids = [
+            #"{"type":"session.text.started","data":{"sessionID":"ses-1","assistantMessageID":"msg-a","ordinal":0}}"#,
+            #"{"type":"session.text.delta","data":{"sessionID":"ses-1","assistantMessageID":"msg-a","ordinal":0,"delta":"Look"}}"#,
+            #"{"type":"session.text.ended","data":{"sessionID":"ses-1","assistantMessageID":"msg-b","ordinal":0,"text":"Done"}}"#,
+            #"{"type":"session.reasoning.started","data":{"sessionID":"ses-1","assistantMessageID":"msg-a","ordinal":0,"state":{}}}"#,
+            #"{"type":"session.reasoning.delta","data":{"sessionID":"ses-1","assistantMessageID":"msg-b","ordinal":1,"delta":"Hm"}}"#,
+        ].map(partID)
+        #expect(ids == ["msg-a:text:0", "msg-a:text:0", "msg-b:text:0", "msg-a:reasoning:0", "msg-b:reasoning:1"])
+    }
+
     @Test func parseEvent_projectsLiveTextDeltaUsingOrdinalPartID() {
         let adapter = EventDomainAdapter()
         let event = adapter.parseEvent(
@@ -523,7 +543,7 @@ struct EventDomainAdapterTests {
         #expect(event?.type == "message.part.delta")
         #expect(event?.sessionID == "ses-1")
         #expect(event?.rawProperties?["messageID"]?.stringValue == "msg-2")
-        #expect(event?.rawProperties?["partID"]?.stringValue == "text-0")
+        #expect(event?.rawProperties?["partID"]?.stringValue == "msg-2:text:0")
         #expect(event?.rawProperties?["delta"]?.stringValue == "Hi")
         #expect(event?.triggersMessageRefresh == true)
     }

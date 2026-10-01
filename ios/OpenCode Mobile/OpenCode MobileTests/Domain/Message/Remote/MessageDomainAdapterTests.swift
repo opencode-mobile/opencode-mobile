@@ -767,12 +767,43 @@ struct MessageDomainAdapterTests {
             return
         }
         #expect(reasoning.text == "Need to greet the user.")
-        #expect(reasoning.id == "msg_asst:thinking:0")
+        #expect(reasoning.id == "msg_asst:reasoning:0")
         guard case let .text(text) = parts.first(where: { if case .text = $0 { true } else { false } }) else {
             Issue.record("expected text part")
             return
         }
-        #expect(text.id == "msg_asst:text:1")
+        #expect(text.id == "msg_asst:text:0")
+    }
+
+    @Test func projectV2IDsTextAndReasoningByPerKindOrdinalLikeLiveEvents() throws {
+        // Live v2 events number each kind from 0 per assistant message, so REST
+        // must too, or a reload would add a second copy of the live text.
+        let dtos = try decoder.decode(
+            [V2SessionMessageDTO].self,
+            from: Data(
+                """
+                [
+                  {
+                    "id":"msg_a",
+                    "type":"assistant",
+                    "content":[
+                      {"type":"reasoning","text":"Plan"},
+                      {"type":"text","text":"Let me look around."},
+                      {"type":"tool","id":"call_1","name":"glob","state":{"status":"completed","input":{}}},
+                      {"type":"reasoning","text":"More"},
+                      {"type":"text","text":"Found it."}
+                    ],
+                    "time":{"created":3}
+                  },
+                  {"id":"msg_b","type":"assistant","content":[{"type":"text","text":"Done."}],"time":{"created":4}}
+                ]
+                """.utf8
+            )
+        )
+
+        let messages = adapter.messages(fromV2: dtos)
+        #expect(messages[0].parts.map(\.testPartID) == ["msg_a:reasoning:0", "msg_a:text:0", "call_1", "msg_a:reasoning:1", "msg_a:text:1"])
+        #expect(messages[1].parts.map(\.testPartID) == ["msg_b:text:0"])
     }
 
     @Test func projectV2AssistantInheritsCarriedAgentAndModel() throws {
@@ -1106,5 +1137,18 @@ struct MessageDomainAdapterTests {
 
     private func decodeMessage(_ json: String) throws -> MessageDTO {
         try decoder.decode(MessageDTO.self, from: Data(json.utf8))
+    }
+}
+
+extension MessagePart {
+    /// Test helper: the part's id regardless of kind.
+    var testPartID: String? {
+        switch self {
+        case .text(let part): part.id
+        case .file(let part): part.id
+        case .tool(let part): part.id
+        case .compaction(let part): part.id
+        case .reasoning(let part): part.id
+        }
     }
 }

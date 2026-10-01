@@ -741,10 +741,7 @@ nonisolated struct EventDomainAdapter: Sendable {
         if let textID = string(in: properties, key: "textID") {
             return textID
         }
-        if let ordinal = string(in: properties, key: "ordinal") {
-            return "text-\(ordinal)"
-        }
-        return nil
+        return ordinalPartID(in: properties, kind: "text")
     }
 
     private func reasoningPartID(in properties: [String: Any]) -> String? {
@@ -754,10 +751,18 @@ nonisolated struct EventDomainAdapter: Sendable {
         if let id = string(in: properties, key: "id") {
             return id
         }
-        if let ordinal = string(in: properties, key: "ordinal") {
-            return "reasoning-\(ordinal)"
+        return ordinalPartID(in: properties, kind: "reasoning")
+    }
+
+    /// v2 text/reasoning events carry no part id, only an `ordinal` that restarts
+    /// at 0 in every assistant message. Scope it to the message so step texts of
+    /// one turn stay distinct, matching `MessageDomainAdapter`'s REST ids.
+    private func ordinalPartID(in properties: [String: Any], kind: String) -> String? {
+        guard let ordinal = string(in: properties, key: "ordinal") else { return nil }
+        guard let messageID = string(in: properties, key: "assistantMessageID") else {
+            return "\(kind)-\(ordinal)"
         }
-        return nil
+        return V2ContentPartID.make(messageID: messageID, kind: kind, ordinal: ordinal)
     }
 
     private func resolvedToolName(_ properties: [String: Any]) -> String {

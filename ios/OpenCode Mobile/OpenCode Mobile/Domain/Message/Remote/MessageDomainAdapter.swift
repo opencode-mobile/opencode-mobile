@@ -388,8 +388,17 @@ nonisolated struct MessageDomainAdapter: Sendable {
     }
 
     private func projectV2Assistant(_ dto: V2SessionMessageDTO, agent: String, model: V2ModelRefDTO?) -> Message {
-        let parts = dto.content.enumerated().compactMap { index, content in
-            v2AssistantPart(content, fallbackID: "\(dto.id):\(content.type):\(index)")
+        var ordinals: [String: Int] = [:]
+        let parts = dto.content.enumerated().compactMap { index, content -> MessagePart? in
+            let fallbackID: String
+            if let kind = V2ContentPartID.kind(contentType: content.type) {
+                let ordinal = ordinals[kind, default: 0]
+                ordinals[kind] = ordinal + 1
+                fallbackID = V2ContentPartID.make(messageID: dto.id, kind: kind, ordinal: String(ordinal))
+            } else {
+                fallbackID = "\(dto.id):\(content.type):\(index)"
+            }
+            return v2AssistantPart(content, fallbackID: fallbackID)
         }
         return messageFromV2(
             id: dto.id,
@@ -728,4 +737,22 @@ nonisolated struct MessageDomainAdapter: Sendable {
 
 private extension String {
     var nilIfEmpty: String? { isEmpty ? nil : self }
+}
+
+/// Part ids for v2 assistant text and reasoning, which the server stores without
+/// ids. Live events carry a per-message `ordinal` per kind; REST content keeps the
+/// same per-kind order, so both sides derive `<messageID>:<kind>:<ordinal>` and a
+/// reload replaces live parts in place.
+nonisolated enum V2ContentPartID {
+    static func make(messageID: String, kind: String, ordinal: String) -> String {
+        "\(messageID):\(kind):\(ordinal)"
+    }
+
+    static func kind(contentType: String) -> String? {
+        switch contentType {
+        case "text": "text"
+        case "reasoning", "thinking": "reasoning"
+        default: nil
+        }
+    }
 }

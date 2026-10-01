@@ -2,6 +2,7 @@ package dev.opencode.mobile.domain.event
 
 import dev.opencode.mobile.domain.message.AttachmentDataUrl
 import dev.opencode.mobile.domain.message.ToolPartIdentity
+import dev.opencode.mobile.domain.message.V2ContentPartId
 import dev.opencode.mobile.domain.session.SessionActivity
 import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.domain.session.toSessionActivity
@@ -765,17 +766,25 @@ class EventDomainAdapter(
 
     private fun JsonObject.textPartId(): String? {
         string("textID")?.let { return it }
-        val ordinal = this["ordinal"]?.jsonPrimitive ?: return null
-        val value = ordinal.intOrNull?.toString() ?: ordinal.contentOrNull ?: return null
-        return "text-$value"
+        return ordinalPartId("text")
     }
 
     private fun JsonObject.reasoningPartId(): String? {
         string("reasoningID")?.let { return it }
         string("id")?.let { return it }
+        return ordinalPartId("reasoning")
+    }
+
+    /**
+     * v2 text/reasoning events carry no part id, only an `ordinal` that restarts
+     * at 0 in every assistant message. Scope it to the message so step texts of
+     * one turn stay distinct, matching [MessageDomainAdapter]'s REST ids.
+     */
+    private fun JsonObject.ordinalPartId(kind: String): String? {
         val ordinal = this["ordinal"]?.jsonPrimitive ?: return null
         val value = ordinal.intOrNull?.toString() ?: ordinal.contentOrNull ?: return null
-        return "reasoning-$value"
+        val messageId = string("assistantMessageID") ?: return "$kind-$value"
+        return V2ContentPartId.of(messageId, kind, value)
     }
 
     private fun JsonObject.string(key: String): String? = this[key]?.jsonPrimitive?.contentOrNull

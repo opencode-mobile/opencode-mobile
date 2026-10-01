@@ -968,8 +968,46 @@ class MessageDomainAdapterTest {
         val parts = adapter.projectV2(dtos).single().parts
         val reasoning = parts.filterIsInstance<MessagePart.Reasoning>().single()
         assertEquals("Need to greet the user.", reasoning.text)
-        assertEquals("msg_asst:thinking:0", reasoning.id)
-        assertEquals("msg_asst:text:1", parts.filterIsInstance<MessagePart.Text>().single().id)
+        assertEquals("msg_asst:reasoning:0", reasoning.id)
+        assertEquals("msg_asst:text:0", parts.filterIsInstance<MessagePart.Text>().single().id)
+    }
+
+    @Test
+    fun projectV2_idsTextAndReasoningByPerKindOrdinalLikeLiveEvents() {
+        // Live v2 events number each kind from 0 per assistant message, so REST
+        // must too, or a reload would add a second copy of the live text.
+        val dtos =
+            json.decodeFromString<List<dev.opencode.mobile.data.remote.dto.V2SessionMessageDto>>(
+                """
+                [
+                  {
+                    "id":"msg_a",
+                    "type":"assistant",
+                    "content":[
+                      {"type":"reasoning","text":"Plan"},
+                      {"type":"text","text":"Let me look around."},
+                      {"type":"tool","id":"call_1","name":"glob","state":{"status":"completed","input":{}}},
+                      {"type":"reasoning","text":"More"},
+                      {"type":"text","text":"Found it."}
+                    ],
+                    "time":{"created":3}
+                  },
+                  {
+                    "id":"msg_b",
+                    "type":"assistant",
+                    "content":[{"type":"text","text":"Done."}],
+                    "time":{"created":4}
+                  }
+                ]
+                """.trimIndent(),
+            )
+
+        val messages = adapter.projectV2(dtos)
+        assertEquals(
+            listOf("msg_a:reasoning:0", "msg_a:text:0", "call_1", "msg_a:reasoning:1", "msg_a:text:1"),
+            messages[0].parts.map { it.partId() },
+        )
+        assertEquals(listOf("msg_b:text:0"), messages[1].parts.map { it.partId() })
     }
 
     @Test
@@ -1306,3 +1344,12 @@ class MessageDomainAdapterTest {
         assertEquals(messages, adapter.mergeInbox(messages, emptyList()))
     }
 }
+
+private fun MessagePart.partId(): String? =
+    when (this) {
+        is MessagePart.Text -> id
+        is MessagePart.Tool -> id
+        is MessagePart.File -> id
+        is MessagePart.Compaction -> id
+        is MessagePart.Reasoning -> id
+    }

@@ -3,6 +3,7 @@ package dev.opencode.mobile.domain.event
 import dev.opencode.mobile.domain.session.SessionActivity
 import dev.opencode.mobile.domain.session.SessionStatus
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
@@ -872,6 +873,39 @@ class EventDomainAdapterTest {
     }
 
     @Test
+    fun parseEvents_scopesV2OrdinalPartIdsToTheirAssistantMessage() {
+        // Captured v2 shape: each step's first text and reasoning are ordinal 0
+        // and carry no part id, so the id must include the assistant message.
+        fun partId(line: String): String? =
+            adapter
+                .parseEvents(line)
+                .firstNotNullOfOrNull { event ->
+                    (event.rawProperties?.get("part") as? JsonObject)
+                        ?.get("id")
+                        ?.jsonPrimitive
+                        ?.content
+                        ?: event.rawProperties
+                            ?.get("partID")
+                            ?.jsonPrimitive
+                            ?.content
+                }
+
+        val ids =
+            listOf(
+                """{"type":"session.text.started","data":{"sessionID":"ses-1","assistantMessageID":"msg-a","ordinal":0}}""",
+                """{"type":"session.text.delta","data":{"sessionID":"ses-1","assistantMessageID":"msg-a","ordinal":0,"delta":"Look"}}""",
+                """{"type":"session.text.ended","data":{"sessionID":"ses-1","assistantMessageID":"msg-b","ordinal":0,"text":"Done"}}""",
+                """{"type":"session.reasoning.started","data":{"sessionID":"ses-1","assistantMessageID":"msg-a","ordinal":0,"state":{}}}""",
+                """{"type":"session.reasoning.delta","data":{"sessionID":"ses-1","assistantMessageID":"msg-b","ordinal":1,"delta":"Hm"}}""",
+            ).map(::partId)
+
+        assertEquals(
+            listOf("msg-a:text:0", "msg-a:text:0", "msg-b:text:0", "msg-a:reasoning:0", "msg-b:reasoning:1"),
+            ids,
+        )
+    }
+
+    @Test
     fun parseEvent_projectsLiveTextDeltaUsingOrdinalPartId() {
         val event =
             adapter.parseEvent(
@@ -889,7 +923,7 @@ class EventDomainAdapterTest {
                 ?.content,
         )
         assertEquals(
-            "text-0",
+            "msg-2:text:0",
             event
                 ?.rawProperties
                 ?.get("partID")
@@ -1193,11 +1227,22 @@ class EventDomainAdapterTest {
                 """{"type":"session.tool.progress","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","id":"prt-1","metadata":{"sessionID":"child-1","status":"running"}}}""",
             )
 
-        val state = event?.rawProperties?.get("part")?.jsonObject?.get("state")?.jsonObject
+        val state =
+            event
+                ?.rawProperties
+                ?.get("part")
+                ?.jsonObject
+                ?.get("state")
+                ?.jsonObject
         assertEquals("running", state?.get("status")?.jsonPrimitive?.content)
         assertEquals(
             "child-1",
-            state?.get("metadata")?.jsonObject?.get("sessionID")?.jsonPrimitive?.content,
+            state
+                ?.get("metadata")
+                ?.jsonObject
+                ?.get("sessionID")
+                ?.jsonPrimitive
+                ?.content,
         )
     }
 
@@ -1209,7 +1254,14 @@ class EventDomainAdapterTest {
             )
 
         val metadata =
-            event?.rawProperties?.get("part")?.jsonObject?.get("state")?.jsonObject?.get("metadata")?.jsonObject
+            event
+                ?.rawProperties
+                ?.get("part")
+                ?.jsonObject
+                ?.get("state")
+                ?.jsonObject
+                ?.get("metadata")
+                ?.jsonObject
         assertEquals("child-1", metadata?.get("sessionID")?.jsonPrimitive?.content)
         assertEquals("2", metadata?.get("count")?.jsonPrimitive?.content)
     }

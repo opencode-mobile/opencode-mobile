@@ -481,9 +481,16 @@ class MessageDomainAdapter {
         agent: String,
         model: V2ModelRefDto?,
     ): Message {
+        val ordinals = mutableMapOf<String, Int>()
         val parts =
             dto.content.mapIndexedNotNull { index, content ->
-                toV2AssistantPart(content, fallbackId = "${dto.id}:${content.type}:$index")
+                val fallbackId =
+                    V2ContentPartId.kind(content.type)?.let { kind ->
+                        val ordinal = ordinals.getOrDefault(kind, 0)
+                        ordinals[kind] = ordinal + 1
+                        V2ContentPartId.of(dto.id, kind, ordinal.toString())
+                    } ?: "${dto.id}:${content.type}:$index"
+                toV2AssistantPart(content, fallbackId = fallbackId)
             }
         val errorText =
             dto.error
@@ -819,4 +826,25 @@ class MessageDomainAdapter {
         }
         return (current as? JsonPrimitive)?.jsonPrimitive?.content
     }
+}
+
+/**
+ * Part ids for v2 assistant text and reasoning, which the server stores without
+ * ids. Live events carry a per-message `ordinal` per kind; REST content keeps the
+ * same per-kind order, so both sides derive `<messageID>:<kind>:<ordinal>` and a
+ * reload replaces live parts in place.
+ */
+internal object V2ContentPartId {
+    fun of(
+        messageId: String,
+        kind: String,
+        ordinal: String,
+    ): String = "$messageId:$kind:$ordinal"
+
+    fun kind(contentType: String): String? =
+        when (contentType) {
+            "text" -> "text"
+            "reasoning", "thinking" -> "reasoning"
+            else -> null
+        }
 }
