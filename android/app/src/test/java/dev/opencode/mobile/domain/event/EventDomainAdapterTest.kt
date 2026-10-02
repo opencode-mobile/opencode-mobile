@@ -512,6 +512,34 @@ class EventDomainAdapterTest {
     }
 
     @Test
+    fun parseEvents_marksInboxSyntheticItemTextAsSynthetic() {
+        val events =
+            adapter.parseEvents(
+                """{"type":"session.inbox.enqueued","data":{"inboxID":"msg-3","sessionID":"ses-1","item":{"type":"synthetic","payload":{"text":"<system-reminder>Plan mode</system-reminder>"},"delivery":"steer"}}}""",
+            )
+
+        assertEquals(listOf("message.updated", "message.part.updated"), events.map { it.type })
+        val part = events[1].rawProperties?.get("part")?.jsonObject
+        assertEquals("true", part?.get("synthetic")?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun parseEvents_inboxUserItemTextIsNotSynthetic() {
+        val events =
+            adapter.parseEvents(
+                """{"type":"session.inbox.enqueued","data":{"inboxID":"msg-2","sessionID":"ses-1","item":{"type":"user","payload":{"text":"Hello"},"delivery":"steer"}}}""",
+            )
+
+        assertNull(
+            events[1]
+                .rawProperties
+                ?.get("part")
+                ?.jsonObject
+                ?.get("synthetic"),
+        )
+    }
+
+    @Test
     fun parseEvents_projectsInboxEnqueuedItemPayloadIntoUserText() {
         val events =
             adapter.parseEvents(

@@ -382,7 +382,12 @@ class EventDomainAdapter(
         val messageId = userMessageId(properties)
         val parts = mutableListOf<OpencodeEvent>()
         val text = prompt?.string("text") ?: properties.string("text")
-        text?.takeIf { it.isNotBlank() }?.let { parts += userTextPartUpdated(sessionId, messageId, it) }
+        // v2 inbox `synthetic` items (e.g. Plan mode's system-reminder) are server-injected
+        // context, not something the user typed: keep the part but mark it hidden.
+        val synthetic = (properties["item"] as? JsonObject)?.string("type") == "synthetic"
+        text?.takeIf { it.isNotBlank() }?.let {
+            parts += userTextPartUpdated(sessionId, messageId, it, synthetic = synthetic)
+        }
         if (prompt == null) return parts
         val files = prompt["files"] as? JsonArray ?: return parts
         files.forEachIndexed { index, element ->
@@ -396,6 +401,7 @@ class EventDomainAdapter(
         sessionId: String?,
         messageId: String?,
         text: String,
+        synthetic: Boolean = false,
     ): OpencodeEvent {
         val part =
             buildJsonObject {
@@ -404,6 +410,7 @@ class EventDomainAdapter(
                 messageId?.let { put("messageID", it) }
                 put("type", "text")
                 put("text", text)
+                if (synthetic) put("synthetic", true)
             }
         return event("message.part.updated", buildJsonObject { put("part", part) })
     }

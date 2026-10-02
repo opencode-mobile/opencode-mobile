@@ -342,10 +342,15 @@ nonisolated struct EventDomainAdapter: Sendable {
         let sessionID = sessionID(from: properties)
         let messageID = userMessageID(in: properties)
         var parts: [OpencodeEvent] = []
+        // v2 inbox `synthetic` items (e.g. Plan mode's system-reminder) are server-injected
+        // context, not something the user typed: keep the part but mark it hidden.
+        let isSynthetic = (properties["item"] as? [String: Any]).flatMap { string(in: $0, key: "type") } == "synthetic"
         if let text = prompt.flatMap({ string(in: $0, key: "text") }) ?? string(in: properties, key: "text"),
            !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         {
-            parts.append(userTextPartUpdated(sessionID: sessionID, messageID: messageID, text: text))
+            parts.append(
+                userTextPartUpdated(sessionID: sessionID, messageID: messageID, text: text, isSynthetic: isSynthetic)
+            )
         }
         guard let prompt else { return parts }
         let files = prompt["files"] as? [Any] ?? []
@@ -356,8 +361,16 @@ nonisolated struct EventDomainAdapter: Sendable {
         return parts
     }
 
-    private func userTextPartUpdated(sessionID: String?, messageID: String?, text: String) -> OpencodeEvent {
+    private func userTextPartUpdated(
+        sessionID: String?,
+        messageID: String?,
+        text: String,
+        isSynthetic: Bool = false
+    ) -> OpencodeEvent {
         var part: [String: Any] = ["type": "text", "text": text]
+        if isSynthetic {
+            part["synthetic"] = true
+        }
         if let messageID {
             part["id"] = "\(messageID):text:0"
             part["messageID"] = messageID
