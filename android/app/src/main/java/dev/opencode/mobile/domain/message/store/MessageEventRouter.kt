@@ -1,5 +1,6 @@
 package dev.opencode.mobile.domain.message
 
+import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.OpencodeEvent
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
@@ -20,6 +21,7 @@ object MessageEventRouter {
             "message.part.removed",
             "session.revert.committed",
             "session.idle",
+            EventDomainAdapter.MESSAGE_CONTEXT_EVENT,
         )
 
     fun shouldStageForMessageSync(event: OpencodeEvent): Boolean = event.type in messageIntakeTypes
@@ -34,6 +36,7 @@ object MessageEventRouter {
             "message.removed",
             "message.part.removed",
             "session.revert.committed",
+            EventDomainAdapter.MESSAGE_CONTEXT_EVENT,
         )
 
     /**

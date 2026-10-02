@@ -272,12 +272,13 @@ class EventDomainAdapter(
             "session.text.ended",
             -> listOf(textPartUpdated(properties))
             "session.next.moved",
+            "session.moved",
+            -> listOf(event("session.updated", properties))
             "session.next.agent.switched",
             "session.next.model.switched",
-            "session.moved",
             "session.agent.selected",
             "session.model.selected",
-            -> listOf(event("session.updated", properties))
+            -> listOfNotNull(event("session.updated", properties), messageContext(properties))
             "session.renamed" -> listOf(renamedToUpdated(properties))
             "session.forked" -> listOf(forkedToCreated(properties))
             "session.usage.updated",
@@ -464,9 +465,27 @@ class EventDomainAdapter(
 
     private fun stepStarted(properties: JsonObject): List<OpencodeEvent> =
         listOfNotNull(
-            assistantMessageUpdated(properties, stampCreated = true),
+            assistantMessageUpdated(properties, stampCreated = true, withAgentAndModel = true),
             statusEvent(properties, "busy"),
         )
+
+    /**
+     * A v2 agent or model switch, for the message store: prompts delivered after it are
+     * recorded with it (`message.context` is client-only).
+     */
+    private fun messageContext(properties: JsonObject): OpencodeEvent? {
+        val agent = properties.string("agent")
+        val model = properties["model"] as? JsonObject
+        if (agent == null && model == null) return null
+        val context =
+            buildJsonObject {
+                sessionIdFromProperties(properties)?.let { put("sessionID", it) }
+                agent?.let { put("agent", it) }
+                model?.let { put("model", it) }
+                properties.long("created")?.let { put("created", it) }
+            }
+        return event(MESSAGE_CONTEXT_EVENT, context)
+    }
 
     /** An aborted step projects as `finish: "aborted"` so the reply keeps an Interrupted note. */
     private fun failedStepFinish(properties: JsonObject): String? {
@@ -483,6 +502,7 @@ class EventDomainAdapter(
         properties: JsonObject,
         stampCreated: Boolean = false,
         finish: String? = null,
+        withAgentAndModel: Boolean = false,
     ): OpencodeEvent? {
         val sessionId = sessionIdFromProperties(properties)
         val assistantId = properties.string("assistantMessageID") ?: properties.string("messageID") ?: return null
@@ -495,6 +515,18 @@ class EventDomainAdapter(
                 if (stampCreated) {
                     properties.long("created")?.let { created ->
                         put("time", buildJsonObject { put("created", created) })
+                    }
+                }
+                // `step.started` carries the agent and model the step runs with.
+                if (withAgentAndModel) {
+                    properties.string("agent")?.let { agent ->
+                        put("agent", agent)
+                        put("mode", agent)
+                    }
+                    (properties["model"] as? JsonObject)?.let { model ->
+                        model.string("id")?.let { put("modelID", it) }
+                        model.string("providerID")?.let { put("providerID", it) }
+                        model.string("variant")?.let { put("variant", it) }
                     }
                 }
             }
@@ -1013,6 +1045,9 @@ class EventDomainAdapter(
     }
 
     companion object {
+        /** Client-only projection of a v2 agent/model switch for the message store. */
+        const val MESSAGE_CONTEXT_EVENT = "message.context"
+
         private val WRAPPER_KEYS =
             setOf(
                 "payload",

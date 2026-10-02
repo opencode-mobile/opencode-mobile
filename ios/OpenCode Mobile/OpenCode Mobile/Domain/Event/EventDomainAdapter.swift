@@ -234,9 +234,11 @@ nonisolated struct EventDomainAdapter: Sendable {
             [textDelta(properties)]
         case "session.next.text.ended", "session.text.ended":
             [textPartUpdated(properties)]
-        case "session.next.moved", "session.next.agent.switched", "session.next.model.switched",
-             "session.moved", "session.agent.selected", "session.model.selected":
+        case "session.next.moved", "session.moved":
             [event(type: "session.updated", properties: properties)]
+        case "session.next.agent.switched", "session.next.model.switched",
+             "session.agent.selected", "session.model.selected":
+            [event(type: "session.updated", properties: properties), messageContext(properties)].compactMap { $0 }
         case "session.renamed":
             [renamedToUpdated(properties)]
         case "session.forked":
@@ -449,9 +451,23 @@ nonisolated struct EventDomainAdapter: Sendable {
 
     private func stepStarted(_ properties: [String: Any]) -> [OpencodeEvent] {
         [
-            assistantMessageUpdated(properties, stampCreated: true),
+            assistantMessageUpdated(properties, stampCreated: true, withAgentAndModel: true),
             statusEvent(properties, statusType: "busy"),
         ].compactMap { $0 }
+    }
+
+    /// A v2 agent or model switch, for the message store: prompts delivered after it are
+    /// recorded with it (`message.context` is client-only).
+    private func messageContext(_ properties: [String: Any]) -> OpencodeEvent? {
+        let agent = string(in: properties, key: "agent")
+        let model = properties["model"] as? [String: Any]
+        guard agent != nil || model != nil else { return nil }
+        var context: [String: Any] = [:]
+        if let sessionID = sessionID(from: properties) { context["sessionID"] = sessionID }
+        if let agent { context["agent"] = agent }
+        if let model { context["model"] = model }
+        if let created = int64(in: properties, key: "created") { context["created"] = created }
+        return event(type: Self.messageContextEvent, properties: context)
     }
 
     /// v2 has no assistant `message.updated`; synthesize one. Only `step.started`
@@ -466,7 +482,8 @@ nonisolated struct EventDomainAdapter: Sendable {
     private func assistantMessageUpdated(
         _ properties: [String: Any],
         stampCreated: Bool = false,
-        finish: String? = nil
+        finish: String? = nil,
+        withAgentAndModel: Bool = false
     ) -> OpencodeEvent? {
         guard let assistantID = string(in: properties, key: "assistantMessageID") ?? string(in: properties, key: "messageID") else {
             return nil
@@ -478,6 +495,18 @@ nonisolated struct EventDomainAdapter: Sendable {
         if let finish { info["finish"] = finish }
         if stampCreated, let created = int64(in: properties, key: "created") {
             info["time"] = ["created": created]
+        }
+        // `step.started` carries the agent and model the step runs with.
+        if withAgentAndModel {
+            if let agent = string(in: properties, key: "agent") {
+                info["agent"] = agent
+                info["mode"] = agent
+            }
+            if let model = properties["model"] as? [String: Any] {
+                if let id = string(in: model, key: "id") { info["modelID"] = id }
+                if let providerID = string(in: model, key: "providerID") { info["providerID"] = providerID }
+                if let variant = string(in: model, key: "variant") { info["variant"] = variant }
+            }
         }
         return event(type: "message.updated", properties: ["info": info])
     }
@@ -973,6 +1002,9 @@ nonisolated struct EventDomainAdapter: Sendable {
         guard let title = info?["title"]?.stringValue else { return nil }
         return SessionTitleUpdate(sessionID: sessionID, title: title)
     }
+
+    /// Client-only projection of a v2 agent/model switch for the message store.
+    static let messageContextEvent = "message.context"
 
     private static let wrapperKeys: Set<String> = [
         "payload",

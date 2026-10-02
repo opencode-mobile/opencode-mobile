@@ -174,6 +174,67 @@ struct V2LiveTurnTimelineTests {
         #expect(queued.variant == "high")
     }
 
+    @Test func liveV2Prompts_getTheAgentAndModelRestRecords() throws {
+        // Shaped like the B2-5 sim run: a server-injected prompt, a steer from this app (which
+        // switches agent and model first), then more injected prompts and steers.
+        apply(prompt("u1", "Say hello.", at: 1_000))
+        apply(step("a1", at: 1_050, model: Self.scripted))
+        apply(agentSelected("build", at: 1_200))
+        apply(modelSelected(Self.scriptedHigh, at: 1_201))
+        apply(enqueued("u2", "Steer from Android", at: 1_202))
+        apply(text("a1", "Hello!", at: 1_300))
+        apply(stepEnded("a1", finish: "stop", at: 1_310))
+        apply(delivered("u2", at: 1_320))
+        apply(step("a2", at: 1_330, model: Self.scriptedHigh))
+        apply(text("a2", "Steered.", at: 1_340))
+        apply(stepEnded("a2", finish: "stop", at: 1_350))
+        apply(idle(at: 1_360))
+        apply(prompt("u3", "Second hello.", at: 2_000))
+        apply(agentSelected("build", at: 2_020))
+        apply(step("a3", at: 2_030, model: Self.scriptedHigh))
+        apply(text("a3", "Hello again!", at: 2_040))
+        apply(stepEnded("a3", finish: "stop", at: 2_050))
+        apply(idle(at: 2_060))
+
+        let live = store.messages(sessionID: Self.session).filter { $0.role == .user }
+        let rest = try restMessages(
+            """
+            [
+              {"id":"u1","type":"user","text":"Say hello.","time":{"created":1000}},
+              {"id":"s1","type":"agent-switched","agent":"build","time":{"created":1200}},
+              {"id":"s2","type":"model-switched","model":\(Self.scriptedHigh),"time":{"created":1201}},
+              {"id":"a1","type":"assistant","agent":"build","model":\(Self.scripted),
+               "content":[{"type":"text","text":"Hello!"}],"time":{"created":1050}},
+              {"id":"u2","type":"user","text":"Steer from Android","time":{"created":1320}},
+              {"id":"a2","type":"assistant","agent":"build","model":\(Self.scriptedHigh),
+               "content":[{"type":"text","text":"Steered."}],"time":{"created":1330}},
+              {"id":"u3","type":"user","text":"Second hello.","time":{"created":2000}},
+              {"id":"s3","type":"agent-switched","agent":"build","time":{"created":2020}},
+              {"id":"a3","type":"assistant","agent":"build","model":\(Self.scriptedHigh),
+               "content":[{"type":"text","text":"Hello again!"}],"time":{"created":2030}}
+            ]
+            """
+        ).filter { $0.role == .user }
+
+        #expect(live.map(\.id) == ["u1", "u2", "u3"])
+        #expect(live.map(metaLine) == rest.map(metaLine))
+        #expect(live.map(metaLine) == [nil, "build|scripted|nil", "build|scripted|high"])
+    }
+
+    @Test func switchBeforeAPrompt_appliesToThatPrompt() throws {
+        apply(prompt("u1", "First", at: 1_000))
+        apply(step("a1", at: 1_050, model: Self.scriptedHigh))
+        apply(text("a1", "Reply.", at: 1_060))
+        apply(stepEnded("a1", finish: "stop", at: 1_070))
+        apply(idle(at: 1_080))
+        apply(agentSelected("plan", at: 2_000))
+        apply(modelSelected(#"{"id":"scripted","providerID":"sim","variant":"low"}"#, at: 2_001))
+        apply(prompt("u2", "Second", at: 2_010))
+
+        let second = try #require(store.messages(sessionID: Self.session).first { $0.id == "u2" })
+        #expect(metaLine(second) == "plan|scripted|low")
+    }
+
     @Test func stoppedTool_isInterruptedNotFailed_liveAndAfterReload() throws {
         apply(prompt("u1", "Start the deployment.", at: 1_000))
         apply(step("a1", at: 1_100))
@@ -481,12 +542,28 @@ struct V2LiveTurnTimelineTests {
         [envelope("session.inbox.delivered", at, #""inboxID":"\#(id)""#)]
     }
 
-    private func step(_ id: String, at: Int64) -> [String] {
+    private static let scripted = #"{"id":"scripted","providerID":"sim"}"#
+    private static let scriptedHigh = #"{"id":"scripted","providerID":"sim","variant":"high"}"#
+
+    private func step(_ id: String, at: Int64, model: String = #"{"id":"m","providerID":"p"}"#) -> [String] {
         [envelope(
             "session.step.started",
             at,
-            #""agent":"build","model":{"id":"m","providerID":"p"},"assistantMessageID":"\#(id)""#
+            #""agent":"build","model":\#(model),"assistantMessageID":"\#(id)""#
         )]
+    }
+
+    private func agentSelected(_ agent: String, at: Int64) -> [String] {
+        [envelope("session.agent.selected", at, #""agent":"\#(agent)""#)]
+    }
+
+    private func modelSelected(_ model: String, at: Int64) -> [String] {
+        [envelope("session.model.selected", at, #""model":\#(model)"#)]
+    }
+
+    private func metaLine(_ message: Message) -> String? {
+        guard message.mode != nil || message.model != nil else { return nil }
+        return "\(message.mode ?? "nil")|\(message.model ?? "nil")|\(message.variant ?? "nil")"
     }
 
     private func textStarted(_ id: String, ordinal: Int, at: Int64) -> [String] {
@@ -557,6 +634,9 @@ struct V2LiveTurnTimelineTests {
                 _ = store.apply(sessionID: Self.session, patch: .removedFrom(messageID: messageID))
             case "session.idle":
                 store.finishStreamingText(sessionID: Self.session)
+            case EventDomainAdapter.messageContextEvent:
+                guard let patch = MessageContextPatch.from(properties) else { continue }
+                _ = store.apply(sessionID: Self.session, patch: patch)
             default:
                 continue
             }

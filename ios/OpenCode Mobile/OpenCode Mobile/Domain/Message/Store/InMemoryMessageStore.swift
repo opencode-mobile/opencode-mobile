@@ -20,6 +20,18 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
     /// replay deltas after a snapshot, keyed like `deltaChunks`.
     private var absorbedReplayChars: [String: [String: Int]] = [:]
 
+    /// Running agent/model per session, in arrival order (see `SessionRunningContext`).
+    private var runningContexts: [String: SessionRunningContext] = [:]
+
+    /// The running agent/model each live v2 prompt was delivered with.
+    private var contextStamps: [String: [String: SessionRunningContext]] = [:]
+
+    /// Messages whose agent/model already advanced the running context.
+    private var contextContributors: [String: Set<String>] = [:]
+
+    private static let agentKeys = ["agent", "mode"]
+    private static let modelKeys = ["model", "modelID", "providerID", "variant"]
+
     func replaceAll(sessionID: String, messages: [Message]) {
         lock.lock()
         defer { lock.unlock() }
@@ -38,6 +50,7 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
         let unique = collapsingDuplicateIDs(messages)
         messageOrder[sessionID] = unique.map(\.id)
         baseMessages[sessionID] = unique
+        reseedRunningContext(sessionID: sessionID, messages: unique)
         seedPartIdentities(sessionID: sessionID, messages: unique, previousStarts: previousStarts)
         bumpRevision(sessionID: sessionID)
     }
@@ -59,6 +72,8 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
                 return applyMessagesRemovedFrom(sessionID: sessionID, messageID: messageID)
             case .partRemoved(let messageID, let partID):
                 return applyPartRemoved(sessionID: sessionID, messageID: messageID, partID: partID)
+            case .contextSwitched(let agent, let model, let atEpochMs):
+                return applyContextSwitched(sessionID: sessionID, agent: agent, model: model, atEpochMs: atEpochMs)
             }
         }() else {
             return .noChange
@@ -107,8 +122,19 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
                 parts: parts,
                 orders: orders
             )
-            let message = adapter.message(info: info, domainParts: sortedParts)
-                .withMetadata(from: baseByID[messageID])
+            let base = baseByID[messageID]
+            let live = adapter.message(info: info, domainParts: sortedParts)
+            let message: Message
+            // A delivered REST copy is the authority; a waiting inbox copy only guessed.
+            if let stamp = contextStamps[sessionID]?[messageID] {
+                if let base, !base.isWaitingForPickup {
+                    message = stamp.stamp(live.withMetadata(from: base))
+                } else {
+                    message = stamp.stamp(live).withMetadata(from: base)
+                }
+            } else {
+                message = live.withMetadata(from: base)
+            }
             return hasRenderableContent(message) ? message : baseByID[messageID]
         }
         guard let baseMessage = baseByID[messageID] else { return nil }
@@ -274,6 +300,9 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
         revisions.removeAll()
         deltaChunks.removeAll()
         absorbedReplayChars.removeAll()
+        runningContexts.removeAll()
+        contextStamps.removeAll()
+        contextContributors.removeAll()
     }
 
     private func applyInfoUpdated(sessionID: String, infoDict: [String: AnySendable]) -> SessionChangeSet? {
@@ -302,6 +331,13 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
             // v2 infos are partial projections: keep the times an update omits.
             if infoDict["time"] == nil, let time = prior["time"] {
                 merged["time"] = time
+            }
+            // v2 step infos after `step.started` omit the agent and model it carried.
+            if Self.agentKeys.allSatisfy({ infoDict[$0] == nil }) {
+                for key in Self.agentKeys { if let value = prior[key] { merged[key] = value } }
+            }
+            if Self.modelKeys.allSatisfy({ infoDict[$0] == nil }) {
+                for key in Self.modelKeys { if let value = prior[key] { merged[key] = value } }
             }
         } else if infoDict["time"] == nil, let time = baseTime(sessionID: sessionID, messageID: messageID) {
             // REST-seeded rows have no cached info; carry their times into the first live info.
@@ -334,6 +370,16 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
             messageOrder[sessionID]?.removeAll { $0 == messageID }
             insertMessage(sessionID: sessionID, messageID: messageID, role: info.role)
         }
+        if isUserInfo {
+            observeUserContext(
+                sessionID: sessionID,
+                messageID: messageID,
+                info: merged,
+                deliveredNow: (inserted && !waiting) || delivered
+            )
+        } else {
+            contributeAssistantContext(sessionID: sessionID, messageID: messageID)
+        }
         return SessionChangeSet(
             sessionRevision: 0,
             insertedMessageIDs: inserted ? [messageID] : [],
@@ -341,6 +387,61 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
             pickupStateChangedIDs: pickupChanged ? [messageID] : [],
             structuralChange: inserted || delivered
         )
+    }
+
+    /// A user info that has its own agent/model advances the running value (v1, REST); a v2
+    /// prompt that has neither is stamped with the running value when it is delivered.
+    private func observeUserContext(
+        sessionID: String,
+        messageID: String,
+        info infoDict: [String: AnySendable],
+        deliveredNow: Bool
+    ) {
+        guard let info = decodeInfo(from: infoDict) else { return }
+        let message = adapter.message(info: info, domainParts: [])
+        let context = runningContexts[sessionID] ?? SessionRunningContext()
+        if message.mode != nil || message.model != nil {
+            runningContexts[sessionID] = context.advanced(by: message)
+            contextContributors[sessionID, default: []].insert(messageID)
+        }
+        if deliveredNow, message.mode == nil || message.model == nil {
+            contextStamps[sessionID, default: [:]][messageID] = context
+        }
+    }
+
+    /// A live assistant joins the timeline when its content starts (that is where REST
+    /// places it), so its agent/model advances the running value at its first part.
+    private func contributeAssistantContext(sessionID: String, messageID: String) {
+        guard contextContributors[sessionID]?.contains(messageID) != true,
+              partsCache[sessionID]?[messageID]?.isEmpty == false,
+              let infoDict = infoCache[sessionID]?[messageID]?.dictionaryValue,
+              let info = decodeInfo(from: infoDict),
+              info.role.lowercased() == "assistant"
+        else { return }
+        let message = adapter.message(info: info, domainParts: [])
+        guard message.mode != nil || message.model != nil else { return }
+        contextContributors[sessionID, default: []].insert(messageID)
+        runningContexts[sessionID] = (runningContexts[sessionID] ?? SessionRunningContext()).advanced(by: message)
+    }
+
+    private func applyContextSwitched(
+        sessionID: String,
+        agent: String?,
+        model: MessageModelContext?,
+        atEpochMs: Int64?
+    ) -> SessionChangeSet? {
+        guard agent != nil || model != nil else { return nil }
+        runningContexts[sessionID] = (runningContexts[sessionID] ?? SessionRunningContext())
+            .switched(agent: agent, model: model, atEpochMs: atEpochMs)
+        // Nothing on screen changes until a prompt is delivered.
+        return nil
+    }
+
+    private func reseedRunningContext(sessionID: String, messages: [Message]) {
+        runningContexts[sessionID] = (runningContexts[sessionID] ?? SessionRunningContext()).reseeded(messages)
+        let ids = Set(messages.map(\.id))
+        contextContributors[sessionID] = ids
+        contextStamps[sessionID] = contextStamps[sessionID]?.filter { ids.contains($0.key) }
     }
 
     private func baseTime(sessionID: String, messageID: String) -> AnySendable? {
@@ -456,6 +557,7 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
         if delta == nil, replacesStreamSnapshot(resolvedPart) {
             clearChunks(sessionID: sessionID, messageID: messageID, partID: partID)
         }
+        if insertedPart { contributeAssistantContext(sessionID: sessionID, messageID: messageID) }
         let previousStreaming = isStreamingPart(previous)
         let resolvedStreaming = isStreamingPart(stored)
         let streamingChanged = previousStreaming != resolvedStreaming
@@ -926,6 +1028,7 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
         let uniqueIDs = (prepended.map(\.id) + order).filter { seen.insert($0).inserted }
         messageOrder[sessionID] = uniqueIDs
         baseMessages[sessionID] = uniqueIDs.compactMap { byID[$0] }
+        contextContributors[sessionID, default: []].formUnion(prepended.map(\.id))
         seedPartIdentities(sessionID: sessionID, messages: prepended, previousStarts: previousStarts)
         bumpRevision(sessionID: sessionID)
     }
@@ -984,6 +1087,7 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
         let unique = collapsingDuplicateIDs(messages)
         messageOrder[sessionID] = unique.map(\.id)
         baseMessages[sessionID] = unique
+        reseedRunningContext(sessionID: sessionID, messages: unique)
         deltaChunks[sessionID] = [:]
         absorbedReplayChars[sessionID] = [:]
         bumpRevision(sessionID: sessionID)

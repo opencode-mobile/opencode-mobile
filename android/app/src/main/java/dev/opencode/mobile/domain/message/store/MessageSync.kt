@@ -4,6 +4,7 @@ import android.os.Looper
 import android.util.Log
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
+import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.event.OpencodeEvent
 import dev.opencode.mobile.domain.event.ResumeTiming
@@ -613,6 +614,11 @@ class MessageSync(
                             requestCatchUp()
                             return
                         }
+                    }
+                    EventDomainAdapter.MESSAGE_CONTEXT_EVENT -> {
+                        val patch = MessageContextPatch.from(event.rawProperties ?: return) ?: return
+                        engine.apply(storeSlot, patch)
+                        return
                     }
                     "message.part.removed" -> {
                         if (requiresFullReloadForRestSeededPartRemoval(event.rawProperties, storeSlot)) {

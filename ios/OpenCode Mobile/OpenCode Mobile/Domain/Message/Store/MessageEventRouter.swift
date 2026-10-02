@@ -12,6 +12,7 @@ nonisolated enum MessageEventRouter {
         "message.part.removed",
         "session.revert.committed",
         "session.idle",
+        EventDomainAdapter.messageContextEvent,
         "stream.reconnected",
         "server.connected",
         "sse.parse.failed",
@@ -32,6 +33,7 @@ nonisolated enum MessageEventRouter {
         "message.removed",
         "message.part.removed",
         "session.revert.committed",
+        EventDomainAdapter.messageContextEvent,
     ]
 
     /// Cheap UTF-8 size proxy for staging byte budgets. Never inspects full

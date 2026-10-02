@@ -6,6 +6,7 @@ import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.message.DisplayMessage
 import dev.opencode.mobile.domain.message.InMemoryMessageStore
 import dev.opencode.mobile.domain.message.Message
+import dev.opencode.mobile.domain.message.MessageContextPatch
 import dev.opencode.mobile.domain.message.MessageDomainAdapter
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessagePatch
@@ -212,6 +213,69 @@ class V2LiveTurnTimelineTest {
         assertEquals("build", queued.mode)
         assertEquals("scripted", queued.model)
         assertEquals("high", queued.variant)
+    }
+
+    @Test
+    fun liveV2Prompts_getTheAgentAndModelRestRecords() {
+        // Shaped like the B2-5 sim run: a server-injected prompt, a steer from this app (which
+        // switches agent and model first), then more injected prompts and steers.
+        apply(prompt("u1", "Say hello.", at = 1_000))
+        apply(step("a1", at = 1_050, model = SCRIPTED))
+        apply(agentSelected("build", at = 1_200))
+        apply(modelSelected(SCRIPTED_HIGH, at = 1_201))
+        apply(enqueued("u2", "Steer from Android", at = 1_202))
+        apply(text("a1", "Hello!", at = 1_300))
+        apply(stepEnded("a1", "stop", at = 1_310))
+        apply(delivered("u2", at = 1_320))
+        apply(step("a2", at = 1_330, model = SCRIPTED_HIGH))
+        apply(text("a2", "Steered.", at = 1_340))
+        apply(stepEnded("a2", "stop", at = 1_350))
+        apply(idle(at = 1_360))
+        apply(prompt("u3", "Second hello.", at = 2_000))
+        apply(agentSelected("build", at = 2_020))
+        apply(step("a3", at = 2_030, model = SCRIPTED_HIGH))
+        apply(text("a3", "Hello again!", at = 2_040))
+        apply(stepEnded("a3", "stop", at = 2_050))
+        apply(idle(at = 2_060))
+
+        val live = store.messages(SESSION).filter { it.role == MessageRole.User }
+        val rest =
+            restMessages(
+                """
+                [
+                  {"id":"u1","type":"user","text":"Say hello.","time":{"created":1000}},
+                  {"id":"s1","type":"agent-switched","agent":"build","time":{"created":1200}},
+                  {"id":"s2","type":"model-switched","model":$SCRIPTED_HIGH,"time":{"created":1201}},
+                  {"id":"a1","type":"assistant","agent":"build","model":$SCRIPTED,
+                   "content":[{"type":"text","text":"Hello!"}],"time":{"created":1050}},
+                  {"id":"u2","type":"user","text":"Steer from Android","time":{"created":1320}},
+                  {"id":"a2","type":"assistant","agent":"build","model":$SCRIPTED_HIGH,
+                   "content":[{"type":"text","text":"Steered."}],"time":{"created":1330}},
+                  {"id":"u3","type":"user","text":"Second hello.","time":{"created":2000}},
+                  {"id":"s3","type":"agent-switched","agent":"build","time":{"created":2020}},
+                  {"id":"a3","type":"assistant","agent":"build","model":$SCRIPTED_HIGH,
+                   "content":[{"type":"text","text":"Hello again!"}],"time":{"created":2030}}
+                ]
+                """,
+            ).filter { it.role == MessageRole.User }
+
+        assertEquals(listOf("u1", "u2", "u3"), live.map { it.id })
+        assertEquals(rest.map { it.metaLine() }, live.map { it.metaLine() })
+        assertEquals(listOf(null, "build|scripted|null", "build|scripted|high"), live.map { it.metaLine() })
+    }
+
+    @Test
+    fun switchBeforeAPrompt_appliesToThatPrompt() {
+        apply(prompt("u1", "First", at = 1_000))
+        apply(step("a1", at = 1_050, model = SCRIPTED_HIGH))
+        apply(text("a1", "Reply.", at = 1_060))
+        apply(stepEnded("a1", "stop", at = 1_070))
+        apply(idle(at = 1_080))
+        apply(agentSelected("plan", at = 2_000))
+        apply(modelSelected("""{"id":"scripted","providerID":"sim","variant":"low"}""", at = 2_001))
+        apply(prompt("u2", "Second", at = 2_010))
+
+        assertEquals("plan|scripted|low", store.messages(SESSION).single { it.id == "u2" }.metaLine())
     }
 
     @Test
@@ -562,14 +626,27 @@ class V2LiveTurnTimelineTest {
     private fun step(
         id: String,
         at: Long,
+        model: String = """{"id":"m","providerID":"p"}""",
     ): List<String> =
         listOf(
             envelope(
                 "session.step.started",
                 at,
-                """"agent":"build","model":{"id":"m","providerID":"p"},"assistantMessageID":"$id"""",
+                """"agent":"build","model":$model,"assistantMessageID":"$id"""",
             ),
         )
+
+    private fun agentSelected(
+        agent: String,
+        at: Long,
+    ): List<String> = listOf(envelope("session.agent.selected", at, """"agent":"$agent""""))
+
+    private fun modelSelected(
+        model: String,
+        at: Long,
+    ): List<String> = listOf(envelope("session.model.selected", at, """"model":$model"""))
+
+    private fun Message.metaLine(): String? = if (mode == null && model == null) null else "$mode|$model|$variant"
 
     private fun textStarted(
         id: String,
@@ -643,6 +720,8 @@ class V2LiveTurnTimelineTest {
                 "session.revert.committed" ->
                     store.apply(SESSION, MessagePatch.RemovedFrom(properties.string("messageID")!!))
                 "session.idle" -> store.finishStreamingText(SESSION)
+                EventDomainAdapter.MESSAGE_CONTEXT_EVENT ->
+                    MessageContextPatch.from(properties)?.let { store.apply(SESSION, it) }
             }
         }
     }
@@ -708,6 +787,8 @@ class V2LiveTurnTimelineTest {
 
     private companion object {
         const val SESSION = "ses_v2"
+        const val SCRIPTED = """{"id":"scripted","providerID":"sim"}"""
+        const val SCRIPTED_HIGH = """{"id":"scripted","providerID":"sim","variant":"high"}"""
         const val SUMMARY = "## Objective\n- Exercise queue and steer prompts.\n\n## Next Move\n- Wait."
     }
 }

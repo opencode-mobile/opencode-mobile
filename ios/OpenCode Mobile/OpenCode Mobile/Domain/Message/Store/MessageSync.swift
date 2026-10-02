@@ -1092,6 +1092,8 @@ nonisolated final class MessageSync: @unchecked Sendable {
                     publishMessages: publishMessages
                 )
             }
+        case EventDomainAdapter.messageContextEvent:
+            applyMessageContext(event: event, key: key)
         case "message.part.removed":
             if requiresFullReloadForRestSeededPartRemoval(event: event, key: key) {
                 await fullReloadSilent(
@@ -1139,10 +1141,18 @@ nonisolated final class MessageSync: @unchecked Sendable {
                 _ = handleRevertCommitted(event: event, key: key, publishMessages: publishMessages)
             case "message.part.removed":
                 handleMessagePartRemoved(event: event, key: key, publishMessages: publishMessages)
+            case EventDomainAdapter.messageContextEvent:
+                applyMessageContext(event: event, key: key)
             default:
                 break
             }
         }
+    }
+
+    /// A v2 agent/model switch only changes what later delivered prompts are stamped with.
+    private func applyMessageContext(event: OpencodeEvent, key: MessageSessionKey) {
+        guard let props = event.rawProperties, let patch = MessageContextPatch.from(props) else { return }
+        _ = store.apply(sessionID: key.storeSlot, patch: patch)
     }
 
     private func handleMessageUpdated(
