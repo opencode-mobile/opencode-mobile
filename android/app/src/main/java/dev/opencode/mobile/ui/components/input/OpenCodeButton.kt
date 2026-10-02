@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -186,10 +187,20 @@ fun OpenCodeButton(
         }
 
     val haptic = LocalHapticFeedback.current
-    val interaction =
+    // Icon-only buttons carry their label on the clickable node itself, so it is
+    // announced (and listed by accessibility tooling) whether or not it is enabled.
+    val iconLabel =
+        when (variant) {
+            is OpenCodeButtonVariant.IconSquare -> variant.contentDescription
+            is OpenCodeButtonVariant.IconCircle -> variant.contentDescription
+            is OpenCodeButtonVariant.IconCircleText -> variant.contentDescription
+            else -> null
+        }
+    val clickable =
         if (onLongClick != null) {
             Modifier.combinedClickable(
                 enabled = enabled,
+                role = Role.Button,
                 onClick = onClick,
                 onLongClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -197,8 +208,10 @@ fun OpenCodeButton(
                 },
             )
         } else {
-            Modifier.clickable(enabled = enabled, onClick = onClick)
+            Modifier.clickable(enabled = enabled, role = Role.Button, onClick = onClick)
         }
+    val interaction =
+        iconLabel?.let { label -> clickable.semantics { contentDescription = label } } ?: clickable
     Surface(
         modifier =
             modifier
@@ -245,7 +258,7 @@ fun OpenCodeButton(
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = variant.imageVector,
-                        contentDescription = variant.contentDescription,
+                        contentDescription = null,
                         modifier = Modifier.size(OpenCodeButtonIconSize),
                         tint = contentColor,
                     )
@@ -254,19 +267,13 @@ fun OpenCodeButton(
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = variant.imageVector,
-                        contentDescription = variant.contentDescription,
+                        contentDescription = null,
                         modifier = Modifier.size(OpenCodeButtonIconSize),
                         tint = contentColor,
                     )
                 }
             is OpenCodeButtonVariant.IconCircleText ->
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier =
-                        variant.contentDescription?.let {
-                            Modifier.semantics { contentDescription = it }
-                        } ?: Modifier,
-                ) {
+                Box(contentAlignment = Alignment.Center) {
                     Text(
                         text = variant.text,
                         style = MaterialTheme.typography.titleMedium,
