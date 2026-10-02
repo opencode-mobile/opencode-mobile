@@ -19,6 +19,7 @@ import dev.opencode.mobile.ui.sessionchat.dropOrphanQuestionRequests
 import dev.opencode.mobile.ui.sessionchat.isQuestionAnswerValid
 import dev.opencode.mobile.ui.sessionchat.orderedPermissionRequests
 import dev.opencode.mobile.ui.sessionchat.orderedQuestionRequests
+import dev.opencode.mobile.ui.sessionchat.toggledQuestionSelection
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -141,12 +142,7 @@ class SessionChatInbox(
         if (request.id != requestId || request.sessionId != sessionId || current.questionSubmittingId != null) return
         val question = request.questions.getOrNull(current.questionWizardIndex) ?: return
         val draft = current.questionDraft
-        val selected =
-            if (question.multiple) {
-                if (label in draft.selectedLabels) draft.selectedLabels - label else draft.selectedLabels + label
-            } else {
-                listOf(label)
-            }
+        val selected = toggledQuestionSelection(question, draft.selectedLabels, label)
         updateQuestionDraft(current.questionWizardIndex, draft.copy(selectedLabels = selected, customSelected = false))
     }
 

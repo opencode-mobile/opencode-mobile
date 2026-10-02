@@ -686,11 +686,15 @@ fun SessionChatScreen(
                                     val questionCount = request?.questions?.size?.coerceAtLeast(1) ?: 1
                                     val index = uiState.questionWizardIndex.coerceIn(0, questionCount - 1)
                                     val answered =
-                                        if (uiState.questionCustomSelected) {
-                                            uiState.questionCustomText.isNotBlank()
-                                        } else {
-                                            uiState.questionSelectedLabels.isNotEmpty()
-                                        }
+                                        question != null &&
+                                            isQuestionAnswerValid(
+                                                question,
+                                                QuestionAnswerDraft(
+                                                    selectedLabels = uiState.questionSelectedLabels,
+                                                    customText = uiState.questionCustomText,
+                                                    customSelected = uiState.questionCustomSelected,
+                                                ),
+                                            )
                                     val submitting = uiState.questionSubmitting
                                     OpenCodeSessionComposerState.Question(
                                         requestId = request?.id.orEmpty(),
@@ -707,6 +711,8 @@ fun SessionChatScreen(
                                                 )
                                             },
                                         multiple = question?.multiple == true,
+                                        minSelections = question?.minSelections,
+                                        maxSelections = question?.maxSelections,
                                         customAllowed = question?.custom != false,
                                         selectedLabels = uiState.questionSelectedLabels,
                                         customText = uiState.questionCustomText,

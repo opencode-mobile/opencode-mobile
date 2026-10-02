@@ -289,6 +289,9 @@ struct QuestionInfo: Sendable, Equatable {
     let multiple: Bool
     let custom: Bool
     let fieldKey: String?
+    /// Form multiselect bounds (`minItems` / `maxItems`); nil means unbounded.
+    let minSelections: Int?
+    let maxSelections: Int?
 
     init(
         question: String,
@@ -296,7 +299,9 @@ struct QuestionInfo: Sendable, Equatable {
         options: [QuestionOption],
         multiple: Bool,
         custom: Bool,
-        fieldKey: String? = nil
+        fieldKey: String? = nil,
+        minSelections: Int? = nil,
+        maxSelections: Int? = nil
     ) {
         self.question = question
         self.header = header
@@ -304,6 +309,8 @@ struct QuestionInfo: Sendable, Equatable {
         self.multiple = multiple
         self.custom = custom
         self.fieldKey = fieldKey
+        self.minSelections = minSelections
+        self.maxSelections = maxSelections
     }
 }
 

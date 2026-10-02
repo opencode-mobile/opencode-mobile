@@ -228,6 +228,9 @@ data class QuestionInfo(
     val multiple: Boolean = false,
     val custom: Boolean = true,
     val fieldKey: String? = null,
+    /** Form multiselect bounds (`minItems` / `maxItems`); null means unbounded. */
+    val minSelections: Int? = null,
+    val maxSelections: Int? = null,
 )
 
 data class QuestionRequest(

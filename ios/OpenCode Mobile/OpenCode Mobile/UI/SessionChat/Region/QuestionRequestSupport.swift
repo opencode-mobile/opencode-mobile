@@ -45,7 +45,21 @@ func dropOrphanQuestionRequests(_ requests: [QuestionRequest], messages: [Messag
 }
 
 func isQuestionAnswerValid(question: QuestionInfo, draft: QuestionAnswerDraft) -> Bool {
-    draft.customSelected ? question.custom && !draft.customText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty : !draft.selectedLabels.isEmpty
+    if draft.customSelected {
+        return question.custom && !draft.customText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+    let count = draft.selectedLabels.count
+    return count >= max(1, question.minSelections ?? 1) && count <= (question.maxSelections ?? Int.max)
+}
+
+/// Next selection after tapping `label`. A single-pick question (or a multiselect
+/// capped at one) replaces the pick; a multiselect at its `maxItems` cap ignores
+/// further picks until one is cleared.
+func toggledQuestionSelection(question: QuestionInfo, selected: [String], label: String) -> [String] {
+    if !question.multiple || question.maxSelections == 1 { return [label] }
+    if selected.contains(label) { return selected.filter { $0 != label } }
+    if let max = question.maxSelections, selected.count >= max { return selected }
+    return selected + [label]
 }
 
 func buildQuestionAnswers(questions: [QuestionInfo], drafts: [Int: QuestionAnswerDraft]) -> [[String]]? {

@@ -926,6 +926,8 @@ struct SessionChatView: View {
                     question: question?.question ?? "",
                     options: (question?.options ?? []).map { .init(label: $0.label, description: $0.description) },
                     multiple: question?.multiple ?? false,
+                    minSelections: question?.minSelections,
+                    maxSelections: question?.maxSelections,
                     customAllowed: question?.custom ?? true,
                     selectedLabels: draft.questionSelectedLabels,
                     customText: draft.questionCustomText,

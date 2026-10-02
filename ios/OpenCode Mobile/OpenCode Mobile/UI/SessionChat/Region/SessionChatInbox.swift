@@ -130,9 +130,7 @@ final class SessionChatInbox {
         else { return }
         let question = request.questions[state.questionWizardIndex]
         let draft = state.questionDraft
-        let selected = question.multiple
-            ? (draft.selectedLabels.contains(label) ? draft.selectedLabels.filter { $0 != label } : draft.selectedLabels + [label])
-            : [label]
+        let selected = toggledQuestionSelection(question: question, selected: draft.selectedLabels, label: label)
         state.questionDrafts[state.questionWizardIndex] = QuestionAnswerDraft(
             selectedLabels: selected, customText: draft.customText, customSelected: false
         )

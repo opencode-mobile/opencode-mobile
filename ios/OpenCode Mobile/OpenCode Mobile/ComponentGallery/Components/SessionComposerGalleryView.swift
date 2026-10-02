@@ -15,6 +15,7 @@ private enum SessionComposerGalleryScenario: String, CaseIterable, Identifiable 
     case question
     case questionWizard
     case multiSelect
+    case multiSelectBounded
     case custom
     case questionSubmitting
     case questionError
@@ -37,6 +38,7 @@ private enum SessionComposerGalleryScenario: String, CaseIterable, Identifiable 
         case .question: "Question"
         case .questionWizard: "Wizard"
         case .multiSelect: "Multi-select"
+        case .multiSelectBounded: "Up to 2"
         case .custom: "Custom"
         case .questionSubmitting: "Q Submit"
         case .questionError: "Q Error"
@@ -174,6 +176,16 @@ struct SessionComposerGalleryView: View {
                 selectedLabels: selectedLabels,
                 submitEnabled: !selectedLabels.isEmpty
             )
+        case .multiSelectBounded:
+            questionState(
+                questionIndex: 0,
+                questionCount: 1,
+                multiple: true,
+                maxSelections: 2,
+                customAllowed: false,
+                selectedLabels: Array(selectedLabels.prefix(2)),
+                submitEnabled: !selectedLabels.isEmpty
+            )
         case .custom:
             questionState(
                 questionIndex: 0,
@@ -250,6 +262,7 @@ struct SessionComposerGalleryView: View {
         header: String = "Approach",
         question: String = "How should we implement this change?",
         multiple: Bool = false,
+        maxSelections: Int? = nil,
         customAllowed: Bool = true,
         selectedLabels: [String] = [],
         customText: String = "",
@@ -270,6 +283,7 @@ struct SessionComposerGalleryView: View {
                 question: question,
                 options: sampleQuestionOptions,
                 multiple: multiple,
+                maxSelections: maxSelections,
                 customAllowed: customAllowed,
                 selectedLabels: selectedLabels,
                 customText: customText,
@@ -285,7 +299,7 @@ struct SessionComposerGalleryView: View {
 
     private func applyScenarioDefaults(_ option: SessionComposerGalleryScenario) {
         switch option {
-        case .multiSelect:
+        case .multiSelect, .multiSelectBounded:
             selectedLabels = ["Minimal patch", "Investigate first"]
             customSelected = false
             customText = ""
@@ -318,7 +332,7 @@ struct SessionComposerGalleryView: View {
                 draftText = text
             }
         case let .toggleQuestionOption(_, _, label):
-            if scenario == .multiSelect {
+            if scenario == .multiSelect || scenario == .multiSelectBounded {
                 if selectedLabels.contains(label) {
                     selectedLabels.removeAll { $0 == label }
                 } else {

@@ -123,6 +123,45 @@ class QuestionRequestSupportTest {
         )
     }
 
+    @Test
+    fun toggledQuestionSelection_respectsMaxItems() {
+        val single = boundedQuestion(max = 1)
+        assertEquals(listOf("Production"), toggledQuestionSelection(single, listOf("Staging"), "Production"))
+
+        val upToTwo = boundedQuestion(max = 2)
+        val two = toggledQuestionSelection(upToTwo, listOf("Staging"), "Production")
+        assertEquals(listOf("Staging", "Production"), two)
+        assertEquals(two, toggledQuestionSelection(upToTwo, two, "Preview"))
+        assertEquals(listOf("Production"), toggledQuestionSelection(upToTwo, two, "Staging"))
+
+        val open = boundedQuestion(max = null)
+        assertEquals(listOf("A", "B", "C"), toggledQuestionSelection(open, listOf("A", "B"), "C"))
+    }
+
+    @Test
+    fun isQuestionAnswerValid_checksMinAndMaxItems() {
+        val question = boundedQuestion(min = 2, max = 3)
+        assertEquals(false, isQuestionAnswerValid(question, QuestionAnswerDraft(selectedLabels = listOf("A"))))
+        assertEquals(true, isQuestionAnswerValid(question, QuestionAnswerDraft(selectedLabels = listOf("A", "B"))))
+        assertEquals(
+            false,
+            isQuestionAnswerValid(question, QuestionAnswerDraft(selectedLabels = listOf("A", "B", "C", "D"))),
+        )
+    }
+
+    private fun boundedQuestion(
+        min: Int? = null,
+        max: Int?,
+    ) = QuestionInfo(
+        question = "Which environment should I deploy to?",
+        header = "Simulated question",
+        options = emptyList(),
+        multiple = true,
+        custom = false,
+        minSelections = min,
+        maxSelections = max,
+    )
+
     private fun questionRequest(
         id: String,
         sessionId: String,

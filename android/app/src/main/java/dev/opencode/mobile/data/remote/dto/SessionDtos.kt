@@ -164,6 +164,8 @@ data class V2FormFieldDto(
     val options: List<V2FormFieldOptionDto> = emptyList(),
     val custom: Boolean? = null,
     val multiple: Boolean? = null,
+    val minItems: Int? = null,
+    val maxItems: Int? = null,
 )
 
 @Serializable

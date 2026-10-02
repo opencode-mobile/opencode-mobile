@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import OpenCode_Mobile
 
@@ -63,6 +64,71 @@ struct QuestionRequestSupportTests {
                     1: QuestionAnswerDraft(customText: "custom", customSelected: true),
                 ]
             ) == [["A"], ["custom"]]
+        )
+    }
+
+    @Test func injectedFormField_headsWithFormTitleAndKeepsBounds() throws {
+        // `inject.form` on the simulation server: one field with only a title.
+        let json = #"{"id":"frm_2","sessionID":"ses_1","title":"Simulated question","fields":[{"key":"environment","title":"Which environment should I deploy to?","type":"multiselect","options":[{"value":"staging","label":"Staging"},{"value":"production","label":"Production"}],"maxItems":1}]}"#
+        let form = try JSONDecoder().decode(V2FormInfoDTO.self, from: Data(json.utf8))
+        let question = try #require(SessionDomainAdapter().questionRequest(from: form).questions.first)
+        #expect(question.header == "Simulated question")
+        #expect(question.question == "Which environment should I deploy to?")
+        #expect(question.multiple)
+        #expect(question.maxSelections == 1)
+        #expect(question.minSelections == nil)
+        #expect(!question.custom)
+    }
+
+    @Test func questionToolFormField_keepsItsHeaderAndCustomAnswer() throws {
+        let json = #"{"id":"frm_3","sessionID":"ses_1","title":"Questions","fields":[{"key":"q0","title":"Database","description":"Which database should the service use?","type":"string","options":[],"custom":true}]}"#
+        let form = try JSONDecoder().decode(V2FormInfoDTO.self, from: Data(json.utf8))
+        let question = try #require(SessionDomainAdapter().questionRequest(from: form).questions.first)
+        #expect(question.header == "Database")
+        #expect(question.question == "Which database should the service use?")
+        #expect(question.custom)
+    }
+
+    @Test func toggledQuestionSelection_respectsMaxItems() {
+        let single = boundedQuestion(max: 1)
+        #expect(toggledQuestionSelection(question: single, selected: ["Staging"], label: "Production") == ["Production"])
+
+        let upToTwo = boundedQuestion(max: 2)
+        let two = toggledQuestionSelection(question: upToTwo, selected: ["Staging"], label: "Production")
+        #expect(two == ["Staging", "Production"])
+        #expect(toggledQuestionSelection(question: upToTwo, selected: two, label: "Preview") == two)
+        #expect(toggledQuestionSelection(question: upToTwo, selected: two, label: "Staging") == ["Production"])
+
+        let open = boundedQuestion(max: nil)
+        #expect(toggledQuestionSelection(question: open, selected: ["A", "B"], label: "C") == ["A", "B", "C"])
+    }
+
+    @Test func isQuestionAnswerValid_checksMinAndMaxItems() {
+        let question = boundedQuestion(min: 2, max: 3)
+        #expect(!isQuestionAnswerValid(question: question, draft: QuestionAnswerDraft(selectedLabels: ["A"], customText: "", customSelected: false)))
+        #expect(isQuestionAnswerValid(question: question, draft: QuestionAnswerDraft(selectedLabels: ["A", "B"], customText: "", customSelected: false)))
+        #expect(!isQuestionAnswerValid(question: question, draft: QuestionAnswerDraft(selectedLabels: ["A", "B", "C", "D"], customText: "", customSelected: false)))
+    }
+
+    @Test func questionSelectionHint_reflectsFormBounds() {
+        #expect(OpenCodeSessionComposer.questionSelectionHint(multiple: false) == "Select one")
+        #expect(OpenCodeSessionComposer.questionSelectionHint(multiple: true) == "Select all that apply")
+        #expect(OpenCodeSessionComposer.questionSelectionHint(multiple: true, maxSelections: 1) == "Select one")
+        #expect(OpenCodeSessionComposer.questionSelectionHint(multiple: true, maxSelections: 3) == "Select up to 3")
+        #expect(OpenCodeSessionComposer.questionSelectionHint(multiple: true, minSelections: 2) == "Select at least 2")
+        #expect(OpenCodeSessionComposer.questionSelectionHint(multiple: true, minSelections: 2, maxSelections: 4) == "Select 2 to 4")
+        #expect(OpenCodeSessionComposer.questionSelectionHint(multiple: true, minSelections: 2, maxSelections: 2) == "Select 2")
+    }
+
+    private func boundedQuestion(min: Int? = nil, max: Int?) -> QuestionInfo {
+        QuestionInfo(
+            question: "Which environment should I deploy to?",
+            header: "Simulated question",
+            options: [],
+            multiple: true,
+            custom: false,
+            minSelections: min,
+            maxSelections: max
         )
     }
 

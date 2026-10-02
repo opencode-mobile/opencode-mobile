@@ -113,6 +113,9 @@ sealed interface OpenCodeSessionComposerState {
         val question: String,
         val options: List<QuestionOption>,
         val multiple: Boolean = false,
+        /** Multiselect bounds from the form field; null means unbounded. */
+        val minSelections: Int? = null,
+        val maxSelections: Int? = null,
         val customAllowed: Boolean = true,
         val selectedLabels: List<String> = emptyList(),
         val customText: String = "",
@@ -471,6 +474,23 @@ private fun PromptEntryContent(
     }
 }
 
+/** Selection hint under a question; reflects a multiselect's `minItems` / `maxItems`. */
+internal fun questionSelectionHint(
+    multiple: Boolean,
+    minSelections: Int? = null,
+    maxSelections: Int? = null,
+): String {
+    if (!multiple || maxSelections == 1) return "Select one"
+    val min = minSelections?.takeIf { it > 1 }
+    return when {
+        min != null && maxSelections != null && maxSelections > min -> "Select $min to $maxSelections"
+        min != null && maxSelections != null -> "Select $min"
+        min != null -> "Select at least $min"
+        maxSelections != null -> "Select up to $maxSelections"
+        else -> "Select all that apply"
+    }
+}
+
 /**
  * Send button label. Steer/Queue only describe what Send does while work is running;
  * an idle session just sends.
@@ -752,10 +772,11 @@ private fun QuestionRequestContent(
     val showBack = state.questionIndex > 0
     val showNext = state.questionIndex < state.questionCount - 1
     val selectionHint =
-        when {
-            state.multiple -> "Select all that apply"
-            else -> "Select one"
-        }
+        questionSelectionHint(
+            multiple = state.multiple,
+            minSelections = state.minSelections,
+            maxSelections = state.maxSelections,
+        )
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),

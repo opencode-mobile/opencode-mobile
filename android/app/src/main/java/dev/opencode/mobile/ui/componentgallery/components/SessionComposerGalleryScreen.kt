@@ -44,6 +44,7 @@ private enum class SessionComposerGalleryScenario(
     Question("Question"),
     QuestionWizard("Wizard"),
     MultiSelect("Multi-select"),
+    MultiSelectBounded("Up to 2"),
     Custom("Custom"),
     QuestionSubmitting("Q Submit"),
     QuestionError("Q Error"),
@@ -167,6 +168,16 @@ fun SessionComposerGalleryScreen(modifier: Modifier = Modifier) {
                     questionCount = 1,
                     multiple = true,
                     selectedLabels = selectedLabels,
+                    customAllowed = false,
+                    submitEnabled = selectedLabels.isNotEmpty(),
+                )
+            SessionComposerGalleryScenario.MultiSelectBounded ->
+                questionState(
+                    questionIndex = 0,
+                    questionCount = 1,
+                    multiple = true,
+                    maxSelections = 2,
+                    selectedLabels = selectedLabels.take(2),
                     customAllowed = false,
                     submitEnabled = selectedLabels.isNotEmpty(),
                 )
@@ -335,6 +346,7 @@ private fun questionState(
     header: String = "Approach",
     question: String = "How should we implement this change?",
     multiple: Boolean = false,
+    maxSelections: Int? = null,
     customAllowed: Boolean = true,
     selectedLabels: List<String> = emptyList(),
     customText: String = "",
@@ -353,6 +365,7 @@ private fun questionState(
     question = question,
     options = SampleQuestionOptions,
     multiple = multiple,
+    maxSelections = maxSelections,
     customAllowed = customAllowed,
     selectedLabels = selectedLabels,
     customText = customText,

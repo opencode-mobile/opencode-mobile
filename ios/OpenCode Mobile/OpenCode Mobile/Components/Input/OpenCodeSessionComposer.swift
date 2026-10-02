@@ -106,6 +106,9 @@ enum OpenCodeSessionComposerState {
         let question: String
         let options: [QuestionOption]
         let multiple: Bool
+        /// Multiselect bounds from the form field; nil means unbounded.
+        let minSelections: Int?
+        let maxSelections: Int?
         let customAllowed: Bool
         let selectedLabels: [String]
         let customText: String
@@ -125,6 +128,8 @@ enum OpenCodeSessionComposerState {
             question: String,
             options: [QuestionOption],
             multiple: Bool = false,
+            minSelections: Int? = nil,
+            maxSelections: Int? = nil,
             customAllowed: Bool = true,
             selectedLabels: [String] = [],
             customText: String = "",
@@ -143,6 +148,8 @@ enum OpenCodeSessionComposerState {
             self.question = question
             self.options = options
             self.multiple = multiple
+            self.minSelections = minSelections
+            self.maxSelections = maxSelections
             self.customAllowed = customAllowed
             self.selectedLabels = selectedLabels
             self.customText = customText
@@ -494,7 +501,11 @@ struct OpenCodeSessionComposer: View {
     private func questionRequestContent(_ question: OpenCodeSessionComposerState.Question) -> some View {
         let showBack = question.questionIndex > 0
         let showNext = question.questionIndex < question.questionCount - 1
-        let selectionHint = question.multiple ? "Select all that apply" : "Select one"
+        let selectionHint = Self.questionSelectionHint(
+            multiple: question.multiple,
+            minSelections: question.minSelections,
+            maxSelections: question.maxSelections
+        )
 
         VStack(alignment: .leading, spacing: 10) {
             HStack {
@@ -654,6 +665,23 @@ struct OpenCodeSessionComposer: View {
         switch followUpDelivery {
         case .steer: return "Send as Steer"
         case .queue: return "Send as Queue"
+        }
+    }
+
+    /// Selection hint under a question; reflects a multiselect's `minItems` / `maxItems`.
+    nonisolated static func questionSelectionHint(
+        multiple: Bool,
+        minSelections: Int? = nil,
+        maxSelections: Int? = nil
+    ) -> String {
+        if !multiple || maxSelections == 1 { return "Select one" }
+        let min = minSelections.flatMap { $0 > 1 ? $0 : nil }
+        switch (min, maxSelections) {
+        case let (min?, max?) where max > min: return "Select \(min) to \(max)"
+        case let (min?, _?): return "Select \(min)"
+        case let (min?, nil): return "Select at least \(min)"
+        case let (nil, max?): return "Select up to \(max)"
+        case (nil, nil): return "Select all that apply"
         }
     }
 
