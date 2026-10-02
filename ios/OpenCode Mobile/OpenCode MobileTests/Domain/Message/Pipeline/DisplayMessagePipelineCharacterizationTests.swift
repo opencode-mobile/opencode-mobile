@@ -757,6 +757,28 @@ struct DisplayMessagePipelineCharacterizationTests {
         _ = await waitUntil { collector.isFinished }
     }
 
+    @Test func networkFrameIdenticalToCacheSeed_confirmsCacheSync() async {
+        // Regression: a network frame equal to the cache-seeded one was skipped as a
+        // no-op without confirming the cache, leaving Syncing… up (compacted v2 tail).
+        let harness = Harness()
+        let collector = CharacterizationDisplayCollector()
+        let task = Task {
+            await collector.collect(harness.pipeline.observeDisplayMessages(sessionID: "ses-1", directory: nil))
+        }
+
+        await harness.source.emit(.messages([plainAssistant("cached")], isFromCache: true))
+        let seeded = await waitUntil { collector.fromCacheFlags == [true] }
+        #expect(seeded)
+
+        await harness.source.emit(.messages([plainAssistant("cached")], isFromCache: false))
+        let confirmed = await waitUntil { collector.sawCacheSyncConfirmed }
+        #expect(confirmed)
+        #expect(collector.fromCacheFlags == [true])
+
+        task.cancel()
+        _ = await waitUntil { collector.isFinished }
+    }
+
     @Test func controllableClock_overlappingHeldSleepsBothResumeOnSingleRelease() async {
         let clock = ControllablePipelineClock(holdSleep: true)
         let done = LockedFlagPair()

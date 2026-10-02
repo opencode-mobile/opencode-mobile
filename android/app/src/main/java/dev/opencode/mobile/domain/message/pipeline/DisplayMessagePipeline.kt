@@ -558,6 +558,7 @@ class DisplayMessagePipeline(
                             send(DisplayMessageListUpdate.CacheSyncConfirmed(hasOlder = update.hasOlder))
                         }
                         is MessageListUpdate.Messages -> {
+                            val previousSourceIsFromCache = sourceIsFromCache
                             sourceIsFromCache = update.isFromCache
                             sourceHasOlder = update.hasOlder
                             if (hasStreamingDelta(update.messages)) {
@@ -589,6 +590,11 @@ class DisplayMessagePipeline(
                                     lastPublishedMessages != null &&
                                     update.messages == lastPublishedMessages
                                 ) {
+                                    // A network frame identical to the cache-seeded one confirms
+                                    // the cache; skipping it silently would leave Syncing… up.
+                                    if (previousSourceIsFromCache) {
+                                        send(DisplayMessageListUpdate.CacheSyncConfirmed(hasOlder = update.hasOlder))
+                                    }
                                     return@collect
                                 }
                                 val generation = nextGeneration()

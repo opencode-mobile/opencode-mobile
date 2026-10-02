@@ -736,12 +736,22 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
                         continuation.yield(.loadFailed(error))
                     case .messages(let messages, let isFromCache):
                         if !messagesContainStreamingText(messages) {
-                            let skipNoop = synced {
-                                !isFromCache
-                                    && lastPublishedMessages == messages
-                                    && !isStreamingSession
+                            let noop = synced { () -> (skip: Bool, confirmsCache: Bool) in
+                                guard !isFromCache,
+                                      lastPublishedMessages == messages,
+                                      !isStreamingSession
+                                else { return (false, false) }
+                                // A network frame identical to the cache-seeded one confirms the
+                                // cache. Skipping it silently left Syncing… up (e.g. a compacted
+                                // v2 tail never passes the settled tail-identity confirm).
+                                let confirmsCache = sourceIsFromCache
+                                sourceIsFromCache = false
+                                return (true, confirmsCache)
                             }
-                            if skipNoop { continue }
+                            if noop.skip {
+                                if noop.confirmsCache { continuation.yield(.cacheSyncConfirmed) }
+                                continue
+                            }
                         }
                         let plan = synced { () -> (
                             generation: UInt64,
