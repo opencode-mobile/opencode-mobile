@@ -150,6 +150,8 @@ data class SessionChatUiState(
     val shouldLeaveSession: Boolean = false,
     val permissionRequest: PermissionRequest? = null,
     val permissionQueueCount: Int = 0,
+    /** The permission dock is collapsed to a "Review permission" pill above the composer. */
+    val permissionDockHidden: Boolean = false,
     val permissionSubmitting: Boolean = false,
     val permissionErrorMessage: String? = null,
     val questionRequest: QuestionRequest? = null,
@@ -547,6 +549,8 @@ fun SessionChatRepoStripRegionState.toSessionBranchPill(): SessionBranchPillUiSt
 
 data class SessionChatInboxRegionState(
     val permissionRequests: List<PermissionRequest> = emptyList(),
+    /** The pending permission the user tucked away to reach the composer (never rejects it). */
+    val permissionHiddenId: String? = null,
     val permissionSubmittingId: String? = null,
     val permissionError: String? = null,
     val permissionTopologyError: String? = null,
@@ -560,6 +564,10 @@ data class SessionChatInboxRegionState(
 ) {
     val visibleQuestionRequest: QuestionRequest?
         get() = if (permissionRequests.isNotEmpty()) null else questionRequests.firstOrNull()
+
+    /** True while the first pending permission is the one the user hid; a new request shows again. */
+    val isPermissionDockHidden: Boolean
+        get() = permissionHiddenId != null && permissionRequests.firstOrNull()?.id == permissionHiddenId
 
     val questionDraft: QuestionAnswerDraft
         get() = questionDrafts[questionWizardIndex] ?: QuestionAnswerDraft()

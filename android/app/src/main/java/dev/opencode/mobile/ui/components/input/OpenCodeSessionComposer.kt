@@ -60,9 +60,12 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import dev.opencode.mobile.domain.message.FollowUpDelivery
+import dev.opencode.mobile.theme.CodeTextStyle
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
@@ -87,11 +90,22 @@ sealed interface OpenCodeSessionComposerState {
         val followUpDelivery: FollowUpDelivery? = null,
     ) : OpenCodeSessionComposerState
 
+    /** A file an edit/write permission would change, with its diff size. */
+    data class PermissionFile(
+        val path: String,
+        val additions: Int,
+        val deletions: Int,
+    )
+
     data class Permission(
         val requestId: String,
         val sessionId: String,
         val permission: String,
         val patterns: List<String>,
+        /** Edit/write targets; shown as `path +N −N` instead of [patterns] when present. */
+        val files: List<PermissionFile> = emptyList(),
+        /** Patterns "Always" would save; the Always action shows only when non-empty. */
+        val alwaysPatterns: List<String> = emptyList(),
         val queuePosition: Int = 1,
         val queueCount: Int = 1,
         val submitting: Boolean = false,
@@ -173,6 +187,16 @@ sealed interface OpenCodeSessionComposerAction {
         val sessionId: String,
     ) : OpenCodeSessionComposerAction
 
+    data class AlwaysAllowPermission(
+        val requestId: String,
+        val sessionId: String,
+    ) : OpenCodeSessionComposerAction
+
+    /** Collapse the permission dock without answering it. */
+    data class HidePermission(
+        val requestId: String,
+    ) : OpenCodeSessionComposerAction
+
     data class ToggleQuestionOption(
         val requestId: String,
         val sessionId: String,
@@ -248,6 +272,8 @@ fun OpenCodeSessionComposer(
             modifier = Modifier.fillMaxWidth(),
             shape = shellShape,
             border = outline,
+            // Opaque: at 95% the timeline rows behind show through as faint rectangles.
+            opaque = true,
         ) {
             Column(
                 modifier =
@@ -718,6 +744,7 @@ private fun PermissionApprovalContent(
     state: OpenCodeSessionComposerState.Permission,
     onAction: (OpenCodeSessionComposerAction) -> Unit,
 ) {
+    val actionsEnabled = state.actionsEnabled && !state.submitting
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -727,12 +754,28 @@ private fun PermissionApprovalContent(
             if (state.queueCount > 1) {
                 Text("${state.queuePosition} of ${state.queueCount}", style = MaterialTheme.typography.bodySmall)
             }
+            OpenCodeButton(
+                variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.KeyboardArrowDown, "Hide permission request"),
+                contrast = OpenCodeButtonContrast.Low,
+                onClick = { onAction(OpenCodeSessionComposerAction.HidePermission(state.requestId)) },
+            )
         }
         Text(state.permission.replace('_', ' '), style = MaterialTheme.typography.bodyMedium)
         SelectionContainer {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                state.patterns.forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
+                if (state.files.isNotEmpty()) {
+                    state.files.forEach { file -> PermissionFileLine(file) }
+                } else {
+                    state.patterns.forEach { Text(it, style = PermissionCodeStyle) }
+                }
             }
+        }
+        if (state.alwaysPatterns.isNotEmpty()) {
+            Text(
+                text = "Always allows: ${state.alwaysPatterns.joinToString(", ")}",
+                style = MaterialTheme.typography.bodySmall,
+                color = openCodeColor("text-weak"),
+            )
         }
         state.errorMessage?.let {
             Text(it, color = openCodeColor("error"), style = MaterialTheme.typography.bodySmall)
@@ -741,27 +784,58 @@ private fun PermissionApprovalContent(
     Row(
         Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         OpenCodeButton(
             OpenCodeButtonVariant.CompactText("Deny"),
             onClick = {
                 onAction(OpenCodeSessionComposerAction.DenyPermission(state.requestId, state.sessionId))
             },
-            enabled = state.actionsEnabled && !state.submitting,
+            enabled = actionsEnabled,
             contrast = OpenCodeButtonContrast.Low,
         )
         Spacer(Modifier.weight(1f))
         if (state.submitting) {
             CircularProgressIndicator(modifier = Modifier.padding(horizontal = 8.dp), strokeWidth = 2.dp)
         }
+        if (state.alwaysPatterns.isNotEmpty()) {
+            OpenCodeButton(
+                OpenCodeButtonVariant.CompactText("Always"),
+                onClick = {
+                    onAction(OpenCodeSessionComposerAction.AlwaysAllowPermission(state.requestId, state.sessionId))
+                },
+                enabled = actionsEnabled,
+                contrast = OpenCodeButtonContrast.Low,
+            )
+        }
         OpenCodeButton(
             OpenCodeButtonVariant.CompactText("Allow once"),
             onClick = {
                 onAction(OpenCodeSessionComposerAction.AllowPermissionOnce(state.requestId, state.sessionId))
             },
-            enabled = state.actionsEnabled && !state.submitting,
+            enabled = actionsEnabled,
         )
     }
+}
+
+/** Commands and paths read as code (iOS: `OpenCodeTypography.code`). */
+private val PermissionCodeStyle = CodeTextStyle.copy(fontSize = 13.sp, lineHeight = 18.sp)
+
+@Composable
+private fun PermissionFileLine(file: OpenCodeSessionComposerState.PermissionFile) {
+    Text(
+        text =
+            buildAnnotatedString {
+                append(file.path)
+                if (file.additions > 0 || file.deletions > 0) {
+                    append("  ")
+                    withStyle(SpanStyle(color = openCodeColor("diff-add"))) { append("+${file.additions}") }
+                    append(" ")
+                    withStyle(SpanStyle(color = openCodeColor("diff-delete"))) { append("\u2212${file.deletions}") }
+                }
+            },
+        style = PermissionCodeStyle,
+    )
 }
 
 @Composable

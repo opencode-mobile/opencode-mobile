@@ -33,6 +33,9 @@ private val ActionPillShadowElevation = 4.dp
 
 enum class OpenCodeActionPillVariant {
     ScrollToEnd,
+
+    /** A hidden permission dock waiting above the composer. */
+    ReviewPermission,
 }
 
 @Composable
@@ -45,10 +48,12 @@ fun OpenCodeActionPill(
     val label =
         when (variant) {
             OpenCodeActionPillVariant.ScrollToEnd -> "Scroll to end"
+            OpenCodeActionPillVariant.ReviewPermission -> "Review permission request"
         }
     val icon: ImageVector? =
         when (variant) {
             OpenCodeActionPillVariant.ScrollToEnd -> OpenCodeIcons.ArrowDownward
+            OpenCodeActionPillVariant.ReviewPermission -> OpenCodeIcons.ArrowUpward
         }
     val accessibilityLabel = label
 

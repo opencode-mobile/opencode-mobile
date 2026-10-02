@@ -38,6 +38,7 @@ private enum class SessionComposerGalleryScenario(
     Revert("Revert"),
     ChildLockout("Child"),
     Permission("Permission"),
+    PermissionEdit("Edit"),
     Queued("Queued"),
     Submitting("Submitting"),
     Error("Error"),
@@ -132,6 +133,7 @@ fun SessionComposerGalleryScreen(modifier: Modifier = Modifier) {
                     showVariant = true,
                 )
             SessionComposerGalleryScenario.Permission -> permissionState()
+            SessionComposerGalleryScenario.PermissionEdit -> permissionState(edit = true)
             SessionComposerGalleryScenario.Queued -> permissionState(queueCount = 3)
             SessionComposerGalleryScenario.Submitting -> permissionState(submitting = true)
             SessionComposerGalleryScenario.Error -> permissionState(errorMessage = "The permission response failed. Try again.")
@@ -330,11 +332,22 @@ private fun permissionState(
     queueCount: Int = 1,
     submitting: Boolean = false,
     errorMessage: String? = null,
+    edit: Boolean = false,
 ) = OpenCodeSessionComposerState.Permission(
     requestId = "permission-gallery",
     sessionId = "session-gallery",
-    permission = "bash",
-    patterns = listOf("git status", "git diff --stat"),
+    permission = if (edit) "edit" else "bash",
+    patterns = if (edit) listOf("README.md", "notes/todo.md") else listOf("git status --short", "git diff --stat"),
+    files =
+        if (edit) {
+            listOf(
+                OpenCodeSessionComposerState.PermissionFile("README.md", additions = 1, deletions = 1),
+                OpenCodeSessionComposerState.PermissionFile("notes/todo.md", additions = 4, deletions = 0),
+            )
+        } else {
+            emptyList()
+        },
+    alwaysPatterns = if (edit) listOf("*") else listOf("git status *", "git diff *"),
     queueCount = queueCount,
     submitting = submitting,
     errorMessage = errorMessage,
@@ -393,6 +406,8 @@ private val OpenCodeSessionComposerAction.label: String
             OpenCodeSessionComposerAction.Stop -> "Stop"
             is OpenCodeSessionComposerAction.AllowPermissionOnce -> "Allow once"
             is OpenCodeSessionComposerAction.DenyPermission -> "Deny"
+            is OpenCodeSessionComposerAction.AlwaysAllowPermission -> "Always"
+            is OpenCodeSessionComposerAction.HidePermission -> "Hide permission"
             is OpenCodeSessionComposerAction.ToggleQuestionOption -> "Toggle option"
             is OpenCodeSessionComposerAction.ToggleQuestionCustom -> "Toggle custom"
             is OpenCodeSessionComposerAction.QuestionCustomTextChanged -> "Custom text changed"

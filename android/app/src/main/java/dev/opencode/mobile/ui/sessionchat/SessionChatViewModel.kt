@@ -936,6 +936,28 @@ class SessionChatViewModel
             inbox.allowPermissionOnce(requestId, sessionId)
         }
 
+        fun alwaysAllowPermission(
+            requestId: String,
+            sessionId: String,
+        ) {
+            logAction(
+                actionId = ProductAnalytics.Action.PERMISSION_ALWAYS,
+                parameters = mapOf(ProductAnalytics.Param.PERMISSION_DECISION to "always"),
+            )
+            inbox.alwaysAllowPermission(requestId, sessionId)
+        }
+
+        /** Collapse the dock so the composer is reachable; the request stays pending. */
+        fun hidePermissionDock(requestId: String) {
+            logAction(ProductAnalytics.Action.PERMISSION_HIDE)
+            inbox.hidePermissionDock(requestId)
+        }
+
+        fun showPermissionDock() {
+            logAction(ProductAnalytics.Action.PERMISSION_SHOW)
+            inbox.showPermissionDock()
+        }
+
         fun denyPermission(
             requestId: String,
             sessionId: String,
@@ -1290,6 +1312,7 @@ class SessionChatViewModel
                 shouldLeaveSession = infoState.shouldLeaveSession,
                 permissionRequest = inboxSnapshot.permissionRequests.firstOrNull(),
                 permissionQueueCount = inboxSnapshot.permissionRequests.size,
+                permissionDockHidden = inboxSnapshot.isPermissionDockHidden,
                 permissionSubmitting = inboxSnapshot.permissionSubmittingId != null,
                 permissionErrorMessage = inboxSnapshot.permissionError ?: inboxSnapshot.permissionTopologyError,
                 questionRequest = visibleQuestion,

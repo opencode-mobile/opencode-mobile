@@ -132,6 +132,20 @@ class SessionChatInbox(
         sessionId: String,
     ) = respondToPermission(requestId, sessionId, PermissionDecision.Deny)
 
+    fun alwaysAllowPermission(
+        requestId: String,
+        sessionId: String,
+    ) = respondToPermission(requestId, sessionId, PermissionDecision.AlwaysAllow)
+
+    fun hidePermissionDock(requestId: String) {
+        if (_state.value.permissionRequests.none { it.id == requestId }) return
+        _state.update { it.copy(permissionHiddenId = requestId) }
+    }
+
+    fun showPermissionDock() {
+        _state.update { it.copy(permissionHiddenId = null) }
+    }
+
     fun toggleQuestionOption(
         requestId: String,
         sessionId: String,

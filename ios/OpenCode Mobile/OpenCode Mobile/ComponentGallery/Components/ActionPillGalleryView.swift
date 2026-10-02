@@ -18,10 +18,12 @@ struct ActionPillGalleryView: View {
                 action: { enabled.toggle() }
             )
 
-            HStack {
-                Spacer()
-                OpenCodeActionPill(variant: .scrollToEnd, enabled: enabled, action: {})
-                Spacer()
+            ForEach(Array(OpenCodeActionPillVariant.allCases.enumerated()), id: \.offset) { _, variant in
+                HStack {
+                    Spacer()
+                    OpenCodeActionPill(variant: variant, enabled: enabled, action: {})
+                    Spacer()
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

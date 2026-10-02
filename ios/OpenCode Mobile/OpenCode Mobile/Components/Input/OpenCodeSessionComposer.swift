@@ -56,11 +56,22 @@ enum OpenCodeSessionComposerState {
         }
     }
 
+    /// A file an edit/write permission would change, with its diff size.
+    struct PermissionFile: Hashable {
+        let path: String
+        let additions: Int
+        let deletions: Int
+    }
+
     struct Permission {
         let requestID: String
         let sessionID: String
         let permission: String
         let patterns: [String]
+        /// Edit/write targets; shown as `path +N −N` instead of `patterns` when present.
+        let files: [PermissionFile]
+        /// Patterns "Always" would save; the Always action shows only when non-empty.
+        let alwaysPatterns: [String]
         let queuePosition: Int
         let queueCount: Int
         let submitting: Bool
@@ -72,6 +83,8 @@ enum OpenCodeSessionComposerState {
             sessionID: String,
             permission: String,
             patterns: [String],
+            files: [PermissionFile] = [],
+            alwaysPatterns: [String] = [],
             queuePosition: Int = 1,
             queueCount: Int = 1,
             submitting: Bool = false,
@@ -82,6 +95,8 @@ enum OpenCodeSessionComposerState {
             self.sessionID = sessionID
             self.permission = permission
             self.patterns = patterns
+            self.files = files
+            self.alwaysPatterns = alwaysPatterns
             self.queuePosition = queuePosition
             self.queueCount = queueCount
             self.submitting = submitting
@@ -188,6 +203,9 @@ enum OpenCodeSessionComposerAction {
     case stop
     case allowPermissionOnce(requestID: String, sessionID: String)
     case denyPermission(requestID: String, sessionID: String)
+    case alwaysAllowPermission(requestID: String, sessionID: String)
+    /// Collapse the permission dock without answering it.
+    case hidePermission(requestID: String)
     case toggleQuestionOption(requestID: String, sessionID: String, label: String)
     case toggleQuestionCustom(requestID: String, sessionID: String)
     case questionCustomTextChanged(requestID: String, sessionID: String, text: String)
@@ -449,6 +467,7 @@ struct OpenCodeSessionComposer: View {
 
     @ViewBuilder
     private func permissionApprovalContent(_ permission: OpenCodeSessionComposerState.Permission) -> some View {
+        let actionsEnabled = permission.actionsEnabled && !permission.submitting
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("Permission requested").font(OpenCodeTypography.heading)
@@ -457,13 +476,29 @@ struct OpenCodeSessionComposer: View {
                     Text("\(permission.queuePosition) of \(permission.queueCount)")
                         .font(OpenCodeTypography.caption)
                 }
+                OpenCodeButton(
+                    variant: .iconCircle(.keyboardArrowDown, accessibilityLabel: "Hide permission request"),
+                    contrast: .low,
+                    action: { onAction(.hidePermission(requestID: permission.requestID)) }
+                )
             }
             Text(permission.permission.replacingOccurrences(of: "_", with: " "))
                 .font(OpenCodeTypography.bodySecondary)
-            ForEach(Array(permission.patterns.enumerated()), id: \.offset) { _, pattern in
-                Text(pattern)
-                    .font(OpenCodeTypography.code)
-                    .textSelection(.enabled)
+            if permission.files.isEmpty {
+                ForEach(Array(permission.patterns.enumerated()), id: \.offset) { _, pattern in
+                    Text(pattern)
+                        .font(OpenCodeTypography.code)
+                        .textSelection(.enabled)
+                }
+            } else {
+                ForEach(permission.files, id: \.self) { file in
+                    permissionFileLine(file)
+                }
+            }
+            if !permission.alwaysPatterns.isEmpty {
+                Text("Always allows: \(permission.alwaysPatterns.joined(separator: ", "))")
+                    .font(OpenCodeTypography.caption)
+                    .foregroundStyle(OpenCodeColors.textWeak)
             }
             if let errorMessage = permission.errorMessage {
                 Text(errorMessage)
@@ -473,10 +508,10 @@ struct OpenCodeSessionComposer: View {
         }
         .padding(.horizontal, 4)
         .padding(.vertical, 4)
-        HStack {
+        HStack(spacing: 8) {
             OpenCodeButton(
                 variant: .compactText(title: "Deny"),
-                enabled: permission.actionsEnabled && !permission.submitting,
+                enabled: actionsEnabled,
                 contrast: .low,
                 action: {
                     onAction(.denyPermission(requestID: permission.requestID, sessionID: permission.sessionID))
@@ -486,15 +521,38 @@ struct OpenCodeSessionComposer: View {
             if permission.submitting {
                 ProgressView().controlSize(.small)
             }
+            if !permission.alwaysPatterns.isEmpty {
+                OpenCodeButton(
+                    variant: .compactText(title: "Always"),
+                    enabled: actionsEnabled,
+                    contrast: .low,
+                    action: {
+                        onAction(.alwaysAllowPermission(requestID: permission.requestID, sessionID: permission.sessionID))
+                    }
+                )
+            }
             OpenCodeButton(
                 variant: .compactText(title: "Allow once"),
-                enabled: permission.actionsEnabled && !permission.submitting,
+                enabled: actionsEnabled,
                 action: {
                     onAction(.allowPermissionOnce(requestID: permission.requestID, sessionID: permission.sessionID))
                 }
             )
         }
-        .accessibilityElement(children: .contain)
+    }
+
+    private func permissionFileLine(_ file: OpenCodeSessionComposerState.PermissionFile) -> some View {
+        var line = Text(file.path)
+        if file.additions > 0 || file.deletions > 0 {
+            line = line
+                + Text("  ")
+                + Text("+\(file.additions)").foregroundColor(OpenCodeColors.diffAdd)
+                + Text(" ")
+                + Text("\u{2212}\(file.deletions)").foregroundColor(OpenCodeColors.diffDelete)
+        }
+        return line
+            .font(OpenCodeTypography.code)
+            .textSelection(.enabled)
     }
 
     @ViewBuilder

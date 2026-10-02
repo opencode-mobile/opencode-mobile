@@ -1,7 +1,9 @@
 import SwiftUI
 
-enum OpenCodeActionPillVariant {
+enum OpenCodeActionPillVariant: CaseIterable {
     case scrollToEnd
+    /// A hidden permission dock waiting above the composer.
+    case reviewPermission
 }
 
 struct OpenCodeActionPill: View {
@@ -48,6 +50,8 @@ struct OpenCodeActionPill: View {
         switch variant {
         case .scrollToEnd:
             "Scroll to end"
+        case .reviewPermission:
+            "Review permission request"
         }
     }
 
@@ -55,6 +59,8 @@ struct OpenCodeActionPill: View {
         switch variant {
         case .scrollToEnd:
             .arrowDownward
+        case .reviewPermission:
+            .arrowUpward
         }
     }
 

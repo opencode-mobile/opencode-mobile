@@ -150,6 +150,7 @@ nonisolated struct SessionDomainAdapter: Sendable {
     func permissionResponse(_ decision: PermissionDecision) -> String {
         switch decision {
         case .allowOnce: "once"
+        case .alwaysAllow: "always"
         case .deny: "reject"
         }
     }

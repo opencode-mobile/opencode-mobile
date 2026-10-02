@@ -182,6 +182,7 @@ class SessionDomainAdapter {
     fun toPermissionResponse(decision: PermissionDecision): String =
         when (decision) {
             PermissionDecision.AllowOnce -> "once"
+            PermissionDecision.AlwaysAllow -> "always"
             PermissionDecision.Deny -> "reject"
         }
 

@@ -187,6 +187,9 @@ object ProductAnalytics {
         // Permission / question
         const val PERMISSION_ALLOW_ONCE = "permission_allow_once"
         const val PERMISSION_DENY = "permission_deny"
+        const val PERMISSION_ALWAYS = "permission_always"
+        const val PERMISSION_HIDE = "permission_hide"
+        const val PERMISSION_SHOW = "permission_show"
         const val QUESTION_TOGGLE_OPTION = "question_toggle_option"
         const val QUESTION_TOGGLE_CUSTOM = "question_toggle_custom"
         const val QUESTION_EDIT_CUSTOM_TEXT = "question_edit_custom_text"

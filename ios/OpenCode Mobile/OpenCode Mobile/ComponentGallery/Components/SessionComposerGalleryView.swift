@@ -9,6 +9,7 @@ private enum SessionComposerGalleryScenario: String, CaseIterable, Identifiable 
     case revert
     case childLockout
     case permission
+    case permissionEdit
     case queued
     case submitting
     case error
@@ -32,6 +33,7 @@ private enum SessionComposerGalleryScenario: String, CaseIterable, Identifiable 
         case .revert: "Revert"
         case .childLockout: "Child"
         case .permission: "Permission"
+        case .permissionEdit: "Edit"
         case .queued: "Queued"
         case .submitting: "Submitting"
         case .error: "Error"
@@ -137,6 +139,8 @@ struct SessionComposerGalleryView: View {
             )
         case .permission:
             permissionState()
+        case .permissionEdit:
+            permissionState(edit: true)
         case .queued:
             permissionState(queueCount: 3)
         case .submitting:
@@ -241,14 +245,22 @@ struct SessionComposerGalleryView: View {
     private func permissionState(
         queueCount: Int = 1,
         submitting: Bool = false,
-        errorMessage: String? = nil
+        errorMessage: String? = nil,
+        edit: Bool = false
     ) -> OpenCodeSessionComposerState {
         .permission(
             .init(
                 requestID: "permission-gallery",
                 sessionID: "session-gallery",
-                permission: "bash",
-                patterns: ["git status", "git diff --stat"],
+                permission: edit ? "edit" : "bash",
+                patterns: edit ? ["README.md", "notes/todo.md"] : ["git status --short", "git diff --stat"],
+                files: edit
+                    ? [
+                        .init(path: "README.md", additions: 1, deletions: 1),
+                        .init(path: "notes/todo.md", additions: 4, deletions: 0),
+                    ]
+                    : [],
+                alwaysPatterns: edit ? ["*"] : ["git status *", "git diff *"],
                 queueCount: queueCount,
                 submitting: submitting,
                 errorMessage: errorMessage
@@ -376,6 +388,8 @@ private extension OpenCodeSessionComposerAction {
         case .stop: "Stop"
         case .allowPermissionOnce: "Allow once"
         case .denyPermission: "Deny"
+        case .alwaysAllowPermission: "Always"
+        case .hidePermission: "Hide permission"
         case .toggleQuestionOption: "Toggle option"
         case .toggleQuestionCustom: "Toggle custom"
         case .questionCustomTextChanged: "Custom text changed"

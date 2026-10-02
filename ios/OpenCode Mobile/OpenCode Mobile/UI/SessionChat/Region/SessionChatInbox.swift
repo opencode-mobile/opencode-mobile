@@ -123,6 +123,21 @@ final class SessionChatInbox {
         await respondToPermission(requestID: requestID, sessionID: sessionID, decision: .deny)
     }
 
+    func alwaysAllowPermission(requestID: String, sessionID: String) async {
+        await respondToPermission(requestID: requestID, sessionID: sessionID, decision: .alwaysAllow)
+    }
+
+    func hidePermissionDock(requestID: String) {
+        guard state.permissionRequests.contains(where: { $0.id == requestID }) else { return }
+        state.permissionHiddenID = requestID
+        notifyChange()
+    }
+
+    func showPermissionDock() {
+        state.permissionHiddenID = nil
+        notifyChange()
+    }
+
     func toggleQuestionOption(requestID: String, sessionID: String, label: String) {
         guard let request = state.visibleQuestionRequest,
               request.id == requestID, request.sessionID == sessionID, state.questionSubmittingID == nil,
