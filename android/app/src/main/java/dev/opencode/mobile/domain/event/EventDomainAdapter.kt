@@ -468,17 +468,17 @@ class EventDomainAdapter(
             statusEvent(properties, "busy"),
         )
 
-    /**
-     * v2 has no assistant `message.updated`; synthesize one. Only `step.started`
-     * stamps `time.created` (the envelope time) so a live reply orders after the
-     * prompt it answers; later partial infos omit `time` and the store keeps it.
-     */
     /** An aborted step projects as `finish: "aborted"` so the reply keeps an Interrupted note. */
     private fun failedStepFinish(properties: JsonObject): String? {
         val type = (properties["error"] as? JsonObject)?.string("type")
         return if (ToolInterruption.isAbortedType(type)) "aborted" else "error"
     }
 
+    /**
+     * v2 has no assistant `message.updated`; synthesize one. Only `step.started`
+     * stamps `time.created` (the envelope time) so a live reply orders after the
+     * prompt it answers; later partial infos omit `time` and the store keeps it.
+     */
     private fun assistantMessageUpdated(
         properties: JsonObject,
         stampCreated: Boolean = false,
