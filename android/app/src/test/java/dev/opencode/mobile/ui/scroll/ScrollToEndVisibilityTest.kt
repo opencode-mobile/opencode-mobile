@@ -360,6 +360,102 @@ class ScrollToEndVisibilityTest {
         )
     }
 
+    // Reverse-layout geometry as LazyList reports it on device: the bottom anchor
+    // rests at offset 0 and offsets turn negative while scrolling toward older rows.
+    @Test
+    fun pinnedAtRestWithBottomAnchorAtZero() {
+        assertTrue(
+            isPinnedToTimelineEnd(
+                messageCount = 12,
+                tolerancePx = 32,
+                bottomAnchorHeightPx = 3,
+                visibleItems =
+                    listOf(
+                        TimelineVisibleItem(index = 0, offset = 0, size = 3),
+                        TimelineVisibleItem(index = 1, offset = 3, size = 988),
+                    ),
+            ),
+        )
+    }
+
+    @Test
+    fun notPinnedWhileBottomAnchorOnlyUnderComposerPadding() {
+        assertFalse(
+            isPinnedToTimelineEnd(
+                messageCount = 12,
+                tolerancePx = 32,
+                bottomAnchorHeightPx = 3,
+                visibleItems =
+                    listOf(
+                        TimelineVisibleItem(index = 0, offset = -503, size = 3),
+                        TimelineVisibleItem(index = 1, offset = -500, size = 988),
+                    ),
+            ),
+        )
+    }
+
+    @Test
+    fun notPinnedWhileTallNewestRowTopStillOnScreen() {
+        // B5-3: scrolled 864px up inside a tall newest reply. Treating this as
+        // pinned kept auto-follow armed and load-older snapped to the end.
+        assertFalse(
+            isPinnedToTimelineEnd(
+                messageCount = 12,
+                tolerancePx = 32,
+                bottomAnchorHeightPx = 3,
+                visibleItems =
+                    listOf(
+                        TimelineVisibleItem(index = 1, offset = -864, size = 988),
+                        TimelineVisibleItem(index = 2, offset = 124, size = 173),
+                    ),
+            ),
+        )
+    }
+
+    @Test
+    fun pinnedWithinToleranceOfEnd() {
+        assertTrue(
+            isPinnedToTimelineEnd(
+                messageCount = 12,
+                tolerancePx = 32,
+                bottomAnchorHeightPx = 3,
+                visibleItems =
+                    listOf(
+                        TimelineVisibleItem(index = 0, offset = -20, size = 3),
+                        TimelineVisibleItem(index = 1, offset = -17, size = 988),
+                    ),
+            ),
+        )
+        assertTrue(
+            isPinnedToTimelineEnd(
+                messageCount = 12,
+                tolerancePx = 32,
+                bottomAnchorHeightPx = 3,
+                visibleItems = listOf(TimelineVisibleItem(index = 1, offset = -25, size = 988)),
+            ),
+        )
+    }
+
+    @Test
+    fun notPinnedWhenNewestRowNotLaidOut() {
+        assertFalse(
+            isPinnedToTimelineEnd(
+                messageCount = 58,
+                tolerancePx = 32,
+                bottomAnchorHeightPx = 3,
+                visibleItems = listOf(TimelineVisibleItem(index = 9, offset = -40, size = 300)),
+            ),
+        )
+        assertTrue(
+            isPinnedToTimelineEnd(
+                messageCount = 0,
+                tolerancePx = 32,
+                bottomAnchorHeightPx = 3,
+                visibleItems = emptyList(),
+            ),
+        )
+    }
+
     private fun scrolledPastReveal(): List<TimelineVisibleItem> =
         listOf(
             TimelineVisibleItem(index = 1, offset = -4400, size = 6900),

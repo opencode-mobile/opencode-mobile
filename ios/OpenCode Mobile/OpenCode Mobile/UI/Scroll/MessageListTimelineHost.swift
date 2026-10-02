@@ -484,7 +484,11 @@ where Item.ID == String {
                 guard let self else { return }
 
                 if let visibleAnchor {
-                    self.restoreVisibleAnchor(visibleAnchor)
+                    if isOlderPrepend {
+                        self.settleOlderPrependAnchor(visibleAnchor)
+                    } else {
+                        self.restoreVisibleAnchor(visibleAnchor)
+                    }
                 }
 
                 let shouldStayPinned =
@@ -575,7 +579,7 @@ where Item.ID == String {
         return VisibleAnchor(itemID: itemID, offsetFromViewportTop: offsetFromViewportTop)
     }
 
-    private func restoreVisibleAnchor(_ anchor: VisibleAnchor) {
+    private func restoreVisibleAnchor(_ anchor: VisibleAnchor, preservingMomentum: Bool = false) {
         guard let collectionView else { return }
         guard let index = orderedIDs.firstIndex(of: anchor.itemID) else { return }
         let indexPath = IndexPath(item: index, section: 0)
@@ -591,10 +595,46 @@ where Item.ID == String {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         UIView.performWithoutAnimation {
-            collectionView.setContentOffset(CGPoint(x: 0, y: clamped), animated: false)
+            if preservingMomentum {
+                // Assigning the offset shifts an in-flight fling instead of
+                // cancelling it like `setContentOffset(_:animated:)` does.
+                collectionView.contentOffset = CGPoint(x: 0, y: clamped)
+            } else {
+                collectionView.setContentOffset(CGPoint(x: 0, y: clamped), animated: false)
+            }
         }
         CATransaction.commit()
         reportGeometry()
+    }
+
+    /// Older rows enter at the layout's estimated height. Those that land in the
+    /// viewport — e.g. in the rubber-band gap while the user is pulled past the
+    /// oldest row — self-size on the next pass, and a single restore then drifts
+    /// by their estimate error (the list "snapped back" about one turn). Lay out
+    /// the visible region and re-anchor until the anchor row holds still.
+    private func settleOlderPrependAnchor(_ anchor: VisibleAnchor) {
+        restoreVisibleAnchor(anchor, preservingMomentum: true)
+        for _ in 0..<3 {
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            UIView.performWithoutAnimation {
+                collectionView.layoutIfNeeded()
+            }
+            CATransaction.commit()
+            guard let drift = visibleAnchorDrift(anchor), abs(drift) > 0.5 else { return }
+            restoreVisibleAnchor(anchor, preservingMomentum: true)
+        }
+    }
+
+    private func visibleAnchorDrift(_ anchor: VisibleAnchor) -> CGFloat? {
+        guard let index = orderedIDs.firstIndex(of: anchor.itemID),
+              collectionView.numberOfSections > 0,
+              collectionView.numberOfItems(inSection: 0) > index,
+              let attributes = collectionView.layoutAttributesForItem(
+                  at: IndexPath(item: index, section: 0)
+              )
+        else { return nil }
+        return attributes.frame.minY - collectionView.contentOffset.y - anchor.offsetFromViewportTop
     }
 
     private func preserveUnpinnedScrollPositionIfNeeded() {

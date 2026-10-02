@@ -189,4 +189,31 @@ class MessageListVisibleAnchorScrollTest {
             ),
         )
     }
+
+    @Test
+    fun restoreTarget_accountsForStatusRowBelowNewest() {
+        val anchor = MessageListVisibleAnchor(messageId = "mid", scrollOffset = 12)
+        // Bottom anchor + working status row occupy lazy indices 0 and 1.
+        assertEquals(
+            MessageListVisibleAnchorRestoreTarget(lazyIndex = 3, scrollOffset = 12),
+            MessageListVisibleAnchorScroll.restoreTarget(
+                anchor = anchor,
+                messageIdsChronological = chronologicalIds,
+                leadingItemCount = 2,
+            ),
+        )
+    }
+
+    @Test
+    fun restoreTarget_keepsAnchorIndexWhenOlderRowsPrepend() {
+        val anchor = MessageListVisibleAnchor(messageId = "mid", scrollOffset = 30)
+        val afterPrepend = listOf("older-2", "older-1") + chronologicalIds
+        assertEquals(
+            MessageListVisibleAnchorRestoreTarget(lazyIndex = 2, scrollOffset = 30),
+            MessageListVisibleAnchorScroll.restoreTarget(
+                anchor = anchor,
+                messageIdsChronological = afterPrepend,
+            ),
+        )
+    }
 }

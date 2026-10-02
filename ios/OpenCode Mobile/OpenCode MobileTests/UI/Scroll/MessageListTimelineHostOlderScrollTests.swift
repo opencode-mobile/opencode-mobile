@@ -6,6 +6,82 @@ import UIKit
 
 @MainActor
 struct MessageListTimelineHostOlderScrollTests {
+    /// B5-3: pulled past the oldest row when the older page lands. Prepended
+    /// rows in the rubber-band gap self-size after the first restore; the old
+    /// first row must stay where it was instead of shifting by their estimate.
+    @Test func prependWhileOverscrolledAtTopKeepsOldFirstRowInPlace() throws {
+        let controller = MessageListTimelineViewController<OlderScrollItem, Text>(
+            itemContent: { Text($0.label) },
+            horizontalContentPadding: 0,
+            topContentPadding: 0,
+            bottomContentPadding: 0,
+            bottomOverlayInset: 0,
+            interItemSpacing: 0
+        )
+        let initialItems = (20...40).map { index in
+            OlderScrollItem(id: "m\(index)", label: String(repeating: "Row \(index) ", count: 12))
+        }
+        let scroll = TimelineScrollController(initialMessageCount: initialItems.count)
+        scroll.autoFollowEnabled = true
+        controller.scrollController = scroll
+        scroll.attach(controller)
+        controller.loadViewIfNeeded()
+        controller.view.frame = CGRect(x: 0, y: 0, width: 320, height: 640)
+        let window = UIWindow(frame: controller.view.frame)
+        window.rootViewController = controller
+        window.makeKeyAndVisible()
+
+        controller.apply(
+            items: initialItems,
+            packet: MessageListTimelineApplyPacket(
+                frameRevision: 1,
+                insertedRowIDs: Set(initialItems.map(\.id)),
+                changedRowIDs: [],
+                removedRowIDs: [],
+                layoutChangedRowIDs: Set(initialItems.map(\.id)),
+                grewBottomRowIDs: [],
+                decorateRowIDs: [],
+                isRequired: true,
+                kinds: [.structure, .required]
+            ),
+            animatingDifferences: false
+        )
+        controller.view.layoutIfNeeded()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.08))
+        controller.view.layoutIfNeeded()
+        // Rubber-band 80pt past the oldest loaded row.
+        controller.testSetContentOffsetY(-80)
+        controller.view.layoutIfNeeded()
+        scroll.beginUserScrolling()
+        scroll.endUserScrolling()
+        let anchorBefore = try #require(controller.testItemFrame(id: "m20"))
+
+        // Short older rows: real heights far below the 120pt layout estimate.
+        let olderItems = (1...19).map { OlderScrollItem(id: "m\($0)", label: "Older \($0)") }
+        controller.apply(
+            items: olderItems + initialItems,
+            packet: MessageListTimelineApplyPacket(
+                frameRevision: 2,
+                insertedRowIDs: Set(olderItems.map(\.id)),
+                changedRowIDs: [],
+                removedRowIDs: [],
+                layoutChangedRowIDs: Set(olderItems.map(\.id)),
+                grewBottomRowIDs: [],
+                decorateRowIDs: [],
+                isRequired: true,
+                kinds: [.structure, .required]
+            ),
+            animatingDifferences: false
+        )
+        controller.view.layoutIfNeeded()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        controller.view.layoutIfNeeded()
+
+        let anchorAfter = try #require(controller.testItemFrame(id: "m20"))
+        #expect(abs(anchorAfter.minY - anchorBefore.minY) < 2)
+        #expect(!scroll.isProgrammaticScrolling)
+    }
+
     @Test func prependRestoresVisibleItemOffsetWithoutArmingFollow() {
         let controller = MessageListTimelineViewController<OlderScrollItem, Text>(
             itemContent: { Text($0.label) },

@@ -213,17 +213,20 @@ internal fun MessageListAutoFollowArmingEffect(
 @Composable
 internal fun MessageListAutoFollowAppendEffect(
     messageCount: Int,
+    newestMessageId: String?,
     autoFollowEnabled: Boolean,
     autoFollowTolerancePx: Int,
     bottomAnchorHeightPx: Int,
     autoFollowState: MessageListAutoFollowState,
     scrollController: MessageListTimelineScrollController,
 ) {
+    val currentNewestMessageId by rememberUpdatedState(newestMessageId)
     LaunchedEffect(messageCount, autoFollowEnabled) {
         if (
             autoFollowState.onMessageCountChanged(
                 messageCount = messageCount,
                 autoFollowEnabled = autoFollowEnabled,
+                newestMessageId = currentNewestMessageId,
             )
         ) {
             withFrameNanos { }
@@ -442,6 +445,9 @@ internal fun MessageListUnarmedVisibleAnchorEffect(
             MessageListVisibleAnchorScroll.restoreTarget(
                 anchor = checkNotNull(frozenAnchor),
                 messageIdsChronological = currentMessageIds,
+                // Bottom anchor plus an optional status row sit below the newest message.
+                leadingItemCount =
+                    (listState.layoutInfo.totalItemsCount - currentMessageIds.size).coerceAtLeast(1),
             ) ?: return@LaunchedEffect
 
         listState.scrollToItem(

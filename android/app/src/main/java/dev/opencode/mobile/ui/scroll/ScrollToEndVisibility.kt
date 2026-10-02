@@ -151,33 +151,54 @@ fun LazyListState.isPinnedToTimelineEnd(
     messageCount: Int,
     tolerancePx: Int,
     bottomAnchorHeightPx: Int,
-): Boolean {
-    if (messageCount == 0) return true
+): Boolean =
+    isPinnedToTimelineEnd(
+        messageCount = messageCount,
+        tolerancePx = tolerancePx,
+        bottomAnchorHeightPx = bottomAnchorHeightPx,
+        visibleItems = layoutInfo.visibleItemsInfo.map { it.toTimelineVisibleItem() },
+    )
 
-    val bottomAnchor =
-        layoutInfo.visibleItemsInfo.firstOrNull { it.index == BOTTOM_ANCHOR_INDEX }
-    if (bottomAnchor != null) {
-        val contentEnd =
-            bottomAnchor.offset +
-                bottomAnchor.size +
-                layoutInfo.afterContentPadding
-        return contentEnd <= layoutInfo.viewportEndOffset + tolerancePx
-    }
-
-    val newestMessageIndex = newestMessageIndex(messageCount)
+/**
+ * How far the reverse-layout timeline is scrolled away from its end, in px.
+ *
+ * With `reverseLayout = true`, LazyList reports item offsets along the reversed
+ * main axis: the bottom anchor rests at offset `0` and every row's offset turns
+ * negative as the user scrolls toward older rows (content padding is outside
+ * this range). Returns `null` when neither the bottom anchor nor the newest row
+ * is laid out — the list is far from the end.
+ */
+internal fun timelineEndScrollDistancePx(
+    messageCount: Int,
+    bottomAnchorHeightPx: Int,
+    visibleItems: List<TimelineVisibleItem>,
+): Int? {
+    if (messageCount == 0) return 0
+    val bottomAnchor = visibleItems.firstOrNull { it.index == BOTTOM_ANCHOR_INDEX }
+    if (bottomAnchor != null) return -bottomAnchor.offset
     val newestMessage =
-        layoutInfo.visibleItemsInfo.firstOrNull { it.index == newestMessageIndex }
-            ?: return false
+        visibleItems.firstOrNull { it.index == newestMessageIndex(messageCount) } ?: return null
+    return bottomAnchorHeightPx - newestMessage.offset
+}
 
-    val lastVisible = layoutInfo.visibleItemsInfo.maxByOrNull { it.index } ?: return false
-    if (lastVisible.index < newestMessageIndex) return false
-
-    val estimatedContentEnd =
-        newestMessage.offset +
-            newestMessage.size +
-            layoutInfo.afterContentPadding +
-            bottomAnchorHeightPx
-    return estimatedContentEnd <= layoutInfo.viewportEndOffset + tolerancePx
+/**
+ * Pinned means scrolled no further than [tolerancePx] from the end. A newest
+ * row (or bottom anchor) that is merely still laid out — e.g. a tall reply whose
+ * top is on screen, or the anchor under the composer padding — is not pinned.
+ */
+internal fun isPinnedToTimelineEnd(
+    messageCount: Int,
+    tolerancePx: Int,
+    bottomAnchorHeightPx: Int,
+    visibleItems: List<TimelineVisibleItem>,
+): Boolean {
+    val distance =
+        timelineEndScrollDistancePx(
+            messageCount = messageCount,
+            bottomAnchorHeightPx = bottomAnchorHeightPx,
+            visibleItems = visibleItems,
+        ) ?: return false
+    return distance <= tolerancePx
 }
 
 suspend fun LazyListState.animateScrollToTimelineEnd() {
