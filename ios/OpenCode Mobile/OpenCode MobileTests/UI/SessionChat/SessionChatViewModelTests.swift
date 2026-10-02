@@ -3068,6 +3068,162 @@ struct SessionChatViewModelTests {
         #expect(viewModel.uiState.snackbar == nil)
     }
 
+    @Test func runClientSlashAction_compactEnqueued_timelineCompletesBeforePostReturns_showsOneSuccess() async {
+        let hold = AsyncGate()
+        let repository = FakeMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        let sessionRepository = FakeChatSessionRepository(summarizeHold: hold, compactStart: .enqueued)
+        let viewModel = makeViewModel(
+            messageRepository: repository,
+            eventStream: eventStream,
+            sessionRepository: sessionRepository
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        _ = await waitUntil { viewModel.uiState.visibleClientSlashActions.contains(.compact) }
+
+        viewModel.runClientSlashAction(.compact)
+        await waitUntil { sessionRepository.summarizeRequest != nil }
+        #expect(viewModel.uiState.sessionStatusLabel == SessionCompactChrome.statusLabel)
+
+        // The live compaction item completes while POST /compact is still in flight.
+        repository.messages.append(completedCompactionMessage(summary: "## Goal\nShip it"))
+        eventStream.openGap()
+        eventStream.emit(OpencodeEvent(type: "server.connected", sessionID: nil))
+        await waitUntil(timeoutMs: 5_000) { viewModel.uiState.sessionStatusLabel == nil }
+        try? await Task.sleep(for: .milliseconds(100))
+        #expect(viewModel.uiState.sessionStatusLabel == nil)
+        #expect(viewModel.uiState.snackbar == nil)
+
+        await hold.open()
+        await waitUntil(timeoutMs: 5_000) { viewModel.uiState.snackbar?.message == SessionCompactChrome.fallbackSuccess }
+        #expect(viewModel.uiState.snackbar?.message == SessionCompactChrome.fallbackSuccess)
+        #expect(viewModel.uiState.sessionStatusLabel == nil)
+
+        viewModel.consumeSnackbar()
+        try? await Task.sleep(for: .milliseconds(150))
+        #expect(viewModel.uiState.snackbar == nil)
+    }
+
+    @Test func runClientSlashAction_compactEnqueued_busyThenIdleBeforePostReturns_clearsWithoutSuccess() async {
+        let hold = AsyncGate()
+        let eventStream = FakeForegroundEventStream()
+        let sessionRepository = FakeChatSessionRepository(summarizeHold: hold, compactStart: .enqueued)
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(),
+            eventStream: eventStream,
+            sessionRepository: sessionRepository
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        _ = await waitUntil { viewModel.uiState.visibleClientSlashActions.contains(.compact) }
+
+        viewModel.runClientSlashAction(.compact)
+        await waitUntil { sessionRepository.summarizeRequest != nil }
+        eventStream.emit(busyStatusEvent())
+        try? await Task.sleep(for: .milliseconds(100))
+        eventStream.emit(OpencodeEvent(type: "session.idle", sessionID: "ses-1"))
+        try? await Task.sleep(for: .milliseconds(100))
+        // Enqueue not confirmed yet: idle alone does not end the compaction.
+        #expect(viewModel.uiState.sessionStatusLabel == SessionCompactChrome.statusLabel)
+
+        await hold.open()
+        await waitUntil(timeoutMs: 5_000) { viewModel.uiState.sessionStatusLabel == nil }
+        try? await Task.sleep(for: .milliseconds(100))
+        #expect(viewModel.uiState.sessionStatusLabel == nil)
+        #expect(viewModel.uiState.snackbar == nil)
+    }
+
+    @Test func runClientSlashAction_compactFinished_timelineCompletesFirst_showsOneSuccess() async {
+        let hold = AsyncGate()
+        let repository = FakeMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        let sessionRepository = FakeChatSessionRepository(summarizeHold: hold, compactStart: .finished)
+        let viewModel = makeViewModel(
+            messageRepository: repository,
+            eventStream: eventStream,
+            sessionRepository: sessionRepository
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        _ = await waitUntil { viewModel.uiState.visibleClientSlashActions.contains(.compact) }
+
+        viewModel.runClientSlashAction(.compact)
+        await waitUntil { sessionRepository.summarizeRequest != nil }
+        repository.messages.append(completedCompactionMessage(summary: "## Goal\nShip it"))
+        eventStream.openGap()
+        eventStream.emit(OpencodeEvent(type: "server.connected", sessionID: nil))
+        await waitUntil(timeoutMs: 5_000) { viewModel.uiState.sessionStatusLabel == nil }
+        try? await Task.sleep(for: .milliseconds(100))
+        #expect(viewModel.uiState.snackbar == nil)
+
+        await hold.open()
+        await waitUntil(timeoutMs: 5_000) { viewModel.uiState.snackbar?.message == SessionCompactChrome.fallbackSuccess }
+        #expect(viewModel.uiState.snackbar?.message == SessionCompactChrome.fallbackSuccess)
+
+        viewModel.consumeSnackbar()
+        try? await Task.sleep(for: .milliseconds(150))
+        #expect(viewModel.uiState.snackbar == nil)
+        #expect(viewModel.uiState.sessionStatusLabel == nil)
+    }
+
+    @Test func runClientSlashAction_compactEnqueued_stillBusyWhenPostReturns_staysCompacting() async {
+        let hold = AsyncGate()
+        let repository = FakeMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        // Busy on the server too, so the reconnect refresh below keeps the session busy.
+        let sessionRepository = FakeChatSessionRepository(
+            sessionStatusType: "busy",
+            summarizeHold: hold,
+            compactStart: .enqueued
+        )
+        let viewModel = makeViewModel(
+            messageRepository: repository,
+            eventStream: eventStream,
+            sessionRepository: sessionRepository
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        _ = await waitUntil { viewModel.uiState.visibleClientSlashActions.contains(.compact) }
+
+        viewModel.runClientSlashAction(.compact)
+        await waitUntil { sessionRepository.summarizeRequest != nil }
+        eventStream.emit(busyStatusEvent())
+        try? await Task.sleep(for: .milliseconds(100))
+
+        // The post-enqueue re-check must see the session still busy, not treat it as idle.
+        await hold.open()
+        try? await Task.sleep(for: .milliseconds(150))
+        #expect(viewModel.uiState.sessionStatusLabel == SessionCompactChrome.statusLabel)
+        #expect(viewModel.uiState.snackbar == nil)
+
+        repository.messages.append(completedCompactionMessage(summary: "## Goal\nShip it"))
+        eventStream.openGap()
+        eventStream.emit(OpencodeEvent(type: "server.connected", sessionID: nil))
+        await waitUntil(timeoutMs: 5_000) { viewModel.uiState.snackbar?.message == SessionCompactChrome.fallbackSuccess }
+        #expect(viewModel.uiState.snackbar?.message == SessionCompactChrome.fallbackSuccess)
+    }
+
+    private func completedCompactionMessage(summary: String?) -> Message {
+        Message(
+            id: "msg-c",
+            role: .assistant,
+            text: "",
+            parts: [.compaction(CompactionPart(id: "msg-c", completed: true, summary: summary))],
+            model: nil,
+            mode: "compaction",
+            sentAtEpochMs: 5
+        )
+    }
+
+    private func busyStatusEvent() -> OpencodeEvent {
+        OpencodeEvent(
+            type: "session.status",
+            sessionID: "ses-1",
+            rawProperties: ["status": .dictionary(["type": .string("busy")])]
+        )
+    }
+
     @Test func runClientSlashAction_compact_showsCompactingWhileInFlight() async {
         let hold = AsyncGate()
         let clock = ChatTestSyncClock(now: 1_000)
