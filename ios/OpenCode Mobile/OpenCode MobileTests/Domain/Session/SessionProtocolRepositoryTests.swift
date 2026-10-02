@@ -121,14 +121,14 @@ struct SessionProtocolRepositoryTests {
 
     @Test func v2ForkPostsBoundaryEnvelope() async throws {
         ProtocolRoutingURLProtocol.reset(responses: [
-            .json(sessionEnvelope(id: "ses_fork", title: "Fork", parentID: "ses_1"))
+            .json(sessionEnvelope(id: "ses_fork", title: "Fork", forkSourceID: "ses_1"))
         ])
         let repository = makeSessionRepository(serverProtocol: .v2)
 
         let forked = try await repository.forkSession(id: "ses_1", atMessageID: "msg_1")
 
         #expect(forked.id == "ses_fork")
-        #expect(forked.parentID == "ses_1")
+        #expect(forked.parentID == nil)
         let request = try #require(ProtocolRoutingURLProtocol.requests.first)
         #expect(request.httpMethod == "POST")
         #expect(request.url?.path.hasSuffix("/api/session/ses_1/fork") == true)
@@ -309,7 +309,7 @@ struct SessionProtocolRepositoryTests {
         #expect(queryValue(url, "location[directory]") == "/repo")
     }
 
-    @Test func v2RespondToPermissionPostsReplyBody() async throws {
+    @Test func v2RespondToPermissionPostsDecisionBody() async throws {
         ProtocolRoutingURLProtocol.reset(responses: [.noContent])
         let repository = makeSessionRepository(serverProtocol: .v2)
 
@@ -324,7 +324,29 @@ struct SessionProtocolRepositoryTests {
         let request = try #require(ProtocolRoutingURLProtocol.requests.first)
         #expect(request.httpMethod == "POST")
         #expect(request.url?.path.hasSuffix("/api/session/ses_1/permission/per_1/reply") == true)
-        #expect(ProtocolRoutingURLProtocol.bodies.first??.contains(#""reply":"once""#) == true)
+        let body = try #require(ProtocolRoutingURLProtocol.bodies.first ?? nil)
+        #expect(body.contains(#""decision":"once""#))
+        #expect(!body.contains(#""reply""#))
+    }
+
+    @Test func v2RespondToPermissionDenyPostsRejectDecision() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [.noContent])
+        let repository = makeSessionRepository(serverProtocol: .v2)
+
+        let ok = try await repository.respondToPermission(
+            sessionID: "ses_1",
+            permissionID: "per_1",
+            decision: .deny,
+            directory: "/repo"
+        )
+
+        #expect(ok)
+        let request = try #require(ProtocolRoutingURLProtocol.requests.first)
+        #expect(request.httpMethod == "POST")
+        #expect(request.url?.path.hasSuffix("/api/session/ses_1/permission/per_1/reply") == true)
+        let body = try #require(ProtocolRoutingURLProtocol.bodies.first ?? nil)
+        #expect(body.contains(#""decision":"reject""#))
+        #expect(!body.contains(#""reply""#))
     }
 
     @Test func v2ListPendingQuestionsFallsBackToFormsWhenQuestionRoute404s() async throws {
@@ -779,11 +801,15 @@ struct SessionProtocolRepositoryTests {
         id: String,
         title: String?,
         parentID: String? = nil,
+        forkSourceID: String? = nil,
         archived: Int64? = nil,
         wrapInData: Bool = true
     ) -> String {
         let titleField = title.map { "\"title\":\"\($0)\"," } ?? ""
-        let parentField = parentID.map { ",\"parentID\":\"\($0)\"" } ?? ""
+        let parentField = (parentID.map { ",\"parentID\":\"\($0)\"" } ?? "")
+            + (forkSourceID.map {
+                ",\"fork\":{\"sessionID\":\"\($0)\",\"boundary\":{\"type\":\"before\",\"messageID\":\"msg_1\"}}"
+            } ?? "")
         let archivedField = archived.map { ",\"archived\":\($0)" } ?? ""
         let session = "{"
             + "\"id\":\"\(id)\",\(titleField)\"projectID\":\"p\",\"cost\":0,"

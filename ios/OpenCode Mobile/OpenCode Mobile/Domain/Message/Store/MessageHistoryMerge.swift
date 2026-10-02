@@ -15,9 +15,16 @@ nonisolated enum MessageHistoryMerge {
         guard let firstOverlap = oldestOverlapIndex(local: local, tail: tail) else {
             return tail
         }
-        let lastOverlap = newestOverlapIndex(local: local, tail: tail) ?? firstOverlap
         let olderPrefix = Array(local.prefix(firstOverlap))
-        let newerSuffix = Array(local.suffix(from: min(local.count, lastOverlap + 1)))
+        // Only rows newer than the tail's newest message survive (live arrivals the
+        // snapshot predates). When that message is not local, every local row past
+        // the overlap sits inside the tail's window, so the tail disproves it (a
+        // committed revert removed it on the server).
+        let tailIDs = Set(tail.map(\.id))
+        var newerSuffix: [Message] = []
+        if let newestID = tail.last?.id, let newestLocal = local.lastIndex(where: { $0.id == newestID }) {
+            newerSuffix = local.suffix(from: newestLocal + 1).filter { !tailIDs.contains($0.id) }
+        }
         return olderPrefix + tail + newerSuffix
     }
 
@@ -35,7 +42,10 @@ nonisolated enum MessageHistoryMerge {
         if remote.isEmpty { return true }
         guard let firstOverlap = oldestOverlapIndex(local: local, tail: remote) else { return true }
         let lastOverlap = newestOverlapIndex(local: local, tail: remote) ?? firstOverlap
-        let localWindow = Array(local[firstOverlap...lastOverlap])
+        // A local message inside the tail's window that the tail lacks was removed
+        // on the server (a committed revert): it must not make the tail look stale.
+        let remoteIDs = Set(remote.map(\.id))
+        let localWindow = local[firstOverlap...lastOverlap].filter { remoteIDs.contains($0.id) }
         return MessageSnapshotAuthority.isAheadOrEqual(remote: remote, local: localWindow)
     }
 

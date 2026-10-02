@@ -116,6 +116,12 @@ class SessionChatViewModel
 
         internal var nowMs: () -> Long = { System.currentTimeMillis() }
 
+        internal var catalogRetryDelaysMs: List<Long>
+            get() = composer.catalogRetryDelaysMs
+            set(value) {
+                composer.catalogRetryDelaysMs = value
+            }
+
         private val timeline =
             SessionChatTimeline(
                 messageRepository = messageRepository,
@@ -132,6 +138,7 @@ class SessionChatViewModel
                 sessionModelSelectionStore = sessionModelSelectionStore,
                 composerDraftStore = composerDraftStore,
                 scope = viewModelScope,
+                foregroundEventStream = foregroundEventStream,
             )
         private val sessionInfo =
             SessionInfo(

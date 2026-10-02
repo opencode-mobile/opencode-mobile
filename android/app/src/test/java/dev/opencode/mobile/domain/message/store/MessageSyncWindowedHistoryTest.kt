@@ -244,6 +244,44 @@ class MessageSyncWindowedHistoryTest {
         }
 
     @Test
+    fun cachedRevertedTurn_restTailWithoutIt_dropsTheRevertedRows() =
+        runTest(testDispatcher) {
+            // Cold start: the cache still holds a turn the server reverted and removed.
+            val cache =
+                SeededSessionCache(
+                    listOf(
+                        user("u1"),
+                        assistant("a1"),
+                        Message(id = "u2", role = MessageRole.User, text = "Queued prompt"),
+                        Message(id = "a2", role = MessageRole.Assistant, text = "A long reply to the reverted prompt."),
+                        user("u3"),
+                        assistant("a3"),
+                    ),
+                )
+            val sync =
+                createSync(
+                    listMessageTail = { _, _ ->
+                        MessagePage(
+                            messages = listOf(user("u1"), assistant("a1"), user("u3"), assistant("a3")),
+                            olderCursor = null,
+                            hasOlder = false,
+                        )
+                    },
+                    sessionCache = cache,
+                )
+            val updates = mutableListOf<MessageListUpdate>()
+            val job =
+                launch {
+                    sync.observeMessages("ses-1", "/repo").collect { updates += it }
+                }
+            advanceUntilIdle()
+            job.cancel()
+            val published = updates.filterIsInstance<MessageListUpdate.Messages>()
+            assertFalse(published.last().isFromCache)
+            assertEquals(listOf("u1", "a1", "u3", "a3"), published.last().messages.map { it.id })
+        }
+
+    @Test
     fun streamingCachedTail_completedRestTail_publishesRestContent() =
         runTest(testDispatcher) {
             val cache =

@@ -1058,7 +1058,7 @@ nonisolated final class MessageSync: @unchecked Sendable {
 
         switch event.type {
         case "message.updated", "message.part.updated", "message.part.delta",
-             "message.removed", "message.part.removed", "session.idle":
+             "message.removed", "message.part.removed", "session.revert.committed", "session.idle":
             noteMessageActivity(for: key.storeSlot)
         default:
             break
@@ -1082,6 +1082,16 @@ nonisolated final class MessageSync: @unchecked Sendable {
             handleMessagePartDelta(event: event, key: key, publishMessages: publishMessages)
         case "message.removed":
             handleMessageRemoved(event: event, key: key, publishMessages: publishMessages)
+        case "session.revert.committed":
+            if !handleRevertCommitted(event: event, key: key, publishMessages: publishMessages) {
+                // The revert point is outside the loaded window: let REST settle it.
+                await fullReloadSilent(
+                    key: key,
+                    reason: "session.revert.committed",
+                    staging: staging,
+                    publishMessages: publishMessages
+                )
+            }
         case "message.part.removed":
             if requiresFullReloadForRestSeededPartRemoval(event: event, key: key) {
                 await fullReloadSilent(
@@ -1125,6 +1135,8 @@ nonisolated final class MessageSync: @unchecked Sendable {
                 handleMessagePartDelta(event: event, key: key, publishMessages: publishMessages)
             case "message.removed":
                 handleMessageRemoved(event: event, key: key, publishMessages: publishMessages)
+            case "session.revert.committed":
+                _ = handleRevertCommitted(event: event, key: key, publishMessages: publishMessages)
             case "message.part.removed":
                 handleMessagePartRemoved(event: event, key: key, publishMessages: publishMessages)
             default:
@@ -1194,6 +1206,24 @@ nonisolated final class MessageSync: @unchecked Sendable {
         guard case .changed(let changeSet) = store.apply(sessionID: key.storeSlot, patch: .removed(messageID: messageID)) else { return }
         MessagePipelineProbe.emit(.reducerCommitted)
         emitLiveMessages(key: key, changeSet: changeSet, publishMessages: publishMessages)
+    }
+
+    /// Drops the reverted message and everything after it; false when the revert
+    /// point is not in the store.
+    @discardableResult
+    private func handleRevertCommitted(
+        event: OpencodeEvent,
+        key: MessageSessionKey,
+        publishMessages: @escaping @Sendable ([Message]) -> Void
+    ) -> Bool {
+        guard let messageID = event.rawProperties?["messageID"]?.stringValue else { return true }
+        guard case .changed(let changeSet) = store.apply(
+            sessionID: key.storeSlot,
+            patch: .removedFrom(messageID: messageID)
+        ) else { return false }
+        MessagePipelineProbe.emit(.reducerCommitted)
+        emitLiveMessages(key: key, changeSet: changeSet, publishMessages: publishMessages)
+        return true
     }
 
     private func handleMessagePartRemoved(

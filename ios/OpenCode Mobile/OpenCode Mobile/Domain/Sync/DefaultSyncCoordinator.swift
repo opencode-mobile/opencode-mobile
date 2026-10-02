@@ -80,12 +80,10 @@ nonisolated final class DefaultSyncCoordinator: SyncCoordinator, @unchecked Send
             record.state = .stale
             waiters.append(contentsOf: record.takeWaiters())
             records[key] = record
+            publishStateLocked(key, .stale)
         }
         lock.unlock()
         resume(waiters)
-        for key in keys {
-            publishState(key, .stale)
-        }
     }
 
     func register(
@@ -102,8 +100,8 @@ nonisolated final class DefaultSyncCoordinator: SyncCoordinator, @unchecked Send
             return SyncRegistration(id: id, key: key)
         }
         records[key] = KeyRecord(loader: loader, registrationID: id)
+        publishStateLocked(key, .stale)
         lock.unlock()
-        publishState(key, .stale)
         return SyncRegistration(id: id, key: key)
     }
 
@@ -139,8 +137,9 @@ nonisolated final class DefaultSyncCoordinator: SyncCoordinator, @unchecked Send
             if records[key] != nil {
                 records[key]?.stateContinuations[id] = continuation
             }
-            lock.unlock()
+            // Yield under the lock so a concurrent publish can't overtake this first value.
             continuation.yield(current)
+            lock.unlock()
             continuation.onTermination = { [weak self] _ in
                 guard let self else { return }
                 self.lock.lock()
@@ -189,11 +188,9 @@ nonisolated final class DefaultSyncCoordinator: SyncCoordinator, @unchecked Send
             record.retryAttempt = 0
             record.state = .stale
             records[item] = record
+            publishStateLocked(item, .stale)
         }
         lock.unlock()
-        for item in keys {
-            publishState(item, .stale)
-        }
     }
 
     func bootstrap(_ reason: SyncBootstrapReason) async {
@@ -507,8 +504,8 @@ nonisolated final class DefaultSyncCoordinator: SyncCoordinator, @unchecked Send
         }
         record.loadTask = loadTask
         records[key] = record
+        publishStateLocked(key, .syncing)
         lock.unlock()
-        publishState(key, .syncing)
         await loadTask.value
     }
 
@@ -549,10 +546,9 @@ nonisolated final class DefaultSyncCoordinator: SyncCoordinator, @unchecked Send
                 record.state = .stale
             }
             records[key] = record
-            let nextState = record.state
             let shouldReload = record.state == .stale && generationMatches && canCatchUpLocked()
+            publishStateLocked(key, record.state)
             lock.unlock()
-            publishState(key, nextState)
             resume(waiters)
             if shouldReload {
                 Task.detached { [weak self] in
@@ -566,8 +562,8 @@ nonisolated final class DefaultSyncCoordinator: SyncCoordinator, @unchecked Send
         let attempt = record.retryAttempt
         let shouldRetry = generationMatches && canCatchUpLocked()
         records[key] = record
+        publishStateLocked(key, .stale)
         lock.unlock()
-        publishState(key, .stale)
         resume(waiters)
         if shouldRetry {
             scheduleRetry(key: key, serial: currentSerial, generation: generation, attempt: attempt)
@@ -610,16 +606,12 @@ nonisolated final class DefaultSyncCoordinator: SyncCoordinator, @unchecked Send
         }
     }
 
-    private func publishState(_ key: ProjectionKey, _ state: ProjectionState) {
-        lock.lock()
-        let continuations: [AsyncStream<ProjectionState>.Continuation]
-        if let record = records[key] {
-            continuations = Array(record.stateContinuations.values)
-        } else {
-            continuations = []
-        }
-        lock.unlock()
-        for continuation in continuations {
+    /// Delivers `state` to the key's observers. Call with `lock` held, in the same critical section
+    /// that changed the state, so observers see changes in the order they happened (a publish made
+    /// after unlocking could otherwise land after a newer one and leave observers on an old state).
+    private func publishStateLocked(_ key: ProjectionKey, _ state: ProjectionState) {
+        guard let record = records[key] else { return }
+        for continuation in record.stateContinuations.values {
             continuation.yield(state)
         }
     }

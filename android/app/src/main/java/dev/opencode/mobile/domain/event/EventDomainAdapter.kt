@@ -2,6 +2,7 @@ package dev.opencode.mobile.domain.event
 
 import dev.opencode.mobile.domain.message.AttachmentDataUrl
 import dev.opencode.mobile.domain.message.ToolPartIdentity
+import dev.opencode.mobile.domain.message.V2ContentPartId
 import dev.opencode.mobile.domain.session.SessionActivity
 import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.domain.session.toSessionActivity
@@ -18,10 +19,17 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
+import java.util.concurrent.ConcurrentHashMap
 
 class EventDomainAdapter(
     private val json: Json,
 ) {
+    /**
+     * v2 compaction message id per session, remembered from `compaction.started`:
+     * `ended` / `failed` carry no id, while the server updates the running item.
+     */
+    private val runningCompactionIds = ConcurrentHashMap<String, String>()
+
     fun parseEvent(dataLine: String): OpencodeEvent? = parseEvents(dataLine).firstOrNull()
 
     fun parseEvents(dataLine: String): List<OpencodeEvent> = (parse(dataLine) as? EventParseOutcome.Events)?.events ?: emptyList()
@@ -41,10 +49,11 @@ class EventDomainAdapter(
                     ?: return EventParseOutcome.Unrecognized
             val innerType = stringIn(syncEvent, "type") ?: return EventParseOutcome.Unrecognized
             val data = propertiesFromData(syncEvent["data"]) ?: JsonObject(emptyMap())
+            val envelopeId = stringIn(syncEvent, "id") ?: stringIn(payload, "id") ?: stringIn(raw, "id")
             val stamped =
                 stampEnvelopeId(
-                    project(canonicalEventType(innerType), data),
-                    stringIn(syncEvent, "id") ?: stringIn(payload, "id") ?: stringIn(raw, "id"),
+                    project(canonicalEventType(innerType), data, envelopeId),
+                    envelopeId,
                 )
             return if (stamped.isEmpty()) {
                 EventParseOutcome.Dropped(canonicalEventType(innerType))
@@ -52,10 +61,11 @@ class EventDomainAdapter(
                 EventParseOutcome.Events(stamped)
             }
         }
+        val envelopeId = stringIn(payload, "id") ?: stringIn(raw, "id")
         val stamped =
             stampEnvelopeId(
-                project(canonicalEventType(type), properties),
-                stringIn(payload, "id") ?: stringIn(raw, "id"),
+                project(canonicalEventType(type), properties, envelopeId),
+                envelopeId,
             )
         return if (stamped.isEmpty()) {
             EventParseOutcome.Dropped(canonicalEventType(type))
@@ -148,6 +158,7 @@ class EventDomainAdapter(
     private fun project(
         type: String,
         properties: JsonObject,
+        envelopeId: String? = null,
     ): List<OpencodeEvent> =
         when (type) {
             "permission.v2.asked" -> listOf(event("permission.asked", properties))
@@ -223,24 +234,24 @@ class EventDomainAdapter(
             "session.next.compaction.started",
             "session.compaction.started",
             ->
-                listOf(
-                    statusEvent(properties, "busy"),
-                    compactionPartUpdated(properties, completed = false),
-                )
+                listOf(statusEvent(properties, "busy")) +
+                    compactionUpdated(properties, envelopeId, phase = CompactionPhase.Started)
+            // The summary streams as model context; the timeline never shows it as text.
             "session.next.compaction.delta",
             "session.compaction.delta",
-            -> listOf(compactionTextDelta(properties))
+            -> emptyList()
             "session.next.compaction.ended",
             "session.compaction.ended",
-            -> listOf(compactionPartUpdated(properties, completed = true))
+            -> compactionUpdated(properties, envelopeId, phase = CompactionPhase.Ended)
             "session.next.compaction.failed",
             "session.compaction.failed",
             ->
-                listOf(
-                    compactionPartUpdated(properties, completed = true),
-                    event("session.error", properties),
-                    event("session.idle", properties),
-                )
+                compactionUpdated(properties, envelopeId, phase = CompactionPhase.Failed) +
+                    listOf(
+                        event("session.error", properties),
+                        event("session.idle", properties),
+                    )
+            "session.revert.committed" -> listOfNotNull(revertCommitted(properties))
             "session.next.reasoning.started",
             "session.reasoning.started",
             -> reasoningStarted(properties)
@@ -267,6 +278,7 @@ class EventDomainAdapter(
             "session.model.selected",
             -> listOf(event("session.updated", properties))
             "session.renamed" -> listOf(renamedToUpdated(properties))
+            "session.forked" -> listOf(forkedToCreated(properties))
             "session.usage.updated",
             "session.next.usage.updated",
             -> listOfNotNull(usageUpdated(properties))
@@ -307,6 +319,21 @@ class EventDomainAdapter(
                 properties.string("title")?.let { put("title", it) }
             }
         return event("session.updated", buildJsonObject { put("info", info) })
+    }
+
+    /**
+     * v2 announces a fork only as `session.forked`, whose `parentID` is the fork source.
+     * A fork is a new top-level session, so it is projected as `session.created` without
+     * `parentID`, keeping it from reading as a subagent child.
+     */
+    private fun forkedToCreated(properties: JsonObject): OpencodeEvent {
+        val sessionId = sessionIdFromProperties(properties)
+        val projected =
+            buildJsonObject {
+                sessionId?.let { put("sessionID", it) }
+                properties.string("parentID")?.let { put("forkedFromSessionID", it) }
+            }
+        return event("session.created", projected)
     }
 
     private fun inboxCancelled(properties: JsonObject): OpencodeEvent {
@@ -429,11 +456,19 @@ class EventDomainAdapter(
 
     private fun stepStarted(properties: JsonObject): List<OpencodeEvent> =
         listOfNotNull(
-            assistantMessageUpdated(properties),
+            assistantMessageUpdated(properties, stampCreated = true),
             statusEvent(properties, "busy"),
         )
 
-    private fun assistantMessageUpdated(properties: JsonObject): OpencodeEvent? {
+    /**
+     * v2 has no assistant `message.updated`; synthesize one. Only `step.started`
+     * stamps `time.created` (the envelope time) so a live reply orders after the
+     * prompt it answers; later partial infos omit `time` and the store keeps it.
+     */
+    private fun assistantMessageUpdated(
+        properties: JsonObject,
+        stampCreated: Boolean = false,
+    ): OpencodeEvent? {
         val sessionId = sessionIdFromProperties(properties)
         val assistantId = properties.string("assistantMessageID") ?: properties.string("messageID") ?: return null
         val info =
@@ -441,6 +476,11 @@ class EventDomainAdapter(
                 put("id", assistantId)
                 sessionId?.let { put("sessionID", it) }
                 put("role", "assistant")
+                if (stampCreated) {
+                    properties.long("created")?.let { created ->
+                        put("time", buildJsonObject { put("created", created) })
+                    }
+                }
             }
         return event("message.updated", buildJsonObject { put("info", info) })
     }
@@ -535,36 +575,77 @@ class EventDomainAdapter(
             title = "Shell",
         )
 
-    private fun compactionPartUpdated(
+    private enum class CompactionPhase { Started, Ended, Failed }
+
+    /**
+     * v2 compaction is its own transcript item (`type: compaction`). Its id is
+     * `inputID` or the `started` envelope id with `evt_` swapped for `msg_`; a
+     * finished one without a remembered start uses its own envelope id, as the
+     * server does when it appends a completed item.
+     */
+    private fun compactionUpdated(
         properties: JsonObject,
-        completed: Boolean,
-    ): OpencodeEvent {
+        envelopeId: String?,
+        phase: CompactionPhase,
+    ): List<OpencodeEvent> {
         val sessionId = sessionIdFromProperties(properties)
-        val messageId = properties.string("messageID")
+        val fromEnvelope = envelopeId?.let { id -> if (id.startsWith("evt_")) "msg_" + id.removePrefix("evt_") else id }
+        val remembered = sessionId?.let { runningCompactionIds[it] }
+        val messageId =
+            when (phase) {
+                CompactionPhase.Started -> properties.string("inputID") ?: properties.string("messageID") ?: fromEnvelope
+                else -> properties.string("inputID") ?: properties.string("messageID") ?: remembered ?: fromEnvelope
+            } ?: return emptyList()
+        if (sessionId != null) {
+            if (phase == CompactionPhase.Started) {
+                runningCompactionIds[sessionId] = messageId
+            } else {
+                runningCompactionIds.remove(sessionId)
+            }
+        }
+        val info =
+            buildJsonObject {
+                put("id", messageId)
+                sessionId?.let { put("sessionID", it) }
+                put("role", "assistant")
+                put("mode", "compaction")
+                if (phase == CompactionPhase.Started) {
+                    properties.long("created")?.let { created ->
+                        put("time", buildJsonObject { put("created", created) })
+                    }
+                }
+            }
         val part =
             buildJsonObject {
-                messageId?.let { put("id", it) }
+                put("id", messageId)
                 sessionId?.let { put("sessionID", it) }
-                messageId?.let { put("messageID", it) }
+                put("messageID", messageId)
                 put("type", "compaction")
                 put("auto", properties.string("reason") == "auto")
-                put("completed", completed)
+                put("completed", phase != CompactionPhase.Started)
+                if (phase == CompactionPhase.Ended) {
+                    properties.string("text")?.takeIf { it.isNotBlank() }?.let { put("summary", it) }
+                }
             }
-        return event("message.part.updated", buildJsonObject { put("part", part) })
+        return listOf(
+            event("message.updated", buildJsonObject { put("info", info) }),
+            event("message.part.updated", buildJsonObject { put("part", part) }),
+        )
     }
 
-    private fun compactionTextDelta(properties: JsonObject): OpencodeEvent {
-        val sessionId = sessionIdFromProperties(properties)
-        val messageId = properties.string("messageID")
+    /**
+     * v2 announces a committed revert only as `session.revert.committed {to}`:
+     * the server dropped `to` and every later message, with no per-message
+     * `message.removed` (v1 sends those instead).
+     */
+    private fun revertCommitted(properties: JsonObject): OpencodeEvent? {
+        val messageId = properties.string("to") ?: properties.string("messageID") ?: return null
         val projected =
             buildJsonObject {
-                sessionId?.let { put("sessionID", it) }
-                messageId?.let { put("messageID", it) }
-                messageId?.let { put("partID", "$it:text:0") }
-                put("field", "text")
-                properties.string("text")?.let { put("delta", it) }
+                sessionIdFromProperties(properties)?.let { put("sessionID", it) }
+                put("messageID", messageId)
             }
-        return event("message.part.delta", projected)
+        return event("session.revert.committed", projected)
     }
 
     private fun toolLikePartUpdated(
@@ -765,17 +846,25 @@ class EventDomainAdapter(
 
     private fun JsonObject.textPartId(): String? {
         string("textID")?.let { return it }
-        val ordinal = this["ordinal"]?.jsonPrimitive ?: return null
-        val value = ordinal.intOrNull?.toString() ?: ordinal.contentOrNull ?: return null
-        return "text-$value"
+        return ordinalPartId("text")
     }
 
     private fun JsonObject.reasoningPartId(): String? {
         string("reasoningID")?.let { return it }
         string("id")?.let { return it }
+        return ordinalPartId("reasoning")
+    }
+
+    /**
+     * v2 text/reasoning events carry no part id, only an `ordinal` that restarts
+     * at 0 in every assistant message. Scope it to the message so step texts of
+     * one turn stay distinct, matching [MessageDomainAdapter]'s REST ids.
+     */
+    private fun JsonObject.ordinalPartId(kind: String): String? {
         val ordinal = this["ordinal"]?.jsonPrimitive ?: return null
         val value = ordinal.intOrNull?.toString() ?: ordinal.contentOrNull ?: return null
-        return "reasoning-$value"
+        val messageId = string("assistantMessageID") ?: return "$kind-$value"
+        return V2ContentPartId.of(messageId, kind, value)
     }
 
     private fun JsonObject.string(key: String): String? = this[key]?.jsonPrimitive?.contentOrNull

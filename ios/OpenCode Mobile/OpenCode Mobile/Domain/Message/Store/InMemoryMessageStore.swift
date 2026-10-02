@@ -55,6 +55,8 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
                 return applyPartDelta(sessionID: sessionID, messageID: messageID, partID: partID, delta: delta)
             case .removed(let messageID):
                 return applyMessageRemoved(sessionID: sessionID, messageID: messageID)
+            case .removedFrom(let messageID):
+                return applyMessagesRemovedFrom(sessionID: sessionID, messageID: messageID)
             case .partRemoved(let messageID, let partID):
                 return applyPartRemoved(sessionID: sessionID, messageID: messageID, partID: partID)
             }
@@ -132,7 +134,9 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
             sentAtEpochMs: baseMessage.sentAtEpochMs,
             completedAtEpochMs: baseMessage.completedAtEpochMs,
             contextInputTokens: baseMessage.contextInputTokens,
-            contextEstimate: baseMessage.contextEstimate
+            contextEstimate: baseMessage.contextEstimate,
+            followUpDelivery: baseMessage.followUpDelivery,
+            isWaitingForPickup: baseMessage.isWaitingForPickup
         )
     }
 
@@ -277,13 +281,22 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
         ensureCaches(sessionID: sessionID)
         let inserted = !(messageOrder[sessionID]?.contains(messageID) ?? false)
         var merged = infoDict
+        var priorInfo: MessageInfoDTO?
         if case let .dictionary(prior) = infoCache[sessionID]?[messageID] {
+            priorInfo = decodeInfo(from: prior)
             if infoDict["waiting"] == nil, let waiting = prior["waiting"] {
                 merged["waiting"] = waiting
             }
             if infoDict["delivery"] == nil, let delivery = prior["delivery"] {
                 merged["delivery"] = delivery
             }
+            // v2 infos are partial projections: keep the times an update omits.
+            if infoDict["time"] == nil, let time = prior["time"] {
+                merged["time"] = time
+            }
+        } else if infoDict["time"] == nil, let time = baseTime(sessionID: sessionID, messageID: messageID) {
+            // REST-seeded rows have no cached info; carry their times into the first live info.
+            merged["time"] = time
         }
         infoCache[sessionID]?[messageID] = .dictionary(merged)
 
@@ -293,15 +306,39 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
         if partOrder[sessionID]?[messageID] == nil {
             partOrder[sessionID]?[messageID] = []
         }
-        if inserted {
+        let isUserInfo = info.role.lowercased() == "user"
+        let waiting = decodeInfo(from: merged)?.waiting == true
+        // A queued v2 prompt is hidden until delivered, then it belongs after
+        // whatever the session produced meanwhile, not where it was enqueued.
+        // A REST-seeded inbox prompt has no cached info yet; its base copy says whether it was waiting.
+        let wasWaiting = priorInfo.map { $0.waiting == true }
+            ?? (baseMessages[sessionID]?.last(where: { $0.id == messageID })?.isWaitingForPickup == true)
+        let delivered = !inserted && isUserInfo && wasWaiting && !waiting
+        if inserted && isUserInfo && waiting {
+            messageOrder[sessionID]?.append(messageID)
+        } else if inserted {
+            insertMessage(sessionID: sessionID, messageID: messageID, role: info.role)
+        } else if delivered {
+            messageOrder[sessionID]?.removeAll { $0 == messageID }
             insertMessage(sessionID: sessionID, messageID: messageID, role: info.role)
         }
         return SessionChangeSet(
             sessionRevision: 0,
             insertedMessageIDs: inserted ? [messageID] : [],
             changedMessageIDs: inserted ? [] : [messageID],
-            structuralChange: inserted
+            structuralChange: inserted || delivered
         )
+    }
+
+    private func baseTime(sessionID: String, messageID: String) -> AnySendable? {
+        guard let base = baseMessages[sessionID]?.last(where: { $0.id == messageID }),
+              let created = base.sentAtEpochMs
+        else { return nil }
+        var time: [String: AnySendable] = ["created": .int64(created)]
+        if let completed = base.completedAtEpochMs {
+            time["completed"] = .int64(completed)
+        }
+        return .dictionary(time)
     }
 
     private func insertMessage(sessionID: String, messageID: String, role: String) {
@@ -519,6 +556,19 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
         return SessionChangeSet(
             sessionRevision: 0,
             removedMessageIDs: [messageID],
+            structuralChange: true
+        )
+    }
+
+    private func applyMessagesRemovedFrom(sessionID: String, messageID: String) -> SessionChangeSet? {
+        guard let order = messageOrder[sessionID], let start = order.firstIndex(of: messageID) else { return nil }
+        let removed = Array(order[start...])
+        for id in removed {
+            _ = applyMessageRemoved(sessionID: sessionID, messageID: id)
+        }
+        return SessionChangeSet(
+            sessionRevision: 0,
+            removedMessageIDs: Set(removed),
             structuralChange: true
         )
     }
@@ -909,10 +959,10 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
 
         partsCache[sessionID] = nextParts
         partOrder[sessionID] = nextOrders
-        if var infos = infoCache[sessionID] {
-            infos = infos.filter { incomingIDs.contains($0.key) }
-            infoCache[sessionID] = infos
-        }
+        // REST is the authority for message info: a live info cached before
+        // the reload (a v2 prompt still `waiting`, a partial v2 assistant info
+        // without times) must not shadow the reloaded message.
+        infoCache[sessionID] = [:]
         if var ignored = ignoredPartIDs[sessionID] {
             ignored = ignored.filter { incomingIDs.contains($0.key) }
             ignoredPartIDs[sessionID] = ignored
@@ -1057,7 +1107,8 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
                 CompactionPart(
                     id: prior.id,
                     auto: prior.auto || next.auto,
-                    completed: prior.completed || next.completed
+                    completed: prior.completed || next.completed,
+                    summary: next.summary ?? prior.summary
                 )
             )
         default:

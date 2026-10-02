@@ -2,6 +2,15 @@ import Foundation
 
 @MainActor
 final class SessionChatComposer {
+    /// Server catalog events after which the model list is refetched. A freshly started
+    /// server can answer the first `GET model` before its catalog is ready, then announce it.
+    static let catalogUpdateEvents: Set<String> = ["model.updated", "provider.updated"]
+    /// Stream (re)connects after which the model list is refetched: catalog events the server
+    /// sent while the stream was down (a restart) are never replayed.
+    static let catalogReconnectEvents: Set<String> = ["server.connected", "stream.reconnected"]
+    /// Backoff for refetching a catalog that came back empty (a server still loading providers).
+    nonisolated static let defaultCatalogRetryDelaysMs = [1_000, 2_000, 4_000]
+
     var onChange: (() -> Void)?
 
     private(set) var state = SessionChatComposerRegionState()
@@ -16,6 +25,7 @@ final class SessionChatComposer {
     private let sessionModelSelectionStore: any SessionModelSelectionStore
     private let composerDraftStore: any ComposerDraftStore
     private let activeConnectionManager: ActiveConnectionManager
+    private let foregroundEventStream: (any ForegroundEventStream)?
     private let sentTimeFormatter: DateFormatter
     private var loadedCatalog: ModelSelectionCatalog?
     private var cachedSelection: SessionModelSelection?
@@ -33,6 +43,11 @@ final class SessionChatComposer {
     private var mentionableAgentsTask: Task<Void, Never>?
     private var selectableAgentsTask: Task<Void, Never>?
     private var loadedSelectableAgents = false
+    private var catalogLoadGeneration = 0
+    private var catalogEventTask: Task<Void, Never>?
+    private var catalogRefreshTask: Task<Void, Never>?
+    private var catalogRetryTask: Task<Void, Never>?
+    private let catalogRetryDelaysMs: [Int]
 
     init(
         sessionID: String,
@@ -44,7 +59,9 @@ final class SessionChatComposer {
         sessionRepository: any SessionRepository,
         sessionModelSelectionStore: any SessionModelSelectionStore,
         composerDraftStore: any ComposerDraftStore,
-        activeConnectionManager: ActiveConnectionManager
+        activeConnectionManager: ActiveConnectionManager,
+        foregroundEventStream: (any ForegroundEventStream)? = nil,
+        catalogRetryDelaysMs: [Int] = SessionChatComposer.defaultCatalogRetryDelaysMs
     ) {
         self.sessionID = sessionID
         self.worktree = worktree
@@ -56,6 +73,8 @@ final class SessionChatComposer {
         self.sessionModelSelectionStore = sessionModelSelectionStore
         self.composerDraftStore = composerDraftStore
         self.activeConnectionManager = activeConnectionManager
+        self.foregroundEventStream = foregroundEventStream
+        self.catalogRetryDelaysMs = catalogRetryDelaysMs
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "h:mm a"
@@ -109,9 +128,45 @@ final class SessionChatComposer {
         loadServerCommands()
         loadMentionableAgents()
         loadSelectableAgents()
+        startCatalogEventRefresh()
+    }
+
+    func stopCatalogEventRefresh() {
+        catalogEventTask?.cancel()
+        catalogEventTask = nil
+        catalogRefreshTask?.cancel()
+        catalogRefreshTask = nil
+        catalogRetryTask?.cancel()
+        catalogRetryTask = nil
+    }
+
+    /// Refetches the model catalog when the server announces a provider or model change, or
+    /// when the stream reconnects (the server may have restarted and announced its catalog
+    /// while the stream was down), so an empty answer recovers without a manual retry.
+    private func startCatalogEventRefresh() {
+        guard let foregroundEventStream, catalogEventTask == nil else { return }
+        catalogEventTask = Task { [weak self] in
+            for await event in foregroundEventStream.events() {
+                if Task.isCancelled { return }
+                guard Self.catalogUpdateEvents.contains(event.type)
+                    || Self.catalogReconnectEvents.contains(event.type)
+                else { continue }
+                self?.refreshCatalogAfterServerUpdate(reason: event.type)
+            }
+        }
+    }
+
+    private func refreshCatalogAfterServerUpdate(reason: String) {
+        OpenCodeLog.sessionChat.info("model catalog refresh reason=\(reason)")
+        catalogRefreshTask?.cancel()
+        catalogRefreshTask = Task { [weak self] in
+            await self?.loadCatalog(keepLoadedCatalogOnFailure: true)
+        }
     }
 
     func reset() {
+        catalogRetryTask?.cancel()
+        catalogRetryTask = nil
         loadedCatalog = nil
         loadedSelectableAgents = false
         cachedSelection = nil
@@ -129,16 +184,51 @@ final class SessionChatComposer {
     }
 
     func loadCatalog() async {
+        await loadCatalog(keepLoadedCatalogOnFailure: false)
+    }
+
+    /// `emptyRetryAttempt` is non-zero only for a backoff retry of an empty answer.
+    private func loadCatalog(keepLoadedCatalogOnFailure: Bool, emptyRetryAttempt: Int = 0) async {
+        catalogLoadGeneration += 1
+        let generation = catalogLoadGeneration
+        if emptyRetryAttempt == 0 {
+            catalogRetryTask?.cancel()
+            catalogRetryTask = nil
+        }
         do {
             let catalog = try await modelRepository.listModelOptions(directory: worktree)
+            // An older request must not overwrite the answer to a newer one.
+            guard generation == catalogLoadGeneration else { return }
+            if catalog.options.isEmpty {
+                scheduleEmptyCatalogRetry(attempt: emptyRetryAttempt)
+                // A server still loading must not hide a catalog this session already has.
+                if keepLoadedCatalogOnFailure, loadedCatalog?.options.isEmpty == false { return }
+            }
             applyCatalog(catalog)
         } catch {
+            // A superseded refresh is cancelled; its failure is not the catalog's state.
+            guard generation == catalogLoadGeneration, !Task.isCancelled else { return }
             OpenCodeLog.sessionChat.warning("loadCatalog failed error=\(error.localizedDescription)")
+            if emptyRetryAttempt > 0 {
+                scheduleEmptyCatalogRetry(attempt: emptyRetryAttempt)
+            }
+            if keepLoadedCatalogOnFailure, loadedCatalog?.options.isEmpty == false { return }
             updateComposer {
                 $0.isModelSelectionReady = false
                 $0.modelCatalogError = "Unable to load models. Tap Model to retry."
                 $0.modelNotice = "Unable to load models. Tap Model to retry."
             }
+        }
+    }
+
+    private func scheduleEmptyCatalogRetry(attempt: Int) {
+        guard attempt < catalogRetryDelaysMs.count else { return }
+        let delayMs = catalogRetryDelaysMs[attempt]
+        OpenCodeLog.sessionChat.info("model catalog empty; retry attempt=\(attempt + 1) delayMs=\(delayMs)")
+        catalogRetryTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(delayMs))
+            guard !Task.isCancelled else { return }
+            await self?.loadCatalog(keepLoadedCatalogOnFailure: true, emptyRetryAttempt: attempt + 1)
         }
     }
 

@@ -6,6 +6,8 @@ import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.decodeFromJsonElement
@@ -77,6 +79,7 @@ class InMemoryMessageStore
                     is MessagePatch.PartUpdated -> applyPartUpdated(sessionId, patch.partJson, patch.delta)
                     is MessagePatch.PartDelta -> applyPartDelta(sessionId, patch.messageId, patch.partId, patch.delta)
                     is MessagePatch.Removed -> applyMessageRemoved(sessionId, patch.messageId)
+                    is MessagePatch.RemovedFrom -> applyMessagesRemovedFrom(sessionId, patch.messageId)
                     is MessagePatch.PartRemoved -> applyPartRemoved(sessionId, patch.messageId, patch.partId)
                 } ?: return MessageStoreApplyResult.NoChange
             bumpRevision(sessionId)
@@ -276,32 +279,62 @@ class InMemoryMessageStore
             val order = messageOrders[sessionId]!!
             val inserted = messageId !in order
             val previous = infoCaches[sessionId]!![messageId]
+            // v2 infos are partial projections: keep fields an update omits.
+            val priorTime = previous?.get("time") ?: baseTimeJson(sessionId, messageId)
             val merged =
-                if (previous == null) {
-                    infoJson
-                } else {
-                    buildJsonObject {
-                        infoJson.forEach { (key, value) -> put(key, value) }
-                        if (!infoJson.containsKey("waiting")) {
-                            previous["waiting"]?.let { put("waiting", it) }
-                        }
-                        if (!infoJson.containsKey("delivery")) {
-                            previous["delivery"]?.let { put("delivery", it) }
-                        }
+                buildJsonObject {
+                    infoJson.forEach { (key, value) -> put(key, value) }
+                    if (!infoJson.containsKey("time")) {
+                        priorTime?.let { put("time", it) }
+                    }
+                    if (previous != null && !infoJson.containsKey("waiting")) {
+                        previous["waiting"]?.let { put("waiting", it) }
+                    }
+                    if (previous != null && !infoJson.containsKey("delivery")) {
+                        previous["delivery"]?.let { put("delivery", it) }
                     }
                 }
             infoCaches[sessionId]!![messageId] = merged
             partsCaches[sessionId]!!.getOrPut(messageId) { mutableMapOf() }
             partOrders[sessionId]!!.getOrPut(messageId) { mutableListOf() }
-            if (inserted) {
+            val isUserInfo = info.role.equals("user", ignoreCase = true)
+            val waiting = merged.isWaiting()
+            // A queued v2 prompt is hidden until delivered, then it belongs after
+            // whatever the session produced meanwhile, not where it was enqueued.
+            // A REST-seeded inbox prompt has no cached info yet; its base copy says whether it was waiting.
+            val wasWaiting =
+                previous?.isWaiting()
+                    ?: (baseMessages[sessionId]?.lastOrNull { it.id == messageId }?.isWaitingForPickup == true)
+            val delivered = !inserted && isUserInfo && wasWaiting && !waiting
+            if (inserted && isUserInfo && waiting) {
+                order.add(messageId)
+            } else if (inserted) {
+                insertMessage(sessionId, order, messageId, info.role)
+            } else if (delivered) {
+                order.remove(messageId)
                 insertMessage(sessionId, order, messageId, info.role)
             }
             return SessionChangeSet(
                 sessionRevision = 0,
                 insertedMessageIds = if (inserted) setOf(messageId) else emptySet(),
                 changedMessageIds = if (inserted) emptySet() else setOf(messageId),
-                structuralChange = inserted,
+                structuralChange = inserted || delivered,
             )
+        }
+
+        private fun JsonObject.isWaiting(): Boolean = (this["waiting"] as? JsonPrimitive)?.booleanOrNull == true
+
+        /** REST-seeded rows have no cached info; carry their times into the first live info. */
+        private fun baseTimeJson(
+            sessionId: String,
+            messageId: String,
+        ): JsonObject? {
+            val base = baseMessages[sessionId]?.firstOrNull { it.id == messageId } ?: return null
+            val created = base.sentAtEpochMs ?: return null
+            return buildJsonObject {
+                put("created", created)
+                base.completedAtEpochMs?.let { put("completed", it) }
+            }
         }
 
         private fun insertMessage(
@@ -491,6 +524,22 @@ class InMemoryMessageStore
             return SessionChangeSet(
                 sessionRevision = 0,
                 removedMessageIds = setOf(messageId),
+                structuralChange = true,
+            )
+        }
+
+        private fun applyMessagesRemovedFrom(
+            sessionId: String,
+            messageId: String,
+        ): SessionChangeSet? {
+            val order = messageOrders[sessionId] ?: return null
+            val start = order.indexOf(messageId)
+            if (start < 0) return null
+            val removed = order.subList(start, order.size).toList()
+            removed.forEach { id -> applyMessageRemoved(sessionId, id) }
+            return SessionChangeSet(
+                sessionRevision = 0,
+                removedMessageIds = removed.toSet(),
                 structuralChange = true,
             )
         }
@@ -809,7 +858,10 @@ class InMemoryMessageStore
 
             partsCaches[sessionId] = nextParts
             partOrders[sessionId] = nextOrders
-            infoCaches[sessionId]!!.keys.retainAll(incomingIds)
+            // REST is the authority for message info: a live info cached before
+            // the reload (a v2 prompt still `waiting`, a partial v2 assistant
+            // info without times) must not shadow the reloaded message.
+            infoCaches[sessionId]!!.clear()
             ignoredPartIds[sessionId]!!.keys.retainAll(incomingIds)
             messageOrders[sessionId] = messages.map { it.id }.toMutableList()
             baseMessages[sessionId] = messages
@@ -913,6 +965,7 @@ class InMemoryMessageStore
                         existing.copy(
                             auto = existing.auto || incoming.auto,
                             completed = existing.completed || incoming.completed,
+                            summary = incoming.summary ?: existing.summary,
                         )
                     else -> incoming
                 }

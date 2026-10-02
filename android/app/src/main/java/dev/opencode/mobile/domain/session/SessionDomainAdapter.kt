@@ -58,7 +58,8 @@ class SessionDomainAdapter {
             slug = null,
             projectId = dto.projectId,
             directory = dto.location?.directory?.takeIf { it.isNotEmpty() },
-            parentId = dto.parentId ?: dto.fork?.sessionId,
+            // A fork is a top-level session; only a real `parentID` marks a subagent child.
+            parentId = dto.parentId,
             cost = dto.cost,
             tokens = toTokenUsage(dto.tokens),
             createdAtEpochMs = dto.time?.created,

@@ -72,12 +72,59 @@ class MessageWindowMergeTest {
         assertFalse(MessageWindowMerge.isTailAcceptable(remote = tail, local = local))
     }
 
+    @Test
+    fun isTailAcceptable_acceptsTailThatDroppedRevertedMessages() {
+        // Cached transcript still holds a reverted turn the server has since removed.
+        val local =
+            listOf(
+                user("u1", "First prompt"),
+                assistant("a1", "Answer to the first prompt."),
+                user("u2", "Queued prompt"),
+                assistant("a2", "A much longer answer to the queued prompt that was reverted."),
+                user("u3", "Queued prompt v2"),
+                assistant("a3", "Answer to the replacement prompt."),
+            )
+        val tail =
+            listOf(
+                user("u1", "First prompt"),
+                assistant("a1", "Answer to the first prompt."),
+                user("u3", "Queued prompt v2"),
+                assistant("a3", "Answer to the replacement prompt."),
+            )
+        assertTrue(MessageWindowMerge.isTailAcceptable(remote = tail, local = local))
+        assertEquals(listOf("u1", "a1", "u3", "a3"), MessageWindowMerge.applyTail(local, tail).map { it.id })
+    }
+
+    @Test
+    fun isTailAcceptable_acceptsTailWhoseNewTurnReplacedACachedRevertedTurn() {
+        val local =
+            listOf(
+                user("u1", "First prompt"),
+                assistant("a1", "Answer one."),
+                user("u2", "Reverted prompt"),
+                assistant("a2", "A long reverted answer that is no longer on the server."),
+            )
+        val tail = listOf(user("u1", "First prompt"), assistant("a1", "Answer one."), user("u3", "New"))
+        assertTrue(MessageWindowMerge.isTailAcceptable(remote = tail, local = local))
+        assertEquals(listOf("u1", "a1", "u3"), MessageWindowMerge.applyTail(local, tail).map { it.id })
+    }
+
     private fun messages(vararg ids: String): List<Message> = ids.map { user(it, it) }
 
     private fun user(
         id: String,
         text: String,
     ) = Message(id = id, role = MessageRole.User, text = text)
+
+    private fun assistant(
+        id: String,
+        text: String,
+    ) = Message(
+        id = id,
+        role = MessageRole.Assistant,
+        text = text,
+        parts = listOf(MessagePart.Text(text = text, id = "$id:text:0")),
+    )
 
     private fun assistant(
         text: String,

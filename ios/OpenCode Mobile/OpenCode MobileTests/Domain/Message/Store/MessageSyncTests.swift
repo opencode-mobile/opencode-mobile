@@ -621,6 +621,50 @@ struct MessageSyncTests {
         #expect(collector.emissions.count == 2)
     }
 
+    @Test func cachedRevertedTurn_restTailWithoutIt_dropsTheRevertedRows() async {
+        // Cold start: the cache still holds a turn the server reverted and removed.
+        func row(_ id: String, _ role: MessageRole, _ text: String, at: Int64) -> Message {
+            Message(
+                id: id,
+                role: role,
+                text: text,
+                parts: [.text(TextPart(id: "\(id):text:0", text: text, isStreaming: false))],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: at
+            )
+        }
+        let repo = FakeLiveMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        eventStream.setConnectionState(.connected)
+        let kept = [row("u1", .user, "First prompt", at: 1), row("a1", .assistant, "Answer one.", at: 2)]
+        let replacement = [row("u3", .user, "Queued prompt v2", at: 5), row("a3", .assistant, "Answer v2.", at: 6)]
+        let reverted = [
+            row("u2", .user, "Queued prompt", at: 3),
+            row("a2", .assistant, "A long reply to the reverted prompt that the server dropped.", at: 4),
+        ]
+        repo.messages = kept + replacement
+        let sync = MessageSync(
+            listMessages: { sessionID, directory in
+                try await repo.listMessages(sessionID: sessionID, directory: directory)
+            },
+            store: SessionMessageEngine(store: InMemoryMessageStore()),
+            eventStream: eventStream,
+            connectionProfileIDProvider: { "local" },
+            recoveryDelay: { _ in try? await Task.sleep(for: .milliseconds(1)) },
+            sessionCache: SeedingSessionCache(messages: kept + reverted + replacement)
+        )
+        let collector = CacheConfirmAwareCollector()
+        let task = Task {
+            await collector.collect(sync.observeMessages(sessionID: "ses-1", directory: "/repo"))
+        }
+        let dropped = await waitUntil {
+            collector.latest()?.map(\.id) == ["u1", "a1", "u3", "a3"]
+        }
+        task.cancel()
+        #expect(dropped)
+    }
+
     @Test func streamingCachedTail_completedRestTail_publishesRestContent() async {
         let user = Message(
             id: "m1",

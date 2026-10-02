@@ -28,7 +28,8 @@ nonisolated struct SessionDomainAdapter: Sendable {
                 guard let directory = dto.location?.directory, !directory.isEmpty else { return nil }
                 return directory
             }(),
-            parentID: dto.parentID ?? dto.fork?.sessionID,
+            // A fork is a top-level session; only a real `parentID` marks a subagent child.
+            parentID: dto.parentID,
             cost: dto.cost,
             tokens: tokenUsage(from: dto.tokens),
             createdAtEpochMs: dto.time?.created,

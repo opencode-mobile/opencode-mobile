@@ -3,6 +3,7 @@ package dev.opencode.mobile.domain.event
 import dev.opencode.mobile.domain.session.SessionActivity
 import dev.opencode.mobile.domain.session.SessionStatus
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
@@ -855,9 +856,70 @@ class EventDomainAdapterTest {
                 """{"type":"session.compaction.ended","data":{"sessionID":"ses-1","messageID":"msg-c"}}""",
             )
 
-        assertEquals(listOf("message.part.updated"), events.map { it.type })
+        assertEquals(listOf("message.updated", "message.part.updated"), events.map { it.type })
         assertTrue(events.none { it.type == "session.idle" })
         assertTrue(events.none { it.type == "session.active.snapshot" })
+    }
+
+    @Test
+    fun parseEvents_keysLiveCompactionToTheStartedItemAndCarriesTheSummary() {
+        fun part(line: String) =
+            adapter
+                .parseEvents(line)
+                .single { it.type == "message.part.updated" }
+                .rawProperties!!["part"]!!
+                .jsonObject
+
+        // Captured v2 shapes: `started` carries the inbox `inputID`, `ended` no id at all.
+        val started =
+            part(
+                """{"id":"evt_0f9026d76001","created":1790884081021,"type":"session.compaction.started",""" +
+                    """"data":{"sessionID":"ses-1","reason":"manual","recent":"","inputID":"msg_0f9026d76001"}}""",
+            )
+        val ended =
+            part(
+                """{"id":"evt_0f9027b10001","created":1790884084400,"type":"session.compaction.ended",""" +
+                    """"data":{"sessionID":"ses-1","reason":"manual","text":"## Objective\n- Hi.","recent":""}}""",
+            )
+        val autoEnded =
+            part(
+                """{"id":"evt_0f9030000001","created":1790884090000,"type":"session.compaction.ended",""" +
+                    """"data":{"sessionID":"ses-1","reason":"auto","text":"## Objective","recent":""}}""",
+            )
+
+        assertEquals("msg_0f9026d76001", started["messageID"]?.jsonPrimitive?.content)
+        assertEquals("false", started["completed"]?.jsonPrimitive?.content)
+        assertEquals("msg_0f9026d76001", ended["messageID"]?.jsonPrimitive?.content)
+        assertEquals("true", ended["completed"]?.jsonPrimitive?.content)
+        assertEquals("## Objective\n- Hi.", ended["summary"]?.jsonPrimitive?.content)
+        // Without a started item the server appends one keyed by the ended event.
+        assertEquals("msg_0f9030000001", autoEnded["messageID"]?.jsonPrimitive?.content)
+        assertTrue(
+            adapter
+                .parseEvents("""{"type":"session.compaction.delta","data":{"sessionID":"ses-1","text":"## Obj"}}""")
+                .isEmpty(),
+        )
+    }
+
+    @Test
+    fun parseEvents_projectsV2RevertCommittedWithItsRevertPoint() {
+        val events =
+            adapter.parseEvents(
+                """{"id":"evt_00d055e78001","created":1786924850808,"type":"session.revert.committed",""" +
+                    """"data":{"sessionID":"ses-1","to":"msg_00cf91b85001"}}""",
+            )
+
+        assertEquals(listOf("session.revert.committed"), events.map { it.type })
+        assertEquals("ses-1", events.single().sessionId)
+        assertEquals(
+            "msg_00cf91b85001",
+            events
+                .single()
+                .rawProperties
+                ?.get("messageID")
+                ?.jsonPrimitive
+                ?.content,
+        )
     }
 
     @Test
@@ -867,8 +929,44 @@ class EventDomainAdapterTest {
                 """{"type":"session.compaction.failed","data":{"sessionID":"ses-1","messageID":"msg-c"}}""",
             )
 
-        assertEquals(listOf("message.part.updated", "session.error", "session.idle"), events.map { it.type })
+        assertEquals(
+            listOf("message.updated", "message.part.updated", "session.error", "session.idle"),
+            events.map { it.type },
+        )
         assertTrue(events.last().triggersStatusRefresh)
+    }
+
+    @Test
+    fun parseEvents_scopesV2OrdinalPartIdsToTheirAssistantMessage() {
+        // Captured v2 shape: each step's first text and reasoning are ordinal 0
+        // and carry no part id, so the id must include the assistant message.
+        fun partId(line: String): String? =
+            adapter
+                .parseEvents(line)
+                .firstNotNullOfOrNull { event ->
+                    (event.rawProperties?.get("part") as? JsonObject)
+                        ?.get("id")
+                        ?.jsonPrimitive
+                        ?.content
+                        ?: event.rawProperties
+                            ?.get("partID")
+                            ?.jsonPrimitive
+                            ?.content
+                }
+
+        val ids =
+            listOf(
+                """{"type":"session.text.started","data":{"sessionID":"ses-1","assistantMessageID":"msg-a","ordinal":0}}""",
+                """{"type":"session.text.delta","data":{"sessionID":"ses-1","assistantMessageID":"msg-a","ordinal":0,"delta":"Look"}}""",
+                """{"type":"session.text.ended","data":{"sessionID":"ses-1","assistantMessageID":"msg-b","ordinal":0,"text":"Done"}}""",
+                """{"type":"session.reasoning.started","data":{"sessionID":"ses-1","assistantMessageID":"msg-a","ordinal":0,"state":{}}}""",
+                """{"type":"session.reasoning.delta","data":{"sessionID":"ses-1","assistantMessageID":"msg-b","ordinal":1,"delta":"Hm"}}""",
+            ).map(::partId)
+
+        assertEquals(
+            listOf("msg-a:text:0", "msg-a:text:0", "msg-b:text:0", "msg-a:reasoning:0", "msg-b:reasoning:1"),
+            ids,
+        )
     }
 
     @Test
@@ -889,7 +987,7 @@ class EventDomainAdapterTest {
                 ?.content,
         )
         assertEquals(
-            "text-0",
+            "msg-2:text:0",
             event
                 ?.rawProperties
                 ?.get("partID")
@@ -975,6 +1073,21 @@ class EventDomainAdapterTest {
             EventParseOutcome.Unrecognized,
             adapter.parse("""{"payload":{"type":"sync","properties":{}}}"""),
         )
+    }
+
+    @Test
+    fun parseEvent_projectsForkedIntoTopLevelSessionCreated() {
+        val event =
+            adapter.parseEvent(
+                """{"type":"session.forked","data":{"sessionID":"ses_fork","parentID":"ses_src","boundary":{"type":"through","messageID":"msg_1"}}}""",
+            )
+
+        assertEquals("session.created", event?.type)
+        assertEquals("ses_fork", event?.sessionId)
+        assertTrue(event?.triggersHomeRefresh == true)
+        assertNull(event?.rawProperties?.get("parentID"))
+        val forkedFrom = event?.rawProperties?.get("forkedFromSessionID")
+        assertEquals("ses_src", forkedFrom?.jsonPrimitive?.content)
     }
 
     @Test
@@ -1193,11 +1306,22 @@ class EventDomainAdapterTest {
                 """{"type":"session.tool.progress","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","id":"prt-1","metadata":{"sessionID":"child-1","status":"running"}}}""",
             )
 
-        val state = event?.rawProperties?.get("part")?.jsonObject?.get("state")?.jsonObject
+        val state =
+            event
+                ?.rawProperties
+                ?.get("part")
+                ?.jsonObject
+                ?.get("state")
+                ?.jsonObject
         assertEquals("running", state?.get("status")?.jsonPrimitive?.content)
         assertEquals(
             "child-1",
-            state?.get("metadata")?.jsonObject?.get("sessionID")?.jsonPrimitive?.content,
+            state
+                ?.get("metadata")
+                ?.jsonObject
+                ?.get("sessionID")
+                ?.jsonPrimitive
+                ?.content,
         )
     }
 
@@ -1209,7 +1333,14 @@ class EventDomainAdapterTest {
             )
 
         val metadata =
-            event?.rawProperties?.get("part")?.jsonObject?.get("state")?.jsonObject?.get("metadata")?.jsonObject
+            event
+                ?.rawProperties
+                ?.get("part")
+                ?.jsonObject
+                ?.get("state")
+                ?.jsonObject
+                ?.get("metadata")
+                ?.jsonObject
         assertEquals("child-1", metadata?.get("sessionID")?.jsonPrimitive?.content)
         assertEquals("2", metadata?.get("count")?.jsonPrimitive?.content)
     }

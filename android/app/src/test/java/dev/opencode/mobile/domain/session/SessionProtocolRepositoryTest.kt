@@ -202,7 +202,7 @@ class SessionProtocolRepositoryTest {
                 testClient { request ->
                     captured = request
                     respondJson(
-                        """{"data":{"id":"ses_fork","title":"Fork","projectID":"p","cost":0,"tokens":{"input":0,"output":0,"reasoning":0,"cache":{"read":0,"write":0}},"time":{"created":1,"updated":2},"location":{"directory":"/repo"},"parentID":"ses_1"}}""",
+                        """{"data":{"id":"ses_fork","title":"Fork","projectID":"p","cost":0,"tokens":{"input":0,"output":0,"reasoning":0,"cache":{"read":0,"write":0}},"time":{"created":1,"updated":2},"location":{"directory":"/repo"},"fork":{"sessionID":"ses_1","boundary":{"type":"before","messageID":"msg_1"}}}}""",
                     )
                 }
             val repository =
@@ -215,7 +215,7 @@ class SessionProtocolRepositoryTest {
             val forked = repository.forkSession("ses_1", atMessageId = "msg_1", directory = "/repo")
 
             assertEquals("ses_fork", forked.id)
-            assertEquals("ses_1", forked.parentId)
+            assertNull(forked.parentId)
             assertEquals(HttpMethod.Post, captured?.method)
             assertTrue(captured!!.url.encodedPath.endsWith("/api/session/ses_1/fork"))
             assertTrue(captured.requestBodyText().contains("\"boundary\""))
@@ -433,7 +433,7 @@ class SessionProtocolRepositoryTest {
         }
 
     @Test
-    fun v2RespondToPermission_postsReplyBody() =
+    fun v2RespondToPermission_postsDecisionBody() =
         runTest {
             val requests = mutableListOf<HttpRequestData>()
             val client =
@@ -457,7 +457,39 @@ class SessionProtocolRepositoryTest {
                     .url.encodedPath
                     .contains("/api/session/ses_1/permission/per_1/reply"),
             )
-            assertTrue(requests.single().requestBodyText().contains("\"reply\":\"once\""))
+            val body = requests.single().requestBodyText()
+            assertTrue(body.contains("\"decision\":\"once\""))
+            assertFalse(body.contains("\"reply\""))
+        }
+
+    @Test
+    fun v2RespondToPermission_denyPostsRejectDecision() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respond("", HttpStatusCode.NoContent)
+                }
+            val repository =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V2),
+                )
+
+            val ok = repository.respondToPermission("ses_1", "per_1", PermissionDecision.Deny, "/repo")
+
+            assertTrue(ok)
+            assertTrue(
+                requests
+                    .single()
+                    .url.encodedPath
+                    .contains("/api/session/ses_1/permission/per_1/reply"),
+            )
+            val body = requests.single().requestBodyText()
+            assertTrue(body.contains("\"decision\":\"reject\""))
+            assertFalse(body.contains("\"reply\""))
         }
 
     @Test
@@ -835,6 +867,7 @@ class SessionProtocolRepositoryTest {
             val children = repository.listChildSessions("ses_1", "/repo")
 
             assertEquals("ses_child", children.single().id)
+            assertEquals("ses_1", children.single().parentId)
             assertEquals("ses_1", requests.single().url.parameters["parentID"])
         }
 

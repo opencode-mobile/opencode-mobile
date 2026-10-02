@@ -205,6 +205,7 @@ internal data class CachedMessagePartPayload(
     val dataUrl: String? = null,
     val timeStartEpochMs: Long? = null,
     val timeEndEpochMs: Long? = null,
+    val auto: Boolean = false,
 )
 
 @Serializable
@@ -408,7 +409,14 @@ private fun MessagePart.toCachePayload(): CachedMessagePartPayload? =
                 attachmentKind = kind.name.lowercase(),
                 dataUrl = AttachmentLimits.persistedDataUrl(dataUrl),
             )
-        is MessagePart.Compaction -> null
+        is MessagePart.Compaction ->
+            CachedMessagePartPayload(
+                kind = "compaction",
+                id = id,
+                text = summary,
+                status = if (completed) "completed" else "running",
+                auto = auto,
+            )
         is MessagePart.Reasoning ->
             CachedMessagePartPayload(
                 kind = "reasoning",
@@ -464,6 +472,13 @@ private fun CachedMessagePartPayload.toDomain(): MessagePart? =
                 id = id,
                 timeStartEpochMs = timeStartEpochMs,
                 timeEndEpochMs = timeEndEpochMs,
+            )
+        "compaction" ->
+            MessagePart.Compaction(
+                id = id,
+                auto = auto,
+                completed = status == "completed",
+                summary = text?.takeIf { it.isNotBlank() },
             )
         else -> null
     }

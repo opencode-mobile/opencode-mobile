@@ -110,6 +110,7 @@ class MessageDomainAdapter {
                     id = dto.id,
                     auto = dto.auto == true,
                     completed = dto.completed == true,
+                    summary = dto.summary?.takeIf { it.isNotBlank() },
                 )
             "reasoning" ->
                 MessagePart.Reasoning(
@@ -312,7 +313,7 @@ class MessageDomainAdapter {
         val userItems =
             inbox
                 .filter { it.type == "user" }
-                .sortedBy { it.timeCreated }
+                .sortedBy { it.createdAtEpochMs }
         if (userItems.isEmpty()) return messages
         val existingIds = messages.map { it.id }.toSet()
         val itemsById = userItems.associateBy { it.id }
@@ -334,7 +335,7 @@ class MessageDomainAdapter {
                         role = MessageRole.User,
                         text = text,
                         parts = listOf(MessagePart.Text(text = text, id = "${item.id}:text:0")),
-                        sentAtEpochMs = item.timeCreated,
+                        sentAtEpochMs = item.createdAtEpochMs,
                         followUpDelivery = FollowUpDelivery.fromWire(item.delivery),
                         isWaitingForPickup = true,
                     )
@@ -481,9 +482,16 @@ class MessageDomainAdapter {
         agent: String,
         model: V2ModelRefDto?,
     ): Message {
+        val ordinals = mutableMapOf<String, Int>()
         val parts =
             dto.content.mapIndexedNotNull { index, content ->
-                toV2AssistantPart(content, fallbackId = "${dto.id}:${content.type}:$index")
+                val fallbackId =
+                    V2ContentPartId.kind(content.type)?.let { kind ->
+                        val ordinal = ordinals.getOrDefault(kind, 0)
+                        ordinals[kind] = ordinal + 1
+                        V2ContentPartId.of(dto.id, kind, ordinal.toString())
+                    } ?: "${dto.id}:${content.type}:$index"
+                toV2AssistantPart(content, fallbackId = fallbackId)
             }
         val errorText =
             dto.error
@@ -508,17 +516,17 @@ class MessageDomainAdapter {
 
     private fun projectV2Compaction(dto: V2SessionMessageDto): Message {
         val summary = dto.summary.orEmpty()
+        // The summary is model context, not a reply: it rides on the compaction
+        // part so the timeline shows a compaction row instead of reply text.
         val parts =
-            mutableListOf<MessagePart>(
+            listOf<MessagePart>(
                 MessagePart.Compaction(
                     id = dto.id,
                     auto = dto.reason == "auto",
                     completed = dto.status.equals("completed", ignoreCase = true),
+                    summary = summary.takeIf { it.isNotBlank() },
                 ),
             )
-        if (summary.isNotBlank()) {
-            parts += MessagePart.Text(text = summary, id = "${dto.id}:text:0")
-        }
         return messageFromV2(
             id = dto.id,
             role = MessageRole.Assistant,
@@ -819,4 +827,25 @@ class MessageDomainAdapter {
         }
         return (current as? JsonPrimitive)?.jsonPrimitive?.content
     }
+}
+
+/**
+ * Part ids for v2 assistant text and reasoning, which the server stores without
+ * ids. Live events carry a per-message `ordinal` per kind; REST content keeps the
+ * same per-kind order, so both sides derive `<messageID>:<kind>:<ordinal>` and a
+ * reload replaces live parts in place.
+ */
+internal object V2ContentPartId {
+    fun of(
+        messageId: String,
+        kind: String,
+        ordinal: String,
+    ): String = "$messageId:$kind:$ordinal"
+
+    fun kind(contentType: String): String? =
+        when (contentType) {
+            "text" -> "text"
+            "reasoning", "thinking" -> "reasoning"
+            else -> null
+        }
 }

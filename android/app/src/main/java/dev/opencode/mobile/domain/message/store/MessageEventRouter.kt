@@ -18,6 +18,7 @@ object MessageEventRouter {
             "message.part.delta",
             "message.removed",
             "message.part.removed",
+            "session.revert.committed",
             "session.idle",
         )
 
@@ -32,6 +33,7 @@ object MessageEventRouter {
             "message.part.delta",
             "message.removed",
             "message.part.removed",
+            "session.revert.committed",
         )
 
     /**

@@ -319,6 +319,12 @@ object SessionChatTimelineBlocks {
                     index += 1
                 }
                 is MessagePart.Compaction -> {
+                    // v1 marks compaction on the user message that asked for it;
+                    // only the v2 compaction item (an assistant row) gets a marker.
+                    if (allowToolCards) {
+                        if (!flushText()) return SessionChatTimelineBlocksResult.MissingPartIds
+                        blocks += compactionCard(part) ?: return SessionChatTimelineBlocksResult.MissingPartIds
+                    }
                     index += 1
                 }
             }
@@ -418,12 +424,34 @@ object SessionChatTimelineBlocks {
                         }
                     }
                 }
-                is MessagePart.Compaction -> Unit
+                is MessagePart.Compaction -> {
+                    if (!flushParagraph()) return SessionChatTimelineBlocksResult.MissingPartIds
+                    blocks += compactionCard(part) ?: return SessionChatTimelineBlocksResult.MissingPartIds
+                }
             }
         }
         if (!flushParagraph()) return SessionChatTimelineBlocksResult.MissingPartIds
         return SessionChatTimelineBlocksResult.Ok(blocks)
     }
+
+    /**
+     * The compaction marker: a card that opens the summary in the tool detail
+     * sheet, so the summary never reads as reply text.
+     */
+    private fun compactionCard(part: MessagePart.Compaction): SessionChatTimelineBlock.ToolCard? {
+        val partId = part.id ?: return null
+        return SessionChatTimelineBlock.ToolCard(
+            blockID = PresentationBlockId.direct(partId),
+            toolName = SessionCompactChrome.MARKER_TOOL_NAME,
+            status = if (part.completed) ToolStatus.Completed else ToolStatus.Running,
+            title = if (part.completed) SessionCompactChrome.MARKER_TITLE else SessionCompactChrome.STATUS_LABEL,
+            subtitle = if (part.auto) SessionCompactChrome.MARKER_AUTO_SUBTITLE else null,
+            detailText = part.summary?.takeIf { it.isNotBlank() },
+        )
+    }
+
+    /** A message that carries a compaction marker stays its own row. */
+    private fun isCompactionBody(body: DisplayMessageBody): Boolean = body.message.parts.any { it is MessagePart.Compaction }
 
     /**
      * Explore tools that fold into the paragraph's summary chip: two or more
@@ -756,13 +784,16 @@ object SessionChatTimelineBlocks {
         val merged = mutableListOf<DisplayMessageBody>()
         var index = 0
         while (index < bodies.size) {
-            if (bodies[index].message.role != MessageRole.Assistant) {
+            if (bodies[index].message.role != MessageRole.Assistant || isCompactionBody(bodies[index])) {
                 merged += bodies[index]
                 index += 1
                 continue
             }
             var end = index + 1
-            while (end < bodies.size && bodies[end].message.role == MessageRole.Assistant) {
+            while (end < bodies.size &&
+                bodies[end].message.role == MessageRole.Assistant &&
+                !isCompactionBody(bodies[end])
+            ) {
                 end += 1
             }
             if (end == index + 1) {
@@ -828,6 +859,7 @@ object SessionChatTimelineBlocks {
 
     private fun isMergeableToolOnlyAssistant(body: DisplayMessageBody): Boolean {
         if (body.message.role != MessageRole.Assistant || body.blocks.isEmpty()) return false
+        if (isCompactionBody(body)) return false
         return body.blocks.all { isGroupableToolBlock(it) }
     }
 

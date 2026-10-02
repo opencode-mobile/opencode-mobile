@@ -10,6 +10,7 @@ nonisolated enum MessageEventRouter {
         "message.part.delta",
         "message.removed",
         "message.part.removed",
+        "session.revert.committed",
         "session.idle",
         "stream.reconnected",
         "server.connected",
@@ -30,6 +31,7 @@ nonisolated enum MessageEventRouter {
         "message.part.delta",
         "message.removed",
         "message.part.removed",
+        "session.revert.committed",
     ]
 
     /// Cheap UTF-8 size proxy for staging byte budgets. Never inspects full

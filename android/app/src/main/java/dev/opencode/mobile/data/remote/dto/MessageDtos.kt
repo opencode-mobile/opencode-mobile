@@ -98,6 +98,7 @@ data class MessagePartDto(
     val files: List<String>? = null,
     val auto: Boolean? = null,
     val completed: Boolean? = null,
+    val summary: String? = null,
 )
 
 @Serializable

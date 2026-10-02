@@ -403,9 +403,52 @@ struct EventDomainAdapterTests {
         let events = adapter.parseEvents(
             dataLine: #"{"type":"session.compaction.ended","data":{"sessionID":"ses-1","messageID":"msg-c"}}"#
         )
-        #expect(events.map(\.type) == ["message.part.updated"])
+        #expect(events.map(\.type) == ["message.updated", "message.part.updated"])
         #expect(!events.contains(where: { $0.type == "session.idle" }))
         #expect(!events.contains(where: { $0.type == "session.active.snapshot" }))
+    }
+
+    @Test func parseEvents_keysLiveCompactionToTheStartedItemAndCarriesTheSummary() {
+        let adapter = EventDomainAdapter()
+        func part(_ line: String) -> [String: AnySendable]? {
+            adapter.parseEvents(dataLine: line)
+                .first { $0.type == "message.part.updated" }?
+                .rawProperties?["part"]?.dictionaryValue
+        }
+        // Captured v2 shapes: `started` carries the inbox `inputID`, `ended` no id at all.
+        let started = part(
+            #"{"id":"evt_0f9026d76001","created":1790884081021,"type":"session.compaction.started","#
+                + #""data":{"sessionID":"ses-1","reason":"manual","recent":"","inputID":"msg_0f9026d76001"}}"#
+        )
+        let ended = part(
+            #"{"id":"evt_0f9027b10001","created":1790884084400,"type":"session.compaction.ended","#
+                + ###""data":{"sessionID":"ses-1","reason":"manual","text":"## Objective\n- Hi.","recent":""}}"###
+        )
+        let autoEnded = part(
+            #"{"id":"evt_0f9030000001","created":1790884090000,"type":"session.compaction.ended","#
+                + ###""data":{"sessionID":"ses-1","reason":"auto","text":"## Objective","recent":""}}"###
+        )
+
+        #expect(started?["messageID"]?.stringValue == "msg_0f9026d76001")
+        #expect(started?["completed"] == .bool(false))
+        #expect(ended?["messageID"]?.stringValue == "msg_0f9026d76001")
+        #expect(ended?["completed"] == .bool(true))
+        #expect(ended?["summary"]?.stringValue == "## Objective\n- Hi.")
+        // Without a started item the server appends one keyed by the ended event.
+        #expect(autoEnded?["messageID"]?.stringValue == "msg_0f9030000001")
+        #expect(adapter.parseEvents(
+            dataLine: ###"{"type":"session.compaction.delta","data":{"sessionID":"ses-1","text":"## Obj"}}"###
+        ).isEmpty)
+    }
+
+    @Test func parseEvents_projectsV2RevertCommittedWithItsRevertPoint() {
+        let events = EventDomainAdapter().parseEvents(
+            dataLine: #"{"id":"evt_00d055e78001","created":1786924850808,"type":"session.revert.committed","#
+                + #""data":{"sessionID":"ses-1","to":"msg_00cf91b85001"}}"#
+        )
+        #expect(events.map(\.type) == ["session.revert.committed"])
+        #expect(events.first?.sessionID == "ses-1")
+        #expect(events.first?.rawProperties?["messageID"]?.stringValue == "msg_00cf91b85001")
     }
 
     @Test func parseEvents_projectsLiveCompactionFailedIntoPartErrorAndIdle() {
@@ -413,7 +456,7 @@ struct EventDomainAdapterTests {
         let events = adapter.parseEvents(
             dataLine: #"{"type":"session.compaction.failed","data":{"sessionID":"ses-1","messageID":"msg-c"}}"#
         )
-        #expect(events.map(\.type) == ["message.part.updated", "session.error", "session.idle"])
+        #expect(events.map(\.type) == ["message.updated", "message.part.updated", "session.error", "session.idle"])
         #expect(events.last?.triggersStatusRefresh == true)
     }
 
@@ -515,6 +558,35 @@ struct EventDomainAdapterTests {
         #expect(event?.rawProperties?["part"]?.dictionaryValue?["tool"]?.stringValue == "websearch")
     }
 
+    @Test func parseEvents_scopesV2OrdinalPartIDsToTheirAssistantMessage() {
+        // Captured v2 shape: each step's first text and reasoning are ordinal 0
+        // and carry no part id, so the id must include the assistant message.
+        let adapter = EventDomainAdapter()
+        func partID(_ line: String) -> String? {
+            adapter.parseEvents(dataLine: line).lazy.compactMap { event in
+                event.rawProperties?["part"]?.dictionaryValue?["id"]?.stringValue
+                    ?? event.rawProperties?["partID"]?.stringValue
+            }.first
+        }
+        let ids = [
+            #"{"type":"session.text.started","data":{"sessionID":"ses-1","assistantMessageID":"msg-a","ordinal":0}}"#,
+            #"{"type":"session.text.delta","data":{"sessionID":"ses-1","assistantMessageID":"msg-a","ordinal":0,"delta":"Look"}}"#,
+            #"{"type":"session.text.ended","data":{"sessionID":"ses-1","assistantMessageID":"msg-b","ordinal":0,"text":"Done"}}"#,
+            #"{"type":"session.reasoning.started","data":{"sessionID":"ses-1","assistantMessageID":"msg-a","ordinal":0,"state":{}}}"#,
+            #"{"type":"session.reasoning.delta","data":{"sessionID":"ses-1","assistantMessageID":"msg-b","ordinal":1,"delta":"Hm"}}"#,
+        ].map(partID)
+        #expect(ids == ["msg-a:text:0", "msg-a:text:0", "msg-b:text:0", "msg-a:reasoning:0", "msg-b:reasoning:1"])
+    }
+
+    @Test func parseEvents_stepStartedStampsAssistantCreatedTime() {
+        let adapter = EventDomainAdapter()
+        let events = adapter.parseEvents(
+            dataLine: #"{"id":"evt_1","created":1786924698081,"type":"session.step.started","data":{"sessionID":"ses-1","agent":"build","assistantMessageID":"msg-a"}}"#
+        )
+        let info = events.first { $0.type == "message.updated" }?.rawProperties?["info"]?.dictionaryValue
+        #expect(info?["time"]?.dictionaryValue?["created"]?.int64Value == 1786924698081)
+    }
+
     @Test func parseEvent_projectsLiveTextDeltaUsingOrdinalPartID() {
         let adapter = EventDomainAdapter()
         let event = adapter.parseEvent(
@@ -523,7 +595,7 @@ struct EventDomainAdapterTests {
         #expect(event?.type == "message.part.delta")
         #expect(event?.sessionID == "ses-1")
         #expect(event?.rawProperties?["messageID"]?.stringValue == "msg-2")
-        #expect(event?.rawProperties?["partID"]?.stringValue == "text-0")
+        #expect(event?.rawProperties?["partID"]?.stringValue == "msg-2:text:0")
         #expect(event?.rawProperties?["delta"]?.stringValue == "Hi")
         #expect(event?.triggersMessageRefresh == true)
     }
@@ -604,6 +676,18 @@ struct EventDomainAdapterTests {
         #expect(event?.type == "session.updated")
         #expect(event?.sessionID == "ses-1")
         #expect(event?.rawProperties?["info"]?.dictionaryValue?["title"]?.stringValue == "Testing conversation")
+    }
+
+    @Test func parseEvent_projectsForkedIntoTopLevelSessionCreated() {
+        let adapter = EventDomainAdapter()
+        let event = adapter.parseEvent(
+            dataLine: #"{"type":"session.forked","data":{"sessionID":"ses_fork","parentID":"ses_src","boundary":{"type":"through","messageID":"msg_1"}}}"#
+        )
+        #expect(event?.type == "session.created")
+        #expect(event?.sessionID == "ses_fork")
+        #expect(event?.triggersHomeRefresh == true)
+        #expect(event?.rawProperties?["parentID"] == nil)
+        #expect(event?.rawProperties?["forkedFromSessionID"]?.stringValue == "ses_src")
     }
 
     @Test func parseEvent_remapsPermissionV2Asked() {

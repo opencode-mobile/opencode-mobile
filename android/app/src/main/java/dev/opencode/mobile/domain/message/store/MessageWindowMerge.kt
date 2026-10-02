@@ -56,7 +56,9 @@ object MessageWindowMerge {
         val tailNewestId = remote.last().id
         val tailNewestInLocal = local.indexOfLast { it.id == tailNewestId }
         val windowEnd = if (tailNewestInLocal >= 0) tailNewestInLocal + 1 else local.size
-        val localWindow = local.subList(oldestOverlapIndex, windowEnd)
+        // A local message inside the tail's window that the tail lacks was removed
+        // on the server (a committed revert): it must not make the tail look stale.
+        val localWindow = local.subList(oldestOverlapIndex, windowEnd).filter { it.id in remoteIds }
         return MessageSnapshotAuthority.isAheadOrEqual(remote = remote, local = localWindow)
     }
 }

@@ -94,6 +94,44 @@ struct MessageHistoryMergeTests {
         #expect(merged.last?.text == "live sse extra text")
     }
 
+    @Test func tailThatDroppedRevertedMessagesIsAcceptedAndDropsThem() {
+        // Cached transcript still holds a reverted turn the server has since removed.
+        let local = [
+            message("u1", role: .user, text: "First prompt"),
+            message("a1", role: .assistant, text: "Answer to the first prompt."),
+            message("u2", role: .user, text: "Queued prompt"),
+            message("a2", role: .assistant, text: "A much longer answer to the queued prompt that was reverted."),
+            message("u3", role: .user, text: "Queued prompt v2"),
+            message("a3", role: .assistant, text: "Answer to the replacement prompt."),
+        ]
+        let tail = [
+            message("u1", role: .user, text: "First prompt"),
+            message("a1", role: .assistant, text: "Answer to the first prompt."),
+            message("u3", role: .user, text: "Queued prompt v2"),
+            message("a3", role: .assistant, text: "Answer to the replacement prompt."),
+        ]
+
+        #expect(MessageHistoryMerge.shouldAcceptTail(remote: tail, local: local))
+        #expect(MessageHistoryMerge.applyTail(local: local, tail: tail).map(\.id) == ["u1", "a1", "u3", "a3"])
+    }
+
+    @Test func tailWhoseNewTurnReplacedACachedRevertedTurnDropsIt() {
+        let local = [
+            message("u1", role: .user, text: "First prompt"),
+            message("a1", role: .assistant, text: "Answer one."),
+            message("u2", role: .user, text: "Reverted prompt"),
+            message("a2", role: .assistant, text: "A long reverted answer that is no longer on the server."),
+        ]
+        let tail = [
+            message("u1", role: .user, text: "First prompt"),
+            message("a1", role: .assistant, text: "Answer one."),
+            message("u3", role: .user, text: "New"),
+        ]
+
+        #expect(MessageHistoryMerge.shouldAcceptTail(remote: tail, local: local))
+        #expect(MessageHistoryMerge.applyTail(local: local, tail: tail).map(\.id) == ["u1", "a1", "u3"])
+    }
+
     private func message(
         _ id: String,
         role: MessageRole,

@@ -130,7 +130,7 @@ struct V2SessionRemote: SessionRemote, Sendable {
         try await api.respondToPermissionV2(
             sessionID: sessionID,
             permissionID: permissionID,
-            body: V2PermissionReplyRequestDTO(reply: adapter.permissionResponse(decision))
+            body: V2PermissionReplyRequestDTO(decision: adapter.permissionResponse(decision))
         )
     }
 

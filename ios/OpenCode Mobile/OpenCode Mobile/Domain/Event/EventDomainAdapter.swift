@@ -1,6 +1,10 @@
 import Foundation
 
 nonisolated struct EventDomainAdapter: Sendable {
+    /// v2 compaction item id per session, remembered from `compaction.started`:
+    /// `ended` / `failed` carry no id while the server updates the running item.
+    private let runningCompactionIDs = RunningCompactionIDs()
+
     func parseEvent(dataLine: String) -> OpencodeEvent? {
         parseEvents(dataLine: dataLine).first
     }
@@ -36,17 +40,19 @@ nonisolated struct EventDomainAdapter: Sendable {
                 return .unrecognized
             }
             let data = properties(fromData: syncEvent["data"]) ?? [:]
+            let envelopeID = string(in: syncEvent, key: "id") ?? string(in: payload, key: "id") ?? json["id"] as? String
             let stamped = stampEnvelopeId(
-                project(type: canonicalEventType(innerType), properties: data),
-                id: string(in: syncEvent, key: "id") ?? string(in: payload, key: "id") ?? json["id"] as? String
+                project(type: canonicalEventType(innerType), properties: data, envelopeID: envelopeID),
+                id: envelopeID
             )
             return stamped.isEmpty
                 ? .dropped(type: canonicalEventType(innerType))
                 : .events(stamped)
         }
+        let envelopeID = string(in: payload, key: "id") ?? json["id"] as? String
         let stamped = stampEnvelopeId(
-            project(type: canonicalEventType(type), properties: eventProperties),
-            id: string(in: payload, key: "id") ?? json["id"] as? String
+            project(type: canonicalEventType(type), properties: eventProperties, envelopeID: envelopeID),
+            id: envelopeID
         )
         return stamped.isEmpty
             ? .dropped(type: canonicalEventType(type))
@@ -145,7 +151,7 @@ nonisolated struct EventDomainAdapter: Sendable {
         return String(type[..<dot])
     }
 
-    private func project(type: String, properties: [String: Any]) -> [OpencodeEvent] {
+    private func project(type: String, properties: [String: Any], envelopeID: String? = nil) -> [OpencodeEvent] {
         switch type {
         case "permission.v2.asked":
             [event(type: "permission.asked", properties: properties)]
@@ -202,20 +208,20 @@ nonisolated struct EventDomainAdapter: Sendable {
         case "session.next.shell.ended", "session.shell.ended":
             [shellPartUpdated(properties, status: "completed")]
         case "session.next.compaction.started", "session.compaction.started":
-            [
-                statusEvent(properties, statusType: "busy"),
-                compactionPartUpdated(properties, completed: false),
-            ]
+            [statusEvent(properties, statusType: "busy")]
+                + compactionUpdated(properties, envelopeID: envelopeID, phase: .started)
         case "session.next.compaction.delta", "session.compaction.delta":
-            [compactionTextDelta(properties)]
+            // The summary streams as model context; the timeline never shows it as text.
+            []
         case "session.next.compaction.ended", "session.compaction.ended":
-            [compactionPartUpdated(properties, completed: true)]
+            compactionUpdated(properties, envelopeID: envelopeID, phase: .ended)
         case "session.next.compaction.failed", "session.compaction.failed":
-            [
-                compactionPartUpdated(properties, completed: true),
+            compactionUpdated(properties, envelopeID: envelopeID, phase: .failed) + [
                 event(type: "session.error", properties: properties),
                 event(type: "session.idle", properties: properties),
             ]
+        case "session.revert.committed":
+            [revertCommitted(properties)].compactMap { $0 }
         case "session.next.reasoning.started", "session.reasoning.started":
             reasoningStarted(properties)
         case "session.next.reasoning.delta", "session.reasoning.delta":
@@ -233,6 +239,8 @@ nonisolated struct EventDomainAdapter: Sendable {
             [event(type: "session.updated", properties: properties)]
         case "session.renamed":
             [renamedToUpdated(properties)]
+        case "session.forked":
+            [forkedToCreated(properties)]
         case "session.usage.updated", "session.next.usage.updated":
             [usageUpdated(properties)].compactMap { $0 }
         default:
@@ -276,6 +284,20 @@ nonisolated struct EventDomainAdapter: Sendable {
             info["title"] = title
         }
         return event(type: "session.updated", properties: ["info": info])
+    }
+
+    /// v2 announces a fork only as `session.forked`, whose `parentID` is the fork source.
+    /// A fork is a new top-level session, so it is projected as `session.created` without
+    /// `parentID`, keeping it from reading as a subagent child.
+    private func forkedToCreated(_ properties: [String: Any]) -> OpencodeEvent {
+        var projected: [String: Any] = [:]
+        if let sessionID = sessionID(from: properties) {
+            projected["sessionID"] = sessionID
+        }
+        if let source = string(in: properties, key: "parentID") {
+            projected["forkedFromSessionID"] = source
+        }
+        return event(type: "session.created", properties: projected)
     }
 
     private func inboxCancelled(_ properties: [String: Any]) -> OpencodeEvent {
@@ -414,18 +436,24 @@ nonisolated struct EventDomainAdapter: Sendable {
 
     private func stepStarted(_ properties: [String: Any]) -> [OpencodeEvent] {
         [
-            assistantMessageUpdated(properties),
+            assistantMessageUpdated(properties, stampCreated: true),
             statusEvent(properties, statusType: "busy"),
         ].compactMap { $0 }
     }
 
-    private func assistantMessageUpdated(_ properties: [String: Any]) -> OpencodeEvent? {
+    /// v2 has no assistant `message.updated`; synthesize one. Only `step.started`
+    /// stamps `time.created` (the envelope time) so a live reply orders after the
+    /// prompt it answers; later partial infos omit `time` and the store keeps it.
+    private func assistantMessageUpdated(_ properties: [String: Any], stampCreated: Bool = false) -> OpencodeEvent? {
         guard let assistantID = string(in: properties, key: "assistantMessageID") ?? string(in: properties, key: "messageID") else {
             return nil
         }
         var info: [String: Any] = ["id": assistantID, "role": "assistant"]
         if let sessionID = sessionID(from: properties) {
             info["sessionID"] = sessionID
+        }
+        if stampCreated, let created = int64(in: properties, key: "created") {
+            info["time"] = ["created": created]
         }
         return event(type: "message.updated", properties: ["info": info])
     }
@@ -510,37 +538,71 @@ nonisolated struct EventDomainAdapter: Sendable {
         )
     }
 
-    private func compactionPartUpdated(_ properties: [String: Any], completed: Bool) -> OpencodeEvent {
+    private enum CompactionPhase { case started, ended, failed }
+
+    /// v2 compaction is its own transcript item (`type: compaction`). Its id is
+    /// `inputID` or the `started` envelope id with `evt_` swapped for `msg_`; a
+    /// finished one without a remembered start uses its own envelope id, as the
+    /// server does when it appends a completed item.
+    private func compactionUpdated(
+        _ properties: [String: Any],
+        envelopeID: String?,
+        phase: CompactionPhase
+    ) -> [OpencodeEvent] {
         let sessionID = sessionID(from: properties)
-        let messageID = string(in: properties, key: "messageID")
+        let fromEnvelope = envelopeID.map { id -> String in
+            id.hasPrefix("evt_") ? "msg_" + String(id.dropFirst("evt_".count)) : id
+        }
+        let explicit = string(in: properties, key: "inputID") ?? string(in: properties, key: "messageID")
+        let resolved: String?
+        switch phase {
+        case .started:
+            resolved = explicit ?? fromEnvelope
+        case .ended, .failed:
+            resolved = explicit ?? sessionID.flatMap { runningCompactionIDs.id(for: $0) } ?? fromEnvelope
+        }
+        guard let messageID = resolved else { return [] }
+        if let sessionID {
+            runningCompactionIDs.set(phase == .started ? messageID : nil, for: sessionID)
+        }
+        var info: [String: Any] = ["id": messageID, "role": "assistant", "mode": "compaction"]
         var part: [String: Any] = [
+            "id": messageID,
+            "messageID": messageID,
             "type": "compaction",
             "auto": string(in: properties, key: "reason") == "auto",
-            "completed": completed,
+            "completed": phase != .started,
         ]
-        if let messageID {
-            part["id"] = messageID
-            part["messageID"] = messageID
-        }
         if let sessionID {
+            info["sessionID"] = sessionID
             part["sessionID"] = sessionID
         }
-        return event(type: "message.part.updated", properties: ["part": part])
+        if phase == .started, let created = int64(in: properties, key: "created") {
+            info["time"] = ["created": created]
+        }
+        if phase == .ended, let summary = string(in: properties, key: "text"),
+           !summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        {
+            part["summary"] = summary
+        }
+        return [
+            event(type: "message.updated", properties: ["info": info]),
+            event(type: "message.part.updated", properties: ["part": part]),
+        ]
     }
 
-    private func compactionTextDelta(_ properties: [String: Any]) -> OpencodeEvent {
-        var projected: [String: Any] = ["field": "text"]
+    /// v2 announces a committed revert only as `session.revert.committed {to}`:
+    /// the server dropped `to` and every later message, with no per-message
+    /// `message.removed` (v1 sends those instead).
+    private func revertCommitted(_ properties: [String: Any]) -> OpencodeEvent? {
+        guard let messageID = string(in: properties, key: "to") ?? string(in: properties, key: "messageID") else {
+            return nil
+        }
+        var projected: [String: Any] = ["messageID": messageID]
         if let sessionID = sessionID(from: properties) {
             projected["sessionID"] = sessionID
         }
-        if let messageID = string(in: properties, key: "messageID") {
-            projected["messageID"] = messageID
-            projected["partID"] = "\(messageID):text:0"
-        }
-        if let text = string(in: properties, key: "text") {
-            projected["delta"] = text
-        }
-        return event(type: "message.part.delta", properties: projected)
+        return event(type: "session.revert.committed", properties: projected)
     }
 
     private func toolLikePartUpdated(
@@ -741,10 +803,7 @@ nonisolated struct EventDomainAdapter: Sendable {
         if let textID = string(in: properties, key: "textID") {
             return textID
         }
-        if let ordinal = string(in: properties, key: "ordinal") {
-            return "text-\(ordinal)"
-        }
-        return nil
+        return ordinalPartID(in: properties, kind: "text")
     }
 
     private func reasoningPartID(in properties: [String: Any]) -> String? {
@@ -754,10 +813,18 @@ nonisolated struct EventDomainAdapter: Sendable {
         if let id = string(in: properties, key: "id") {
             return id
         }
-        if let ordinal = string(in: properties, key: "ordinal") {
-            return "reasoning-\(ordinal)"
+        return ordinalPartID(in: properties, kind: "reasoning")
+    }
+
+    /// v2 text/reasoning events carry no part id, only an `ordinal` that restarts
+    /// at 0 in every assistant message. Scope it to the message so step texts of
+    /// one turn stay distinct, matching `MessageDomainAdapter`'s REST ids.
+    private func ordinalPartID(in properties: [String: Any], kind: String) -> String? {
+        guard let ordinal = string(in: properties, key: "ordinal") else { return nil }
+        guard let messageID = string(in: properties, key: "assistantMessageID") else {
+            return "\(kind)-\(ordinal)"
         }
-        return nil
+        return V2ContentPartID.make(messageID: messageID, kind: kind, ordinal: ordinal)
     }
 
     private func resolvedToolName(_ properties: [String: Any]) -> String {
@@ -901,4 +968,22 @@ nonisolated enum EventParseOutcome: Sendable {
 nonisolated struct SessionTitleUpdate: Equatable, Sendable {
     let sessionID: String
     let title: String
+}
+
+/// Session → running v2 compaction item id, shared by copies of the adapter.
+nonisolated final class RunningCompactionIDs: @unchecked Sendable {
+    private let lock = NSLock()
+    private var ids: [String: String] = [:]
+
+    func id(for sessionID: String) -> String? {
+        lock.lock()
+        defer { lock.unlock() }
+        return ids[sessionID]
+    }
+
+    func set(_ id: String?, for sessionID: String) {
+        lock.lock()
+        defer { lock.unlock() }
+        ids[sessionID] = id
+    }
 }

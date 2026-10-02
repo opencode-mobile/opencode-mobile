@@ -6,6 +6,11 @@ package dev.opencode.mobile.ui.sessionchat
  */
 object SessionCompactChrome {
     const val STATUS_LABEL = "Compacting…"
+
+    /** Timeline marker for a server compaction item; the summary opens from it. */
+    const val MARKER_TITLE = "Context compacted"
+    const val MARKER_AUTO_SUBTITLE = "Automatic"
+    const val MARKER_TOOL_NAME = "compaction"
     const val FALLBACK_SUCCESS = "Session compacted."
     const val FAILURE = "Couldn't compact session context."
 

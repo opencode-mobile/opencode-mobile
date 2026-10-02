@@ -72,7 +72,7 @@ data class V2PermissionSourceDto(
 
 @Serializable
 data class V2PermissionReplyRequestDto(
-    val reply: String,
+    val decision: String,
 )
 
 @Serializable
@@ -105,7 +105,11 @@ data class V2InboxItemDto(
     val type: String = "",
     val payload: V2InboxUserPayloadDto? = null,
     val delivery: String? = null,
-)
+    /** `Session.Inbox.User` nests the enqueue time as `time.created`. */
+    val time: SessionTimeDto? = null,
+) {
+    val createdAtEpochMs: Long get() = time?.created ?: timeCreated
+}
 
 @Serializable
 data class V2InboxUserPayloadDto(
