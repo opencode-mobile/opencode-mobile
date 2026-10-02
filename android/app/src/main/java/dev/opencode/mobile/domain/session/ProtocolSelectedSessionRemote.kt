@@ -107,6 +107,13 @@ internal class ProtocolSelectedSessionRemote(
         directory: String?,
     ): Boolean = selected().summarizeSession(id, providerId, modelId, directory)
 
+    override suspend fun compactSession(
+        id: String,
+        providerId: String,
+        modelId: String,
+        directory: String?,
+    ): CompactionStart = selected().compactSession(id, providerId, modelId, directory)
+
     override suspend fun revertSession(
         id: String,
         messageId: String,

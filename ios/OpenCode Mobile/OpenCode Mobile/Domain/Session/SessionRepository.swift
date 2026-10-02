@@ -23,6 +23,10 @@ protocol SessionRepository: Sendable {
     func getVcsStatus(directory: String?) async throws -> [VcsFileStatus]
     func getVcsDiff(mode: VcsDiffMode, directory: String?, context: Int) async throws -> [FileDiff]
     func summarizeSession(id: String, providerID: String, modelID: String) async throws -> Bool
+    /// Requests compaction and says whether the summary already exists when this returns.
+    /// v1 `summarize` returns after compacting; v2 `compact` only enqueues it, and completion
+    /// arrives live as the compaction item reaching completed.
+    func compactSession(id: String, providerID: String, modelID: String) async throws -> CompactionStart
     func revertSession(id: String, messageID: String, partID: String?) async throws -> Bool
     func unrevertSession(id: String) async throws -> Bool
     func respondToPermission(sessionID: String, permissionID: String, decision: PermissionDecision, directory: String?) async throws -> Bool
@@ -36,7 +40,19 @@ protocol SessionRepository: Sendable {
     func queuePendingPrompt(sessionID: String, inboxID: String) async throws -> Bool
 }
 
+/// How the server handled a compact request.
+nonisolated enum CompactionStart: Sendable, Equatable {
+    /// The server returned after the summary was written.
+    case finished
+    /// The server only enqueued compaction; it completes later, live.
+    case enqueued
+}
+
 extension SessionRepository {
+    func compactSession(id: String, providerID: String, modelID: String) async throws -> CompactionStart {
+        _ = try await summarizeSession(id: id, providerID: providerID, modelID: modelID)
+        return .finished
+    }
     func listPendingPermissions(directory: String?) async throws -> [PermissionRequest] { [] }
     func listPendingQuestions(directory: String?) async throws -> [QuestionRequest] { [] }
     func replyToQuestion(questionID: String, answers: [[String]], directory: String?) async throws -> Bool { false }
@@ -221,6 +237,10 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
 
     func summarizeSession(id: String, providerID: String, modelID: String) async throws -> Bool {
         try await run { try await remote.summarizeSession(id: id, providerID: providerID, modelID: modelID) }
+    }
+
+    func compactSession(id: String, providerID: String, modelID: String) async throws -> CompactionStart {
+        try await run { try await remote.compactSession(id: id, providerID: providerID, modelID: modelID) }
     }
 
     func revertSession(id: String, messageID: String, partID: String?) async throws -> Bool {

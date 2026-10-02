@@ -46,6 +46,7 @@ import dev.opencode.mobile.domain.model.ModelSelectionConnectionIdentity
 import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.model.SessionModelSelection
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
+import dev.opencode.mobile.domain.session.CompactionStart
 import dev.opencode.mobile.domain.session.FileDiff
 import dev.opencode.mobile.domain.session.FileDiffStatus
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
@@ -4318,6 +4319,74 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun runClientSlashAction_compactEnqueued_staysCompactingUntilCompactionCompletes() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val sessionRepository = FakeSessionRepository(compactStart = CompactionStart.Enqueued)
+            val viewModel = createViewModel(repository = repository, sessionRepository = sessionRepository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.runClientSlashAction(ClientSlashAction.Compact)
+            advanceUntilIdle()
+
+            // POST /compact returned (enqueued): no success yet, still Compacting….
+            assertEquals(SessionCompactChrome.STATUS_LABEL, viewModel.uiState.value.sessionStatusLabel)
+            assertNull(viewModel.uiState.value.snackbar)
+
+            repository.messages =
+                repository.messages +
+                Message(
+                    id = "msg-c",
+                    role = MessageRole.Assistant,
+                    text = "",
+                    parts =
+                        listOf(
+                            MessagePart.Compaction(id = "msg-c", completed = true, summary = "## Goal\nShip it"),
+                        ),
+                    mode = "compaction",
+                    sentAtEpochMs = 5,
+                )
+            repository.eventStream.emit(OpencodeEvent(type = "message.updated", sessionId = "ses-1"))
+            advanceUntilIdle()
+
+            assertNull(viewModel.uiState.value.sessionStatusLabel)
+            assertEquals(
+                SessionCompactChrome.FALLBACK_SUCCESS,
+                viewModel.uiState.value.snackbar
+                    ?.message,
+            )
+        }
+
+    @Test
+    fun runClientSlashAction_compactEnqueued_failedCompactionShowsNoSuccess() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val sessionRepository = FakeSessionRepository(compactStart = CompactionStart.Enqueued)
+            val viewModel = createViewModel(repository = repository, sessionRepository = sessionRepository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.runClientSlashAction(ClientSlashAction.Compact)
+            advanceUntilIdle()
+            repository.messages =
+                repository.messages +
+                Message(
+                    id = "msg-c",
+                    role = MessageRole.Assistant,
+                    text = "",
+                    parts = listOf(MessagePart.Compaction(id = "msg-c", completed = true)),
+                    mode = "compaction",
+                    sentAtEpochMs = 5,
+                )
+            repository.eventStream.emit(OpencodeEvent(type = "message.updated", sessionId = "ses-1"))
+            advanceUntilIdle()
+
+            assertNull(viewModel.uiState.value.sessionStatusLabel)
+            assertNull(viewModel.uiState.value.snackbar)
+        }
+
+    @Test
     fun workingFooter_holdsThroughIdleThenCollapsesAndCancelsOnBusy() =
         runTest(testDispatcher) {
             val repository = FakeMessageRepository()
@@ -5116,6 +5185,7 @@ private class FakeSessionRepository(
     private val unrevertError: Throwable? = null,
     private val summarizeError: Throwable? = null,
     private val summarizeHoldUntil: CompletableDeferred<Unit>? = null,
+    private val compactStart: CompactionStart = CompactionStart.Finished,
 ) : SessionRepository {
     data class DiffRequest(
         val sessionId: String,
@@ -5342,6 +5412,16 @@ private class FakeSessionRepository(
         summarizeHoldUntil?.await()
         summarizeError?.let { throw it }
         return true
+    }
+
+    override suspend fun compactSession(
+        id: String,
+        providerId: String,
+        modelId: String,
+        directory: String?,
+    ): CompactionStart {
+        summarizeSession(id, providerId, modelId, directory)
+        return compactStart
     }
 
     override suspend fun revertSession(

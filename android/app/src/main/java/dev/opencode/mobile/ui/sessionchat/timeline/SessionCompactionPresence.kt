@@ -14,15 +14,19 @@ object SessionCompactionPresence {
         return activeTurn(messages).any(::isCompactionSignal)
     }
 
-    fun completedCompactionIds(messages: List<Message>): Set<String> =
-        messages
-            .flatMap { message ->
-                message.parts.mapNotNull { part ->
-                    val compaction = part as? MessagePart.Compaction ?: return@mapNotNull null
-                    if (!compaction.completed) return@mapNotNull null
-                    compaction.id ?: message.id
+    fun completedCompactionIds(messages: List<Message>): Set<String> = completedCompactions(messages).keys
+
+    /** Completed compaction ids mapped to their summary (null when the item has none, e.g. failed). */
+    fun completedCompactions(messages: List<Message>): Map<String, String?> =
+        buildMap {
+            messages.forEach { message ->
+                message.parts.forEach { part ->
+                    val compaction = part as? MessagePart.Compaction ?: return@forEach
+                    if (!compaction.completed) return@forEach
+                    put(compaction.id ?: message.id, compaction.summary)
                 }
-            }.toSet()
+            }
+        }
 
     private fun activeTurn(messages: List<Message>): List<Message> {
         val lastUserIndex = messages.indexOfLast { it.role == MessageRole.User }

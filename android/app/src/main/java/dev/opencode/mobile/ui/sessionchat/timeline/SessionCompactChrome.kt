@@ -18,7 +18,10 @@ object SessionCompactChrome {
         beforeFraction: Float?,
         afterFraction: Float?,
     ): String {
-        if (beforeFraction == null || afterFraction == null) return FALLBACK_SUCCESS
+        // 0% means usage is unknown (no token counts yet), not an empty context.
+        if (beforeFraction == null || afterFraction == null || beforeFraction <= 0f || afterFraction <= 0f) {
+            return FALLBACK_SUCCESS
+        }
         val before = (beforeFraction * 100f).toInt()
         val after = (afterFraction * 100f).toInt()
         return "Context compacted · $before% → $after%"

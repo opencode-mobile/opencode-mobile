@@ -99,6 +99,21 @@ interface SessionRepository {
         directory: String? = null,
     ): Boolean
 
+    /**
+     * Requests compaction and says whether the summary already exists when this returns.
+     * v1 `summarize` returns after compacting; v2 `compact` only enqueues it, and completion
+     * arrives live as the compaction item reaching completed.
+     */
+    suspend fun compactSession(
+        id: String,
+        providerId: String,
+        modelId: String,
+        directory: String? = null,
+    ): CompactionStart {
+        summarizeSession(id, providerId, modelId, directory)
+        return CompactionStart.Finished
+    }
+
     suspend fun revertSession(
         id: String,
         messageId: String,
@@ -167,4 +182,13 @@ interface SessionRepository {
         inboxId: String,
         directory: String? = null,
     ): Boolean = false
+}
+
+/** How the server handled a compact request. */
+enum class CompactionStart {
+    /** The server returned after the summary was written. */
+    Finished,
+
+    /** The server only enqueued compaction; it completes later, live. */
+    Enqueued,
 }

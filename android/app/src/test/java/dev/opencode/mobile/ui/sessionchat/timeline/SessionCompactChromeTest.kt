@@ -23,4 +23,16 @@ class SessionCompactChromeTest {
             SessionCompactChrome.successMessage(beforeFraction = null, afterFraction = 0.34f),
         )
     }
+
+    @Test
+    fun successMessage_fallsBackWhenUsageIsUnknown() {
+        assertEquals(
+            SessionCompactChrome.FALLBACK_SUCCESS,
+            SessionCompactChrome.successMessage(beforeFraction = 0f, afterFraction = 0f),
+        )
+        assertEquals(
+            SessionCompactChrome.FALLBACK_SUCCESS,
+            SessionCompactChrome.successMessage(beforeFraction = 0.72f, afterFraction = 0f),
+        )
+    }
 }

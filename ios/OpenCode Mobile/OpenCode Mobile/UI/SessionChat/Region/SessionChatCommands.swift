@@ -22,6 +22,8 @@ final class SessionChatCommands {
     private var lastHasSelectedComposerModel = false
     private var lastDomainMessages: [Message] = []
     private var completedCompactionIDsAtStart: Set<String> = []
+    /// A v2 compaction the server only enqueued: success waits for the live compaction item.
+    private var pendingLiveCompaction: PendingLiveCompaction?
     private var actionTask: Task<Void, Never>?
     private var forkTask: Task<Void, Never>?
     private var revertTask: Task<Void, Never>?
@@ -52,6 +54,7 @@ final class SessionChatCommands {
         forkedTarget = nil
         lastDomainMessages = []
         completedCompactionIDsAtStart = []
+        pendingLiveCompaction = nil
         state = SessionChatCommandsRegionState()
         notifyChange()
         refreshRevert()
@@ -85,13 +88,45 @@ final class SessionChatCommands {
         state.visibleActions = ClientSlashActionCatalog.visibleActions(input)
     }
 
-    func observeLoadedMessages(_ messages: [Message]) {
+    func observeLoadedMessages(_ messages: [Message], isSessionBusy: Bool = false) {
         lastDomainMessages = messages
         guard state.isCompacting else { return }
-        let ids = SessionCompactionPresence.completedCompactionIDs(in: messages)
-        if ids.contains(where: { !completedCompactionIDsAtStart.contains($0) }) {
+        if isSessionBusy { pendingLiveCompaction?.sawBusy = true }
+        let finished = SessionCompactionPresence.completedCompactions(in: messages)
+            .filter { !completedCompactionIDsAtStart.contains($0.key) }
+        if !finished.isEmpty {
             OpenCodeLog.sessionChat.info("compact completed via timeline")
             state.isCompacting = false
+            if let pending = pendingLiveCompaction {
+                pendingLiveCompaction = nil
+                // v2 `compaction.ended` carries the summary; `compaction.failed` does not
+                // (its error reaches the session error chrome).
+                if finished.values.contains(where: { !($0 ?? "").isEmpty }) {
+                    postLiveCompactionSuccess(pending)
+                }
+            }
+            return
+        }
+        if let pending = pendingLiveCompaction, pending.sawBusy, !isSessionBusy,
+           !SessionCompactionPresence.isActive(messages: messages, isSessionBusy: true)
+        {
+            // The session went idle without a completed compaction (failed or cancelled).
+            OpenCodeLog.sessionChat.info("compact ended without a summary")
+            pendingLiveCompaction = nil
+            state.isCompacting = false
+        }
+    }
+
+    private func postLiveCompactionSuccess(_ pending: PendingLiveCompaction) {
+        // Called while publishing UI state: defer the success notice to its own change.
+        actionTask = Task { [weak self] in
+            let after = await pending.awaitAfterContextFraction()
+            guard let self, !Task.isCancelled else { return }
+            self.state.actionSuccessMessage = SessionCompactChrome.successMessage(
+                beforeFraction: pending.beforeContextFraction,
+                afterFraction: after
+            )
+            self.notifyChange()
         }
     }
 
@@ -325,6 +360,7 @@ final class SessionChatCommands {
         let sessionID = sessionID
         actionTask?.cancel()
         completedCompactionIDsAtStart = SessionCompactionPresence.completedCompactionIDs(in: lastDomainMessages)
+        pendingLiveCompaction = nil
         state.isCompacting = true
         state.actionErrorMessage = nil
         state.actionSuccessMessage = nil
@@ -335,8 +371,8 @@ final class SessionChatCommands {
         let repository = sessionRepository
         actionTask = Task {
             do {
-                _ = try await Task.detached {
-                    try await repository.summarizeSession(
+                let start = try await Task.detached {
+                    try await repository.compactSession(
                         id: sessionID,
                         providerID: providerID,
                         modelID: modelID
@@ -344,6 +380,19 @@ final class SessionChatCommands {
                 }.value
                 guard !Task.isCancelled else {
                     state.isCompacting = false
+                    notifyChange()
+                    return
+                }
+                if start == .enqueued {
+                    // v2 returns at enqueue time: stay Compacting… until the live compaction
+                    // item completes (observeLoadedMessages).
+                    OpenCodeLog.sessionChat.info("compact enqueued session=\(sessionID)")
+                    guard state.isCompacting else { return }
+                    pendingLiveCompaction = PendingLiveCompaction(
+                        beforeContextFraction: beforeContextFraction,
+                        awaitAfterContextFraction: awaitAfterContextFraction
+                    )
+                    observeLoadedMessages(lastDomainMessages)
                     notifyChange()
                     return
                 }
@@ -472,5 +521,17 @@ final class SessionChatCommands {
 
     private func notifyChange() {
         onChange?()
+    }
+}
+
+@MainActor
+private final class PendingLiveCompaction {
+    let beforeContextFraction: Float?
+    let awaitAfterContextFraction: () async -> Float?
+    var sawBusy = false
+
+    init(beforeContextFraction: Float?, awaitAfterContextFraction: @escaping () async -> Float?) {
+        self.beforeContextFraction = beforeContextFraction
+        self.awaitAfterContextFraction = awaitAfterContextFraction
     }
 }

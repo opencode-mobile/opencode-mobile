@@ -702,6 +702,27 @@ class SessionProtocolRepositoryTest {
         }
 
     @Test
+    fun compactSession_isEnqueuedOnV2AndFinishedOnV1() =
+        runTest {
+            val client = testClient { respond("true", HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json")) }
+            val v2 =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V2),
+                )
+            val v1 =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V1),
+                )
+
+            assertEquals(CompactionStart.Enqueued, v2.compactSession("ses_1", "openai", "gpt-4.1", "/repo"))
+            assertEquals(CompactionStart.Finished, v1.compactSession("ses_1", "openai", "gpt-4.1", "/repo"))
+        }
+
+    @Test
     fun v1RevertSession_acceptsSessionJsonBody() =
         runTest {
             val requests = mutableListOf<HttpRequestData>()

@@ -9,14 +9,19 @@ enum SessionCompactionPresence {
     }
 
     static func completedCompactionIDs(in messages: [Message]) -> Set<String> {
-        Set(
-            messages.flatMap { message in
-                message.parts.compactMap { part -> String? in
-                    guard case let .compaction(compaction) = part, compaction.completed else { return nil }
-                    return compaction.id ?? message.id
-                }
+        Set(completedCompactions(in: messages).keys)
+    }
+
+    /// Completed compaction ids mapped to their summary (nil when the item has none, e.g. failed).
+    static func completedCompactions(in messages: [Message]) -> [String: String?] {
+        var result: [String: String?] = [:]
+        for message in messages {
+            for part in message.parts {
+                guard case let .compaction(compaction) = part, compaction.completed else { continue }
+                result[compaction.id ?? message.id] = .some(compaction.summary)
             }
-        )
+        }
+        return result
     }
 
     private static func activeTurn(in messages: [Message]) -> ArraySlice<Message> {

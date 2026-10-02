@@ -130,6 +130,16 @@ internal class V2SessionRemote(
         directory: String?,
     ): Boolean = api.compactSessionV2(id)
 
+    override suspend fun compactSession(
+        id: String,
+        providerId: String,
+        modelId: String,
+        directory: String?,
+    ): CompactionStart {
+        api.compactSessionV2(id)
+        return CompactionStart.Enqueued
+    }
+
     override suspend fun revertSession(
         id: String,
         messageId: String,

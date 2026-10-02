@@ -1038,7 +1038,10 @@ final class SessionChatViewModel {
             messages: timelineState.messages,
             hasSelectedComposerModel: composerState.composer.selectedModel != nil
         )
-        commands.observeLoadedMessages(timeline.loadedMessages())
+        commands.observeLoadedMessages(
+            timeline.loadedMessages(),
+            isSessionBusy: infoState.sessionStatusLabel != nil
+        )
         let commandsState = commands.state
         let isCompacting = effectiveCompacting(
             localCompacting: commandsState.isCompacting,

@@ -113,6 +113,11 @@ struct V2SessionRemote: SessionRemote, Sendable {
         try await api.compactSessionV2(id: id)
     }
 
+    func compactSession(id: String, providerID _: String, modelID _: String) async throws -> CompactionStart {
+        _ = try await api.compactSessionV2(id: id)
+        return .enqueued
+    }
+
     func revertSession(id: String, messageID: String, partID: String?) async throws -> Bool {
         try await api.stageRevertV2(id: id, messageID: messageID, partID: partID)
     }

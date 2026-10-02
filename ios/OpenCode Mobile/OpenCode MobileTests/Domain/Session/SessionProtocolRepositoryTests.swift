@@ -496,6 +496,26 @@ struct SessionProtocolRepositoryTests {
         #expect(body.contains("\"delivery\":\"steer\""))
     }
 
+    @Test func v2CompactSessionIsEnqueued() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [.noContent])
+        let repository = makeSessionRepository(serverProtocol: .v2)
+
+        let start = try await repository.compactSession(id: "ses_1", providerID: "openai", modelID: "gpt-4.1")
+
+        #expect(start == .enqueued)
+        #expect(ProtocolRoutingURLProtocol.requests.first?.url?.path.hasSuffix("/api/session/ses_1/compact") == true)
+    }
+
+    @Test func v1CompactSessionIsFinishedWhenSummarizeReturns() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [.json("true")])
+        let repository = makeSessionRepository(serverProtocol: .v1)
+
+        let start = try await repository.compactSession(id: "ses_1", providerID: "openai", modelID: "gpt-4.1")
+
+        #expect(start == .finished)
+        #expect(ProtocolRoutingURLProtocol.requests.first?.url?.path.hasSuffix("/session/ses_1/summarize") == true)
+    }
+
     @Test func v2RevertSessionStagesWithMessageAndFiles() async throws {
         ProtocolRoutingURLProtocol.reset(responses: [.noContent])
         let repository = makeSessionRepository(serverProtocol: .v2)

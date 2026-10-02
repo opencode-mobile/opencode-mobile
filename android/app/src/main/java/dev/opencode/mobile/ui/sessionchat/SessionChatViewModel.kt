@@ -253,7 +253,10 @@ class SessionChatViewModel
                         messages = timelineState.messages,
                         hasSelectedComposerModel = composerState.composer.selectedModel != null,
                     )
-                    commands.observeLoadedMessages(timeline.loadedMessages())
+                    commands.observeLoadedMessages(
+                        messages = timeline.loadedMessages(),
+                        isSessionBusy = infoState.sessionStatusLabel != null,
+                    )
                     publishUiState(
                         timelineState,
                         composerState,

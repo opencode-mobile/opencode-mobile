@@ -20,4 +20,15 @@ struct SessionCompactChromeTests {
                 == SessionCompactChrome.fallbackSuccess
         )
     }
+
+    @Test func successMessage_fallsBackWhenUsageIsUnknown() {
+        #expect(
+            SessionCompactChrome.successMessage(beforeFraction: 0, afterFraction: 0)
+                == SessionCompactChrome.fallbackSuccess
+        )
+        #expect(
+            SessionCompactChrome.successMessage(beforeFraction: 0.72, afterFraction: 0)
+                == SessionCompactChrome.fallbackSuccess
+        )
+    }
 }
