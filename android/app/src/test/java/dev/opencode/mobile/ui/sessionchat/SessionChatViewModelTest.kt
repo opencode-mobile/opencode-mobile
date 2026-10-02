@@ -46,6 +46,7 @@ import dev.opencode.mobile.domain.model.ModelSelectionConnectionIdentity
 import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.model.SessionModelSelection
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
+import dev.opencode.mobile.domain.session.CompactionStart
 import dev.opencode.mobile.domain.session.FileDiff
 import dev.opencode.mobile.domain.session.FileDiffStatus
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
@@ -1196,6 +1197,20 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun clearSessionReadyFocus_releasesOnlyTheBoundSession() =
+        runTest(testDispatcher) {
+            val readyStore = RecordingSessionReadyStore()
+            val viewModel = createViewModel(FakeMessageRepository(), sessionReadyStore = readyStore)
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            viewModel.clearSessionReadyFocus()
+
+            assertEquals(listOf("ses-1"), readyStore.releaseCalls)
+            assertTrue(readyStore.focusCalls.none { it.first == null })
+        }
+
+    @Test
     fun bind_sameSessionReuse_refinesProjectLabelWhenPeersChange() =
         runTest(testDispatcher) {
             val connectionProfileStore =
@@ -2157,6 +2172,40 @@ class SessionChatViewModelTest {
                     ?.modelId,
             )
             assertEquals("high", viewModel.uiState.value.composer.selectedVariant)
+        }
+
+    @Test
+    fun loadMessages_serverDefaultVariantIsDefaultWithoutNotice() =
+        runTest(testDispatcher) {
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(
+                        messages =
+                            listOf(
+                                Message(
+                                    id = "msg-2",
+                                    role = MessageRole.Assistant,
+                                    text = "Reply",
+                                    model = "claude-sonnet",
+                                    modelProviderId = "anthropic",
+                                    modelId = "claude-sonnet",
+                                    variant = "default",
+                                    sentAtEpochMs = 2_000L,
+                                ),
+                            ),
+                    ),
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertEquals(
+                "claude-sonnet",
+                viewModel.uiState.value.composer.selectedModel
+                    ?.option
+                    ?.modelId,
+            )
+            assertNull(viewModel.uiState.value.composer.selectedVariant)
+            assertNull(viewModel.uiState.value.composer.modelNotice)
         }
 
     @Test
@@ -4270,6 +4319,223 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun runClientSlashAction_compactEnqueued_staysCompactingUntilCompactionCompletes() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val sessionRepository = FakeSessionRepository(compactStart = CompactionStart.Enqueued)
+            val viewModel = createViewModel(repository = repository, sessionRepository = sessionRepository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.runClientSlashAction(ClientSlashAction.Compact)
+            advanceUntilIdle()
+
+            // POST /compact returned (enqueued): no success yet, still Compacting….
+            assertEquals(SessionCompactChrome.STATUS_LABEL, viewModel.uiState.value.sessionStatusLabel)
+            assertNull(viewModel.uiState.value.snackbar)
+
+            repository.messages =
+                repository.messages +
+                Message(
+                    id = "msg-c",
+                    role = MessageRole.Assistant,
+                    text = "",
+                    parts =
+                        listOf(
+                            MessagePart.Compaction(id = "msg-c", completed = true, summary = "## Goal\nShip it"),
+                        ),
+                    mode = "compaction",
+                    sentAtEpochMs = 5,
+                )
+            repository.eventStream.emit(OpencodeEvent(type = "message.updated", sessionId = "ses-1"))
+            advanceUntilIdle()
+
+            assertNull(viewModel.uiState.value.sessionStatusLabel)
+            assertEquals(
+                SessionCompactChrome.FALLBACK_SUCCESS,
+                viewModel.uiState.value.snackbar
+                    ?.message,
+            )
+        }
+
+    @Test
+    fun runClientSlashAction_compactEnqueued_failedCompactionShowsNoSuccess() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val sessionRepository = FakeSessionRepository(compactStart = CompactionStart.Enqueued)
+            val viewModel = createViewModel(repository = repository, sessionRepository = sessionRepository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.runClientSlashAction(ClientSlashAction.Compact)
+            advanceUntilIdle()
+            repository.messages =
+                repository.messages +
+                Message(
+                    id = "msg-c",
+                    role = MessageRole.Assistant,
+                    text = "",
+                    parts = listOf(MessagePart.Compaction(id = "msg-c", completed = true)),
+                    mode = "compaction",
+                    sentAtEpochMs = 5,
+                )
+            repository.eventStream.emit(OpencodeEvent(type = "message.updated", sessionId = "ses-1"))
+            advanceUntilIdle()
+
+            assertNull(viewModel.uiState.value.sessionStatusLabel)
+            assertNull(viewModel.uiState.value.snackbar)
+        }
+
+    @Test
+    fun runClientSlashAction_compactEnqueued_timelineCompletesBeforePostReturns_showsOneSuccess() =
+        runTest(testDispatcher) {
+            val hold = CompletableDeferred<Unit>()
+            val repository = FakeMessageRepository()
+            val sessionRepository =
+                FakeSessionRepository(summarizeHoldUntil = hold, compactStart = CompactionStart.Enqueued)
+            val viewModel = createViewModel(repository = repository, sessionRepository = sessionRepository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.runClientSlashAction(ClientSlashAction.Compact)
+            advanceUntilIdle()
+            assertEquals(SessionCompactChrome.STATUS_LABEL, viewModel.uiState.value.sessionStatusLabel)
+
+            // The live compaction item completes while POST /compact is still in flight.
+            repository.messages = repository.messages + completedCompactionMessage(summary = "## Goal\nShip it")
+            repository.eventStream.emit(OpencodeEvent(type = "message.updated", sessionId = "ses-1"))
+            advanceUntilIdle()
+            assertNull(viewModel.uiState.value.sessionStatusLabel)
+            assertNull(viewModel.uiState.value.snackbar)
+
+            hold.complete(Unit)
+            advanceUntilIdle()
+            assertNull(viewModel.uiState.value.sessionStatusLabel)
+            assertEquals(
+                SessionCompactChrome.FALLBACK_SUCCESS,
+                viewModel.uiState.value.snackbar
+                    ?.message,
+            )
+
+            viewModel.consumeSnackbar()
+            repository.eventStream.emit(OpencodeEvent(type = "message.updated", sessionId = "ses-1"))
+            advanceUntilIdle()
+            assertNull(viewModel.uiState.value.snackbar)
+        }
+
+    @Test
+    fun runClientSlashAction_compactEnqueued_busyThenIdleBeforePostReturns_clearsWithoutSuccess() =
+        runTest(testDispatcher) {
+            val hold = CompletableDeferred<Unit>()
+            val repository = FakeMessageRepository()
+            val sessionRepository =
+                FakeSessionRepository(summarizeHoldUntil = hold, compactStart = CompactionStart.Enqueued)
+            val viewModel = createViewModel(repository = repository, sessionRepository = sessionRepository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.runClientSlashAction(ClientSlashAction.Compact)
+            advanceUntilIdle()
+            repository.eventStream.emit(busyStatusEvent())
+            advanceUntilIdle()
+            repository.eventStream.emit(OpencodeEvent(type = "session.idle", sessionId = "ses-1"))
+            advanceUntilIdle()
+            // Enqueue not confirmed yet: idle alone does not end the compaction.
+            assertEquals(SessionCompactChrome.STATUS_LABEL, viewModel.uiState.value.sessionStatusLabel)
+
+            hold.complete(Unit)
+            advanceUntilIdle()
+            assertNull(viewModel.uiState.value.sessionStatusLabel)
+            assertNull(viewModel.uiState.value.snackbar)
+        }
+
+    @Test
+    fun runClientSlashAction_compactFinished_timelineCompletesFirst_showsOneSuccess() =
+        runTest(testDispatcher) {
+            val hold = CompletableDeferred<Unit>()
+            val repository = FakeMessageRepository()
+            val sessionRepository =
+                FakeSessionRepository(summarizeHoldUntil = hold, compactStart = CompactionStart.Finished)
+            val viewModel = createViewModel(repository = repository, sessionRepository = sessionRepository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.runClientSlashAction(ClientSlashAction.Compact)
+            advanceUntilIdle()
+            repository.messages = repository.messages + completedCompactionMessage(summary = "## Goal\nShip it")
+            repository.eventStream.emit(OpencodeEvent(type = "message.updated", sessionId = "ses-1"))
+            advanceUntilIdle()
+            assertNull(viewModel.uiState.value.sessionStatusLabel)
+            assertNull(viewModel.uiState.value.snackbar)
+
+            hold.complete(Unit)
+            advanceUntilIdle()
+            assertEquals(
+                SessionCompactChrome.FALLBACK_SUCCESS,
+                viewModel.uiState.value.snackbar
+                    ?.message,
+            )
+
+            viewModel.consumeSnackbar()
+            repository.eventStream.emit(OpencodeEvent(type = "message.updated", sessionId = "ses-1"))
+            advanceUntilIdle()
+            assertNull(viewModel.uiState.value.snackbar)
+            assertNull(viewModel.uiState.value.sessionStatusLabel)
+        }
+
+    @Test
+    fun runClientSlashAction_compactEnqueued_stillBusyWhenPostReturns_staysCompacting() =
+        runTest(testDispatcher) {
+            val hold = CompletableDeferred<Unit>()
+            val repository = FakeMessageRepository()
+            val sessionRepository =
+                FakeSessionRepository(summarizeHoldUntil = hold, compactStart = CompactionStart.Enqueued)
+            val viewModel = createViewModel(repository = repository, sessionRepository = sessionRepository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.runClientSlashAction(ClientSlashAction.Compact)
+            advanceUntilIdle()
+            repository.eventStream.emit(busyStatusEvent())
+            advanceUntilIdle()
+
+            // The post-enqueue re-check must see the session still busy, not treat it as idle.
+            hold.complete(Unit)
+            advanceUntilIdle()
+            assertEquals(SessionCompactChrome.STATUS_LABEL, viewModel.uiState.value.sessionStatusLabel)
+            assertNull(viewModel.uiState.value.snackbar)
+
+            repository.messages = repository.messages + completedCompactionMessage(summary = "## Goal\nShip it")
+            repository.eventStream.emit(OpencodeEvent(type = "message.updated", sessionId = "ses-1"))
+            advanceUntilIdle()
+            repository.eventStream.emit(OpencodeEvent(type = "session.idle", sessionId = "ses-1"))
+            advanceUntilIdle()
+            assertNull(viewModel.uiState.value.sessionStatusLabel)
+            assertEquals(
+                SessionCompactChrome.FALLBACK_SUCCESS,
+                viewModel.uiState.value.snackbar
+                    ?.message,
+            )
+        }
+
+    private fun completedCompactionMessage(summary: String?): Message =
+        Message(
+            id = "msg-c",
+            role = MessageRole.Assistant,
+            text = "",
+            parts = listOf(MessagePart.Compaction(id = "msg-c", completed = true, summary = summary)),
+            mode = "compaction",
+            sentAtEpochMs = 5,
+        )
+
+    private fun busyStatusEvent(): OpencodeEvent =
+        OpencodeEvent(
+            type = "session.status",
+            sessionId = "ses-1",
+            rawProperties = buildJsonObject { put("type", "busy") },
+        )
+
+    @Test
     fun workingFooter_holdsThroughIdleThenCollapsesAndCancelsOnBusy() =
         runTest(testDispatcher) {
             val repository = FakeMessageRepository()
@@ -4631,6 +4897,7 @@ class SessionChatViewModelTest {
 
 private class RecordingSessionReadyStore : SessionReadyStore {
     val focusCalls = mutableListOf<Pair<String?, String?>>()
+    val releaseCalls = mutableListOf<String>()
 
     override fun observeReadyIds(directory: String): Flow<Set<String>> = kotlinx.coroutines.flow.flowOf(emptySet())
 
@@ -4644,6 +4911,10 @@ private class RecordingSessionReadyStore : SessionReadyStore {
         directory: String?,
     ) {
         focusCalls.add(sessionId to directory)
+    }
+
+    override fun releaseFocusedSession(sessionId: String) {
+        releaseCalls.add(sessionId)
     }
 
     override fun bindProfile(profileId: String?) = Unit
@@ -5063,6 +5334,7 @@ private class FakeSessionRepository(
     private val unrevertError: Throwable? = null,
     private val summarizeError: Throwable? = null,
     private val summarizeHoldUntil: CompletableDeferred<Unit>? = null,
+    private val compactStart: CompactionStart = CompactionStart.Finished,
 ) : SessionRepository {
     data class DiffRequest(
         val sessionId: String,
@@ -5289,6 +5561,16 @@ private class FakeSessionRepository(
         summarizeHoldUntil?.await()
         summarizeError?.let { throw it }
         return true
+    }
+
+    override suspend fun compactSession(
+        id: String,
+        providerId: String,
+        modelId: String,
+        directory: String?,
+    ): CompactionStart {
+        summarizeSession(id, providerId, modelId, directory)
+        return compactStart
     }
 
     override suspend fun revertSession(

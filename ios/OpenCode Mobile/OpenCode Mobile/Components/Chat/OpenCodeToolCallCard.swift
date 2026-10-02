@@ -5,6 +5,8 @@ enum OpenCodeToolCallCardStatus: String, CaseIterable, Sendable {
     case running
     case completed
     case error
+    /// Stopped by the user (Stop, Deny, Dismiss): neutral, not a failure.
+    case interrupted
 }
 
 struct OpenCodeToolCallCard: View {
@@ -72,7 +74,7 @@ struct OpenCodeToolCallCard: View {
                 if let errorText, !errorText.isEmpty {
                     Text(errorText)
                         .font(OpenCodeTypography.caption)
-                        .foregroundStyle(OpenCodeColors.error)
+                        .foregroundStyle(status == .interrupted ? OpenCodeColors.textWeak : OpenCodeColors.error)
                         .lineLimit(3)
                 }
             }
@@ -166,6 +168,8 @@ private extension OpenCodeToolCallCardStatus {
             OpenCodeColors.success
         case .error:
             OpenCodeColors.error
+        case .interrupted:
+            OpenCodeColors.textWeak
         }
     }
 }
@@ -176,6 +180,7 @@ private enum ToolCallCardPreviewCase: String, CaseIterable, Identifiable {
     case running
     case completedWithDiff
     case error
+    case interrupted
     case tappable
     case titleOnly
 
@@ -187,6 +192,7 @@ private enum ToolCallCardPreviewCase: String, CaseIterable, Identifiable {
         case .running: .running
         case .completedWithDiff, .tappable, .titleOnly: .completed
         case .error: .error
+        case .interrupted: .interrupted
         }
     }
 
@@ -196,6 +202,7 @@ private enum ToolCallCardPreviewCase: String, CaseIterable, Identifiable {
         case .running: "Called task"
         case .completedWithDiff, .tappable: "Called edit"
         case .error: "Called webfetch"
+        case .interrupted: "Called shell"
         case .titleOnly: "Called skill"
         }
     }
@@ -206,6 +213,7 @@ private enum ToolCallCardPreviewCase: String, CaseIterable, Identifiable {
         case .running: "Explore codebase"
         case .completedWithDiff, .tappable: "OpenCodeListItem.swift"
         case .error: nil
+        case .interrupted: "./deploy.sh"
         case .titleOnly: nil
         }
     }
@@ -227,6 +235,7 @@ private enum ToolCallCardPreviewCase: String, CaseIterable, Identifiable {
     var errorText: String? {
         switch self {
         case .error: "Request failed with status 403"
+        case .interrupted: "Stopped"
         default: nil
         }
     }

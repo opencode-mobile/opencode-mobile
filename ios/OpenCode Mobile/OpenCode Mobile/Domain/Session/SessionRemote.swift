@@ -108,6 +108,10 @@ struct ProtocolSelectedSessionRemote: SessionRemote, Sendable {
         try await selected().summarizeSession(id: id, providerID: providerID, modelID: modelID)
     }
 
+    func compactSession(id: String, providerID: String, modelID: String) async throws -> CompactionStart {
+        try await selected().compactSession(id: id, providerID: providerID, modelID: modelID)
+    }
+
     func revertSession(id: String, messageID: String, partID: String?) async throws -> Bool {
         try await selected().revertSession(id: id, messageID: messageID, partID: partID)
     }

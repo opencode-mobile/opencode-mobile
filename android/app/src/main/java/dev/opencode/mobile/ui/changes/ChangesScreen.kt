@@ -392,8 +392,10 @@ private fun FileViewerScreen(
     var viewer by remember(file.path) { mutableStateOf(FileViewerState(file)) }
     val scrollState = rememberScrollState()
     var selectedHunkOffset by remember(file.path) { mutableIntStateOf(0) }
-    LaunchedEffect(viewer.selectedHunkId, selectedHunkOffset) {
-        scrollState.animateScrollTo(selectedHunkOffset)
+    // Open at the top (diff header visible, like iOS); follow the hunk only once the user navigates.
+    var hunkNavigated by remember(file.path) { mutableStateOf(false) }
+    LaunchedEffect(viewer.selectedHunkId, selectedHunkOffset, hunkNavigated) {
+        if (hunkNavigated) scrollState.animateScrollTo(selectedHunkOffset)
     }
     ProductRouteScreenViewEffect(screenId = ProductAnalytics.Screen.CHANGES_FILE_VIEWER)
     Column(Modifier.fillMaxSize()) {
@@ -426,6 +428,7 @@ private fun FileViewerScreen(
                             contextMode = viewer.contextMode,
                             selectedHunkId = viewer.selectedHunkId,
                             onSelectedHunkOffset = { selectedHunkOffset = it },
+                            revealSelectedHunk = hunkNavigated,
                         )
                         Spacer(Modifier.height(trailingScrollSpace))
                     }
@@ -436,6 +439,7 @@ private fun FileViewerScreen(
                         contextExpanded = viewer.contextMode == UnifiedDiffContextMode.Expanded,
                         onPrevious = {
                             logFileViewerAction(ProductAnalytics.Action.FILE_VIEWER_HUNK_PREVIOUS)
+                            hunkNavigated = true
                             viewer = viewer.selectPreviousHunk()
                         },
                         onToggleContext = {
@@ -444,6 +448,7 @@ private fun FileViewerScreen(
                         },
                         onNext = {
                             logFileViewerAction(ProductAnalytics.Action.FILE_VIEWER_HUNK_NEXT)
+                            hunkNavigated = true
                             viewer = viewer.selectNextHunk()
                         },
                         modifier =

@@ -10,6 +10,7 @@ import dev.opencode.mobile.domain.mcp.McpServerCatalog
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.model.NewSessionModelSelectionResolver
+import dev.opencode.mobile.domain.session.CompactionStart
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.ui.sessionchat.ChildSessionNavigationTarget
@@ -29,6 +30,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Client slash actions (Commands sheet): new / fork / undo / redo / compact.
@@ -56,6 +58,25 @@ class SessionChatCommands(
     private var lastHasSelectedComposerModel: Boolean = false
     private var lastDomainMessages: List<Message> = emptyList()
     private var completedCompactionIdsAtStart: Set<String> = emptySet()
+    private var lastIsSessionBusy: Boolean = false
+
+    /**
+     * The compaction this screen started, tracked from the moment [runCompact] runs so live
+     * timeline updates that land before `POST /compact` returns are not lost.
+     */
+    private var pendingCompaction: PendingCompaction? = null
+
+    private class PendingCompaction(
+        val beforeContextFraction: Float?,
+        val awaitAfterContextFraction: suspend () -> Float?,
+    ) {
+        /** `POST /compact` returned `Enqueued` (v2): the live compaction item decides success. */
+        var enqueued: Boolean = false
+        var sawBusy: Boolean = false
+
+        /** Set when the timeline completed the compaction before the POST returned: whether it had a summary. */
+        var finishedEarlyWithSummary: Boolean? = null
+    }
 
     fun bind(
         sessionId: String,
@@ -70,6 +91,8 @@ class SessionChatCommands(
         lastHasSelectedComposerModel = false
         lastDomainMessages = emptyList()
         completedCompactionIdsAtStart = emptySet()
+        lastIsSessionBusy = false
+        pendingCompaction = null
         _state.value = SessionChatCommandsRegionState()
         refreshRevert()
     }
@@ -94,13 +117,63 @@ class SessionChatCommands(
         _state.update { it.copy(visibleActions = ClientSlashActionCatalog.visibleActions(input)) }
     }
 
-    fun observeLoadedMessages(messages: List<Message>) {
+    fun observeLoadedMessages(
+        messages: List<Message>,
+        isSessionBusy: Boolean = false,
+    ) {
         lastDomainMessages = messages
-        if (!_state.value.isCompacting) return
-        val ids = SessionCompactionPresence.completedCompactionIds(messages)
-        if (ids.any { it !in completedCompactionIdsAtStart }) {
+        lastIsSessionBusy = isSessionBusy
+        val pending = pendingCompaction ?: return
+        // Already finished in the timeline; waiting for the POST to say v1 or v2.
+        if (pending.finishedEarlyWithSummary != null) return
+        if (isSessionBusy) pending.sawBusy = true
+        val finished =
+            SessionCompactionPresence
+                .completedCompactions(messages)
+                .filter { it.key !in completedCompactionIdsAtStart }
+        if (finished.isNotEmpty()) {
             logI("compact completed via timeline")
             _state.update { it.copy(isCompacting = false) }
+            // v2 `compaction.ended` carries the summary; `compaction.failed` does not
+            // (its error reaches the session error chrome).
+            val hasSummary = finished.values.any { !it.isNullOrBlank() }
+            if (pending.enqueued) {
+                pendingCompaction = null
+                if (hasSummary) postLiveCompactionSuccess(pending)
+            } else {
+                pending.finishedEarlyWithSummary = hasSummary
+            }
+            return
+        }
+        if (pending.enqueued &&
+            pending.sawBusy &&
+            !isSessionBusy &&
+            !SessionCompactionPresence.isActive(messages, isSessionBusy = true)
+        ) {
+            // The session went idle without a completed compaction (failed or cancelled).
+            logI("compact ended without a summary")
+            pendingCompaction = null
+            _state.update { it.copy(isCompacting = false) }
+        }
+    }
+
+    private fun postLiveCompactionSuccess(pending: PendingCompaction) {
+        scope.launch { showCompactionSuccess(pending.beforeContextFraction, pending.awaitAfterContextFraction) }
+    }
+
+    private suspend fun showCompactionSuccess(
+        beforeContextFraction: Float?,
+        awaitAfterContextFraction: suspend () -> Float?,
+    ) {
+        val after = withContext(ioDispatcher) { runCatching { awaitAfterContextFraction() }.getOrNull() }
+        _state.update {
+            it.copy(
+                actionSuccessMessage =
+                    SessionCompactChrome.successMessage(
+                        beforeFraction = beforeContextFraction,
+                        afterFraction = after,
+                    ),
+            )
         }
     }
 
@@ -350,6 +423,8 @@ class SessionChatCommands(
         val sessionId = boundSessionId ?: return
         val worktree = boundWorktree ?: return
         completedCompactionIdsAtStart = SessionCompactionPresence.completedCompactionIds(lastDomainMessages)
+        val pending = PendingCompaction(beforeContextFraction, awaitAfterContextFraction)
+        pendingCompaction = pending
         _state.update {
             it.copy(
                 isCompacting = true,
@@ -357,35 +432,48 @@ class SessionChatCommands(
                 actionSuccessMessage = null,
             )
         }
-        scope.launch(ioDispatcher) {
-            runCatching { sessionRepository.summarizeSession(sessionId, providerId, modelId, worktree) }
-                .onSuccess {
-                    logI("compact success session=$sessionId")
-                    // Clear Compacting… before post-success refresh so a slow timeline
-                    // rebuild cannot leave the chrome stuck (iOS MainActor freeze twin).
-                    _state.update { it.copy(isCompacting = false) }
-                    val after = runCatching { awaitAfterContextFraction() }.getOrNull()
-                    _state.update {
-                        it.copy(
-                            actionSuccessMessage =
-                                SessionCompactChrome.successMessage(
-                                    beforeFraction = beforeContextFraction,
-                                    afterFraction = after,
-                                ),
-                        )
+        scope.launch {
+            withContext(ioDispatcher) {
+                runCatching { sessionRepository.compactSession(sessionId, providerId, modelId, worktree) }
+            }.onSuccess { start ->
+                // Rebound or superseded by another compaction while the POST was in flight.
+                if (pendingCompaction !== pending) return@onSuccess
+                if (start == CompactionStart.Enqueued) {
+                    // v2 returns at enqueue time: stay Compacting… until the live
+                    // compaction item completes (observeLoadedMessages).
+                    logI("compact enqueued session=$sessionId")
+                    pending.enqueued = true
+                    val finishedEarlyWithSummary = pending.finishedEarlyWithSummary
+                    if (finishedEarlyWithSummary != null) {
+                        pendingCompaction = null
+                        if (finishedEarlyWithSummary) {
+                            showCompactionSuccess(beforeContextFraction, awaitAfterContextFraction)
+                        }
+                        return@onSuccess
                     }
-                }.onFailure { error ->
-                    logW(
-                        "compact failed session=$sessionId error=${error.message ?: error::class.java.simpleName}",
-                    )
-                    _state.update {
-                        it.copy(
-                            isCompacting = false,
-                            actionErrorMessage = SessionCompactChrome.FAILURE,
-                            actionSuccessMessage = null,
-                        )
-                    }
+                    observeLoadedMessages(lastDomainMessages, lastIsSessionBusy)
+                    return@onSuccess
                 }
+                logI("compact success session=$sessionId")
+                pendingCompaction = null
+                // Clear Compacting… before post-success refresh so a slow timeline
+                // rebuild cannot leave the chrome stuck (iOS MainActor freeze twin).
+                _state.update { it.copy(isCompacting = false) }
+                showCompactionSuccess(beforeContextFraction, awaitAfterContextFraction)
+            }.onFailure { error ->
+                if (pendingCompaction !== pending) return@onFailure
+                logW(
+                    "compact failed session=$sessionId error=${error.message ?: error::class.java.simpleName}",
+                )
+                pendingCompaction = null
+                _state.update {
+                    it.copy(
+                        isCompacting = false,
+                        actionErrorMessage = SessionCompactChrome.FAILURE,
+                        actionSuccessMessage = null,
+                    )
+                }
+            }
         }
     }
 

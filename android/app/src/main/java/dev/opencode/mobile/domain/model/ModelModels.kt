@@ -37,6 +37,34 @@ data class ModelSelectionProvider(
     val models: List<ModelSelectionOption>,
 )
 
+/** Variant naming rules shared by the catalog adapters and the composer. */
+object ModelVariants {
+    /** The v2 server records `"default"` on messages and sessions when no variant was chosen. */
+    const val SERVER_DEFAULT: String = "default"
+
+    private val effortRank = listOf("none", "minimal", "low", "medium", "high", "xhigh", "max")
+
+    /**
+     * A recorded variant that means "no variant": blank, or the server's `"default"` when the
+     * model has no variant literally named that.
+     */
+    fun isDefault(
+        variant: String?,
+        available: List<String>,
+    ): Boolean = variant.isNullOrBlank() || (variant == SERVER_DEFAULT && variant !in available)
+
+    /**
+     * Orders variants by reasoning effort (low → medium → high), then by name. Used when the
+     * server gives no order (v1 returns variants as an object).
+     */
+    fun sortedByEffort(variants: Collection<String>): List<String> =
+        variants.sortedWith(
+            compareBy<String> { name ->
+                effortRank.indexOf(name.lowercase()).takeIf { it >= 0 } ?: effortRank.size
+            }.thenBy(String.CASE_INSENSITIVE_ORDER) { it },
+        )
+}
+
 data class ModelSelectionOption(
     val providerId: String,
     val providerName: String,

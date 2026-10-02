@@ -287,6 +287,23 @@ struct EventDomainAdapterTests {
         #expect(event?.triggersMessageRefresh == true)
     }
 
+    @Test func parseEvents_marksInboxSyntheticItemTextAsSynthetic() {
+        let adapter = EventDomainAdapter()
+        let events = adapter.parseEvents(
+            dataLine: #"{"type":"session.inbox.enqueued","data":{"inboxID":"msg-3","sessionID":"ses-1","item":{"type":"synthetic","payload":{"text":"<system-reminder>Plan mode</system-reminder>"},"delivery":"steer"}}}"#
+        )
+        #expect(events.map(\.type) == ["message.updated", "message.part.updated"])
+        #expect(events[1].rawProperties?["part"]?.dictionaryValue?["synthetic"]?.boolValue == true)
+    }
+
+    @Test func parseEvents_inboxUserItemTextIsNotSynthetic() {
+        let adapter = EventDomainAdapter()
+        let events = adapter.parseEvents(
+            dataLine: #"{"type":"session.inbox.enqueued","data":{"inboxID":"msg-2","sessionID":"ses-1","item":{"type":"user","payload":{"text":"Hello"},"delivery":"steer"}}}"#
+        )
+        #expect(events[1].rawProperties?["part"]?.dictionaryValue?["synthetic"] == nil)
+    }
+
     @Test func parseEvents_projectsInboxEnqueuedItemPayloadIntoUserText() {
         let adapter = EventDomainAdapter()
         let events = adapter.parseEvents(
@@ -538,6 +555,15 @@ struct EventDomainAdapterTests {
         let state = event?.rawProperties?["part"]?.dictionaryValue?["state"]?.dictionaryValue
         #expect(state?["status"]?.stringValue == "running")
         #expect(state?["metadata"]?.dictionaryValue?["sessionID"]?.stringValue == "child-1")
+    }
+
+    @Test func parseEvent_toolProgressMetadataTitleBecomesTheLiveTitle() {
+        let adapter = EventDomainAdapter()
+        let event = adapter.parseEvent(
+            dataLine: #"{"type":"session.tool.progress","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","id":"prt-1","metadata":{"title":"Run migrations · step 3/6","step":3}}}"#
+        )
+        let state = event?.rawProperties?["part"]?.dictionaryValue?["state"]?.dictionaryValue
+        #expect(state?["title"]?.stringValue == "Run migrations · step 3/6")
     }
 
     @Test func parseEvent_toolSuccessMergesStructuredAndMetadata() {

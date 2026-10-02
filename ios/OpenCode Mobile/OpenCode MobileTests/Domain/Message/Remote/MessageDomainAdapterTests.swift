@@ -712,6 +712,35 @@ struct MessageDomainAdapterTests {
         #expect(tool.output == "src")
     }
 
+    @Test func projectV2ToolTitleComesFromMetadata() throws {
+        let dtos = try decoder.decode(
+            [V2SessionMessageDTO].self,
+            from: Data(
+                """
+                [
+                  {
+                    "id":"msg_asst",
+                    "type":"assistant",
+                    "content":[
+                      {"type":"tool","id":"call_1","name":"sim_task","state":{"status":"error","input":{"title":"Backfill users"},"error":{"type":"tool.execution","message":"lock timeout"},"metadata":{"title":"Backfill users · step 3/3"}}},
+                      {"type":"tool","id":"call_2","name":"read","state":{"status":"completed","input":{"path":"README.md"},"metadata":{"truncated":false}}}
+                    ],
+                    "time":{"created":3}
+                  }
+                ]
+                """.utf8
+            )
+        )
+
+        let tools = adapter.messages(fromV2: dtos)[0].parts.compactMap { part -> ToolPart? in
+            guard case let .tool(tool) = part else { return nil }
+            return tool
+        }
+        #expect(tools.count == 2)
+        #expect(tools.first?.title == "Backfill users · step 3/3")
+        #expect(tools.last?.title == nil)
+    }
+
     @Test func projectV2MapsReasoningContentIntoThoughtPart() throws {
         let dtos = try decoder.decode(
             [V2SessionMessageDTO].self,

@@ -413,7 +413,7 @@ private fun SessionListRow(
             StartDecorator.Letter(
                 character = session.letter,
                 accent = session.letterAccent,
-                statusDot = if (showStatusDot) status?.tone else null,
+                statusDot = if (showStatusDot) status.tone else null,
             ),
         onClick = { onSessionSelected(session) },
         onLongPress = onSessionLongPress?.let { handler -> { handler(session) } },
@@ -477,20 +477,20 @@ fun List<SessionListSession>.visibleForFilter(selectedFilterId: String): List<Se
 internal fun SessionListStatus.toListItemStatus(
     retryAttempt: Int? = null,
     stale: Boolean = false,
-): OpenCodeListItemStatus? {
+): OpenCodeListItemStatus {
     val tone =
         if (stale) {
             OpenCodeListItemStatusTone.Stale
         } else {
             when (this) {
-                SessionListStatus.Idle -> return null
+                SessionListStatus.Idle -> OpenCodeListItemStatusTone.Info
                 SessionListStatus.Running -> OpenCodeListItemStatusTone.Interactive
                 SessionListStatus.Retrying -> OpenCodeListItemStatusTone.Warning
                 SessionListStatus.Ready -> OpenCodeListItemStatusTone.Success
             }
         }
     return when (this) {
-        SessionListStatus.Idle -> null
+        SessionListStatus.Idle -> OpenCodeListItemStatus(text = "Idle", tone = tone)
         SessionListStatus.Running -> OpenCodeListItemStatus(text = "Running", tone = tone)
         SessionListStatus.Retrying ->
             OpenCodeListItemStatus(

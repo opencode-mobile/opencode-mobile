@@ -38,12 +38,14 @@ private enum class SessionComposerGalleryScenario(
     Revert("Revert"),
     ChildLockout("Child"),
     Permission("Permission"),
+    PermissionEdit("Edit"),
     Queued("Queued"),
     Submitting("Submitting"),
     Error("Error"),
     Question("Question"),
     QuestionWizard("Wizard"),
     MultiSelect("Multi-select"),
+    MultiSelectBounded("Up to 2"),
     Custom("Custom"),
     QuestionSubmitting("Q Submit"),
     QuestionError("Q Error"),
@@ -131,6 +133,7 @@ fun SessionComposerGalleryScreen(modifier: Modifier = Modifier) {
                     showVariant = true,
                 )
             SessionComposerGalleryScenario.Permission -> permissionState()
+            SessionComposerGalleryScenario.PermissionEdit -> permissionState(edit = true)
             SessionComposerGalleryScenario.Queued -> permissionState(queueCount = 3)
             SessionComposerGalleryScenario.Submitting -> permissionState(submitting = true)
             SessionComposerGalleryScenario.Error -> permissionState(errorMessage = "The permission response failed. Try again.")
@@ -167,6 +170,16 @@ fun SessionComposerGalleryScreen(modifier: Modifier = Modifier) {
                     questionCount = 1,
                     multiple = true,
                     selectedLabels = selectedLabels,
+                    customAllowed = false,
+                    submitEnabled = selectedLabels.isNotEmpty(),
+                )
+            SessionComposerGalleryScenario.MultiSelectBounded ->
+                questionState(
+                    questionIndex = 0,
+                    questionCount = 1,
+                    multiple = true,
+                    maxSelections = 2,
+                    selectedLabels = selectedLabels.take(2),
                     customAllowed = false,
                     submitEnabled = selectedLabels.isNotEmpty(),
                 )
@@ -319,11 +332,22 @@ private fun permissionState(
     queueCount: Int = 1,
     submitting: Boolean = false,
     errorMessage: String? = null,
+    edit: Boolean = false,
 ) = OpenCodeSessionComposerState.Permission(
     requestId = "permission-gallery",
     sessionId = "session-gallery",
-    permission = "bash",
-    patterns = listOf("git status", "git diff --stat"),
+    permission = if (edit) "edit" else "bash",
+    patterns = if (edit) listOf("README.md", "notes/todo.md") else listOf("git status --short", "git diff --stat"),
+    files =
+        if (edit) {
+            listOf(
+                OpenCodeSessionComposerState.PermissionFile("README.md", additions = 1, deletions = 1),
+                OpenCodeSessionComposerState.PermissionFile("notes/todo.md", additions = 4, deletions = 0),
+            )
+        } else {
+            emptyList()
+        },
+    alwaysPatterns = if (edit) listOf("*") else listOf("git status *", "git diff *"),
     queueCount = queueCount,
     submitting = submitting,
     errorMessage = errorMessage,
@@ -335,6 +359,7 @@ private fun questionState(
     header: String = "Approach",
     question: String = "How should we implement this change?",
     multiple: Boolean = false,
+    maxSelections: Int? = null,
     customAllowed: Boolean = true,
     selectedLabels: List<String> = emptyList(),
     customText: String = "",
@@ -353,6 +378,7 @@ private fun questionState(
     question = question,
     options = SampleQuestionOptions,
     multiple = multiple,
+    maxSelections = maxSelections,
     customAllowed = customAllowed,
     selectedLabels = selectedLabels,
     customText = customText,
@@ -380,6 +406,8 @@ private val OpenCodeSessionComposerAction.label: String
             OpenCodeSessionComposerAction.Stop -> "Stop"
             is OpenCodeSessionComposerAction.AllowPermissionOnce -> "Allow once"
             is OpenCodeSessionComposerAction.DenyPermission -> "Deny"
+            is OpenCodeSessionComposerAction.AlwaysAllowPermission -> "Always"
+            is OpenCodeSessionComposerAction.HidePermission -> "Hide permission"
             is OpenCodeSessionComposerAction.ToggleQuestionOption -> "Toggle option"
             is OpenCodeSessionComposerAction.ToggleQuestionCustom -> "Toggle custom"
             is OpenCodeSessionComposerAction.QuestionCustomTextChanged -> "Custom text changed"

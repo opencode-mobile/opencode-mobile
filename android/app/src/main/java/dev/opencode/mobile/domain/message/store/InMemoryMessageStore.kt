@@ -33,6 +33,15 @@ class InMemoryMessageStore
         private val baseMessages = ConcurrentHashMap<String, List<Message>>()
         private val revisions = ConcurrentHashMap<String, Long>()
 
+        /** Running agent/model per session, in arrival order (see [SessionRunningContext]). */
+        private val runningContexts = ConcurrentHashMap<String, SessionRunningContext>()
+
+        /** The running agent/model each live v2 prompt was delivered with. */
+        private val contextStamps = ConcurrentHashMap<String, MutableMap<String, SessionRunningContext>>()
+
+        /** Messages whose agent/model already advanced the running context. */
+        private val contextContributors = ConcurrentHashMap<String, MutableSet<String>>()
+
         /** Pending text delta pieces keyed by session → "messageId\\upartId". */
         private val deltaChunks = ConcurrentHashMap<String, MutableMap<String, MutableList<String>>>()
 
@@ -64,6 +73,7 @@ class InMemoryMessageStore
             absorbedReplayChars[sessionId]!!.clear()
             messageOrders[sessionId] = messages.map { it.id }.toMutableList()
             baseMessages[sessionId] = messages
+            reseedRunningContext(sessionId, messages)
             seedPartIdentities(sessionId, messages, previousStarts)
             bumpRevision(sessionId)
         }
@@ -81,6 +91,7 @@ class InMemoryMessageStore
                     is MessagePatch.Removed -> applyMessageRemoved(sessionId, patch.messageId)
                     is MessagePatch.RemovedFrom -> applyMessagesRemovedFrom(sessionId, patch.messageId)
                     is MessagePatch.PartRemoved -> applyPartRemoved(sessionId, patch.messageId, patch.partId)
+                    is MessagePatch.ContextSwitched -> applyContextSwitched(sessionId, patch)
                 } ?: return MessageStoreApplyResult.NoChange
             bumpRevision(sessionId)
             return MessageStoreApplyResult.Changed(mutation.copy(sessionRevision = revision(sessionId)))
@@ -124,7 +135,16 @@ class InMemoryMessageStore
             if (infoJson != null) {
                 val info = tryParseInfoDto(infoJson) ?: return baseById[messageId]
                 val messageParts = orderedParts(sessionId, messageId, parts, orders)
-                val message = adapter.toMessage(info, messageParts)
+                val base = baseById[messageId]
+                val stamp = contextStamps[sessionId]?.get(messageId)
+                val live = adapter.toMessage(info, messageParts)
+                // A delivered REST copy is the authority; a waiting inbox copy only guessed.
+                val message =
+                    when {
+                        stamp == null -> live.withMetadataFrom(base)
+                        base != null && !base.isWaitingForPickup -> stamp.stamp(live.withMetadataFrom(base))
+                        else -> stamp.stamp(live).withMetadataFrom(base)
+                    }
                 return when {
                     message.hasRenderableContent() -> message
                     else -> baseById[messageId]
@@ -266,6 +286,9 @@ class InMemoryMessageStore
             revisions.clear()
             deltaChunks.clear()
             absorbedReplayChars.clear()
+            runningContexts.clear()
+            contextStamps.clear()
+            contextContributors.clear()
         }
 
         private fun applyInfoUpdated(
@@ -293,6 +316,20 @@ class InMemoryMessageStore
                     if (previous != null && !infoJson.containsKey("delivery")) {
                         previous["delivery"]?.let { put("delivery", it) }
                     }
+                    // A later partial info (usage) must not drop how the step ended.
+                    if (previous != null && !infoJson.containsKey("finish")) {
+                        previous["finish"]?.let { put("finish", it) }
+                    }
+                    if (previous != null && !infoJson.containsKey("error")) {
+                        previous["error"]?.let { put("error", it) }
+                    }
+                    // v2 step infos after `step.started` omit the agent and model it carried.
+                    if (previous != null && AGENT_KEYS.none(infoJson::containsKey)) {
+                        AGENT_KEYS.forEach { key -> previous[key]?.let { put(key, it) } }
+                    }
+                    if (previous != null && MODEL_KEYS.none(infoJson::containsKey)) {
+                        MODEL_KEYS.forEach { key -> previous[key]?.let { put(key, it) } }
+                    }
                 }
             infoCaches[sessionId]!![messageId] = merged
             partsCaches[sessionId]!!.getOrPut(messageId) { mutableMapOf() }
@@ -306,6 +343,9 @@ class InMemoryMessageStore
                 previous?.isWaiting()
                     ?: (baseMessages[sessionId]?.lastOrNull { it.id == messageId }?.isWaitingForPickup == true)
             val delivered = !inserted && isUserInfo && wasWaiting && !waiting
+            // v2 `inbox.delivered` carries no parts; publish it so the prompt leaves the
+            // pending strip and shows as a bubble before the first step starts.
+            val pickupChanged = !inserted && isUserInfo && wasWaiting != waiting
             if (inserted && isUserInfo && waiting) {
                 order.add(messageId)
             } else if (inserted) {
@@ -314,12 +354,98 @@ class InMemoryMessageStore
                 order.remove(messageId)
                 insertMessage(sessionId, order, messageId, info.role)
             }
+            if (isUserInfo) {
+                observeUserContext(sessionId, messageId, merged, deliveredNow = (inserted && !waiting) || delivered)
+            } else {
+                contributeAssistantContext(sessionId, messageId)
+            }
             return SessionChangeSet(
                 sessionRevision = 0,
                 insertedMessageIds = if (inserted) setOf(messageId) else emptySet(),
                 changedMessageIds = if (inserted) emptySet() else setOf(messageId),
+                pickupStateChangedIds = if (pickupChanged) setOf(messageId) else emptySet(),
                 structuralChange = inserted || delivered,
             )
+        }
+
+        /**
+         * v2 live infos are partial (a delivered prompt has no agent or model); keep the
+         * REST/inbox copy's agent, model and variant so the bubble keeps its meta line.
+         */
+        private fun Message.withMetadataFrom(base: Message?): Message {
+            if (base == null) return this
+            val withStop = if (stopReason == null && base.stopReason != null) copy(stopReason = base.stopReason) else this
+            if (mode != null && model != null) return withStop
+            return withStop.copy(
+                mode = mode ?: base.mode,
+                model = model ?: base.model,
+                modelProviderId = if (model == null) base.modelProviderId else modelProviderId,
+                modelId = if (model == null) base.modelId else modelId,
+                variant = if (model == null) base.variant else variant,
+            )
+        }
+
+        /**
+         * A user info that has its own agent/model advances the running value (v1, REST); a v2
+         * prompt that has neither is stamped with the running value when it is delivered.
+         */
+        private fun observeUserContext(
+            sessionId: String,
+            messageId: String,
+            infoJson: JsonObject,
+            deliveredNow: Boolean,
+        ) {
+            val info = tryParseInfoDto(infoJson) ?: return
+            val message = adapter.toMessage(info, emptyList())
+            val context = runningContexts[sessionId] ?: SessionRunningContext()
+            if (message.mode != null || message.model != null) {
+                runningContexts[sessionId] = context.advancedBy(message)
+                contextContributors.getOrPut(sessionId) { mutableSetOf() }.add(messageId)
+            }
+            if (deliveredNow && (message.mode == null || message.model == null)) {
+                contextStamps.getOrPut(sessionId) { mutableMapOf() }[messageId] = context
+            }
+        }
+
+        /**
+         * A live assistant joins the timeline when its content starts (that is where REST
+         * places it), so its agent/model advances the running value at its first part.
+         */
+        private fun contributeAssistantContext(
+            sessionId: String,
+            messageId: String,
+        ) {
+            val contributors = contextContributors.getOrPut(sessionId) { mutableSetOf() }
+            if (messageId in contributors) return
+            if (partsCaches[sessionId]?.get(messageId).isNullOrEmpty()) return
+            val infoJson = infoCaches[sessionId]?.get(messageId) ?: return
+            val info = tryParseInfoDto(infoJson) ?: return
+            if (!info.role.equals("assistant", ignoreCase = true)) return
+            val message = adapter.toMessage(info, emptyList())
+            if (message.mode == null && message.model == null) return
+            contributors.add(messageId)
+            runningContexts[sessionId] = (runningContexts[sessionId] ?: SessionRunningContext()).advancedBy(message)
+        }
+
+        private fun applyContextSwitched(
+            sessionId: String,
+            patch: MessagePatch.ContextSwitched,
+        ): SessionChangeSet? {
+            if (patch.agent == null && patch.model == null) return null
+            runningContexts[sessionId] =
+                (runningContexts[sessionId] ?: SessionRunningContext()).switched(patch.agent, patch.model, patch.atEpochMs)
+            // Nothing on screen changes until a prompt is delivered.
+            return null
+        }
+
+        private fun reseedRunningContext(
+            sessionId: String,
+            messages: List<Message>,
+        ) {
+            runningContexts[sessionId] = (runningContexts[sessionId] ?: SessionRunningContext()).reseeded(messages)
+            contextContributors[sessionId] = messages.mapTo(mutableSetOf()) { it.id }
+            val ids = messages.mapTo(hashSetOf()) { it.id }
+            contextStamps[sessionId]?.keys?.retainAll(ids)
         }
 
         private fun JsonObject.isWaiting(): Boolean = (this["waiting"] as? JsonPrimitive)?.booleanOrNull == true
@@ -442,6 +568,7 @@ class InMemoryMessageStore
                 clearChunks(sessionId, messageId, partId)
             }
             val streamingChanged = previous?.isStreamingPart() != stored.isStreamingPart()
+            if (insertedPart) contributeAssistantContext(sessionId, messageId)
             return SessionChangeSet(
                 sessionRevision = 0,
                 changedMessageIds = setOf(messageId),
@@ -814,6 +941,7 @@ class InMemoryMessageStore
                 byId[message.id] = message
             }
             baseMessages[sessionId] = messageOrders[sessionId]!!.mapNotNull { byId[it] }
+            contextContributors.getOrPut(sessionId) { mutableSetOf() }.addAll(prepended.map { it.id })
             seedPartIdentities(sessionId, prepended, previousStarts)
             bumpRevision(sessionId)
         }
@@ -865,6 +993,7 @@ class InMemoryMessageStore
             ignoredPartIds[sessionId]!!.keys.retainAll(incomingIds)
             messageOrders[sessionId] = messages.map { it.id }.toMutableList()
             baseMessages[sessionId] = messages
+            reseedRunningContext(sessionId, messages)
             deltaChunks[sessionId]!!.clear()
             absorbedReplayChars[sessionId]!!.clear()
             bumpRevision(sessionId)
@@ -927,6 +1056,7 @@ class InMemoryMessageStore
                             output = incoming.output?.takeIf { it.isNotEmpty() } ?: existing.output,
                             metadata = mergeJson(existing.metadata, incoming.metadata),
                             timeStartEpochMs = incoming.timeStartEpochMs ?: existing.timeStartEpochMs,
+                            isInterrupted = incoming.isInterrupted,
                         )
                     }
                     existing is MessagePart.Text && incoming is MessagePart.Text -> {
@@ -1082,5 +1212,7 @@ class InMemoryMessageStore
         private fun Message.hasRenderableContent(): Boolean = text.isNotBlank() || parts.isNotEmpty()
 
         companion object {
+            private val AGENT_KEYS = listOf("agent", "mode")
+            private val MODEL_KEYS = listOf("model", "modelID", "providerID", "variant")
         }
     }

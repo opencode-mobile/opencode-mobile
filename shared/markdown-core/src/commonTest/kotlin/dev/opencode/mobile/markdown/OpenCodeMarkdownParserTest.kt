@@ -153,6 +153,50 @@ class OpenCodeMarkdownParserTest {
     }
 
     @Test
+    fun rendersStreamedTableHeaderWhileDelimiterRowIsArriving() {
+        val header = "Intro\n\n| File | Lines | Status |\n"
+        for (partial in listOf("|", "| -", "| --- | -", "| --- | ---: |", "|:--|--:|  ")) {
+            val document = OpenCodeMarkdownParser.parse(header + partial)
+
+            assertEquals(2, document.blocks.size, "partial delimiter `$partial`")
+            assertIs<MarkdownBlock.Paragraph>(document.blocks[0])
+            val table = assertIs<MarkdownBlock.Table>(document.blocks[1], "partial delimiter `$partial`")
+            assertEquals(
+                listOf("File", "Lines", "Status"),
+                table.header.cells.map { cell -> (cell.inlines.single() as MarkdownInline.Text).text },
+            )
+            assertTrue(table.rows.isEmpty())
+        }
+    }
+
+    @Test
+    fun streamedTableKeepsRowsReceivedSoFar() {
+        val document =
+            OpenCodeMarkdownParser.parse(
+                "| File | Lines |\n| --- | ---: |\n| README.md | 12 |\n| src",
+            )
+
+        val table = assertIs<MarkdownBlock.Table>(document.blocks.single())
+        assertEquals(2, table.rows.size)
+        assertEquals(1, table.rows[1].cells.size)
+    }
+
+    @Test
+    fun unfinishedDelimiterRowOnlyCountsAsTableAtTheEndOfTheSource() {
+        val notTrailing = OpenCodeMarkdownParser.parse("| File | Lines |\n|\nmore text")
+        assertTrue(notTrailing.blocks.none { block -> block is MarkdownBlock.Table })
+
+        val withoutLeadingPipe = OpenCodeMarkdownParser.parse("a | b\n|")
+        assertTrue(withoutLeadingPipe.blocks.none { block -> block is MarkdownBlock.Table })
+
+        val headerOnly = OpenCodeMarkdownParser.parse("| File | Lines |\n")
+        assertTrue(headerOnly.blocks.none { block -> block is MarkdownBlock.Table })
+
+        val dataRowNotDelimiter = OpenCodeMarkdownParser.parse("| File | Lines |\n| READ")
+        assertTrue(dataRowNotDelimiter.blocks.none { block -> block is MarkdownBlock.Table })
+    }
+
+    @Test
     fun markdownFenceClosesOnFirstBareFenceLikeCommonMark() {
         // Match opencode web: an outer ```markdown fence closes at the first
         // bare closing fence (after nested ```bash), so later content is real

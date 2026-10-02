@@ -637,7 +637,7 @@ private extension SessionChatRow {
                 .text(id: blockID, text: text)
             case .attachment(_, let file):
                 .attachment(file.attachmentPresentation)
-            case .toolCard, .toolGroup, .childSessionRow, .reasoning, .stepParagraph:
+            case .toolCard, .toolGroup, .childSessionRow, .reasoning, .stepParagraph, .stopNote:
                 nil
             }
         }
@@ -729,7 +729,7 @@ private struct AssistantMessageContent: View {
                     OpenCodeMessageAttachment(attachment: file.attachmentPresentation)
                 case .toolCard(_, let card):
                     OpenCodeToolCallCard(
-                        status: card.status.toolCallCardStatus,
+                        status: card.status.toolCallCardStatus(interrupted: card.isInterrupted),
                         title: card.title,
                         subtitle: card.subtitle,
                         additions: card.additions,
@@ -739,7 +739,7 @@ private struct AssistantMessageContent: View {
                     )
                 case .toolGroup(let blockID, let group):
                     OpenCodeToolCallCard(
-                        status: group.status.toolCallCardStatus,
+                        status: group.status.toolCallCardStatus(interrupted: false),
                         title: group.title,
                         subtitle: group.subtitle,
                         errorText: group.errorText,
@@ -780,6 +780,8 @@ private struct AssistantMessageContent: View {
                             )
                         }
                     )
+                case .stopNote(_, let reason):
+                    OpenCodeMessageNote(variant: reason == .length ? .truncated : .interrupted)
                 case .stepParagraph(_, let paragraph):
                     StepParagraphBlock(
                         paragraph: paragraph,
@@ -827,12 +829,45 @@ private struct AssistantMessageContent: View {
                 onToolDetailTap(
                     SessionChatToolDetailTarget(
                         title: card.title,
-                        body: detail
+                        body: detail,
+                        bodyIsMarkdown: card.detailIsMarkdown
                     )
                 )
             }
         }
         return nil
+    }
+}
+
+/// One step-paragraph chip; an in-flight tool also shows its live elapsed
+/// time (`m:ss`, as the child-session row does) after any trailing text.
+private struct StepParagraphToolChip: View {
+    let chip: SessionChatToolChipBlock
+    let action: (() -> Void)?
+
+    var body: some View {
+        if let start = chip.runningSinceEpochMs {
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                toolChip(
+                    elapsed: SessionChatChildSessionElapsed.format(
+                        startEpochMs: start,
+                        nowEpochMs: Int64(context.date.timeIntervalSince1970 * 1000)
+                    )
+                )
+            }
+        } else {
+            toolChip(elapsed: nil)
+        }
+    }
+
+    private func toolChip(elapsed: String?) -> OpenCodeToolChip {
+        let trailing = [chip.displayTrailingText, elapsed].compactMap { $0 }.filter { !$0.isEmpty }
+        return OpenCodeToolChip(
+            variant: chip.variant,
+            status: chip.status.toolChipStatus(interrupted: chip.card.isInterrupted),
+            trailingText: trailing.isEmpty ? nil : trailing.joined(separator: " \u{00B7} "),
+            action: action
+        )
     }
 }
 
@@ -911,16 +946,11 @@ private struct StepParagraphBlock: View {
                         case .explore(let summary):
                             OpenCodeToolChip(
                                 variant: .explore(label: summary.label),
-                                status: summary.status.toolChipStatus,
+                                status: summary.status.toolChipStatus(interrupted: false),
                                 action: { exploreAction(summary) }
                             )
                         case .chip(let chip):
-                            OpenCodeToolChip(
-                                variant: chip.variant,
-                                status: chip.status.toolChipStatus,
-                                trailingText: chip.displayTrailingText,
-                                action: chipAction(chip)
-                            )
+                            StepParagraphToolChip(chip: chip, action: chipAction(chip))
                         case .more(let count):
                             OpenCodeToolChip(
                                 variant: .more(count: count),
@@ -960,12 +990,12 @@ private extension SessionChatToolChipBlock {
 }
 
 private extension ToolStatus {
-    var toolChipStatus: OpenCodeToolChipStatus {
+    func toolChipStatus(interrupted: Bool) -> OpenCodeToolChipStatus {
         switch self {
         case .pending: .pending
         case .running: .running
         case .completed: .completed
-        case .error: .error
+        case .error: interrupted ? .interrupted : .error
         }
     }
 }
@@ -1033,12 +1063,12 @@ private struct AssistantMessageBubble: View {
 }
 
 private extension ToolStatus {
-    var toolCallCardStatus: OpenCodeToolCallCardStatus {
+    func toolCallCardStatus(interrupted: Bool) -> OpenCodeToolCallCardStatus {
         switch self {
         case .pending: .pending
         case .running: .running
         case .completed: .completed
-        case .error: .error
+        case .error: interrupted ? .interrupted : .error
         }
     }
 }

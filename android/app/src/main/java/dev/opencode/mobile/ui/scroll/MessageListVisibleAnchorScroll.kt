@@ -50,15 +50,18 @@ internal object MessageListVisibleAnchorScroll {
 
     /**
      * Chronological message IDs (oldest → newest) to reverse-layout LazyList index.
-     * Index 0 is the bottom anchor spacer; messages occupy `1..messageCount`.
+     * Index 0 is the bottom anchor spacer; [leadingItemCount] counts it plus any
+     * status row below the newest message, so messages occupy
+     * `leadingItemCount until leadingItemCount + messageCount`.
      */
     fun lazyIndexForMessageId(
         messageIdsChronological: List<String>,
         messageId: String,
+        leadingItemCount: Int = 1,
     ): Int? {
         val chronologicalIndex = messageIdsChronological.indexOf(messageId)
         if (chronologicalIndex < 0) return null
-        return messageIdsChronological.size - chronologicalIndex
+        return leadingItemCount + messageIdsChronological.lastIndex - chronologicalIndex
     }
 
     fun messageIdAtLazyIndex(
@@ -104,11 +107,13 @@ internal object MessageListVisibleAnchorScroll {
     fun restoreTarget(
         anchor: MessageListVisibleAnchor,
         messageIdsChronological: List<String>,
+        leadingItemCount: Int = 1,
     ): MessageListVisibleAnchorRestoreTarget? {
         val lazyIndex =
             lazyIndexForMessageId(
                 messageIdsChronological = messageIdsChronological,
                 messageId = anchor.messageId,
+                leadingItemCount = leadingItemCount,
             ) ?: return null
         return MessageListVisibleAnchorRestoreTarget(
             lazyIndex = lazyIndex,

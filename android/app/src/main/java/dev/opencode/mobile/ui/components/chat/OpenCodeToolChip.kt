@@ -106,6 +106,9 @@ enum class OpenCodeToolChipStatus {
     Running,
     Completed,
     Error,
+
+    /** Stopped by the user (Stop, Deny, Dismiss): neutral, not a failure. */
+    Interrupted,
 }
 
 /**
@@ -282,6 +285,13 @@ fun OpenCodeToolChip(
                         modifier = Modifier.size(ToolChipIconSize),
                         tint = openCodeColor("error"),
                     )
+                OpenCodeToolChipStatus.Interrupted ->
+                    Icon(
+                        imageVector = OpenCodeIcons.StopCircle,
+                        contentDescription = null,
+                        modifier = Modifier.size(ToolChipIconSize),
+                        tint = openCodeColor("text-weak"),
+                    )
                 OpenCodeToolChipStatus.Completed ->
                     if (variant is OpenCodeToolChipVariant.Command || variant is OpenCodeToolChipVariant.Agent) {
                         Icon(
@@ -346,6 +356,7 @@ private fun toolChipColors(
             byVariant.copy(background = warning.copy(alpha = 0.12f), border = warning.copy(alpha = 0.4f))
         }
         OpenCodeToolChipStatus.Pending -> byVariant.copy(label = openCodeColor("text-base"))
+        OpenCodeToolChipStatus.Interrupted -> byVariant.copy(label = openCodeColor("text-base"))
         OpenCodeToolChipStatus.Completed -> byVariant
     }
 }
@@ -475,6 +486,7 @@ enum class ToolChipPreviewCase(
     RunningCommand(OpenCodeToolChipVariant.Command("./gradlew :app:testDebugUnitTest"), OpenCodeToolChipStatus.Running),
     CompletedCommand(OpenCodeToolChipVariant.Command("xcodebuild test"), OpenCodeToolChipStatus.Completed, "42s"),
     FailedCommand(OpenCodeToolChipVariant.Command("npm test"), OpenCodeToolChipStatus.Error),
+    StoppedCommand(OpenCodeToolChipVariant.Command("./deploy.sh"), OpenCodeToolChipStatus.Interrupted),
     PendingFile(OpenCodeToolChipVariant.File("Navigation.kt"), OpenCodeToolChipStatus.Pending),
     Agent(OpenCodeToolChipVariant.Agent("Explore", "Find where the branch pill is rendered"), OpenCodeToolChipStatus.Completed, "1m 4s"),
     FailedAgent(OpenCodeToolChipVariant.Agent("Review", "Standards review"), OpenCodeToolChipStatus.Error),

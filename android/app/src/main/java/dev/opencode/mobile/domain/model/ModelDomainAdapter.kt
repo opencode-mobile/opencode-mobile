@@ -19,11 +19,7 @@ class ModelDomainAdapter {
                             providerName = provider.name ?: provider.id,
                             modelId = model.id ?: key,
                             modelName = model.name ?: model.id ?: key,
-                            variants =
-                                model.variants
-                                    ?.keys
-                                    ?.sortedWith(String.CASE_INSENSITIVE_ORDER)
-                                    .orEmpty(),
+                            variants = ModelVariants.sortedByEffort(model.variants?.keys.orEmpty()),
                             contextLimitTokens = model.limit?.context,
                             supportsImageInput = model.capabilities?.input?.image ?: true,
                             supportsPdfInput = model.capabilities?.input?.pdf ?: true,
@@ -57,10 +53,11 @@ class ModelDomainAdapter {
                         providerName = providerNames[model.providerId] ?: model.providerId,
                         modelId = model.id,
                         modelName = model.name ?: model.id,
+                        // v2 lists variants in the model's own order (low → medium → high).
                         variants =
                             model.variants
                                 .mapNotNull { it.id?.takeIf(String::isNotBlank) }
-                                .sortedWith(String.CASE_INSENSITIVE_ORDER),
+                                .distinct(),
                         contextLimitTokens = model.limit?.context,
                         supportsImageInput = inputs.isEmpty() || "image" in inputs,
                         supportsPdfInput = inputs.isEmpty() || "pdf" in inputs,

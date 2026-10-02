@@ -12,6 +12,8 @@ data class SessionChangeSet(
     val removedMessageIds: Set<String> = emptySet(),
     val changedPartIdsByMessage: Map<String, Set<String>> = emptyMap(),
     val streamingStateChangedIds: Set<String> = emptySet(),
+    /** User prompts whose inbox `waiting` state flipped (a v2 delivery), with no part change. */
+    val pickupStateChangedIds: Set<String> = emptySet(),
     val structuralChange: Boolean = false,
 )
 

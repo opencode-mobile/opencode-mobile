@@ -8,7 +8,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
         return Message(
             id: info.id,
             role: role(from: info.role),
-            text: flatText.isEmpty ? errorText(from: info.error) : flatText,
+            text: flatText.isEmpty ? errorText(from: info.error, stopReason: stopReason(info)) : flatText,
             parts: domainParts,
             cost: info.cost,
             tokens: tokenUsage(from: info.tokens),
@@ -22,7 +22,8 @@ nonisolated struct MessageDomainAdapter: Sendable {
             contextInputTokens: info.tokens?.input,
             contextEstimate: contextEstimate(role: info.role, parts: dto.parts),
             followUpDelivery: FollowUpDelivery.fromWire(info.delivery),
-            isWaitingForPickup: info.waiting == true
+            isWaitingForPickup: info.waiting == true,
+            stopReason: stopReason(info)
         )
     }
 
@@ -34,7 +35,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
         return Message(
             id: info.id,
             role: role(from: info.role),
-            text: flatText.isEmpty ? errorText(from: info.error) : flatText,
+            text: flatText.isEmpty ? errorText(from: info.error, stopReason: stopReason(info)) : flatText,
             parts: domainParts,
             cost: info.cost,
             tokens: tokenUsage(from: info.tokens),
@@ -48,7 +49,8 @@ nonisolated struct MessageDomainAdapter: Sendable {
             contextInputTokens: info.tokens?.input,
             contextEstimate: MessageContextEstimate(),
             followUpDelivery: FollowUpDelivery.fromWire(info.delivery),
-            isWaitingForPickup: info.waiting == true
+            isWaitingForPickup: info.waiting == true,
+            stopReason: stopReason(info)
         )
     }
 
@@ -100,17 +102,20 @@ nonisolated struct MessageDomainAdapter: Sendable {
         callID: String? = nil,
         state: MessageToolStateDTO?
     ) -> ToolPart {
-        ToolPart(
+        let status = toolStatus(from: state?.status)
+        return ToolPart(
             id: id,
             toolName: toolName,
-            status: toolStatus(from: state?.status),
+            status: status,
             title: state?.title.flatMap { $0.isEmpty ? nil : $0 },
             error: state?.error.flatMap { $0.isEmpty ? nil : $0 },
             callID: callID,
             input: state?.input,
             output: state?.output,
             metadata: state?.metadata,
-            timeStartEpochMs: state?.time?.start
+            timeStartEpochMs: state?.time?.start,
+            isInterrupted: status == .error
+                && (state?.interrupted == true || ToolInterruption.isUserInterruption(state?.error))
         )
     }
 
@@ -278,6 +283,9 @@ nonisolated struct MessageDomainAdapter: Sendable {
                 followUpDelivery: FollowUpDelivery.fromWire(item.delivery)
             )
         }
+        // Inbox items carry no agent or model; the server records the session's current
+        // ones on delivery, so inherit them from the newest message that has them.
+        let context = messages.last { $0.model != nil && $0.mode != "compaction" }
         let materialized = userItems
             .filter { !existingIDs.contains($0.id) }
             .map { item -> Message in
@@ -289,8 +297,11 @@ nonisolated struct MessageDomainAdapter: Sendable {
                     parts: text.isEmpty
                         ? []
                         : [.text(TextPart(id: "\(item.id):text:0", text: text, isStreaming: false))],
-                    model: nil,
-                    mode: nil,
+                    model: context?.model,
+                    modelProviderID: context?.modelProviderID,
+                    modelID: context?.modelID,
+                    variant: context?.variant,
+                    mode: context?.mode,
                     sentAtEpochMs: item.timeCreated,
                     followUpDelivery: FollowUpDelivery.fromWire(item.delivery),
                     isWaitingForPickup: true
@@ -407,11 +418,14 @@ nonisolated struct MessageDomainAdapter: Sendable {
             }
             return v2AssistantPart(content, fallbackID: fallbackID)
         }
-        return messageFromV2(
+        let stopReason = MessageStopReason.from(finish: dto.finish, errorKind: dto.error?.type)
+        var message = messageFromV2(
             id: dto.id,
             role: .assistant,
             parts: parts,
-            fallbackText: dto.error?.message?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "",
+            fallbackText: stopReason == .interrupted
+                ? ""
+                : dto.error?.message?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "",
             cost: dto.cost,
             tokens: tokenUsage(from: dto.tokens),
             mode: dto.agent ?? (agent.isEmpty ? nil : agent),
@@ -421,6 +435,8 @@ nonisolated struct MessageDomainAdapter: Sendable {
             contextInputTokens: dto.tokens?.input,
             contextEstimate: v2AssistantContextEstimate(dto.content)
         )
+        message.stopReason = stopReason
+        return message
     }
 
     private func projectV2Compaction(_ dto: V2SessionMessageDTO) -> Message {
@@ -500,17 +516,22 @@ nonisolated struct MessageDomainAdapter: Sendable {
         case "tool":
             guard let name = content.name else { return nil }
             let state = content.state
+            let metadata = state?.metadata ?? state?.structured
+            let status = toolStatus(from: state?.status)
             return .tool(
                 ToolPart(
                     id: content.id ?? fallbackID,
                     toolName: name,
-                    status: toolStatus(from: state?.status),
+                    status: status,
+                    // v2 tools report their progress title in metadata (v1: state.title).
+                    title: metadata?["title"]?.stringValue.flatMap { $0.isEmpty ? nil : $0 },
                     error: state?.error?.message.flatMap { $0.isEmpty ? nil : $0 },
                     callID: content.id,
                     input: dictionaryFromInput(state?.input),
                     output: toolOutput(state),
-                    metadata: state?.metadata ?? state?.structured,
-                    timeStartEpochMs: content.time?.created
+                    metadata: metadata,
+                    timeStartEpochMs: content.time?.created,
+                    isInterrupted: status == .error && ToolInterruption.isAbortedType(state?.error?.type)
                 )
             )
         default:
@@ -644,8 +665,14 @@ nonisolated struct MessageDomainAdapter: Sendable {
         }
     }
 
-    private func errorText(from error: MessageErrorInfoDTO?) -> String {
-        guard let error else { return "" }
+    private func stopReason(_ info: MessageInfoDTO) -> MessageStopReason? {
+        guard info.role.lowercased() == "assistant" else { return nil }
+        return MessageStopReason.from(finish: info.finish, errorKind: info.error?.name)
+    }
+
+    /// A stopped reply gets an "Interrupted" note, not the abort error as reply text.
+    private func errorText(from error: MessageErrorInfoDTO?, stopReason: MessageStopReason? = nil) -> String {
+        guard let error, stopReason != .interrupted else { return "" }
         if let message = error.data?.message?.trimmingCharacters(in: .whitespacesAndNewlines), !message.isEmpty {
             return message
         }

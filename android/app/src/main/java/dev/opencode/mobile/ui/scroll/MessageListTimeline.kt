@@ -202,6 +202,7 @@ internal fun rememberMessageListTimeline(
 
     MessageListAutoFollowAppendEffect(
         messageCount = messageCount,
+        newestMessageId = resolvedMessageIds.lastOrNull(),
         autoFollowEnabled = autoFollowEnabled,
         autoFollowTolerancePx = autoFollowTolerancePx,
         bottomAnchorHeightPx = bottomAnchorHeightPx,

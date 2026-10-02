@@ -47,6 +47,9 @@ enum class OpenCodeToolCallCardStatus {
     Running,
     Completed,
     Error,
+
+    /** Stopped by the user (Stop, Deny, Dismiss): neutral, not a failure. */
+    Interrupted,
 }
 
 @Composable
@@ -183,7 +186,12 @@ fun OpenCodeToolCallCard(
                     Text(
                         text = errorText,
                         style = MaterialTheme.typography.bodySmall,
-                        color = openCodeColor("error"),
+                        color =
+                            if (status == OpenCodeToolCallCardStatus.Interrupted) {
+                                openCodeColor("text-weak")
+                            } else {
+                                openCodeColor("error")
+                            },
                         maxLines = 3,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -201,6 +209,7 @@ private fun OpenCodeToolCallCardStatus.dotColor(): Color =
         -> openCodeColor("warning")
         OpenCodeToolCallCardStatus.Completed -> openCodeColor("success")
         OpenCodeToolCallCardStatus.Error -> openCodeColor("error")
+        OpenCodeToolCallCardStatus.Interrupted -> openCodeColor("text-weak")
     }
 
 internal fun buildToolCallCardAccessibilityLabel(
@@ -271,6 +280,12 @@ private fun ToolCallCardPreviewColumn() {
             status = OpenCodeToolCallCardStatus.Error,
             title = "Called webfetch",
             errorText = "Request failed with status 403",
+        )
+        OpenCodeToolCallCard(
+            status = OpenCodeToolCallCardStatus.Interrupted,
+            title = "Called shell",
+            subtitle = "./deploy.sh",
+            errorText = "Stopped",
         )
         OpenCodeToolCallCard(
             status = OpenCodeToolCallCardStatus.Completed,

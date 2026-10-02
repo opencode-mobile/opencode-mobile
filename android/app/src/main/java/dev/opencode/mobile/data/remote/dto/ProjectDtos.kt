@@ -23,3 +23,11 @@ data class ProjectDto(
                 ?: directory?.takeIf { it.isNotBlank() }
                 ?: error("Project requires worktree or directory")
 }
+
+/** v2 `GET /api/project` item: the project root is `canonical`. */
+@Serializable
+data class V2ProjectDto(
+    val id: String,
+    val canonical: String,
+    val name: String? = null,
+)

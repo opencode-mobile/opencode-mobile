@@ -166,6 +166,8 @@ nonisolated struct V2FormFieldDTO: Codable, Sendable {
     let options: [V2FormFieldOptionDTO]
     let custom: Bool?
     let multiple: Bool?
+    let minItems: Int?
+    let maxItems: Int?
 
     init(
         key: String,
@@ -174,7 +176,9 @@ nonisolated struct V2FormFieldDTO: Codable, Sendable {
         type: String? = nil,
         options: [V2FormFieldOptionDTO] = [],
         custom: Bool? = nil,
-        multiple: Bool? = nil
+        multiple: Bool? = nil,
+        minItems: Int? = nil,
+        maxItems: Int? = nil
     ) {
         self.key = key
         self.title = title
@@ -183,6 +187,8 @@ nonisolated struct V2FormFieldDTO: Codable, Sendable {
         self.options = options
         self.custom = custom
         self.multiple = multiple
+        self.minItems = minItems
+        self.maxItems = maxItems
     }
 
     init(from decoder: Decoder) throws {
@@ -194,6 +200,8 @@ nonisolated struct V2FormFieldDTO: Codable, Sendable {
         options = try container.decodeIfPresent([V2FormFieldOptionDTO].self, forKey: .options) ?? []
         custom = try container.decodeIfPresent(Bool.self, forKey: .custom)
         multiple = try container.decodeIfPresent(Bool.self, forKey: .multiple)
+        minItems = try container.decodeIfPresent(Int.self, forKey: .minItems)
+        maxItems = try container.decodeIfPresent(Int.self, forKey: .maxItems)
     }
 }
 

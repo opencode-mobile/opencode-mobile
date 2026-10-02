@@ -34,11 +34,12 @@ struct ModelDomainAdapter: Sendable {
         let options: [ModelSelectionOption] = models.compactMap { model in
             guard isUsable(model), !disabledProviders.contains(model.providerID) else { return nil }
             let inputs = (model.capabilities?.input ?? []).map { $0.lowercased() }
+            // v2 lists variants in the model's own order (low → medium → high).
+            var seenVariants = Set<String>()
             let variants = model.variants.compactMap { variant -> String? in
-                guard let id = variant.id, !id.isEmpty else { return nil }
+                guard let id = variant.id, !id.isEmpty, seenVariants.insert(id).inserted else { return nil }
                 return id
             }
-            .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
             return ModelSelectionOption(
                 providerID: model.providerID,
                 providerName: providerNames[model.providerID] ?? model.providerID,
@@ -94,7 +95,7 @@ struct ModelDomainAdapter: Sendable {
 
     private func variantKeys(from model: ProviderModelDTO) -> [String] {
         guard let variants = model.variants else { return [] }
-        return variants.keys.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+        return ModelVariants.sortedByEffort(variants.keys)
     }
 
     private func defaultOption(from defaults: [String: String], in options: [ModelSelectionOption]) -> ModelSelectionOption? {

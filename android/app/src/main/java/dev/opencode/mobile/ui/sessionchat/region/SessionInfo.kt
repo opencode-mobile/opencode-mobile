@@ -10,6 +10,7 @@ import dev.opencode.mobile.domain.event.LiveUpdates
 import dev.opencode.mobile.domain.event.OpencodeEvent
 import dev.opencode.mobile.domain.live.SessionStatusLiveStore
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.message.ToolInterruption
 import dev.opencode.mobile.domain.model.ModelSelection
 import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
@@ -362,7 +363,10 @@ class SessionInfo(
                                 "SSE event observed session=$sessionId type=${event.type} " +
                                     "eventSession=${event.sessionId ?: "-"} scope=$eventScope",
                             )
-                            if (event.type == "session.error" && event.sessionId == sessionId) {
+                            if (event.type == "session.error" &&
+                                event.sessionId == sessionId &&
+                                !isUserAbort(event.rawProperties)
+                            ) {
                                 _state.update { it.copy(errorMessage = sessionErrorMessage(event.rawProperties)) }
                             }
                             applySessionUpdatedTitle(event, sessionId)
@@ -408,6 +412,15 @@ class SessionInfo(
             is SessionError.Decoding -> "Unable to read server response"
             else -> throwable.message ?: "Something went wrong"
         }
+
+    /** The user's own Stop/Deny: the timeline shows it neutrally, so no error toast. */
+    private fun isUserAbort(properties: JsonObject?): Boolean {
+        val error = properties?.get("error") as? JsonObject
+        return ToolInterruption.isUserAbortError(
+            type = (error?.get("type") as? JsonPrimitive)?.contentOrNull,
+            name = (error?.get("name") as? JsonPrimitive)?.contentOrNull,
+        )
+    }
 
     private fun sessionErrorMessage(properties: JsonObject?): String {
         val error = properties?.get("error") as? JsonObject

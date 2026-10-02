@@ -118,6 +118,59 @@ class SessionReadyStoreTest {
         }
 
     @Test
+    fun staleRelease_afterReturningToParent_keepsParentFocused() =
+        runTest(testDispatcher) {
+            val statusStore = FakeReadyStatusStore()
+            val store = createStore(statusStore)
+            val emissions = mutableListOf<Set<String>>()
+            val job =
+                launch {
+                    store.observeReadyIds("/repo").collect { emissions.add(it) }
+                }
+            advanceUntilIdle()
+
+            store.setFocusedSession("parent", "/repo")
+            store.notifyPromptSent("parent", "/repo")
+            statusStore.emit("/repo", runningSnapshot("parent"))
+            advanceUntilIdle()
+            // Open the child, then "Back to main session": the parent re-focuses before the
+            // leaving child (and the earlier parent entry) release their focus.
+            store.setFocusedSession("child", "/repo")
+            store.releaseFocusedSession("parent")
+            store.setFocusedSession("parent", "/repo")
+            store.releaseFocusedSession("child")
+            statusStore.emit("/repo", idleSnapshot())
+            advanceUntilIdle()
+            job.cancel()
+
+            assertTrue(emissions.last().isEmpty())
+        }
+
+    @Test
+    fun switchingFocusToAnotherSession_whileBusy_marksPriorReady() =
+        runTest(testDispatcher) {
+            val statusStore = FakeReadyStatusStore()
+            val store = createStore(statusStore)
+            val emissions = mutableListOf<Set<String>>()
+            val job =
+                launch {
+                    store.observeReadyIds("/repo").collect { emissions.add(it) }
+                }
+            advanceUntilIdle()
+
+            store.setFocusedSession("parent", "/repo")
+            statusStore.emit("/repo", runningSnapshot("parent"))
+            advanceUntilIdle()
+            store.setFocusedSession("child", "/repo")
+            store.releaseFocusedSession("parent")
+            statusStore.emit("/repo", idleSnapshot())
+            advanceUntilIdle()
+            job.cancel()
+
+            assertEquals(setOf("parent"), emissions.last())
+        }
+
+    @Test
     fun homeOnlyBusy_neverWatched_staysQuiet() =
         runTest(testDispatcher) {
             val statusStore = FakeReadyStatusStore()
@@ -404,11 +457,11 @@ class SessionReadyStoreTest {
             clock = clock,
         )
 
-    private fun runningSnapshot(): SessionActivitySnapshot =
+    private fun runningSnapshot(sessionId: String = "ses-1"): SessionActivitySnapshot =
         SessionActivitySnapshot(
             entries =
                 mapOf(
-                    "ses-1" to
+                    sessionId to
                         SessionActivityEntry(
                             activity = SessionActivity.Running,
                             source = SessionActivitySource.Server,

@@ -1,5 +1,6 @@
 package dev.opencode.mobile.domain.session
 
+import dev.opencode.mobile.data.remote.HttpBodyResponseException
 import dev.opencode.mobile.data.remote.dto.ApiSessionActiveDto
 import dev.opencode.mobile.data.remote.dto.FileDiffDto
 import dev.opencode.mobile.data.remote.dto.MessageTokensDto
@@ -181,6 +182,7 @@ class SessionDomainAdapter {
     fun toPermissionResponse(decision: PermissionDecision): String =
         when (decision) {
             PermissionDecision.AllowOnce -> "once"
+            PermissionDecision.AlwaysAllow -> "always"
             PermissionDecision.Deny -> "reject"
         }
 
@@ -280,8 +282,10 @@ class SessionDomainAdapter {
         formTitle: String?,
     ): QuestionInfo =
         QuestionInfo(
+            // Question-tool forms put a short header in `title` and the question in
+            // `description`; a plain form field has only `title`, so the form title heads it.
             question = field.description ?: field.title ?: field.key,
-            header = field.title ?: formTitle ?: field.key,
+            header = if (field.description != null) field.title ?: formTitle.orEmpty() else formTitle.orEmpty(),
             options =
                 field.options.map { option ->
                     QuestionOption(
@@ -291,13 +295,22 @@ class SessionDomainAdapter {
                     )
                 },
             multiple = field.multiple == true || field.type.equals("multiselect", ignoreCase = true),
-            custom = field.custom != false,
+            // Forms only accept free text when the field opts in.
+            custom = field.custom == true,
             fieldKey = field.key,
+            minSelections = field.minItems?.takeIf { it > 0 },
+            maxSelections = field.maxItems?.takeIf { it > 0 },
         )
 
     fun mapError(throwable: Throwable): SessionError =
         when (throwable) {
             is SessionError -> throwable
+            is HttpBodyResponseException ->
+                SessionError.Http(
+                    statusCode = throwable.response.status.value,
+                    message = throwable.message,
+                    body = throwable.bodyText,
+                )
             is ResponseException ->
                 SessionError.Http(
                     statusCode = throwable.response.status.value,

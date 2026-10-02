@@ -777,6 +777,27 @@ class DisplayMessagePipelineCharacterizationTest {
             )
         }
 
+    @Test
+    fun networkFrameIdenticalToCacheSeed_confirmsCacheSync() =
+        runTest(testDispatcher) {
+            // Regression: a network frame equal to the cache-seeded one was skipped as a
+            // no-op without confirming the cache, which could leave Syncing… up.
+            val harness = startHarness()
+            harness.source.emit(
+                MessageListUpdate.Messages(listOf(plainAssistant("cached")), isFromCache = true),
+            )
+            advanceUntilIdle()
+            val seeded = harness.emissions.filterIsInstance<DisplayMessageListUpdate.Messages>()
+            assertTrue(seeded.isNotEmpty() && seeded.all { it.isFromCache })
+
+            harness.source.emit(
+                MessageListUpdate.Messages(listOf(plainAssistant("cached")), isFromCache = false),
+            )
+            advanceUntilIdle()
+
+            assertTrue(harness.emissions.last() is DisplayMessageListUpdate.CacheSyncConfirmed)
+        }
+
     private fun TestScope.startHarness(
         holdDelays: Boolean = false,
         smoothStreamingUpdates: () -> Boolean = { true },

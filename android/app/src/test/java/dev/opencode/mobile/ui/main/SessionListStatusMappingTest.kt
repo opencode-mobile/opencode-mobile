@@ -5,7 +5,6 @@ import dev.opencode.mobile.ui.components.OpenCodeListItemStatusTone
 import dev.opencode.mobile.ui.components.SessionListStatus
 import dev.opencode.mobile.ui.components.toListItemStatus
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Test
 
 class SessionListStatusMappingTest {
@@ -73,7 +72,7 @@ class SessionListStatusMappingTest {
     fun cachedRunningUsesStaleTone() {
         assertEquals(
             OpenCodeListItemStatusTone.Stale,
-            SessionListStatus.Running.toListItemStatus(stale = true)?.tone,
+            SessionListStatus.Running.toListItemStatus(stale = true).tone,
         )
     }
 
@@ -81,13 +80,22 @@ class SessionListStatusMappingTest {
     fun serverRunningUsesInteractiveTone() {
         assertEquals(
             OpenCodeListItemStatusTone.Interactive,
-            SessionListStatus.Running.toListItemStatus(stale = false)?.tone,
+            SessionListStatus.Running.toListItemStatus(stale = false).tone,
         )
     }
 
     @Test
-    fun idleHasNoChipEvenWhenStale() {
-        assertNull(SessionListStatus.Idle.toListItemStatus(stale = true))
+    fun idleShowsInfoPill() {
+        val status = SessionListStatus.Idle.toListItemStatus(stale = false)
+        assertEquals("Idle", status.text)
+        assertEquals(OpenCodeListItemStatusTone.Info, status.tone)
+    }
+
+    @Test
+    fun cachedIdleUsesStaleTone() {
+        val status = SessionListStatus.Idle.toListItemStatus(stale = true)
+        assertEquals("Idle", status.text)
+        assertEquals(OpenCodeListItemStatusTone.Stale, status.tone)
     }
 }
 

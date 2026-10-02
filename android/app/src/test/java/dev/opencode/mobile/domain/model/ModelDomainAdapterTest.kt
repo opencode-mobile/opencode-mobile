@@ -1,6 +1,9 @@
 package dev.opencode.mobile.domain.model
 
 import dev.opencode.mobile.data.remote.dto.ConfigProvidersResponseDto
+import dev.opencode.mobile.data.remote.dto.V2ModelInfoDto
+import dev.opencode.mobile.data.remote.dto.V2ModelVariantDto
+import dev.opencode.mobile.data.remote.dto.V2ProviderInfoDto
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -47,10 +50,45 @@ class ModelDomainAdapterTest {
         assertEquals(1, catalog.options.size)
         assertEquals("anthropic", catalog.options.single().providerId)
         assertEquals("claude-sonnet", catalog.options.single().modelId)
-        assertEquals(listOf("high", "low"), catalog.options.single().variants)
+        assertEquals(listOf("low", "high"), catalog.options.single().variants)
         assertEquals(catalog.options.single(), catalog.serverDefault)
         assertEquals(true, catalog.options.single().supportsImageInput)
         assertEquals(true, catalog.options.single().supportsPdfInput)
+    }
+
+    @Test
+    fun toCatalog_v2KeepsServerVariantOrder() {
+        val catalog =
+            adapter.toCatalog(
+                providers = listOf(V2ProviderInfoDto(id = "sim")),
+                models =
+                    listOf(
+                        V2ModelInfoDto(
+                            id = "scripted",
+                            providerId = "sim",
+                            variants = listOf("low", "medium", "high").map { V2ModelVariantDto(id = it) },
+                        ),
+                    ),
+            )
+
+        assertEquals(listOf("low", "medium", "high"), catalog.options.single().variants)
+    }
+
+    @Test
+    fun sortedByEffort_ordersKnownEffortsThenByName() {
+        assertEquals(
+            listOf("minimal", "low", "medium", "high", "xhigh", "fast", "thinking"),
+            ModelVariants.sortedByEffort(listOf("thinking", "high", "low", "fast", "xhigh", "medium", "minimal")),
+        )
+    }
+
+    @Test
+    fun isDefault_treatsServerDefaultAsNoVariantUnlessTheModelNamesIt() {
+        assertEquals(true, ModelVariants.isDefault("default", listOf("low", "high")))
+        assertEquals(true, ModelVariants.isDefault(null, listOf("low")))
+        assertEquals(true, ModelVariants.isDefault("", listOf("low")))
+        assertEquals(false, ModelVariants.isDefault("default", listOf("default", "fast")))
+        assertEquals(false, ModelVariants.isDefault("max", listOf("low")))
     }
 
     @Test

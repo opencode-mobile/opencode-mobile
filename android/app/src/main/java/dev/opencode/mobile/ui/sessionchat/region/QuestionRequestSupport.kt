@@ -61,8 +61,26 @@ internal fun isQuestionAnswerValid(
     if (draft.customSelected) {
         question.custom && draft.customText.isNotBlank()
     } else {
-        draft.selectedLabels.isNotEmpty()
+        val count = draft.selectedLabels.size
+        count >= maxOf(1, question.minSelections ?: 1) && count <= (question.maxSelections ?: Int.MAX_VALUE)
     }
+
+/**
+ * Next selection after tapping [label]. A single-pick question (or a multiselect
+ * capped at one) replaces the pick; a multiselect at its `maxItems` cap ignores
+ * further picks until one is cleared.
+ */
+internal fun toggledQuestionSelection(
+    question: QuestionInfo,
+    selected: List<String>,
+    label: String,
+): List<String> {
+    if (!question.multiple || question.maxSelections == 1) return listOf(label)
+    if (label in selected) return selected - label
+    val max = question.maxSelections
+    if (max != null && selected.size >= max) return selected
+    return selected + label
+}
 
 internal fun buildQuestionAnswers(
     questions: List<QuestionInfo>,

@@ -60,6 +60,20 @@ class MessageContentPreparerTest {
         }
 
     @Test
+    fun streamingTextBlockRendersTableOnceDelimiterRowStarts() =
+        runTest(testDispatcher) {
+            val preparer = createPreparer()
+            val plain = "Here is the summary:\n\n| File | Lines | Status |\n|"
+            val structureFirst = preparer.prepareStructureOnlyTextBlock(blockID = "b1", plain = plain)
+            val streaming = preparer.prepareTextBlock(blockID = "b1", plain = plain, isStreaming = true)
+            for (document in listOf(structureFirst, streaming)) {
+                val table = document!!.blocks.last() as MarkdownBlock.Table
+                assertEquals(3, table.header.cells.size)
+                assertTrue(table.rows.isEmpty())
+            }
+        }
+
+    @Test
     fun prepareMessageUsesCacheForSameMessageSnapshot() =
         runTest(testDispatcher) {
             val preparer = createPreparer()

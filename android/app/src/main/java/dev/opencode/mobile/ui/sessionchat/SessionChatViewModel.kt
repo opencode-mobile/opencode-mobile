@@ -253,7 +253,10 @@ class SessionChatViewModel
                         messages = timelineState.messages,
                         hasSelectedComposerModel = composerState.composer.selectedModel != null,
                     )
-                    commands.observeLoadedMessages(timeline.loadedMessages())
+                    commands.observeLoadedMessages(
+                        messages = timeline.loadedMessages(),
+                        isSessionBusy = infoState.sessionStatusLabel != null,
+                    )
                     publishUiState(
                         timelineState,
                         composerState,
@@ -436,7 +439,9 @@ class SessionChatViewModel
         }
 
         fun clearSessionReadyFocus() {
-            sessionReadyStore.setFocusedSession(null)
+            // Only release our own focus: the next Session Chat (child, parent, fork) may
+            // already have focused itself before this screen leaves composition.
+            boundSessionId?.let { sessionReadyStore.releaseFocusedSession(it) }
         }
 
         fun loadMessages() {
@@ -931,6 +936,28 @@ class SessionChatViewModel
             inbox.allowPermissionOnce(requestId, sessionId)
         }
 
+        fun alwaysAllowPermission(
+            requestId: String,
+            sessionId: String,
+        ) {
+            logAction(
+                actionId = ProductAnalytics.Action.PERMISSION_ALWAYS,
+                parameters = mapOf(ProductAnalytics.Param.PERMISSION_DECISION to "always"),
+            )
+            inbox.alwaysAllowPermission(requestId, sessionId)
+        }
+
+        /** Collapse the dock so the composer is reachable; the request stays pending. */
+        fun hidePermissionDock(requestId: String) {
+            logAction(ProductAnalytics.Action.PERMISSION_HIDE)
+            inbox.hidePermissionDock(requestId)
+        }
+
+        fun showPermissionDock() {
+            logAction(ProductAnalytics.Action.PERMISSION_SHOW)
+            inbox.showPermissionDock()
+        }
+
         fun denyPermission(
             requestId: String,
             sessionId: String,
@@ -1285,6 +1312,7 @@ class SessionChatViewModel
                 shouldLeaveSession = infoState.shouldLeaveSession,
                 permissionRequest = inboxSnapshot.permissionRequests.firstOrNull(),
                 permissionQueueCount = inboxSnapshot.permissionRequests.size,
+                permissionDockHidden = inboxSnapshot.isPermissionDockHidden,
                 permissionSubmitting = inboxSnapshot.permissionSubmittingId != null,
                 permissionErrorMessage = inboxSnapshot.permissionError ?: inboxSnapshot.permissionTopologyError,
                 questionRequest = visibleQuestion,

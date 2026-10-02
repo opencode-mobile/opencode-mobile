@@ -18,6 +18,8 @@ nonisolated struct Message: Equatable, Sendable, Identifiable {
     let contextEstimate: MessageContextEstimate
     let followUpDelivery: FollowUpDelivery?
     let isWaitingForPickup: Bool
+    /// Why an assistant reply ended early; nil for a complete (or still running) reply.
+    var stopReason: MessageStopReason?
 
     init(
         id: String,
@@ -36,7 +38,8 @@ nonisolated struct Message: Equatable, Sendable, Identifiable {
         contextInputTokens: Int64? = nil,
         contextEstimate: MessageContextEstimate = MessageContextEstimate(),
         followUpDelivery: FollowUpDelivery? = nil,
-        isWaitingForPickup: Bool = false
+        isWaitingForPickup: Bool = false,
+        stopReason: MessageStopReason? = nil
     ) {
         self.id = id
         self.role = role
@@ -55,6 +58,36 @@ nonisolated struct Message: Equatable, Sendable, Identifiable {
         self.contextEstimate = contextEstimate
         self.followUpDelivery = followUpDelivery
         self.isWaitingForPickup = isWaitingForPickup
+        self.stopReason = stopReason
+    }
+
+    /// Fills agent, model and variant this copy lacks from `base` (v2 live infos are partial).
+    func withMetadata(from base: Message?) -> Message {
+        guard let base else { return self }
+        var copy = self
+        if copy.stopReason == nil { copy.stopReason = base.stopReason }
+        guard mode == nil || model == nil else { return copy }
+        let takeModel = model == nil
+        return Message(
+            id: id,
+            role: role,
+            text: text,
+            parts: parts,
+            cost: cost,
+            tokens: tokens,
+            model: takeModel ? base.model : model,
+            modelProviderID: takeModel ? base.modelProviderID : modelProviderID,
+            modelID: takeModel ? base.modelID : modelID,
+            variant: takeModel ? base.variant : variant,
+            mode: mode ?? base.mode,
+            sentAtEpochMs: sentAtEpochMs,
+            completedAtEpochMs: completedAtEpochMs,
+            contextInputTokens: contextInputTokens,
+            contextEstimate: contextEstimate,
+            followUpDelivery: followUpDelivery,
+            isWaitingForPickup: isWaitingForPickup,
+            stopReason: copy.stopReason
+        )
     }
 
     func withPickupState(
@@ -78,8 +111,28 @@ nonisolated struct Message: Equatable, Sendable, Identifiable {
             contextInputTokens: contextInputTokens,
             contextEstimate: contextEstimate,
             followUpDelivery: followUpDelivery,
-            isWaitingForPickup: isWaitingForPickup
+            isWaitingForPickup: isWaitingForPickup,
+            stopReason: stopReason
         )
+    }
+}
+
+/// An assistant reply that ended before the model finished its answer.
+nonisolated enum MessageStopReason: String, Equatable, Sendable {
+    /// The model hit its output limit (`finish: "length"`).
+    case length
+    /// The user stopped the run (`error.type: "aborted"` / `MessageAbortedError`).
+    case interrupted
+
+    /// `finish` is the step finish reason (`"aborted"` is how the v2 live projection
+    /// marks an aborted step); `errorKind` is the v2 error `type` or v1 error `name`.
+    static func from(finish: String?, errorKind: String?) -> MessageStopReason? {
+        switch finish?.lowercased() {
+        case "length": return .length
+        case "aborted": return .interrupted
+        default:
+            return ToolInterruption.isUserAbortError(type: errorKind, name: errorKind) ? .interrupted : nil
+        }
     }
 }
 
@@ -228,6 +281,8 @@ nonisolated struct ToolPart: Equatable, Sendable {
     let output: String?
     let metadata: [String: AnyCodable]?
     let timeStartEpochMs: Int64?
+    /// Failed because the user stopped the run or declined the call, not a real failure.
+    let isInterrupted: Bool
 
     init(
         id: String? = nil,
@@ -239,7 +294,8 @@ nonisolated struct ToolPart: Equatable, Sendable {
         input: [String: AnyCodable]? = nil,
         output: String? = nil,
         metadata: [String: AnyCodable]? = nil,
-        timeStartEpochMs: Int64? = nil
+        timeStartEpochMs: Int64? = nil,
+        isInterrupted: Bool = false
     ) {
         self.id = id
         self.toolName = toolName
@@ -251,6 +307,7 @@ nonisolated struct ToolPart: Equatable, Sendable {
         self.output = output
         self.metadata = metadata
         self.timeStartEpochMs = timeStartEpochMs
+        self.isInterrupted = isInterrupted
     }
 
     func withTimeStart(_ timeStartEpochMs: Int64?) -> ToolPart {
@@ -264,7 +321,8 @@ nonisolated struct ToolPart: Equatable, Sendable {
             input: input,
             output: output,
             metadata: metadata,
-            timeStartEpochMs: timeStartEpochMs
+            timeStartEpochMs: timeStartEpochMs,
+            isInterrupted: isInterrupted
         )
     }
 }

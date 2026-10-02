@@ -32,4 +32,14 @@ sealed interface MessagePatch {
         val messageId: String,
         val partId: String,
     ) : MessagePatch
+
+    /**
+     * v2 `session.agent.selected` / `session.model.selected`: the session's agent or model
+     * changed. The store applies it to prompts delivered after it (their info carries neither).
+     */
+    data class ContextSwitched(
+        val agent: String? = null,
+        val model: MessageModelContext? = null,
+        val atEpochMs: Long? = null,
+    ) : MessagePatch
 }

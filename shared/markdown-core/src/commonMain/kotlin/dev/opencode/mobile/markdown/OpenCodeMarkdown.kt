@@ -644,8 +644,27 @@ object OpenCodeMarkdownParser {
         index: Int,
     ): Boolean {
         if (index + 1 >= lines.size) return false
-        return lines[index].contains("|") && tableSeparatorRegex.matches(lines[index + 1].trim())
+        val header = lines[index]
+        val separator = lines[index + 1].trim()
+        if (header.contains("|") && tableSeparatorRegex.matches(separator)) return true
+        return isStreamingTableHeader(header, separator, isLastLine = index + 1 == lines.lastIndex)
     }
+
+    /**
+     * A streamed table shows its header as soon as the delimiter row starts
+     * arriving (`| File | Lines |` then `|`, `| --`, ...), instead of raw pipes
+     * until the delimiter row is complete. Only the source's final line can be
+     * an unfinished delimiter row, so completed Markdown is unaffected.
+     */
+    private fun isStreamingTableHeader(
+        header: String,
+        separator: String,
+        isLastLine: Boolean,
+    ): Boolean =
+        isLastLine &&
+            header.trim().startsWith("|") &&
+            splitTableRow(header).any { it.isNotEmpty() } &&
+            partialTableSeparatorRegex.matches(separator)
 
     private fun parseInlines(text: String): InlineResult {
         val diagnostics = mutableListOf<MarkdownDiagnostic>()
@@ -801,6 +820,7 @@ object OpenCodeMarkdownParser {
     private val fenceRegex = Regex("""^\s*(```|~~~)\s*([^`]*)$""")
     private val thematicBreakRegex = Regex("""^\s*(-{3,}|\*{3,}|_{3,})\s*$""")
     private val tableSeparatorRegex = Regex("""^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?$""")
+    private val partialTableSeparatorRegex = Regex("""^\|(\s*:?-*:?\s*\|)*\s*:?-*:?\s*$""")
     private val rawHtmlRegex = Regex("""</?[A-Za-z][^>]*>""")
     private const val MAX_LOGBOOK_LANGUAGE_LENGTH = 64
     private val autolinkTrailingPunctuation = setOf('.', ',', ';', ':', '!', '?', ')', ']', '}', '>', '\'', '"')

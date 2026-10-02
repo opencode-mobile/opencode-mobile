@@ -254,7 +254,16 @@ enum VcsDiffMode: String, Sendable {
 
 enum PermissionDecision: Sendable {
     case allowOnce
+    /// Allow and save the request's `always` patterns (v1 `always`, v2 `decision: "always"`).
+    case alwaysAllow
     case deny
+}
+
+/// One file an edit/write permission would change, from the request metadata.
+struct PermissionFileChange: Sendable, Equatable {
+    let path: String
+    let additions: Int
+    let deletions: Int
 }
 
 struct PermissionRequest: Sendable, Equatable, Identifiable {
@@ -266,6 +275,9 @@ struct PermissionRequest: Sendable, Equatable, Identifiable {
     let always: [String]
     let toolMessageID: String?
     let toolCallID: String?
+
+    /// Files an edit/write would change; empty for other permissions.
+    var fileChanges: [PermissionFileChange] { PermissionFileChanges.from(metadata) }
 }
 
 struct QuestionOption: Sendable, Equatable, Identifiable {
@@ -289,6 +301,9 @@ struct QuestionInfo: Sendable, Equatable {
     let multiple: Bool
     let custom: Bool
     let fieldKey: String?
+    /// Form multiselect bounds (`minItems` / `maxItems`); nil means unbounded.
+    let minSelections: Int?
+    let maxSelections: Int?
 
     init(
         question: String,
@@ -296,7 +311,9 @@ struct QuestionInfo: Sendable, Equatable {
         options: [QuestionOption],
         multiple: Bool,
         custom: Bool,
-        fieldKey: String? = nil
+        fieldKey: String? = nil,
+        minSelections: Int? = nil,
+        maxSelections: Int? = nil
     ) {
         self.question = question
         self.header = header
@@ -304,6 +321,8 @@ struct QuestionInfo: Sendable, Equatable {
         self.multiple = multiple
         self.custom = custom
         self.fieldKey = fieldKey
+        self.minSelections = minSelections
+        self.maxSelections = maxSelections
     }
 }
 

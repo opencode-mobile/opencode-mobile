@@ -150,6 +150,7 @@ nonisolated struct SessionDomainAdapter: Sendable {
     func permissionResponse(_ decision: PermissionDecision) -> String {
         switch decision {
         case .allowOnce: "once"
+        case .alwaysAllow: "always"
         case .deny: "reject"
         }
     }
@@ -238,8 +239,10 @@ nonisolated struct SessionDomainAdapter: Sendable {
 
     private func questionInfo(from field: V2FormFieldDTO, formTitle: String?) -> QuestionInfo {
         QuestionInfo(
+            // Question-tool forms put a short header in `title` and the question in
+            // `description`; a plain form field has only `title`, so the form title heads it.
             question: field.description ?? field.title ?? field.key,
-            header: field.title ?? formTitle ?? field.key,
+            header: field.description != nil ? (field.title ?? formTitle ?? "") : (formTitle ?? ""),
             options: field.options.map { option in
                 QuestionOption(
                     label: option.label ?? option.value ?? "",
@@ -248,8 +251,11 @@ nonisolated struct SessionDomainAdapter: Sendable {
                 )
             },
             multiple: field.multiple == true || field.type?.lowercased() == "multiselect",
-            custom: field.custom != false,
-            fieldKey: field.key
+            // Forms only accept free text when the field opts in.
+            custom: field.custom == true,
+            fieldKey: field.key,
+            minSelections: field.minItems.flatMap { $0 > 0 ? $0 : nil },
+            maxSelections: field.maxItems.flatMap { $0 > 0 ? $0 : nil }
         )
     }
 

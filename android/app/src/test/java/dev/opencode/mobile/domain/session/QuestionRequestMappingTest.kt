@@ -149,6 +149,42 @@ class QuestionRequestMappingTest {
     }
 
     @Test
+    fun `injected form field heads with the form title and keeps its bounds`() {
+        // `inject.form` on the simulation server: one field with only a title.
+        val question =
+            adapter
+                .toQuestionRequest(
+                    V2FormInfoDto(
+                        id = "frm_2",
+                        sessionId = "ses_1",
+                        title = "Simulated question",
+                        fields =
+                            listOf(
+                                V2FormFieldDto(
+                                    key = "environment",
+                                    title = "Which environment should I deploy to?",
+                                    type = "multiselect",
+                                    options =
+                                        listOf(
+                                            V2FormFieldOptionDto(value = "staging", label = "Staging"),
+                                            V2FormFieldOptionDto(value = "production", label = "Production"),
+                                        ),
+                                    maxItems = 1,
+                                ),
+                            ),
+                    ),
+                ).questions
+                .single()
+
+        assertEquals("Simulated question", question.header)
+        assertEquals("Which environment should I deploy to?", question.question)
+        assertTrue(question.multiple)
+        assertEquals(1, question.maxSelections)
+        assertEquals(null, question.minSelections)
+        assertFalse(question.custom)
+    }
+
+    @Test
     fun `form reply uses field keys and option values`() {
         val request =
             adapter.toQuestionRequest(

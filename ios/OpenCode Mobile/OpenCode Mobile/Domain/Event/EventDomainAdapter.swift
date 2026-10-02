@@ -175,7 +175,7 @@ nonisolated struct EventDomainAdapter: Sendable {
         case "session.execution.started":
             [statusEvent(properties, statusType: "busy")]
         case "session.next.step.ended", "session.step.ended":
-            [assistantMessageUpdated(properties)].compactMap { $0 }
+            [assistantMessageUpdated(properties, finish: string(in: properties, key: "finish"))].compactMap { $0 }
         case "session.execution.succeeded",
              "session.execution.interrupted":
             [event(type: "session.idle", properties: properties)]
@@ -187,7 +187,7 @@ nonisolated struct EventDomainAdapter: Sendable {
         case "session.step.failed":
             [
                 event(type: "session.error", properties: properties),
-                assistantMessageUpdated(properties),
+                assistantMessageUpdated(properties, finish: failedStepFinish(properties)),
             ].compactMap { $0 }
         case "session.next.retried", "session.retry.scheduled":
             [statusEvent(properties, statusType: "retry")]
@@ -234,9 +234,11 @@ nonisolated struct EventDomainAdapter: Sendable {
             [textDelta(properties)]
         case "session.next.text.ended", "session.text.ended":
             [textPartUpdated(properties)]
-        case "session.next.moved", "session.next.agent.switched", "session.next.model.switched",
-             "session.moved", "session.agent.selected", "session.model.selected":
+        case "session.next.moved", "session.moved":
             [event(type: "session.updated", properties: properties)]
+        case "session.next.agent.switched", "session.next.model.switched",
+             "session.agent.selected", "session.model.selected":
+            [event(type: "session.updated", properties: properties), messageContext(properties)].compactMap { $0 }
         case "session.renamed":
             [renamedToUpdated(properties)]
         case "session.forked":
@@ -342,10 +344,15 @@ nonisolated struct EventDomainAdapter: Sendable {
         let sessionID = sessionID(from: properties)
         let messageID = userMessageID(in: properties)
         var parts: [OpencodeEvent] = []
+        // v2 inbox `synthetic` items (e.g. Plan mode's system-reminder) are server-injected
+        // context, not something the user typed: keep the part but mark it hidden.
+        let isSynthetic = (properties["item"] as? [String: Any]).flatMap { string(in: $0, key: "type") } == "synthetic"
         if let text = prompt.flatMap({ string(in: $0, key: "text") }) ?? string(in: properties, key: "text"),
            !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         {
-            parts.append(userTextPartUpdated(sessionID: sessionID, messageID: messageID, text: text))
+            parts.append(
+                userTextPartUpdated(sessionID: sessionID, messageID: messageID, text: text, isSynthetic: isSynthetic)
+            )
         }
         guard let prompt else { return parts }
         let files = prompt["files"] as? [Any] ?? []
@@ -356,8 +363,16 @@ nonisolated struct EventDomainAdapter: Sendable {
         return parts
     }
 
-    private func userTextPartUpdated(sessionID: String?, messageID: String?, text: String) -> OpencodeEvent {
+    private func userTextPartUpdated(
+        sessionID: String?,
+        messageID: String?,
+        text: String,
+        isSynthetic: Bool = false
+    ) -> OpencodeEvent {
         var part: [String: Any] = ["type": "text", "text": text]
+        if isSynthetic {
+            part["synthetic"] = true
+        }
         if let messageID {
             part["id"] = "\(messageID):text:0"
             part["messageID"] = messageID
@@ -436,15 +451,40 @@ nonisolated struct EventDomainAdapter: Sendable {
 
     private func stepStarted(_ properties: [String: Any]) -> [OpencodeEvent] {
         [
-            assistantMessageUpdated(properties, stampCreated: true),
+            assistantMessageUpdated(properties, stampCreated: true, withAgentAndModel: true),
             statusEvent(properties, statusType: "busy"),
         ].compactMap { $0 }
+    }
+
+    /// A v2 agent or model switch, for the message store: prompts delivered after it are
+    /// recorded with it (`message.context` is client-only).
+    private func messageContext(_ properties: [String: Any]) -> OpencodeEvent? {
+        let agent = string(in: properties, key: "agent")
+        let model = properties["model"] as? [String: Any]
+        guard agent != nil || model != nil else { return nil }
+        var context: [String: Any] = [:]
+        if let sessionID = sessionID(from: properties) { context["sessionID"] = sessionID }
+        if let agent { context["agent"] = agent }
+        if let model { context["model"] = model }
+        if let created = int64(in: properties, key: "created") { context["created"] = created }
+        return event(type: Self.messageContextEvent, properties: context)
     }
 
     /// v2 has no assistant `message.updated`; synthesize one. Only `step.started`
     /// stamps `time.created` (the envelope time) so a live reply orders after the
     /// prompt it answers; later partial infos omit `time` and the store keeps it.
-    private func assistantMessageUpdated(_ properties: [String: Any], stampCreated: Bool = false) -> OpencodeEvent? {
+    /// An aborted step projects as `finish: "aborted"` so the reply keeps an Interrupted note.
+    private func failedStepFinish(_ properties: [String: Any]) -> String {
+        let type = (properties["error"] as? [String: Any])?["type"] as? String
+        return ToolInterruption.isAbortedType(type) ? "aborted" : "error"
+    }
+
+    private func assistantMessageUpdated(
+        _ properties: [String: Any],
+        stampCreated: Bool = false,
+        finish: String? = nil,
+        withAgentAndModel: Bool = false
+    ) -> OpencodeEvent? {
         guard let assistantID = string(in: properties, key: "assistantMessageID") ?? string(in: properties, key: "messageID") else {
             return nil
         }
@@ -452,8 +492,21 @@ nonisolated struct EventDomainAdapter: Sendable {
         if let sessionID = sessionID(from: properties) {
             info["sessionID"] = sessionID
         }
+        if let finish { info["finish"] = finish }
         if stampCreated, let created = int64(in: properties, key: "created") {
             info["time"] = ["created": created]
+        }
+        // `step.started` carries the agent and model the step runs with.
+        if withAgentAndModel {
+            if let agent = string(in: properties, key: "agent") {
+                info["agent"] = agent
+                info["mode"] = agent
+            }
+            if let model = properties["model"] as? [String: Any] {
+                if let id = string(in: model, key: "id") { info["modelID"] = id }
+                if let providerID = string(in: model, key: "providerID") { info["providerID"] = providerID }
+                if let variant = string(in: model, key: "variant") { info["variant"] = variant }
+            }
         }
         return event(type: "message.updated", properties: ["info": info])
     }
@@ -479,7 +532,12 @@ nonisolated struct EventDomainAdapter: Sendable {
                 output = texts.joined()
             }
         }
-        let error = (properties["error"] as? [String: Any]).flatMap { $0["message"] as? String }
+        let errorObject = properties["error"] as? [String: Any]
+        let error = errorObject?["message"] as? String
+        let interrupted = status == "error" && ToolInterruption.isAbortedType(errorObject?["type"] as? String)
+        let metadata = toolMetadata(properties)
+        // v2 `tool.progress` carries the live title in metadata (v1: state.title).
+        let title = (metadata?["title"] as? String).flatMap { $0.isEmpty ? nil : $0 }
         return toolLikePartUpdated(
             properties: properties,
             messageID: string(in: properties, key: "assistantMessageID"),
@@ -490,7 +548,9 @@ nonisolated struct EventDomainAdapter: Sendable {
             input: objectInput(properties["input"]),
             output: output,
             error: error,
-            metadata: toolMetadata(properties)
+            metadata: metadata,
+            title: title,
+            interrupted: interrupted
         )
     }
 
@@ -616,9 +676,11 @@ nonisolated struct EventDomainAdapter: Sendable {
         output: String? = nil,
         error: String? = nil,
         metadata: [String: Any]? = nil,
-        title: String? = nil
+        title: String? = nil,
+        interrupted: Bool = false
     ) -> OpencodeEvent {
         var state: [String: Any] = ["status": status]
+        if interrupted { state["interrupted"] = true }
         if let title { state["title"] = title }
         if let input { state["input"] = input }
         if let output { state["output"] = output }
@@ -940,6 +1002,9 @@ nonisolated struct EventDomainAdapter: Sendable {
         guard let title = info?["title"]?.stringValue else { return nil }
         return SessionTitleUpdate(sessionID: sessionID, title: title)
     }
+
+    /// Client-only projection of a v2 agent/model switch for the message store.
+    static let messageContextEvent = "message.context"
 
     private static let wrapperKeys: Set<String> = [
         "payload",

@@ -102,12 +102,7 @@ final class DefaultSessionReadyStore: SessionReadyStore {
 
     func setFocusedSession(sessionID: String?, directory: String?) {
         if sessionID == nil {
-            if let priorID = focusedSessionID, let priorDirectory = focusedDirectory {
-                let type = handles[priorDirectory]?.previousTypes[priorID] ?? nil
-                if type.isBusyOrRetry {
-                    startWatch(sessionID: priorID, directory: priorDirectory, reason: "leave-while-busy")
-                }
-            }
+            armLeaveWhileBusy()
             let priorID = focusedSessionID
             focusedSessionID = nil
             focusedDirectory = nil
@@ -118,6 +113,11 @@ final class DefaultSessionReadyStore: SessionReadyStore {
         }
 
         guard let sessionID else { return }
+        if focusedSessionID != sessionID {
+            // Moving straight to another session (child, parent, fork) leaves the prior one
+            // just like navigating away from it.
+            armLeaveWhileBusy()
+        }
         focusedSessionID = sessionID
         focusedDirectory = directory
         // Opening Session Chat acknowledges Ready. Drop Ready and any leftover watch so
@@ -143,6 +143,24 @@ final class DefaultSessionReadyStore: SessionReadyStore {
                 handle.previousTypes[sessionID] = "idle"
             }
             ensureStatusObservation(directory: directory, handle: handle)
+        }
+    }
+
+    func releaseFocusedSession(sessionID: String) {
+        guard focusedSessionID == sessionID else {
+            if let focusedSessionID {
+                DiagnosticLog.info(.session, "focus release ignored session=\(sessionID) focused=\(focusedSessionID)")
+            }
+            return
+        }
+        setFocusedSession(sessionID: nil, directory: nil)
+    }
+
+    private func armLeaveWhileBusy() {
+        guard let priorID = focusedSessionID, let priorDirectory = focusedDirectory else { return }
+        let type = handles[priorDirectory]?.previousTypes[priorID] ?? nil
+        if type.isBusyOrRetry {
+            startWatch(sessionID: priorID, directory: priorDirectory, reason: "leave-while-busy")
         }
     }
 

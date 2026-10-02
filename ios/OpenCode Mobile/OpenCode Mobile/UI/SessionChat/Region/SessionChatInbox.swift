@@ -123,6 +123,21 @@ final class SessionChatInbox {
         await respondToPermission(requestID: requestID, sessionID: sessionID, decision: .deny)
     }
 
+    func alwaysAllowPermission(requestID: String, sessionID: String) async {
+        await respondToPermission(requestID: requestID, sessionID: sessionID, decision: .alwaysAllow)
+    }
+
+    func hidePermissionDock(requestID: String) {
+        guard state.permissionRequests.contains(where: { $0.id == requestID }) else { return }
+        state.permissionHiddenID = requestID
+        notifyChange()
+    }
+
+    func showPermissionDock() {
+        state.permissionHiddenID = nil
+        notifyChange()
+    }
+
     func toggleQuestionOption(requestID: String, sessionID: String, label: String) {
         guard let request = state.visibleQuestionRequest,
               request.id == requestID, request.sessionID == sessionID, state.questionSubmittingID == nil,
@@ -130,9 +145,7 @@ final class SessionChatInbox {
         else { return }
         let question = request.questions[state.questionWizardIndex]
         let draft = state.questionDraft
-        let selected = question.multiple
-            ? (draft.selectedLabels.contains(label) ? draft.selectedLabels.filter { $0 != label } : draft.selectedLabels + [label])
-            : [label]
+        let selected = toggledQuestionSelection(question: question, selected: draft.selectedLabels, label: label)
         state.questionDrafts[state.questionWizardIndex] = QuestionAnswerDraft(
             selectedLabels: selected, customText: draft.customText, customSelected: false
         )
@@ -260,7 +273,10 @@ final class SessionChatInbox {
                 }
                 state.permissionError = "Permission request is no longer available"
             } else {
-                state.permissionError = error.localizedDescription
+                OpenCodeLog.sessionChat.warning(
+                    "permission reply failed request=\(request.id) decision=\(decision) error=\(error.localizedDescription)"
+                )
+                state.permissionError = InteractionReplyError.permissionReply.message(for: error)
             }
             notifyChange()
         }
@@ -361,10 +377,14 @@ final class SessionChatInbox {
             if state.visibleQuestionRequest?.id == requestID {
                 state.questionError = "Question request is no longer available"
             }
-        } else if state.visibleQuestionRequest?.id == requestID {
-            state.questionError = error.localizedDescription.isEmpty
-                ? (dismiss ? "Question dismiss failed" : "Question response failed")
-                : error.localizedDescription
+        } else {
+            OpenCodeLog.sessionChat.warning(
+                "question \(dismiss ? "dismiss" : "reply") failed request=\(requestID) error=\(error.localizedDescription)"
+            )
+            if state.visibleQuestionRequest?.id == requestID {
+                let failure: InteractionReplyError = dismiss ? .questionDismiss : .questionReply
+                state.questionError = failure.message(for: error)
+            }
         }
         notifyChange()
     }

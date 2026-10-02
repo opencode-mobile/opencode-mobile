@@ -49,6 +49,8 @@ import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.SessionTodoList
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
+import dev.opencode.mobile.ui.components.OpenCodeActionPill
+import dev.opencode.mobile.ui.components.OpenCodeActionPillVariant
 import dev.opencode.mobile.ui.components.OpenCodeActionTile
 import dev.opencode.mobile.ui.components.OpenCodeActionTileBadge
 import dev.opencode.mobile.ui.components.OpenCodeActionTileGrid
@@ -584,7 +586,7 @@ fun SessionChatScreen(
                     val overlayComposerKind =
                         SessionChatComposerKind.resolve(
                             isChildSession = parentId != null,
-                            hasPermission = uiState.permissionRequest != null,
+                            hasPermission = uiState.permissionRequest != null && !uiState.permissionDockHidden,
                             hasQuestion = uiState.questionRequest != null,
                         )
                     if (overlayComposerKind == SessionChatComposerKind.Prompt) {
@@ -647,6 +649,18 @@ fun SessionChatScreen(
                         // Suggestions float above this column. Keep the pending strip
                         // in the measured height so the timeline inset does not jump.
                         if (overlayComposerKind == SessionChatComposerKind.Prompt &&
+                            uiState.permissionDockHidden
+                        ) {
+                            OpenCodeActionPill(
+                                variant = OpenCodeActionPillVariant.ReviewPermission,
+                                onClick = viewModel::showPermissionDock,
+                                modifier =
+                                    Modifier
+                                        .align(Alignment.CenterHorizontally)
+                                        .padding(bottom = 6.dp),
+                            )
+                        }
+                        if (overlayComposerKind == SessionChatComposerKind.Prompt &&
                             uiState.pendingPrompts.isNotEmpty()
                         ) {
                             OpenCodePendingPromptsStrip(
@@ -662,7 +676,7 @@ fun SessionChatScreen(
                         val composerKind =
                             SessionChatComposerKind.resolve(
                                 isChildSession = parentId != null,
-                                hasPermission = uiState.permissionRequest != null,
+                                hasPermission = uiState.permissionRequest != null && !uiState.permissionDockHidden,
                                 hasQuestion = uiState.questionRequest != null,
                             )
                         val composerState =
@@ -674,6 +688,15 @@ fun SessionChatScreen(
                                         sessionId = request?.sessionId.orEmpty(),
                                         permission = request?.permission.orEmpty(),
                                         patterns = request?.patterns.orEmpty(),
+                                        files =
+                                            request?.fileChanges.orEmpty().map { file ->
+                                                OpenCodeSessionComposerState.PermissionFile(
+                                                    path = file.path,
+                                                    additions = file.additions,
+                                                    deletions = file.deletions,
+                                                )
+                                            },
+                                        alwaysPatterns = request?.always.orEmpty(),
                                         queueCount = uiState.permissionQueueCount,
                                         submitting = uiState.permissionSubmitting,
                                         actionsEnabled = uiState.canMutate,
@@ -686,11 +709,15 @@ fun SessionChatScreen(
                                     val questionCount = request?.questions?.size?.coerceAtLeast(1) ?: 1
                                     val index = uiState.questionWizardIndex.coerceIn(0, questionCount - 1)
                                     val answered =
-                                        if (uiState.questionCustomSelected) {
-                                            uiState.questionCustomText.isNotBlank()
-                                        } else {
-                                            uiState.questionSelectedLabels.isNotEmpty()
-                                        }
+                                        question != null &&
+                                            isQuestionAnswerValid(
+                                                question,
+                                                QuestionAnswerDraft(
+                                                    selectedLabels = uiState.questionSelectedLabels,
+                                                    customText = uiState.questionCustomText,
+                                                    customSelected = uiState.questionCustomSelected,
+                                                ),
+                                            )
                                     val submitting = uiState.questionSubmitting
                                     OpenCodeSessionComposerState.Question(
                                         requestId = request?.id.orEmpty(),
@@ -707,6 +734,8 @@ fun SessionChatScreen(
                                                 )
                                             },
                                         multiple = question?.multiple == true,
+                                        minSelections = question?.minSelections,
+                                        maxSelections = question?.maxSelections,
                                         customAllowed = question?.custom != false,
                                         selectedLabels = uiState.questionSelectedLabels,
                                         customText = uiState.questionCustomText,
@@ -807,6 +836,10 @@ fun SessionChatScreen(
                                         viewModel.allowPermissionOnce(action.requestId, action.sessionId)
                                     is OpenCodeSessionComposerAction.DenyPermission ->
                                         viewModel.denyPermission(action.requestId, action.sessionId)
+                                    is OpenCodeSessionComposerAction.AlwaysAllowPermission ->
+                                        viewModel.alwaysAllowPermission(action.requestId, action.sessionId)
+                                    is OpenCodeSessionComposerAction.HidePermission ->
+                                        viewModel.hidePermissionDock(action.requestId)
                                     is OpenCodeSessionComposerAction.ToggleQuestionOption ->
                                         viewModel.toggleQuestionOption(action.requestId, action.sessionId, action.label)
                                     is OpenCodeSessionComposerAction.ToggleQuestionCustom ->

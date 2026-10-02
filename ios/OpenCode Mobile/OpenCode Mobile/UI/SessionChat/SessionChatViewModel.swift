@@ -739,6 +739,25 @@ final class SessionChatViewModel {
         await inbox.allowPermissionOnce(requestID: requestID, sessionID: sessionID)
     }
 
+    func alwaysAllowPermission(requestID: String, sessionID: String) async {
+        logChatAction(
+            ProductAnalytics.Action.permissionAlways,
+            parameters: [ProductAnalytics.Param.permissionDecision: "always"]
+        )
+        await inbox.alwaysAllowPermission(requestID: requestID, sessionID: sessionID)
+    }
+
+    /// Collapse the dock so the composer is reachable; the request stays pending.
+    func hidePermissionDock(requestID: String) {
+        logChatAction(ProductAnalytics.Action.permissionHide)
+        inbox.hidePermissionDock(requestID: requestID)
+    }
+
+    func showPermissionDock() {
+        logChatAction(ProductAnalytics.Action.permissionShow)
+        inbox.showPermissionDock()
+    }
+
     func denyPermission(requestID: String, sessionID: String) async {
         logChatAction(
             ProductAnalytics.Action.permissionDeny,
@@ -886,7 +905,9 @@ final class SessionChatViewModel {
         sessionInfo.stopObserving()
         inbox.stop()
         collapsePreferenceGeneration += 1
-        sessionReadyStore.setFocusedSession(sessionID: nil, directory: nil)
+        // Only release our own focus: the next Session Chat (child, parent, fork) may already
+        // have focused itself before this screen disappears.
+        sessionReadyStore.releaseFocusedSession(sessionID: sessionID)
         syncCoordinator?.markFocused(nil)
         reviewChanges.stop()
         repoStrip.stop()
@@ -1036,7 +1057,10 @@ final class SessionChatViewModel {
             messages: timelineState.messages,
             hasSelectedComposerModel: composerState.composer.selectedModel != nil
         )
-        commands.observeLoadedMessages(timeline.loadedMessages())
+        commands.observeLoadedMessages(
+            timeline.loadedMessages(),
+            isSessionBusy: infoState.sessionStatusLabel != nil
+        )
         let commandsState = commands.state
         let isCompacting = effectiveCompacting(
             localCompacting: commandsState.isCompacting,
@@ -1173,6 +1197,7 @@ final class SessionChatViewModel {
             shouldLeaveSession: infoState.shouldLeaveSession,
             permissionRequest: inboxState.permissionRequests.first,
             permissionQueueCount: inboxState.permissionRequests.count,
+            permissionDockHidden: inboxState.isPermissionDockHidden,
             permissionSubmitting: inboxState.permissionSubmittingID != nil,
             permissionErrorMessage: inboxState.permissionError ?? inboxState.permissionTopologyError,
             questionRequest: visibleQuestion,

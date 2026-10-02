@@ -86,6 +86,7 @@ nonisolated final class SessionMessageEngine: @unchecked Sendable {
         !changeSet.changedPartIDsByMessage.isEmpty
             || !changeSet.removedMessageIDs.isEmpty
             || !changeSet.streamingStateChangedIDs.isEmpty
+            || !changeSet.pickupStateChangedIDs.isEmpty
     }
 
     /// Build the next published frame by splicing changed message IDs into

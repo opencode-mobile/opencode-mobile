@@ -138,7 +138,7 @@ internal fun SessionChatToolGroupScreen(
             ) {
                 target.members.forEach { card ->
                     OpenCodeToolCallCard(
-                        status = card.status.toGroupToolCallCardStatus(),
+                        status = card.status.toGroupToolCallCardStatus(interrupted = card.isInterrupted),
                         title = card.title,
                         subtitle = card.subtitle,
                         additions = card.additions,
@@ -188,7 +188,13 @@ private fun toolGroupMemberOnClick(
         else -> null
     }
 
-private fun ToolStatus.toGroupToolCallCardStatus(): OpenCodeToolCallCardStatus =
+private fun ToolStatus.toGroupToolCallCardStatus(interrupted: Boolean = false): OpenCodeToolCallCardStatus =
+    when {
+        this == ToolStatus.Error && interrupted -> OpenCodeToolCallCardStatus.Interrupted
+        else -> toGroupToolCallCardStatusBase()
+    }
+
+private fun ToolStatus.toGroupToolCallCardStatusBase(): OpenCodeToolCallCardStatus =
     when (this) {
         ToolStatus.Pending -> OpenCodeToolCallCardStatus.Pending
         ToolStatus.Running -> OpenCodeToolCallCardStatus.Running

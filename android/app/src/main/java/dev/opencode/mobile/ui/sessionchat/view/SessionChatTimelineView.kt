@@ -68,6 +68,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.message.MessageStopReason
 import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.theme.openCodeColor
@@ -76,6 +77,8 @@ import dev.opencode.mobile.ui.components.OpenCodeActionPillVariant
 import dev.opencode.mobile.ui.components.OpenCodeAssistantMessage
 import dev.opencode.mobile.ui.components.OpenCodeAssistantMessagePresentation
 import dev.opencode.mobile.ui.components.OpenCodeMessageAttachment
+import dev.opencode.mobile.ui.components.OpenCodeMessageNote
+import dev.opencode.mobile.ui.components.OpenCodeMessageNoteVariant
 import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessage
 import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessageContent
 import dev.opencode.mobile.ui.components.OpenCodeSessionBranchPill
@@ -648,6 +651,7 @@ private fun SessionChatMessageItem.outgoingContent(): List<OpenCodeOutgoingMessa
             is SessionChatTimelineBlock.ChildSessionRow,
             is SessionChatTimelineBlock.Reasoning,
             is SessionChatTimelineBlock.StepParagraph,
+            is SessionChatTimelineBlock.StopNote,
             -> null
         }
     }
@@ -715,6 +719,7 @@ private fun AssistantMessageContent(
                         SessionChatToolDetailTarget(
                             title = block.title,
                             body = block.detailText,
+                            bodyIsMarkdown = block.detailIsMarkdown,
                         ),
                     )
                 }
@@ -752,7 +757,7 @@ private fun AssistantMessageContent(
                         OpenCodeMessageAttachment(AttachmentPresentationMapper.from(block.attachment))
                     is SessionChatTimelineBlock.ToolCard ->
                         OpenCodeToolCallCard(
-                            status = block.status.toToolCallCardStatus(),
+                            status = block.status.toToolCallCardStatus(interrupted = block.isInterrupted),
                             title = block.title,
                             subtitle = block.subtitle,
                             additions = block.additions,
@@ -806,6 +811,14 @@ private fun AssistantMessageContent(
                                             ),
                                         )
                                     }
+                                },
+                        )
+                    is SessionChatTimelineBlock.StopNote ->
+                        OpenCodeMessageNote(
+                            variant =
+                                when (block.reason) {
+                                    MessageStopReason.Length -> OpenCodeMessageNoteVariant.Truncated
+                                    MessageStopReason.Interrupted -> OpenCodeMessageNoteVariant.Interrupted
                                 },
                         )
                     is SessionChatTimelineBlock.StepParagraph ->
@@ -907,10 +920,14 @@ private fun StepParagraphBlock(
                 }
                 visible.forEach { chip ->
                     key(chip.id) {
+                        val elapsed = rememberElapsedLabel(chip.runningSinceEpochMs)
                         OpenCodeToolChip(
                             variant = chip.toToolChipVariant(),
-                            status = chip.status.toToolChipStatus(),
-                            trailingText = chip.displayTrailingText,
+                            status = chip.status.toToolChipStatus(interrupted = chip.card.isInterrupted),
+                            trailingText =
+                                listOfNotNull(chip.displayTrailingText, elapsed)
+                                    .takeIf { it.isNotEmpty() }
+                                    ?.joinToString(" \u00b7 "),
                             onClick = chipAction(chip),
                         )
                     }
@@ -942,7 +959,13 @@ private fun SessionChatTimelineBlock.ToolChip.toToolChipVariant(): OpenCodeToolC
         ToolChipKind.Skill -> OpenCodeToolChipVariant.Skill(name = label)
     }
 
-private fun ToolStatus.toToolChipStatus(): OpenCodeToolChipStatus =
+private fun ToolStatus.toToolChipStatus(interrupted: Boolean = false): OpenCodeToolChipStatus =
+    when {
+        this == ToolStatus.Error && interrupted -> OpenCodeToolChipStatus.Interrupted
+        else -> toToolChipStatusBase()
+    }
+
+private fun ToolStatus.toToolChipStatusBase(): OpenCodeToolChipStatus =
     when (this) {
         ToolStatus.Pending -> OpenCodeToolChipStatus.Pending
         ToolStatus.Running -> OpenCodeToolChipStatus.Running
@@ -1013,7 +1036,13 @@ internal object SessionChatMarkdownPaint {
     ): Boolean = hasMarkdown && textLength >= DEFERRED_CHARACTER_THRESHOLD
 }
 
-private fun ToolStatus.toToolCallCardStatus(): OpenCodeToolCallCardStatus =
+private fun ToolStatus.toToolCallCardStatus(interrupted: Boolean = false): OpenCodeToolCallCardStatus =
+    when {
+        this == ToolStatus.Error && interrupted -> OpenCodeToolCallCardStatus.Interrupted
+        else -> toToolCallCardStatusBase()
+    }
+
+private fun ToolStatus.toToolCallCardStatusBase(): OpenCodeToolCallCardStatus =
     when (this) {
         ToolStatus.Pending -> OpenCodeToolCallCardStatus.Pending
         ToolStatus.Running -> OpenCodeToolCallCardStatus.Running

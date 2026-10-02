@@ -282,7 +282,7 @@ struct SessionChatView: View {
                 VStack(spacing: 0) {
                     if SessionChatComposerKind.resolve(
                         isChildSession: session.parentID != nil,
-                        hasPermission: viewModel.uiState.permissionRequest != nil,
+                        hasPermission: viewModel.uiState.permissionRequest != nil && !viewModel.uiState.permissionDockHidden,
                         hasQuestion: viewModel.uiState.questionRequest != nil
                     ) == .prompt {
                         if viewModel.uiState.atSuggestionsVisible {
@@ -323,9 +323,15 @@ struct SessionChatView: View {
                     VStack(spacing: 0) {
                         // Suggestions float above this stack. Keep the pending strip
                         // in the measured height so the timeline inset does not jump.
+                        if viewModel.uiState.permissionDockHidden {
+                            OpenCodeActionPill(variant: .reviewPermission) {
+                                viewModel.showPermissionDock()
+                            }
+                            .padding(.bottom, 6)
+                        }
                         if SessionChatComposerKind.resolve(
                             isChildSession: session.parentID != nil,
-                            hasPermission: viewModel.uiState.permissionRequest != nil,
+                            hasPermission: viewModel.uiState.permissionRequest != nil && !viewModel.uiState.permissionDockHidden,
                             hasQuestion: viewModel.uiState.questionRequest != nil
                         ) == .prompt,
                             !viewModel.uiState.pendingPrompts.isEmpty {
@@ -883,7 +889,7 @@ struct SessionChatView: View {
         let isSending = viewModel.uiState.isSending
         let kind = SessionChatComposerKind.resolve(
             isChildSession: session.parentID != nil,
-            hasPermission: viewModel.uiState.permissionRequest != nil,
+            hasPermission: viewModel.uiState.permissionRequest != nil && !viewModel.uiState.permissionDockHidden,
             hasQuestion: viewModel.uiState.questionRequest != nil
         )
         let state: OpenCodeSessionComposerState
@@ -895,6 +901,10 @@ struct SessionChatView: View {
                     sessionID: request.sessionID,
                     permission: request.permission,
                     patterns: request.patterns,
+                    files: request.fileChanges.map {
+                        .init(path: $0.path, additions: $0.additions, deletions: $0.deletions)
+                    },
+                    alwaysPatterns: request.always,
                     queueCount: viewModel.uiState.permissionQueueCount,
                     submitting: viewModel.uiState.permissionSubmitting,
                     actionsEnabled: viewModel.uiState.canMutate,
@@ -926,6 +936,8 @@ struct SessionChatView: View {
                     question: question?.question ?? "",
                     options: (question?.options ?? []).map { .init(label: $0.label, description: $0.description) },
                     multiple: question?.multiple ?? false,
+                    minSelections: question?.minSelections,
+                    maxSelections: question?.maxSelections,
                     customAllowed: question?.custom ?? true,
                     selectedLabels: draft.questionSelectedLabels,
                     customText: draft.questionCustomText,
@@ -1031,6 +1043,10 @@ struct SessionChatView: View {
                     Task { await viewModel.allowPermissionOnce(requestID: requestID, sessionID: sessionID) }
                 case let .denyPermission(requestID, sessionID):
                     Task { await viewModel.denyPermission(requestID: requestID, sessionID: sessionID) }
+                case let .alwaysAllowPermission(requestID, sessionID):
+                    Task { await viewModel.alwaysAllowPermission(requestID: requestID, sessionID: sessionID) }
+                case let .hidePermission(requestID):
+                    viewModel.hidePermissionDock(requestID: requestID)
                 case let .toggleQuestionOption(requestID, sessionID, label):
                     viewModel.toggleQuestionOption(requestID: requestID, sessionID: sessionID, label: label)
                 case let .toggleQuestionCustom(requestID, sessionID):

@@ -6,10 +6,12 @@ import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.message.DisplayMessage
 import dev.opencode.mobile.domain.message.InMemoryMessageStore
 import dev.opencode.mobile.domain.message.Message
+import dev.opencode.mobile.domain.message.MessageContextPatch
 import dev.opencode.mobile.domain.message.MessageDomainAdapter
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessagePatch
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.message.MessageStopReason
 import dev.opencode.mobile.markdown.MarkdownDocument
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -183,6 +185,228 @@ class V2LiveTurnTimelineTest {
             listOf("Answer to the first prompt.", "Answer to the steer prompt.", "Answer to the queued prompt."),
             merged.filter { it.message.role == MessageRole.Assistant }.map { it.message.text },
         )
+    }
+
+    @Test
+    fun deliveredInboxPrompt_keepsTheSessionAgentAndModel() {
+        // The sender sees its queued prompt as an inbox item, then only a partial live info.
+        reload(
+            """
+            [
+              {"id":"s1","type":"agent-switched","agent":"build","time":{"created":900}},
+              {"id":"s2","type":"model-switched","model":{"id":"scripted","providerID":"sim","variant":"high"},
+               "time":{"created":901}},
+              {"id":"u1","type":"user","text":"First prompt","time":{"created":1000}},
+              {"id":"a1","type":"assistant","agent":"build",
+               "model":{"id":"scripted","providerID":"sim","variant":"high"},
+               "content":[{"type":"text","text":"Answer."}],"time":{"created":1100}}
+            ]
+            """,
+            inbox =
+                """[{"id":"u2","sessionID":"$SESSION","time":{"created":1150},"type":"user",""" +
+                    """"payload":{"text":"Queued prompt"},"delivery":"queue"}]""",
+        )
+        apply(delivered("u2", at = 1_220))
+
+        val queued = store.messages(SESSION).single { it.id == "u2" }
+        assertFalse(queued.isWaitingForPickup)
+        assertEquals("build", queued.mode)
+        assertEquals("scripted", queued.model)
+        assertEquals("high", queued.variant)
+    }
+
+    @Test
+    fun liveV2Prompts_getTheAgentAndModelRestRecords() {
+        // Shaped like the B2-5 sim run: a server-injected prompt, a steer from this app (which
+        // switches agent and model first), then more injected prompts and steers.
+        apply(prompt("u1", "Say hello.", at = 1_000))
+        apply(step("a1", at = 1_050, model = SCRIPTED))
+        apply(agentSelected("build", at = 1_200))
+        apply(modelSelected(SCRIPTED_HIGH, at = 1_201))
+        apply(enqueued("u2", "Steer from Android", at = 1_202))
+        apply(text("a1", "Hello!", at = 1_300))
+        apply(stepEnded("a1", "stop", at = 1_310))
+        apply(delivered("u2", at = 1_320))
+        apply(step("a2", at = 1_330, model = SCRIPTED_HIGH))
+        apply(text("a2", "Steered.", at = 1_340))
+        apply(stepEnded("a2", "stop", at = 1_350))
+        apply(idle(at = 1_360))
+        apply(prompt("u3", "Second hello.", at = 2_000))
+        apply(agentSelected("build", at = 2_020))
+        apply(step("a3", at = 2_030, model = SCRIPTED_HIGH))
+        apply(text("a3", "Hello again!", at = 2_040))
+        apply(stepEnded("a3", "stop", at = 2_050))
+        apply(idle(at = 2_060))
+
+        val live = store.messages(SESSION).filter { it.role == MessageRole.User }
+        val rest =
+            restMessages(
+                """
+                [
+                  {"id":"u1","type":"user","text":"Say hello.","time":{"created":1000}},
+                  {"id":"s1","type":"agent-switched","agent":"build","time":{"created":1200}},
+                  {"id":"s2","type":"model-switched","model":$SCRIPTED_HIGH,"time":{"created":1201}},
+                  {"id":"a1","type":"assistant","agent":"build","model":$SCRIPTED,
+                   "content":[{"type":"text","text":"Hello!"}],"time":{"created":1050}},
+                  {"id":"u2","type":"user","text":"Steer from Android","time":{"created":1320}},
+                  {"id":"a2","type":"assistant","agent":"build","model":$SCRIPTED_HIGH,
+                   "content":[{"type":"text","text":"Steered."}],"time":{"created":1330}},
+                  {"id":"u3","type":"user","text":"Second hello.","time":{"created":2000}},
+                  {"id":"s3","type":"agent-switched","agent":"build","time":{"created":2020}},
+                  {"id":"a3","type":"assistant","agent":"build","model":$SCRIPTED_HIGH,
+                   "content":[{"type":"text","text":"Hello again!"}],"time":{"created":2030}}
+                ]
+                """,
+            ).filter { it.role == MessageRole.User }
+
+        assertEquals(listOf("u1", "u2", "u3"), live.map { it.id })
+        assertEquals(rest.map { it.metaLine() }, live.map { it.metaLine() })
+        assertEquals(listOf(null, "build|scripted|null", "build|scripted|high"), live.map { it.metaLine() })
+    }
+
+    @Test
+    fun switchBeforeAPrompt_appliesToThatPrompt() {
+        apply(prompt("u1", "First", at = 1_000))
+        apply(step("a1", at = 1_050, model = SCRIPTED_HIGH))
+        apply(text("a1", "Reply.", at = 1_060))
+        apply(stepEnded("a1", "stop", at = 1_070))
+        apply(idle(at = 1_080))
+        apply(agentSelected("plan", at = 2_000))
+        apply(modelSelected("""{"id":"scripted","providerID":"sim","variant":"low"}""", at = 2_001))
+        apply(prompt("u2", "Second", at = 2_010))
+
+        assertEquals("plan|scripted|low", store.messages(SESSION).single { it.id == "u2" }.metaLine())
+    }
+
+    @Test
+    fun stoppedTool_isInterruptedNotFailed_liveAndAfterReload() {
+        apply(prompt("u1", "Start the deployment.", at = 1_000))
+        apply(step("a1", at = 1_100))
+        apply(text("a1", "Starting the deployment now.", at = 1_110))
+        val fields = """"assistantMessageID":"a1","id":"call_8","name":"sim_task""""
+        apply(
+            listOf(
+                envelope("session.tool.input.started", 1_120, fields),
+                envelope("session.tool.called", 1_121, """$fields,"input":{"title":"Deploy"}"""),
+                envelope(
+                    "session.tool.failed",
+                    1_200,
+                    """$fields,"error":{"type":"aborted","message":"Tool execution interrupted"},"executed":false""",
+                ),
+            ),
+        )
+
+        val liveTool = store.messages(SESSION).single { it.id == "a1" }.parts.filterIsInstance<MessagePart.Tool>().single()
+        assertTrue(liveTool.isInterrupted)
+        val paragraph = chipBodies(store.messages(SESSION))[1].blocks.stepParagraphs().single()
+        assertTrue(paragraph.errorLines.isEmpty())
+        assertTrue(paragraph.chips.single().card.isInterrupted)
+        assertEquals("Stopped", paragraph.chips.single().card.errorText)
+
+        val rest =
+            restMessages(
+                """
+                [
+                  {"id":"u1","type":"user","text":"Start the deployment.","time":{"created":1000}},
+                  {"id":"a1","type":"assistant","finish":"error","error":{"type":"aborted","message":"Step interrupted"},
+                   "content":[{"type":"text","text":"Starting the deployment now."},
+                     {"type":"tool","id":"call_8","name":"sim_task","state":{"status":"error","input":{},
+                      "error":{"type":"aborted","message":"Tool execution interrupted"}}}],
+                   "time":{"created":1100,"completed":1200}}
+                ]
+                """,
+            )
+        assertTrue(rest[1].parts.filterIsInstance<MessagePart.Tool>().single().isInterrupted)
+    }
+
+    @Test
+    fun realToolFailure_staysAnError() {
+        apply(prompt("u1", "Run it", at = 1_000))
+        apply(step("a1", at = 1_100))
+        val fields = """"assistantMessageID":"a1","id":"call_9","name":"sim_task""""
+        apply(
+            listOf(
+                envelope("session.tool.called", 1_121, """$fields,"input":{}"""),
+                envelope("session.tool.failed", 1_200, """$fields,"error":{"type":"unknown","message":"lock timeout"}"""),
+            ),
+        )
+        val tool = store.messages(SESSION).single { it.id == "a1" }.parts.filterIsInstance<MessagePart.Tool>().single()
+        assertFalse(tool.isInterrupted)
+    }
+
+    @Test
+    fun truncatedReply_keepsACutOffNote_liveAndFromRest() {
+        apply(prompt("u1", "Write an essay", at = 1_000))
+        apply(step("a1", at = 1_100))
+        apply(text("a1", "This is a very long essay that never", at = 1_110))
+        apply(stepEnded("a1", "length", at = 1_200))
+        // A later partial info (usage) must not drop how the step ended.
+        apply(
+            listOf(
+                envelope(
+                    "session.usage.updated",
+                    1_210,
+                    """"assistantMessageID":"a1","tokens":{"input":1,"output":2,"reasoning":0,"cache":{"read":0,"write":0}}""",
+                ),
+            ),
+        )
+        apply(idle(at = 1_300))
+
+        val live = store.messages(SESSION).single { it.id == "a1" }
+        assertEquals(MessageStopReason.Length, live.stopReason)
+        val body = chipBodies(store.messages(SESSION))[1]
+        assertEquals(
+            SessionChatTimelineBlock.StopNote(blockID = "a1:stop-note", reason = MessageStopReason.Length),
+            body.blocks.last(),
+        )
+
+        val rest =
+            restMessages(
+                """
+                [{"id":"a1","type":"assistant","finish":"length","content":[{"type":"text","text":"Cut"}],
+                  "time":{"created":1100,"completed":1200}}]
+                """,
+            )
+        assertEquals(MessageStopReason.Length, rest.single().stopReason)
+    }
+
+    @Test
+    fun interruptedReply_keepsAnInterruptedNote_andNoAbortText() {
+        apply(prompt("u1", "Explain", at = 1_000))
+        apply(step("a1", at = 1_100))
+        apply(text("a1", "The handler lives in", at = 1_110))
+        apply(
+            listOf(
+                envelope(
+                    "session.step.failed",
+                    1_200,
+                    """"assistantMessageID":"a1","error":{"type":"aborted","message":"Step interrupted"}""",
+                ),
+            ),
+        )
+        assertEquals(MessageStopReason.Interrupted, store.messages(SESSION).single { it.id == "a1" }.stopReason)
+        val merged = chipBodies(store.messages(SESSION))
+        assertTrue(merged[1].blocks.last() is SessionChatTimelineBlock.StopNote)
+
+        val rest =
+            restMessages(
+                """
+                [{"id":"a1","type":"assistant","finish":"error","error":{"type":"aborted","message":"Step interrupted"},
+                  "content":[],"time":{"created":1100,"completed":1200}}]
+                """,
+            )
+        assertEquals(MessageStopReason.Interrupted, rest.single().stopReason)
+        assertEquals("", rest.single().text)
+    }
+
+    @Test
+    fun completeReply_hasNoStopNote() {
+        apply(prompt("u1", "Say hi", at = 1_000))
+        apply(step("a1", at = 1_100))
+        apply(text("a1", "Hi.", at = 1_110))
+        apply(stepEnded("a1", "stop", at = 1_200))
+        assertEquals(null, store.messages(SESSION).single { it.id == "a1" }.stopReason)
+        assertTrue(chipBodies(store.messages(SESSION))[1].blocks.none { it is SessionChatTimelineBlock.StopNote })
     }
 
     @Test
@@ -402,14 +626,27 @@ class V2LiveTurnTimelineTest {
     private fun step(
         id: String,
         at: Long,
+        model: String = """{"id":"m","providerID":"p"}""",
     ): List<String> =
         listOf(
             envelope(
                 "session.step.started",
                 at,
-                """"agent":"build","model":{"id":"m","providerID":"p"},"assistantMessageID":"$id"""",
+                """"agent":"build","model":$model,"assistantMessageID":"$id"""",
             ),
         )
+
+    private fun agentSelected(
+        agent: String,
+        at: Long,
+    ): List<String> = listOf(envelope("session.agent.selected", at, """"agent":"$agent""""))
+
+    private fun modelSelected(
+        model: String,
+        at: Long,
+    ): List<String> = listOf(envelope("session.model.selected", at, """"model":$model"""))
+
+    private fun Message.metaLine(): String? = if (mode == null && model == null) null else "$mode|$model|$variant"
 
     private fun textStarted(
         id: String,
@@ -483,6 +720,8 @@ class V2LiveTurnTimelineTest {
                 "session.revert.committed" ->
                     store.apply(SESSION, MessagePatch.RemovedFrom(properties.string("messageID")!!))
                 "session.idle" -> store.finishStreamingText(SESSION)
+                EventDomainAdapter.MESSAGE_CONTEXT_EVENT ->
+                    MessageContextPatch.from(properties)?.let { store.apply(SESSION, it) }
             }
         }
     }
@@ -548,6 +787,8 @@ class V2LiveTurnTimelineTest {
 
     private companion object {
         const val SESSION = "ses_v2"
+        const val SCRIPTED = """{"id":"scripted","providerID":"sim"}"""
+        const val SCRIPTED_HIGH = """{"id":"scripted","providerID":"sim","variant":"high"}"""
         const val SUMMARY = "## Objective\n- Exercise queue and steer prompts.\n\n## Next Move\n- Wait."
     }
 }

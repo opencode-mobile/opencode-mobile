@@ -1,6 +1,7 @@
 package dev.opencode.mobile.domain.event
 
 import dev.opencode.mobile.domain.message.AttachmentDataUrl
+import dev.opencode.mobile.domain.message.ToolInterruption
 import dev.opencode.mobile.domain.message.ToolPartIdentity
 import dev.opencode.mobile.domain.message.V2ContentPartId
 import dev.opencode.mobile.domain.session.SessionActivity
@@ -186,7 +187,7 @@ class EventDomainAdapter(
             "session.execution.started" -> listOf(statusEvent(properties, "busy"))
             "session.next.step.ended",
             "session.step.ended",
-            -> listOfNotNull(assistantMessageUpdated(properties))
+            -> listOfNotNull(assistantMessageUpdated(properties, finish = properties.string("finish")))
             "session.execution.succeeded",
             "session.execution.interrupted",
             -> listOf(event("session.idle", properties))
@@ -200,7 +201,7 @@ class EventDomainAdapter(
             "session.step.failed" ->
                 listOfNotNull(
                     event("session.error", properties),
-                    assistantMessageUpdated(properties),
+                    assistantMessageUpdated(properties, finish = failedStepFinish(properties)),
                 )
             "session.next.retried",
             "session.retry.scheduled",
@@ -271,12 +272,13 @@ class EventDomainAdapter(
             "session.text.ended",
             -> listOf(textPartUpdated(properties))
             "session.next.moved",
+            "session.moved",
+            -> listOf(event("session.updated", properties))
             "session.next.agent.switched",
             "session.next.model.switched",
-            "session.moved",
             "session.agent.selected",
             "session.model.selected",
-            -> listOf(event("session.updated", properties))
+            -> listOfNotNull(event("session.updated", properties), messageContext(properties))
             "session.renamed" -> listOf(renamedToUpdated(properties))
             "session.forked" -> listOf(forkedToCreated(properties))
             "session.usage.updated",
@@ -382,7 +384,12 @@ class EventDomainAdapter(
         val messageId = userMessageId(properties)
         val parts = mutableListOf<OpencodeEvent>()
         val text = prompt?.string("text") ?: properties.string("text")
-        text?.takeIf { it.isNotBlank() }?.let { parts += userTextPartUpdated(sessionId, messageId, it) }
+        // v2 inbox `synthetic` items (e.g. Plan mode's system-reminder) are server-injected
+        // context, not something the user typed: keep the part but mark it hidden.
+        val synthetic = (properties["item"] as? JsonObject)?.string("type") == "synthetic"
+        text?.takeIf { it.isNotBlank() }?.let {
+            parts += userTextPartUpdated(sessionId, messageId, it, synthetic = synthetic)
+        }
         if (prompt == null) return parts
         val files = prompt["files"] as? JsonArray ?: return parts
         files.forEachIndexed { index, element ->
@@ -396,6 +403,7 @@ class EventDomainAdapter(
         sessionId: String?,
         messageId: String?,
         text: String,
+        synthetic: Boolean = false,
     ): OpencodeEvent {
         val part =
             buildJsonObject {
@@ -404,6 +412,7 @@ class EventDomainAdapter(
                 messageId?.let { put("messageID", it) }
                 put("type", "text")
                 put("text", text)
+                if (synthetic) put("synthetic", true)
             }
         return event("message.part.updated", buildJsonObject { put("part", part) })
     }
@@ -456,9 +465,33 @@ class EventDomainAdapter(
 
     private fun stepStarted(properties: JsonObject): List<OpencodeEvent> =
         listOfNotNull(
-            assistantMessageUpdated(properties, stampCreated = true),
+            assistantMessageUpdated(properties, stampCreated = true, withAgentAndModel = true),
             statusEvent(properties, "busy"),
         )
+
+    /**
+     * A v2 agent or model switch, for the message store: prompts delivered after it are
+     * recorded with it (`message.context` is client-only).
+     */
+    private fun messageContext(properties: JsonObject): OpencodeEvent? {
+        val agent = properties.string("agent")
+        val model = properties["model"] as? JsonObject
+        if (agent == null && model == null) return null
+        val context =
+            buildJsonObject {
+                sessionIdFromProperties(properties)?.let { put("sessionID", it) }
+                agent?.let { put("agent", it) }
+                model?.let { put("model", it) }
+                properties.long("created")?.let { put("created", it) }
+            }
+        return event(MESSAGE_CONTEXT_EVENT, context)
+    }
+
+    /** An aborted step projects as `finish: "aborted"` so the reply keeps an Interrupted note. */
+    private fun failedStepFinish(properties: JsonObject): String? {
+        val type = (properties["error"] as? JsonObject)?.string("type")
+        return if (ToolInterruption.isAbortedType(type)) "aborted" else "error"
+    }
 
     /**
      * v2 has no assistant `message.updated`; synthesize one. Only `step.started`
@@ -468,6 +501,8 @@ class EventDomainAdapter(
     private fun assistantMessageUpdated(
         properties: JsonObject,
         stampCreated: Boolean = false,
+        finish: String? = null,
+        withAgentAndModel: Boolean = false,
     ): OpencodeEvent? {
         val sessionId = sessionIdFromProperties(properties)
         val assistantId = properties.string("assistantMessageID") ?: properties.string("messageID") ?: return null
@@ -476,9 +511,22 @@ class EventDomainAdapter(
                 put("id", assistantId)
                 sessionId?.let { put("sessionID", it) }
                 put("role", "assistant")
+                finish?.let { put("finish", it) }
                 if (stampCreated) {
                     properties.long("created")?.let { created ->
                         put("time", buildJsonObject { put("created", created) })
+                    }
+                }
+                // `step.started` carries the agent and model the step runs with.
+                if (withAgentAndModel) {
+                    properties.string("agent")?.let { agent ->
+                        put("agent", agent)
+                        put("mode", agent)
+                    }
+                    (properties["model"] as? JsonObject)?.let { model ->
+                        model.string("id")?.let { put("modelID", it) }
+                        model.string("providerID")?.let { put("providerID", it) }
+                        model.string("variant")?.let { put("variant", it) }
                     }
                 }
             }
@@ -499,10 +547,9 @@ class EventDomainAdapter(
         val name = resolvedToolName(properties)
         val callId = properties.string("callID")
         val partId = properties.string("id") ?: callId
-        val error =
-            properties["error"]
-                ?.jsonObject
-                ?.string("message")
+        val errorObject = properties["error"] as? JsonObject
+        val error = errorObject?.string("message")
+        val interrupted = status == "error" && ToolInterruption.isAbortedType(errorObject?.string("type"))
         val output =
             properties.string("output")
                 ?: properties["content"]
@@ -529,6 +576,9 @@ class EventDomainAdapter(
             output = output,
             error = error,
             metadata = metadata,
+            // v2 `tool.progress` carries the live title in metadata (v1: state.title).
+            title = metadata?.string("title")?.takeIf { it.isNotEmpty() },
+            interrupted = interrupted,
         )
     }
 
@@ -660,11 +710,13 @@ class EventDomainAdapter(
         error: String? = null,
         metadata: JsonObject? = null,
         title: String? = null,
+        interrupted: Boolean = false,
     ): OpencodeEvent {
         val sessionId = sessionIdFromProperties(properties)
         val state =
             buildJsonObject {
                 put("status", status)
+                if (interrupted) put("interrupted", true)
                 title?.let { put("title", it) }
                 if (input is JsonObject) put("input", input)
                 output?.let { put("output", it) }
@@ -993,6 +1045,9 @@ class EventDomainAdapter(
     }
 
     companion object {
+        /** Client-only projection of a v2 agent/model switch for the message store. */
+        const val MESSAGE_CONTEXT_EVENT = "message.context"
+
         private val WRAPPER_KEYS =
             setOf(
                 "payload",

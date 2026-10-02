@@ -782,7 +782,7 @@ class SessionChatTimelineBlocksTest {
     }
 
     @Test
-    fun build_readDoesNotUseDirectoryPathAsSubtitle() {
+    fun build_readUsesV2PathAsSubtitle() {
         val tool =
             buildBlocks(
                 role = MessageRole.Assistant,
@@ -792,13 +792,15 @@ class SessionChatTimelineBlocksTest {
                             toolName = "read",
                             status = ToolStatus.Completed,
                             id = "prt-1",
-                            input = json("path" to "/home/ivan/Projects/session-test"),
+                            input = json("path" to "src/app.ts"),
+                            output = "1: export function handler()",
                         ),
                     ),
             ).single() as SessionChatTimelineBlock.ToolCard
 
         assertEquals("Explored — 1 read", tool.title)
-        assertNull(tool.subtitle)
+        assertEquals("src/app.ts", tool.subtitle)
+        assertEquals("1: export function handler()", tool.detailText)
     }
 
     @Test
@@ -868,7 +870,7 @@ class SessionChatTimelineBlocksTest {
         assertEquals(3, group.count)
         assertEquals(ToolStatus.Running, group.status)
         assertEquals("Explored — 1 read · 1 grep · 1 glob", group.title)
-        assertEquals("a.kt", group.subtitle)
+        assertEquals("3 tools", group.subtitle)
     }
 
     @Test
@@ -894,7 +896,7 @@ class SessionChatTimelineBlocksTest {
             ).single() as SessionChatTimelineBlock.ToolGroup
 
         assertEquals("Explored — 2 searches", group.title)
-        assertEquals("one", group.subtitle)
+        assertEquals("2 tools", group.subtitle)
     }
 
     @Test
@@ -1090,7 +1092,7 @@ class SessionChatTimelineBlocksTest {
             ).single() as SessionChatTimelineBlock.ToolCard
         assertEquals("Explored — 1 search", search.title)
         assertEquals("opencode mobile", search.subtitle)
-        assertNull(search.detailText)
+        assertEquals("https://a.example\nhttps://b.example", search.detailText)
     }
 
     @Test
@@ -1812,7 +1814,7 @@ class SessionChatTimelineBlocksTest {
         val group = blocks[0] as SessionChatTimelineBlock.ToolGroup
         assertEquals(PresentationBlockId.toolGroup(listOf("prt-1", "prt-2")), group.blockID)
         assertEquals("Explored — 2 reads", group.title)
-        assertNull(group.subtitle)
+        assertEquals("2 tools", group.subtitle)
         assertTrue(blocks[1] is SessionChatTimelineBlock.ToolCard)
     }
 
@@ -1850,7 +1852,7 @@ class SessionChatTimelineBlocksTest {
         assertEquals(PresentationBlockId.toolGroup(listOf("prt-1", "prt-3")), group.blockID)
         assertEquals(2, group.count)
         assertEquals("Explored — 2 reads", group.title)
-        assertNull(group.subtitle)
+        assertEquals("2 tools", group.subtitle)
     }
 
     @Test
@@ -2207,6 +2209,8 @@ class SessionChatTimelineBlocksTest {
         val summary = requireNotNull(paragraph.exploreSummary)
         assertEquals("Explored \u00b7 1 glob \u00b7 1 grep \u00b7 1 search \u00b7 1 fetch", summary.label)
         assertEquals("Explored \u2014 1 glob \u00b7 1 grep \u00b7 1 search \u00b7 1 fetch", summary.title)
+        // The detail subtitle sums up the group; each member row keeps its own argument.
+        assertEquals("4 tools", summary.subtitle)
         assertEquals(ToolStatus.Completed, summary.status)
         assertEquals(PresentationBlockId.toolGroup(listOf("p1", "p2", "p3", "p4")), summary.blockID)
         assertEquals(listOf("p1", "p2", "p3", "p4").map(PresentationBlockId::direct), summary.members.map { it.blockID })
@@ -2418,7 +2422,7 @@ class SessionChatTimelineBlocksTest {
         val summary = requireNotNull((blocks.single() as SessionChatTimelineBlock.StepParagraph).exploreSummary)
         assertEquals("Exploring \u00b7 2 reads \u00b7 1 grep", summary.label)
         assertEquals(ToolStatus.Running, summary.status)
-        assertEquals("/a/b.kt", summary.subtitle)
+        assertEquals("3 tools", summary.subtitle)
         assertEquals(3, summary.members.size)
     }
 
@@ -3119,6 +3123,151 @@ class SessionChatTimelineBlocksTest {
         assertEquals("/feature", uses[0].label)
         assertEquals(ToolStatus.Running, uses[0].status)
         assertEquals("/repo/.agents/skills/feature", uses[0].directory)
+    }
+
+    @Test
+    fun chipTimeline_v2ReadPath_labelsChipAndExploreMembers() {
+        fun read(
+            id: String,
+            path: String,
+        ) = MessagePart.Tool(toolName = "read", status = ToolStatus.Completed, id = id, input = json("path" to path), output = "body of $path")
+        val lone =
+            buildBlocks(role = MessageRole.Assistant, chipTimeline = true, parts = listOf(read("r1", "src/app.ts")))
+                .single() as SessionChatTimelineBlock.StepParagraph
+        assertEquals("app.ts", lone.chips.single().label)
+
+        val folded =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                chipTimeline = true,
+                parts = listOf(read("r1", "README.md"), read("r2", "src/app.ts")),
+            ).single() as SessionChatTimelineBlock.StepParagraph
+        val members = requireNotNull(folded.exploreSummary).members
+        assertEquals(listOf("README.md", "src/app.ts"), members.map { it.subtitle })
+        assertEquals(listOf("body of README.md", "body of src/app.ts"), members.map { it.detailText })
+    }
+
+    @Test
+    fun chipTimeline_customTool_labelsFromTitleInputAndLiveProgress() {
+        val running =
+            MessagePart.Tool(
+                toolName = "sim_task",
+                status = ToolStatus.Running,
+                id = "c1",
+                input = json("title" to "Run migrations"),
+                title = "Run migrations \u00b7 step 3/6",
+            )
+        val failed =
+            MessagePart.Tool(
+                toolName = "sim_task",
+                status = ToolStatus.Error,
+                id = "c2",
+                input = json("title" to "Backfill users"),
+                title = "Backfill users \u00b7 step 3/3",
+                error = "Backfill aborted: lock timeout",
+            )
+        val mcp =
+            MessagePart.Tool(
+                toolName = "github_create_issue",
+                status = ToolStatus.Completed,
+                id = "c3",
+                input = json("title" to "Add handler tests", "body" to "src/app.ts has no tests."),
+                output = "Created issue #42",
+            )
+        val bare = MessagePart.Tool(toolName = "sim_task", status = ToolStatus.Completed, id = "c4")
+        val paragraph =
+            buildBlocks(role = MessageRole.Assistant, chipTimeline = true, parts = listOf(running, failed, mcp, bare))
+                .single() as SessionChatTimelineBlock.StepParagraph
+
+        assertEquals(
+            listOf("Run migrations \u00b7 step 3/6", "Backfill users", "Add handler tests", "sim_task"),
+            paragraph.chips.map { it.label },
+        )
+        assertEquals(listOf("Backfill users: Backfill aborted: lock timeout"), paragraph.errorLines)
+        // The tool name stays the detail sheet title.
+        assertEquals("Called github_create_issue", paragraph.chips[2].card.title)
+        assertEquals("Add handler tests", paragraph.chips[2].card.subtitle)
+        assertEquals("Created issue #42", paragraph.chips[2].card.detailText)
+    }
+
+    @Test
+    fun build_shellNonZeroExit_isFailedWithExitCode() {
+        val shell =
+            MessagePart.Tool(
+                toolName = "shell",
+                status = ToolStatus.Completed,
+                id = "s1",
+                input = json("command" to "echo 'about to fail' && exit 3"),
+                output = "about to fail\nCommand exited with code 3.",
+                metadata = buildJsonObject { put("exit", 3) },
+            )
+        val ok = shell.copy(id = "s2", metadata = buildJsonObject { put("exit", 0) })
+        val card = buildBlocks(role = MessageRole.Assistant, parts = listOf(shell)).single() as SessionChatTimelineBlock.ToolCard
+        assertEquals(ToolStatus.Error, card.status)
+        assertEquals("Exited with code 3", card.errorText)
+        assertEquals("about to fail\nCommand exited with code 3.", card.detailText)
+
+        val paragraph =
+            buildBlocks(role = MessageRole.Assistant, chipTimeline = true, parts = listOf(shell, ok))
+                .single() as SessionChatTimelineBlock.StepParagraph
+        assertEquals(listOf(ToolStatus.Error, ToolStatus.Completed), paragraph.chips.map { it.status })
+        assertEquals(listOf("echo 'about to fail' && exit 3: Exited with code 3"), paragraph.errorLines)
+    }
+
+    @Test
+    fun chipTimeline_inFlightChipsCarryTheirStartForElapsedTime() {
+        val agent =
+            MessagePart.Tool(
+                toolName = "subagent",
+                status = ToolStatus.Running,
+                id = "a1",
+                input = json("agent" to "explore", "description" to "Scan the project"),
+                timeStartEpochMs = 1_000L,
+            )
+        val held = MessagePart.Tool(toolName = "sim_task", status = ToolStatus.Running, id = "h1", timeStartEpochMs = 2_000L)
+        val done = MessagePart.Tool(toolName = "sim_task", status = ToolStatus.Completed, id = "d1", timeStartEpochMs = 3_000L)
+        val paragraph =
+            buildBlocks(role = MessageRole.Assistant, chipTimeline = true, parts = listOf(agent, held, done))
+                .single() as SessionChatTimelineBlock.StepParagraph
+        val startsById = paragraph.chips.associate { it.id to it.runningSinceEpochMs }
+        assertEquals(1_000L, startsById[PresentationBlockId.direct("a1")])
+        assertEquals(2_000L, startsById[PresentationBlockId.direct("h1")])
+        assertNull(startsById[PresentationBlockId.direct("d1")])
+    }
+
+    @Test
+    fun chipTimeline_writeOfNewFileCountsItsLines() {
+        val write =
+            MessagePart.Tool(
+                toolName = "write",
+                status = ToolStatus.Completed,
+                id = "w1",
+                input = json("path" to "notes/todo.md", "content" to "# Todo\n\n- [ ] Add handler tests\n- [ ] Wire CI\n"),
+            )
+        val overwrite =
+            write.copy(
+                id = "w2",
+                input = json("path" to "README.md", "content" to "# Title\n"),
+                metadata = buildJsonObject { put("exists", true) },
+            )
+        val paragraph =
+            buildBlocks(role = MessageRole.Assistant, chipTimeline = true, parts = listOf(write, overwrite))
+                .single() as SessionChatTimelineBlock.StepParagraph
+        assertEquals("todo.md", paragraph.chips[0].label)
+        assertEquals(4, paragraph.chips[0].additions)
+        assertNull(paragraph.chips[0].deletions)
+        assertNull(paragraph.chips[1].additions)
+    }
+
+    @Test
+    fun build_compactionCardMarksItsSummaryAsMarkdown() {
+        val card =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                parts = listOf(MessagePart.Compaction(id = "c1", auto = false, completed = true, summary = "## Objective\nShip it")),
+            ).single() as SessionChatTimelineBlock.ToolCard
+        assertEquals("## Objective\nShip it", card.detailText)
+        assertTrue(card.detailIsMarkdown)
     }
 
     private fun buildBlocks(

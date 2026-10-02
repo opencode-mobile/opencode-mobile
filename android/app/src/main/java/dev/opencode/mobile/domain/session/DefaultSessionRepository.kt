@@ -177,6 +177,15 @@ class DefaultSessionRepository
             runCatching { remote.summarizeSession(id, providerId, modelId, directory) }
                 .getOrElse { throw adapter.mapError(it) }
 
+        override suspend fun compactSession(
+            id: String,
+            providerId: String,
+            modelId: String,
+            directory: String?,
+        ): CompactionStart =
+            runCatching { remote.compactSession(id, providerId, modelId, directory) }
+                .getOrElse { throw adapter.mapError(it) }
+
         override suspend fun revertSession(
             id: String,
             messageId: String,

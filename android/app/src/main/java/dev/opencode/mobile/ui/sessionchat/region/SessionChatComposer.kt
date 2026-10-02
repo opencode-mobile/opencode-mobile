@@ -31,6 +31,7 @@ import dev.opencode.mobile.domain.model.ModelSelection
 import dev.opencode.mobile.domain.model.ModelSelectionCatalog
 import dev.opencode.mobile.domain.model.ModelSelectionConnectionIdentity
 import dev.opencode.mobile.domain.model.ModelSelectionOption
+import dev.opencode.mobile.domain.model.ModelVariants
 import dev.opencode.mobile.domain.model.SessionModelSelection
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
@@ -395,7 +396,7 @@ class SessionChatComposer(
         val variant = resolvedVariant(rememberedVariant, option)
         val variantNotice =
             rememberedVariant
-                ?.takeIf { it.isNotBlank() && it !in option.variants }
+                ?.takeIf { !ModelVariants.isDefault(it, option.variants) && it !in option.variants }
                 ?.let { "Remembered Variant is unavailable. Using Default." }
         initialSelectionState =
             if (initialSelectionState == InitialSelectionState.WaitingForFallback) {

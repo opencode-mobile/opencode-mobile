@@ -36,12 +36,14 @@ fun ActionPillGalleryScreen(modifier: Modifier = Modifier) {
             onClick = { enabled = !enabled },
         )
 
-        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-            OpenCodeActionPill(
-                variant = OpenCodeActionPillVariant.ScrollToEnd,
-                enabled = enabled,
-                onClick = {},
-            )
+        OpenCodeActionPillVariant.entries.forEach { variant ->
+            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                OpenCodeActionPill(
+                    variant = variant,
+                    enabled = enabled,
+                    onClick = {},
+                )
+            }
         }
     }
 }

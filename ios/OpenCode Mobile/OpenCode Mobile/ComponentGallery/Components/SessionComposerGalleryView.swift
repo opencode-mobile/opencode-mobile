@@ -9,12 +9,14 @@ private enum SessionComposerGalleryScenario: String, CaseIterable, Identifiable 
     case revert
     case childLockout
     case permission
+    case permissionEdit
     case queued
     case submitting
     case error
     case question
     case questionWizard
     case multiSelect
+    case multiSelectBounded
     case custom
     case questionSubmitting
     case questionError
@@ -31,12 +33,14 @@ private enum SessionComposerGalleryScenario: String, CaseIterable, Identifiable 
         case .revert: "Revert"
         case .childLockout: "Child"
         case .permission: "Permission"
+        case .permissionEdit: "Edit"
         case .queued: "Queued"
         case .submitting: "Submitting"
         case .error: "Error"
         case .question: "Question"
         case .questionWizard: "Wizard"
         case .multiSelect: "Multi-select"
+        case .multiSelectBounded: "Up to 2"
         case .custom: "Custom"
         case .questionSubmitting: "Q Submit"
         case .questionError: "Q Error"
@@ -135,6 +139,8 @@ struct SessionComposerGalleryView: View {
             )
         case .permission:
             permissionState()
+        case .permissionEdit:
+            permissionState(edit: true)
         case .queued:
             permissionState(queueCount: 3)
         case .submitting:
@@ -172,6 +178,16 @@ struct SessionComposerGalleryView: View {
                 multiple: true,
                 customAllowed: false,
                 selectedLabels: selectedLabels,
+                submitEnabled: !selectedLabels.isEmpty
+            )
+        case .multiSelectBounded:
+            questionState(
+                questionIndex: 0,
+                questionCount: 1,
+                multiple: true,
+                maxSelections: 2,
+                customAllowed: false,
+                selectedLabels: Array(selectedLabels.prefix(2)),
                 submitEnabled: !selectedLabels.isEmpty
             )
         case .custom:
@@ -229,14 +245,22 @@ struct SessionComposerGalleryView: View {
     private func permissionState(
         queueCount: Int = 1,
         submitting: Bool = false,
-        errorMessage: String? = nil
+        errorMessage: String? = nil,
+        edit: Bool = false
     ) -> OpenCodeSessionComposerState {
         .permission(
             .init(
                 requestID: "permission-gallery",
                 sessionID: "session-gallery",
-                permission: "bash",
-                patterns: ["git status", "git diff --stat"],
+                permission: edit ? "edit" : "bash",
+                patterns: edit ? ["README.md", "notes/todo.md"] : ["git status --short", "git diff --stat"],
+                files: edit
+                    ? [
+                        .init(path: "README.md", additions: 1, deletions: 1),
+                        .init(path: "notes/todo.md", additions: 4, deletions: 0),
+                    ]
+                    : [],
+                alwaysPatterns: edit ? ["*"] : ["git status *", "git diff *"],
                 queueCount: queueCount,
                 submitting: submitting,
                 errorMessage: errorMessage
@@ -250,6 +274,7 @@ struct SessionComposerGalleryView: View {
         header: String = "Approach",
         question: String = "How should we implement this change?",
         multiple: Bool = false,
+        maxSelections: Int? = nil,
         customAllowed: Bool = true,
         selectedLabels: [String] = [],
         customText: String = "",
@@ -270,6 +295,7 @@ struct SessionComposerGalleryView: View {
                 question: question,
                 options: sampleQuestionOptions,
                 multiple: multiple,
+                maxSelections: maxSelections,
                 customAllowed: customAllowed,
                 selectedLabels: selectedLabels,
                 customText: customText,
@@ -285,7 +311,7 @@ struct SessionComposerGalleryView: View {
 
     private func applyScenarioDefaults(_ option: SessionComposerGalleryScenario) {
         switch option {
-        case .multiSelect:
+        case .multiSelect, .multiSelectBounded:
             selectedLabels = ["Minimal patch", "Investigate first"]
             customSelected = false
             customText = ""
@@ -318,7 +344,7 @@ struct SessionComposerGalleryView: View {
                 draftText = text
             }
         case let .toggleQuestionOption(_, _, label):
-            if scenario == .multiSelect {
+            if scenario == .multiSelect || scenario == .multiSelectBounded {
                 if selectedLabels.contains(label) {
                     selectedLabels.removeAll { $0 == label }
                 } else {
@@ -362,6 +388,8 @@ private extension OpenCodeSessionComposerAction {
         case .stop: "Stop"
         case .allowPermissionOnce: "Allow once"
         case .denyPermission: "Deny"
+        case .alwaysAllowPermission: "Always"
+        case .hidePermission: "Hide permission"
         case .toggleQuestionOption: "Toggle option"
         case .toggleQuestionCustom: "Toggle custom"
         case .questionCustomTextChanged: "Custom text changed"

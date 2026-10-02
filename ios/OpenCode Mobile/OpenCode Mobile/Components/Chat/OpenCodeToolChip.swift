@@ -23,6 +23,8 @@ enum OpenCodeToolChipStatus: String, CaseIterable, Sendable {
     case running
     case completed
     case error
+    /// Stopped by the user (Stop, Deny, Dismiss): neutral, not a failure.
+    case interrupted
 }
 
 struct OpenCodeToolChip: View {
@@ -241,6 +243,10 @@ struct OpenCodeToolChip: View {
                 .controlSize(.mini)
                 .tint(OpenCodeColors.warning)
                 .frame(width: Self.glyphSize, height: Self.glyphSize)
+        case .interrupted?:
+            OpenCodeIconImage(icon: .stopCircle, size: Self.glyphSize)
+                .foregroundStyle(OpenCodeColors.textWeak)
+                .fixedSize()
         case .pending?, nil:
             EmptyView()
         }
@@ -267,7 +273,7 @@ struct OpenCodeToolChip: View {
             OpenCodeColors.error
         case (.skill, _):
             OpenCodeColors.textInteractiveBase
-        case (_, .pending?):
+        case (_, .pending?), (_, .interrupted?):
             OpenCodeColors.textBase
         default:
             OpenCodeColors.textStrong
@@ -395,6 +401,7 @@ private struct ToolChipHitShape: Shape {
             OpenCodeToolChip(variant: .command(label: "xcodebuild test"), status: .completed)
             OpenCodeToolChip(variant: .command(label: "xcodebuild test"), status: .running, trailingText: "12s")
             OpenCodeToolChip(variant: .command(label: "npm test"), status: .error)
+            OpenCodeToolChip(variant: .command(label: "./deploy.sh"), status: .interrupted)
             OpenCodeToolChip(variant: .command(label: "swift build"), status: .pending)
             OpenCodeToolChip(variant: .agent(name: "Explore", brief: "Find the session list"), trailingText: "1m 4s")
             OpenCodeToolChip(variant: .agent(name: "Build", brief: "Android half"), status: .running)

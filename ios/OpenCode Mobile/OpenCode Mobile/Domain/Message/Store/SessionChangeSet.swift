@@ -10,6 +10,8 @@ nonisolated struct SessionChangeSet: Equatable, Sendable {
     var removedMessageIDs: Set<String> = []
     var changedPartIDsByMessage: [String: Set<String>] = [:]
     var streamingStateChangedIDs: Set<String> = []
+    /// User prompts whose inbox `waiting` state flipped (a v2 delivery), with no part change.
+    var pickupStateChangedIDs: Set<String> = []
     var structuralChange: Bool = false
 }
 

@@ -201,8 +201,18 @@ enum class VcsDiffMode(
 
 enum class PermissionDecision {
     AllowOnce,
+
+    /** Allow and save the request's `always` patterns (v1 `always`, v2 `decision: "always"`). */
+    AlwaysAllow,
     Deny,
 }
+
+/** One file an edit/write permission would change, from the request metadata. */
+data class PermissionFileChange(
+    val path: String,
+    val additions: Int,
+    val deletions: Int,
+)
 
 data class PermissionRequest(
     val id: String,
@@ -213,7 +223,11 @@ data class PermissionRequest(
     val always: List<String>,
     val toolMessageId: String?,
     val toolCallId: String?,
-)
+) {
+    /** Files an edit/write would change; empty for other permissions. */
+    val fileChanges: List<PermissionFileChange>
+        get() = PermissionFileChanges.from(metadata)
+}
 
 data class QuestionOption(
     val label: String,
@@ -228,6 +242,9 @@ data class QuestionInfo(
     val multiple: Boolean = false,
     val custom: Boolean = true,
     val fieldKey: String? = null,
+    /** Form multiselect bounds (`minItems` / `maxItems`); null means unbounded. */
+    val minSelections: Int? = null,
+    val maxSelections: Int? = null,
 )
 
 data class QuestionRequest(
@@ -246,6 +263,8 @@ sealed class SessionError : Exception() {
     data class Http(
         val statusCode: Int,
         override val message: String?,
+        /** Raw response body, when it was read. */
+        val body: String? = null,
     ) : SessionError()
 
     data class Decoding(

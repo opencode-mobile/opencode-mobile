@@ -5,6 +5,7 @@ import dev.opencode.mobile.domain.command.ServerCommand
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.message.MessageStopReason
 import dev.opencode.mobile.domain.message.ThoughtPartChrome
 import dev.opencode.mobile.domain.message.ToolPartIdentity
 import dev.opencode.mobile.domain.message.ToolStatus
@@ -46,11 +47,21 @@ sealed class SessionChatTimelineBlock {
         val deletions: Int? = null,
         /** Non-null when the card should open a Bottom Sheet with this body. */
         val detailText: String? = null,
+        /** True when [detailText] is markdown (a compaction summary), not tool output. */
+        val detailIsMarkdown: Boolean = false,
         /** Non-null when tap should open this child session's Session Chat. */
         val childSessionId: String? = null,
         /** When true, tap opens owning-turn Changes (optional File Viewer path). */
         val opensChangesReview: Boolean = false,
         val changesInitialFilePath: String? = null,
+        /** [status] is Error because the user stopped or declined it; render neutral. */
+        val isInterrupted: Boolean = false,
+    ) : SessionChatTimelineBlock()
+
+    /** Persistent note that the reply ended early (cut off or interrupted). */
+    data class StopNote(
+        override val blockID: String,
+        val reason: MessageStopReason,
     ) : SessionChatTimelineBlock()
 
     data class ToolGroup(
@@ -124,6 +135,8 @@ sealed class SessionChatTimelineBlock {
      * chips that existed at tap time by comparing against it.
      * [repeatCount] > 1 when identical consecutive completed runs were folded
      * into this chip; [card] is then the latest run.
+     * [runningSinceEpochMs] is the tool's start while it is in flight, so the
+     * view can show a live elapsed time; null once it settles.
      */
     data class ToolChip(
         val id: String,
@@ -145,6 +158,7 @@ sealed class SessionChatTimelineBlock {
         val card: ToolCard,
         val repeatCount: Int = 1,
         val arrivalIndex: Int = 0,
+        val runningSinceEpochMs: Long? = null,
     ) {
         /** Chip trailing text with the `×N` repeat marker ahead of any existing text. */
         val displayTrailingText: String?
@@ -216,6 +230,16 @@ enum class ToolChipFamily { Explore, Change, Command, Agent, Skill }
 
 object SessionChatTimelineBlocks {
     private val contextToolNames = setOf("read", "glob", "grep", "websearch")
+
+    /** Neutral copy for a tool the user stopped or declined (never the raw abort text). */
+    internal fun interruptedToolText(error: String?): String {
+        val text = error.orEmpty()
+        return if (text.contains("declined", ignoreCase = true) || text.contains("rejected", ignoreCase = true)) {
+            "Declined"
+        } else {
+            "Stopped"
+        }
+    }
 
     fun build(
         role: MessageRole,
@@ -447,6 +471,7 @@ object SessionChatTimelineBlocks {
             title = if (part.completed) SessionCompactChrome.MARKER_TITLE else SessionCompactChrome.STATUS_LABEL,
             subtitle = if (part.auto) SessionCompactChrome.MARKER_AUTO_SUBTITLE else null,
             detailText = part.summary?.takeIf { it.isNotBlank() },
+            detailIsMarkdown = true,
         )
     }
 
@@ -474,7 +499,7 @@ object SessionChatTimelineBlocks {
             blockID = PresentationBlockId.toolGroup(memberIds),
             label = (if (running) "Exploring" else "Explored") + " · " + counts,
             title = "Explored — $counts",
-            subtitle = tools.firstNotNullOfOrNull(::contextSubtitle),
+            subtitle = exploredGroupSubtitle(tools),
             status = if (running) ToolStatus.Running else ToolStatus.Completed,
             members = members,
         )
@@ -565,7 +590,7 @@ object SessionChatTimelineBlocks {
         chips.sortedBy { it.family.ordinal }
 
     private fun chipErrorLine(chip: SessionChatTimelineBlock.ToolChip): String? {
-        if (chip.status != ToolStatus.Error) return null
+        if (chip.status != ToolStatus.Error || chip.card.isInterrupted) return null
         return "${chip.label}: ${chip.card.errorText ?: "Failed"}"
     }
 
@@ -596,11 +621,16 @@ object SessionChatTimelineBlocks {
             skillId = if (family == ToolChipFamily.Skill) requestedSkillId(tool) else null,
             additions = card.additions.takeIf { isChange },
             deletions = card.deletions.takeIf { isChange },
-            status = tool.status,
+            status = card.status,
             trailingText = null,
             card = card,
+            runningSinceEpochMs = inFlightStart(tool),
         )
     }
+
+    /** A tool's start while it is pending or running, for live elapsed time. */
+    private fun inFlightStart(tool: MessagePart.Tool): Long? =
+        if (tool.status == ToolStatus.Pending || tool.status == ToolStatus.Running) tool.timeStartEpochMs else null
 
     private fun chipFamily(name: String): ToolChipFamily =
         when {
@@ -627,8 +657,22 @@ object SessionChatTimelineBlocks {
             "task", "subagent" -> taskAgentName(tool)
             "skill" -> "/" + (skillName(tool) ?: name)
             "lsp", "plan_exit" -> card.title
-            else -> if (isQuestionTool(tool)) card.title else null
+            else -> if (isQuestionTool(tool)) card.title else customToolLabel(tool)
         } ?: tool.toolName
+
+    /**
+     * Custom and MCP tools: the live progress title while running, then the
+     * tool's own `title` input (or the first line of its `description`). The
+     * tool name stays the fallback and the detail sheet title.
+     */
+    private fun customToolLabel(tool: MessagePart.Tool): String? =
+        runningTitleOverride(tool)
+            ?: inputString(tool.input, "title")
+            ?: inputString(tool.input, "description")
+                ?.lineSequence()
+                ?.firstOrNull()
+                ?.trim()
+                ?.takeIf { it.isNotEmpty() }
 
     private fun chipBrief(tool: MessagePart.Tool): String? =
         (inputString(tool.input, "description", "prompt") ?: childSessionTitle(tool))
@@ -733,6 +777,21 @@ object SessionChatTimelineBlocks {
         bodies: List<DisplayMessageBody>,
         collapseConsecutiveToolCalls: Boolean,
         chipTimeline: Boolean = false,
+    ): List<DisplayMessageBody> = mergeBodies(bodies, collapseConsecutiveToolCalls, chipTimeline).map(::withStopNote)
+
+    /** An assistant reply that ended early keeps a note under its last block. */
+    private fun withStopNote(body: DisplayMessageBody): DisplayMessageBody {
+        val reason = body.message.stopReason ?: return body
+        if (body.message.role != MessageRole.Assistant) return body
+        if (body.blocks.any { it is SessionChatTimelineBlock.StopNote }) return body
+        val note = SessionChatTimelineBlock.StopNote(blockID = "${body.message.id}:stop-note", reason = reason)
+        return body.copy(blocks = body.blocks + note)
+    }
+
+    private fun mergeBodies(
+        bodies: List<DisplayMessageBody>,
+        collapseConsecutiveToolCalls: Boolean,
+        chipTimeline: Boolean,
     ): List<DisplayMessageBody> {
         if (chipTimeline) return mergeConsecutiveAssistantBodiesForChips(bodies, collapseConsecutiveToolCalls)
         if (!collapseConsecutiveToolCalls || bodies.size < 2) return bodies
@@ -764,7 +823,8 @@ object SessionChatTimelineBlocks {
                     fallbackText = "",
                     collapseConsecutiveToolCalls = true,
                 )
-            merged += DisplayMessageBody(message = first.message, blocks = blocks)
+            merged +=
+                DisplayMessageBody(message = first.message.copy(stopReason = run.last().message.stopReason), blocks = blocks)
             index = end
         }
         return merged
@@ -817,7 +877,7 @@ object SessionChatTimelineBlocks {
                 is SessionChatTimelineBlocksResult.Ok ->
                     merged +=
                         DisplayMessageBody(
-                            message = first.message.copy(parts = parts),
+                            message = first.message.copy(parts = parts, stopReason = run.last().message.stopReason),
                             blocks = reattachMarkdown(result.blocks, run),
                         )
                 SessionChatTimelineBlocksResult.MissingPartIds -> merged += run
@@ -872,6 +932,7 @@ object SessionChatTimelineBlocks {
             is SessionChatTimelineBlock.ChildSessionRow,
             is SessionChatTimelineBlock.Reasoning,
             is SessionChatTimelineBlock.StepParagraph,
+            is SessionChatTimelineBlock.StopNote,
             -> false
         }
 
@@ -981,12 +1042,8 @@ object SessionChatTimelineBlocks {
             tools.map { tool ->
                 toToolCard(tool) as? SessionChatTimelineBlock.ToolCard ?: return null
             }
-        val status = worstStatus(tools.map { it.status })
-        val errorText =
-            tools
-                .firstOrNull { it.status == ToolStatus.Error }
-                ?.error
-                ?.takeIf { it.isNotEmpty() }
+        val status = worstStatus(members.map { it.status })
+        val errorText = members.firstOrNull { it.status == ToolStatus.Error }?.errorText
         return SessionChatTimelineBlock.ToolGroup(
             blockID = PresentationBlockId.toolGroup(memberIds),
             count = tools.size,
@@ -1012,7 +1069,7 @@ object SessionChatTimelineBlocks {
      */
     private fun groupSubtitle(tools: List<MessagePart.Tool>): String? {
         if (tools.isNotEmpty() && tools.all { isContextTool(it.toolName) }) {
-            return tools.firstNotNullOfOrNull(::contextSubtitle)
+            return exploredGroupSubtitle(tools)
         }
         val order = mutableListOf<String>()
         val counts = mutableMapOf<String, Int>()
@@ -1025,6 +1082,13 @@ object SessionChatTimelineBlocks {
             familyPhrase(name, counts.getValue(name))
         }
     }
+
+    /**
+     * One explore tool keeps its argument (a glob pattern, a path); several are `4 tools` (the title
+     * already counts each kind, and each row keeps its own argument).
+     */
+    private fun exploredGroupSubtitle(tools: List<MessagePart.Tool>): String? =
+        if (tools.size == 1) contextSubtitle(tools.single()) else "${tools.size} tools"
 
     private fun exploredTitle(tools: List<MessagePart.Tool>): String {
         val order = mutableListOf<String>()
@@ -1126,15 +1190,20 @@ object SessionChatTimelineBlocks {
         val partId = tool.id ?: return null
         val name = tool.toolName.lowercase()
         val chrome = specializedChrome(name, tool) ?: genericChrome(tool)
+        val failedExit = failedShellExitCode(name, tool)
+        val status = if (failedExit != null) ToolStatus.Error else tool.status
+        val interrupted = failedExit == null && tool.status == ToolStatus.Error && tool.isInterrupted
         val errorText =
-            when (tool.status) {
-                ToolStatus.Error -> tool.error?.takeIf { it.isNotEmpty() }
+            when {
+                failedExit != null -> "Exited with code $failedExit"
+                interrupted -> interruptedToolText(tool.error)
+                tool.status == ToolStatus.Error -> tool.error?.takeIf { it.isNotEmpty() }
                 else -> null
             }
         return SessionChatTimelineBlock.ToolCard(
             blockID = PresentationBlockId.direct(partId),
             toolName = tool.toolName,
-            status = tool.status,
+            status = status,
             title = chrome.title,
             subtitle = chrome.subtitle,
             errorText = errorText,
@@ -1144,7 +1213,22 @@ object SessionChatTimelineBlocks {
             childSessionId = chrome.childSessionId,
             opensChangesReview = chrome.opensChangesReview,
             changesInitialFilePath = chrome.changesInitialFilePath,
+            isInterrupted = interrupted,
         )
+    }
+
+    /**
+     * A shell run the server reports as completed but whose command exited
+     * non-zero (`metadata.exit`): shown as failed with the exit code.
+     */
+    private fun failedShellExitCode(
+        name: String,
+        tool: MessagePart.Tool,
+    ): Int? {
+        if (name != "bash" && name != "shell") return null
+        if (tool.status != ToolStatus.Completed) return null
+        val exit = (tool.metadata?.get("exit") as? JsonPrimitive)?.contentOrNull?.toIntOrNull() ?: return null
+        return exit.takeIf { it != 0 }
     }
 
     private data class Chrome(
@@ -1160,9 +1244,9 @@ object SessionChatTimelineBlocks {
 
     private fun genericChrome(tool: MessagePart.Tool): Chrome {
         val subtitle =
-            inputPreview(tool.input)
+            runningTitleOverride(tool)?.takeIf { !it.equals(tool.toolName, ignoreCase = true) }
+                ?: inputPreview(tool.input)
                 ?: tool.title?.takeIf { it.isNotEmpty() && !it.equals(tool.toolName, ignoreCase = true) }
-                ?: runningTitleOverride(tool)
         return Chrome(
             title = ToolPartIdentity.calledTitle(tool.toolName),
             subtitle = subtitle,
@@ -1225,7 +1309,8 @@ object SessionChatTimelineBlocks {
         val additions =
             positiveCount(
                 metadataFilediffInt(tool.metadata, "additions")
-                    ?: singlePatchFile?.additions,
+                    ?: singlePatchFile?.additions
+                    ?: newFileLineCount(tool),
             )
         val deletions =
             positiveCount(
@@ -1241,6 +1326,24 @@ object SessionChatTimelineBlocks {
             opensChangesReview = opens,
             changesInitialFilePath = path.takeIf { opens },
         )
+    }
+
+    /**
+     * A write that reports no diff counts (v2 sends none) and did not
+     * overwrite an existing file adds every line of its `content`.
+     */
+    private fun newFileLineCount(tool: MessagePart.Tool): Int? {
+        if (!tool.toolName.equals("write", ignoreCase = true)) return null
+        if (isTruthyMetadata(tool.metadata, "exists")) return null
+        val content = (tool.input?.get("content") as? JsonPrimitive)?.contentOrNull ?: return null
+        return lineCount(content)
+    }
+
+    /** Lines in a file body; a trailing newline does not start another line. */
+    private fun lineCount(content: String): Int {
+        if (content.isEmpty()) return 0
+        val lines = content.split("\n")
+        return if (lines.last().isEmpty()) lines.size - 1 else lines.size
     }
 
     private fun canOpenChangesReview(status: ToolStatus): Boolean = status == ToolStatus.Completed || status == ToolStatus.Error
@@ -1351,6 +1454,7 @@ object SessionChatTimelineBlocks {
         Chrome(
             title = exploredTitle(listOf(tool)),
             subtitle = runningTitleOverride(tool) ?: subtitle,
+            detailText = settledDetail(tool),
         )
 
     private fun shellChrome(tool: MessagePart.Tool): Chrome {
@@ -1449,6 +1553,7 @@ object SessionChatTimelineBlocks {
             "query",
             "pattern",
             "name",
+            "title",
             "description",
             "prompt",
             "text",
@@ -1493,8 +1598,8 @@ object SessionChatTimelineBlocks {
 
     private fun pathSubtitle(input: JsonObject?): String? = inputString(input, "filePath", "path", "file")
 
-    /** Read chrome is the file, not explore/cwd `path` (often the project root). */
-    private fun readPathSubtitle(input: JsonObject?): String? = inputString(input, "filePath", "file")
+    /** Read chrome is the file: v1 sends `filePath`, v2 sends `path`. */
+    private fun readPathSubtitle(input: JsonObject?): String? = inputString(input, "filePath", "file", "path")
 
     private fun patternPathSubtitle(input: JsonObject?): String? {
         val pattern = inputString(input, "pattern")

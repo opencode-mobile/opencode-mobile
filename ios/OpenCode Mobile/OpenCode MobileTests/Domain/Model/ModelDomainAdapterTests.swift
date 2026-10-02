@@ -43,10 +43,38 @@ struct ModelDomainAdapterTests {
         #expect(catalog.options.count == 1)
         #expect(catalog.options[0].providerID == "anthropic")
         #expect(catalog.options[0].modelID == "claude-sonnet")
-        #expect(catalog.options[0].variants == ["high", "low"])
+        #expect(catalog.options[0].variants == ["low", "high"])
         #expect(catalog.serverDefault == catalog.options[0])
         #expect(catalog.options[0].supportsImageInput)
         #expect(catalog.options[0].supportsPdfInput)
+    }
+
+    @Test func catalog_v2KeepsServerVariantOrder() throws {
+        let data =
+            """
+            {"id":"scripted","providerID":"sim","name":"Scripted model",
+             "variants":[{"id":"low"},{"id":"medium"},{"id":"high"}]}
+            """.data(using: .utf8)!
+        let model = try decoder.decode(V2ModelInfoDTO.self, from: data)
+
+        let catalog = adapter.catalog(providers: [], models: [model])
+
+        #expect(catalog.options.first?.variants == ["low", "medium", "high"])
+    }
+
+    @Test func sortedByEffort_ordersKnownEffortsThenByName() {
+        #expect(
+            ModelVariants.sortedByEffort(["thinking", "high", "low", "fast", "xhigh", "medium", "minimal"])
+                == ["minimal", "low", "medium", "high", "xhigh", "fast", "thinking"]
+        )
+    }
+
+    @Test func isDefault_treatsServerDefaultAsNoVariantUnlessTheModelNamesIt() {
+        #expect(ModelVariants.isDefault("default", available: ["low", "high"]))
+        #expect(ModelVariants.isDefault(nil, available: ["low"]))
+        #expect(ModelVariants.isDefault("", available: ["low"]))
+        #expect(!ModelVariants.isDefault("default", available: ["default", "fast"]))
+        #expect(!ModelVariants.isDefault("max", available: ["low"]))
     }
 
     @Test func catalog_mapsInputCapabilities() throws {

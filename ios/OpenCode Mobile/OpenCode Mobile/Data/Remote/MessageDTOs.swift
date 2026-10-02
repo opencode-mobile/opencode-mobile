@@ -21,6 +21,7 @@ nonisolated struct MessageInfoDTO: Codable, Sendable {
     let cost: Double?
     let waiting: Bool?
     let delivery: String?
+    let finish: String?
 }
 
 nonisolated struct MessageTokensDTO: Codable, Sendable {
@@ -98,6 +99,8 @@ nonisolated struct MessageToolStateDTO: Codable, Sendable {
     let error: String?
     let time: MessageToolTimeDTO?
     let metadata: [String: AnyCodable]?
+    /// Set by the v2 live projection when `tool.failed` reports `error.type: "aborted"`.
+    var interrupted: Bool? = nil
 }
 
 nonisolated struct MessageToolTimeDTO: Codable, Sendable {

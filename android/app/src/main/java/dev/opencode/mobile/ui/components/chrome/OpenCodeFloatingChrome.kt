@@ -26,13 +26,18 @@ fun OpenCodeFloatingChrome(
     border: BorderStroke? = null,
     tonalElevation: Dp = 2.dp,
     shadowElevation: Dp = 4.dp,
+    /**
+     * Fully opaque fill for large surfaces over the timeline (Session Composer and its
+     * docks): the 95% translucent fill lets timeline rows show through as faint shapes.
+     */
+    opaque: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val surfaceRaised = openCodeColor("surface-raised-base")
     Surface(
         modifier = modifier,
         shape = shape,
-        color = surfaceRaised.copy(alpha = 0.95f),
+        color = if (opaque) surfaceRaised else surfaceRaised.copy(alpha = 0.95f),
         tonalElevation = tonalElevation,
         shadowElevation = shadowElevation,
         border = border,

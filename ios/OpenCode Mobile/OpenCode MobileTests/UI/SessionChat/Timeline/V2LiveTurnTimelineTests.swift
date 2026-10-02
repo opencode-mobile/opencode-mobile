@@ -149,6 +149,212 @@ struct V2LiveTurnTimelineTests {
         ])
     }
 
+    @Test func deliveredInboxPrompt_keepsTheSessionAgentAndModel() throws {
+        // The sender sees its queued prompt as an inbox item, then only a partial live info.
+        try reload(
+            """
+            [
+              {"id":"s1","type":"agent-switched","agent":"build","time":{"created":900}},
+              {"id":"s2","type":"model-switched","model":{"id":"scripted","providerID":"sim","variant":"high"},
+               "time":{"created":901}},
+              {"id":"u1","type":"user","text":"First prompt","time":{"created":1000}},
+              {"id":"a1","type":"assistant","agent":"build",
+               "model":{"id":"scripted","providerID":"sim","variant":"high"},
+               "content":[{"type":"text","text":"Answer."}],"time":{"created":1100}}
+            ]
+            """,
+            inbox: #"[{"id":"u2","sessionID":"ses_v2","time":{"created":1150},"type":"user","payload":{"text":"Queued prompt"},"delivery":"queue"}]"#
+        )
+        apply(delivered("u2", at: 1_220))
+
+        let queued = try #require(store.messages(sessionID: Self.session).first { $0.id == "u2" })
+        #expect(!queued.isWaitingForPickup)
+        #expect(queued.mode == "build")
+        #expect(queued.model == "scripted")
+        #expect(queued.variant == "high")
+    }
+
+    @Test func liveV2Prompts_getTheAgentAndModelRestRecords() throws {
+        // Shaped like the B2-5 sim run: a server-injected prompt, a steer from this app (which
+        // switches agent and model first), then more injected prompts and steers.
+        apply(prompt("u1", "Say hello.", at: 1_000))
+        apply(step("a1", at: 1_050, model: Self.scripted))
+        apply(agentSelected("build", at: 1_200))
+        apply(modelSelected(Self.scriptedHigh, at: 1_201))
+        apply(enqueued("u2", "Steer from Android", at: 1_202))
+        apply(text("a1", "Hello!", at: 1_300))
+        apply(stepEnded("a1", finish: "stop", at: 1_310))
+        apply(delivered("u2", at: 1_320))
+        apply(step("a2", at: 1_330, model: Self.scriptedHigh))
+        apply(text("a2", "Steered.", at: 1_340))
+        apply(stepEnded("a2", finish: "stop", at: 1_350))
+        apply(idle(at: 1_360))
+        apply(prompt("u3", "Second hello.", at: 2_000))
+        apply(agentSelected("build", at: 2_020))
+        apply(step("a3", at: 2_030, model: Self.scriptedHigh))
+        apply(text("a3", "Hello again!", at: 2_040))
+        apply(stepEnded("a3", finish: "stop", at: 2_050))
+        apply(idle(at: 2_060))
+
+        let live = store.messages(sessionID: Self.session).filter { $0.role == .user }
+        let rest = try restMessages(
+            """
+            [
+              {"id":"u1","type":"user","text":"Say hello.","time":{"created":1000}},
+              {"id":"s1","type":"agent-switched","agent":"build","time":{"created":1200}},
+              {"id":"s2","type":"model-switched","model":\(Self.scriptedHigh),"time":{"created":1201}},
+              {"id":"a1","type":"assistant","agent":"build","model":\(Self.scripted),
+               "content":[{"type":"text","text":"Hello!"}],"time":{"created":1050}},
+              {"id":"u2","type":"user","text":"Steer from Android","time":{"created":1320}},
+              {"id":"a2","type":"assistant","agent":"build","model":\(Self.scriptedHigh),
+               "content":[{"type":"text","text":"Steered."}],"time":{"created":1330}},
+              {"id":"u3","type":"user","text":"Second hello.","time":{"created":2000}},
+              {"id":"s3","type":"agent-switched","agent":"build","time":{"created":2020}},
+              {"id":"a3","type":"assistant","agent":"build","model":\(Self.scriptedHigh),
+               "content":[{"type":"text","text":"Hello again!"}],"time":{"created":2030}}
+            ]
+            """
+        ).filter { $0.role == .user }
+
+        #expect(live.map(\.id) == ["u1", "u2", "u3"])
+        #expect(live.map(metaLine) == rest.map(metaLine))
+        #expect(live.map(metaLine) == [nil, "build|scripted|nil", "build|scripted|high"])
+    }
+
+    @Test func switchBeforeAPrompt_appliesToThatPrompt() throws {
+        apply(prompt("u1", "First", at: 1_000))
+        apply(step("a1", at: 1_050, model: Self.scriptedHigh))
+        apply(text("a1", "Reply.", at: 1_060))
+        apply(stepEnded("a1", finish: "stop", at: 1_070))
+        apply(idle(at: 1_080))
+        apply(agentSelected("plan", at: 2_000))
+        apply(modelSelected(#"{"id":"scripted","providerID":"sim","variant":"low"}"#, at: 2_001))
+        apply(prompt("u2", "Second", at: 2_010))
+
+        let second = try #require(store.messages(sessionID: Self.session).first { $0.id == "u2" })
+        #expect(metaLine(second) == "plan|scripted|low")
+    }
+
+    @Test func stoppedTool_isInterruptedNotFailed_liveAndAfterReload() throws {
+        apply(prompt("u1", "Start the deployment.", at: 1_000))
+        apply(step("a1", at: 1_100))
+        apply(text("a1", "Starting the deployment now.", at: 1_110))
+        let fields = #""assistantMessageID":"a1","id":"call_8","name":"sim_task""#
+        apply([
+            envelope("session.tool.input.started", 1_120, fields),
+            envelope("session.tool.called", 1_121, fields + #","input":{"title":"Deploy"}"#),
+            envelope(
+                "session.tool.failed",
+                1_200,
+                fields + #","error":{"type":"aborted","message":"Tool execution interrupted"},"executed":false"#
+            ),
+        ])
+
+        let message = try #require(store.messages(sessionID: Self.session).first { $0.id == "a1" })
+        let liveTool = try #require(message.parts.compactMap { part -> ToolPart? in
+            if case .tool(let tool) = part { return tool }
+            return nil
+        }.first)
+        #expect(liveTool.isInterrupted)
+        let frame = chipFrame(store.messages(sessionID: Self.session))
+        let paragraph = try #require(stepParagraphs(frame.messages[1].blocks).first?.paragraph)
+        #expect(paragraph.errorLines.isEmpty)
+        #expect(paragraph.chips.first?.card.isInterrupted == true)
+        #expect(paragraph.chips.first?.card.errorText == "Stopped")
+
+        let rest = try restMessages(
+            """
+            [
+              {"id":"u1","type":"user","text":"Start the deployment.","time":{"created":1000}},
+              {"id":"a1","type":"assistant","finish":"error","error":{"type":"aborted","message":"Step interrupted"},
+               "content":[{"type":"text","text":"Starting the deployment now."},
+                 {"type":"tool","id":"call_8","name":"sim_task","state":{"status":"error","input":{},
+                  "error":{"type":"aborted","message":"Tool execution interrupted"}}}],
+               "time":{"created":1100,"completed":1200}}
+            ]
+            """
+        )
+        let restTool = rest[1].parts.compactMap { part -> ToolPart? in
+            if case .tool(let tool) = part { return tool }
+            return nil
+        }.first
+        #expect(restTool?.isInterrupted == true)
+    }
+
+    @Test func realToolFailure_staysAnError() throws {
+        apply(prompt("u1", "Run it", at: 1_000))
+        apply(step("a1", at: 1_100))
+        let fields = #""assistantMessageID":"a1","id":"call_9","name":"sim_task""#
+        apply([
+            envelope("session.tool.called", 1_121, fields + #","input":{}"#),
+            envelope("session.tool.failed", 1_200, fields + #","error":{"type":"unknown","message":"lock timeout"}"#),
+        ])
+        let message = try #require(store.messages(sessionID: Self.session).first { $0.id == "a1" })
+        let tool = message.parts.compactMap { part -> ToolPart? in
+            if case .tool(let tool) = part { return tool }
+            return nil
+        }.first
+        #expect(tool?.isInterrupted == false)
+    }
+
+    @Test func truncatedReply_keepsACutOffNote_liveAndFromRest() throws {
+        apply(prompt("u1", "Write an essay", at: 1_000))
+        apply(step("a1", at: 1_100))
+        apply(text("a1", "This is a very long essay that never", at: 1_110))
+        apply(stepEnded("a1", finish: "length", at: 1_200))
+        // A later partial info (usage) must not drop how the step ended.
+        apply([
+            envelope(
+                "session.usage.updated",
+                1_210,
+                #""assistantMessageID":"a1","tokens":{"input":1,"output":2,"reasoning":0,"cache":{"read":0,"write":0}}"#
+            ),
+        ])
+        apply(idle(at: 1_300))
+
+        let live = try #require(store.messages(sessionID: Self.session).first { $0.id == "a1" })
+        #expect(live.stopReason == .length)
+        let frame = chipFrame(store.messages(sessionID: Self.session))
+        #expect(frame.messages[1].blocks.last == .stopNote(blockID: "a1:stop-note", reason: .length))
+
+        let rest = try restMessages(
+            #"[{"id":"a1","type":"assistant","finish":"length","content":[{"type":"text","text":"Cut"}],"time":{"created":1100,"completed":1200}}]"#
+        )
+        #expect(rest.first?.stopReason == .length)
+    }
+
+    @Test func interruptedReply_keepsAnInterruptedNote_andNoAbortText() throws {
+        apply(prompt("u1", "Explain", at: 1_000))
+        apply(step("a1", at: 1_100))
+        apply(text("a1", "The handler lives in", at: 1_110))
+        apply([
+            envelope(
+                "session.step.failed",
+                1_200,
+                #""assistantMessageID":"a1","error":{"type":"aborted","message":"Step interrupted"}"#
+            ),
+        ])
+        #expect(store.messages(sessionID: Self.session).first { $0.id == "a1" }?.stopReason == .interrupted)
+        let frame = chipFrame(store.messages(sessionID: Self.session))
+        #expect(frame.messages[1].blocks.last == .stopNote(blockID: "a1:stop-note", reason: .interrupted))
+
+        let rest = try restMessages(
+            #"[{"id":"a1","type":"assistant","finish":"error","error":{"type":"aborted","message":"Step interrupted"},"content":[],"time":{"created":1100,"completed":1200}}]"#
+        )
+        #expect(rest.first?.stopReason == .interrupted)
+        #expect(rest.first?.text == "")
+    }
+
+    @Test func completeReply_hasNoStopNote() {
+        apply(prompt("u1", "Say hi", at: 1_000))
+        apply(step("a1", at: 1_100))
+        apply(text("a1", "Hi.", at: 1_110))
+        apply(stepEnded("a1", finish: "stop", at: 1_200))
+        #expect(store.messages(sessionID: Self.session).first { $0.id == "a1" }?.stopReason == nil)
+        let frame = chipFrame(store.messages(sessionID: Self.session))
+        #expect(!frame.messages[1].blocks.contains { if case .stopNote = $0 { true } else { false } })
+    }
+
     @Test func restReloadAfterLiveTurn_replacesLivePartsInPlace() throws {
         apply(prompt("u1", "Explore", at: 1_000))
         apply(step("a1", at: 1_100))
@@ -336,12 +542,28 @@ struct V2LiveTurnTimelineTests {
         [envelope("session.inbox.delivered", at, #""inboxID":"\#(id)""#)]
     }
 
-    private func step(_ id: String, at: Int64) -> [String] {
+    private static let scripted = #"{"id":"scripted","providerID":"sim"}"#
+    private static let scriptedHigh = #"{"id":"scripted","providerID":"sim","variant":"high"}"#
+
+    private func step(_ id: String, at: Int64, model: String = #"{"id":"m","providerID":"p"}"#) -> [String] {
         [envelope(
             "session.step.started",
             at,
-            #""agent":"build","model":{"id":"m","providerID":"p"},"assistantMessageID":"\#(id)""#
+            #""agent":"build","model":\#(model),"assistantMessageID":"\#(id)""#
         )]
+    }
+
+    private func agentSelected(_ agent: String, at: Int64) -> [String] {
+        [envelope("session.agent.selected", at, #""agent":"\#(agent)""#)]
+    }
+
+    private func modelSelected(_ model: String, at: Int64) -> [String] {
+        [envelope("session.model.selected", at, #""model":\#(model)"#)]
+    }
+
+    private func metaLine(_ message: Message) -> String? {
+        guard message.mode != nil || message.model != nil else { return nil }
+        return "\(message.mode ?? "nil")|\(message.model ?? "nil")|\(message.variant ?? "nil")"
     }
 
     private func textStarted(_ id: String, ordinal: Int, at: Int64) -> [String] {
@@ -412,6 +634,9 @@ struct V2LiveTurnTimelineTests {
                 _ = store.apply(sessionID: Self.session, patch: .removedFrom(messageID: messageID))
             case "session.idle":
                 store.finishStreamingText(sessionID: Self.session)
+            case EventDomainAdapter.messageContextEvent:
+                guard let patch = MessageContextPatch.from(properties) else { continue }
+                _ = store.apply(sessionID: Self.session, patch: patch)
             default:
                 continue
             }

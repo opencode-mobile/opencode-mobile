@@ -235,6 +235,8 @@ struct SessionChatUiState: Equatable {
     var shouldLeaveSession: Bool = false
     var permissionRequest: PermissionRequest?
     var permissionQueueCount: Int = 0
+    /// The permission dock is collapsed to a "Review permission" pill above the composer.
+    var permissionDockHidden: Bool = false
     var permissionSubmitting: Bool = false
     var permissionErrorMessage: String?
     var questionRequest: QuestionRequest?
@@ -637,6 +639,8 @@ struct PendingSend: Equatable {
 
 struct SessionChatInboxRegionState: Equatable {
     var permissionRequests: [PermissionRequest] = []
+    /// The pending permission the user tucked away to reach the composer (never rejects it).
+    var permissionHiddenID: String?
     var permissionSubmittingID: String?
     var permissionError: String?
     var permissionTopologyError: String?
@@ -650,6 +654,11 @@ struct SessionChatInboxRegionState: Equatable {
 
     var visibleQuestionRequest: QuestionRequest? {
         permissionRequests.isEmpty ? questionRequests.first : nil
+    }
+
+    /// True while the first pending permission is the one the user hid; a new request shows again.
+    var isPermissionDockHidden: Bool {
+        permissionHiddenID != nil && permissionRequests.first?.id == permissionHiddenID
     }
 
     var questionDraft: QuestionAnswerDraft {

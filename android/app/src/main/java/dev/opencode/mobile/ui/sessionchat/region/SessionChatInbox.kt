@@ -19,6 +19,7 @@ import dev.opencode.mobile.ui.sessionchat.dropOrphanQuestionRequests
 import dev.opencode.mobile.ui.sessionchat.isQuestionAnswerValid
 import dev.opencode.mobile.ui.sessionchat.orderedPermissionRequests
 import dev.opencode.mobile.ui.sessionchat.orderedQuestionRequests
+import dev.opencode.mobile.ui.sessionchat.toggledQuestionSelection
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -131,6 +132,20 @@ class SessionChatInbox(
         sessionId: String,
     ) = respondToPermission(requestId, sessionId, PermissionDecision.Deny)
 
+    fun alwaysAllowPermission(
+        requestId: String,
+        sessionId: String,
+    ) = respondToPermission(requestId, sessionId, PermissionDecision.AlwaysAllow)
+
+    fun hidePermissionDock(requestId: String) {
+        if (_state.value.permissionRequests.none { it.id == requestId }) return
+        _state.update { it.copy(permissionHiddenId = requestId) }
+    }
+
+    fun showPermissionDock() {
+        _state.update { it.copy(permissionHiddenId = null) }
+    }
+
     fun toggleQuestionOption(
         requestId: String,
         sessionId: String,
@@ -141,12 +156,7 @@ class SessionChatInbox(
         if (request.id != requestId || request.sessionId != sessionId || current.questionSubmittingId != null) return
         val question = request.questions.getOrNull(current.questionWizardIndex) ?: return
         val draft = current.questionDraft
-        val selected =
-            if (question.multiple) {
-                if (label in draft.selectedLabels) draft.selectedLabels - label else draft.selectedLabels + label
-            } else {
-                listOf(label)
-            }
+        val selected = toggledQuestionSelection(question, draft.selectedLabels, label)
         updateQuestionDraft(current.questionWizardIndex, draft.copy(selectedLabels = selected, customSelected = false))
     }
 
@@ -311,10 +321,11 @@ class SessionChatInbox(
                         )
                     }
                 } else {
+                    logW("permission reply failed request=${request.id} decision=$decision", it)
                     _state.update { state ->
                         state.copy(
                             permissionSubmittingId = null,
-                            permissionError = it.message ?: "Permission response failed",
+                            permissionError = InteractionReplyError.PermissionReply.message(it),
                         )
                     }
                 }
@@ -457,14 +468,10 @@ class SessionChatInbox(
             }
             return
         }
+        logW("question ${if (dismiss) "dismiss" else "reply"} failed request=$requestId", error)
         if (_state.value.visibleQuestionRequest?.id == requestId) {
-            _state.update { current ->
-                current.copy(
-                    questionError =
-                        error.message
-                            ?: if (dismiss) "Question dismiss failed" else "Question response failed",
-                )
-            }
+            val failure = if (dismiss) InteractionReplyError.QuestionDismiss else InteractionReplyError.QuestionReply
+            _state.update { current -> current.copy(questionError = failure.message(error)) }
         }
     }
 
@@ -494,5 +501,13 @@ class SessionChatInbox(
 
     private fun logI(message: String) {
         DiagnosticLog.info(DiagnosticLogArea.Chat, message)
+    }
+
+    private fun logW(
+        message: String,
+        error: Throwable,
+    ) {
+        val body = (error as? SessionError.Http)?.let { " status=${it.statusCode} body=${it.body.orEmpty().take(500)}" }
+        DiagnosticLog.warning(DiagnosticLogArea.Chat, message + body.orEmpty(), error)
     }
 }

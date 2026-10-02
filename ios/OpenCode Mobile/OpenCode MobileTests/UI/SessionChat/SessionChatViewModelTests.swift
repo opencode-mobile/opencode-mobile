@@ -1797,6 +1797,32 @@ struct SessionChatViewModelTests {
         #expect(viewModel.uiState.composer.selectedVariant == "high")
     }
 
+    @Test func loadMessages_serverDefaultVariantIsDefaultWithoutNotice() async {
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(
+                messages: [
+                    Message(
+                        id: "msg-2",
+                        role: .assistant,
+                        text: "Reply",
+                        model: "claude-sonnet",
+                        modelProviderID: "anthropic",
+                        modelID: "claude-sonnet",
+                        variant: "default",
+                        mode: nil,
+                        sentAtEpochMs: 2_000
+                    ),
+                ]
+            )
+        )
+
+        await viewModel.loadMessages()
+
+        #expect(viewModel.uiState.composer.selectedModel?.option.modelID == "claude-sonnet")
+        #expect(viewModel.uiState.composer.selectedVariant == nil)
+        #expect(viewModel.uiState.composer.modelNotice == nil)
+    }
+
     @Test func loadMessages_sortsOldestToNewest() async {
         let viewModel = makeViewModel(
             messageRepository: FakeMessageRepository(
@@ -2967,6 +2993,237 @@ struct SessionChatViewModelTests {
         #expect(commandRepository.runCommandCalled == false)
     }
 
+    @Test func runClientSlashAction_compactEnqueued_staysCompactingUntilCompactionCompletes() async {
+        let repository = FakeMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        let sessionRepository = FakeChatSessionRepository(compactStart: .enqueued)
+        let viewModel = makeViewModel(
+            messageRepository: repository,
+            eventStream: eventStream,
+            sessionRepository: sessionRepository
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        _ = await waitUntil { viewModel.uiState.visibleClientSlashActions.contains(.compact) }
+
+        viewModel.runClientSlashAction(.compact)
+        await waitUntil { sessionRepository.summarizeRequest != nil }
+        try? await Task.sleep(for: .milliseconds(100))
+
+        // POST /compact returned (enqueued): no success yet, still Compacting….
+        #expect(viewModel.uiState.sessionStatusLabel == SessionCompactChrome.statusLabel)
+        #expect(viewModel.uiState.snackbar == nil)
+
+        repository.messages.append(
+            Message(
+                id: "msg-c",
+                role: .assistant,
+                text: "",
+                parts: [.compaction(CompactionPart(id: "msg-c", completed: true, summary: "## Goal\nShip it"))],
+                model: nil,
+                mode: "compaction",
+                sentAtEpochMs: 5
+            )
+        )
+        eventStream.openGap()
+        eventStream.emit(OpencodeEvent(type: "server.connected", sessionID: nil))
+        await waitUntil(timeoutMs: 5_000) { viewModel.uiState.snackbar?.message == SessionCompactChrome.fallbackSuccess }
+
+        #expect(viewModel.uiState.snackbar?.message == SessionCompactChrome.fallbackSuccess)
+        #expect(viewModel.uiState.sessionStatusLabel == nil)
+    }
+
+    @Test func runClientSlashAction_compactEnqueued_failedCompactionShowsNoSuccess() async {
+        let repository = FakeMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        let sessionRepository = FakeChatSessionRepository(compactStart: .enqueued)
+        let viewModel = makeViewModel(
+            messageRepository: repository,
+            eventStream: eventStream,
+            sessionRepository: sessionRepository
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        _ = await waitUntil { viewModel.uiState.visibleClientSlashActions.contains(.compact) }
+
+        viewModel.runClientSlashAction(.compact)
+        await waitUntil { sessionRepository.summarizeRequest != nil }
+        repository.messages.append(
+            Message(
+                id: "msg-c",
+                role: .assistant,
+                text: "",
+                parts: [.compaction(CompactionPart(id: "msg-c", completed: true))],
+                model: nil,
+                mode: "compaction",
+                sentAtEpochMs: 5
+            )
+        )
+        eventStream.openGap()
+        eventStream.emit(OpencodeEvent(type: "server.connected", sessionID: nil))
+        await waitUntil(timeoutMs: 5_000) { viewModel.uiState.sessionStatusLabel == nil }
+        try? await Task.sleep(for: .milliseconds(100))
+
+        #expect(viewModel.uiState.sessionStatusLabel == nil)
+        #expect(viewModel.uiState.snackbar == nil)
+    }
+
+    @Test func runClientSlashAction_compactEnqueued_timelineCompletesBeforePostReturns_showsOneSuccess() async {
+        let hold = AsyncGate()
+        let repository = FakeMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        let sessionRepository = FakeChatSessionRepository(summarizeHold: hold, compactStart: .enqueued)
+        let viewModel = makeViewModel(
+            messageRepository: repository,
+            eventStream: eventStream,
+            sessionRepository: sessionRepository
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        _ = await waitUntil { viewModel.uiState.visibleClientSlashActions.contains(.compact) }
+
+        viewModel.runClientSlashAction(.compact)
+        await waitUntil { sessionRepository.summarizeRequest != nil }
+        #expect(viewModel.uiState.sessionStatusLabel == SessionCompactChrome.statusLabel)
+
+        // The live compaction item completes while POST /compact is still in flight.
+        repository.messages.append(completedCompactionMessage(summary: "## Goal\nShip it"))
+        eventStream.openGap()
+        eventStream.emit(OpencodeEvent(type: "server.connected", sessionID: nil))
+        await waitUntil(timeoutMs: 5_000) { viewModel.uiState.sessionStatusLabel == nil }
+        try? await Task.sleep(for: .milliseconds(100))
+        #expect(viewModel.uiState.sessionStatusLabel == nil)
+        #expect(viewModel.uiState.snackbar == nil)
+
+        await hold.open()
+        await waitUntil(timeoutMs: 5_000) { viewModel.uiState.snackbar?.message == SessionCompactChrome.fallbackSuccess }
+        #expect(viewModel.uiState.snackbar?.message == SessionCompactChrome.fallbackSuccess)
+        #expect(viewModel.uiState.sessionStatusLabel == nil)
+
+        viewModel.consumeSnackbar()
+        try? await Task.sleep(for: .milliseconds(150))
+        #expect(viewModel.uiState.snackbar == nil)
+    }
+
+    @Test func runClientSlashAction_compactEnqueued_busyThenIdleBeforePostReturns_clearsWithoutSuccess() async {
+        let hold = AsyncGate()
+        let eventStream = FakeForegroundEventStream()
+        let sessionRepository = FakeChatSessionRepository(summarizeHold: hold, compactStart: .enqueued)
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(),
+            eventStream: eventStream,
+            sessionRepository: sessionRepository
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        _ = await waitUntil { viewModel.uiState.visibleClientSlashActions.contains(.compact) }
+
+        viewModel.runClientSlashAction(.compact)
+        await waitUntil { sessionRepository.summarizeRequest != nil }
+        eventStream.emit(busyStatusEvent())
+        try? await Task.sleep(for: .milliseconds(100))
+        eventStream.emit(OpencodeEvent(type: "session.idle", sessionID: "ses-1"))
+        try? await Task.sleep(for: .milliseconds(100))
+        // Enqueue not confirmed yet: idle alone does not end the compaction.
+        #expect(viewModel.uiState.sessionStatusLabel == SessionCompactChrome.statusLabel)
+
+        await hold.open()
+        await waitUntil(timeoutMs: 5_000) { viewModel.uiState.sessionStatusLabel == nil }
+        try? await Task.sleep(for: .milliseconds(100))
+        #expect(viewModel.uiState.sessionStatusLabel == nil)
+        #expect(viewModel.uiState.snackbar == nil)
+    }
+
+    @Test func runClientSlashAction_compactFinished_timelineCompletesFirst_showsOneSuccess() async {
+        let hold = AsyncGate()
+        let repository = FakeMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        let sessionRepository = FakeChatSessionRepository(summarizeHold: hold, compactStart: .finished)
+        let viewModel = makeViewModel(
+            messageRepository: repository,
+            eventStream: eventStream,
+            sessionRepository: sessionRepository
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        _ = await waitUntil { viewModel.uiState.visibleClientSlashActions.contains(.compact) }
+
+        viewModel.runClientSlashAction(.compact)
+        await waitUntil { sessionRepository.summarizeRequest != nil }
+        repository.messages.append(completedCompactionMessage(summary: "## Goal\nShip it"))
+        eventStream.openGap()
+        eventStream.emit(OpencodeEvent(type: "server.connected", sessionID: nil))
+        await waitUntil(timeoutMs: 5_000) { viewModel.uiState.sessionStatusLabel == nil }
+        try? await Task.sleep(for: .milliseconds(100))
+        #expect(viewModel.uiState.snackbar == nil)
+
+        await hold.open()
+        await waitUntil(timeoutMs: 5_000) { viewModel.uiState.snackbar?.message == SessionCompactChrome.fallbackSuccess }
+        #expect(viewModel.uiState.snackbar?.message == SessionCompactChrome.fallbackSuccess)
+
+        viewModel.consumeSnackbar()
+        try? await Task.sleep(for: .milliseconds(150))
+        #expect(viewModel.uiState.snackbar == nil)
+        #expect(viewModel.uiState.sessionStatusLabel == nil)
+    }
+
+    @Test func runClientSlashAction_compactEnqueued_stillBusyWhenPostReturns_staysCompacting() async {
+        let hold = AsyncGate()
+        let repository = FakeMessageRepository()
+        let eventStream = FakeForegroundEventStream()
+        // Busy on the server too, so the reconnect refresh below keeps the session busy.
+        let sessionRepository = FakeChatSessionRepository(
+            sessionStatusType: "busy",
+            summarizeHold: hold,
+            compactStart: .enqueued
+        )
+        let viewModel = makeViewModel(
+            messageRepository: repository,
+            eventStream: eventStream,
+            sessionRepository: sessionRepository
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        _ = await waitUntil { viewModel.uiState.visibleClientSlashActions.contains(.compact) }
+
+        viewModel.runClientSlashAction(.compact)
+        await waitUntil { sessionRepository.summarizeRequest != nil }
+        eventStream.emit(busyStatusEvent())
+        try? await Task.sleep(for: .milliseconds(100))
+
+        // The post-enqueue re-check must see the session still busy, not treat it as idle.
+        await hold.open()
+        try? await Task.sleep(for: .milliseconds(150))
+        #expect(viewModel.uiState.sessionStatusLabel == SessionCompactChrome.statusLabel)
+        #expect(viewModel.uiState.snackbar == nil)
+
+        repository.messages.append(completedCompactionMessage(summary: "## Goal\nShip it"))
+        eventStream.openGap()
+        eventStream.emit(OpencodeEvent(type: "server.connected", sessionID: nil))
+        await waitUntil(timeoutMs: 5_000) { viewModel.uiState.snackbar?.message == SessionCompactChrome.fallbackSuccess }
+        #expect(viewModel.uiState.snackbar?.message == SessionCompactChrome.fallbackSuccess)
+    }
+
+    private func completedCompactionMessage(summary: String?) -> Message {
+        Message(
+            id: "msg-c",
+            role: .assistant,
+            text: "",
+            parts: [.compaction(CompactionPart(id: "msg-c", completed: true, summary: summary))],
+            model: nil,
+            mode: "compaction",
+            sentAtEpochMs: 5
+        )
+    }
+
+    private func busyStatusEvent() -> OpencodeEvent {
+        OpencodeEvent(
+            type: "session.status",
+            sessionID: "ses-1",
+            rawProperties: ["status": .dictionary(["type": .string("busy")])]
+        )
+    }
+
     @Test func runClientSlashAction_compact_showsCompactingWhileInFlight() async {
         let hold = AsyncGate()
         let clock = ChatTestSyncClock(now: 1_000)
@@ -3912,6 +4169,7 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
     private let unrevertError: SessionError?
     private let summarizeError: SessionError?
     private let summarizeHold: AsyncGate?
+    private let compactStart: CompactionStart
 
     init(
         sessions: [Session] = [],
@@ -3941,7 +4199,8 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
         revertError: SessionError? = nil,
         unrevertError: SessionError? = nil,
         summarizeError: SessionError? = nil,
-        summarizeHold: AsyncGate? = nil
+        summarizeHold: AsyncGate? = nil,
+        compactStart: CompactionStart = .finished
     ) {
         self.sessions = sessions
         self.pendingPermissions = pendingPermissions
@@ -3966,6 +4225,7 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
         self.unrevertError = unrevertError
         self.summarizeError = summarizeError
         self.summarizeHold = summarizeHold
+        self.compactStart = compactStart
         self.deleteError = deleteError
         self.deleteResult = deleteResult
         self.archiveHold = archiveHold
@@ -4090,6 +4350,10 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
         if let summarizeHold { await summarizeHold.wait() }
         if let summarizeError { throw summarizeError }
         return true
+    }
+    func compactSession(id: String, providerID: String, modelID: String) async throws -> CompactionStart {
+        _ = try await summarizeSession(id: id, providerID: providerID, modelID: modelID)
+        return compactStart
     }
     func revertSession(id: String, messageID: String, partID: String?) async throws -> Bool {
         revertRequest = RevertRequest(id: id, messageID: messageID, partID: partID)

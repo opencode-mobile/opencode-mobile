@@ -15,4 +15,9 @@ class PermissionDecisionTest {
     fun `deny maps to reject`() {
         assertEquals("reject", adapter.toPermissionResponse(PermissionDecision.Deny))
     }
+
+    @Test
+    fun `always maps to always`() {
+        assertEquals("always", adapter.toPermissionResponse(PermissionDecision.AlwaysAllow))
+    }
 }

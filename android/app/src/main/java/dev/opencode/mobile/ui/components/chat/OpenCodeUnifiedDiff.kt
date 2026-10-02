@@ -185,6 +185,8 @@ fun OpenCodeUnifiedDiff(
     selectedHunkId: Int? = null,
     onSelectedHunkOffset: (Int) -> Unit = {},
     document: UnifiedDiffDocument,
+    /** Scroll the selected hunk into view; false keeps the file header in view on open. */
+    revealSelectedHunk: Boolean = true,
 ) {
     val shape = RoundedCornerShape(8.dp)
     Column(
@@ -203,8 +205,8 @@ fun OpenCodeUnifiedDiff(
             document.visibleRows(contextMode).forEach { row ->
                 val selected = row.id == selectedHunkId && row.kind == UnifiedDiffRowKind.Hunk
                 val bringIntoViewRequester = remember(row.id) { BringIntoViewRequester() }
-                LaunchedEffect(selected) {
-                    if (selected) bringIntoViewRequester.bringIntoView()
+                LaunchedEffect(selected, revealSelectedHunk) {
+                    if (selected && revealSelectedHunk) bringIntoViewRequester.bringIntoView()
                 }
                 UnifiedDiffRowView(
                     row,
