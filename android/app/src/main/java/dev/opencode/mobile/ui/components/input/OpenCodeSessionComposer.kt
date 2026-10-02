@@ -450,11 +450,10 @@ private fun PromptEntryContent(
                                 OpenCodeIcons.ArrowUpward
                             },
                         contentDescription =
-                            when (state.followUpDelivery) {
-                                FollowUpDelivery.Steer -> "Send as Steer"
-                                FollowUpDelivery.Queue -> "Send as Queue"
-                                null -> "Send prompt"
-                            },
+                            sessionComposerSendLabel(
+                                followUpDelivery = state.followUpDelivery,
+                                hasActiveWork = state.showStop,
+                            ),
                     ),
                 enabled = state.sendEnabled,
                 contrast = OpenCodeButtonContrast.Accent,
@@ -471,6 +470,20 @@ private fun PromptEntryContent(
         }
     }
 }
+
+/**
+ * Send button label. Steer/Queue only describe what Send does while work is running;
+ * an idle session just sends.
+ */
+internal fun sessionComposerSendLabel(
+    followUpDelivery: FollowUpDelivery?,
+    hasActiveWork: Boolean,
+): String =
+    when (followUpDelivery.takeIf { hasActiveWork }) {
+        FollowUpDelivery.Steer -> "Send as Steer"
+        FollowUpDelivery.Queue -> "Send as Queue"
+        null -> "Send"
+    }
 
 private class MentionVisualTransformation(
     private val mentionRanges: List<IntRange>,

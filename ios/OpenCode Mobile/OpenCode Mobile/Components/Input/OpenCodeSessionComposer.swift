@@ -295,13 +295,10 @@ struct OpenCodeSessionComposer: View {
                     OpenCodeButton(
                         variant: .iconCircle(
                             prompt.followUpDelivery == .steer ? .arrowWarmUp : .arrowUpward,
-                            accessibilityLabel: {
-                                switch prompt.followUpDelivery {
-                                case .steer: "Send as Steer"
-                                case .queue: "Send as Queue"
-                                case nil: "Send prompt"
-                                }
-                            }()
+                            accessibilityLabel: Self.sendLabel(
+                                followUpDelivery: prompt.followUpDelivery,
+                                hasActiveWork: prompt.showStop
+                            )
                         ),
                         enabled: prompt.sendEnabled,
                         contrast: .accent,
@@ -649,6 +646,16 @@ struct OpenCodeSessionComposer: View {
     }
 
     private static let shellCornerRadius: CGFloat = 26
+
+    /// Send button label. Steer/Queue only describe what Send does while work is running;
+    /// an idle session just sends.
+    nonisolated static func sendLabel(followUpDelivery: FollowUpDelivery?, hasActiveWork: Bool) -> String {
+        guard hasActiveWork, let followUpDelivery else { return "Send" }
+        switch followUpDelivery {
+        case .steer: return "Send as Steer"
+        case .queue: return "Send as Queue"
+        }
+    }
 
     private static func questionSelectionDecorator(selected: Bool) -> StartDecorator {
         .icon(
