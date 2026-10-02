@@ -540,6 +540,15 @@ struct EventDomainAdapterTests {
         #expect(state?["metadata"]?.dictionaryValue?["sessionID"]?.stringValue == "child-1")
     }
 
+    @Test func parseEvent_toolProgressMetadataTitleBecomesTheLiveTitle() {
+        let adapter = EventDomainAdapter()
+        let event = adapter.parseEvent(
+            dataLine: #"{"type":"session.tool.progress","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","id":"prt-1","metadata":{"title":"Run migrations · step 3/6","step":3}}}"#
+        )
+        let state = event?.rawProperties?["part"]?.dictionaryValue?["state"]?.dictionaryValue
+        #expect(state?["title"]?.stringValue == "Run migrations · step 3/6")
+    }
+
     @Test func parseEvent_toolSuccessMergesStructuredAndMetadata() {
         let adapter = EventDomainAdapter()
         let event = adapter.parseEvent(

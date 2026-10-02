@@ -907,10 +907,14 @@ private fun StepParagraphBlock(
                 }
                 visible.forEach { chip ->
                     key(chip.id) {
+                        val elapsed = rememberElapsedLabel(chip.runningSinceEpochMs)
                         OpenCodeToolChip(
                             variant = chip.toToolChipVariant(),
                             status = chip.status.toToolChipStatus(),
-                            trailingText = chip.displayTrailingText,
+                            trailingText =
+                                listOfNotNull(chip.displayTrailingText, elapsed)
+                                    .takeIf { it.isNotEmpty() }
+                                    ?.joinToString(" \u00b7 "),
                             onClick = chipAction(chip),
                         )
                     }

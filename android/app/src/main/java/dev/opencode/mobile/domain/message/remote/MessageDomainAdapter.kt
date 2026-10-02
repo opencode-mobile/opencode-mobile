@@ -594,14 +594,17 @@ class MessageDomainAdapter {
                 val name = content.name ?: return null
                 val state = content.state
                 val status = toToolStatus(state?.status)
+                val metadata = state?.metadata ?: state?.structured
                 MessagePart.Tool(
                     toolName = name,
                     status = status,
+                    // v2 tools report their progress title in metadata (v1: state.title).
+                    title = (metadata?.get("title") as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotEmpty() },
                     error = state?.error?.message?.takeIf { it.isNotEmpty() },
                     callId = content.id,
                     input = jsonObjectFromInput(state?.input),
                     output = toolOutput(state),
-                    metadata = state?.metadata ?: state?.structured,
+                    metadata = metadata,
                     id = content.id ?: fallbackId,
                     timeStartEpochMs = content.time?.created,
                 )

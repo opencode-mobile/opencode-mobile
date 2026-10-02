@@ -237,6 +237,9 @@ nonisolated struct SessionChatToolChipBlock: Equatable, Sendable {
     /// Position in arrival order before the family sort; `+N more` expansion
     /// is scoped to chips that existed at tap time by comparing against it.
     let arrivalIndex: Int
+    /// The tool's start while it is pending or running, so the view can show
+    /// a live elapsed time; nil once it settles.
+    let runningSinceEpochMs: Int64?
 
     init(
         id: String,
@@ -251,7 +254,8 @@ nonisolated struct SessionChatToolChipBlock: Equatable, Sendable {
         trailingText: String? = nil,
         card: SessionChatToolCardBlock,
         repeatCount: Int = 1,
-        arrivalIndex: Int = 0
+        arrivalIndex: Int = 0,
+        runningSinceEpochMs: Int64? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -266,6 +270,7 @@ nonisolated struct SessionChatToolChipBlock: Equatable, Sendable {
         self.card = card
         self.repeatCount = repeatCount
         self.arrivalIndex = arrivalIndex
+        self.runningSinceEpochMs = runningSinceEpochMs
     }
 
     /// Failed, running or pending chips are never hidden behind `+N more`
@@ -293,13 +298,15 @@ nonisolated struct SessionChatToolChipBlock: Equatable, Sendable {
             family: family,
             label: label,
             brief: brief,
+            skillID: skillID,
             additions: additions,
             deletions: deletions,
             status: status,
             trailingText: trailingText,
             card: card,
             repeatCount: repeatCount,
-            arrivalIndex: arrivalIndex
+            arrivalIndex: arrivalIndex,
+            runningSinceEpochMs: runningSinceEpochMs
         )
     }
 
@@ -317,7 +324,8 @@ nonisolated struct SessionChatToolChipBlock: Equatable, Sendable {
             trailingText: trailingText,
             card: card,
             repeatCount: repeatCount,
-            arrivalIndex: arrivalIndex
+            arrivalIndex: arrivalIndex,
+            runningSinceEpochMs: runningSinceEpochMs
         )
     }
 }
@@ -1072,10 +1080,14 @@ nonisolated enum SessionChatTimelineBlocks {
                 label = (skillName(tool) ?? card.subtitle).map { "/\($0)" }
                 brief = skillDirectory(tool)
                 skillID = requestedSkillID(tool)
+            case "lsp", "plan_exit":
+                kind = .command
+                family = .command
+                label = card.title
             default:
                 kind = .command
                 family = .command
-                label = nil
+                label = isQuestionTool(tool) ? card.title : customToolLabel(tool)
             }
         }
         return SessionChatToolChipBlock(
@@ -1087,11 +1099,21 @@ nonisolated enum SessionChatTimelineBlocks {
             skillID: nonEmpty(skillID),
             additions: family == .change ? card.additions : nil,
             deletions: family == .change ? card.deletions : nil,
-            status: tool.status,
+            status: card.status,
             trailingText: nil,
             card: card,
-            repeatCount: 1
+            repeatCount: 1,
+            runningSinceEpochMs: (tool.status == .pending || tool.status == .running) ? tool.timeStartEpochMs : nil
         )
+    }
+
+    /// Custom and MCP tools: the live progress title while running, then the
+    /// tool's own `title` input (or the first line of its `description`). The
+    /// tool name stays the fallback and the detail sheet title.
+    private static func customToolLabel(_ tool: ToolPart) -> String? {
+        runningTitleOverride(tool)
+            ?? inputString(tool.input, keys: "title")
+            ?? inputString(tool.input, keys: "description").flatMap(firstLine)
     }
 
     private static func lastPathComponent(_ path: String) -> String {
@@ -1327,11 +1349,8 @@ nonisolated enum SessionChatTimelineBlocks {
             return card
         }
         guard members.count == tools.count else { return nil }
-        let status = worstStatus(tools.map(\.status))
-        let errorText = tools
-            .first(where: { $0.status == .error })?
-            .error
-            .flatMap { $0.isEmpty ? nil : $0 }
+        let status = worstStatus(members.map(\.status))
+        let errorText = members.first(where: { $0.status == .error })?.errorText
         return .toolGroup(
             blockID: PresentationBlockId.toolGroup(memberIds),
             group: SessionChatToolGroupBlock(
@@ -1471,18 +1490,20 @@ nonisolated enum SessionChatTimelineBlocks {
         guard let partId = tool.id else { return nil }
         let name = tool.toolName.lowercased()
         let chrome = specializedChrome(name: name, tool: tool) ?? genericChrome(tool)
+        let failedExit = failedShellExitCode(name: name, tool: tool)
         let errorText: String? =
-            switch tool.status {
-            case .error:
+            if let failedExit {
+                "Exited with code \(failedExit)"
+            } else if tool.status == .error {
                 tool.error.flatMap { $0.isEmpty ? nil : $0 }
-            case .pending, .running, .completed:
+            } else {
                 nil
             }
         return .toolCard(
             blockID: PresentationBlockId.direct(partId),
             card: SessionChatToolCardBlock(
                 toolName: tool.toolName,
-                status: tool.status,
+                status: failedExit != nil ? .error : tool.status,
                 title: chrome.title,
                 subtitle: chrome.subtitle,
                 errorText: errorText,
@@ -1494,6 +1515,24 @@ nonisolated enum SessionChatTimelineBlocks {
                 changesInitialFilePath: chrome.changesInitialFilePath
             )
         )
+    }
+
+    /// A shell run the server reports as completed but whose command exited
+    /// non-zero (`metadata.exit`): shown as failed with the exit code.
+    private static func failedShellExitCode(name: String, tool: ToolPart) -> Int? {
+        guard name == "bash" || name == "shell", tool.status == .completed,
+              let raw = tool.metadata?["exit"], let exit = intValue(raw), exit != 0
+        else { return nil }
+        return exit
+    }
+
+    private static func intValue(_ value: AnyCodable) -> Int? {
+        switch value {
+        case .int(let number): number
+        case .double(let number): Int(number)
+        case .string(let text): Int(text)
+        default: nil
+        }
     }
 
     private struct Chrome {
@@ -1528,13 +1567,16 @@ nonisolated enum SessionChatTimelineBlocks {
     }
 
     private static func genericChrome(_ tool: ToolPart) -> Chrome {
-        let subtitle = inputPreview(tool.input)
-            ?? tool.title.flatMap { title in
+        func distinctFromName(_ title: String?) -> String? {
+            title.flatMap { title in
                 title.isEmpty || title.compare(tool.toolName, options: .caseInsensitive) == .orderedSame
                     ? nil
                     : title
             }
-            ?? runningTitleOverride(tool)
+        }
+        let subtitle = distinctFromName(runningTitleOverride(tool))
+            ?? inputPreview(tool.input)
+            ?? distinctFromName(tool.title)
         return Chrome(
             title: ToolPartIdentity.calledTitle(tool.toolName),
             subtitle: subtitle,
@@ -1606,7 +1648,7 @@ nonisolated enum SessionChatTimelineBlocks {
             ?? singlePatchFile?.path
             ?? pathSubtitle(tool.input)
         let additions = positiveCount(
-            metadataFilediffInt(tool.metadata, key: "additions") ?? singlePatchFile?.additions
+            metadataFilediffInt(tool.metadata, key: "additions") ?? singlePatchFile?.additions ?? newFileLineCount(tool)
         )
         let deletions = positiveCount(
             metadataFilediffInt(tool.metadata, key: "deletions") ?? singlePatchFile?.deletions
@@ -1620,6 +1662,23 @@ nonisolated enum SessionChatTimelineBlocks {
             opensChangesReview: opens,
             changesInitialFilePath: opens ? path : nil
         )
+    }
+
+    /// A write that reports no diff counts (v2 sends none) and did not
+    /// overwrite an existing file adds every line of its `content`.
+    private static func newFileLineCount(_ tool: ToolPart) -> Int? {
+        guard tool.toolName.lowercased() == "write",
+              !isTruthyMetadata(tool.metadata, key: "exists"),
+              let content = tool.input?["content"]?.stringValue
+        else { return nil }
+        return lineCount(content)
+    }
+
+    /// Lines in a file body; a trailing newline does not start another line.
+    private static func lineCount(_ content: String) -> Int {
+        guard !content.isEmpty else { return 0 }
+        let lines = content.components(separatedBy: "\n")
+        return lines.last?.isEmpty == true ? lines.count - 1 : lines.count
     }
 
     private static func canOpenChangesReview(_ status: ToolStatus) -> Bool {
@@ -1735,7 +1794,8 @@ nonisolated enum SessionChatTimelineBlocks {
     private static func contextChrome(tool: ToolPart, subtitle: String?) -> Chrome {
         Chrome(
             title: exploredTitle([tool]),
-            subtitle: runningTitleOverride(tool) ?? subtitle
+            subtitle: runningTitleOverride(tool) ?? subtitle,
+            detailText: settledDetail(tool)
         )
     }
 
@@ -1817,7 +1877,8 @@ nonisolated enum SessionChatTimelineBlocks {
     private static func inputPreview(_ input: [String: AnyCodable]?) -> String? {
         if let preferred = inputString(
             input,
-            keys: "command", "filePath", "path", "file", "url", "query", "pattern", "name", "description", "prompt", "text", "id"
+            keys: "command", "filePath", "path", "file", "url", "query", "pattern", "name", "title", "description", "prompt",
+            "text", "id"
         ) {
             return preferred
         }
@@ -1879,9 +1940,9 @@ nonisolated enum SessionChatTimelineBlocks {
         inputString(input, keys: "filePath", "path", "file")
     }
 
-    /// Read chrome is the file, not explore/cwd `path` (often the project root).
+    /// Read chrome is the file: v1 sends `filePath`, v2 sends `path`.
     private static func readPathSubtitle(_ input: [String: AnyCodable]?) -> String? {
-        inputString(input, keys: "filePath", "file")
+        inputString(input, keys: "filePath", "file", "path")
     }
 
     private static func patternPathSubtitle(_ input: [String: AnyCodable]?) -> String? {

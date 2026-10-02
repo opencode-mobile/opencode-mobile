@@ -500,16 +500,19 @@ nonisolated struct MessageDomainAdapter: Sendable {
         case "tool":
             guard let name = content.name else { return nil }
             let state = content.state
+            let metadata = state?.metadata ?? state?.structured
             return .tool(
                 ToolPart(
                     id: content.id ?? fallbackID,
                     toolName: name,
                     status: toolStatus(from: state?.status),
+                    // v2 tools report their progress title in metadata (v1: state.title).
+                    title: metadata?["title"]?.stringValue.flatMap { $0.isEmpty ? nil : $0 },
                     error: state?.error?.message.flatMap { $0.isEmpty ? nil : $0 },
                     callID: content.id,
                     input: dictionaryFromInput(state?.input),
                     output: toolOutput(state),
-                    metadata: state?.metadata ?? state?.structured,
+                    metadata: metadata,
                     timeStartEpochMs: content.time?.created
                 )
             )

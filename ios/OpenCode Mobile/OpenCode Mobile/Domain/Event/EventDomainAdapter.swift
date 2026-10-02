@@ -480,6 +480,9 @@ nonisolated struct EventDomainAdapter: Sendable {
             }
         }
         let error = (properties["error"] as? [String: Any]).flatMap { $0["message"] as? String }
+        let metadata = toolMetadata(properties)
+        // v2 `tool.progress` carries the live title in metadata (v1: state.title).
+        let title = (metadata?["title"] as? String).flatMap { $0.isEmpty ? nil : $0 }
         return toolLikePartUpdated(
             properties: properties,
             messageID: string(in: properties, key: "assistantMessageID"),
@@ -490,7 +493,8 @@ nonisolated struct EventDomainAdapter: Sendable {
             input: objectInput(properties["input"]),
             output: output,
             error: error,
-            metadata: toolMetadata(properties)
+            metadata: metadata,
+            title: title
         )
     }
 

@@ -530,7 +530,7 @@ struct SessionChatTimelineBlocksTests {
         #expect(tool.detailText == nil)
     }
 
-    @Test func build_readDoesNotUseDirectoryPathAsSubtitle() {
+    @Test func build_readUsesV2PathAsSubtitle() {
         let blocks = okBlocks(
             parts: [
                 .tool(
@@ -538,7 +538,8 @@ struct SessionChatTimelineBlocksTests {
                         id: "read-1",
                         toolName: "read",
                         status: .completed,
-                        input: ["path": .string("/home/ivan/Projects/session-test")]
+                        input: ["path": .string("src/app.ts")],
+                        output: "1: export function handler()"
                     )
                 ),
             ]
@@ -548,7 +549,8 @@ struct SessionChatTimelineBlocksTests {
             return
         }
         #expect(tool.title == "Explored — 1 read")
-        #expect(tool.subtitle == nil)
+        #expect(tool.subtitle == "src/app.ts")
+        #expect(tool.detailText == "1: export function handler()")
     }
 
     @Test func build_contextFallsBackToGenericTitleWhenInputMissing() {
@@ -795,7 +797,7 @@ struct SessionChatTimelineBlocksTests {
         }
         #expect(search.title == "Explored — 1 search")
         #expect(search.subtitle == "opencode mobile")
-        #expect(search.detailText == nil)
+        #expect(search.detailText == "https://a.example\nhttps://b.example")
     }
 
     @Test func build_runningNetworkHasNoSheetDetailEvenWithOutput() {
@@ -2758,6 +2760,150 @@ struct SessionChatTimelineBlocksTests {
         #expect(first.id == second.id)
         #expect(first.id == PresentationBlockId.stepParagraphIdentity("t1"))
     }
+
+    @Test func chipTimeline_v2ReadPath_labelsChipAndExploreMembers() {
+        func read(_ id: String, _ path: String) -> MessagePart {
+            .tool(ToolPart(id: id, toolName: "read", status: .completed, input: ["path": .string(path)], output: "body of \(path)"))
+        }
+        guard let lone = paragraph(okBlocks(parts: [read("r1", "src/app.ts")], chipTimeline: true).single) else { return }
+        #expect(lone.chips.map(\.label) == ["app.ts"])
+
+        guard let folded = paragraph(
+            okBlocks(parts: [read("r1", "README.md"), read("r2", "src/app.ts")], chipTimeline: true).single
+        ) else { return }
+        let members = folded.exploreSummary?.members ?? []
+        #expect(members.map(\.subtitle) == ["README.md", "src/app.ts"])
+        #expect(members.map(\.detailText) == ["body of README.md", "body of src/app.ts"])
+    }
+
+    @Test func chipTimeline_customTool_labelsFromTitleInputAndLiveProgress() {
+        let running = ToolPart(
+            id: "c1",
+            toolName: "sim_task",
+            status: .running,
+            title: "Run migrations \u{00B7} step 3/6",
+            input: ["title": .string("Run migrations")]
+        )
+        let failed = ToolPart(
+            id: "c2",
+            toolName: "sim_task",
+            status: .error,
+            title: "Backfill users \u{00B7} step 3/3",
+            error: "Backfill aborted: lock timeout",
+            input: ["title": .string("Backfill users")]
+        )
+        let mcp = ToolPart(
+            id: "c3",
+            toolName: "github_create_issue",
+            status: .completed,
+            input: ["title": .string("Add handler tests"), "body": .string("src/app.ts has no tests.")],
+            output: "Created issue #42"
+        )
+        let bare = ToolPart(id: "c4", toolName: "sim_task", status: .completed)
+        guard let paragraph = paragraph(
+            okBlocks(parts: [.tool(running), .tool(failed), .tool(mcp), .tool(bare)], chipTimeline: true).single
+        ) else { return }
+        #expect(paragraph.chips.map(\.label) == [
+            "Run migrations \u{00B7} step 3/6", "Backfill users", "Add handler tests", "sim_task",
+        ])
+        #expect(paragraph.errorLines == ["Backfill users: Backfill aborted: lock timeout"])
+        // The tool name stays the detail sheet title.
+        #expect(paragraph.chips[2].card.title == "Called github_create_issue")
+        #expect(paragraph.chips[2].card.subtitle == "Add handler tests")
+        #expect(paragraph.chips[2].card.detailText == "Created issue #42")
+    }
+
+    @Test func chipTimeline_questionChipSaysAskedQuestions() {
+        let question = ToolPart(
+            id: "q1",
+            toolName: "question",
+            status: .completed,
+            input: [
+                "questions": .array([
+                    .dictionary(["question": .string("Which database?")]),
+                    .dictionary(["question": .string("Which region?")]),
+                ]),
+            ],
+            metadata: ["answers": .array([.array([.string("Postgres")]), .array([.string("eu-west")])])]
+        )
+        guard let paragraph = paragraph(okBlocks(parts: [.tool(question)], chipTimeline: true).single) else { return }
+        #expect(paragraph.chips.map(\.label) == ["Asked 2 questions"])
+    }
+
+    @Test func build_shellNonZeroExit_isFailedWithExitCode() {
+        let shell = ToolPart(
+            id: "s1",
+            toolName: "shell",
+            status: .completed,
+            input: ["command": .string("echo 'about to fail' && exit 3")],
+            output: "about to fail\nCommand exited with code 3.",
+            metadata: ["exit": .int(3)]
+        )
+        let ok = ToolPart(
+            id: "s2",
+            toolName: "shell",
+            status: .completed,
+            input: ["command": .string("echo 'about to fail' && exit 3")],
+            metadata: ["exit": .int(0)]
+        )
+        guard case .toolCard(_, let card)? = okBlocks(parts: [.tool(shell)]).single else {
+            Issue.record("Expected tool card")
+            return
+        }
+        #expect(card.status == .error)
+        #expect(card.errorText == "Exited with code 3")
+        #expect(card.detailText == "about to fail\nCommand exited with code 3.")
+
+        guard let paragraph = paragraph(okBlocks(parts: [.tool(shell), .tool(ok)], chipTimeline: true).single) else { return }
+        #expect(paragraph.chips.map(\.status) == [.error, .completed])
+        #expect(paragraph.errorLines == ["echo 'about to fail' && exit 3: Exited with code 3"])
+    }
+
+    @Test func chipTimeline_inFlightChipsCarryTheirStartForElapsedTime() {
+        let agent = ToolPart(
+            id: "a1",
+            toolName: "subagent",
+            status: .running,
+            input: ["agent": .string("explore"), "description": .string("Scan the project")],
+            timeStartEpochMs: 1_000
+        )
+        let held = ToolPart(id: "h1", toolName: "sim_task", status: .running, timeStartEpochMs: 2_000)
+        let done = ToolPart(id: "d1", toolName: "sim_task", status: .completed, timeStartEpochMs: 3_000)
+        guard let paragraph = paragraph(
+            okBlocks(parts: [.tool(agent), .tool(held), .tool(done)], chipTimeline: true).single
+        ) else { return }
+        let starts = Dictionary(uniqueKeysWithValues: paragraph.chips.map { ($0.id, $0.runningSinceEpochMs) })
+        #expect(starts[PresentationBlockId.direct("a1")] == 1_000)
+        #expect(starts[PresentationBlockId.direct("h1")] == 2_000)
+        #expect(starts[PresentationBlockId.direct("d1")] == .some(nil))
+    }
+
+    @Test func chipTimeline_writeOfNewFileCountsItsLines() {
+        let write = ToolPart(
+            id: "w1",
+            toolName: "write",
+            status: .completed,
+            input: [
+                "path": .string("notes/todo.md"),
+                "content": .string("# Todo\n\n- [ ] Add handler tests\n- [ ] Wire CI\n"),
+            ]
+        )
+        let overwrite = ToolPart(
+            id: "w2",
+            toolName: "write",
+            status: .completed,
+            input: ["path": .string("README.md"), "content": .string("# Title\n")],
+            metadata: ["exists": .bool(true)]
+        )
+        guard let paragraph = paragraph(okBlocks(parts: [.tool(write), .tool(overwrite)], chipTimeline: true).single) else {
+            return
+        }
+        #expect(paragraph.chips[0].label == "todo.md")
+        #expect(paragraph.chips[0].additions == 4)
+        #expect(paragraph.chips[0].deletions == nil)
+        #expect(paragraph.chips[1].additions == nil)
+    }
+
 
     private func okBlocks(
         role: MessageRole = .assistant,

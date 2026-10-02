@@ -1011,6 +1011,29 @@ class MessageDomainAdapterTest {
     }
 
     @Test
+    fun projectV2_toolTitleComesFromMetadata() {
+        val dtos =
+            json.decodeFromString<List<dev.opencode.mobile.data.remote.dto.V2SessionMessageDto>>(
+                """
+                [
+                  {
+                    "id":"msg_a",
+                    "type":"assistant",
+                    "content":[
+                      {"type":"tool","id":"call_1","name":"sim_task","state":{"status":"error","input":{"title":"Backfill users"},"error":{"type":"tool.execution","message":"lock timeout"},"metadata":{"title":"Backfill users · step 3/3"}}},
+                      {"type":"tool","id":"call_2","name":"read","state":{"status":"completed","input":{"path":"README.md"},"metadata":{"truncated":false}}}
+                    ],
+                    "time":{"created":3}
+                  }
+                ]
+                """.trimIndent(),
+            )
+
+        val tools = adapter.projectV2(dtos).single().parts.filterIsInstance<MessagePart.Tool>()
+        assertEquals(listOf("Backfill users · step 3/3", null), tools.map { it.title })
+    }
+
+    @Test
     fun projectV2_assistantInheritsCarriedAgentAndModel() {
         val dtos =
             json.decodeFromString<List<dev.opencode.mobile.data.remote.dto.V2SessionMessageDto>>(

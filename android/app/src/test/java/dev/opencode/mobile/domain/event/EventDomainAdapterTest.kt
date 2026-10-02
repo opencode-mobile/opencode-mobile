@@ -1326,6 +1326,23 @@ class EventDomainAdapterTest {
     }
 
     @Test
+    fun parseEvent_toolProgressMetadataTitleBecomesTheLiveTitle() {
+        val event =
+            adapter.parseEvent(
+                """{"type":"session.tool.progress","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","id":"prt-1","metadata":{"title":"Run migrations · step 3/6","step":3}}}""",
+            )
+
+        val state =
+            event
+                ?.rawProperties
+                ?.get("part")
+                ?.jsonObject
+                ?.get("state")
+                ?.jsonObject
+        assertEquals("Run migrations · step 3/6", state?.get("title")?.jsonPrimitive?.content)
+    }
+
+    @Test
     fun parseEvent_toolSuccessMergesStructuredAndMetadata() {
         val event =
             adapter.parseEvent(

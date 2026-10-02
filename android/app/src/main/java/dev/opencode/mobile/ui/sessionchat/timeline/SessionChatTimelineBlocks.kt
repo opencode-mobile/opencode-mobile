@@ -124,6 +124,8 @@ sealed class SessionChatTimelineBlock {
      * chips that existed at tap time by comparing against it.
      * [repeatCount] > 1 when identical consecutive completed runs were folded
      * into this chip; [card] is then the latest run.
+     * [runningSinceEpochMs] is the tool's start while it is in flight, so the
+     * view can show a live elapsed time; null once it settles.
      */
     data class ToolChip(
         val id: String,
@@ -145,6 +147,7 @@ sealed class SessionChatTimelineBlock {
         val card: ToolCard,
         val repeatCount: Int = 1,
         val arrivalIndex: Int = 0,
+        val runningSinceEpochMs: Long? = null,
     ) {
         /** Chip trailing text with the `×N` repeat marker ahead of any existing text. */
         val displayTrailingText: String?
@@ -596,11 +599,16 @@ object SessionChatTimelineBlocks {
             skillId = if (family == ToolChipFamily.Skill) requestedSkillId(tool) else null,
             additions = card.additions.takeIf { isChange },
             deletions = card.deletions.takeIf { isChange },
-            status = tool.status,
+            status = card.status,
             trailingText = null,
             card = card,
+            runningSinceEpochMs = inFlightStart(tool),
         )
     }
+
+    /** A tool's start while it is pending or running, for live elapsed time. */
+    private fun inFlightStart(tool: MessagePart.Tool): Long? =
+        if (tool.status == ToolStatus.Pending || tool.status == ToolStatus.Running) tool.timeStartEpochMs else null
 
     private fun chipFamily(name: String): ToolChipFamily =
         when {
@@ -627,8 +635,22 @@ object SessionChatTimelineBlocks {
             "task", "subagent" -> taskAgentName(tool)
             "skill" -> "/" + (skillName(tool) ?: name)
             "lsp", "plan_exit" -> card.title
-            else -> if (isQuestionTool(tool)) card.title else null
+            else -> if (isQuestionTool(tool)) card.title else customToolLabel(tool)
         } ?: tool.toolName
+
+    /**
+     * Custom and MCP tools: the live progress title while running, then the
+     * tool's own `title` input (or the first line of its `description`). The
+     * tool name stays the fallback and the detail sheet title.
+     */
+    private fun customToolLabel(tool: MessagePart.Tool): String? =
+        runningTitleOverride(tool)
+            ?: inputString(tool.input, "title")
+            ?: inputString(tool.input, "description")
+                ?.lineSequence()
+                ?.firstOrNull()
+                ?.trim()
+                ?.takeIf { it.isNotEmpty() }
 
     private fun chipBrief(tool: MessagePart.Tool): String? =
         (inputString(tool.input, "description", "prompt") ?: childSessionTitle(tool))
@@ -981,12 +1003,8 @@ object SessionChatTimelineBlocks {
             tools.map { tool ->
                 toToolCard(tool) as? SessionChatTimelineBlock.ToolCard ?: return null
             }
-        val status = worstStatus(tools.map { it.status })
-        val errorText =
-            tools
-                .firstOrNull { it.status == ToolStatus.Error }
-                ?.error
-                ?.takeIf { it.isNotEmpty() }
+        val status = worstStatus(members.map { it.status })
+        val errorText = members.firstOrNull { it.status == ToolStatus.Error }?.errorText
         return SessionChatTimelineBlock.ToolGroup(
             blockID = PresentationBlockId.toolGroup(memberIds),
             count = tools.size,
@@ -1126,15 +1144,18 @@ object SessionChatTimelineBlocks {
         val partId = tool.id ?: return null
         val name = tool.toolName.lowercase()
         val chrome = specializedChrome(name, tool) ?: genericChrome(tool)
+        val failedExit = failedShellExitCode(name, tool)
+        val status = if (failedExit != null) ToolStatus.Error else tool.status
         val errorText =
-            when (tool.status) {
-                ToolStatus.Error -> tool.error?.takeIf { it.isNotEmpty() }
+            when {
+                failedExit != null -> "Exited with code $failedExit"
+                tool.status == ToolStatus.Error -> tool.error?.takeIf { it.isNotEmpty() }
                 else -> null
             }
         return SessionChatTimelineBlock.ToolCard(
             blockID = PresentationBlockId.direct(partId),
             toolName = tool.toolName,
-            status = tool.status,
+            status = status,
             title = chrome.title,
             subtitle = chrome.subtitle,
             errorText = errorText,
@@ -1145,6 +1166,20 @@ object SessionChatTimelineBlocks {
             opensChangesReview = chrome.opensChangesReview,
             changesInitialFilePath = chrome.changesInitialFilePath,
         )
+    }
+
+    /**
+     * A shell run the server reports as completed but whose command exited
+     * non-zero (`metadata.exit`): shown as failed with the exit code.
+     */
+    private fun failedShellExitCode(
+        name: String,
+        tool: MessagePart.Tool,
+    ): Int? {
+        if (name != "bash" && name != "shell") return null
+        if (tool.status != ToolStatus.Completed) return null
+        val exit = (tool.metadata?.get("exit") as? JsonPrimitive)?.contentOrNull?.toIntOrNull() ?: return null
+        return exit.takeIf { it != 0 }
     }
 
     private data class Chrome(
@@ -1160,9 +1195,9 @@ object SessionChatTimelineBlocks {
 
     private fun genericChrome(tool: MessagePart.Tool): Chrome {
         val subtitle =
-            inputPreview(tool.input)
+            runningTitleOverride(tool)?.takeIf { !it.equals(tool.toolName, ignoreCase = true) }
+                ?: inputPreview(tool.input)
                 ?: tool.title?.takeIf { it.isNotEmpty() && !it.equals(tool.toolName, ignoreCase = true) }
-                ?: runningTitleOverride(tool)
         return Chrome(
             title = ToolPartIdentity.calledTitle(tool.toolName),
             subtitle = subtitle,
@@ -1225,7 +1260,8 @@ object SessionChatTimelineBlocks {
         val additions =
             positiveCount(
                 metadataFilediffInt(tool.metadata, "additions")
-                    ?: singlePatchFile?.additions,
+                    ?: singlePatchFile?.additions
+                    ?: newFileLineCount(tool),
             )
         val deletions =
             positiveCount(
@@ -1241,6 +1277,24 @@ object SessionChatTimelineBlocks {
             opensChangesReview = opens,
             changesInitialFilePath = path.takeIf { opens },
         )
+    }
+
+    /**
+     * A write that reports no diff counts (v2 sends none) and did not
+     * overwrite an existing file adds every line of its `content`.
+     */
+    private fun newFileLineCount(tool: MessagePart.Tool): Int? {
+        if (!tool.toolName.equals("write", ignoreCase = true)) return null
+        if (isTruthyMetadata(tool.metadata, "exists")) return null
+        val content = (tool.input?.get("content") as? JsonPrimitive)?.contentOrNull ?: return null
+        return lineCount(content)
+    }
+
+    /** Lines in a file body; a trailing newline does not start another line. */
+    private fun lineCount(content: String): Int {
+        if (content.isEmpty()) return 0
+        val lines = content.split("\n")
+        return if (lines.last().isEmpty()) lines.size - 1 else lines.size
     }
 
     private fun canOpenChangesReview(status: ToolStatus): Boolean = status == ToolStatus.Completed || status == ToolStatus.Error
@@ -1351,6 +1405,7 @@ object SessionChatTimelineBlocks {
         Chrome(
             title = exploredTitle(listOf(tool)),
             subtitle = runningTitleOverride(tool) ?: subtitle,
+            detailText = settledDetail(tool),
         )
 
     private fun shellChrome(tool: MessagePart.Tool): Chrome {
@@ -1449,6 +1504,7 @@ object SessionChatTimelineBlocks {
             "query",
             "pattern",
             "name",
+            "title",
             "description",
             "prompt",
             "text",
@@ -1493,8 +1549,8 @@ object SessionChatTimelineBlocks {
 
     private fun pathSubtitle(input: JsonObject?): String? = inputString(input, "filePath", "path", "file")
 
-    /** Read chrome is the file, not explore/cwd `path` (often the project root). */
-    private fun readPathSubtitle(input: JsonObject?): String? = inputString(input, "filePath", "file")
+    /** Read chrome is the file: v1 sends `filePath`, v2 sends `path`. */
+    private fun readPathSubtitle(input: JsonObject?): String? = inputString(input, "filePath", "file", "path")
 
     private fun patternPathSubtitle(input: JsonObject?): String? {
         val pattern = inputString(input, "pattern")

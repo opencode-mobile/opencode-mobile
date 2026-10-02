@@ -836,6 +836,38 @@ private struct AssistantMessageContent: View {
     }
 }
 
+/// One step-paragraph chip; an in-flight tool also shows its live elapsed
+/// time (`m:ss`, as the child-session row does) after any trailing text.
+private struct StepParagraphToolChip: View {
+    let chip: SessionChatToolChipBlock
+    let action: (() -> Void)?
+
+    var body: some View {
+        if let start = chip.runningSinceEpochMs {
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                toolChip(
+                    elapsed: SessionChatChildSessionElapsed.format(
+                        startEpochMs: start,
+                        nowEpochMs: Int64(context.date.timeIntervalSince1970 * 1000)
+                    )
+                )
+            }
+        } else {
+            toolChip(elapsed: nil)
+        }
+    }
+
+    private func toolChip(elapsed: String?) -> OpenCodeToolChip {
+        let trailing = [chip.displayTrailingText, elapsed].compactMap { $0 }.filter { !$0.isEmpty }
+        return OpenCodeToolChip(
+            variant: chip.variant,
+            status: chip.status.toolChipStatus,
+            trailingText: trailing.isEmpty ? nil : trailing.joined(separator: " \u{00B7} "),
+            action: action
+        )
+    }
+}
+
 /// Chip timeline (OPE-260): narration, then the tools that followed it as
 /// chips (the explore summary first), then one caption per failed tool. A
 /// single trailing `+N more` reveals the chips the paragraph had at tap time;
@@ -915,12 +947,7 @@ private struct StepParagraphBlock: View {
                                 action: { exploreAction(summary) }
                             )
                         case .chip(let chip):
-                            OpenCodeToolChip(
-                                variant: chip.variant,
-                                status: chip.status.toolChipStatus,
-                                trailingText: chip.displayTrailingText,
-                                action: chipAction(chip)
-                            )
+                            StepParagraphToolChip(chip: chip, action: chipAction(chip))
                         case .more(let count):
                             OpenCodeToolChip(
                                 variant: .more(count: count),

@@ -529,6 +529,8 @@ class EventDomainAdapter(
             output = output,
             error = error,
             metadata = metadata,
+            // v2 `tool.progress` carries the live title in metadata (v1: state.title).
+            title = metadata?.string("title")?.takeIf { it.isNotEmpty() },
         )
     }
 

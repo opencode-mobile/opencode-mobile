@@ -17,22 +17,31 @@ fun SessionChatChildSessionRow(
     onClick: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
+    OpenCodeChildSessionRow(
+        title = agentName,
+        caption = if (isBackground) "background" else null,
+        subtitle = secondLine,
+        elapsed = rememberElapsedLabel(timeStartEpochMs),
+        onClick = onClick,
+        modifier = modifier,
+    )
+}
+
+/**
+ * Live `m:ss` since [startEpochMs], ticking once a second; null without a
+ * start. Shared by in-flight child-session rows and tool chips.
+ */
+@Composable
+internal fun rememberElapsedLabel(startEpochMs: Long?): String? {
     val nowEpochMs by produceState(
         initialValue = System.currentTimeMillis(),
-        timeStartEpochMs,
+        startEpochMs,
     ) {
-        if (timeStartEpochMs == null) return@produceState
+        if (startEpochMs == null) return@produceState
         while (true) {
             value = System.currentTimeMillis()
             delay(1_000)
         }
     }
-    OpenCodeChildSessionRow(
-        title = agentName,
-        caption = if (isBackground) "background" else null,
-        subtitle = secondLine,
-        elapsed = SessionChatChildSessionElapsed.format(timeStartEpochMs, nowEpochMs),
-        onClick = onClick,
-        modifier = modifier,
-    )
+    return SessionChatChildSessionElapsed.format(startEpochMs, nowEpochMs)
 }
