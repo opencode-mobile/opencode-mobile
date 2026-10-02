@@ -157,6 +157,8 @@ where Item.ID == String {
         guard let index = orderedIDs.firstIndex(of: id) else { return nil }
         return itemFrameInViewCoordinates(at: index)
     }
+    /// Test seam: collection `adjustedContentInset.top`.
+    var testAdjustedContentInsetTop: CGFloat { collectionView.adjustedContentInset.top }
     /// Test seam: collection `adjustedContentInset.bottom`.
     var testAdjustedContentInsetBottom: CGFloat { collectionView.adjustedContentInset.bottom }
     /// Test seam: collection `contentSize.height`.
@@ -613,7 +615,14 @@ where Item.ID == String {
     /// by their estimate error (the list "snapped back" about one turn). Lay out
     /// the visible region and re-anchor until the anchor row holds still.
     private func settleOlderPrependAnchor(_ anchor: VisibleAnchor) {
-        restoreVisibleAnchor(anchor, preservingMomentum: true)
+        // Only a fling inside the content keeps its momentum. Pulled past the old
+        // top edge, the in-flight motion is the bounce back to that edge (it
+        // keeps adding its delta and would slide the rows the older page just
+        // filled in); setContentOffset ends it.
+        let preservingMomentum =
+            collectionView.isDecelerating
+            && collectionView.contentOffset.y >= -collectionView.adjustedContentInset.top - 0.5
+        restoreVisibleAnchor(anchor, preservingMomentum: preservingMomentum)
         for _ in 0..<3 {
             CATransaction.begin()
             CATransaction.setDisableActions(true)
@@ -622,7 +631,7 @@ where Item.ID == String {
             }
             CATransaction.commit()
             guard let drift = visibleAnchorDrift(anchor), abs(drift) > 0.5 else { return }
-            restoreVisibleAnchor(anchor, preservingMomentum: true)
+            restoreVisibleAnchor(anchor, preservingMomentum: preservingMomentum)
         }
     }
 

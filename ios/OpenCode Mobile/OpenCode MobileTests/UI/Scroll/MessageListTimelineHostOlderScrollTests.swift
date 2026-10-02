@@ -6,10 +6,11 @@ import UIKit
 
 @MainActor
 struct MessageListTimelineHostOlderScrollTests {
-    /// B5-3: pulled past the oldest row when the older page lands. Prepended
-    /// rows in the rubber-band gap self-size after the first restore; the old
-    /// first row must stay where it was instead of shifting by their estimate.
-    @Test func prependWhileOverscrolledAtTopKeepsOldFirstRowInPlace() throws {
+    /// B5-3: pulled past the oldest row when the older page lands. The scroll
+    /// view is still animating back to the old top edge; the restore must end
+    /// that motion and keep the old first row where it was, instead of letting
+    /// it slide the newly filled rows (the "moves back a turn" symptom).
+    @Test func prependWhileOverscrolledAtTopKeepsOldFirstRowInPlace() async throws {
         let controller = MessageListTimelineViewController<OlderScrollItem, Text>(
             itemContent: { Text($0.label) },
             horizontalContentPadding: 0,
@@ -46,11 +47,11 @@ struct MessageListTimelineHostOlderScrollTests {
             ),
             animatingDifferences: false
         )
-        controller.view.layoutIfNeeded()
-        RunLoop.main.run(until: Date().addingTimeInterval(0.08))
-        controller.view.layoutIfNeeded()
-        // Rubber-band 80pt past the oldest loaded row.
-        controller.testSetContentOffsetY(-80)
+        // Diffable completions run on a later main-queue turn; a nested RunLoop
+        // run inside this MainActor test cannot drain them, so suspend instead.
+        try await settle(controller)
+        // Pull 80pt past the oldest loaded row; layout starts the snap back.
+        controller.testSetContentOffsetY(-controller.testAdjustedContentInsetTop - 80)
         controller.view.layoutIfNeeded()
         scroll.beginUserScrolling()
         scroll.endUserScrolling()
@@ -73,12 +74,13 @@ struct MessageListTimelineHostOlderScrollTests {
             ),
             animatingDifferences: false
         )
-        controller.view.layoutIfNeeded()
-        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
-        controller.view.layoutIfNeeded()
+        try await settle(controller)
 
         let anchorAfter = try #require(controller.testItemFrame(id: "m20"))
-        #expect(abs(anchorAfter.minY - anchorBefore.minY) < 2)
+        #expect(
+            abs(anchorAfter.minY - anchorBefore.minY) < 2,
+            "anchor moved from \(anchorBefore.minY) to \(anchorAfter.minY)"
+        )
         #expect(!scroll.isProgrammaticScrolling)
     }
 
@@ -244,6 +246,17 @@ struct MessageListTimelineHostOlderScrollTests {
         controller.testNotifyNearOldestIfNeeded()
         #expect(fires == 2)
     }
+}
+
+@MainActor
+private func settle(
+    _ controller: MessageListTimelineViewController<OlderScrollItem, Text>
+) async throws {
+    for _ in 0..<3 {
+        controller.view.layoutIfNeeded()
+        try await Task.sleep(for: .milliseconds(40))
+    }
+    controller.view.layoutIfNeeded()
 }
 
 private struct OlderScrollItem: Identifiable {
