@@ -2174,6 +2174,40 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun loadMessages_serverDefaultVariantIsDefaultWithoutNotice() =
+        runTest(testDispatcher) {
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(
+                        messages =
+                            listOf(
+                                Message(
+                                    id = "msg-2",
+                                    role = MessageRole.Assistant,
+                                    text = "Reply",
+                                    model = "claude-sonnet",
+                                    modelProviderId = "anthropic",
+                                    modelId = "claude-sonnet",
+                                    variant = "default",
+                                    sentAtEpochMs = 2_000L,
+                                ),
+                            ),
+                    ),
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertEquals(
+                "claude-sonnet",
+                viewModel.uiState.value.composer.selectedModel
+                    ?.option
+                    ?.modelId,
+            )
+            assertNull(viewModel.uiState.value.composer.selectedVariant)
+            assertNull(viewModel.uiState.value.composer.modelNotice)
+        }
+
+    @Test
     fun loadMessages_prefersLatestMessageModelOverCatalogDefault() =
         runTest(testDispatcher) {
             val defaultOption =

@@ -1797,6 +1797,32 @@ struct SessionChatViewModelTests {
         #expect(viewModel.uiState.composer.selectedVariant == "high")
     }
 
+    @Test func loadMessages_serverDefaultVariantIsDefaultWithoutNotice() async {
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(
+                messages: [
+                    Message(
+                        id: "msg-2",
+                        role: .assistant,
+                        text: "Reply",
+                        model: "claude-sonnet",
+                        modelProviderID: "anthropic",
+                        modelID: "claude-sonnet",
+                        variant: "default",
+                        mode: nil,
+                        sentAtEpochMs: 2_000
+                    ),
+                ]
+            )
+        )
+
+        await viewModel.loadMessages()
+
+        #expect(viewModel.uiState.composer.selectedModel?.option.modelID == "claude-sonnet")
+        #expect(viewModel.uiState.composer.selectedVariant == nil)
+        #expect(viewModel.uiState.composer.modelNotice == nil)
+    }
+
     @Test func loadMessages_sortsOldestToNewest() async {
         let viewModel = makeViewModel(
             messageRepository: FakeMessageRepository(

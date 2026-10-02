@@ -361,7 +361,9 @@ final class SessionChatComposer {
         let option = chosenOption ?? catalog.serverDefault ?? catalog.options[0]
         let variant = resolvedVariant(remembered: rememberedVariant, for: option)
         let variantNotice = rememberedVariant.flatMap {
-            !$0.isEmpty && !option.variants.contains($0) ? "Remembered Variant is unavailable. Using Default." : nil
+            !ModelVariants.isDefault($0, available: option.variants) && !option.variants.contains($0)
+                ? "Remembered Variant is unavailable. Using Default."
+                : nil
         }
         initialSelectionState = initialSelectionState == .waitingForFallback ? .failedWithFallback : .resolved
         let droppedForModel = state.composer.attachments.filter { !option.acceptsAttachmentKind($0.kind) }

@@ -33,6 +33,35 @@ struct ModelSelectionProvider: Equatable, Sendable, Identifiable {
     var models: [ModelSelectionOption]
 }
 
+/// Variant naming rules shared by the catalog adapters and the composer.
+nonisolated enum ModelVariants {
+    /// The v2 server records `"default"` on messages and sessions when no variant was chosen.
+    static let serverDefault = "default"
+
+    private static let effortRank = ["none", "minimal", "low", "medium", "high", "xhigh", "max"]
+
+    /// A recorded variant that means "no variant": empty, or the server's `"default"` when the
+    /// model has no variant literally named that.
+    static func isDefault(_ variant: String?, available: [String]) -> Bool {
+        guard let variant, !variant.isEmpty else { return true }
+        return variant == serverDefault && !available.contains(variant)
+    }
+
+    /// Orders variants by reasoning effort (low → medium → high), then by name. Used when the
+    /// server gives no order (v1 returns variants as an object).
+    static func sortedByEffort<S: Sequence>(_ variants: S) -> [String] where S.Element == String {
+        func rank(_ name: String) -> Int {
+            effortRank.firstIndex(of: name.lowercased()) ?? effortRank.count
+        }
+        return variants.sorted { left, right in
+            let leftRank = rank(left)
+            let rightRank = rank(right)
+            if leftRank != rightRank { return leftRank < rightRank }
+            return left.localizedCaseInsensitiveCompare(right) == .orderedAscending
+        }
+    }
+}
+
 struct ModelSelectionOption: Equatable, Sendable, Identifiable {
     var id: String { "\(providerID):\(modelID)" }
 
