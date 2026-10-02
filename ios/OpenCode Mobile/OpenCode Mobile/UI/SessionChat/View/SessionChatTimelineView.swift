@@ -827,7 +827,8 @@ private struct AssistantMessageContent: View {
                 onToolDetailTap(
                     SessionChatToolDetailTarget(
                         title: card.title,
-                        body: detail
+                        body: detail,
+                        bodyIsMarkdown: card.detailIsMarkdown
                     )
                 )
             }

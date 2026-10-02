@@ -715,6 +715,7 @@ private fun AssistantMessageContent(
                         SessionChatToolDetailTarget(
                             title = block.title,
                             body = block.detailText,
+                            bodyIsMarkdown = block.detailIsMarkdown,
                         ),
                     )
                 }

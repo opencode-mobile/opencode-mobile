@@ -107,6 +107,8 @@ nonisolated struct SessionChatToolCardBlock: Equatable, Sendable {
     let deletions: Int?
     /// Non-nil when the card should open a Bottom Sheet with this body.
     let detailText: String?
+    /// True when `detailText` is markdown (a compaction summary), not tool output.
+    let detailIsMarkdown: Bool
     /// Non-nil when tap should open this child session's Session Chat.
     let childSessionId: String?
     /// When true, tap opens owning-turn Changes (optional File Viewer path).
@@ -122,6 +124,7 @@ nonisolated struct SessionChatToolCardBlock: Equatable, Sendable {
         additions: Int? = nil,
         deletions: Int? = nil,
         detailText: String? = nil,
+        detailIsMarkdown: Bool = false,
         childSessionId: String? = nil,
         opensChangesReview: Bool = false,
         changesInitialFilePath: String? = nil
@@ -134,6 +137,7 @@ nonisolated struct SessionChatToolCardBlock: Equatable, Sendable {
         self.additions = additions
         self.deletions = deletions
         self.detailText = detailText
+        self.detailIsMarkdown = detailIsMarkdown
         self.childSessionId = childSessionId
         self.opensChangesReview = opensChangesReview
         self.changesInitialFilePath = changesInitialFilePath
@@ -700,7 +704,8 @@ nonisolated enum SessionChatTimelineBlocks {
                 status: part.completed ? .completed : .running,
                 title: part.completed ? SessionCompactChrome.markerTitle : SessionCompactChrome.statusLabel,
                 subtitle: part.auto ? SessionCompactChrome.markerAutoSubtitle : nil,
-                detailText: summary
+                detailText: summary,
+                detailIsMarkdown: true
             )
         )
     }

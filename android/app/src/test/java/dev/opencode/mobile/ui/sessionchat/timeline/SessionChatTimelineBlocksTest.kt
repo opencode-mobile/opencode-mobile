@@ -3257,6 +3257,16 @@ class SessionChatTimelineBlocksTest {
         assertNull(paragraph.chips[1].additions)
     }
 
+    @Test
+    fun build_compactionCardMarksItsSummaryAsMarkdown() {
+        val card =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                parts = listOf(MessagePart.Compaction(id = "c1", auto = false, completed = true, summary = "## Objective\nShip it")),
+            ).single() as SessionChatTimelineBlock.ToolCard
+        assertEquals("## Objective\nShip it", card.detailText)
+        assertTrue(card.detailIsMarkdown)
+    }
 
     private fun buildBlocks(
         role: MessageRole,

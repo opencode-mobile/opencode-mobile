@@ -46,6 +46,8 @@ sealed class SessionChatTimelineBlock {
         val deletions: Int? = null,
         /** Non-null when the card should open a Bottom Sheet with this body. */
         val detailText: String? = null,
+        /** True when [detailText] is markdown (a compaction summary), not tool output. */
+        val detailIsMarkdown: Boolean = false,
         /** Non-null when tap should open this child session's Session Chat. */
         val childSessionId: String? = null,
         /** When true, tap opens owning-turn Changes (optional File Viewer path). */
@@ -450,6 +452,7 @@ object SessionChatTimelineBlocks {
             title = if (part.completed) SessionCompactChrome.MARKER_TITLE else SessionCompactChrome.STATUS_LABEL,
             subtitle = if (part.auto) SessionCompactChrome.MARKER_AUTO_SUBTITLE else null,
             detailText = part.summary?.takeIf { it.isNotBlank() },
+            detailIsMarkdown = true,
         )
     }
 

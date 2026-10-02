@@ -2904,6 +2904,17 @@ struct SessionChatTimelineBlocksTests {
         #expect(paragraph.chips[1].additions == nil)
     }
 
+    @Test func build_compactionCardMarksItsSummaryAsMarkdown() {
+        let blocks = okBlocks(
+            parts: [.compaction(CompactionPart(id: "c1", completed: true, summary: "## Objective\nShip it"))]
+        )
+        guard case .toolCard(_, let card)? = blocks.single else {
+            Issue.record("Expected compaction card")
+            return
+        }
+        #expect(card.detailText == "## Objective\nShip it")
+        #expect(card.detailIsMarkdown)
+    }
 
     private func okBlocks(
         role: MessageRole = .assistant,
