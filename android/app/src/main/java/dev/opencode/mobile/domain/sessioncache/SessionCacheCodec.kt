@@ -206,6 +206,7 @@ internal data class CachedMessagePartPayload(
     val timeStartEpochMs: Long? = null,
     val timeEndEpochMs: Long? = null,
     val auto: Boolean = false,
+    val isInterrupted: Boolean = false,
 )
 
 @Serializable
@@ -399,6 +400,7 @@ private fun MessagePart.toCachePayload(): CachedMessagePartPayload? =
                 output = output,
                 metadata = metadata,
                 timeStartEpochMs = timeStartEpochMs,
+                isInterrupted = isInterrupted,
             )
         is MessagePart.File ->
             CachedMessagePartPayload(
@@ -452,6 +454,7 @@ private fun CachedMessagePartPayload.toDomain(): MessagePart? =
                 metadata = metadata,
                 id = id,
                 timeStartEpochMs = timeStartEpochMs,
+                isInterrupted = isInterrupted,
             )
         "file" -> {
             val fileId = id ?: return null

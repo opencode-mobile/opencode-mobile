@@ -100,17 +100,20 @@ nonisolated struct MessageDomainAdapter: Sendable {
         callID: String? = nil,
         state: MessageToolStateDTO?
     ) -> ToolPart {
-        ToolPart(
+        let status = toolStatus(from: state?.status)
+        return ToolPart(
             id: id,
             toolName: toolName,
-            status: toolStatus(from: state?.status),
+            status: status,
             title: state?.title.flatMap { $0.isEmpty ? nil : $0 },
             error: state?.error.flatMap { $0.isEmpty ? nil : $0 },
             callID: callID,
             input: state?.input,
             output: state?.output,
             metadata: state?.metadata,
-            timeStartEpochMs: state?.time?.start
+            timeStartEpochMs: state?.time?.start,
+            isInterrupted: status == .error
+                && (state?.interrupted == true || ToolInterruption.isUserInterruption(state?.error))
         )
     }
 
@@ -507,11 +510,12 @@ nonisolated struct MessageDomainAdapter: Sendable {
             guard let name = content.name else { return nil }
             let state = content.state
             let metadata = state?.metadata ?? state?.structured
+            let status = toolStatus(from: state?.status)
             return .tool(
                 ToolPart(
                     id: content.id ?? fallbackID,
                     toolName: name,
-                    status: toolStatus(from: state?.status),
+                    status: status,
                     // v2 tools report their progress title in metadata (v1: state.title).
                     title: metadata?["title"]?.stringValue.flatMap { $0.isEmpty ? nil : $0 },
                     error: state?.error?.message.flatMap { $0.isEmpty ? nil : $0 },
@@ -519,7 +523,8 @@ nonisolated struct MessageDomainAdapter: Sendable {
                     input: dictionaryFromInput(state?.input),
                     output: toolOutput(state),
                     metadata: metadata,
-                    timeStartEpochMs: content.time?.created
+                    timeStartEpochMs: content.time?.created,
+                    isInterrupted: status == .error && ToolInterruption.isAbortedType(state?.error?.type)
                 )
             )
         default:

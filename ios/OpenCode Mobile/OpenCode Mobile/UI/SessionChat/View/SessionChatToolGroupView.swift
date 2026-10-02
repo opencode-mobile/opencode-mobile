@@ -50,7 +50,7 @@ struct SessionChatToolGroupView: View {
                 LazyVStack(alignment: .leading, spacing: 8) {
                     ForEach(Array(target.members.enumerated()), id: \.offset) { _, card in
                         OpenCodeToolCallCard(
-                            status: card.status.toolGroupCardStatus,
+                            status: card.isInterrupted ? .interrupted : card.status.toolGroupCardStatus,
                             title: card.title,
                             subtitle: card.subtitle,
                             additions: card.additions,

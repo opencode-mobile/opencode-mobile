@@ -147,6 +147,9 @@ class MessageDomainAdapter {
             metadata = state?.metadata,
             id = id,
             timeStartEpochMs = state?.time?.start,
+            isInterrupted =
+                status == ToolStatus.Error &&
+                    (state?.interrupted == true || ToolInterruption.isUserInterruption(state?.error)),
         )
     }
 
@@ -615,6 +618,7 @@ class MessageDomainAdapter {
                     metadata = metadata,
                     id = content.id ?: fallbackId,
                     timeStartEpochMs = content.time?.created,
+                    isInterrupted = status == ToolStatus.Error && ToolInterruption.isAbortedType(state?.error?.type),
                 )
             }
             else -> null

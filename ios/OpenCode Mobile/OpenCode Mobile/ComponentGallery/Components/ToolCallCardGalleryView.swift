@@ -20,7 +20,8 @@ struct ToolCallCardGalleryView: View {
     }
 
     private var errorText: String? {
-        showErrorText ? "Request failed with status 403" : nil
+        guard showErrorText else { return nil }
+        return status == .interrupted ? "Stopped" : "Request failed with status 403"
     }
 
     private var title: String {
@@ -29,6 +30,7 @@ struct ToolCallCardGalleryView: View {
         case .running: "Called task"
         case .completed: "Called edit"
         case .error: "Called webfetch"
+        case .interrupted: "Called shell"
         }
     }
 
@@ -45,7 +47,7 @@ struct ToolCallCardGalleryView: View {
                             selected: status == value,
                             action: {
                                 status = value
-                                if value == .error {
+                                if value == .error || value == .interrupted {
                                     showErrorText = true
                                 }
                             }

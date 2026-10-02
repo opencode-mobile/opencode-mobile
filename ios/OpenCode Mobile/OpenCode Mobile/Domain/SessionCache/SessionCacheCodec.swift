@@ -264,6 +264,7 @@ nonisolated private struct CachedMessagePartPayload: Codable, Sendable {
     let timeStartEpochMs: Int64?
     let timeEndEpochMs: Int64?
     let auto: Bool?
+    let isInterrupted: Bool
 
     init(
         kind: String,
@@ -286,7 +287,8 @@ nonisolated private struct CachedMessagePartPayload: Codable, Sendable {
         dataUrl: String? = nil,
         timeStartEpochMs: Int64? = nil,
         timeEndEpochMs: Int64? = nil,
-        auto: Bool? = nil
+        auto: Bool? = nil,
+        isInterrupted: Bool = false
     ) {
         self.kind = kind
         self.id = id
@@ -309,6 +311,7 @@ nonisolated private struct CachedMessagePartPayload: Codable, Sendable {
         self.timeStartEpochMs = timeStartEpochMs
         self.timeEndEpochMs = timeEndEpochMs
         self.auto = auto
+        self.isInterrupted = isInterrupted
     }
 
     init(from decoder: Decoder) throws {
@@ -334,6 +337,7 @@ nonisolated private struct CachedMessagePartPayload: Codable, Sendable {
         timeStartEpochMs = try container.decodeIfPresent(Int64.self, forKey: .timeStartEpochMs)
         timeEndEpochMs = try container.decodeIfPresent(Int64.self, forKey: .timeEndEpochMs)
         auto = try container.decodeIfPresent(Bool.self, forKey: .auto)
+        isInterrupted = try container.decodeIfPresent(Bool.self, forKey: .isInterrupted) ?? false
     }
 }
 
@@ -591,7 +595,8 @@ private extension MessagePart {
                 input: part.input,
                 output: part.output,
                 metadata: part.metadata,
-                timeStartEpochMs: part.timeStartEpochMs
+                timeStartEpochMs: part.timeStartEpochMs,
+                isInterrupted: part.isInterrupted
             )
         case let .file(part):
             return CachedMessagePartPayload(
@@ -648,7 +653,8 @@ private extension CachedMessagePartPayload {
                     input: input,
                     output: output,
                     metadata: metadata,
-                    timeStartEpochMs: timeStartEpochMs
+                    timeStartEpochMs: timeStartEpochMs,
+                    isInterrupted: isInterrupted
                 )
             )
         case "file":

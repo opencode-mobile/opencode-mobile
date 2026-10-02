@@ -92,6 +92,8 @@ sealed class MessagePart {
         val metadata: JsonObject? = null,
         val id: String? = null,
         val timeStartEpochMs: Long? = null,
+        /** Failed because the user stopped the run or declined the call, not a real failure. */
+        val isInterrupted: Boolean = false,
     ) : MessagePart()
 
     data class File(

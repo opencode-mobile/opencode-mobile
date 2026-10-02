@@ -729,7 +729,7 @@ private struct AssistantMessageContent: View {
                     OpenCodeMessageAttachment(attachment: file.attachmentPresentation)
                 case .toolCard(_, let card):
                     OpenCodeToolCallCard(
-                        status: card.status.toolCallCardStatus,
+                        status: card.status.toolCallCardStatus(interrupted: card.isInterrupted),
                         title: card.title,
                         subtitle: card.subtitle,
                         additions: card.additions,
@@ -739,7 +739,7 @@ private struct AssistantMessageContent: View {
                     )
                 case .toolGroup(let blockID, let group):
                     OpenCodeToolCallCard(
-                        status: group.status.toolCallCardStatus,
+                        status: group.status.toolCallCardStatus(interrupted: false),
                         title: group.title,
                         subtitle: group.subtitle,
                         errorText: group.errorText,
@@ -862,7 +862,7 @@ private struct StepParagraphToolChip: View {
         let trailing = [chip.displayTrailingText, elapsed].compactMap { $0 }.filter { !$0.isEmpty }
         return OpenCodeToolChip(
             variant: chip.variant,
-            status: chip.status.toolChipStatus,
+            status: chip.status.toolChipStatus(interrupted: chip.card.isInterrupted),
             trailingText: trailing.isEmpty ? nil : trailing.joined(separator: " \u{00B7} "),
             action: action
         )
@@ -944,7 +944,7 @@ private struct StepParagraphBlock: View {
                         case .explore(let summary):
                             OpenCodeToolChip(
                                 variant: .explore(label: summary.label),
-                                status: summary.status.toolChipStatus,
+                                status: summary.status.toolChipStatus(interrupted: false),
                                 action: { exploreAction(summary) }
                             )
                         case .chip(let chip):
@@ -988,12 +988,12 @@ private extension SessionChatToolChipBlock {
 }
 
 private extension ToolStatus {
-    var toolChipStatus: OpenCodeToolChipStatus {
+    func toolChipStatus(interrupted: Bool) -> OpenCodeToolChipStatus {
         switch self {
         case .pending: .pending
         case .running: .running
         case .completed: .completed
-        case .error: .error
+        case .error: interrupted ? .interrupted : .error
         }
     }
 }
@@ -1061,12 +1061,12 @@ private struct AssistantMessageBubble: View {
 }
 
 private extension ToolStatus {
-    var toolCallCardStatus: OpenCodeToolCallCardStatus {
+    func toolCallCardStatus(interrupted: Bool) -> OpenCodeToolCallCardStatus {
         switch self {
         case .pending: .pending
         case .running: .running
         case .completed: .completed
-        case .error: .error
+        case .error: interrupted ? .interrupted : .error
         }
     }
 }

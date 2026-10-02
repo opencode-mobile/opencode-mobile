@@ -485,7 +485,8 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
                     input: input,
                     output: tool.output,
                     metadata: tool.metadata,
-                    timeStartEpochMs: tool.timeStartEpochMs
+                    timeStartEpochMs: tool.timeStartEpochMs,
+                    isInterrupted: tool.isInterrupted
                 )
             )
             return SessionChangeSet(
@@ -1039,7 +1040,8 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
                         input: tool.input,
                         output: tool.output,
                         metadata: tool.metadata,
-                        timeStartEpochMs: tool.timeStartEpochMs
+                        timeStartEpochMs: tool.timeStartEpochMs,
+                        isInterrupted: tool.isInterrupted
                     )
                 )
             }
@@ -1064,7 +1066,8 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
                     input: mergedInput,
                     output: nonEmpty(next.output) ?? prior.output,
                     metadata: mergeDict(prior.metadata, next.metadata),
-                    timeStartEpochMs: next.timeStartEpochMs ?? prior.timeStartEpochMs
+                    timeStartEpochMs: next.timeStartEpochMs ?? prior.timeStartEpochMs,
+                    isInterrupted: next.isInterrupted
                 )
             )
         case (.text(let prior), .text(let next)):

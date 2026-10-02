@@ -492,7 +492,9 @@ nonisolated struct EventDomainAdapter: Sendable {
                 output = texts.joined()
             }
         }
-        let error = (properties["error"] as? [String: Any]).flatMap { $0["message"] as? String }
+        let errorObject = properties["error"] as? [String: Any]
+        let error = errorObject?["message"] as? String
+        let interrupted = status == "error" && ToolInterruption.isAbortedType(errorObject?["type"] as? String)
         let metadata = toolMetadata(properties)
         // v2 `tool.progress` carries the live title in metadata (v1: state.title).
         let title = (metadata?["title"] as? String).flatMap { $0.isEmpty ? nil : $0 }
@@ -507,7 +509,8 @@ nonisolated struct EventDomainAdapter: Sendable {
             output: output,
             error: error,
             metadata: metadata,
-            title: title
+            title: title,
+            interrupted: interrupted
         )
     }
 
@@ -633,9 +636,11 @@ nonisolated struct EventDomainAdapter: Sendable {
         output: String? = nil,
         error: String? = nil,
         metadata: [String: Any]? = nil,
-        title: String? = nil
+        title: String? = nil,
+        interrupted: Bool = false
     ) -> OpencodeEvent {
         var state: [String: Any] = ["status": status]
+        if interrupted { state["interrupted"] = true }
         if let title { state["title"] = title }
         if let input { state["input"] = input }
         if let output { state["output"] = output }

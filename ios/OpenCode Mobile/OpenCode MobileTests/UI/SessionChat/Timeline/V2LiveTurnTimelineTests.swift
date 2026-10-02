@@ -174,6 +174,68 @@ struct V2LiveTurnTimelineTests {
         #expect(queued.variant == "high")
     }
 
+    @Test func stoppedTool_isInterruptedNotFailed_liveAndAfterReload() throws {
+        apply(prompt("u1", "Start the deployment.", at: 1_000))
+        apply(step("a1", at: 1_100))
+        apply(text("a1", "Starting the deployment now.", at: 1_110))
+        let fields = #""assistantMessageID":"a1","id":"call_8","name":"sim_task""#
+        apply([
+            envelope("session.tool.input.started", 1_120, fields),
+            envelope("session.tool.called", 1_121, fields + #","input":{"title":"Deploy"}"#),
+            envelope(
+                "session.tool.failed",
+                1_200,
+                fields + #","error":{"type":"aborted","message":"Tool execution interrupted"},"executed":false"#
+            ),
+        ])
+
+        let message = try #require(store.messages(sessionID: Self.session).first { $0.id == "a1" })
+        let liveTool = try #require(message.parts.compactMap { part -> ToolPart? in
+            if case .tool(let tool) = part { return tool }
+            return nil
+        }.first)
+        #expect(liveTool.isInterrupted)
+        let frame = chipFrame(store.messages(sessionID: Self.session))
+        let paragraph = try #require(stepParagraphs(frame.messages[1].blocks).first?.paragraph)
+        #expect(paragraph.errorLines.isEmpty)
+        #expect(paragraph.chips.first?.card.isInterrupted == true)
+        #expect(paragraph.chips.first?.card.errorText == "Stopped")
+
+        let rest = try restMessages(
+            """
+            [
+              {"id":"u1","type":"user","text":"Start the deployment.","time":{"created":1000}},
+              {"id":"a1","type":"assistant","finish":"error","error":{"type":"aborted","message":"Step interrupted"},
+               "content":[{"type":"text","text":"Starting the deployment now."},
+                 {"type":"tool","id":"call_8","name":"sim_task","state":{"status":"error","input":{},
+                  "error":{"type":"aborted","message":"Tool execution interrupted"}}}],
+               "time":{"created":1100,"completed":1200}}
+            ]
+            """
+        )
+        let restTool = rest[1].parts.compactMap { part -> ToolPart? in
+            if case .tool(let tool) = part { return tool }
+            return nil
+        }.first
+        #expect(restTool?.isInterrupted == true)
+    }
+
+    @Test func realToolFailure_staysAnError() throws {
+        apply(prompt("u1", "Run it", at: 1_000))
+        apply(step("a1", at: 1_100))
+        let fields = #""assistantMessageID":"a1","id":"call_9","name":"sim_task""#
+        apply([
+            envelope("session.tool.called", 1_121, fields + #","input":{}"#),
+            envelope("session.tool.failed", 1_200, fields + #","error":{"type":"unknown","message":"lock timeout"}"#),
+        ])
+        let message = try #require(store.messages(sessionID: Self.session).first { $0.id == "a1" })
+        let tool = message.parts.compactMap { part -> ToolPart? in
+            if case .tool(let tool) = part { return tool }
+            return nil
+        }.first
+        #expect(tool?.isInterrupted == false)
+    }
+
     @Test func restReloadAfterLiveTurn_replacesLivePartsInPlace() throws {
         apply(prompt("u1", "Explore", at: 1_000))
         apply(step("a1", at: 1_100))

@@ -114,6 +114,8 @@ nonisolated struct SessionChatToolCardBlock: Equatable, Sendable {
     /// When true, tap opens owning-turn Changes (optional File Viewer path).
     let opensChangesReview: Bool
     let changesInitialFilePath: String?
+    /// `status` is `.error` because the user stopped or declined it; render neutral.
+    let isInterrupted: Bool
 
     init(
         toolName: String,
@@ -127,7 +129,8 @@ nonisolated struct SessionChatToolCardBlock: Equatable, Sendable {
         detailIsMarkdown: Bool = false,
         childSessionId: String? = nil,
         opensChangesReview: Bool = false,
-        changesInitialFilePath: String? = nil
+        changesInitialFilePath: String? = nil,
+        isInterrupted: Bool = false
     ) {
         self.toolName = toolName
         self.status = status
@@ -141,6 +144,7 @@ nonisolated struct SessionChatToolCardBlock: Equatable, Sendable {
         self.childSessionId = childSessionId
         self.opensChangesReview = opensChangesReview
         self.changesInitialFilePath = changesInitialFilePath
+        self.isInterrupted = isInterrupted
     }
 }
 
@@ -774,7 +778,7 @@ nonisolated enum SessionChatTimelineBlocks {
             // part id stays put while later tools stream in.
             let firstPartId = textIds.first ?? toolIds[0]
             let errorLines = chips.compactMap { chip -> String? in
-                guard chip.status == .error else { return nil }
+                guard chip.status == .error, !chip.card.isInterrupted else { return nil }
                 return "\(chip.label): \(chip.card.errorText ?? "Failed")"
             }
             pendingText.removeAll()
@@ -1496,9 +1500,12 @@ nonisolated enum SessionChatTimelineBlocks {
         let name = tool.toolName.lowercased()
         let chrome = specializedChrome(name: name, tool: tool) ?? genericChrome(tool)
         let failedExit = failedShellExitCode(name: name, tool: tool)
+        let interrupted = failedExit == nil && tool.status == .error && tool.isInterrupted
         let errorText: String? =
             if let failedExit {
                 "Exited with code \(failedExit)"
+            } else if interrupted {
+                interruptedToolText(tool.error)
             } else if tool.status == .error {
                 tool.error.flatMap { $0.isEmpty ? nil : $0 }
             } else {
@@ -1517,9 +1524,16 @@ nonisolated enum SessionChatTimelineBlocks {
                 detailText: chrome.detailText,
                 childSessionId: chrome.childSessionId,
                 opensChangesReview: chrome.opensChangesReview,
-                changesInitialFilePath: chrome.changesInitialFilePath
+                changesInitialFilePath: chrome.changesInitialFilePath,
+                isInterrupted: interrupted
             )
         )
+    }
+
+    /// Neutral copy for a tool the user stopped or declined (never the raw abort text).
+    static func interruptedToolText(_ error: String?) -> String {
+        let text = (error ?? "").lowercased()
+        return text.contains("declined") || text.contains("rejected") ? "Declined" : "Stopped"
     }
 
     /// A shell run the server reports as completed but whose command exited

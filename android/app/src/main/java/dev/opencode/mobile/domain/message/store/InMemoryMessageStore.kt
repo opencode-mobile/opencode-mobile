@@ -946,6 +946,7 @@ class InMemoryMessageStore
                             output = incoming.output?.takeIf { it.isNotEmpty() } ?: existing.output,
                             metadata = mergeJson(existing.metadata, incoming.metadata),
                             timeStartEpochMs = incoming.timeStartEpochMs ?: existing.timeStartEpochMs,
+                            isInterrupted = incoming.isInterrupted,
                         )
                     }
                     existing is MessagePart.Text && incoming is MessagePart.Text -> {

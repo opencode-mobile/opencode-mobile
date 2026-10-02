@@ -73,7 +73,9 @@ final class SessionInfo {
                     )
                 }
                 let boundError =
-                    event.sessionID == boundSessionID ? event.sessionErrorMessage : nil
+                    event.sessionID == boundSessionID && !event.isUserAbortSessionError
+                        ? event.sessionErrorMessage
+                        : nil
                 let hasTitleUpdate = eventAdapter.sessionTitleUpdate(from: event) != nil
                 guard boundError != nil || hasTitleUpdate else { continue }
                 await MainActor.run {

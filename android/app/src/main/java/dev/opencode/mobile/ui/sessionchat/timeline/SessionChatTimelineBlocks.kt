@@ -53,6 +53,8 @@ sealed class SessionChatTimelineBlock {
         /** When true, tap opens owning-turn Changes (optional File Viewer path). */
         val opensChangesReview: Boolean = false,
         val changesInitialFilePath: String? = null,
+        /** [status] is Error because the user stopped or declined it; render neutral. */
+        val isInterrupted: Boolean = false,
     ) : SessionChatTimelineBlock()
 
     data class ToolGroup(
@@ -221,6 +223,16 @@ enum class ToolChipFamily { Explore, Change, Command, Agent, Skill }
 
 object SessionChatTimelineBlocks {
     private val contextToolNames = setOf("read", "glob", "grep", "websearch")
+
+    /** Neutral copy for a tool the user stopped or declined (never the raw abort text). */
+    internal fun interruptedToolText(error: String?): String {
+        val text = error.orEmpty()
+        return if (text.contains("declined", ignoreCase = true) || text.contains("rejected", ignoreCase = true)) {
+            "Declined"
+        } else {
+            "Stopped"
+        }
+    }
 
     fun build(
         role: MessageRole,
@@ -571,7 +583,7 @@ object SessionChatTimelineBlocks {
         chips.sortedBy { it.family.ordinal }
 
     private fun chipErrorLine(chip: SessionChatTimelineBlock.ToolChip): String? {
-        if (chip.status != ToolStatus.Error) return null
+        if (chip.status != ToolStatus.Error || chip.card.isInterrupted) return null
         return "${chip.label}: ${chip.card.errorText ?: "Failed"}"
     }
 
@@ -1149,9 +1161,11 @@ object SessionChatTimelineBlocks {
         val chrome = specializedChrome(name, tool) ?: genericChrome(tool)
         val failedExit = failedShellExitCode(name, tool)
         val status = if (failedExit != null) ToolStatus.Error else tool.status
+        val interrupted = failedExit == null && tool.status == ToolStatus.Error && tool.isInterrupted
         val errorText =
             when {
                 failedExit != null -> "Exited with code $failedExit"
+                interrupted -> interruptedToolText(tool.error)
                 tool.status == ToolStatus.Error -> tool.error?.takeIf { it.isNotEmpty() }
                 else -> null
             }
@@ -1168,6 +1182,7 @@ object SessionChatTimelineBlocks {
             childSessionId = chrome.childSessionId,
             opensChangesReview = chrome.opensChangesReview,
             changesInitialFilePath = chrome.changesInitialFilePath,
+            isInterrupted = interrupted,
         )
     }
 

@@ -40,13 +40,14 @@ fun ToolCallCardGalleryScreen(modifier: Modifier = Modifier) {
             OpenCodeToolCallCardStatus.Running -> "Called task"
             OpenCodeToolCallCardStatus.Completed -> "Called edit"
             OpenCodeToolCallCardStatus.Error -> "Called webfetch"
+            OpenCodeToolCallCardStatus.Interrupted -> "Called shell"
         }
     val subtitle = if (showSubtitle) "OpenCodeListItem.kt" else null
     val additions = if (showDiffCounts) 12 else null
     val deletions = if (showDiffCounts) 3 else null
     val errorText =
         if (showErrorText) {
-            "Request failed with status 403"
+            if (status == OpenCodeToolCallCardStatus.Interrupted) "Stopped" else "Request failed with status 403"
         } else {
             null
         }
@@ -68,7 +69,9 @@ fun ToolCallCardGalleryScreen(modifier: Modifier = Modifier) {
                         selected = status == value,
                         onClick = {
                             statusName = value.name
-                            if (value == OpenCodeToolCallCardStatus.Error) {
+                            if (value == OpenCodeToolCallCardStatus.Error ||
+                                value == OpenCodeToolCallCardStatus.Interrupted
+                            ) {
                                 showErrorText = true
                             }
                         },

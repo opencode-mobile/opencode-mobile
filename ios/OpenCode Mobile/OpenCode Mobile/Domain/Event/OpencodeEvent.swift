@@ -33,6 +33,17 @@ nonisolated struct OpencodeEvent: Sendable, Equatable {
         type == "message.updated"
     }
 
+    /// The user's own Stop/Deny (`error.type: "aborted"` / `MessageAbortedError`): the
+    /// timeline shows it neutrally, so it is not an error toast.
+    var isUserAbortSessionError: Bool {
+        guard type == "session.error" else { return false }
+        let error = rawProperties?["error"]?.dictionaryValue
+        return ToolInterruption.isUserAbortError(
+            type: error?["type"]?.stringValue,
+            name: error?["name"]?.stringValue
+        )
+    }
+
     var sessionErrorMessage: String? {
         guard type == "session.error" else { return nil }
         let error = rawProperties?["error"]?.dictionaryValue

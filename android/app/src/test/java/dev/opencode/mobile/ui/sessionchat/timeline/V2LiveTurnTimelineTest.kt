@@ -214,6 +214,62 @@ class V2LiveTurnTimelineTest {
     }
 
     @Test
+    fun stoppedTool_isInterruptedNotFailed_liveAndAfterReload() {
+        apply(prompt("u1", "Start the deployment.", at = 1_000))
+        apply(step("a1", at = 1_100))
+        apply(text("a1", "Starting the deployment now.", at = 1_110))
+        val fields = """"assistantMessageID":"a1","id":"call_8","name":"sim_task""""
+        apply(
+            listOf(
+                envelope("session.tool.input.started", 1_120, fields),
+                envelope("session.tool.called", 1_121, """$fields,"input":{"title":"Deploy"}"""),
+                envelope(
+                    "session.tool.failed",
+                    1_200,
+                    """$fields,"error":{"type":"aborted","message":"Tool execution interrupted"},"executed":false""",
+                ),
+            ),
+        )
+
+        val liveTool = store.messages(SESSION).single { it.id == "a1" }.parts.filterIsInstance<MessagePart.Tool>().single()
+        assertTrue(liveTool.isInterrupted)
+        val paragraph = chipBodies(store.messages(SESSION))[1].blocks.stepParagraphs().single()
+        assertTrue(paragraph.errorLines.isEmpty())
+        assertTrue(paragraph.chips.single().card.isInterrupted)
+        assertEquals("Stopped", paragraph.chips.single().card.errorText)
+
+        val rest =
+            restMessages(
+                """
+                [
+                  {"id":"u1","type":"user","text":"Start the deployment.","time":{"created":1000}},
+                  {"id":"a1","type":"assistant","finish":"error","error":{"type":"aborted","message":"Step interrupted"},
+                   "content":[{"type":"text","text":"Starting the deployment now."},
+                     {"type":"tool","id":"call_8","name":"sim_task","state":{"status":"error","input":{},
+                      "error":{"type":"aborted","message":"Tool execution interrupted"}}}],
+                   "time":{"created":1100,"completed":1200}}
+                ]
+                """,
+            )
+        assertTrue(rest[1].parts.filterIsInstance<MessagePart.Tool>().single().isInterrupted)
+    }
+
+    @Test
+    fun realToolFailure_staysAnError() {
+        apply(prompt("u1", "Run it", at = 1_000))
+        apply(step("a1", at = 1_100))
+        val fields = """"assistantMessageID":"a1","id":"call_9","name":"sim_task""""
+        apply(
+            listOf(
+                envelope("session.tool.called", 1_121, """$fields,"input":{}"""),
+                envelope("session.tool.failed", 1_200, """$fields,"error":{"type":"unknown","message":"lock timeout"}"""),
+            ),
+        )
+        val tool = store.messages(SESSION).single { it.id == "a1" }.parts.filterIsInstance<MessagePart.Tool>().single()
+        assertFalse(tool.isInterrupted)
+    }
+
+    @Test
     fun restReloadAfterLiveTurn_replacesLivePartsInPlace() {
         apply(prompt("u1", "Explore", at = 1_000))
         apply(step("a1", at = 1_100))

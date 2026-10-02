@@ -117,6 +117,8 @@ data class MessageToolStateDto(
     val error: String? = null,
     val time: MessageToolTimeDto? = null,
     val metadata: JsonObject? = null,
+    /** Set by the v2 live projection when `tool.failed` reports `error.type: "aborted"`. */
+    val interrupted: Boolean? = null,
 )
 
 @Serializable

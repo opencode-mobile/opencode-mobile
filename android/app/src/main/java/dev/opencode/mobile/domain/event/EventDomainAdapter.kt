@@ -1,6 +1,7 @@
 package dev.opencode.mobile.domain.event
 
 import dev.opencode.mobile.domain.message.AttachmentDataUrl
+import dev.opencode.mobile.domain.message.ToolInterruption
 import dev.opencode.mobile.domain.message.ToolPartIdentity
 import dev.opencode.mobile.domain.message.V2ContentPartId
 import dev.opencode.mobile.domain.session.SessionActivity
@@ -506,10 +507,9 @@ class EventDomainAdapter(
         val name = resolvedToolName(properties)
         val callId = properties.string("callID")
         val partId = properties.string("id") ?: callId
-        val error =
-            properties["error"]
-                ?.jsonObject
-                ?.string("message")
+        val errorObject = properties["error"] as? JsonObject
+        val error = errorObject?.string("message")
+        val interrupted = status == "error" && ToolInterruption.isAbortedType(errorObject?.string("type"))
         val output =
             properties.string("output")
                 ?: properties["content"]
@@ -538,6 +538,7 @@ class EventDomainAdapter(
             metadata = metadata,
             // v2 `tool.progress` carries the live title in metadata (v1: state.title).
             title = metadata?.string("title")?.takeIf { it.isNotEmpty() },
+            interrupted = interrupted,
         )
     }
 
@@ -669,11 +670,13 @@ class EventDomainAdapter(
         error: String? = null,
         metadata: JsonObject? = null,
         title: String? = null,
+        interrupted: Boolean = false,
     ): OpencodeEvent {
         val sessionId = sessionIdFromProperties(properties)
         val state =
             buildJsonObject {
                 put("status", status)
+                if (interrupted) put("interrupted", true)
                 title?.let { put("title", it) }
                 if (input is JsonObject) put("input", input)
                 output?.let { put("output", it) }

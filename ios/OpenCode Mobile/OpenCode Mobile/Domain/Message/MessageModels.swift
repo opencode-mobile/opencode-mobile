@@ -253,6 +253,8 @@ nonisolated struct ToolPart: Equatable, Sendable {
     let output: String?
     let metadata: [String: AnyCodable]?
     let timeStartEpochMs: Int64?
+    /// Failed because the user stopped the run or declined the call, not a real failure.
+    let isInterrupted: Bool
 
     init(
         id: String? = nil,
@@ -264,7 +266,8 @@ nonisolated struct ToolPart: Equatable, Sendable {
         input: [String: AnyCodable]? = nil,
         output: String? = nil,
         metadata: [String: AnyCodable]? = nil,
-        timeStartEpochMs: Int64? = nil
+        timeStartEpochMs: Int64? = nil,
+        isInterrupted: Bool = false
     ) {
         self.id = id
         self.toolName = toolName
@@ -276,6 +279,7 @@ nonisolated struct ToolPart: Equatable, Sendable {
         self.output = output
         self.metadata = metadata
         self.timeStartEpochMs = timeStartEpochMs
+        self.isInterrupted = isInterrupted
     }
 
     func withTimeStart(_ timeStartEpochMs: Int64?) -> ToolPart {
@@ -289,7 +293,8 @@ nonisolated struct ToolPart: Equatable, Sendable {
             input: input,
             output: output,
             metadata: metadata,
-            timeStartEpochMs: timeStartEpochMs
+            timeStartEpochMs: timeStartEpochMs,
+            isInterrupted: isInterrupted
         )
     }
 }

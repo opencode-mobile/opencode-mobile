@@ -753,7 +753,7 @@ private fun AssistantMessageContent(
                         OpenCodeMessageAttachment(AttachmentPresentationMapper.from(block.attachment))
                     is SessionChatTimelineBlock.ToolCard ->
                         OpenCodeToolCallCard(
-                            status = block.status.toToolCallCardStatus(),
+                            status = block.status.toToolCallCardStatus(interrupted = block.isInterrupted),
                             title = block.title,
                             subtitle = block.subtitle,
                             additions = block.additions,
@@ -911,7 +911,7 @@ private fun StepParagraphBlock(
                         val elapsed = rememberElapsedLabel(chip.runningSinceEpochMs)
                         OpenCodeToolChip(
                             variant = chip.toToolChipVariant(),
-                            status = chip.status.toToolChipStatus(),
+                            status = chip.status.toToolChipStatus(interrupted = chip.card.isInterrupted),
                             trailingText =
                                 listOfNotNull(chip.displayTrailingText, elapsed)
                                     .takeIf { it.isNotEmpty() }
@@ -947,7 +947,13 @@ private fun SessionChatTimelineBlock.ToolChip.toToolChipVariant(): OpenCodeToolC
         ToolChipKind.Skill -> OpenCodeToolChipVariant.Skill(name = label)
     }
 
-private fun ToolStatus.toToolChipStatus(): OpenCodeToolChipStatus =
+private fun ToolStatus.toToolChipStatus(interrupted: Boolean = false): OpenCodeToolChipStatus =
+    when {
+        this == ToolStatus.Error && interrupted -> OpenCodeToolChipStatus.Interrupted
+        else -> toToolChipStatusBase()
+    }
+
+private fun ToolStatus.toToolChipStatusBase(): OpenCodeToolChipStatus =
     when (this) {
         ToolStatus.Pending -> OpenCodeToolChipStatus.Pending
         ToolStatus.Running -> OpenCodeToolChipStatus.Running
@@ -1018,7 +1024,13 @@ internal object SessionChatMarkdownPaint {
     ): Boolean = hasMarkdown && textLength >= DEFERRED_CHARACTER_THRESHOLD
 }
 
-private fun ToolStatus.toToolCallCardStatus(): OpenCodeToolCallCardStatus =
+private fun ToolStatus.toToolCallCardStatus(interrupted: Boolean = false): OpenCodeToolCallCardStatus =
+    when {
+        this == ToolStatus.Error && interrupted -> OpenCodeToolCallCardStatus.Interrupted
+        else -> toToolCallCardStatusBase()
+    }
+
+private fun ToolStatus.toToolCallCardStatusBase(): OpenCodeToolCallCardStatus =
     when (this) {
         ToolStatus.Pending -> OpenCodeToolCallCardStatus.Pending
         ToolStatus.Running -> OpenCodeToolCallCardStatus.Running
