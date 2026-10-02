@@ -637,7 +637,7 @@ private extension SessionChatRow {
                 .text(id: blockID, text: text)
             case .attachment(_, let file):
                 .attachment(file.attachmentPresentation)
-            case .toolCard, .toolGroup, .childSessionRow, .reasoning, .stepParagraph:
+            case .toolCard, .toolGroup, .childSessionRow, .reasoning, .stepParagraph, .stopNote:
                 nil
             }
         }
@@ -780,6 +780,8 @@ private struct AssistantMessageContent: View {
                             )
                         }
                     )
+                case .stopNote(_, let reason):
+                    OpenCodeMessageNote(variant: reason == .length ? .truncated : .interrupted)
                 case .stepParagraph(_, let paragraph):
                     StepParagraphBlock(
                         paragraph: paragraph,

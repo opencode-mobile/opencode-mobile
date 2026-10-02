@@ -5,6 +5,7 @@ import dev.opencode.mobile.domain.command.ServerCommand
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.message.MessageStopReason
 import dev.opencode.mobile.domain.message.ThoughtPartChrome
 import dev.opencode.mobile.domain.message.ToolPartIdentity
 import dev.opencode.mobile.domain.message.ToolStatus
@@ -55,6 +56,12 @@ sealed class SessionChatTimelineBlock {
         val changesInitialFilePath: String? = null,
         /** [status] is Error because the user stopped or declined it; render neutral. */
         val isInterrupted: Boolean = false,
+    ) : SessionChatTimelineBlock()
+
+    /** Persistent note that the reply ended early (cut off or interrupted). */
+    data class StopNote(
+        override val blockID: String,
+        val reason: MessageStopReason,
     ) : SessionChatTimelineBlock()
 
     data class ToolGroup(
@@ -770,6 +777,21 @@ object SessionChatTimelineBlocks {
         bodies: List<DisplayMessageBody>,
         collapseConsecutiveToolCalls: Boolean,
         chipTimeline: Boolean = false,
+    ): List<DisplayMessageBody> = mergeBodies(bodies, collapseConsecutiveToolCalls, chipTimeline).map(::withStopNote)
+
+    /** An assistant reply that ended early keeps a note under its last block. */
+    private fun withStopNote(body: DisplayMessageBody): DisplayMessageBody {
+        val reason = body.message.stopReason ?: return body
+        if (body.message.role != MessageRole.Assistant) return body
+        if (body.blocks.any { it is SessionChatTimelineBlock.StopNote }) return body
+        val note = SessionChatTimelineBlock.StopNote(blockID = "${body.message.id}:stop-note", reason = reason)
+        return body.copy(blocks = body.blocks + note)
+    }
+
+    private fun mergeBodies(
+        bodies: List<DisplayMessageBody>,
+        collapseConsecutiveToolCalls: Boolean,
+        chipTimeline: Boolean,
     ): List<DisplayMessageBody> {
         if (chipTimeline) return mergeConsecutiveAssistantBodiesForChips(bodies, collapseConsecutiveToolCalls)
         if (!collapseConsecutiveToolCalls || bodies.size < 2) return bodies
@@ -801,7 +823,8 @@ object SessionChatTimelineBlocks {
                     fallbackText = "",
                     collapseConsecutiveToolCalls = true,
                 )
-            merged += DisplayMessageBody(message = first.message, blocks = blocks)
+            merged +=
+                DisplayMessageBody(message = first.message.copy(stopReason = run.last().message.stopReason), blocks = blocks)
             index = end
         }
         return merged
@@ -854,7 +877,7 @@ object SessionChatTimelineBlocks {
                 is SessionChatTimelineBlocksResult.Ok ->
                     merged +=
                         DisplayMessageBody(
-                            message = first.message.copy(parts = parts),
+                            message = first.message.copy(parts = parts, stopReason = run.last().message.stopReason),
                             blocks = reattachMarkdown(result.blocks, run),
                         )
                 SessionChatTimelineBlocksResult.MissingPartIds -> merged += run
@@ -909,6 +932,7 @@ object SessionChatTimelineBlocks {
             is SessionChatTimelineBlock.ChildSessionRow,
             is SessionChatTimelineBlock.Reasoning,
             is SessionChatTimelineBlock.StepParagraph,
+            is SessionChatTimelineBlock.StopNote,
             -> false
         }
 

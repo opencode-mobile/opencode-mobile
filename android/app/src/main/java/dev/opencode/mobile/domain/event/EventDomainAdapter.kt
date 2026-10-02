@@ -187,7 +187,7 @@ class EventDomainAdapter(
             "session.execution.started" -> listOf(statusEvent(properties, "busy"))
             "session.next.step.ended",
             "session.step.ended",
-            -> listOfNotNull(assistantMessageUpdated(properties))
+            -> listOfNotNull(assistantMessageUpdated(properties, finish = properties.string("finish")))
             "session.execution.succeeded",
             "session.execution.interrupted",
             -> listOf(event("session.idle", properties))
@@ -201,7 +201,7 @@ class EventDomainAdapter(
             "session.step.failed" ->
                 listOfNotNull(
                     event("session.error", properties),
-                    assistantMessageUpdated(properties),
+                    assistantMessageUpdated(properties, finish = failedStepFinish(properties)),
                 )
             "session.next.retried",
             "session.retry.scheduled",
@@ -473,9 +473,16 @@ class EventDomainAdapter(
      * stamps `time.created` (the envelope time) so a live reply orders after the
      * prompt it answers; later partial infos omit `time` and the store keeps it.
      */
+    /** An aborted step projects as `finish: "aborted"` so the reply keeps an Interrupted note. */
+    private fun failedStepFinish(properties: JsonObject): String? {
+        val type = (properties["error"] as? JsonObject)?.string("type")
+        return if (ToolInterruption.isAbortedType(type)) "aborted" else "error"
+    }
+
     private fun assistantMessageUpdated(
         properties: JsonObject,
         stampCreated: Boolean = false,
+        finish: String? = null,
     ): OpencodeEvent? {
         val sessionId = sessionIdFromProperties(properties)
         val assistantId = properties.string("assistantMessageID") ?: properties.string("messageID") ?: return null
@@ -484,6 +491,7 @@ class EventDomainAdapter(
                 put("id", assistantId)
                 sessionId?.let { put("sessionID", it) }
                 put("role", "assistant")
+                finish?.let { put("finish", it) }
                 if (stampCreated) {
                     properties.long("created")?.let { created ->
                         put("time", buildJsonObject { put("created", created) })

@@ -8,6 +8,7 @@ import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessageContextEstimate
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.message.MessageStopReason
 import dev.opencode.mobile.domain.message.MessageTokenUsage
 import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.domain.session.Session
@@ -181,6 +182,7 @@ internal data class CachedMessagePayload(
     val completedAtEpochMs: Long? = null,
     val contextInputTokens: Long? = null,
     val contextEstimate: CachedMessageContextEstimatePayload = CachedMessageContextEstimatePayload(),
+    val stopReason: String? = null,
 )
 
 @Serializable
@@ -321,6 +323,7 @@ private fun Message.toCachePayload(): CachedMessagePayload =
         completedAtEpochMs = completedAtEpochMs,
         contextInputTokens = contextInputTokens,
         contextEstimate = contextEstimate.toCachePayload(),
+        stopReason = stopReason?.name?.lowercase(),
     )
 
 private fun CachedMessagePayload.toDomain(): Message =
@@ -340,6 +343,7 @@ private fun CachedMessagePayload.toDomain(): Message =
         completedAtEpochMs = completedAtEpochMs,
         contextInputTokens = contextInputTokens,
         contextEstimate = contextEstimate.toDomain(),
+        stopReason = MessageStopReason.entries.firstOrNull { it.name.equals(stopReason, ignoreCase = true) },
     )
 
 private fun MessageTokenUsage.toCachePayload(): CachedMessageTokenUsagePayload =

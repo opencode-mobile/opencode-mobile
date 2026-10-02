@@ -27,6 +27,7 @@ data class MessageInfoDto(
     val cost: Double? = null,
     val waiting: Boolean? = null,
     val delivery: String? = null,
+    val finish: String? = null,
 )
 
 @Serializable

@@ -236,6 +236,64 @@ struct V2LiveTurnTimelineTests {
         #expect(tool?.isInterrupted == false)
     }
 
+    @Test func truncatedReply_keepsACutOffNote_liveAndFromRest() throws {
+        apply(prompt("u1", "Write an essay", at: 1_000))
+        apply(step("a1", at: 1_100))
+        apply(text("a1", "This is a very long essay that never", at: 1_110))
+        apply(stepEnded("a1", finish: "length", at: 1_200))
+        // A later partial info (usage) must not drop how the step ended.
+        apply([
+            envelope(
+                "session.usage.updated",
+                1_210,
+                #""assistantMessageID":"a1","tokens":{"input":1,"output":2,"reasoning":0,"cache":{"read":0,"write":0}}"#
+            ),
+        ])
+        apply(idle(at: 1_300))
+
+        let live = try #require(store.messages(sessionID: Self.session).first { $0.id == "a1" })
+        #expect(live.stopReason == .length)
+        let frame = chipFrame(store.messages(sessionID: Self.session))
+        #expect(frame.messages[1].blocks.last == .stopNote(blockID: "a1:stop-note", reason: .length))
+
+        let rest = try restMessages(
+            #"[{"id":"a1","type":"assistant","finish":"length","content":[{"type":"text","text":"Cut"}],"time":{"created":1100,"completed":1200}}]"#
+        )
+        #expect(rest.first?.stopReason == .length)
+    }
+
+    @Test func interruptedReply_keepsAnInterruptedNote_andNoAbortText() throws {
+        apply(prompt("u1", "Explain", at: 1_000))
+        apply(step("a1", at: 1_100))
+        apply(text("a1", "The handler lives in", at: 1_110))
+        apply([
+            envelope(
+                "session.step.failed",
+                1_200,
+                #""assistantMessageID":"a1","error":{"type":"aborted","message":"Step interrupted"}"#
+            ),
+        ])
+        #expect(store.messages(sessionID: Self.session).first { $0.id == "a1" }?.stopReason == .interrupted)
+        let frame = chipFrame(store.messages(sessionID: Self.session))
+        #expect(frame.messages[1].blocks.last == .stopNote(blockID: "a1:stop-note", reason: .interrupted))
+
+        let rest = try restMessages(
+            #"[{"id":"a1","type":"assistant","finish":"error","error":{"type":"aborted","message":"Step interrupted"},"content":[],"time":{"created":1100,"completed":1200}}]"#
+        )
+        #expect(rest.first?.stopReason == .interrupted)
+        #expect(rest.first?.text == "")
+    }
+
+    @Test func completeReply_hasNoStopNote() {
+        apply(prompt("u1", "Say hi", at: 1_000))
+        apply(step("a1", at: 1_100))
+        apply(text("a1", "Hi.", at: 1_110))
+        apply(stepEnded("a1", finish: "stop", at: 1_200))
+        #expect(store.messages(sessionID: Self.session).first { $0.id == "a1" }?.stopReason == nil)
+        let frame = chipFrame(store.messages(sessionID: Self.session))
+        #expect(!frame.messages[1].blocks.contains { if case .stopNote = $0 { true } else { false } })
+    }
+
     @Test func restReloadAfterLiveTurn_replacesLivePartsInPlace() throws {
         apply(prompt("u1", "Explore", at: 1_000))
         apply(step("a1", at: 1_100))

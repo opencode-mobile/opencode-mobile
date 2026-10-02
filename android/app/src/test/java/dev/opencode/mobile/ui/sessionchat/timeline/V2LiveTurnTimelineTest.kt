@@ -10,6 +10,7 @@ import dev.opencode.mobile.domain.message.MessageDomainAdapter
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessagePatch
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.message.MessageStopReason
 import dev.opencode.mobile.markdown.MarkdownDocument
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -267,6 +268,81 @@ class V2LiveTurnTimelineTest {
         )
         val tool = store.messages(SESSION).single { it.id == "a1" }.parts.filterIsInstance<MessagePart.Tool>().single()
         assertFalse(tool.isInterrupted)
+    }
+
+    @Test
+    fun truncatedReply_keepsACutOffNote_liveAndFromRest() {
+        apply(prompt("u1", "Write an essay", at = 1_000))
+        apply(step("a1", at = 1_100))
+        apply(text("a1", "This is a very long essay that never", at = 1_110))
+        apply(stepEnded("a1", "length", at = 1_200))
+        // A later partial info (usage) must not drop how the step ended.
+        apply(
+            listOf(
+                envelope(
+                    "session.usage.updated",
+                    1_210,
+                    """"assistantMessageID":"a1","tokens":{"input":1,"output":2,"reasoning":0,"cache":{"read":0,"write":0}}""",
+                ),
+            ),
+        )
+        apply(idle(at = 1_300))
+
+        val live = store.messages(SESSION).single { it.id == "a1" }
+        assertEquals(MessageStopReason.Length, live.stopReason)
+        val body = chipBodies(store.messages(SESSION))[1]
+        assertEquals(
+            SessionChatTimelineBlock.StopNote(blockID = "a1:stop-note", reason = MessageStopReason.Length),
+            body.blocks.last(),
+        )
+
+        val rest =
+            restMessages(
+                """
+                [{"id":"a1","type":"assistant","finish":"length","content":[{"type":"text","text":"Cut"}],
+                  "time":{"created":1100,"completed":1200}}]
+                """,
+            )
+        assertEquals(MessageStopReason.Length, rest.single().stopReason)
+    }
+
+    @Test
+    fun interruptedReply_keepsAnInterruptedNote_andNoAbortText() {
+        apply(prompt("u1", "Explain", at = 1_000))
+        apply(step("a1", at = 1_100))
+        apply(text("a1", "The handler lives in", at = 1_110))
+        apply(
+            listOf(
+                envelope(
+                    "session.step.failed",
+                    1_200,
+                    """"assistantMessageID":"a1","error":{"type":"aborted","message":"Step interrupted"}""",
+                ),
+            ),
+        )
+        assertEquals(MessageStopReason.Interrupted, store.messages(SESSION).single { it.id == "a1" }.stopReason)
+        val merged = chipBodies(store.messages(SESSION))
+        assertTrue(merged[1].blocks.last() is SessionChatTimelineBlock.StopNote)
+
+        val rest =
+            restMessages(
+                """
+                [{"id":"a1","type":"assistant","finish":"error","error":{"type":"aborted","message":"Step interrupted"},
+                  "content":[],"time":{"created":1100,"completed":1200}}]
+                """,
+            )
+        assertEquals(MessageStopReason.Interrupted, rest.single().stopReason)
+        assertEquals("", rest.single().text)
+    }
+
+    @Test
+    fun completeReply_hasNoStopNote() {
+        apply(prompt("u1", "Say hi", at = 1_000))
+        apply(step("a1", at = 1_100))
+        apply(text("a1", "Hi.", at = 1_110))
+        apply(stepEnded("a1", "stop", at = 1_200))
+        assertEquals(null, store.messages(SESSION).single { it.id == "a1" }.stopReason)
+        assertTrue(chipBodies(store.messages(SESSION))[1].blocks.none { it is SessionChatTimelineBlock.StopNote })
     }
 
     @Test

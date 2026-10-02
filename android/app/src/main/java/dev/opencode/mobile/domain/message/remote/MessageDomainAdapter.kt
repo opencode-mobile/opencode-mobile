@@ -43,7 +43,7 @@ class MessageDomainAdapter {
         return Message(
             id = info.id,
             role = toRole(info.role),
-            text = flatText.ifBlank { errorText(info.error) },
+            text = flatText.ifBlank { errorText(info.error, stopReason(info)) },
             parts = domainParts,
             cost = info.cost,
             tokens = toTokenUsage(info.tokens),
@@ -58,6 +58,7 @@ class MessageDomainAdapter {
             contextEstimate = toContextEstimate(info.role, dto.parts),
             followUpDelivery = FollowUpDelivery.fromWire(info.delivery),
             isWaitingForPickup = info.waiting == true,
+            stopReason = stopReason(info),
         )
     }
 
@@ -69,7 +70,7 @@ class MessageDomainAdapter {
         return Message(
             id = info.id,
             role = toRole(info.role),
-            text = flatText.ifBlank { errorText(info.error) },
+            text = flatText.ifBlank { errorText(info.error, stopReason(info)) },
             parts = domainParts,
             cost = info.cost,
             tokens = toTokenUsage(info.tokens),
@@ -84,6 +85,7 @@ class MessageDomainAdapter {
             contextEstimate = MessageContextEstimate(),
             followUpDelivery = FollowUpDelivery.fromWire(info.delivery),
             isWaitingForPickup = info.waiting == true,
+            stopReason = stopReason(info),
         )
     }
 
@@ -504,16 +506,20 @@ class MessageDomainAdapter {
                     } ?: "${dto.id}:${content.type}:$index"
                 toV2AssistantPart(content, fallbackId = fallbackId)
             }
+        val stopReason = MessageStopReason.from(finish = dto.finish, errorKind = dto.error?.type)
         val errorText =
             dto.error
                 ?.message
                 ?.trim()
+                .orEmpty()
+                .takeUnless { stopReason == MessageStopReason.Interrupted }
                 .orEmpty()
         return messageFromV2(
             id = dto.id,
             role = MessageRole.Assistant,
             parts = parts,
             fallbackText = errorText,
+            stopReason = stopReason,
             cost = dto.cost,
             tokens = toTokenUsage(dto.tokens),
             mode = dto.agent ?: agent.ifBlank { null },
@@ -562,11 +568,13 @@ class MessageDomainAdapter {
         completedAtEpochMs: Long? = null,
         contextInputTokens: Long? = null,
         contextEstimate: MessageContextEstimate = MessageContextEstimate(),
+        stopReason: MessageStopReason? = null,
     ): Message {
         val flatText = displayText(parts)
         return Message(
             id = id,
             role = role,
+            stopReason = stopReason,
             text = flatText.ifBlank { fallbackText },
             parts = parts,
             cost = cost,
@@ -721,8 +729,20 @@ class MessageDomainAdapter {
             else -> MessageRole.Unknown
         }
 
-    private fun errorText(error: MessageErrorInfoDto?): String {
+    private fun stopReason(info: MessageInfoDto): MessageStopReason? =
+        if (info.role.equals("assistant", ignoreCase = true)) {
+            MessageStopReason.from(finish = info.finish, errorKind = info.error?.name)
+        } else {
+            null
+        }
+
+    /** A stopped reply gets a "Interrupted" note, not the abort error as reply text. */
+    private fun errorText(
+        error: MessageErrorInfoDto?,
+        stopReason: MessageStopReason? = null,
+    ): String {
         error ?: return ""
+        if (stopReason == MessageStopReason.Interrupted) return ""
         return error.data
             ?.message
             ?.trim()

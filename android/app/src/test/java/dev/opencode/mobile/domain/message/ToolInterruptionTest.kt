@@ -1,5 +1,8 @@
 package dev.opencode.mobile.domain.message
 
+import dev.opencode.mobile.data.remote.dto.MessageErrorDataDto
+import dev.opencode.mobile.data.remote.dto.MessageErrorInfoDto
+import dev.opencode.mobile.data.remote.dto.MessageInfoDto
 import dev.opencode.mobile.data.remote.dto.MessageToolStateDto
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlocks
 import org.junit.Assert.assertEquals
@@ -45,5 +48,24 @@ class ToolInterruptionTest {
             SessionChatTimelineBlocks.interruptedToolText("The user declined this tool call"),
         )
         assertEquals("Stopped", SessionChatTimelineBlocks.interruptedToolText("Tool execution interrupted"))
+    }
+
+    @Test
+    fun v1Info_stopReason() {
+        val truncated = adapter.toMessage(MessageInfoDto(id = "a1", role = "assistant", finish = "length"), emptyList())
+        assertEquals(MessageStopReason.Length, truncated.stopReason)
+        val aborted =
+            adapter.toMessage(
+                MessageInfoDto(
+                    id = "a2",
+                    role = "assistant",
+                    error = MessageErrorInfoDto(name = "MessageAbortedError", data = MessageErrorDataDto(message = "Aborted")),
+                ),
+                emptyList(),
+            )
+        assertEquals(MessageStopReason.Interrupted, aborted.stopReason)
+        assertEquals("", aborted.text)
+        val done = adapter.toMessage(MessageInfoDto(id = "a3", role = "assistant", finish = "stop"), emptyList())
+        assertEquals(null, done.stopReason)
     }
 }

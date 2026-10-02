@@ -8,7 +8,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
         return Message(
             id: info.id,
             role: role(from: info.role),
-            text: flatText.isEmpty ? errorText(from: info.error) : flatText,
+            text: flatText.isEmpty ? errorText(from: info.error, stopReason: stopReason(info)) : flatText,
             parts: domainParts,
             cost: info.cost,
             tokens: tokenUsage(from: info.tokens),
@@ -22,7 +22,8 @@ nonisolated struct MessageDomainAdapter: Sendable {
             contextInputTokens: info.tokens?.input,
             contextEstimate: contextEstimate(role: info.role, parts: dto.parts),
             followUpDelivery: FollowUpDelivery.fromWire(info.delivery),
-            isWaitingForPickup: info.waiting == true
+            isWaitingForPickup: info.waiting == true,
+            stopReason: stopReason(info)
         )
     }
 
@@ -34,7 +35,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
         return Message(
             id: info.id,
             role: role(from: info.role),
-            text: flatText.isEmpty ? errorText(from: info.error) : flatText,
+            text: flatText.isEmpty ? errorText(from: info.error, stopReason: stopReason(info)) : flatText,
             parts: domainParts,
             cost: info.cost,
             tokens: tokenUsage(from: info.tokens),
@@ -48,7 +49,8 @@ nonisolated struct MessageDomainAdapter: Sendable {
             contextInputTokens: info.tokens?.input,
             contextEstimate: MessageContextEstimate(),
             followUpDelivery: FollowUpDelivery.fromWire(info.delivery),
-            isWaitingForPickup: info.waiting == true
+            isWaitingForPickup: info.waiting == true,
+            stopReason: stopReason(info)
         )
     }
 
@@ -416,11 +418,14 @@ nonisolated struct MessageDomainAdapter: Sendable {
             }
             return v2AssistantPart(content, fallbackID: fallbackID)
         }
-        return messageFromV2(
+        let stopReason = MessageStopReason.from(finish: dto.finish, errorKind: dto.error?.type)
+        var message = messageFromV2(
             id: dto.id,
             role: .assistant,
             parts: parts,
-            fallbackText: dto.error?.message?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "",
+            fallbackText: stopReason == .interrupted
+                ? ""
+                : dto.error?.message?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "",
             cost: dto.cost,
             tokens: tokenUsage(from: dto.tokens),
             mode: dto.agent ?? (agent.isEmpty ? nil : agent),
@@ -430,6 +435,8 @@ nonisolated struct MessageDomainAdapter: Sendable {
             contextInputTokens: dto.tokens?.input,
             contextEstimate: v2AssistantContextEstimate(dto.content)
         )
+        message.stopReason = stopReason
+        return message
     }
 
     private func projectV2Compaction(_ dto: V2SessionMessageDTO) -> Message {
@@ -658,8 +665,14 @@ nonisolated struct MessageDomainAdapter: Sendable {
         }
     }
 
-    private func errorText(from error: MessageErrorInfoDTO?) -> String {
-        guard let error else { return "" }
+    private func stopReason(_ info: MessageInfoDTO) -> MessageStopReason? {
+        guard info.role.lowercased() == "assistant" else { return nil }
+        return MessageStopReason.from(finish: info.finish, errorKind: info.error?.name)
+    }
+
+    /// A stopped reply gets an "Interrupted" note, not the abort error as reply text.
+    private func errorText(from error: MessageErrorInfoDTO?, stopReason: MessageStopReason? = nil) -> String {
+        guard let error, stopReason != .interrupted else { return "" }
         if let message = error.data?.message?.trimmingCharacters(in: .whitespacesAndNewlines), !message.isEmpty {
             return message
         }

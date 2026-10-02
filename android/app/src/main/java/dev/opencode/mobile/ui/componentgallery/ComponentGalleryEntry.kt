@@ -26,6 +26,7 @@ enum class ComponentGalleryEntryId {
     AssistantMessage,
     ToolCallCard,
     ToolChip,
+    MessageNote,
     ChildSessionRow,
     TopBar,
     OverflowMenu,
@@ -260,6 +261,12 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.ToolChip,
             title = "Tool Chip",
             description = "Compact file, command, agent, and skill chip under a chip-timeline paragraph.",
+            category = ComponentGalleryCategory.Chat,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.MessageNote,
+            title = "Message Note",
+            description = "Muted note under a reply that was cut off or interrupted.",
             category = ComponentGalleryCategory.Chat,
         ),
         ComponentGalleryEntry(

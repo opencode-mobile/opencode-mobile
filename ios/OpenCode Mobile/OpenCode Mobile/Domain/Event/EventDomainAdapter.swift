@@ -175,7 +175,7 @@ nonisolated struct EventDomainAdapter: Sendable {
         case "session.execution.started":
             [statusEvent(properties, statusType: "busy")]
         case "session.next.step.ended", "session.step.ended":
-            [assistantMessageUpdated(properties)].compactMap { $0 }
+            [assistantMessageUpdated(properties, finish: string(in: properties, key: "finish"))].compactMap { $0 }
         case "session.execution.succeeded",
              "session.execution.interrupted":
             [event(type: "session.idle", properties: properties)]
@@ -187,7 +187,7 @@ nonisolated struct EventDomainAdapter: Sendable {
         case "session.step.failed":
             [
                 event(type: "session.error", properties: properties),
-                assistantMessageUpdated(properties),
+                assistantMessageUpdated(properties, finish: failedStepFinish(properties)),
             ].compactMap { $0 }
         case "session.next.retried", "session.retry.scheduled":
             [statusEvent(properties, statusType: "retry")]
@@ -457,7 +457,17 @@ nonisolated struct EventDomainAdapter: Sendable {
     /// v2 has no assistant `message.updated`; synthesize one. Only `step.started`
     /// stamps `time.created` (the envelope time) so a live reply orders after the
     /// prompt it answers; later partial infos omit `time` and the store keeps it.
-    private func assistantMessageUpdated(_ properties: [String: Any], stampCreated: Bool = false) -> OpencodeEvent? {
+    /// An aborted step projects as `finish: "aborted"` so the reply keeps an Interrupted note.
+    private func failedStepFinish(_ properties: [String: Any]) -> String {
+        let type = (properties["error"] as? [String: Any])?["type"] as? String
+        return ToolInterruption.isAbortedType(type) ? "aborted" : "error"
+    }
+
+    private func assistantMessageUpdated(
+        _ properties: [String: Any],
+        stampCreated: Bool = false,
+        finish: String? = nil
+    ) -> OpencodeEvent? {
         guard let assistantID = string(in: properties, key: "assistantMessageID") ?? string(in: properties, key: "messageID") else {
             return nil
         }
@@ -465,6 +475,7 @@ nonisolated struct EventDomainAdapter: Sendable {
         if let sessionID = sessionID(from: properties) {
             info["sessionID"] = sessionID
         }
+        if let finish { info["finish"] = finish }
         if stampCreated, let created = int64(in: properties, key: "created") {
             info["time"] = ["created": created]
         }

@@ -12,6 +12,7 @@ nonisolated struct V2SessionMessageDTO: Decodable, Sendable {
     let cost: Double?
     let tokens: MessageTokensDTO?
     let error: V2UnknownErrorDTO?
+    let finish: String?
     let time: V2MessageTimeDTO?
     let reason: String?
     let summary: String?
@@ -23,7 +24,7 @@ nonisolated struct V2SessionMessageDTO: Decodable, Sendable {
     let description: String?
 
     private enum CodingKeys: String, CodingKey {
-        case id, type, text, files, agents, agent, model, content, cost, tokens, error, time
+        case id, type, text, files, agents, agent, model, content, cost, tokens, error, finish, time
         case reason, summary, status, command, output, callID, name, description
     }
 
@@ -40,6 +41,7 @@ nonisolated struct V2SessionMessageDTO: Decodable, Sendable {
         cost = try container.decodeIfPresent(Double.self, forKey: .cost)
         tokens = try container.decodeIfPresent(MessageTokensDTO.self, forKey: .tokens)
         error = try container.decodeIfPresent(V2UnknownErrorDTO.self, forKey: .error)
+        finish = try container.decodeIfPresent(String.self, forKey: .finish)
         time = try container.decodeIfPresent(V2MessageTimeDTO.self, forKey: .time)
         reason = try container.decodeIfPresent(String.self, forKey: .reason)
         summary = try container.decodeIfPresent(String.self, forKey: .summary)

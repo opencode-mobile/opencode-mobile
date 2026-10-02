@@ -346,6 +346,7 @@ object TimelineProjector {
                 "n:${block.blockID}"
             is SessionChatTimelineBlock.StepParagraph ->
                 "s:${block.blockID}:${block.renderedMarkdown != null}:${stepParagraphChipFingerprint(block)}"
+            is SessionChatTimelineBlock.StopNote -> "x:${block.blockID}:${block.reason}"
         }
 
     /** Chip status / counts change chip width and error captions, so they are layout. */
@@ -583,6 +584,7 @@ object TimelineProjector {
                 "n:${block.blockID}"
             is SessionChatTimelineBlock.StepParagraph ->
                 "s:${block.blockID}:${stepParagraphChipFingerprint(block)}"
+            is SessionChatTimelineBlock.StopNote -> "x:${block.blockID}:${block.reason}"
         }
 
     private fun markdownFingerprint(row: TimelineRow): String =

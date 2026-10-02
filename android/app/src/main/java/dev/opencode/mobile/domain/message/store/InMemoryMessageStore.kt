@@ -293,6 +293,13 @@ class InMemoryMessageStore
                     if (previous != null && !infoJson.containsKey("delivery")) {
                         previous["delivery"]?.let { put("delivery", it) }
                     }
+                    // A later partial info (usage) must not drop how the step ended.
+                    if (previous != null && !infoJson.containsKey("finish")) {
+                        previous["finish"]?.let { put("finish", it) }
+                    }
+                    if (previous != null && !infoJson.containsKey("error")) {
+                        previous["error"]?.let { put("error", it) }
+                    }
                 }
             infoCaches[sessionId]!![messageId] = merged
             partsCaches[sessionId]!!.getOrPut(messageId) { mutableMapOf() }
@@ -331,8 +338,10 @@ class InMemoryMessageStore
          * REST/inbox copy's agent, model and variant so the bubble keeps its meta line.
          */
         private fun Message.withMetadataFrom(base: Message?): Message {
-            if (base == null || (mode != null && model != null)) return this
-            return copy(
+            if (base == null) return this
+            val withStop = if (stopReason == null && base.stopReason != null) copy(stopReason = base.stopReason) else this
+            if (mode != null && model != null) return withStop
+            return withStop.copy(
                 mode = mode ?: base.mode,
                 model = model ?: base.model,
                 modelProviderId = if (model == null) base.modelProviderId else modelProviderId,

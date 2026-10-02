@@ -18,6 +18,8 @@ nonisolated struct Message: Equatable, Sendable, Identifiable {
     let contextEstimate: MessageContextEstimate
     let followUpDelivery: FollowUpDelivery?
     let isWaitingForPickup: Bool
+    /// Why an assistant reply ended early; nil for a complete (or still running) reply.
+    var stopReason: MessageStopReason?
 
     init(
         id: String,
@@ -36,7 +38,8 @@ nonisolated struct Message: Equatable, Sendable, Identifiable {
         contextInputTokens: Int64? = nil,
         contextEstimate: MessageContextEstimate = MessageContextEstimate(),
         followUpDelivery: FollowUpDelivery? = nil,
-        isWaitingForPickup: Bool = false
+        isWaitingForPickup: Bool = false,
+        stopReason: MessageStopReason? = nil
     ) {
         self.id = id
         self.role = role
@@ -55,11 +58,15 @@ nonisolated struct Message: Equatable, Sendable, Identifiable {
         self.contextEstimate = contextEstimate
         self.followUpDelivery = followUpDelivery
         self.isWaitingForPickup = isWaitingForPickup
+        self.stopReason = stopReason
     }
 
     /// Fills agent, model and variant this copy lacks from `base` (v2 live infos are partial).
     func withMetadata(from base: Message?) -> Message {
-        guard let base, mode == nil || model == nil else { return self }
+        guard let base else { return self }
+        var copy = self
+        if copy.stopReason == nil { copy.stopReason = base.stopReason }
+        guard mode == nil || model == nil else { return copy }
         let takeModel = model == nil
         return Message(
             id: id,
@@ -78,7 +85,8 @@ nonisolated struct Message: Equatable, Sendable, Identifiable {
             contextInputTokens: contextInputTokens,
             contextEstimate: contextEstimate,
             followUpDelivery: followUpDelivery,
-            isWaitingForPickup: isWaitingForPickup
+            isWaitingForPickup: isWaitingForPickup,
+            stopReason: copy.stopReason
         )
     }
 
@@ -103,8 +111,28 @@ nonisolated struct Message: Equatable, Sendable, Identifiable {
             contextInputTokens: contextInputTokens,
             contextEstimate: contextEstimate,
             followUpDelivery: followUpDelivery,
-            isWaitingForPickup: isWaitingForPickup
+            isWaitingForPickup: isWaitingForPickup,
+            stopReason: stopReason
         )
+    }
+}
+
+/// An assistant reply that ended before the model finished its answer.
+nonisolated enum MessageStopReason: String, Equatable, Sendable {
+    /// The model hit its output limit (`finish: "length"`).
+    case length
+    /// The user stopped the run (`error.type: "aborted"` / `MessageAbortedError`).
+    case interrupted
+
+    /// `finish` is the step finish reason (`"aborted"` is how the v2 live projection
+    /// marks an aborted step); `errorKind` is the v2 error `type` or v1 error `name`.
+    static func from(finish: String?, errorKind: String?) -> MessageStopReason? {
+        switch finish?.lowercased() {
+        case "length": return .length
+        case "aborted": return .interrupted
+        default:
+            return ToolInterruption.isUserAbortError(type: errorKind, name: errorKind) ? .interrupted : nil
+        }
     }
 }
 

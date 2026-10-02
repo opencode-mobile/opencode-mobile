@@ -21,7 +21,36 @@ data class Message(
     val contextEstimate: MessageContextEstimate = MessageContextEstimate(),
     val followUpDelivery: FollowUpDelivery? = null,
     val isWaitingForPickup: Boolean = false,
+    /** Why an assistant reply ended early; null for a complete (or still running) reply. */
+    val stopReason: MessageStopReason? = null,
 )
+
+/** An assistant reply that ended before the model finished its answer. */
+enum class MessageStopReason {
+    /** The model hit its output limit (`finish: "length"`). */
+    Length,
+
+    /** The user stopped the run (`error.type: "aborted"` / `MessageAbortedError`). */
+    Interrupted,
+    ;
+
+    companion object {
+        /**
+         * [finish] is the step finish reason (`"aborted"` is how the v2 live projection
+         * marks an aborted step); [errorKind] is the v2 error `type` or v1 error `name`.
+         */
+        fun from(
+            finish: String?,
+            errorKind: String?,
+        ): MessageStopReason? =
+            when {
+                finish.equals("length", ignoreCase = true) -> Length
+                finish.equals("aborted", ignoreCase = true) -> Interrupted
+                ToolInterruption.isUserAbortError(type = errorKind, name = errorKind) -> Interrupted
+                else -> null
+            }
+    }
+}
 
 data class MessageTokenUsage(
     val input: Long,

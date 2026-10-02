@@ -137,7 +137,8 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
             contextInputTokens: baseMessage.contextInputTokens,
             contextEstimate: baseMessage.contextEstimate,
             followUpDelivery: baseMessage.followUpDelivery,
-            isWaitingForPickup: baseMessage.isWaitingForPickup
+            isWaitingForPickup: baseMessage.isWaitingForPickup,
+            stopReason: baseMessage.stopReason
         )
     }
 
@@ -290,6 +291,13 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
             }
             if infoDict["delivery"] == nil, let delivery = prior["delivery"] {
                 merged["delivery"] = delivery
+            }
+            // A later partial info (usage) must not drop how the step ended.
+            if infoDict["finish"] == nil, let finish = prior["finish"] {
+                merged["finish"] = finish
+            }
+            if infoDict["error"] == nil, let error = prior["error"] {
+                merged["error"] = error
             }
             // v2 infos are partial projections: keep the times an update omits.
             if infoDict["time"] == nil, let time = prior["time"] {

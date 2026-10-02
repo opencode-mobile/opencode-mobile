@@ -12,6 +12,8 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
     case reasoning(blockID: String, text: String, isStreaming: Bool, durationMs: Int64?)
     /// Chip timeline (OPE-260): narration plus the tools that followed it.
     case stepParagraph(blockID: String, paragraph: SessionChatStepParagraphBlock)
+    /// Persistent note that the reply ended early (cut off or interrupted).
+    case stopNote(blockID: String, reason: MessageStopReason)
 
     var blockID: String {
         switch self {
@@ -28,6 +30,8 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
         case .reasoning(let blockID, _, _, _):
             blockID
         case .stepParagraph(let blockID, _):
+            blockID
+        case .stopNote(let blockID, _):
             blockID
         }
     }
@@ -48,7 +52,7 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
         case .stepParagraph(_, let paragraph):
             guard let textBlockID = paragraph.textBlockID, let text = paragraph.text else { return nil }
             return (textBlockID, text, paragraph.renderedMarkdown)
-        case .attachment, .toolCard, .toolGroup, .childSessionRow, .reasoning:
+        case .attachment, .toolCard, .toolGroup, .childSessionRow, .reasoning, .stopNote:
             return nil
         }
     }
@@ -60,7 +64,7 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
             return .text(blockID: blockID, text: text, renderedMarkdown: document)
         case .stepParagraph(let blockID, let paragraph):
             return .stepParagraph(blockID: blockID, paragraph: paragraph.withRenderedMarkdown(document))
-        case .attachment, .toolCard, .toolGroup, .childSessionRow, .reasoning:
+        case .attachment, .toolCard, .toolGroup, .childSessionRow, .reasoning, .stopNote:
             return self
         }
     }
@@ -91,6 +95,8 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
             lID == rID && lText == rText && lStreaming == rStreaming && lDuration == rDuration
         case let (.stepParagraph(lID, lParagraph), .stepParagraph(rID, rParagraph)):
             lID == rID && lParagraph == rParagraph
+        case let (.stopNote(lID, lReason), .stopNote(rID, rReason)):
+            lID == rID && lReason == rReason
         default:
             false
         }
@@ -612,6 +618,29 @@ nonisolated enum SessionChatTimelineBlocks {
         collapseConsecutiveToolCalls: Bool,
         chipTimeline: Bool = false
     ) -> [DisplayMessageBody] {
+        mergeBodies(bodies, collapseConsecutiveToolCalls: collapseConsecutiveToolCalls, chipTimeline: chipTimeline)
+            .map(withStopNote)
+    }
+
+    /// An assistant reply that ended early keeps a note under its last block.
+    private static func withStopNote(_ body: DisplayMessageBody) -> DisplayMessageBody {
+        guard let reason = body.message.stopReason, body.message.role == .assistant else { return body }
+        if body.blocks.contains(where: { if case .stopNote = $0 { return true } else { return false } }) {
+            return body
+        }
+        return DisplayMessageBody(
+            message: body.message,
+            isStreaming: body.isStreaming,
+            blocks: body.blocks + [.stopNote(blockID: "\(body.message.id):stop-note", reason: reason)],
+            renderedMarkdown: body.renderedMarkdown
+        )
+    }
+
+    private static func mergeBodies(
+        _ bodies: [DisplayMessageBody],
+        collapseConsecutiveToolCalls: Bool,
+        chipTimeline: Bool
+    ) -> [DisplayMessageBody] {
         guard collapseConsecutiveToolCalls || chipTimeline, bodies.count >= 2 else { return bodies }
         func isMergeable(_ body: DisplayMessageBody) -> Bool {
             // A message that carries a compaction marker stays its own row.
@@ -654,9 +683,11 @@ nonisolated enum SessionChatTimelineBlocks {
             } else if chipTimeline {
                 blocks = attachMemberRootMarkdown(blocks, members: Array(run))
             }
+            var message = first.message
+            message.stopReason = run.last?.message.stopReason
             merged.append(
                 DisplayMessageBody(
-                    message: first.message,
+                    message: message,
                     isStreaming: run.contains(where: \.isStreaming),
                     blocks: blocks,
                     renderedMarkdown: nil
@@ -725,7 +756,7 @@ nonisolated enum SessionChatTimelineBlocks {
             true
         case .toolCard(_, let card):
             !Self.isChildSessionTool(card.toolName)
-        case .text, .attachment, .childSessionRow, .reasoning, .stepParagraph:
+        case .text, .attachment, .childSessionRow, .reasoning, .stepParagraph, .stopNote:
             false
         }
     }

@@ -184,6 +184,7 @@ nonisolated private struct CachedMessagePayload: Codable, Sendable {
     let completedAtEpochMs: Int64?
     let contextInputTokens: Int64?
     let contextEstimate: CachedMessageContextEstimatePayload
+    let stopReason: String?
 
     init(
         id: String,
@@ -200,7 +201,8 @@ nonisolated private struct CachedMessagePayload: Codable, Sendable {
         sentAtEpochMs: Int64? = nil,
         completedAtEpochMs: Int64? = nil,
         contextInputTokens: Int64? = nil,
-        contextEstimate: CachedMessageContextEstimatePayload = CachedMessageContextEstimatePayload()
+        contextEstimate: CachedMessageContextEstimatePayload = CachedMessageContextEstimatePayload(),
+        stopReason: String? = nil
     ) {
         self.id = id
         self.role = role
@@ -217,6 +219,7 @@ nonisolated private struct CachedMessagePayload: Codable, Sendable {
         self.completedAtEpochMs = completedAtEpochMs
         self.contextInputTokens = contextInputTokens
         self.contextEstimate = contextEstimate
+        self.stopReason = stopReason
     }
 
     init(from decoder: Decoder) throws {
@@ -239,6 +242,7 @@ nonisolated private struct CachedMessagePayload: Codable, Sendable {
             CachedMessageContextEstimatePayload.self,
             forKey: .contextEstimate
         ) ?? CachedMessageContextEstimatePayload()
+        stopReason = try container.decodeIfPresent(String.self, forKey: .stopReason)
     }
 }
 
@@ -498,7 +502,8 @@ private extension Message {
             sentAtEpochMs: sentAtEpochMs,
             completedAtEpochMs: completedAtEpochMs,
             contextInputTokens: contextInputTokens,
-            contextEstimate: contextEstimate.toCachePayload()
+            contextEstimate: contextEstimate.toCachePayload(),
+            stopReason: stopReason?.rawValue
         )
     }
 }
@@ -520,7 +525,8 @@ private extension CachedMessagePayload {
             sentAtEpochMs: sentAtEpochMs,
             completedAtEpochMs: completedAtEpochMs,
             contextInputTokens: contextInputTokens,
-            contextEstimate: contextEstimate.toDomain()
+            contextEstimate: contextEstimate.toDomain(),
+            stopReason: stopReason.flatMap(MessageStopReason.init(rawValue:))
         )
     }
 }

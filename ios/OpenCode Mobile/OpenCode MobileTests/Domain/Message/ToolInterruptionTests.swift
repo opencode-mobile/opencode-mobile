@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import OpenCode_Mobile
 
@@ -35,5 +36,22 @@ struct ToolInterruptionTests {
     @Test func interruptedCopy() {
         #expect(SessionChatTimelineBlocks.interruptedToolText("The user declined this tool call") == "Declined")
         #expect(SessionChatTimelineBlocks.interruptedToolText("Tool execution interrupted") == "Stopped")
+    }
+
+    @Test func v1Info_stopReason() throws {
+        let adapter = MessageDomainAdapter()
+        func info(_ json: String) throws -> MessageInfoDTO {
+            try JSONDecoder().decode(MessageInfoDTO.self, from: Data(json.utf8))
+        }
+        let truncated = adapter.message(info: try info(#"{"id":"a1","role":"assistant","finish":"length"}"#), domainParts: [])
+        #expect(truncated.stopReason == .length)
+        let aborted = adapter.message(
+            info: try info(#"{"id":"a2","role":"assistant","error":{"name":"MessageAbortedError","data":{"message":"Aborted"}}}"#),
+            domainParts: []
+        )
+        #expect(aborted.stopReason == .interrupted)
+        #expect(aborted.text == "")
+        let done = adapter.message(info: try info(#"{"id":"a3","role":"assistant","finish":"stop"}"#), domainParts: [])
+        #expect(done.stopReason == nil)
     }
 }

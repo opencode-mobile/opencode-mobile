@@ -98,6 +98,8 @@ struct ComponentGalleryDetailView: View {
             ToolCallCardGalleryView()
         case .toolChip:
             ToolChipGalleryView()
+        case .messageNote:
+            MessageNoteGalleryView()
         case .childSessionRow:
             ChildSessionRowGalleryView()
         case .topBar:

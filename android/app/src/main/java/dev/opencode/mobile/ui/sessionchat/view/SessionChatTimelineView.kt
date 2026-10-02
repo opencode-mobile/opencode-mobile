@@ -68,6 +68,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.message.MessageStopReason
 import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.theme.openCodeColor
@@ -76,6 +77,8 @@ import dev.opencode.mobile.ui.components.OpenCodeActionPillVariant
 import dev.opencode.mobile.ui.components.OpenCodeAssistantMessage
 import dev.opencode.mobile.ui.components.OpenCodeAssistantMessagePresentation
 import dev.opencode.mobile.ui.components.OpenCodeMessageAttachment
+import dev.opencode.mobile.ui.components.OpenCodeMessageNote
+import dev.opencode.mobile.ui.components.OpenCodeMessageNoteVariant
 import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessage
 import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessageContent
 import dev.opencode.mobile.ui.components.OpenCodeSessionBranchPill
@@ -648,6 +651,7 @@ private fun SessionChatMessageItem.outgoingContent(): List<OpenCodeOutgoingMessa
             is SessionChatTimelineBlock.ChildSessionRow,
             is SessionChatTimelineBlock.Reasoning,
             is SessionChatTimelineBlock.StepParagraph,
+            is SessionChatTimelineBlock.StopNote,
             -> null
         }
     }
@@ -807,6 +811,14 @@ private fun AssistantMessageContent(
                                             ),
                                         )
                                     }
+                                },
+                        )
+                    is SessionChatTimelineBlock.StopNote ->
+                        OpenCodeMessageNote(
+                            variant =
+                                when (block.reason) {
+                                    MessageStopReason.Length -> OpenCodeMessageNoteVariant.Truncated
+                                    MessageStopReason.Interrupted -> OpenCodeMessageNoteVariant.Interrupted
                                 },
                         )
                     is SessionChatTimelineBlock.StepParagraph ->

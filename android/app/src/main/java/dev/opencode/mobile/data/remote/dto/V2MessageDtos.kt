@@ -18,6 +18,7 @@ data class V2SessionMessageDto(
     val cost: Double? = null,
     val tokens: MessageTokensDto? = null,
     val error: V2UnknownErrorDto? = null,
+    val finish: String? = null,
     val time: V2MessageTimeDto? = null,
     val reason: String? = null,
     val summary: String? = null,
