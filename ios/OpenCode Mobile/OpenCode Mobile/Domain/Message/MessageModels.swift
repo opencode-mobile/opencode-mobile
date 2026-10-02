@@ -57,6 +57,31 @@ nonisolated struct Message: Equatable, Sendable, Identifiable {
         self.isWaitingForPickup = isWaitingForPickup
     }
 
+    /// Fills agent, model and variant this copy lacks from `base` (v2 live infos are partial).
+    func withMetadata(from base: Message?) -> Message {
+        guard let base, mode == nil || model == nil else { return self }
+        let takeModel = model == nil
+        return Message(
+            id: id,
+            role: role,
+            text: text,
+            parts: parts,
+            cost: cost,
+            tokens: tokens,
+            model: takeModel ? base.model : model,
+            modelProviderID: takeModel ? base.modelProviderID : modelProviderID,
+            modelID: takeModel ? base.modelID : modelID,
+            variant: takeModel ? base.variant : variant,
+            mode: mode ?? base.mode,
+            sentAtEpochMs: sentAtEpochMs,
+            completedAtEpochMs: completedAtEpochMs,
+            contextInputTokens: contextInputTokens,
+            contextEstimate: contextEstimate,
+            followUpDelivery: followUpDelivery,
+            isWaitingForPickup: isWaitingForPickup
+        )
+    }
+
     func withPickupState(
         isWaitingForPickup: Bool,
         followUpDelivery: FollowUpDelivery?

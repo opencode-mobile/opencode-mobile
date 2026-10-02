@@ -108,6 +108,7 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
                 orders: orders
             )
             let message = adapter.message(info: info, domainParts: sortedParts)
+                .withMetadata(from: baseByID[messageID])
             return hasRenderableContent(message) ? message : baseByID[messageID]
         }
         guard let baseMessage = baseByID[messageID] else { return nil }
@@ -314,6 +315,9 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
         let wasWaiting = priorInfo.map { $0.waiting == true }
             ?? (baseMessages[sessionID]?.last(where: { $0.id == messageID })?.isWaitingForPickup == true)
         let delivered = !inserted && isUserInfo && wasWaiting && !waiting
+        // v2 `inbox.delivered` carries no parts; publish it so the prompt leaves the
+        // pending strip and shows as a bubble before the first step starts.
+        let pickupChanged = !inserted && isUserInfo && wasWaiting != waiting
         if inserted && isUserInfo && waiting {
             messageOrder[sessionID]?.append(messageID)
         } else if inserted {
@@ -326,6 +330,7 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
             sessionRevision: 0,
             insertedMessageIDs: inserted ? [messageID] : [],
             changedMessageIDs: inserted ? [] : [messageID],
+            pickupStateChangedIDs: pickupChanged ? [messageID] : [],
             structuralChange: inserted || delivered
         )
     }

@@ -923,6 +923,51 @@ import Testing
         #expect(messages.last?.text == "Hello world")
     }
 
+    @Test func deliveredPrompt_infoOnlyUpdate_isLivePublishable() {
+        let engine = makeEngine()
+        _ = engine.apply(
+            sessionID: "ses-1",
+            patch: .infoUpdated([
+                "id": .string("msg-u"),
+                "role": .string("user"),
+                "sessionID": .string("ses-1"),
+                "waiting": .bool(true),
+                "delivery": .string("steer"),
+            ])
+        )
+        _ = engine.apply(
+            sessionID: "ses-1",
+            patch: .partUpdated(
+                part: [
+                    "id": .string("msg-u:text:0"),
+                    "messageID": .string("msg-u"),
+                    "sessionID": .string("ses-1"),
+                    "type": .string("text"),
+                    "text": .string("Say hello."),
+                ],
+                delta: nil
+            )
+        )
+        #expect(engine.messages(sessionID: "ses-1").first?.isWaitingForPickup == true)
+
+        // v2 `session.inbox.delivered` projects to an info with no parts.
+        guard case .changed(let changeSet) = engine.apply(
+            sessionID: "ses-1",
+            patch: .infoUpdated([
+                "id": .string("msg-u"),
+                "role": .string("user"),
+                "sessionID": .string("ses-1"),
+                "waiting": .bool(false),
+            ])
+        ) else {
+            Issue.record("expected Changed")
+            return
+        }
+        #expect(changeSet.pickupStateChangedIDs == ["msg-u"])
+        #expect(engine.shouldPublishLive(changeSet))
+        #expect(engine.messages(sessionID: "ses-1").first?.isWaitingForPickup == false)
+    }
+
     @Test func waitingWithoutDelivery_keepsPickupFlag() {
         let message = Message(
             id: "msg-1",

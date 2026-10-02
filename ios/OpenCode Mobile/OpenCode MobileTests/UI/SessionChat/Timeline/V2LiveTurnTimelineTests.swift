@@ -149,6 +149,31 @@ struct V2LiveTurnTimelineTests {
         ])
     }
 
+    @Test func deliveredInboxPrompt_keepsTheSessionAgentAndModel() throws {
+        // The sender sees its queued prompt as an inbox item, then only a partial live info.
+        try reload(
+            """
+            [
+              {"id":"s1","type":"agent-switched","agent":"build","time":{"created":900}},
+              {"id":"s2","type":"model-switched","model":{"id":"scripted","providerID":"sim","variant":"high"},
+               "time":{"created":901}},
+              {"id":"u1","type":"user","text":"First prompt","time":{"created":1000}},
+              {"id":"a1","type":"assistant","agent":"build",
+               "model":{"id":"scripted","providerID":"sim","variant":"high"},
+               "content":[{"type":"text","text":"Answer."}],"time":{"created":1100}}
+            ]
+            """,
+            inbox: #"[{"id":"u2","sessionID":"ses_v2","time":{"created":1150},"type":"user","payload":{"text":"Queued prompt"},"delivery":"queue"}]"#
+        )
+        apply(delivered("u2", at: 1_220))
+
+        let queued = try #require(store.messages(sessionID: Self.session).first { $0.id == "u2" })
+        #expect(!queued.isWaitingForPickup)
+        #expect(queued.mode == "build")
+        #expect(queued.model == "scripted")
+        #expect(queued.variant == "high")
+    }
+
     @Test func restReloadAfterLiveTurn_replacesLivePartsInPlace() throws {
         apply(prompt("u1", "Explore", at: 1_000))
         apply(step("a1", at: 1_100))

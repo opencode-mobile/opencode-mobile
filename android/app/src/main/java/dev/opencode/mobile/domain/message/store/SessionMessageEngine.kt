@@ -77,7 +77,8 @@ class SessionMessageEngine
         fun shouldPublishLive(changeSet: SessionChangeSet): Boolean =
             changeSet.changedPartIdsByMessage.isNotEmpty() ||
                 changeSet.removedMessageIds.isNotEmpty() ||
-                changeSet.streamingStateChangedIds.isNotEmpty()
+                changeSet.streamingStateChangedIds.isNotEmpty() ||
+                changeSet.pickupStateChangedIds.isNotEmpty()
 
         /**
          * Build the next published frame by splicing changed message IDs into

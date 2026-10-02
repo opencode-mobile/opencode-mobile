@@ -278,6 +278,9 @@ nonisolated struct MessageDomainAdapter: Sendable {
                 followUpDelivery: FollowUpDelivery.fromWire(item.delivery)
             )
         }
+        // Inbox items carry no agent or model; the server records the session's current
+        // ones on delivery, so inherit them from the newest message that has them.
+        let context = messages.last { $0.model != nil && $0.mode != "compaction" }
         let materialized = userItems
             .filter { !existingIDs.contains($0.id) }
             .map { item -> Message in
@@ -289,8 +292,11 @@ nonisolated struct MessageDomainAdapter: Sendable {
                     parts: text.isEmpty
                         ? []
                         : [.text(TextPart(id: "\(item.id):text:0", text: text, isStreaming: false))],
-                    model: nil,
-                    mode: nil,
+                    model: context?.model,
+                    modelProviderID: context?.modelProviderID,
+                    modelID: context?.modelID,
+                    variant: context?.variant,
+                    mode: context?.mode,
                     sentAtEpochMs: item.timeCreated,
                     followUpDelivery: FollowUpDelivery.fromWire(item.delivery),
                     isWaitingForPickup: true

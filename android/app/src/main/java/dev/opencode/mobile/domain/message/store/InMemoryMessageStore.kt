@@ -124,7 +124,7 @@ class InMemoryMessageStore
             if (infoJson != null) {
                 val info = tryParseInfoDto(infoJson) ?: return baseById[messageId]
                 val messageParts = orderedParts(sessionId, messageId, parts, orders)
-                val message = adapter.toMessage(info, messageParts)
+                val message = adapter.toMessage(info, messageParts).withMetadataFrom(baseById[messageId])
                 return when {
                     message.hasRenderableContent() -> message
                     else -> baseById[messageId]
@@ -306,6 +306,9 @@ class InMemoryMessageStore
                 previous?.isWaiting()
                     ?: (baseMessages[sessionId]?.lastOrNull { it.id == messageId }?.isWaitingForPickup == true)
             val delivered = !inserted && isUserInfo && wasWaiting && !waiting
+            // v2 `inbox.delivered` carries no parts; publish it so the prompt leaves the
+            // pending strip and shows as a bubble before the first step starts.
+            val pickupChanged = !inserted && isUserInfo && wasWaiting != waiting
             if (inserted && isUserInfo && waiting) {
                 order.add(messageId)
             } else if (inserted) {
@@ -318,7 +321,23 @@ class InMemoryMessageStore
                 sessionRevision = 0,
                 insertedMessageIds = if (inserted) setOf(messageId) else emptySet(),
                 changedMessageIds = if (inserted) emptySet() else setOf(messageId),
+                pickupStateChangedIds = if (pickupChanged) setOf(messageId) else emptySet(),
                 structuralChange = inserted || delivered,
+            )
+        }
+
+        /**
+         * v2 live infos are partial (a delivered prompt has no agent or model); keep the
+         * REST/inbox copy's agent, model and variant so the bubble keeps its meta line.
+         */
+        private fun Message.withMetadataFrom(base: Message?): Message {
+            if (base == null || (mode != null && model != null)) return this
+            return copy(
+                mode = mode ?: base.mode,
+                model = model ?: base.model,
+                modelProviderId = if (model == null) base.modelProviderId else modelProviderId,
+                modelId = if (model == null) base.modelId else modelId,
+                variant = if (model == null) base.variant else variant,
             )
         }
 

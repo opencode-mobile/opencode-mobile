@@ -325,6 +325,9 @@ class MessageDomainAdapter {
                     followUpDelivery = FollowUpDelivery.fromWire(item.delivery),
                 )
             }
+        // Inbox items carry no agent or model; the server records the session's current
+        // ones on delivery, so inherit them from the newest message that has them.
+        val context = messages.lastOrNull { it.model != null && it.mode != "compaction" }
         val materialized =
             userItems
                 .filter { it.id !in existingIds }
@@ -335,6 +338,11 @@ class MessageDomainAdapter {
                         role = MessageRole.User,
                         text = text,
                         parts = listOf(MessagePart.Text(text = text, id = "${item.id}:text:0")),
+                        model = context?.model,
+                        modelProviderId = context?.modelProviderId,
+                        modelId = context?.modelId,
+                        variant = context?.variant,
+                        mode = context?.mode,
                         sentAtEpochMs = item.createdAtEpochMs,
                         followUpDelivery = FollowUpDelivery.fromWire(item.delivery),
                         isWaitingForPickup = true,

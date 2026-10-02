@@ -52,6 +52,51 @@ class SessionMessageEngineTest {
     }
 
     @Test
+    fun deliveredPrompt_infoOnlyUpdate_isLivePublishable() {
+        val waitingInfo =
+            buildJsonObject {
+                put("id", "msg-u")
+                put("role", "user")
+                put("sessionID", "ses-1")
+                put("waiting", true)
+                put("delivery", "steer")
+            }
+        engine.apply("ses-1", MessagePatch.InfoUpdated(waitingInfo))
+        engine.apply(
+            "ses-1",
+            MessagePatch.PartUpdated(
+                buildJsonObject {
+                    put("id", "msg-u:text:0")
+                    put("messageID", "msg-u")
+                    put("sessionID", "ses-1")
+                    put("type", "text")
+                    put("text", "Say hello.")
+                },
+                delta = null,
+            ),
+        )
+        assertTrue(engine.messages("ses-1").single().isWaitingForPickup)
+
+        // v2 `session.inbox.delivered` projects to an info with no parts.
+        val result =
+            engine.apply(
+                "ses-1",
+                MessagePatch.InfoUpdated(
+                    buildJsonObject {
+                        put("id", "msg-u")
+                        put("role", "user")
+                        put("sessionID", "ses-1")
+                        put("waiting", false)
+                    },
+                ),
+            )
+        val changeSet = (result as MessageStoreApplyResult.Changed).changeSet
+        assertEquals(setOf("msg-u"), changeSet.pickupStateChangedIds)
+        assertTrue(engine.shouldPublishLive(changeSet))
+        assertFalse(engine.messages("ses-1").single().isWaitingForPickup)
+    }
+
+    @Test
     fun userInsert_landsBeforeStreamingAssistant() {
         engine.replaceAll(
             "ses-1",
