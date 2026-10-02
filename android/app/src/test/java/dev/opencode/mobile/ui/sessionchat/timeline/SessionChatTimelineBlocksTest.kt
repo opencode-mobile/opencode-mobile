@@ -870,7 +870,7 @@ class SessionChatTimelineBlocksTest {
         assertEquals(3, group.count)
         assertEquals(ToolStatus.Running, group.status)
         assertEquals("Explored — 1 read · 1 grep · 1 glob", group.title)
-        assertEquals("a.kt", group.subtitle)
+        assertEquals("3 tools", group.subtitle)
     }
 
     @Test
@@ -896,7 +896,7 @@ class SessionChatTimelineBlocksTest {
             ).single() as SessionChatTimelineBlock.ToolGroup
 
         assertEquals("Explored — 2 searches", group.title)
-        assertEquals("one", group.subtitle)
+        assertEquals("2 tools", group.subtitle)
     }
 
     @Test
@@ -1814,7 +1814,7 @@ class SessionChatTimelineBlocksTest {
         val group = blocks[0] as SessionChatTimelineBlock.ToolGroup
         assertEquals(PresentationBlockId.toolGroup(listOf("prt-1", "prt-2")), group.blockID)
         assertEquals("Explored — 2 reads", group.title)
-        assertNull(group.subtitle)
+        assertEquals("2 tools", group.subtitle)
         assertTrue(blocks[1] is SessionChatTimelineBlock.ToolCard)
     }
 
@@ -1852,7 +1852,7 @@ class SessionChatTimelineBlocksTest {
         assertEquals(PresentationBlockId.toolGroup(listOf("prt-1", "prt-3")), group.blockID)
         assertEquals(2, group.count)
         assertEquals("Explored — 2 reads", group.title)
-        assertNull(group.subtitle)
+        assertEquals("2 tools", group.subtitle)
     }
 
     @Test
@@ -2209,6 +2209,8 @@ class SessionChatTimelineBlocksTest {
         val summary = requireNotNull(paragraph.exploreSummary)
         assertEquals("Explored \u00b7 1 glob \u00b7 1 grep \u00b7 1 search \u00b7 1 fetch", summary.label)
         assertEquals("Explored \u2014 1 glob \u00b7 1 grep \u00b7 1 search \u00b7 1 fetch", summary.title)
+        // The detail subtitle sums up the group; each member row keeps its own argument.
+        assertEquals("4 tools", summary.subtitle)
         assertEquals(ToolStatus.Completed, summary.status)
         assertEquals(PresentationBlockId.toolGroup(listOf("p1", "p2", "p3", "p4")), summary.blockID)
         assertEquals(listOf("p1", "p2", "p3", "p4").map(PresentationBlockId::direct), summary.members.map { it.blockID })
@@ -2420,7 +2422,7 @@ class SessionChatTimelineBlocksTest {
         val summary = requireNotNull((blocks.single() as SessionChatTimelineBlock.StepParagraph).exploreSummary)
         assertEquals("Exploring \u00b7 2 reads \u00b7 1 grep", summary.label)
         assertEquals(ToolStatus.Running, summary.status)
-        assertEquals("/a/b.kt", summary.subtitle)
+        assertEquals("3 tools", summary.subtitle)
         assertEquals(3, summary.members.size)
     }
 

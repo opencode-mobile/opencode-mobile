@@ -912,7 +912,7 @@ nonisolated enum SessionChatTimelineBlocks {
             blockID: PresentationBlockId.toolGroup(memberIds),
             label: (running ? "Exploring" : "Explored") + " \u{00B7} " + counts,
             title: "Explored \u{2014} \(counts)",
-            subtitle: tools.lazy.compactMap(contextSubtitle).first,
+            subtitle: exploredGroupSubtitle(tools),
             status: running ? .running : .completed,
             members: members
         )
@@ -1416,7 +1416,7 @@ nonisolated enum SessionChatTimelineBlocks {
     /// Context-only groups keep the first path as subtitle.
     private static func groupSubtitle(_ tools: [ToolPart]) -> String? {
         if !tools.isEmpty, tools.allSatisfy({ isContextTool($0.toolName) }) {
-            return tools.lazy.compactMap(contextSubtitle).first
+            return exploredGroupSubtitle(tools)
         }
         var order: [String] = []
         var counts: [String: Int] = [:]
@@ -1430,6 +1430,13 @@ nonisolated enum SessionChatTimelineBlocks {
         return order.map { name in
             familyPhrase(name, count: counts[name, default: 0])
         }.joined(separator: " · ")
+    }
+
+    /// One explore tool keeps its argument (a glob pattern, a path); several are `4 tools` (the title
+    /// already counts each kind, and each row keeps its own argument).
+    private static func exploredGroupSubtitle(_ tools: [ToolPart]) -> String? {
+        if tools.count == 1, let tool = tools.first { return contextSubtitle(tool) }
+        return "\(tools.count) tools"
     }
 
     private static func exploredTitle(_ tools: [ToolPart]) -> String {

@@ -499,7 +499,7 @@ object SessionChatTimelineBlocks {
             blockID = PresentationBlockId.toolGroup(memberIds),
             label = (if (running) "Exploring" else "Explored") + " · " + counts,
             title = "Explored — $counts",
-            subtitle = tools.firstNotNullOfOrNull(::contextSubtitle),
+            subtitle = exploredGroupSubtitle(tools),
             status = if (running) ToolStatus.Running else ToolStatus.Completed,
             members = members,
         )
@@ -1069,7 +1069,7 @@ object SessionChatTimelineBlocks {
      */
     private fun groupSubtitle(tools: List<MessagePart.Tool>): String? {
         if (tools.isNotEmpty() && tools.all { isContextTool(it.toolName) }) {
-            return tools.firstNotNullOfOrNull(::contextSubtitle)
+            return exploredGroupSubtitle(tools)
         }
         val order = mutableListOf<String>()
         val counts = mutableMapOf<String, Int>()
@@ -1082,6 +1082,13 @@ object SessionChatTimelineBlocks {
             familyPhrase(name, counts.getValue(name))
         }
     }
+
+    /**
+     * One explore tool keeps its argument (a glob pattern, a path); several are `4 tools` (the title
+     * already counts each kind, and each row keeps its own argument).
+     */
+    private fun exploredGroupSubtitle(tools: List<MessagePart.Tool>): String? =
+        if (tools.size == 1) contextSubtitle(tools.single()) else "${tools.size} tools"
 
     private fun exploredTitle(tools: List<MessagePart.Tool>): String {
         val order = mutableListOf<String>()

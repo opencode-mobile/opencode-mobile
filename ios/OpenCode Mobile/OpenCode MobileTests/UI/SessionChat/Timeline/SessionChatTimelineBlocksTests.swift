@@ -603,7 +603,7 @@ struct SessionChatTimelineBlocksTests {
         #expect(group.count == 3)
         #expect(group.status == .running)
         #expect(group.title == "Explored — 1 read · 1 grep · 1 glob")
-        #expect(group.subtitle == "a.kt")
+        #expect(group.subtitle == "3 tools")
     }
 
     @Test func build_consecutiveWebsearchesUseExploredSearchChrome() {
@@ -618,7 +618,7 @@ struct SessionChatTimelineBlocksTests {
             return
         }
         #expect(group.title == "Explored — 2 searches")
-        #expect(group.subtitle == "one")
+        #expect(group.subtitle == "2 tools")
     }
 
     @Test func build_textBreaksContextGroup() {
@@ -1584,7 +1584,7 @@ struct SessionChatTimelineBlocksTests {
         }
         #expect(group.count == 2)
         #expect(group.title == "Explored — 2 reads")
-        #expect(group.subtitle == nil)
+        #expect(group.subtitle == "2 tools")
         #expect(blockID == PresentationBlockId.toolGroup(["r1", "r2"]))
     }
 
@@ -1737,7 +1737,7 @@ struct SessionChatTimelineBlocksTests {
         }
         #expect(blockID == PresentationBlockId.toolGroup(["r1", "r2"]))
         #expect(group.title == "Explored — 2 reads")
-        #expect(group.subtitle == nil)
+        #expect(group.subtitle == "2 tools")
         guard case .toolCard = blocks[1] else {
             Issue.record("Expected bash card")
             return
@@ -1978,6 +1978,8 @@ struct SessionChatTimelineBlocksTests {
         let summary = try #require(paragraph.exploreSummary)
         #expect(summary.label == "Explored \u{00B7} 1 glob \u{00B7} 1 grep \u{00B7} 1 search \u{00B7} 1 fetch")
         #expect(summary.title == "Explored \u{2014} 1 glob \u{00B7} 1 grep \u{00B7} 1 search \u{00B7} 1 fetch")
+        // The detail subtitle sums up the group; each member row keeps its own argument.
+        #expect(summary.subtitle == "4 tools")
         #expect(summary.status == .completed)
         #expect(summary.blockID == PresentationBlockId.toolGroup(["g1", "gr", "ws", "wf"]))
         #expect(summary.members.map(\.toolName) == ["glob", "grep", "websearch", "webfetch"])
@@ -2573,7 +2575,7 @@ struct SessionChatTimelineBlocksTests {
         let summary = try #require(step.exploreSummary)
         #expect(summary.label == "Exploring \u{00B7} 2 reads \u{00B7} 1 grep")
         #expect(summary.status == .running)
-        #expect(summary.subtitle == "/a/b.swift")
+        #expect(summary.subtitle == "3 tools")
         #expect(summary.blockID == PresentationBlockId.toolGroup(["r1", "r2", "g1"]))
         #expect(summary.members.count == 3)
         #expect(step.chips.map(\.label) == ["ls"])
