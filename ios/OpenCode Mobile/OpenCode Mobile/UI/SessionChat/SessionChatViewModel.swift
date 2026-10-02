@@ -886,7 +886,9 @@ final class SessionChatViewModel {
         sessionInfo.stopObserving()
         inbox.stop()
         collapsePreferenceGeneration += 1
-        sessionReadyStore.setFocusedSession(sessionID: nil, directory: nil)
+        // Only release our own focus: the next Session Chat (child, parent, fork) may already
+        // have focused itself before this screen disappears.
+        sessionReadyStore.releaseFocusedSession(sessionID: sessionID)
         syncCoordinator?.markFocused(nil)
         reviewChanges.stop()
         repoStrip.stop()

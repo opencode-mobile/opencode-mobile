@@ -1525,6 +1525,7 @@ private final class ControllableReadyStore: SessionReadyStore {
 
     func notifyPromptSent(sessionID: String, directory: String) {}
     func setFocusedSession(sessionID: String?, directory: String?) {}
+    func releaseFocusedSession(sessionID: String) {}
     func bindProfile(profileID: String?) {}
     func clearCache() {}
 }

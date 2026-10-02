@@ -76,19 +76,18 @@ class DefaultSessionReadyStore
                     // Leave while Working: keep a watch even if debounced status never
                     // delivered a busy snapshot before unfocus.
                     val priorId = focusedSessionId
-                    val priorDirectory = focusedDirectory
-                    if (priorId != null && priorDirectory != null) {
-                        val type = previousTypes[priorDirectory]?.get(priorId)
-                        if (type.isBusy()) {
-                            startWatchLocked(priorId, priorDirectory, reason = "leave-while-busy")
-                        }
-                    }
+                    armLeaveWhileBusyLocked()
                     focusedSessionId = null
                     focusedDirectory = null
                     if (priorId != null) {
                         logI("focus cleared session=$priorId")
                     }
                 } else {
+                    if (focusedSessionId != sessionId) {
+                        // Moving straight to another session (child, parent, fork) leaves
+                        // the prior one just like navigating away from it.
+                        armLeaveWhileBusyLocked()
+                    }
                     focusedSessionId = sessionId
                     focusedDirectory = directory
                     // Opening Session Chat acknowledges Ready. Drop Ready and any
@@ -117,6 +116,28 @@ class DefaultSessionReadyStore
             }
             if (sessionId != null && directory != null) {
                 ensureStatusObservation(directory)
+            }
+        }
+
+        override fun releaseFocusedSession(sessionId: String) {
+            synchronized(lock) {
+                if (focusedSessionId != sessionId) {
+                    if (focusedSessionId != null) {
+                        logI("focus release ignored session=$sessionId focused=$focusedSessionId")
+                    }
+                    return
+                }
+                // synchronized is reentrant; clearing under the same lock keeps the check atomic.
+                setFocusedSession(null)
+            }
+        }
+
+        private fun armLeaveWhileBusyLocked() {
+            val priorId = focusedSessionId ?: return
+            val priorDirectory = focusedDirectory ?: return
+            val type = previousTypes[priorDirectory]?.get(priorId)
+            if (type.isBusy()) {
+                startWatchLocked(priorId, priorDirectory, reason = "leave-while-busy")
             }
         }
 

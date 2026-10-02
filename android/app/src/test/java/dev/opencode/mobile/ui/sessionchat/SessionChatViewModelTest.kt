@@ -1196,6 +1196,20 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun clearSessionReadyFocus_releasesOnlyTheBoundSession() =
+        runTest(testDispatcher) {
+            val readyStore = RecordingSessionReadyStore()
+            val viewModel = createViewModel(FakeMessageRepository(), sessionReadyStore = readyStore)
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            viewModel.clearSessionReadyFocus()
+
+            assertEquals(listOf("ses-1"), readyStore.releaseCalls)
+            assertTrue(readyStore.focusCalls.none { it.first == null })
+        }
+
+    @Test
     fun bind_sameSessionReuse_refinesProjectLabelWhenPeersChange() =
         runTest(testDispatcher) {
             val connectionProfileStore =
@@ -4631,6 +4645,7 @@ class SessionChatViewModelTest {
 
 private class RecordingSessionReadyStore : SessionReadyStore {
     val focusCalls = mutableListOf<Pair<String?, String?>>()
+    val releaseCalls = mutableListOf<String>()
 
     override fun observeReadyIds(directory: String): Flow<Set<String>> = kotlinx.coroutines.flow.flowOf(emptySet())
 
@@ -4644,6 +4659,10 @@ private class RecordingSessionReadyStore : SessionReadyStore {
         directory: String?,
     ) {
         focusCalls.add(sessionId to directory)
+    }
+
+    override fun releaseFocusedSession(sessionId: String) {
+        releaseCalls.add(sessionId)
     }
 
     override fun bindProfile(profileId: String?) = Unit

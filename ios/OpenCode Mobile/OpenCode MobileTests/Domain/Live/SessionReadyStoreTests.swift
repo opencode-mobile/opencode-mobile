@@ -74,6 +74,49 @@ final class SessionReadyStoreTests: XCTestCase {
         XCTAssertTrue(ready.latest.isEmpty)
     }
 
+    func testStaleRelease_afterReturningToParent_keepsParentFocused() async {
+        let statusStore = FakeReadyStatusStore()
+        let eventStream = FakeForegroundEventStream()
+        let store = DefaultSessionReadyStore(sessionStatusLiveStore: statusStore, eventStream: eventStream)
+        let ready = ReadyCollector(store: store, directory: "/repo")
+        await ready.waitForSubscription()
+
+        store.setFocusedSession(sessionID: "parent", directory: "/repo")
+        store.notifyPromptSent(sessionID: "parent", directory: "/repo")
+        statusStore.emit(directory: "/repo", statuses: ["parent": status(type: "busy", sessionID: "parent")])
+        await settle()
+        // Open the child, then "Back to main session": the parent re-focuses before the
+        // leaving child (and the earlier parent appearance) release their focus.
+        store.setFocusedSession(sessionID: "child", directory: "/repo")
+        store.releaseFocusedSession(sessionID: "parent")
+        store.setFocusedSession(sessionID: "parent", directory: "/repo")
+        store.releaseFocusedSession(sessionID: "child")
+        statusStore.emit(directory: "/repo", statuses: ["parent": status(type: "idle", sessionID: "parent")])
+        await settle()
+        ready.cancel()
+
+        XCTAssertTrue(ready.latest.isEmpty)
+    }
+
+    func testSwitchingFocusToAnotherSession_whileBusy_marksPriorReady() async {
+        let statusStore = FakeReadyStatusStore()
+        let eventStream = FakeForegroundEventStream()
+        let store = DefaultSessionReadyStore(sessionStatusLiveStore: statusStore, eventStream: eventStream)
+        let ready = ReadyCollector(store: store, directory: "/repo")
+        await ready.waitForSubscription()
+
+        store.setFocusedSession(sessionID: "parent", directory: "/repo")
+        statusStore.emit(directory: "/repo", statuses: ["parent": status(type: "busy", sessionID: "parent")])
+        await settle()
+        store.setFocusedSession(sessionID: "child", directory: "/repo")
+        store.releaseFocusedSession(sessionID: "parent")
+        statusStore.emit(directory: "/repo", statuses: ["parent": status(type: "idle", sessionID: "parent")])
+        await ready.waitUntil { $0.contains("parent") }
+        ready.cancel()
+
+        XCTAssertEqual(ready.latest, ["parent"])
+    }
+
     func testSetFocusedSession_clearsReady() async {
         let statusStore = FakeReadyStatusStore()
         let eventStream = FakeForegroundEventStream()
@@ -377,8 +420,8 @@ final class SessionReadyStoreTests: XCTestCase {
         XCTAssertEqual(statusStore.liveSubscriberCount(directory: "/repo"), 1)
     }
 
-    private func status(type: String) -> SessionStatus {
-        SessionStatus(sessionID: "ses-1", raw: ["type": type])
+    private func status(type: String, sessionID: String = "ses-1") -> SessionStatus {
+        SessionStatus(sessionID: sessionID, raw: ["type": type])
     }
 
     private func settle() async {

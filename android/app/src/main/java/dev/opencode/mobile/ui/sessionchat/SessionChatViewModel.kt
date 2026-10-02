@@ -436,7 +436,9 @@ class SessionChatViewModel
         }
 
         fun clearSessionReadyFocus() {
-            sessionReadyStore.setFocusedSession(null)
+            // Only release our own focus: the next Session Chat (child, parent, fork) may
+            // already have focused itself before this screen leaves composition.
+            boundSessionId?.let { sessionReadyStore.releaseFocusedSession(it) }
         }
 
         fun loadMessages() {
