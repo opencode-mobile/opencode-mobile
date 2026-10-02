@@ -1,5 +1,6 @@
 package dev.opencode.mobile.domain.session
 
+import dev.opencode.mobile.data.remote.HttpBodyResponseException
 import dev.opencode.mobile.data.remote.dto.ApiSessionActiveDto
 import dev.opencode.mobile.data.remote.dto.FileDiffDto
 import dev.opencode.mobile.data.remote.dto.MessageTokensDto
@@ -298,6 +299,12 @@ class SessionDomainAdapter {
     fun mapError(throwable: Throwable): SessionError =
         when (throwable) {
             is SessionError -> throwable
+            is HttpBodyResponseException ->
+                SessionError.Http(
+                    statusCode = throwable.response.status.value,
+                    message = throwable.message,
+                    body = throwable.bodyText,
+                )
             is ResponseException ->
                 SessionError.Http(
                     statusCode = throwable.response.status.value,

@@ -260,7 +260,10 @@ final class SessionChatInbox {
                 }
                 state.permissionError = "Permission request is no longer available"
             } else {
-                state.permissionError = error.localizedDescription
+                OpenCodeLog.sessionChat.warning(
+                    "permission reply failed request=\(request.id) decision=\(decision) error=\(error.localizedDescription)"
+                )
+                state.permissionError = InteractionReplyError.permissionReply.message(for: error)
             }
             notifyChange()
         }
@@ -361,10 +364,14 @@ final class SessionChatInbox {
             if state.visibleQuestionRequest?.id == requestID {
                 state.questionError = "Question request is no longer available"
             }
-        } else if state.visibleQuestionRequest?.id == requestID {
-            state.questionError = error.localizedDescription.isEmpty
-                ? (dismiss ? "Question dismiss failed" : "Question response failed")
-                : error.localizedDescription
+        } else {
+            OpenCodeLog.sessionChat.warning(
+                "question \(dismiss ? "dismiss" : "reply") failed request=\(requestID) error=\(error.localizedDescription)"
+            )
+            if state.visibleQuestionRequest?.id == requestID {
+                let failure: InteractionReplyError = dismiss ? .questionDismiss : .questionReply
+                state.questionError = failure.message(for: error)
+            }
         }
         notifyChange()
     }

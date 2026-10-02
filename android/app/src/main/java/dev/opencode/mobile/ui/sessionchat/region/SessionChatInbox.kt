@@ -311,10 +311,11 @@ class SessionChatInbox(
                         )
                     }
                 } else {
+                    logW("permission reply failed request=${request.id} decision=$decision", it)
                     _state.update { state ->
                         state.copy(
                             permissionSubmittingId = null,
-                            permissionError = it.message ?: "Permission response failed",
+                            permissionError = InteractionReplyError.PermissionReply.message(it),
                         )
                     }
                 }
@@ -457,14 +458,10 @@ class SessionChatInbox(
             }
             return
         }
+        logW("question ${if (dismiss) "dismiss" else "reply"} failed request=$requestId", error)
         if (_state.value.visibleQuestionRequest?.id == requestId) {
-            _state.update { current ->
-                current.copy(
-                    questionError =
-                        error.message
-                            ?: if (dismiss) "Question dismiss failed" else "Question response failed",
-                )
-            }
+            val failure = if (dismiss) InteractionReplyError.QuestionDismiss else InteractionReplyError.QuestionReply
+            _state.update { current -> current.copy(questionError = failure.message(error)) }
         }
     }
 
@@ -494,5 +491,13 @@ class SessionChatInbox(
 
     private fun logI(message: String) {
         DiagnosticLog.info(DiagnosticLogArea.Chat, message)
+    }
+
+    private fun logW(
+        message: String,
+        error: Throwable,
+    ) {
+        val body = (error as? SessionError.Http)?.let { " status=${it.statusCode} body=${it.body.orEmpty().take(500)}" }
+        DiagnosticLog.warning(DiagnosticLogArea.Chat, message + body.orEmpty(), error)
     }
 }

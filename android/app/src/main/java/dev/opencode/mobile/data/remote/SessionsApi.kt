@@ -340,7 +340,7 @@ class SessionsApi private constructor(
             .post("session/$sessionId/permissions/$permissionId") {
                 applyDirectory(directory)
                 setJsonBody(json, body)
-            }.body()
+            }.bodyOnSuccess()
 
     suspend fun replyToQuestion(
         requestId: String,
@@ -352,7 +352,7 @@ class SessionsApi private constructor(
             .post("question/$requestId/reply") {
                 applyDirectory(directory)
                 setJsonBody(json, body)
-            }.body()
+            }.bodyOnSuccess()
 
     suspend fun rejectQuestion(
         requestId: String,
@@ -362,7 +362,7 @@ class SessionsApi private constructor(
             .get()
             .post("question/$requestId/reject") {
                 applyDirectory(directory)
-            }.body()
+            }.bodyOnSuccess()
 
     suspend fun listPendingPermissionsV2(directory: String? = null): List<V2PermissionRequestDto> =
         httpClient
@@ -604,18 +604,20 @@ class SessionsApi private constructor(
      * which skips the question→form fallback.
      */
     private suspend inline fun <reified T> HttpResponse.bodyOnSuccess(): T {
-        if (!status.isSuccess()) {
-            throw ResponseException(this, "HTTP ${status.value}: ${status.description}")
-        }
+        if (!status.isSuccess()) throw failure()
         return body()
     }
 
     private suspend fun HttpResponse.ensureSuccess(): Boolean {
-        if (!status.isSuccess()) {
-            throw ResponseException(this, "HTTP ${status.value}: ${status.description}")
-        }
+        if (!status.isSuccess()) throw failure()
         bodyAsText()
         return true
+    }
+
+    /** Keeps the error body (v2 sends `{"_tag":…,"message":…}`) for user-facing messages. */
+    private suspend fun HttpResponse.failure(): ResponseException {
+        val text = runCatching { bodyAsText() }.getOrDefault("")
+        return HttpBodyResponseException(this, text.ifBlank { "HTTP ${status.value}: ${status.description}" })
     }
 
     private fun interface ClientProvider {

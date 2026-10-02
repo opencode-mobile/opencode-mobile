@@ -246,6 +246,8 @@ sealed class SessionError : Exception() {
     data class Http(
         val statusCode: Int,
         override val message: String?,
+        /** Raw response body, when it was read. */
+        val body: String? = null,
     ) : SessionError()
 
     data class Decoding(
