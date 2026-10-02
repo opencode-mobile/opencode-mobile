@@ -25,8 +25,15 @@ class DefaultProjectRepository
         }
 
         override suspend fun listProjects(): List<Project> =
-            runCatching { projectsApi.listProjects().map(adapter::toProject) }
-                .getOrElse { throw adapter.mapProbeError(it) }
+            runCatching {
+                val dtos =
+                    if (activeConnectionManager.currentProtocolOrProbe() == ServerProtocol.V2) {
+                        projectsApi.listProjectsV2()
+                    } else {
+                        projectsApi.listProjects()
+                    }
+                dtos.map(adapter::toProject)
+            }.getOrElse { throw adapter.mapProbeError(it) }
 
         override suspend fun getCurrentProject(directory: String?): Project =
             runCatching {

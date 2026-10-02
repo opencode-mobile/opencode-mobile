@@ -2,6 +2,7 @@ package dev.opencode.mobile.data.remote
 
 import dev.opencode.mobile.data.remote.dto.ProjectDto
 import dev.opencode.mobile.data.remote.dto.V2LocationInfoDto
+import dev.opencode.mobile.data.remote.dto.V2ProjectDto
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.applyDirectory
 import dev.opencode.mobile.network.applyLocationDirectory
@@ -17,6 +18,13 @@ class ProjectsApi private constructor(
     internal constructor(httpClient: HttpClient) : this(ClientProvider { httpClient })
 
     suspend fun listProjects(): List<ProjectDto> = httpClient.get().get("project").body()
+
+    suspend fun listProjectsV2(): List<ProjectDto> =
+        httpClient
+            .get()
+            .get("api/project")
+            .body<List<V2ProjectDto>>()
+            .map { ProjectDto(id = it.id, directory = it.canonical) }
 
     suspend fun getCurrentProject(directory: String? = null): ProjectDto =
         httpClient

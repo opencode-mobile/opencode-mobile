@@ -223,6 +223,42 @@ struct SessionProtocolRepositoryTests {
         #expect(queryValue(url, "directory") == nil)
     }
 
+    @Test func v2ListProjectsUsesApiProjectAndCanonical() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [
+            .json(#"[{"id":"proj_2","canonical":"/Users/me/app","vcs":"git","time":{"created":1,"updated":1},"sandboxes":[]}]"#)
+        ])
+        let manager = makeManager(serverProtocol: .v2)
+        let repository = DefaultProjectRepository(
+            api: ProjectsAPIClient(fixedConnection: try #require(manager.connection), urlSession: makeURLSession()),
+            adapter: ProjectDomainAdapter(),
+            activeConnectionManager: manager
+        )
+
+        let projects = try await repository.listProjects()
+
+        #expect(projects.map(\.id) == ["proj_2"])
+        #expect(projects.map(\.worktree) == ["/Users/me/app"])
+        let url = try #require(ProtocolRoutingURLProtocol.requests.first?.url)
+        #expect(url.path.hasSuffix("/api/project"))
+    }
+
+    @Test func v1ListProjectsUsesProjectAndWorktree() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [.json(#"[{"id":"proj_1","worktree":"/repo","vcs":"git"}]"#)])
+        let manager = makeManager(serverProtocol: .v1)
+        let repository = DefaultProjectRepository(
+            api: ProjectsAPIClient(fixedConnection: try #require(manager.connection), urlSession: makeURLSession()),
+            adapter: ProjectDomainAdapter(),
+            activeConnectionManager: manager
+        )
+
+        let projects = try await repository.listProjects()
+
+        #expect(projects.map(\.worktree) == ["/repo"])
+        let url = try #require(ProtocolRoutingURLProtocol.requests.first?.url)
+        #expect(url.path.hasSuffix("/project"))
+        #expect(!url.path.hasSuffix("/api/project"))
+    }
+
     @Test func v1ProjectCurrentKeepsDirectoryQuery() async throws {
         ProtocolRoutingURLProtocol.reset(responses: [.json(#"{"id":"proj_1","worktree":"/repo"}"#)])
         let manager = makeManager(serverProtocol: .v1)

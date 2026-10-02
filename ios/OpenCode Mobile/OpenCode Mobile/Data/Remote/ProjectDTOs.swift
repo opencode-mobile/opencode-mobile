@@ -26,3 +26,10 @@ struct ProjectDTO: Codable, Sendable {
         return ""
     }
 }
+
+/// v2 `GET /api/project` item: the project root is `canonical`.
+nonisolated struct V2ProjectDTO: Decodable, Sendable {
+    let id: String
+    let canonical: String
+    let name: String?
+}
