@@ -15,6 +15,7 @@ enum ComponentGalleryEntryID: String, Hashable {
     case typography
     case icons
     case skeletonIllustration
+    case pageIndicator
     case attachment
     case outgoingMessage
     case pendingPromptsStrip
@@ -82,6 +83,12 @@ let componentGalleryEntries = [
         title: "Skeleton Illustration",
         description: "Wireframe hero with one spotlit element for onboarding, tutorials, and hints.",
         category: .foundations
+    ),
+    ComponentGalleryEntry(
+        id: .pageIndicator,
+        title: "Page Indicator",
+        description: "Pager position dots under onboarding and promo carousels.",
+        category: .navigation
     ),
     ComponentGalleryEntry(
         id: .typography,

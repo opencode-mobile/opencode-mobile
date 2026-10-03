@@ -85,6 +85,7 @@ import dev.opencode.mobile.ui.componentgallery.components.SessionListGalleryScre
 import dev.opencode.mobile.ui.componentgallery.components.SessionStatusBarGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SessionTodoItemGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SessionTodosPillGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.PageIndicatorGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SkeletonIllustrationGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SnackbarGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.StatusStackGalleryScreen
@@ -528,6 +529,7 @@ fun MainNavigation() {
                                                         ComponentGalleryEntryId.Icons -> IconsGalleryScreen()
                                                         ComponentGalleryEntryId.SkeletonIllustration ->
                                                             SkeletonIllustrationGalleryScreen()
+                                                        ComponentGalleryEntryId.PageIndicator -> PageIndicatorGalleryScreen()
                                                         ComponentGalleryEntryId.Attachment -> AttachmentGalleryScreen()
                                                         ComponentGalleryEntryId.OutgoingMessage -> OutgoingMessageGalleryScreen()
                                                         ComponentGalleryEntryId.PendingPromptsStrip ->

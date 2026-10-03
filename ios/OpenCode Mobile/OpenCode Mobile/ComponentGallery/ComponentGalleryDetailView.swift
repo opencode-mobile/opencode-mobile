@@ -84,6 +84,8 @@ struct ComponentGalleryDetailView: View {
             IconsGalleryView()
         case .skeletonIllustration:
             SkeletonIllustrationGalleryView()
+        case .pageIndicator:
+            PageIndicatorGalleryView()
         case .attachment:
             AttachmentGalleryView()
         case .outgoingMessage:

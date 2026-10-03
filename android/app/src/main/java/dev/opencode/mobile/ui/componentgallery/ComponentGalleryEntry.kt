@@ -20,6 +20,7 @@ enum class ComponentGalleryEntryId {
     Typography,
     Icons,
     SkeletonIllustration,
+    PageIndicator,
     Attachment,
     OutgoingMessage,
     PendingPromptsStrip,
@@ -88,6 +89,12 @@ val ComponentGalleryEntries =
             title = "Skeleton Illustration",
             description = "Wireframe hero with one spotlit element for onboarding, tutorials, and hints.",
             category = ComponentGalleryCategory.Foundations,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.PageIndicator,
+            title = "Page Indicator",
+            description = "Pager position dots under onboarding and promo carousels.",
+            category = ComponentGalleryCategory.Navigation,
         ),
         ComponentGalleryEntry(
             id = ComponentGalleryEntryId.Typography,
