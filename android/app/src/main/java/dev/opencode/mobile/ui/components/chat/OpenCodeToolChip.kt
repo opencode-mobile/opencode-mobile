@@ -14,13 +14,19 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -29,13 +35,18 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.LinearGradientShader
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.Shader
+import androidx.compose.ui.graphics.ShaderBrush
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.AlignmentLine
 import androidx.compose.ui.layout.HorizontalAlignmentLine
 import androidx.compose.ui.layout.VerticalAlignmentLine
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -48,6 +59,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.opencode.mobile.theme.OpenCodeTheme
+import kotlinx.coroutines.delay
+import kotlin.math.PI
+import kotlin.math.cos
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
@@ -56,7 +70,6 @@ private val ToolChipPaddingStart = 8.dp
 private val ToolChipPaddingEnd = 10.dp
 private val ToolChipPaddingVertical = 6.dp
 private val ToolChipIconSize = 12.dp
-private val ToolChipSpinnerSize = 11.dp
 private val ToolChipContentSpacing = 6.dp
 private val ToolChipBriefMaxWidth = 160.dp
 private val ToolChipMinHeight = 36.dp
@@ -64,6 +77,10 @@ private val ToolChipAgentTileSize = 18.dp
 private val ToolChipAgentTileCornerRadius = 5.dp
 private const val TOOL_CHIP_AGENT_TILE_ALPHA = 0.14f
 private val ToolChipMinTouchTarget = 48.dp
+private const val TOOL_CHIP_RUNNING_REVEAL_DELAY_MS = 250L
+private const val TOOL_CHIP_RUNNING_CYCLE_MS = 1300
+private const val TOOL_CHIP_SHIMMER_HALF_WIDTH = 0.3f
+private const val TOOL_CHIP_RUNNING_ICON_MIN_ALPHA = 0.35f
 
 /** Variant-first content of a [OpenCodeToolChip]; colours and radius are not exposed. */
 sealed class OpenCodeToolChipVariant {
@@ -136,7 +153,22 @@ fun OpenCodeToolChip(
         is OpenCodeToolChipVariant.More -> require(variant.count > 0) { "Tool Chip more count must be positive" }
     }
     val effectiveStatus = if (variant is OpenCodeToolChipVariant.More) OpenCodeToolChipStatus.Completed else status
-    val colors = toolChipColors(variant, effectiveStatus)
+    val isRunning = effectiveStatus == OpenCodeToolChipStatus.Running
+    // Until the chip has been running for the reveal delay it looks idle, so
+    // commands that finish quickly never flash. Static previews skip the delay.
+    val inspectionMode = LocalInspectionMode.current
+    var runningRevealed by remember { mutableStateOf(inspectionMode) }
+    LaunchedEffect(isRunning) {
+        if (isRunning && !inspectionMode) {
+            delay(TOOL_CHIP_RUNNING_REVEAL_DELAY_MS)
+            runningRevealed = true
+        } else {
+            runningRevealed = inspectionMode
+        }
+    }
+    val showsRunningTreatment = isRunning && runningRevealed
+    val runningPhase = if (showsRunningTreatment) rememberRunningPhase() else null
+    val colors = toolChipColors(variant, effectiveStatus, showsRunningTreatment)
     val shape = RoundedCornerShape(ToolChipCornerRadius)
     val interactionSource = remember { MutableInteractionSource() }
     val accessibilityLabel = toolChipAccessibilityLabel(variant, status, trailingText)
@@ -198,20 +230,10 @@ fun OpenCodeToolChip(
                             ),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        modifier = Modifier.size(ToolChipIconSize),
-                        tint = colors.icon,
-                    )
+                    ToolChipLeadingIcon(icon, colors.icon, runningPhase)
                 }
             } else {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    modifier = Modifier.size(ToolChipIconSize),
-                    tint = colors.icon,
-                )
+                ToolChipLeadingIcon(icon, colors.icon, runningPhase)
             }
         }
 
@@ -229,8 +251,12 @@ fun OpenCodeToolChip(
             }
         Text(
             text = variant.primaryText(),
-            style = labelStyle,
-            color = colors.label,
+            style =
+                if (runningPhase != null) {
+                    labelStyle.copy(brush = runningShimmerBrush(runningPhase.value))
+                } else {
+                    labelStyle.copy(color = colors.label)
+                },
             maxLines = 1,
             overflow =
                 if (variant is OpenCodeToolChipVariant.File) TextOverflow.MiddleEllipsis else TextOverflow.Ellipsis,
@@ -272,12 +298,6 @@ fun OpenCodeToolChip(
 
         if (variant !is OpenCodeToolChipVariant.More) {
             when (effectiveStatus) {
-                OpenCodeToolChipStatus.Running ->
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(ToolChipSpinnerSize),
-                        color = openCodeColor("warning"),
-                        strokeWidth = 1.5.dp,
-                    )
                 OpenCodeToolChipStatus.Error ->
                     Icon(
                         imageVector = OpenCodeIcons.Close,
@@ -301,10 +321,74 @@ fun OpenCodeToolChip(
                             tint = openCodeColor("success"),
                         )
                     }
-                OpenCodeToolChipStatus.Pending -> Unit
+                OpenCodeToolChipStatus.Running, OpenCodeToolChipStatus.Pending -> Unit
             }
         }
     }
+}
+
+@Composable
+private fun ToolChipLeadingIcon(
+    icon: ImageVector,
+    tint: Color,
+    runningPhase: State<Float>?,
+) {
+    Icon(
+        imageVector = icon,
+        contentDescription = null,
+        modifier =
+            Modifier
+                .size(ToolChipIconSize)
+                .then(
+                    // Read in the draw phase so the breathing never recomposes.
+                    if (runningPhase != null) Modifier.graphicsLayer { alpha = runningIconAlpha(runningPhase.value) } else Modifier,
+                ),
+        tint = tint,
+    )
+}
+
+/**
+ * 0…1 through one running cycle, derived from the shared frame clock rather
+ * than a per-chip animation, so chips that start running at different times
+ * still sweep in step (iOS keys off wall-clock time the same way).
+ */
+@Composable
+private fun rememberRunningPhase(): State<Float> {
+    val phase = remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            withFrameMillis { frameMillis ->
+                phase.floatValue = (frameMillis % TOOL_CHIP_RUNNING_CYCLE_MS).toFloat() / TOOL_CHIP_RUNNING_CYCLE_MS
+            }
+        }
+    }
+    return phase
+}
+
+/**
+ * A warning-coloured band, `2 × TOOL_CHIP_SHIMMER_HALF_WIDTH` label widths wide,
+ * sweeping left to right across `text-base` text.
+ */
+@Composable
+private fun runningShimmerBrush(phase: Float): ShaderBrush {
+    val base = openCodeColor("text-base")
+    val highlight = openCodeColor("warning")
+    val half = TOOL_CHIP_SHIMMER_HALF_WIDTH
+    val center = -half + phase * (1 + 2 * half)
+    return object : ShaderBrush() {
+        override fun createShader(size: Size): Shader =
+            LinearGradientShader(
+                from = Offset(size.width * (center - half), 0f),
+                to = Offset(size.width * (center + half), 0f),
+                colors = listOf(base, highlight, base),
+            )
+    }
+}
+
+/** Full opacity at the start of the cycle, dimmest halfway through. */
+private fun runningIconAlpha(phase: Float): Float {
+    val mid = (1 + TOOL_CHIP_RUNNING_ICON_MIN_ALPHA) / 2
+    return mid + (1 - mid) * cos(2 * PI * phase).toFloat()
 }
 
 private data class ToolChipColors(
@@ -318,6 +402,7 @@ private data class ToolChipColors(
 private fun toolChipColors(
     variant: OpenCodeToolChipVariant,
     status: OpenCodeToolChipStatus,
+    showsRunningTreatment: Boolean,
 ): ToolChipColors {
     val base =
         ToolChipColors(
@@ -351,10 +436,9 @@ private fun toolChipColors(
                 label = if (variant is OpenCodeToolChipVariant.Agent) error else byVariant.label,
             )
         }
-        OpenCodeToolChipStatus.Running -> {
-            val warning = openCodeColor("warning")
-            byVariant.copy(background = warning.copy(alpha = 0.12f), border = warning.copy(alpha = 0.4f))
-        }
+        // Fill and outline stay put; the label shimmer and icon carry "running".
+        OpenCodeToolChipStatus.Running ->
+            if (showsRunningTreatment) byVariant.copy(icon = openCodeColor("warning")) else byVariant
         OpenCodeToolChipStatus.Pending -> byVariant.copy(label = openCodeColor("text-base"))
         OpenCodeToolChipStatus.Interrupted -> byVariant.copy(label = openCodeColor("text-base"))
         OpenCodeToolChipStatus.Completed -> byVariant
