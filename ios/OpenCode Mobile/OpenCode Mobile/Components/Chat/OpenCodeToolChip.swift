@@ -33,6 +33,11 @@ struct OpenCodeToolChip: View {
     let trailingText: String?
     let action: (() -> Void)?
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Set once the chip has been running for `runningRevealDelay`; until then
+    /// a running chip looks idle, so commands that finish quickly never flash.
+    @State private var runningRevealed = false
+
     init(
         variant: OpenCodeToolChipVariant,
         status: OpenCodeToolChipStatus = .completed,
@@ -70,6 +75,17 @@ struct OpenCodeToolChip: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityLabel)
         .accessibilityAddTraits(action == nil ? [] : .isButton)
+        .task(id: isRunning) {
+            guard isRunning else {
+                runningRevealed = false
+                return
+            }
+            try? await Task.sleep(for: Self.runningRevealDelay)
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeOut(duration: Self.runningFadeDuration)) {
+                runningRevealed = true
+            }
+        }
     }
 
     private var chipContent: some View {
@@ -78,29 +94,21 @@ struct OpenCodeToolChip: View {
                 if case .agent = variant {
                     // Agents get a tinted tile so the chip reads as "someone
                     // else did this" without tinting the whole chip.
-                    OpenCodeIconImage(icon: icon, size: Self.iconSize)
-                        .foregroundStyle(iconColor)
-                        .fixedSize()
+                    leadingIconImage(icon)
                         .frame(width: Self.agentTileSize, height: Self.agentTileSize)
                         .background(
                             OpenCodeColors.info.opacity(Self.agentTileOpacity),
                             in: RoundedRectangle(cornerRadius: Self.agentTileCornerRadius)
                         )
                 } else {
-                    OpenCodeIconImage(icon: icon, size: Self.iconSize)
-                        .foregroundStyle(iconColor)
-                        .fixedSize()
+                    leadingIconImage(icon)
                 }
             }
 
             // Label shrinks before anything else so a long path or command
             // truncates instead of pushing the status glyph off the chip; the
             // chip itself may take the whole row (see OpenCodeChipFlowLayout).
-            Text(label)
-                .font(labelFont)
-                .foregroundStyle(labelColor)
-                .lineLimit(1)
-                .truncationMode(labelTruncationMode)
+            labelView
                 .layoutPriority(1)
 
             if case .agent(_, let brief?) = variant, !brief.isEmpty {
@@ -148,6 +156,84 @@ struct OpenCodeToolChip: View {
         }
         // 44pt tap target without growing the visual chip or overlapping neighbours.
         .contentShape(ToolChipHitShape(minHeight: Self.minTapTarget))
+    }
+
+    // MARK: - Running treatment
+
+    private var isRunning: Bool {
+        effectiveStatus == .running
+    }
+
+    /// Running and past the reveal delay: the label shimmers toward the
+    /// warning colour and the leading icon breathes in step. The chip's fill
+    /// and outline stay as they are.
+    private var showsRunningTreatment: Bool {
+        isRunning && runningRevealed
+    }
+
+    private var animatesRunningTreatment: Bool {
+        showsRunningTreatment && !reduceMotion
+    }
+
+    private var labelText: Text {
+        Text(label)
+            .font(labelFont)
+    }
+
+    @ViewBuilder
+    private var labelView: some View {
+        if animatesRunningTreatment {
+            TimelineView(.animation) { context in
+                labelText
+                    .foregroundStyle(Self.runningShimmer(phase: Self.runningPhase(at: context.date)))
+                    .lineLimit(1)
+                    .truncationMode(labelTruncationMode)
+            }
+        } else {
+            labelText
+                .foregroundStyle(labelColor)
+                .lineLimit(1)
+                .truncationMode(labelTruncationMode)
+        }
+    }
+
+    @ViewBuilder
+    private func leadingIconImage(_ icon: OpenCodeIcon) -> some View {
+        if animatesRunningTreatment {
+            TimelineView(.animation) { context in
+                OpenCodeIconImage(icon: icon, size: Self.iconSize)
+                    .foregroundStyle(iconColor)
+                    .opacity(Self.runningIconOpacity(phase: Self.runningPhase(at: context.date)))
+                    .fixedSize()
+            }
+        } else {
+            OpenCodeIconImage(icon: icon, size: Self.iconSize)
+                .foregroundStyle(iconColor)
+                .fixedSize()
+        }
+    }
+
+    /// 0…1 through one running cycle; every running chip shares the clock so
+    /// neighbouring chips sweep in step.
+    private static func runningPhase(at date: Date) -> Double {
+        date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: runningCycle) / runningCycle
+    }
+
+    /// A warning-coloured band, `2 × shimmerHalfWidth` label widths wide,
+    /// sweeping left to right across `textBase` text.
+    private static func runningShimmer(phase: Double) -> LinearGradient {
+        let center = -shimmerHalfWidth + phase * (1 + 2 * shimmerHalfWidth)
+        return LinearGradient(
+            colors: [OpenCodeColors.textBase, OpenCodeColors.warning, OpenCodeColors.textBase],
+            startPoint: UnitPoint(x: center - shimmerHalfWidth, y: 0.5),
+            endPoint: UnitPoint(x: center + shimmerHalfWidth, y: 0.5)
+        )
+    }
+
+    /// Full opacity at the start of the cycle, dimmest halfway through.
+    private static func runningIconOpacity(phase: Double) -> Double {
+        let mid = (1 + runningIconMinOpacity) / 2
+        return mid + (1 - mid) * cos(2 * .pi * phase)
     }
 
     // MARK: - Content
@@ -238,16 +324,11 @@ struct OpenCodeToolChip: View {
             OpenCodeIconImage(icon: .close, size: Self.glyphSize)
                 .foregroundStyle(OpenCodeColors.error)
                 .fixedSize()
-        case .running?:
-            ProgressView()
-                .controlSize(.mini)
-                .tint(OpenCodeColors.warning)
-                .frame(width: Self.glyphSize, height: Self.glyphSize)
         case .interrupted?:
             OpenCodeIconImage(icon: .stopCircle, size: Self.glyphSize)
                 .foregroundStyle(OpenCodeColors.textWeak)
                 .fixedSize()
-        case .pending?, nil:
+        case .running?, .pending?, nil:
             EmptyView()
         }
     }
@@ -284,6 +365,8 @@ struct OpenCodeToolChip: View {
         switch (variant, effectiveStatus) {
         case (_, .error?):
             OpenCodeColors.error
+        case (_, .running?) where showsRunningTreatment:
+            OpenCodeColors.warning
         case (.agent, _):
             OpenCodeColors.info
         case (.skill, _):
@@ -297,8 +380,6 @@ struct OpenCodeToolChip: View {
         switch (variant, effectiveStatus) {
         case (_, .error?):
             OpenCodeColors.surfaceCriticalBase
-        case (_, .running?):
-            OpenCodeColors.warning.opacity(Self.runningBackgroundOpacity)
         case (.skill, _):
             OpenCodeColors.surfaceInteractiveWeak
         default:
@@ -310,8 +391,6 @@ struct OpenCodeToolChip: View {
         switch (variant, effectiveStatus) {
         case (_, .error?):
             OpenCodeColors.error.opacity(Self.stateBorderOpacity)
-        case (_, .running?):
-            OpenCodeColors.warning.opacity(Self.stateBorderOpacity)
         case (.agent, _):
             OpenCodeColors.info.opacity(Self.agentBorderOpacity)
         default:
@@ -367,7 +446,11 @@ struct OpenCodeToolChip: View {
     private static let glyphSize: CGFloat = 11
     private static let minHeight: CGFloat = 36
     private static let minTapTarget: CGFloat = 44
-    private static let runningBackgroundOpacity = 0.12
+    private static let runningRevealDelay: Duration = .milliseconds(250)
+    private static let runningFadeDuration = 0.25
+    private static let runningCycle = 1.3
+    private static let shimmerHalfWidth = 0.3
+    private static let runningIconMinOpacity = 0.35
     private static let agentTileOpacity = 0.14
     private static let agentTileSize: CGFloat = 18
     private static let agentTileCornerRadius: CGFloat = 5
