@@ -401,7 +401,7 @@ struct SessionChatView: View {
         .sessionChatToolDetailSheet(target: $toolDetailTarget)
         .sessionChatSkillsSheet(target: $skillsTarget)
         // Waits for any view-owned sheet to close so the intro never stacks on one.
-        .sessionChatChipTimelineIntroSheet(
+        .sessionChatChipTimelineIntro(
             isPresented: viewModel.uiState.chipTimelineIntroVisible && !viewSheetOpen,
             onEnable: { viewModel.enableChipTimelineFromIntro() },
             onLater: { viewModel.postponeChipTimelineIntro() },

@@ -332,10 +332,10 @@ private extension GraphicsContext {
         }
         fill(
             Path(roundedRect: CGRect(x: x + 6, y: y + 6, width: 6, height: 6), cornerRadius: 1.5),
-            with: .color(palette.textWeaker)
+            with: .color(palette.borderWeakBase)
         )
         let labelWidth = w - 22 - (diff ? 20 : 0)
-        skeletonBar(x: x + 16, y: y + 6, w: labelWidth, h: 6, color: palette.textWeak, palette: palette)
+        skeletonBar(x: x + 16, y: y + 6, w: labelWidth, h: 6, palette: palette)
         if diff {
             skeletonBar(x: x + w - 24, y: y + 6, w: 8, h: 6, color: palette.diffAdd, palette: palette)
             skeletonBar(x: x + w - 14, y: y + 6, w: 8, h: 6, color: palette.diffDelete, palette: palette)
@@ -349,15 +349,15 @@ private extension GraphicsContext {
             Path(roundedRect: CGRect(x: 160, y: 28, width: 112, height: 22), cornerRadius: 11),
             with: .color(palette.surfaceInteractiveWeak)
         )
-        skeletonBar(x: 172, y: 36, w: 84, h: 6, color: palette.textInteractiveBase, palette: palette)
-        skeletonBar(x: 64, y: 62, w: 196, h: 7, color: palette.textBase, palette: palette)
-        skeletonBar(x: 64, y: 75, w: 138, h: 7, color: palette.textBase, palette: palette)
+        skeletonBar(x: 172, y: 36, w: 84, h: 6, palette: palette)
+        skeletonBar(x: 64, y: 62, w: 196, h: 7, palette: palette)
+        skeletonBar(x: 64, y: 75, w: 138, h: 7, palette: palette)
         skeletonGlow(x: 64, y: 90, w: 206, h: 18, cornerRadius: 6, palette: palette)
         skeletonChip(x: 64, y: 90, w: 62, lit: true, palette: palette)
         skeletonChip(x: 132, y: 90, w: 78, lit: true, diff: true, palette: palette)
         skeletonChip(x: 216, y: 90, w: 54, lit: true, palette: palette)
-        skeletonBar(x: 64, y: 124, w: 176, h: 7, color: palette.textBase, palette: palette)
-        skeletonBar(x: 64, y: 137, w: 110, h: 7, color: palette.textBase, palette: palette)
+        skeletonBar(x: 64, y: 124, w: 176, h: 7, palette: palette)
+        skeletonBar(x: 64, y: 137, w: 110, h: 7, palette: palette)
         skeletonChip(x: 64, y: 152, w: 70, palette: palette)
         skeletonChip(x: 140, y: 152, w: 58, palette: palette)
     }
@@ -379,9 +379,9 @@ private extension GraphicsContext {
         arrow.move(to: CGPoint(x: 166, y: 86))
         arrow.addLine(to: CGPoint(x: 172, y: 92))
         arrow.addLine(to: CGPoint(x: 166, y: 98))
-        stroke(arrow, with: .color(palette.textWeak), style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
-        skeletonBar(x: 184, y: 62, w: 86, h: 7, color: palette.textBase, palette: palette)
-        skeletonBar(x: 184, y: 75, w: 60, h: 7, color: palette.textBase, palette: palette)
+        stroke(arrow, with: .color(palette.textWeaker), style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+        skeletonBar(x: 184, y: 62, w: 86, h: 7, palette: palette)
+        skeletonBar(x: 184, y: 75, w: 60, h: 7, palette: palette)
         skeletonGlow(x: 184, y: 90, w: 86, h: 40, cornerRadius: 6, palette: palette)
         skeletonChip(x: 184, y: 90, w: 46, lit: true, palette: palette)
         skeletonChip(x: 234, y: 90, w: 36, lit: true, palette: palette)
@@ -391,12 +391,12 @@ private extension GraphicsContext {
     /// One lit chip opens its detail: a file header with diff lines.
     mutating func drawChipTimelineDetailsSkeleton(palette: SkeletonIllustrationPalette) {
         skeletonFrame(palette: palette)
-        skeletonBar(x: 64, y: 30, w: 186, h: 7, color: palette.textBase, palette: palette)
-        skeletonBar(x: 64, y: 43, w: 124, h: 7, color: palette.textBase, palette: palette)
+        skeletonBar(x: 64, y: 30, w: 186, h: 7, palette: palette)
+        skeletonBar(x: 64, y: 43, w: 124, h: 7, palette: palette)
         skeletonChip(x: 64, y: 58, w: 62, palette: palette)
         skeletonChip(x: 132, y: 58, w: 84, lit: true, diff: true, palette: palette)
         skeletonCard(x: 64, y: 92, w: 208, h: 86, lit: false, palette: palette)
-        skeletonBar(x: 76, y: 102, w: 96, h: 7, color: palette.textBase, palette: palette)
+        skeletonBar(x: 76, y: 102, w: 96, h: 7, palette: palette)
         let lines: [(CGFloat, Color?)] = [(150, nil), (128, palette.diffDelete), (160, palette.diffAdd), (112, palette.diffAdd), (140, nil)]
         for (index, line) in lines.enumerated() {
             let y = 118 + CGFloat(index) * 11

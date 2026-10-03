@@ -220,15 +220,15 @@ private fun DrawScope.drawChipTimelineGlance(colors: SkeletonIllustrationColors)
         size = Size(112f, 22f),
         cornerRadius = CornerRadius(11f),
     )
-    bar(colors, x = 172f, y = 36f, w = 84f, h = 6f, color = colors.textInteractiveBase)
-    bar(colors, x = 64f, y = 62f, w = 196f, h = 7f, color = colors.textBase)
-    bar(colors, x = 64f, y = 75f, w = 138f, h = 7f, color = colors.textBase)
+    bar(colors, x = 172f, y = 36f, w = 84f, h = 6f)
+    bar(colors, x = 64f, y = 62f, w = 196f, h = 7f)
+    bar(colors, x = 64f, y = 75f, w = 138f, h = 7f)
     glow(colors, x = 64f, y = 90f, w = 206f, h = 18f, cornerRadius = 6f)
     chip(colors, x = 64f, y = 90f, w = 62f, lit = true)
     chip(colors, x = 132f, y = 90f, w = 78f, lit = true, diff = true)
     chip(colors, x = 216f, y = 90f, w = 54f, lit = true)
-    bar(colors, x = 64f, y = 124f, w = 176f, h = 7f, color = colors.textBase)
-    bar(colors, x = 64f, y = 137f, w = 110f, h = 7f, color = colors.textBase)
+    bar(colors, x = 64f, y = 124f, w = 176f, h = 7f)
+    bar(colors, x = 64f, y = 137f, w = 110f, h = 7f)
     chip(colors, x = 64f, y = 152f, w = 70f)
     chip(colors, x = 140f, y = 152f, w = 58f)
 }
@@ -247,11 +247,11 @@ private fun DrawScope.drawChipTimelineLongRuns(colors: SkeletonIllustrationColor
         bar(colors, x = 78f, y = y + 1f, w = width, h = 6f, color = colors.borderWeakerBase)
     }
     val arrowStroke = 2f
-    drawLine(colors.textWeak, Offset(156f, 92f), Offset(172f, 92f), arrowStroke, StrokeCap.Round)
-    drawLine(colors.textWeak, Offset(166f, 86f), Offset(172f, 92f), arrowStroke, StrokeCap.Round)
-    drawLine(colors.textWeak, Offset(166f, 98f), Offset(172f, 92f), arrowStroke, StrokeCap.Round)
-    bar(colors, x = 184f, y = 62f, w = 86f, h = 7f, color = colors.textBase)
-    bar(colors, x = 184f, y = 75f, w = 60f, h = 7f, color = colors.textBase)
+    drawLine(colors.textWeaker, Offset(156f, 92f), Offset(172f, 92f), arrowStroke, StrokeCap.Round)
+    drawLine(colors.textWeaker, Offset(166f, 86f), Offset(172f, 92f), arrowStroke, StrokeCap.Round)
+    drawLine(colors.textWeaker, Offset(166f, 98f), Offset(172f, 92f), arrowStroke, StrokeCap.Round)
+    bar(colors, x = 184f, y = 62f, w = 86f, h = 7f)
+    bar(colors, x = 184f, y = 75f, w = 60f, h = 7f)
     glow(colors, x = 184f, y = 90f, w = 86f, h = 40f, cornerRadius = 6f)
     chip(colors, x = 184f, y = 90f, w = 46f, lit = true)
     chip(colors, x = 234f, y = 90f, w = 36f, lit = true)
@@ -261,12 +261,12 @@ private fun DrawScope.drawChipTimelineLongRuns(colors: SkeletonIllustrationColor
 /** One lit chip opens its detail: a file header with diff lines. */
 private fun DrawScope.drawChipTimelineDetails(colors: SkeletonIllustrationColors) {
     frame(colors)
-    bar(colors, x = 64f, y = 30f, w = 186f, h = 7f, color = colors.textBase)
-    bar(colors, x = 64f, y = 43f, w = 124f, h = 7f, color = colors.textBase)
+    bar(colors, x = 64f, y = 30f, w = 186f, h = 7f)
+    bar(colors, x = 64f, y = 43f, w = 124f, h = 7f)
     chip(colors, x = 64f, y = 58f, w = 62f)
     chip(colors, x = 132f, y = 58f, w = 84f, lit = true, diff = true)
     card(colors, x = 64f, y = 92f, w = 208f, h = 86f, lit = false)
-    bar(colors, x = 76f, y = 102f, w = 96f, h = 7f, color = colors.textBase)
+    bar(colors, x = 76f, y = 102f, w = 96f, h = 7f)
     listOf(
         150f to null,
         128f to colors.diffDelete,
@@ -303,12 +303,12 @@ private fun DrawScope.chip(
         card(colors, x, y, w, h, lit = false, cornerRadius = 6f)
     }
     drawRoundRect(
-        color = colors.textWeaker,
+        color = colors.borderWeakBase,
         topLeft = Offset(x + 6f, y + 6f),
         size = Size(6f, 6f),
         cornerRadius = CornerRadius(1.5f),
     )
-    bar(colors, x = x + 16f, y = y + 6f, w = w - 22f - (if (diff) 20f else 0f), h = 6f, color = colors.textWeak)
+    bar(colors, x = x + 16f, y = y + 6f, w = w - 22f - (if (diff) 20f else 0f), h = 6f)
     if (diff) {
         bar(colors, x = x + w - 24f, y = y + 6f, w = 8f, h = 6f, color = colors.diffAdd)
         bar(colors, x = x + w - 14f, y = y + 6f, w = 8f, h = 6f, color = colors.diffDelete)

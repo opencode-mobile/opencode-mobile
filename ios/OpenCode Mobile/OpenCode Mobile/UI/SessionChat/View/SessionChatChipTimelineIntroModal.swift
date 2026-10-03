@@ -29,9 +29,9 @@ struct SessionChatChipTimelineIntroPage: Identifiable, Hashable {
     ]
 }
 
-/// One-time offer to turn on Chip timeline (OPE-270), in the onboarding carousel
-/// style. Swipe and scrim count as Later.
-struct SessionChatChipTimelineIntroSheetModifier: ViewModifier {
+/// One-time offer to turn on Chip timeline (OPE-270): an onboarding-style carousel
+/// in a centered modal. Close and scrim tap count as Later.
+struct SessionChatChipTimelineIntroModifier: ViewModifier {
     let isPresented: Bool
     let onEnable: () -> Void
     let onLater: () -> Void
@@ -41,68 +41,56 @@ struct SessionChatChipTimelineIntroSheetModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .openCodeBottomSheet(
-                isPresented: sheetPresentedBinding,
-                title: "Try Chip timeline",
-                alwaysFixedHeight: true,
-                content: {
-                    VStack(spacing: 12) {
-                        TabView(selection: $pageIndex) {
-                            ForEach(Array(SessionChatChipTimelineIntroPage.pages.enumerated()), id: \.element.id) {
-                                index, page in
-                                pageView(page).tag(index)
-                            }
-                        }
-                        .tabViewStyle(.page(indexDisplayMode: .never))
-                        .frame(height: 196)
-
-                        OpenCodePageIndicator(
-                            pageCount: SessionChatChipTimelineIntroPage.pages.count,
-                            currentPage: pageIndex
-                        )
-
-                        VStack(spacing: 8) {
-                            OpenCodeButton(
-                                variant: .fullWidthText(title: "Turn on Chip timeline"),
-                                action: onEnable
-                            )
-                            HStack(spacing: 8) {
-                                OpenCodeButton(
-                                    variant: .fullWidthText(title: "Later"),
-                                    size: .medium,
-                                    contrast: .low,
-                                    action: onLater
-                                )
-                                OpenCodeButton(
-                                    variant: .fullWidthText(title: "Don't show again"),
-                                    size: .medium,
-                                    contrast: .low,
-                                    action: onNever
-                                )
-                            }
+            .openCodeModal(isPresented: presentedBinding) {
+                VStack(spacing: 0) {
+                    TabView(selection: $pageIndex) {
+                        ForEach(Array(SessionChatChipTimelineIntroPage.pages.enumerated()), id: \.element.id) {
+                            index, page in
+                            pageView(page).tag(index)
                         }
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 8)
+                    .tabViewStyle(.page(indexDisplayMode: .never))
+                    .frame(height: 270)
+
+                    OpenCodePageIndicator(
+                        pageCount: SessionChatChipTimelineIntroPage.pages.count,
+                        currentPage: pageIndex
+                    )
+                    .padding(.top, 16)
+                    .padding(.bottom, 22)
+
+                    OpenCodeButton(
+                        variant: .fullWidthText(title: "Turn on Chip timeline"),
+                        action: onEnable
+                    )
+
+                    HStack(spacing: 24) {
+                        textAction("Later", action: onLater)
+                        textAction("Don't show again", action: onNever)
+                    }
+                    .padding(.top, 8)
                 }
-            )
+            }
             .onChange(of: isPresented, initial: true) { _, presented in
                 guard presented else { return }
                 pageIndex = 0
                 ProductAnalytics.logScreenView(
                     screenId: ProductAnalytics.Screen.sessionChipTimelineIntro,
-                    presentation: ProductAnalytics.Presentation.sheet,
+                    presentation: ProductAnalytics.Presentation.dialog,
                     trigger: ProductAnalytics.Trigger.present
                 )
             }
     }
 
     private func pageView(_ page: SessionChatChipTimelineIntroPage) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             OpenCodeSkeletonIllustration(topic: page.illustration)
+                .padding(.top, 20)
                 .frame(maxWidth: .infinity)
-                .frame(height: 116)
+                .frame(height: 184)
+                .background(OpenCodeColors.surfaceRaisedBase)
                 .clipShape(RoundedRectangle(cornerRadius: 20))
+                .padding(.bottom, 6)
             Text(page.title)
                 .font(OpenCodeTypography.title)
                 .foregroundStyle(OpenCodeColors.textStrong)
@@ -115,7 +103,15 @@ struct SessionChatChipTimelineIntroSheetModifier: ViewModifier {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private var sheetPresentedBinding: Binding<Bool> {
+    /// Quiet secondary action, styled like onboarding's Skip.
+    private func textAction(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(title, action: action)
+            .font(OpenCodeTypography.body)
+            .foregroundStyle(OpenCodeColors.textWeak)
+            .padding(.vertical, 8)
+    }
+
+    private var presentedBinding: Binding<Bool> {
         Binding(
             get: { isPresented },
             set: { presented in
@@ -126,14 +122,14 @@ struct SessionChatChipTimelineIntroSheetModifier: ViewModifier {
 }
 
 extension View {
-    func sessionChatChipTimelineIntroSheet(
+    func sessionChatChipTimelineIntro(
         isPresented: Bool,
         onEnable: @escaping () -> Void,
         onLater: @escaping () -> Void,
         onNever: @escaping () -> Void
     ) -> some View {
         modifier(
-            SessionChatChipTimelineIntroSheetModifier(
+            SessionChatChipTimelineIntroModifier(
                 isPresented: isPresented,
                 onEnable: onEnable,
                 onLater: onLater,

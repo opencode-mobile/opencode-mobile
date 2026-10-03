@@ -93,7 +93,7 @@ import dev.opencode.mobile.ui.sessionchat.view.SessionChatPickerSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatTimelineView
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatTimelineViewProps
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatTodosSheet
-import dev.opencode.mobile.ui.sessionchat.view.SessionChatChipTimelineIntroSheet
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatChipTimelineIntroModal
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatSkillsSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatSkillsTarget
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolDetailSheet
@@ -903,7 +903,7 @@ fun SessionChatScreen(
                 showAttachmentSource ||
                 activePicker != null ||
                 showDeleteConfirmation
-        SessionChatChipTimelineIntroSheet(
+        SessionChatChipTimelineIntroModal(
             visible = uiState.chipTimelineIntroVisible && !screenSheetOpen,
             onEnable = viewModel::enableChipTimelineFromIntro,
             onLater = viewModel::postponeChipTimelineIntro,

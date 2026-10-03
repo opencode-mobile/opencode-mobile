@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.sessionchat.view
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,6 +12,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
@@ -20,11 +22,9 @@ import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
 import dev.opencode.mobile.theme.openCodeColor
-import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeButton
-import dev.opencode.mobile.ui.components.OpenCodeButtonContrast
-import dev.opencode.mobile.ui.components.OpenCodeButtonSize
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
+import dev.opencode.mobile.ui.components.OpenCodeModal
 import dev.opencode.mobile.ui.components.OpenCodePageIndicator
 import dev.opencode.mobile.ui.components.OpenCodeSkeletonIllustration
 import dev.opencode.mobile.ui.components.OpenCodeSkeletonIllustrationTopic
@@ -56,11 +56,11 @@ internal val ChipTimelineIntroPages =
     )
 
 /**
- * One-time offer to turn on Chip timeline (OPE-270), in the onboarding carousel
- * style. Swipe, scrim, and back count as Later.
+ * One-time offer to turn on Chip timeline (OPE-270): an onboarding-style carousel
+ * in a centered modal. Close, scrim tap, and back count as Later.
  */
 @Composable
-internal fun SessionChatChipTimelineIntroSheet(
+internal fun SessionChatChipTimelineIntroModal(
     visible: Boolean,
     onEnable: () -> Unit,
     onLater: () -> Unit,
@@ -68,7 +68,7 @@ internal fun SessionChatChipTimelineIntroSheet(
 ) {
     ProductPresentedScreenViewEffect(
         screenId = ProductAnalytics.Screen.SESSION_CHIP_TIMELINE_INTRO,
-        presentation = ProductAnalytics.Presentation.SHEET,
+        presentation = ProductAnalytics.Presentation.DIALOG,
         visible = visible,
     )
     val pagerState = rememberPagerState(pageCount = { ChipTimelineIntroPages.size })
@@ -76,54 +76,42 @@ internal fun SessionChatChipTimelineIntroSheet(
         if (visible) pagerState.scrollToPage(0)
     }
 
-    OpenCodeBottomSheet(
-        visible = visible,
-        title = "Try Chip timeline",
-        onDismissRequest = onLater,
-        alwaysFixedHeight = true,
-    ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            HorizontalPager(
-                state = pagerState,
-                pageSpacing = 16.dp,
-                modifier = Modifier.fillMaxWidth().height(196.dp),
-            ) { index ->
-                ChipTimelineIntroPageContent(ChipTimelineIntroPages[index])
-            }
-            OpenCodePageIndicator(
-                pageCount = ChipTimelineIntroPages.size,
-                currentPage = pagerState.currentPage,
-            )
-            Column(
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                OpenCodeButton(
-                    variant = OpenCodeButtonVariant.FullWidthText("Turn on Chip timeline"),
-                    onClick = onEnable,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OpenCodeButton(
-                        variant = OpenCodeButtonVariant.FullWidthText("Later"),
-                        onClick = onLater,
-                        contrast = OpenCodeButtonContrast.Low,
-                        size = OpenCodeButtonSize.Medium,
-                        modifier = Modifier.weight(1f),
-                    )
-                    OpenCodeButton(
-                        variant = OpenCodeButtonVariant.FullWidthText("Don't show again"),
-                        onClick = onNever,
-                        contrast = OpenCodeButtonContrast.Low,
-                        size = OpenCodeButtonSize.Medium,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-            }
+    OpenCodeModal(visible = visible, onDismissRequest = onLater) {
+        HorizontalPager(
+            state = pagerState,
+            pageSpacing = 16.dp,
+            modifier = Modifier.fillMaxWidth().height(274.dp),
+        ) { index ->
+            ChipTimelineIntroPageContent(ChipTimelineIntroPages[index])
         }
+        OpenCodePageIndicator(
+            pageCount = ChipTimelineIntroPages.size,
+            currentPage = pagerState.currentPage,
+            modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 16.dp, bottom = 22.dp),
+        )
+        OpenCodeButton(
+            variant = OpenCodeButtonVariant.FullWidthText("Turn on Chip timeline"),
+            onClick = onEnable,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+        ) {
+            ChipTimelineIntroTextAction("Later", onLater)
+            ChipTimelineIntroTextAction("Don't show again", onNever)
+        }
+    }
+}
+
+/** Quiet secondary action, styled like onboarding's Skip. */
+@Composable
+private fun ChipTimelineIntroTextAction(
+    title: String,
+    onClick: () -> Unit,
+) {
+    TextButton(onClick = onClick) {
+        Text(text = title, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -131,20 +119,23 @@ internal fun SessionChatChipTimelineIntroSheet(
 private fun ChipTimelineIntroPageContent(page: SessionChatChipTimelineIntroPage) {
     Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         OpenCodeSkeletonIllustration(
             topic = page.illustration,
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .height(116.dp)
-                    .clip(RoundedCornerShape(20.dp)),
+                    .height(184.dp)
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(openCodeColor("surface-raised-base"))
+                    .padding(top = 20.dp),
         )
         Text(
             text = page.title,
             style = MaterialTheme.typography.titleLarge,
             color = openCodeColor("text-strong"),
+            modifier = Modifier.padding(top = 6.dp),
         )
         Text(
             text = page.body,

@@ -33,6 +33,7 @@ enum class ComponentGalleryEntryId {
     OverflowMenu,
     BottomSheet,
     Dialog,
+    Modal,
     Snackbar,
     ListItem,
     ListGroup,
@@ -202,6 +203,12 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.Dialog,
             title = "Dialog",
             description = "Centered popup with title, optional subtitle, two options, and optional text field.",
+            category = ComponentGalleryCategory.Navigation,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.Modal,
+            title = "Modal",
+            description = "Centered card with a close button and custom content for promos and short walkthroughs.",
             category = ComponentGalleryCategory.Navigation,
         ),
         ComponentGalleryEntry(
