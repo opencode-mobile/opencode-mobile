@@ -1,11 +1,5 @@
 package dev.opencode.mobile.ui.components
 
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -28,9 +22,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -351,15 +347,23 @@ private fun ToolChipLeadingIcon(
     )
 }
 
-/** 0…1 through one running cycle, repeating while the chip shows the running treatment. */
+/**
+ * 0…1 through one running cycle, derived from the shared frame clock rather
+ * than a per-chip animation, so chips that start running at different times
+ * still sweep in step (iOS keys off wall-clock time the same way).
+ */
 @Composable
-private fun rememberRunningPhase(): State<Float> =
-    rememberInfiniteTransition(label = "toolChipRunning").animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(TOOL_CHIP_RUNNING_CYCLE_MS, easing = LinearEasing), RepeatMode.Restart),
-        label = "toolChipRunningPhase",
-    )
+private fun rememberRunningPhase(): State<Float> {
+    val phase = remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            withFrameMillis { frameMillis ->
+                phase.floatValue = (frameMillis % TOOL_CHIP_RUNNING_CYCLE_MS).toFloat() / TOOL_CHIP_RUNNING_CYCLE_MS
+            }
+        }
+    }
+    return phase
+}
 
 /**
  * A warning-coloured band, `2 × TOOL_CHIP_SHIMMER_HALF_WIDTH` label widths wide,
