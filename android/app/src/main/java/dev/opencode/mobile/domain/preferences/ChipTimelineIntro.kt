@@ -39,11 +39,18 @@ object ChipTimelineIntro {
         nowMillis: Long,
     ): Long? = if (snoozedUntilMillis == null) nowMillis + SNOOZE_MILLIS else null
 
-    /** Visible tool calls in the assistant messages after the last user message. */
+    /**
+     * Visible tool calls in the last finished turn: the assistant messages after
+     * the user message that started it. User rows after the last assistant message
+     * (queued or steered follow-ups) have no reply yet and do not start a turn.
+     */
     fun lastTurnToolCalls(messages: List<Message>): Int {
-        val lastUserIndex = messages.indexOfLast { it.role == MessageRole.User }
-        return messages
-            .drop(lastUserIndex + 1)
+        val lastAssistantIndex = messages.indexOfLast { it.role == MessageRole.Assistant }
+        if (lastAssistantIndex < 0) return 0
+        val answered = messages.subList(0, lastAssistantIndex + 1)
+        val turnStart = answered.indexOfLast { it.role == MessageRole.User }
+        return answered
+            .drop(turnStart + 1)
             .filter { it.role == MessageRole.Assistant }
             .sumOf { message ->
                 message.parts.count { it is MessagePart.Tool && ToolPartIdentity.isVisibleOnTimeline(it) }

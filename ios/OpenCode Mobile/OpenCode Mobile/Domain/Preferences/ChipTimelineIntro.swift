@@ -32,10 +32,14 @@ nonisolated enum ChipTimelineIntro {
         snoozedUntilMs == nil ? nowMs + snoozeMs : nil
     }
 
-    /// Visible tool calls in the assistant messages after the last user message.
+    /// Visible tool calls in the last finished turn: the assistant messages after
+    /// the user message that started it. User rows after the last assistant message
+    /// (queued or steered follow-ups) have no reply yet and do not start a turn.
     static func lastTurnToolCalls(_ messages: [Message]) -> Int {
-        let lastUserIndex = messages.lastIndex(where: { $0.role == .user })
-        let after = lastUserIndex.map { messages.dropFirst($0 + 1) } ?? messages[...]
+        guard let lastAssistantIndex = messages.lastIndex(where: { $0.role == .assistant }) else { return 0 }
+        let answered = messages[...lastAssistantIndex]
+        let turnStart = answered.lastIndex(where: { $0.role == .user })
+        let after = turnStart.map { answered[($0 + 1)...] } ?? answered
         return after
             .filter { $0.role == .assistant }
             .reduce(0) { total, message in

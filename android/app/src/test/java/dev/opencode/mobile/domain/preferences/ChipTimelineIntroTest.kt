@@ -1,5 +1,9 @@
 package dev.opencode.mobile.domain.preferences
 
+import dev.opencode.mobile.domain.message.Message
+import dev.opencode.mobile.domain.message.MessagePart
+import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.message.ToolStatus
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -56,5 +60,38 @@ class ChipTimelineIntroTest {
     @Test
     fun secondLater_endsIntro() {
         assertNull(ChipTimelineIntro.laterSnoozeUntil(now - 1, now))
+    }
+
+    private fun tools(count: Int) = (1..count).map { MessagePart.Tool(toolName = "read", status = ToolStatus.Completed, id = "t$it") }
+
+    @Test
+    fun lastTurnToolCalls_countsAssistantsAfterLastUser() {
+        val messages =
+            listOf(
+                Message(id = "u1", role = MessageRole.User, text = "first"),
+                Message(id = "a1", role = MessageRole.Assistant, text = "", parts = tools(2)),
+                Message(id = "u2", role = MessageRole.User, text = "second"),
+                Message(id = "a2", role = MessageRole.Assistant, text = "", parts = tools(3)),
+                Message(id = "a3", role = MessageRole.Assistant, text = "", parts = tools(5)),
+            )
+
+        assertEquals(8, ChipTimelineIntro.lastTurnToolCalls(messages))
+    }
+
+    @Test
+    fun lastTurnToolCalls_queuedFollowUp_stillCountsFinishedTurn() {
+        val messages =
+            listOf(
+                Message(id = "u1", role = MessageRole.User, text = "fix it"),
+                Message(id = "a1", role = MessageRole.Assistant, text = "", parts = tools(9)),
+                Message(id = "u2", role = MessageRole.User, text = "queued follow-up"),
+            )
+
+        assertEquals(9, ChipTimelineIntro.lastTurnToolCalls(messages))
+    }
+
+    @Test
+    fun lastTurnToolCalls_noAssistant_isZero() {
+        assertEquals(0, ChipTimelineIntro.lastTurnToolCalls(listOf(Message(id = "u1", role = MessageRole.User, text = "hi"))))
     }
 }

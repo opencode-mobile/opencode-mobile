@@ -69,4 +69,21 @@ import Testing
 
         #expect(ChipTimelineIntro.lastTurnToolCalls(messages) == 2)
     }
+
+    @Test func lastTurnToolCalls_queuedFollowUp_stillCountsFinishedTurn() {
+        let tools: [MessagePart] = (1...9).map { .tool(ToolPart(id: "t\($0)", toolName: "read", status: .completed)) }
+        let messages = [
+            Message(id: "u1", role: .user, text: "fix it", model: nil, mode: nil, sentAtEpochMs: nil),
+            Message(id: "a1", role: .assistant, text: "", parts: tools, model: nil, mode: nil, sentAtEpochMs: nil),
+            Message(id: "u2", role: .user, text: "queued follow-up", model: nil, mode: nil, sentAtEpochMs: nil),
+        ]
+
+        #expect(ChipTimelineIntro.lastTurnToolCalls(messages) == 9)
+    }
+
+    @Test func lastTurnToolCalls_noAssistant_isZero() {
+        let messages = [Message(id: "u1", role: .user, text: "hi", model: nil, mode: nil, sentAtEpochMs: nil)]
+
+        #expect(ChipTimelineIntro.lastTurnToolCalls(messages) == 0)
+    }
 }
