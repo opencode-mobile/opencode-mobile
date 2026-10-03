@@ -15,7 +15,6 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
     private let connectionProfileIDProvider: @Sendable () -> String
     private let preparedHistoryCache: PreparedHistoryCache
     private let decorationCache: BlockDecorationCache
-    private let smoothStreamingUpdates: @Sendable () -> Bool
     private var memoryPressureObserver: NSObjectProtocol?
 
     init(
@@ -24,10 +23,7 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
         clock: (any DisplayMessagePipelineClock)? = nil,
         connectionProfileIDProvider: @escaping @Sendable () -> String = { "local" },
         preparedHistoryCache: PreparedHistoryCache? = nil,
-        decorationCache: BlockDecorationCache = .shared,
-        smoothStreamingUpdates: @escaping @Sendable () -> Bool = {
-            SessionChatDisplayPreferences.currentSmoothStreamingUpdates()
-        }
+        decorationCache: BlockDecorationCache = .shared
     ) {
         self.snapshotSource = messageSync
         self.contentPreparer = contentPreparer
@@ -36,7 +32,6 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
         self.connectionProfileIDProvider = connectionProfileIDProvider
         self.preparedHistoryCache = preparedHistoryCache ?? PreparedHistoryCache()
         self.decorationCache = decorationCache
-        self.smoothStreamingUpdates = smoothStreamingUpdates
         observeMemoryPressure()
     }
 
@@ -47,10 +42,7 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
         messageSync: MessageSync? = nil,
         connectionProfileIDProvider: @escaping @Sendable () -> String = { "local" },
         preparedHistoryCache: PreparedHistoryCache? = nil,
-        decorationCache: BlockDecorationCache = .shared,
-        smoothStreamingUpdates: @escaping @Sendable () -> Bool = {
-            SessionChatDisplayPreferences.currentSmoothStreamingUpdates()
-        }
+        decorationCache: BlockDecorationCache = .shared
     ) {
         self.snapshotSource = snapshotSource
         self.contentPreparer = contentPreparer
@@ -59,7 +51,6 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
         self.connectionProfileIDProvider = connectionProfileIDProvider
         self.preparedHistoryCache = preparedHistoryCache ?? PreparedHistoryCache()
         self.decorationCache = decorationCache
-        self.smoothStreamingUpdates = smoothStreamingUpdates
     }
 
     deinit {
@@ -165,7 +156,6 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
                 let decorationBacklog = DecorationBacklog()
 
                 func isDueForMaxBatch() -> Bool {
-                    if !smoothStreamingUpdates() { return true }
                     guard let lastPublishedAt else { return true }
                     return clock.now - lastPublishedAt >= streamingPrepareMaxBatchDuration
                 }

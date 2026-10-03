@@ -8,13 +8,11 @@ nonisolated final class SessionChatDisplayPreferences {
     static let shared = SessionChatDisplayPreferences()
     static let defaultCollapseConsecutiveToolCalls = true
     static let defaultChipTimeline = false
-    static let defaultSmoothStreamingUpdates = true
     static let defaultFollowUpDelivery = FollowUpDelivery.steer
 
     private enum StorageKeys {
         static let collapseConsecutiveToolCalls = "collapseConsecutiveToolCalls"
         static let chipTimeline = "chipTimeline"
-        static let smoothStreamingUpdates = "smoothStreamingUpdates"
         static let followUpDelivery = "followUpDelivery"
         static let chipTimelineIntroDone = "chipTimelineIntroDone"
         static let chipTimelineIntroSnoozedUntilMs = "chipTimelineIntroSnoozedUntilMs"
@@ -49,17 +47,7 @@ nonisolated final class SessionChatDisplayPreferences {
         chipTimelinePreference && chipTimelineAvailable
     }
 
-    /// When true, live assistant tokens coalesce into 80ms / 160ms display frames.
-    /// Off paints every streaming snapshot immediately.
-    private(set) var smoothStreamingUpdates: Bool
     private(set) var followUpDelivery: FollowUpDelivery
-
-    nonisolated static func currentSmoothStreamingUpdates(defaults: UserDefaults = .standard) -> Bool {
-        if defaults.object(forKey: StorageKeys.smoothStreamingUpdates) == nil {
-            return defaultSmoothStreamingUpdates
-        }
-        return defaults.bool(forKey: StorageKeys.smoothStreamingUpdates)
-    }
 
     init(defaults: UserDefaults = .standard, featureFlags: FeatureFlags = .shared) {
         self.defaults = defaults
@@ -73,11 +61,6 @@ nonisolated final class SessionChatDisplayPreferences {
             chipTimelinePreference = Self.defaultChipTimeline
         } else {
             chipTimelinePreference = defaults.bool(forKey: StorageKeys.chipTimeline)
-        }
-        if defaults.object(forKey: StorageKeys.smoothStreamingUpdates) == nil {
-            smoothStreamingUpdates = Self.defaultSmoothStreamingUpdates
-        } else {
-            smoothStreamingUpdates = defaults.bool(forKey: StorageKeys.smoothStreamingUpdates)
         }
         followUpDelivery = FollowUpDelivery.fromWire(defaults.string(forKey: StorageKeys.followUpDelivery))
             ?? Self.defaultFollowUpDelivery
@@ -139,11 +122,6 @@ nonisolated final class SessionChatDisplayPreferences {
         )
     }
 
-    func setSmoothStreamingUpdates(_ value: Bool) {
-        smoothStreamingUpdates = value
-        defaults.set(value, forKey: StorageKeys.smoothStreamingUpdates)
-    }
-
     func setFollowUpDelivery(_ value: FollowUpDelivery) {
         followUpDelivery = value
         defaults.set(value.wireValue, forKey: StorageKeys.followUpDelivery)
@@ -152,13 +130,11 @@ nonisolated final class SessionChatDisplayPreferences {
     func clear() {
         defaults.removeObject(forKey: StorageKeys.collapseConsecutiveToolCalls)
         defaults.removeObject(forKey: StorageKeys.chipTimeline)
-        defaults.removeObject(forKey: StorageKeys.smoothStreamingUpdates)
         defaults.removeObject(forKey: StorageKeys.followUpDelivery)
         defaults.removeObject(forKey: StorageKeys.chipTimelineIntroDone)
         defaults.removeObject(forKey: StorageKeys.chipTimelineIntroSnoozedUntilMs)
         collapseConsecutiveToolCalls = Self.defaultCollapseConsecutiveToolCalls
         chipTimelinePreference = Self.defaultChipTimeline
-        smoothStreamingUpdates = Self.defaultSmoothStreamingUpdates
         followUpDelivery = Self.defaultFollowUpDelivery
         chipTimelineIntroDone = false
         chipTimelineIntroSnoozedUntilMs = nil

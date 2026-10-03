@@ -330,10 +330,6 @@ fun MainNavigation() {
                                                 onChipTimelineChange = settingsViewModel::setChipTimeline,
                                                 chipTimelineAvailable =
                                                     SessionChatDisplayPreferences.chipTimelineAvailable,
-                                                smoothStreamingUpdates =
-                                                    SessionChatDisplayPreferences.smoothStreamingUpdates,
-                                                onSmoothStreamingUpdatesChange =
-                                                    settingsViewModel::setSmoothStreamingUpdates,
                                                 followUpDelivery =
                                                     SessionChatDisplayPreferences.followUpDelivery,
                                                 onFollowUpDeliveryChange =

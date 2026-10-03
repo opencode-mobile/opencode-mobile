@@ -177,30 +177,6 @@ struct DisplayMessagePipelineCharacterizationTests {
         _ = await waitUntil { collector.isFinished }
     }
 
-    @Test func streamingPublishesImmediatelyWhenSmoothStreamingOff() async {
-        let harness = Harness(holdSleep: true, smoothStreamingUpdates: { false })
-        let collector = CharacterizationDisplayCollector()
-        let task = Task {
-            await collector.collect(harness.pipeline.observeDisplayMessages(sessionID: "ses-1", directory: nil))
-        }
-
-        await harness.source.emit(.messages([plainAssistant("seed")], isFromCache: false))
-        _ = await waitUntil { collector.emissions.count == 1 }
-        collector.emissions.removeAll()
-        harness.clock.resetSleepCallCount()
-
-        await harness.source.emit(.messages([streamingAssistant(id: "msg-1", text: "Hello")], isFromCache: false))
-        let published = await waitUntil { collector.emissions.count == 1 }
-        #expect(published)
-        #expect(harness.clock.pendingSleep == nil)
-        #expect(harness.clock.sleepCallCount == 0)
-        #expect(collector.emissions[0].first?.text == "Hello")
-        #expect(collector.emissions[0].first?.isStreaming == true)
-
-        task.cancel()
-        _ = await waitUntil { collector.isFinished }
-    }
-
     @Test func streamingFlushesWhenMaxBatchAgeExceeded() async {
         let harness = Harness(holdSleep: true)
         let collector = CharacterizationDisplayCollector()
@@ -837,10 +813,7 @@ private final class Harness {
     let clock: ControllablePipelineClock
     let pipeline: DisplayMessagePipeline
 
-    init(
-        holdSleep: Bool = false,
-        smoothStreamingUpdates: @escaping @Sendable () -> Bool = { true }
-    ) {
+    init(holdSleep: Bool = false) {
         // Enrichment frames only publish when plain-first left rows awaiting TextMate.
         MarkdownHighlightPreferences.shared.setTextMateEnabled(true)
         let clock = ControllablePipelineClock(holdSleep: holdSleep)
@@ -848,8 +821,7 @@ private final class Harness {
         self.pipeline = DisplayMessagePipeline(
             snapshotSource: source,
             contentPreparer: preparer,
-            clock: clock,
-            smoothStreamingUpdates: smoothStreamingUpdates
+            clock: clock
         )
     }
 }
