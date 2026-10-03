@@ -30,7 +30,6 @@ fun SessionListDockGalleryScreen(modifier: Modifier = Modifier) {
     var selectedFilterId by rememberSaveable { mutableStateOf(SessionListFilterTab.ALL_ID) }
     var showCreateError by rememberSaveable { mutableStateOf(false) }
     var oneProject by rememberSaveable { mutableStateOf(false) }
-    var useProjectPicker by rememberSaveable { mutableStateOf(false) }
     var showProjectPicker by rememberSaveable { mutableStateOf(false) }
     var showNewSessionPicker by rememberSaveable { mutableStateOf(false) }
     // Null until the picker reorders, so the samples keep their authored order
@@ -76,24 +75,18 @@ fun SessionListDockGalleryScreen(modifier: Modifier = Modifier) {
                 selected = showCreateError,
                 onClick = { showCreateError = !showCreateError },
             )
-            OpenCodeChoiceBadge(
-                label = "Picker",
-                selected = useProjectPicker,
-                onClick = { useProjectPicker = !useProjectPicker },
-            )
         }
 
         OpenCodeSessionListDock(
             filterTabs = filterTabs,
             selectedFilterId = selectedFilterId,
             createError = if (showCreateError) "Could not create session. Try again." else null,
-            useProjectPicker = useProjectPicker,
             onOpenProjectPicker = { showProjectPicker = true },
             onFilterSelected = { selectedFilterId = it },
             onAddProject = {},
             onNewSession = {},
             onNewSessionLongPress =
-                if (useProjectPicker && !oneProject) {
+                if (!oneProject) {
                     { showNewSessionPicker = true }
                 } else {
                     null

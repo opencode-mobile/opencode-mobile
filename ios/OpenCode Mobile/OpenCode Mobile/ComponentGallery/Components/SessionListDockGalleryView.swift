@@ -4,7 +4,6 @@ struct SessionListDockGalleryView: View {
     @State private var selectedFilterId = SessionListFilterTab.allId
     @State private var showCreateError = false
     @State private var oneProject = false
-    @State private var useProjectPicker = false
     @State private var showProjectPicker = false
     @State private var showNewSessionPicker = false
 
@@ -36,11 +35,6 @@ struct SessionListDockGalleryView: View {
                         selected: showCreateError,
                         action: { showCreateError.toggle() }
                     )
-                    OpenCodeChoiceBadge(
-                        label: "Picker",
-                        selected: useProjectPicker,
-                        action: { useProjectPicker.toggle() }
-                    )
                 }
                 Spacer()
             }
@@ -51,12 +45,11 @@ struct SessionListDockGalleryView: View {
                 filterTabs: filterTabs,
                 selectedFilterId: selectedFilterId,
                 createError: showCreateError ? "Could not create session. Try again." : nil,
-                useProjectPicker: useProjectPicker,
                 onOpenProjectPicker: { showProjectPicker = true },
                 onFilterSelected: { selectedFilterId = $0 },
                 onAddProject: {},
                 onNewSession: {},
-                onNewSessionLongPress: useProjectPicker && !oneProject
+                onNewSessionLongPress: !oneProject
                     ? { showNewSessionPicker = true }
                     : nil
             )

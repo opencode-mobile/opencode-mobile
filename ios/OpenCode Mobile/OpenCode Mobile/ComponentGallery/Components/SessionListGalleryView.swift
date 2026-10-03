@@ -3,7 +3,6 @@ import SwiftUI
 struct SessionListGalleryView: View {
     @State private var selectedFilterId = SessionListFilterTab.allId
     @State private var oneProject = false
-    @State private var useProjectPicker = false
     @State private var showProjectPicker = false
 
     private var filterTabs: [SessionListFilterTab] {
@@ -16,7 +15,6 @@ struct SessionListGalleryView: View {
                 sessions: sessionListGallerySamples,
                 filterTabs: filterTabs,
                 selectedFilterId: selectedFilterId,
-                useProjectPicker: useProjectPicker,
                 onOpenProjectPicker: { showProjectPicker = true },
                 onFilterSelected: { selectedFilterId = $0 },
                 onSessionSelected: { _ in },
@@ -33,11 +31,6 @@ struct SessionListGalleryView: View {
                             ? sessionListGalleryOneProjectFilterTabs[0].id
                             : SessionListFilterTab.allId
                     }
-                )
-                OpenCodeChoiceBadge(
-                    label: "Picker",
-                    selected: useProjectPicker,
-                    action: { useProjectPicker.toggle() }
                 )
             }
             .padding(.horizontal, 16)

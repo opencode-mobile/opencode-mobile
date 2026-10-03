@@ -62,11 +62,8 @@ enum SessionListHomeChrome {
         return .openCatalog
     }
 
-    static func newSessionLongPressAction(
-        projects: [Project],
-        useProjectPicker: Bool
-    ) -> NewSessionAction {
-        guard useProjectPicker, projects.count >= 2 else {
+    static func newSessionLongPressAction(projects: [Project]) -> NewSessionAction {
+        guard projects.count >= 2 else {
             return .none
         }
         return .presentPicker

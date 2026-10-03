@@ -121,10 +121,8 @@ fun SessionList(
     onNewSession: () -> Unit,
     modifier: Modifier = Modifier,
     createError: String? = null,
-    useProjectPicker: Boolean = false,
     onOpenProjectPicker: () -> Unit = {},
     onFilterSelected: (String) -> Unit = {},
-    onRemoveProject: ((String) -> Unit)? = null,
     emptyContent: (@Composable () -> Unit)? = null,
     onSessionLongPress: ((SessionListSession) -> Unit)? = null,
     onNewSessionLongPress: (() -> Unit)? = null,
@@ -149,33 +147,19 @@ fun SessionList(
                 .background(background),
     ) {
         OpenCodeReadableColumn {
-            if (useProjectPicker) {
-                Crossfade(
-                    targetState = selectedFilterId,
-                    animationSpec =
-                        tween(
-                            durationMillis = SessionListScopePaging.LIST_CROSSFADE_DURATION_MS,
-                            easing = EaseInOut,
-                        ),
-                    modifier = Modifier.fillMaxSize(),
-                    label = "sessionListFilter",
-                ) { filterId ->
-                    SessionListFeedPage(
-                        sessions = sessions,
-                        filterId = filterId,
-                        listBottomFadeHeight = listBottomFadeHeight,
-                        borderWeaker = borderWeaker,
-                        background = background,
-                        emptyContent = emptyContent,
-                        revealNewestToken = revealNewestToken,
-                        onSessionSelected = onSessionSelected,
-                        onSessionLongPress = onSessionLongPress,
-                    )
-                }
-            } else {
+            Crossfade(
+                targetState = selectedFilterId,
+                animationSpec =
+                    tween(
+                        durationMillis = SessionListScopePaging.LIST_CROSSFADE_DURATION_MS,
+                        easing = EaseInOut,
+                    ),
+                modifier = Modifier.fillMaxSize(),
+                label = "sessionListFilter",
+            ) { filterId ->
                 SessionListFeedPage(
                     sessions = sessions,
-                    filterId = selectedFilterId,
+                    filterId = filterId,
                     listBottomFadeHeight = listBottomFadeHeight,
                     borderWeaker = borderWeaker,
                     background = background,
@@ -195,10 +179,8 @@ fun SessionList(
                 filterTabs = filterTabs,
                 selectedFilterId = selectedFilterId,
                 createError = createError,
-                useProjectPicker = useProjectPicker,
                 onOpenProjectPicker = onOpenProjectPicker,
                 onFilterSelected = onFilterSelected,
-                onRemoveProject = onRemoveProject,
                 onAddProject = onAddProject,
                 onNewSession = onNewSession,
                 onNewSessionLongPress = onNewSessionLongPress,

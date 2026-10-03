@@ -29,7 +29,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
 import dev.opencode.mobile.domain.connection.ConnectionProfileIdentity
-import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.session.SessionSummary
 import dev.opencode.mobile.domain.time.RelativeTimeFormatting
 import dev.opencode.mobile.theme.LetterAccent
@@ -882,11 +881,6 @@ private fun HomeProjectsContent(
                 showProjectPicker = false
             }
         }
-        LaunchedEffect(HomeDisplayPreferences.sessionListProjectPickerEnabled) {
-            if (!HomeDisplayPreferences.sessionListProjectPickerEnabled) {
-                showProjectPicker = false
-            }
-        }
         ProductPresentedScreenViewEffect(
             screenId = ProductAnalytics.Screen.HOME_FILTER_PROJECT_PICKER,
             presentation = ProductAnalytics.Presentation.SHEET,
@@ -897,7 +891,6 @@ private fun HomeProjectsContent(
             filterTabs = filterTabs,
             selectedFilterId = resolvedFilterId,
             createError = projectSessionCreateError,
-            useProjectPicker = HomeDisplayPreferences.sessionListProjectPickerEnabled,
             onOpenProjectPicker = {
                 ProductAnalytics.logUserAction(
                     screenId = ProductAnalytics.Screen.HOME,
@@ -912,7 +905,6 @@ private fun HomeProjectsContent(
                 )
                 onSelectedFilterIdChange(filterId)
             },
-            onRemoveProject = onRemoveProject,
             onSessionSelected = { session ->
                 ProductAnalytics.logUserAction(
                     screenId = ProductAnalytics.Screen.HOME,
@@ -946,7 +938,6 @@ private fun HomeProjectsContent(
                 if (
                     SessionListHomeChrome.newSessionLongPressAction(
                         projects = chromeProjects,
-                        useProjectPicker = HomeDisplayPreferences.sessionListProjectPickerEnabled,
                     ) is SessionListHomeChrome.NewSessionAction.PresentPicker
                 ) {
                     onRequestNewSessionProjectPicker
