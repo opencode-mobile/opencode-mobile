@@ -5,6 +5,12 @@ import Testing
 @Suite(.serialized)
 @MainActor
 struct SessionChatViewModelTests {
+    init() {
+        // The test host app settles Chip timeline on launch (a fresh simulator
+        // resolves on), so start every test from the stored defaults.
+        SessionChatDisplayPreferences.shared.clear()
+    }
+
     @Test func expandStepParagraph_publishesExpansionInUiState() {
         let viewModel = makeViewModel(sessionRepository: FakeChatSessionRepository())
         defer { viewModel.stopObserving() }

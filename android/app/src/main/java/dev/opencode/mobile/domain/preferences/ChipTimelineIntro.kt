@@ -19,6 +19,13 @@ object ChipTimelineIntro {
     /** Pause after the turn finishes so the user sees the result first. */
     const val SETTLE_DELAY_MILLIS = 1_500L
 
+    /**
+     * Starting Chip timeline value, settled once per install: a fresh install
+     * starts on it; an install that already had the standard timeline keeps it
+     * and is offered the intro instead.
+     */
+    fun startingChipTimeline(existingInstall: Boolean): Boolean = !existingInstall
+
     fun shouldShow(
         chipTimelineAvailable: Boolean,
         chipTimelineOn: Boolean,

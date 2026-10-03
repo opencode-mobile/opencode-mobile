@@ -119,6 +119,19 @@ object SessionChatDisplayPreferences {
             ?.apply()
     }
 
+    /**
+     * Settles the starting Chip timeline value once per install (OPE-270).
+     * [existingInstall] is true when the app opens past App onboarding. A
+     * stored value, from an earlier launch or a Settings choice, always wins.
+     */
+    fun resolveChipTimelineForInstall(existingInstall: Boolean) {
+        val prefs = prefs() ?: return
+        if (prefs.contains(KEY_CHIP_TIMELINE)) return
+        val value = ChipTimelineIntro.startingChipTimeline(existingInstall)
+        chipTimelinePreference = value
+        prefs.edit().putBoolean(KEY_CHIP_TIMELINE, value).apply()
+    }
+
     /** Intro sheet "Don't show again", or a second Later. */
     fun finishChipTimelineIntro() {
         chipTimelineIntroDone = true

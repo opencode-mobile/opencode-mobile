@@ -98,6 +98,16 @@ nonisolated final class SessionChatDisplayPreferences {
         finishChipTimelineIntro()
     }
 
+    /// Settles the starting Chip timeline value once per install (OPE-270).
+    /// `existingInstall` is true when the app opens past App onboarding. A
+    /// stored value, from an earlier launch or a Settings choice, always wins.
+    func resolveChipTimelineForInstall(existingInstall: Bool) {
+        guard defaults.object(forKey: StorageKeys.chipTimeline) == nil else { return }
+        let value = ChipTimelineIntro.startingChipTimeline(existingInstall: existingInstall)
+        chipTimelinePreference = value
+        defaults.set(value, forKey: StorageKeys.chipTimeline)
+    }
+
     /// Intro sheet "Don't show again", or a second Later.
     func finishChipTimelineIntro() {
         chipTimelineIntroDone = true

@@ -12,6 +12,13 @@ nonisolated enum ChipTimelineIntro {
     /// Pause after the turn finishes so the user sees the result first.
     static let settleDelayMs: Int64 = 1_500
 
+    /// Starting Chip timeline value, settled once per install: a fresh install
+    /// starts on it; an install that already had the standard timeline keeps it
+    /// and is offered the intro instead.
+    static func startingChipTimeline(existingInstall: Bool) -> Bool {
+        !existingInstall
+    }
+
     static func shouldShow(
         chipTimelineAvailable: Bool,
         chipTimelineOn: Bool,
