@@ -76,8 +76,6 @@ fun SettingsScreen(
     chipTimeline: Boolean,
     onChipTimelineChange: (Boolean) -> Unit,
     chipTimelineAvailable: Boolean = true,
-    smoothStreamingUpdates: Boolean,
-    onSmoothStreamingUpdatesChange: (Boolean) -> Unit,
     followUpDelivery: FollowUpDelivery,
     onFollowUpDeliveryChange: (FollowUpDelivery) -> Unit,
     supportsFollowUpDelivery: Boolean,
@@ -276,27 +274,6 @@ fun SettingsScreen(
                         modifier = Modifier.padding(horizontal = 16.dp),
                     )
                 }
-
-                OpenCodeListItem(
-                    title = "Smooth Streaming",
-                    subtitle = "Paint assistant text in short chunks instead of every token",
-                    style = OpenCodeListItemStyle.Card,
-                    startDecorator =
-                        StartDecorator.Icon(OpenCodeIcons.ExpandContent, "Smooth Streaming"),
-                    trailing = {
-                        Switch(
-                            checked = smoothStreamingUpdates,
-                            onCheckedChange = { enabled ->
-                                logSettingsToggle(
-                                    ProductAnalytics.Action.SETTINGS_TOGGLE_SMOOTH_STREAMING,
-                                    enabled,
-                                )
-                                onSmoothStreamingUpdatesChange(enabled)
-                            },
-                        )
-                    },
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                )
 
                 OpenCodeListItem(
                     title = "Follow-up send",
@@ -697,9 +674,6 @@ private fun SettingsScreenLightPreview() {
             onCollapseConsecutiveToolCallsChange = {},
             chipTimeline = SessionChatDisplayPreferences.chipTimeline,
             onChipTimelineChange = {},
-            smoothStreamingUpdates =
-                SessionChatDisplayPreferences.smoothStreamingUpdates,
-            onSmoothStreamingUpdatesChange = {},
             followUpDelivery = FollowUpDelivery.Steer,
             onFollowUpDeliveryChange = {},
             supportsFollowUpDelivery = true,
@@ -740,9 +714,6 @@ private fun SettingsScreenDarkPreview() {
             onCollapseConsecutiveToolCallsChange = {},
             chipTimeline = SessionChatDisplayPreferences.chipTimeline,
             onChipTimelineChange = {},
-            smoothStreamingUpdates =
-                SessionChatDisplayPreferences.smoothStreamingUpdates,
-            onSmoothStreamingUpdatesChange = {},
             followUpDelivery = FollowUpDelivery.Steer,
             onFollowUpDeliveryChange = {},
             supportsFollowUpDelivery = true,

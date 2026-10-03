@@ -205,30 +205,6 @@ struct SettingsView: View {
                     }
 
                     OpenCodeListItem(
-                        title: "Smooth Streaming",
-                        subtitle: "Paint assistant text in short chunks instead of every token",
-                        style: .card,
-                        startDecorator: .icon(.expandContent, accessibilityLabel: "Smooth Streaming"),
-                        trailing: {
-                            Toggle(
-                                "Smooth Streaming",
-                                isOn: Binding(
-                                    get: { sessionChatDisplayPreferences.smoothStreamingUpdates },
-                                    set: { newValue in
-                                        logSettingsAction(
-                                            ProductAnalytics.Action.settingsToggleSmoothStreaming
-                                        )
-                                        sessionChatDisplayPreferences.setSmoothStreamingUpdates(newValue)
-                                    }
-                                )
-                            )
-                            .labelsHidden()
-                            .tint(OpenCodeColors.interactive)
-                        }
-                    )
-                    .padding(.horizontal, 16)
-
-                    OpenCodeListItem(
                         title: "Follow-up send",
                         subtitle: followUpSubtitle,
                         enabled: supportsFollowUpDelivery,
