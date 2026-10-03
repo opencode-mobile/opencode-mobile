@@ -18,6 +18,8 @@ object SessionChatDisplayPreferences {
     private const val KEY_SMOOTH_STREAMING_UPDATES = "smooth_streaming_updates"
     private const val KEY_CHIP_TIMELINE = "chip_timeline"
     private const val KEY_FOLLOW_UP_DELIVERY = "follow_up_delivery"
+    private const val KEY_CHIP_TIMELINE_INTRO_DONE = "chip_timeline_intro_done"
+    private const val KEY_CHIP_TIMELINE_INTRO_SNOOZED_UNTIL = "chip_timeline_intro_snoozed_until"
     const val DEFAULT_COLLAPSE_CONSECUTIVE_TOOL_CALLS = true
     const val DEFAULT_SMOOTH_STREAMING_UPDATES = true
     const val DEFAULT_CHIP_TIMELINE = false
@@ -38,6 +40,14 @@ object SessionChatDisplayPreferences {
 
     /** Stored "Chip timeline" preference, independent of the remote flag. */
     var chipTimelinePreference: Boolean by mutableStateOf(DEFAULT_CHIP_TIMELINE)
+        private set
+
+    /** True once the Chip timeline intro sheet has been answered for good (OPE-270). */
+    var chipTimelineIntroDone: Boolean by mutableStateOf(false)
+        private set
+
+    /** Epoch millis until which a Later answer hides the intro sheet, or null if never snoozed. */
+    var chipTimelineIntroSnoozedUntilMillis: Long? by mutableStateOf(null)
         private set
 
     /** True while the `session_chat_chip_timeline` flag allows the mode at all (OPE-269). */
@@ -74,6 +84,13 @@ object SessionChatDisplayPreferences {
             FollowUpDelivery.fromWire(prefs.getString(KEY_FOLLOW_UP_DELIVERY, null))
                 ?: DEFAULT_FOLLOW_UP_DELIVERY
         chipTimelinePreference = prefs.getBoolean(KEY_CHIP_TIMELINE, DEFAULT_CHIP_TIMELINE)
+        chipTimelineIntroDone = prefs.getBoolean(KEY_CHIP_TIMELINE_INTRO_DONE, false)
+        chipTimelineIntroSnoozedUntilMillis =
+            if (prefs.contains(KEY_CHIP_TIMELINE_INTRO_SNOOZED_UNTIL)) {
+                prefs.getLong(KEY_CHIP_TIMELINE_INTRO_SNOOZED_UNTIL, 0L)
+            } else {
+                null
+            }
     }
 
     fun updateCollapseConsecutiveToolCalls(value: Boolean) {
@@ -91,10 +108,60 @@ object SessionChatDisplayPreferences {
         prefs()?.edit()?.putString(KEY_FOLLOW_UP_DELIVERY, value.wireValue)?.apply()
     }
 
+    /** Any explicit choice, from Settings or the intro sheet, also ends the intro. */
     fun updateChipTimeline(value: Boolean) {
         chipTimelinePreference = value
-        prefs()?.edit()?.putBoolean(KEY_CHIP_TIMELINE, value)?.apply()
+        chipTimelineIntroDone = true
+        prefs()
+            ?.edit()
+            ?.putBoolean(KEY_CHIP_TIMELINE, value)
+            ?.putBoolean(KEY_CHIP_TIMELINE_INTRO_DONE, true)
+            ?.apply()
     }
+
+    /**
+     * Settles the starting Chip timeline value once per install (OPE-270).
+     * [existingInstall] is true when the app opens past App onboarding. A
+     * stored value, from an earlier launch or a Settings choice, always wins.
+     */
+    fun resolveChipTimelineForInstall(existingInstall: Boolean) {
+        val prefs = prefs() ?: return
+        if (prefs.contains(KEY_CHIP_TIMELINE)) return
+        val value = ChipTimelineIntro.startingChipTimeline(existingInstall)
+        chipTimelinePreference = value
+        prefs.edit().putBoolean(KEY_CHIP_TIMELINE, value).apply()
+    }
+
+    /** Intro sheet "Don't show again", or a second Later. */
+    fun finishChipTimelineIntro() {
+        chipTimelineIntroDone = true
+        prefs()?.edit()?.putBoolean(KEY_CHIP_TIMELINE_INTRO_DONE, true)?.apply()
+    }
+
+    /** Intro sheet Later: snooze the first time, end the intro the second time. */
+    fun postponeChipTimelineIntro(nowMillis: Long) {
+        val until = ChipTimelineIntro.laterSnoozeUntil(chipTimelineIntroSnoozedUntilMillis, nowMillis)
+        if (until == null) {
+            finishChipTimelineIntro()
+            return
+        }
+        chipTimelineIntroSnoozedUntilMillis = until
+        prefs()?.edit()?.putLong(KEY_CHIP_TIMELINE_INTRO_SNOOZED_UNTIL, until)?.apply()
+    }
+
+    /** Whether a finished turn with [turnToolCalls] tool calls should offer the intro sheet. */
+    fun shouldOfferChipTimelineIntro(
+        turnToolCalls: Int,
+        nowMillis: Long,
+    ): Boolean =
+        ChipTimelineIntro.shouldShow(
+            chipTimelineAvailable = chipTimelineAvailable,
+            chipTimelineOn = chipTimelinePreference,
+            introDone = chipTimelineIntroDone,
+            snoozedUntilMillis = chipTimelineIntroSnoozedUntilMillis,
+            nowMillis = nowMillis,
+            turnToolCalls = turnToolCalls,
+        )
 
     fun clear() {
         prefs()
@@ -103,11 +170,15 @@ object SessionChatDisplayPreferences {
             ?.remove(KEY_SMOOTH_STREAMING_UPDATES)
             ?.remove(KEY_FOLLOW_UP_DELIVERY)
             ?.remove(KEY_CHIP_TIMELINE)
+            ?.remove(KEY_CHIP_TIMELINE_INTRO_DONE)
+            ?.remove(KEY_CHIP_TIMELINE_INTRO_SNOOZED_UNTIL)
             ?.apply()
         collapseConsecutiveToolCalls = DEFAULT_COLLAPSE_CONSECUTIVE_TOOL_CALLS
         smoothStreamingUpdates = DEFAULT_SMOOTH_STREAMING_UPDATES
         followUpDelivery = DEFAULT_FOLLOW_UP_DELIVERY
         chipTimelinePreference = DEFAULT_CHIP_TIMELINE
+        chipTimelineIntroDone = false
+        chipTimelineIntroSnoozedUntilMillis = null
     }
 
     private fun prefs() = appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)

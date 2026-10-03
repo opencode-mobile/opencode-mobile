@@ -84,6 +84,8 @@ struct ComponentGalleryDetailView: View {
             IconsGalleryView()
         case .skeletonIllustration:
             SkeletonIllustrationGalleryView()
+        case .pageIndicator:
+            PageIndicatorGalleryView()
         case .attachment:
             AttachmentGalleryView()
         case .outgoingMessage:
@@ -110,6 +112,8 @@ struct ComponentGalleryDetailView: View {
             BottomSheetGalleryView()
         case .dialog:
             DialogGalleryView()
+        case .modal:
+            ModalGalleryView()
         case .snackbar:
             SnackbarGalleryView()
         case .listItem:

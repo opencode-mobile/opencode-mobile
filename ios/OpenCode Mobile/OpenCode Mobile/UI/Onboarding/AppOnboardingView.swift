@@ -84,13 +84,7 @@ struct AppOnboardingView: View {
             .tabViewStyle(.page(indexDisplayMode: .never))
 
             VStack(spacing: 10) {
-                HStack(spacing: 6) {
-                    ForEach(AppOnboardingCopy.pages.indices, id: \.self) { index in
-                        Capsule()
-                            .fill(index == pageIndex ? OpenCodeColors.textStrong : OpenCodeColors.textWeaker)
-                            .frame(width: index == pageIndex ? 18 : 7, height: 7)
-                    }
-                }
+                OpenCodePageIndicator(pageCount: AppOnboardingCopy.pages.count, currentPage: pageIndex)
 
                 OpenCodeButton(
                     variant: .fullWidthText(

@@ -554,7 +554,8 @@ extension Container {
                 activeConnectionManager: self.activeConnectionManager(),
                 connectionSessionCoordinator: self.connectionSessionCoordinator(),
                 worldSignals: self.worldSignals(),
-                appOnboardingPreferences: AppOnboardingPreferences.shared
+                appOnboardingPreferences: AppOnboardingPreferences.shared,
+                sessionChatDisplayPreferences: SessionChatDisplayPreferences.shared
             )
         }
     }

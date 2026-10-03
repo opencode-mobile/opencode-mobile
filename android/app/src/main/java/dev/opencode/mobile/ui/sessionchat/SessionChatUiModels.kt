@@ -197,7 +197,19 @@ data class SessionChatUiState(
      * [SessionChatTimelineBlock.StepParagraph.expansionID] to the chip count at tap time.
      */
     val expandedStepParagraphs: Map<String, Int> = emptyMap(),
+    /** One-time Chip timeline intro sheet (OPE-270). */
+    val chipTimelineIntroVisible: Boolean = false,
 ) {
+    /** A permission, question, or Screen Model-owned sheet or dialog would sit under the intro sheet. */
+    fun blocksChipTimelineIntro(): Boolean =
+        permissionRequest != null ||
+            questionRequest != null ||
+            commandsSheetVisible ||
+            mcpPageVisible ||
+            forkDialogVisible ||
+            forkResultVisible ||
+            rename.isDialogVisible
+
     val latestCompletedUserMessageId: String?
         get() {
             var latest: String? = null

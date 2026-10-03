@@ -69,6 +69,7 @@ object ProductAnalytics {
         const val SESSION_TOOL_DETAIL = "session_tool_detail"
         const val SESSION_TOOL_GROUP = "session_tool_group"
         const val SESSION_SKILLS = "session_skills"
+        const val SESSION_CHIP_TIMELINE_INTRO = "session_chip_timeline_intro"
         const val SESSION_TODOS = "session_todos"
         const val SESSION_CONTEXT = "session_context"
         const val CHANGES = "changes"
@@ -244,6 +245,9 @@ object ProductAnalytics {
         const val PENDING_PROMPTS_CLEAR = "pending_prompts_clear"
         const val TOOL_DETAIL_DISMISS = "tool_detail_dismiss"
         const val SKILLS_DISMISS = "skills_dismiss"
+        const val CHIP_TIMELINE_INTRO_ENABLE = "chip_timeline_intro_enable"
+        const val CHIP_TIMELINE_INTRO_LATER = "chip_timeline_intro_later"
+        const val CHIP_TIMELINE_INTRO_NEVER = "chip_timeline_intro_never"
         const val SESSION_TOOL_GROUP_BACK = "session_tool_group_back"
         const val TODOS_DISMISS = "todos_dismiss"
 

@@ -1,5 +1,8 @@
 package dev.opencode.mobile.ui.sessionchat
 
+import kotlinx.coroutines.test.TestScope
+import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
+import dev.opencode.mobile.domain.preferences.ChipTimelineIntro
 import dev.opencode.mobile.domain.command.ClientSlashAction
 import dev.opencode.mobile.domain.command.CommandError
 import dev.opencode.mobile.domain.command.CommandRepository
@@ -111,12 +114,127 @@ class SessionChatViewModelTest {
     @Before
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
+        SessionChatDisplayPreferences.clear()
     }
 
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+        SessionChatDisplayPreferences.clear()
     }
+
+    private fun longTurnRepository(toolCalls: Int) =
+        FakeMessageRepository(
+            messages =
+                listOf(
+                    Message(id = "msg-1", role = MessageRole.User, text = "Fix it"),
+                    Message(
+                        id = "msg-2",
+                        role = MessageRole.Assistant,
+                        text = "",
+                        parts =
+                            (1..toolCalls).map { index ->
+                                MessagePart.Tool(toolName = "read", status = ToolStatus.Completed, id = "prt-$index")
+                            },
+                    ),
+                ),
+        )
+
+    private suspend fun TestScope.finishLongTurn(toolCalls: Int): SessionChatViewModel {
+        val repository = longTurnRepository(toolCalls)
+        val viewModel =
+            createViewModel(
+                repository = repository,
+                sessionRepository = FakeSessionRepository(sessionStatusType = "busy"),
+            )
+        viewModel.bind("ses-1", "Title", "/repo")
+        advanceUntilIdle()
+        repository.eventStream.emit(OpencodeEvent(type = "session.idle", sessionId = "ses-1"))
+        runCurrent()
+        return viewModel
+    }
+
+    @Test
+    fun chipTimelineIntro_longTurnFinishes_showsAfterSettleDelay() =
+        runTest(testDispatcher) {
+            val viewModel = finishLongTurn(ChipTimelineIntro.MIN_TOOL_CALLS)
+
+            testDispatcher.scheduler.advanceTimeBy(ChipTimelineIntro.SETTLE_DELAY_MILLIS - 1)
+            runCurrent()
+            assertFalse(viewModel.uiState.value.chipTimelineIntroVisible)
+
+            testDispatcher.scheduler.advanceTimeBy(1)
+            runCurrent()
+            assertTrue(viewModel.uiState.value.chipTimelineIntroVisible)
+        }
+
+    @Test
+    fun chipTimelineIntro_shortTurn_doesNotShow() =
+        runTest(testDispatcher) {
+            val viewModel = finishLongTurn(ChipTimelineIntro.MIN_TOOL_CALLS - 1)
+            advanceUntilIdle()
+
+            assertFalse(viewModel.uiState.value.chipTimelineIntroVisible)
+        }
+
+    @Test
+    fun chipTimelineIntro_enable_turnsOnChipTimelineAndEndsIntro() =
+        runTest(testDispatcher) {
+            val viewModel = finishLongTurn(ChipTimelineIntro.MIN_TOOL_CALLS)
+            advanceUntilIdle()
+
+            viewModel.enableChipTimelineFromIntro()
+
+            assertFalse(viewModel.uiState.value.chipTimelineIntroVisible)
+            assertTrue(SessionChatDisplayPreferences.chipTimelinePreference)
+            assertTrue(SessionChatDisplayPreferences.chipTimelineIntroDone)
+            assertEquals(
+                SessionChatViewModel.CHIP_TIMELINE_INTRO_ENABLED_NOTICE,
+                viewModel.uiState.value.snackbar?.message,
+            )
+        }
+
+    @Test
+    fun chipTimelineIntro_later_snoozesThenSecondLaterEndsIntro() =
+        runTest(testDispatcher) {
+            val viewModel = finishLongTurn(ChipTimelineIntro.MIN_TOOL_CALLS)
+            advanceUntilIdle()
+
+            viewModel.postponeChipTimelineIntro()
+
+            assertFalse(viewModel.uiState.value.chipTimelineIntroVisible)
+            assertFalse(SessionChatDisplayPreferences.chipTimelineIntroDone)
+            assertEquals(
+                testDispatcher.scheduler.currentTime + ChipTimelineIntro.SNOOZE_MILLIS,
+                SessionChatDisplayPreferences.chipTimelineIntroSnoozedUntilMillis,
+            )
+
+            SessionChatDisplayPreferences.postponeChipTimelineIntro(nowMillis = Long.MAX_VALUE / 2)
+            assertTrue(SessionChatDisplayPreferences.chipTimelineIntroDone)
+        }
+
+    @Test
+    fun chipTimelineIntro_dontShowAgain_endsIntroWithoutTurningOn() =
+        runTest(testDispatcher) {
+            val viewModel = finishLongTurn(ChipTimelineIntro.MIN_TOOL_CALLS)
+            advanceUntilIdle()
+
+            viewModel.dismissChipTimelineIntro()
+
+            assertFalse(viewModel.uiState.value.chipTimelineIntroVisible)
+            assertTrue(SessionChatDisplayPreferences.chipTimelineIntroDone)
+            assertFalse(SessionChatDisplayPreferences.chipTimelinePreference)
+        }
+
+    @Test
+    fun chipTimelineIntro_settingsChange_endsIntro() =
+        runTest(testDispatcher) {
+            SessionChatDisplayPreferences.updateChipTimeline(false)
+            val viewModel = finishLongTurn(ChipTimelineIntro.MIN_TOOL_CALLS)
+            advanceUntilIdle()
+
+            assertFalse(viewModel.uiState.value.chipTimelineIntroVisible)
+        }
 
     @Test
     fun archiveSession_successLeavesSession() =

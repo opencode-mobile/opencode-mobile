@@ -67,6 +67,7 @@ enum ProductAnalytics {
         static let sessionToolDetail = "session_tool_detail"
         static let sessionToolGroup = "session_tool_group"
         static let sessionSkills = "session_skills"
+        static let sessionChipTimelineIntro = "session_chip_timeline_intro"
         static let sessionTodos = "session_todos"
         static let sessionContext = "session_context"
         static let changes = "changes"
@@ -233,6 +234,9 @@ enum ProductAnalytics {
         static let pendingPromptsClear = "pending_prompts_clear"
         static let toolDetailDismiss = "tool_detail_dismiss"
         static let skillsDismiss = "skills_dismiss"
+        static let chipTimelineIntroEnable = "chip_timeline_intro_enable"
+        static let chipTimelineIntroLater = "chip_timeline_intro_later"
+        static let chipTimelineIntroNever = "chip_timeline_intro_never"
         static let sessionToolGroupBack = "session_tool_group_back"
         static let todosDismiss = "todos_dismiss"
 

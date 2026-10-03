@@ -20,6 +20,7 @@ enum class ComponentGalleryEntryId {
     Typography,
     Icons,
     SkeletonIllustration,
+    PageIndicator,
     Attachment,
     OutgoingMessage,
     PendingPromptsStrip,
@@ -32,6 +33,7 @@ enum class ComponentGalleryEntryId {
     OverflowMenu,
     BottomSheet,
     Dialog,
+    Modal,
     Snackbar,
     ListItem,
     ListGroup,
@@ -88,6 +90,12 @@ val ComponentGalleryEntries =
             title = "Skeleton Illustration",
             description = "Wireframe hero with one spotlit element for onboarding, tutorials, and hints.",
             category = ComponentGalleryCategory.Foundations,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.PageIndicator,
+            title = "Page Indicator",
+            description = "Pager position dots under onboarding and promo carousels.",
+            category = ComponentGalleryCategory.Navigation,
         ),
         ComponentGalleryEntry(
             id = ComponentGalleryEntryId.Typography,
@@ -195,6 +203,12 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.Dialog,
             title = "Dialog",
             description = "Centered popup with title, optional subtitle, two options, and optional text field.",
+            category = ComponentGalleryCategory.Navigation,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.Modal,
+            title = "Modal",
+            description = "Centered card with a close button and custom content for promos and short walkthroughs.",
             category = ComponentGalleryCategory.Navigation,
         ),
         ComponentGalleryEntry(

@@ -277,7 +277,9 @@ struct SessionChatView: View {
                     message: viewModel.uiState.snackbar.mapToOpenCodeSnackbarMessage(),
                     onDismissed: { viewModel.consumeSnackbar() }
                 )
-                .padding(.bottom, max(composerOverlayHeight, 168) + composerHomeIndicatorLift)
+                // Sit just above the measured composer, like Android; 168 only
+                // covers the first frame before the composer reports its height.
+                .padding(.bottom, (composerOverlayHeight > 0 ? composerOverlayHeight : 168) + composerHomeIndicatorLift)
 
                 VStack(spacing: 0) {
                     if SessionChatComposerKind.resolve(
@@ -400,6 +402,13 @@ struct SessionChatView: View {
         }
         .sessionChatToolDetailSheet(target: $toolDetailTarget)
         .sessionChatSkillsSheet(target: $skillsTarget)
+        // Waits for any view-owned sheet to close so the intro never stacks on one.
+        .sessionChatChipTimelineIntro(
+            isPresented: viewModel.uiState.chipTimelineIntroVisible && !viewSheetOpen,
+            onEnable: { viewModel.enableChipTimelineFromIntro() },
+            onLater: { viewModel.postponeChipTimelineIntro() },
+            onNever: { viewModel.dismissChipTimelineIntro() }
+        )
         .sessionChatTodosSheet(
             isPresented: $showSessionTodosSheet,
             todos: viewModel.uiState.sessionTodos,
@@ -677,6 +686,17 @@ struct SessionChatView: View {
     /// composer stays above the indicator unless the keyboard already replaced it.
     private var composerHomeIndicatorLift: CGFloat {
         keyboardOverlap > 0 ? 0 : bottomSafeAreaInset
+    }
+
+    private var viewSheetOpen: Bool {
+        messageActionsTarget != nil
+            || showPendingPromptsSheet
+            || toolDetailTarget != nil
+            || skillsTarget != nil
+            || showSessionTodosSheet
+            || showAttachmentSources
+            || activePicker != nil
+            || showDeleteConfirmation
     }
 
     private var blocksSessionTodosSheet: Bool {

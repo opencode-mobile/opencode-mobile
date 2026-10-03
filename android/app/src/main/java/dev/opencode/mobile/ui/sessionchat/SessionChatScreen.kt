@@ -93,6 +93,7 @@ import dev.opencode.mobile.ui.sessionchat.view.SessionChatPickerSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatTimelineView
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatTimelineViewProps
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatTodosSheet
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatChipTimelineIntroModal
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatSkillsSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatSkillsTarget
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolDetailSheet
@@ -890,6 +891,23 @@ fun SessionChatScreen(
         SessionChatSkillsSheet(
             target = skillsTarget,
             onDismiss = { skillsTarget = null },
+        )
+
+        // Waits for any screen-local sheet to close so the intro never stacks on one.
+        val screenSheetOpen =
+            messageActionsTarget != null ||
+                showPendingPromptsSheet ||
+                toolDetailTarget != null ||
+                skillsTarget != null ||
+                showSessionTodosSheet ||
+                showAttachmentSource ||
+                activePicker != null ||
+                showDeleteConfirmation
+        SessionChatChipTimelineIntroModal(
+            visible = uiState.chipTimelineIntroVisible && !screenSheetOpen,
+            onEnable = viewModel::enableChipTimelineFromIntro,
+            onLater = viewModel::postponeChipTimelineIntro,
+            onNever = viewModel::dismissChipTimelineIntro,
         )
 
         SessionChatTodosSheet(

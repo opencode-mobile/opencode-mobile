@@ -16,6 +16,8 @@ nonisolated final class SessionChatDisplayPreferences {
         static let chipTimeline = "chipTimeline"
         static let smoothStreamingUpdates = "smoothStreamingUpdates"
         static let followUpDelivery = "followUpDelivery"
+        static let chipTimelineIntroDone = "chipTimelineIntroDone"
+        static let chipTimelineIntroSnoozedUntilMs = "chipTimelineIntroSnoozedUntilMs"
     }
 
     private let defaults: UserDefaults
@@ -27,6 +29,12 @@ nonisolated final class SessionChatDisplayPreferences {
 
     /// Stored "Chip timeline" preference, independent of the remote flag.
     private(set) var chipTimelinePreference: Bool
+
+    /// True once the Chip timeline intro sheet has been answered for good (OPE-270).
+    private(set) var chipTimelineIntroDone: Bool
+
+    /// Epoch ms until which a Later answer hides the intro sheet, or nil if never snoozed.
+    private(set) var chipTimelineIntroSnoozedUntilMs: Int64?
 
     /// True while the `session_chat_chip_timeline` flag allows the mode at all (OPE-269).
     var chipTimelineAvailable: Bool {
@@ -73,6 +81,9 @@ nonisolated final class SessionChatDisplayPreferences {
         }
         followUpDelivery = FollowUpDelivery.fromWire(defaults.string(forKey: StorageKeys.followUpDelivery))
             ?? Self.defaultFollowUpDelivery
+        chipTimelineIntroDone = defaults.bool(forKey: StorageKeys.chipTimelineIntroDone)
+        chipTimelineIntroSnoozedUntilMs =
+            (defaults.object(forKey: StorageKeys.chipTimelineIntroSnoozedUntilMs) as? NSNumber)?.int64Value
     }
 
     func setCollapseConsecutiveToolCalls(_ value: Bool) {
@@ -80,9 +91,52 @@ nonisolated final class SessionChatDisplayPreferences {
         defaults.set(value, forKey: StorageKeys.collapseConsecutiveToolCalls)
     }
 
+    /// Any explicit choice, from Settings or the intro sheet, also ends the intro.
     func setChipTimeline(_ value: Bool) {
         chipTimelinePreference = value
         defaults.set(value, forKey: StorageKeys.chipTimeline)
+        finishChipTimelineIntro()
+    }
+
+    /// Settles the starting Chip timeline value once per install (OPE-270).
+    /// `existingInstall` is true when the app opens past App onboarding. A
+    /// stored value, from an earlier launch or a Settings choice, always wins.
+    func resolveChipTimelineForInstall(existingInstall: Bool) {
+        guard defaults.object(forKey: StorageKeys.chipTimeline) == nil else { return }
+        let value = ChipTimelineIntro.startingChipTimeline(existingInstall: existingInstall)
+        chipTimelinePreference = value
+        defaults.set(value, forKey: StorageKeys.chipTimeline)
+    }
+
+    /// Intro sheet "Don't show again", or a second Later.
+    func finishChipTimelineIntro() {
+        chipTimelineIntroDone = true
+        defaults.set(true, forKey: StorageKeys.chipTimelineIntroDone)
+    }
+
+    /// Intro sheet Later: snooze the first time, end the intro the second time.
+    func postponeChipTimelineIntro(nowMs: Int64) {
+        guard let until = ChipTimelineIntro.laterSnoozeUntil(
+            snoozedUntilMs: chipTimelineIntroSnoozedUntilMs,
+            nowMs: nowMs
+        ) else {
+            finishChipTimelineIntro()
+            return
+        }
+        chipTimelineIntroSnoozedUntilMs = until
+        defaults.set(NSNumber(value: until), forKey: StorageKeys.chipTimelineIntroSnoozedUntilMs)
+    }
+
+    /// Whether a finished turn with `turnToolCalls` tool calls should offer the intro sheet.
+    func shouldOfferChipTimelineIntro(turnToolCalls: Int, nowMs: Int64) -> Bool {
+        ChipTimelineIntro.shouldShow(
+            chipTimelineAvailable: chipTimelineAvailable,
+            chipTimelineOn: chipTimelinePreference,
+            introDone: chipTimelineIntroDone,
+            snoozedUntilMs: chipTimelineIntroSnoozedUntilMs,
+            nowMs: nowMs,
+            turnToolCalls: turnToolCalls
+        )
     }
 
     func setSmoothStreamingUpdates(_ value: Bool) {
@@ -100,9 +154,13 @@ nonisolated final class SessionChatDisplayPreferences {
         defaults.removeObject(forKey: StorageKeys.chipTimeline)
         defaults.removeObject(forKey: StorageKeys.smoothStreamingUpdates)
         defaults.removeObject(forKey: StorageKeys.followUpDelivery)
+        defaults.removeObject(forKey: StorageKeys.chipTimelineIntroDone)
+        defaults.removeObject(forKey: StorageKeys.chipTimelineIntroSnoozedUntilMs)
         collapseConsecutiveToolCalls = Self.defaultCollapseConsecutiveToolCalls
         chipTimelinePreference = Self.defaultChipTimeline
         smoothStreamingUpdates = Self.defaultSmoothStreamingUpdates
         followUpDelivery = Self.defaultFollowUpDelivery
+        chipTimelineIntroDone = false
+        chipTimelineIntroSnoozedUntilMs = nil
     }
 }

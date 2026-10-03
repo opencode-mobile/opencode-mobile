@@ -45,6 +45,7 @@ import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductRouteScreenViewEffect
 import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
+import dev.opencode.mobile.ui.components.OpenCodePageIndicator
 import dev.opencode.mobile.ui.components.OpenCodeListGroup
 import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
@@ -184,28 +185,7 @@ private fun AppOnboardingPagerScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        pages.indices.forEach { index ->
-                            val selected = index == pagerState.currentPage
-                            Box(
-                                modifier =
-                                    Modifier
-                                        .height(7.dp)
-                                        .width(if (selected) 18.dp else 7.dp)
-                                        .clip(RoundedCornerShape(4.dp))
-                                        .background(
-                                            if (selected) {
-                                                MaterialTheme.colorScheme.onSurface
-                                            } else {
-                                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.28f)
-                                            },
-                                        ),
-                            )
-                        }
-                    }
+                    OpenCodePageIndicator(pageCount = pages.size, currentPage = pagerState.currentPage)
                     OpenCodeButton(
                         variant =
                             OpenCodeButtonVariant.FullWidthText(
