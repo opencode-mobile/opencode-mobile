@@ -64,8 +64,6 @@ struct SessionChatChipTimelineIntroSheetModifier: ViewModifier {
                         VStack(spacing: 8) {
                             OpenCodeButton(
                                 variant: .fullWidthText(title: "Turn on Chip timeline"),
-                                size: .large,
-                                contrast: .accent,
                                 action: onEnable
                             )
                             HStack(spacing: 8) {

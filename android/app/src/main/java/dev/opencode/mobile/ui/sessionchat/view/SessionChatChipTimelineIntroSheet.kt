@@ -104,8 +104,6 @@ internal fun SessionChatChipTimelineIntroSheet(
                 OpenCodeButton(
                     variant = OpenCodeButtonVariant.FullWidthText("Turn on Chip timeline"),
                     onClick = onEnable,
-                    contrast = OpenCodeButtonContrast.Accent,
-                    size = OpenCodeButtonSize.Large,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
