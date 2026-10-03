@@ -50,10 +50,12 @@ fun OpenCodeModal(
     ) {
         Surface(
             modifier =
+                // Screen margin outside the width cap, like iOS: the card is
+                // min(360, screen - 48) wide, not 360 - 48.
                 modifier
+                    .padding(horizontal = 24.dp)
                     .widthIn(max = ModalMaxWidth)
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp),
+                    .fillMaxWidth(),
             shape = ModalCornerRadius,
             color = MaterialTheme.colorScheme.surface,
             contentColor = MaterialTheme.colorScheme.onSurface,

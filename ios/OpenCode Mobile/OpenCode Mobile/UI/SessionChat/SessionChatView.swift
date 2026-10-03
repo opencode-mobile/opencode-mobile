@@ -277,7 +277,9 @@ struct SessionChatView: View {
                     message: viewModel.uiState.snackbar.mapToOpenCodeSnackbarMessage(),
                     onDismissed: { viewModel.consumeSnackbar() }
                 )
-                .padding(.bottom, max(composerOverlayHeight, 168) + composerHomeIndicatorLift)
+                // Sit just above the measured composer, like Android; 168 only
+                // covers the first frame before the composer reports its height.
+                .padding(.bottom, (composerOverlayHeight > 0 ? composerOverlayHeight : 168) + composerHomeIndicatorLift)
 
                 VStack(spacing: 0) {
                     if SessionChatComposerKind.resolve(
