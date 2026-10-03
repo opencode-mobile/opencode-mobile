@@ -8,6 +8,7 @@ import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.event.WorldSignals
 import dev.opencode.mobile.domain.preferences.AppOnboardingPreferences
+import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.OpencodeSseHttpClient
@@ -66,7 +67,9 @@ class AppRootViewModel
             httpClient.rebuild()
             sseHttpClient.rebuild()
             val hasProfile = connectionProfileStore.activeProfile() != null
-            if (!AppOnboardingPreferences.isCompleted && !hasProfile) {
+            val existingInstall = AppOnboardingPreferences.isCompleted || hasProfile
+            SessionChatDisplayPreferences.resolveChipTimelineForInstall(existingInstall)
+            if (!existingInstall) {
                 _state.value = AppRootState.AppOnboarding
             } else {
                 enterHome()

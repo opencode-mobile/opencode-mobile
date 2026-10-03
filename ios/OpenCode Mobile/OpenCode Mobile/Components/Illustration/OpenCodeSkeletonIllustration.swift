@@ -4,6 +4,9 @@ enum OpenCodeSkeletonIllustrationTopic: String, CaseIterable, Hashable {
     case unofficial
     case connectForm
     case sessionsLive
+    case chipTimelineGlance
+    case chipTimelineLongRuns
+    case chipTimelineDetails
 }
 
 struct OpenCodeSkeletonIllustration: View {
@@ -44,6 +47,8 @@ private struct SkeletonIllustrationPalette {
     let buttonPrimaryBase: Color
     let interactive: Color
     let success: Color
+    let diffAdd: Color
+    let diffDelete: Color
 
     static var current: SkeletonIllustrationPalette {
         SkeletonIllustrationPalette(
@@ -59,7 +64,9 @@ private struct SkeletonIllustrationPalette {
             iconInvertBase: OpenCodeColors.iconInvertBase,
             buttonPrimaryBase: OpenCodeColors.buttonPrimaryBase,
             interactive: OpenCodeColors.interactive,
-            success: OpenCodeColors.success
+            success: OpenCodeColors.success,
+            diffAdd: OpenCodeColors.diffAdd,
+            diffDelete: OpenCodeColors.diffDelete
         )
     }
 }
@@ -76,6 +83,12 @@ private extension GraphicsContext {
             drawConnectFormSkeleton(palette: palette)
         case .sessionsLive:
             drawSessionsLiveSkeleton(palette: palette)
+        case .chipTimelineGlance:
+            drawChipTimelineGlanceSkeleton(palette: palette)
+        case .chipTimelineLongRuns:
+            drawChipTimelineLongRunsSkeleton(palette: palette)
+        case .chipTimelineDetails:
+            drawChipTimelineDetailsSkeleton(palette: palette)
         }
     }
 
@@ -300,6 +313,101 @@ private extension GraphicsContext {
         skeletonAvatar(cx: 80, cy: 168, live: false, palette: palette)
         skeletonBar(x: 100, y: 160, w: 90, h: 7, palette: palette)
         skeletonBar(x: 100, y: 173, w: 60, h: 5, palette: palette)
+    }
+
+    /// A tool chip: icon square plus label bar; `diff` adds green/red count bars.
+    mutating func skeletonChip(
+        x: CGFloat,
+        y: CGFloat,
+        w: CGFloat,
+        lit: Bool = false,
+        diff: Bool = false,
+        palette: SkeletonIllustrationPalette
+    ) {
+        let h: CGFloat = 18
+        if lit {
+            skeletonSpotlight(x: x, y: y, w: w, h: h, cornerRadius: 6, palette: palette)
+        } else {
+            skeletonCard(x: x, y: y, w: w, h: h, lit: false, cornerRadius: 6, palette: palette)
+        }
+        fill(
+            Path(roundedRect: CGRect(x: x + 6, y: y + 6, width: 6, height: 6), cornerRadius: 1.5),
+            with: .color(palette.borderWeakBase)
+        )
+        let labelWidth = w - 22 - (diff ? 20 : 0)
+        skeletonBar(x: x + 16, y: y + 6, w: labelWidth, h: 6, palette: palette)
+        if diff {
+            skeletonBar(x: x + w - 24, y: y + 6, w: 8, h: 6, color: palette.diffAdd, palette: palette)
+            skeletonBar(x: x + w - 14, y: y + 6, w: 8, h: 6, color: palette.diffDelete, palette: palette)
+        }
+    }
+
+    /// Narration with its tools as chips underneath; the first chip row is lit.
+    mutating func drawChipTimelineGlanceSkeleton(palette: SkeletonIllustrationPalette) {
+        skeletonFrame(palette: palette)
+        fill(
+            Path(roundedRect: CGRect(x: 160, y: 28, width: 112, height: 22), cornerRadius: 11),
+            with: .color(palette.surfaceInteractiveWeak)
+        )
+        skeletonBar(x: 172, y: 36, w: 84, h: 6, palette: palette)
+        skeletonBar(x: 64, y: 62, w: 196, h: 7, palette: palette)
+        skeletonBar(x: 64, y: 75, w: 138, h: 7, palette: palette)
+        skeletonGlow(x: 64, y: 90, w: 206, h: 18, cornerRadius: 6, palette: palette)
+        skeletonChip(x: 64, y: 90, w: 62, lit: true, palette: palette)
+        skeletonChip(x: 132, y: 90, w: 78, lit: true, diff: true, palette: palette)
+        skeletonChip(x: 216, y: 90, w: 54, lit: true, palette: palette)
+        skeletonBar(x: 64, y: 124, w: 176, h: 7, palette: palette)
+        skeletonBar(x: 64, y: 137, w: 110, h: 7, palette: palette)
+        skeletonChip(x: 64, y: 152, w: 70, palette: palette)
+        skeletonChip(x: 140, y: 152, w: 58, palette: palette)
+    }
+
+    /// A long list of tool rows on the left collapses into a few lit chips on the right.
+    mutating func drawChipTimelineLongRunsSkeleton(palette: SkeletonIllustrationPalette) {
+        skeletonFrame(palette: palette)
+        for index in 0..<8 {
+            let y = 30 + CGFloat(index) * 18
+            fill(
+                Path(roundedRect: CGRect(x: 64, y: y, width: 8, height: 8), cornerRadius: 2),
+                with: .color(palette.borderWeakerBase)
+            )
+            skeletonBar(x: 78, y: y + 1, w: [62, 48, 70, 54, 66, 44, 58, 50][index], h: 6, color: palette.borderWeakerBase, palette: palette)
+        }
+        var arrow = Path()
+        arrow.move(to: CGPoint(x: 156, y: 92))
+        arrow.addLine(to: CGPoint(x: 172, y: 92))
+        arrow.move(to: CGPoint(x: 166, y: 86))
+        arrow.addLine(to: CGPoint(x: 172, y: 92))
+        arrow.addLine(to: CGPoint(x: 166, y: 98))
+        stroke(arrow, with: .color(palette.textWeaker), style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+        skeletonBar(x: 184, y: 62, w: 86, h: 7, palette: palette)
+        skeletonBar(x: 184, y: 75, w: 60, h: 7, palette: palette)
+        skeletonGlow(x: 184, y: 90, w: 86, h: 40, cornerRadius: 6, palette: palette)
+        skeletonChip(x: 184, y: 90, w: 46, lit: true, palette: palette)
+        skeletonChip(x: 234, y: 90, w: 36, lit: true, palette: palette)
+        skeletonChip(x: 184, y: 112, w: 64, lit: true, diff: true, palette: palette)
+    }
+
+    /// One lit chip opens its detail: a file header with diff lines.
+    mutating func drawChipTimelineDetailsSkeleton(palette: SkeletonIllustrationPalette) {
+        skeletonFrame(palette: palette)
+        skeletonBar(x: 64, y: 30, w: 186, h: 7, palette: palette)
+        skeletonBar(x: 64, y: 43, w: 124, h: 7, palette: palette)
+        skeletonChip(x: 64, y: 58, w: 62, palette: palette)
+        skeletonChip(x: 132, y: 58, w: 84, lit: true, diff: true, palette: palette)
+        skeletonCard(x: 64, y: 92, w: 208, h: 86, lit: false, palette: palette)
+        skeletonBar(x: 76, y: 102, w: 96, h: 7, palette: palette)
+        let lines: [(CGFloat, Color?)] = [(150, nil), (128, palette.diffDelete), (160, palette.diffAdd), (112, palette.diffAdd), (140, nil)]
+        for (index, line) in lines.enumerated() {
+            let y = 118 + CGFloat(index) * 11
+            if let marker = line.1 {
+                fill(
+                    Path(roundedRect: CGRect(x: 76, y: y, width: 3, height: 6), cornerRadius: 1),
+                    with: .color(marker)
+                )
+            }
+            skeletonBar(x: 84, y: y, w: line.0, h: 6, color: line.1?.opacity(0.45), palette: palette)
+        }
     }
 
     mutating func drawSkeletonCenteredText(

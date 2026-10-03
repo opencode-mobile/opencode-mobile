@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version_name:
-        description: "App Store marketing version: MAJOR.MINOR.PATCH. Leave empty to use the repo VERSION file."
+        description: "App Store marketing version: MAJOR.MINOR.PATCH. Leave empty to use ios/VERSION (or the repo VERSION file when it is absent)."
         required: false
         type: string
       verify_crashlytics:
@@ -45,7 +45,7 @@ jobs:
         run: |
           set -euo pipefail
           if [[ -z "${IOS_MARKETING_VERSION:-}" ]]; then
-            IOS_MARKETING_VERSION="$(./scripts/read-app-version.sh)"
+            IOS_MARKETING_VERSION="$(./scripts/read-app-version.sh ios)"
           fi
           echo "IOS_MARKETING_VERSION=$IOS_MARKETING_VERSION" >> "$GITHUB_ENV"
 

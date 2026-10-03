@@ -5,6 +5,12 @@ import Testing
 @Suite(.serialized)
 @MainActor
 struct SessionChatViewModelTests {
+    init() {
+        // The test host app settles Chip timeline on launch (a fresh simulator
+        // resolves on), so start every test from the stored defaults.
+        SessionChatDisplayPreferences.shared.clear()
+    }
+
     @Test func expandStepParagraph_publishesExpansionInUiState() {
         let viewModel = makeViewModel(sessionRepository: FakeChatSessionRepository())
         defer { viewModel.stopObserving() }
@@ -3299,6 +3305,85 @@ struct SessionChatViewModelTests {
         #expect(viewModel.uiState.workingIndicatorLabel == "Working")
         #expect(viewModel.uiState.workingIndicatorFading == false)
         #expect(viewModel.uiState.workingIndicatorCollapsed == false)
+    }
+
+    private func finishLongTurn(toolCalls: Int, clock: ChatTestSyncClock) async -> SessionChatViewModel {
+        let eventStream = FakeForegroundEventStream()
+        let tools: [MessagePart] = (1...toolCalls).map {
+            .tool(ToolPart(id: "tool-\($0)", toolName: "read", status: .completed))
+        }
+        let repository = FakeMessageRepository(messages: [
+            Message(id: "msg-1", role: .user, text: "Fix it", model: nil, mode: nil, sentAtEpochMs: nil),
+            Message(id: "msg-2", role: .assistant, text: "", parts: tools, model: nil, mode: nil, sentAtEpochMs: nil),
+        ])
+        let viewModel = makeViewModel(
+            messageRepository: repository,
+            eventStream: eventStream,
+            sessionRepository: FakeChatSessionRepository(sessionStatusType: "busy"),
+            clock: clock
+        )
+        await viewModel.loadMessages()
+        await waitUntil { viewModel.uiState.sessionStatusLabel != nil }
+        eventStream.emit(OpencodeEvent(type: "session.idle", sessionID: "ses-1"))
+        await waitUntil { viewModel.uiState.sessionStatusLabel == nil }
+        return viewModel
+    }
+
+    @Test func chipTimelineIntro_longTurnFinishes_showsAfterSettleDelayThenEnableTurnsOn() async throws {
+        let preferences = SessionChatDisplayPreferences.shared
+        preferences.clear()
+        defer { preferences.clear() }
+        let clock = ChatTestSyncClock(now: 1_000)
+        let viewModel = await finishLongTurn(toolCalls: ChipTimelineIntro.minToolCalls, clock: clock)
+        defer { viewModel.stopObserving() }
+        #expect(viewModel.uiState.chipTimelineIntroVisible == false)
+
+        try await clock.awaitWaiter(milliseconds: Int(ChipTimelineIntro.settleDelayMs))
+        clock.release(milliseconds: Int(ChipTimelineIntro.settleDelayMs))
+        await waitUntil { viewModel.uiState.chipTimelineIntroVisible }
+        #expect(viewModel.uiState.chipTimelineIntroVisible)
+
+        viewModel.enableChipTimelineFromIntro()
+
+        #expect(viewModel.uiState.chipTimelineIntroVisible == false)
+        #expect(preferences.chipTimelinePreference)
+        #expect(preferences.chipTimelineIntroDone)
+        #expect(viewModel.uiState.snackbar?.message == SessionChatViewModel.chipTimelineIntroEnabledNotice)
+    }
+
+    @Test func chipTimelineIntro_later_snoozesThreeDays() async throws {
+        let preferences = SessionChatDisplayPreferences.shared
+        preferences.clear()
+        defer { preferences.clear() }
+        let clock = ChatTestSyncClock(now: 1_000)
+        let viewModel = await finishLongTurn(toolCalls: ChipTimelineIntro.minToolCalls, clock: clock)
+        defer { viewModel.stopObserving() }
+        try await clock.awaitWaiter(milliseconds: Int(ChipTimelineIntro.settleDelayMs))
+        clock.release(milliseconds: Int(ChipTimelineIntro.settleDelayMs))
+        await waitUntil { viewModel.uiState.chipTimelineIntroVisible }
+
+        viewModel.postponeChipTimelineIntro()
+
+        #expect(viewModel.uiState.chipTimelineIntroVisible == false)
+        #expect(preferences.chipTimelineIntroDone == false)
+        #expect(preferences.chipTimelineIntroSnoozedUntilMs == 1_000 + ChipTimelineIntro.snoozeMs)
+    }
+
+    @Test func chipTimelineIntro_shortTurn_doesNotWaitToShow() async {
+        let preferences = SessionChatDisplayPreferences.shared
+        preferences.clear()
+        defer { preferences.clear() }
+        let clock = ChatTestSyncClock(now: 1_000)
+        let viewModel = await finishLongTurn(toolCalls: ChipTimelineIntro.minToolCalls - 1, clock: clock)
+        defer { viewModel.stopObserving() }
+
+        await #expect(throws: (any Error).self) {
+            try await clock.awaitWaiter(
+                milliseconds: Int(ChipTimelineIntro.settleDelayMs),
+                timeout: .milliseconds(300)
+            )
+        }
+        #expect(viewModel.uiState.chipTimelineIntroVisible == false)
     }
 
     @Test func runClientSlashAction_compact_failureClearsCompactingAndShowsError() async {

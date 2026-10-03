@@ -85,6 +85,8 @@ import dev.opencode.mobile.ui.componentgallery.components.SessionListGalleryScre
 import dev.opencode.mobile.ui.componentgallery.components.SessionStatusBarGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SessionTodoItemGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SessionTodosPillGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.ModalGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.PageIndicatorGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SkeletonIllustrationGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SnackbarGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.StatusStackGalleryScreen
@@ -324,10 +326,6 @@ fun MainNavigation() {
                                                 onChipTimelineChange = settingsViewModel::setChipTimeline,
                                                 chipTimelineAvailable =
                                                     SessionChatDisplayPreferences.chipTimelineAvailable,
-                                                smoothStreamingUpdates =
-                                                    SessionChatDisplayPreferences.smoothStreamingUpdates,
-                                                onSmoothStreamingUpdatesChange =
-                                                    settingsViewModel::setSmoothStreamingUpdates,
                                                 followUpDelivery =
                                                     SessionChatDisplayPreferences.followUpDelivery,
                                                 onFollowUpDeliveryChange =
@@ -524,6 +522,7 @@ fun MainNavigation() {
                                                         ComponentGalleryEntryId.Icons -> IconsGalleryScreen()
                                                         ComponentGalleryEntryId.SkeletonIllustration ->
                                                             SkeletonIllustrationGalleryScreen()
+                                                        ComponentGalleryEntryId.PageIndicator -> PageIndicatorGalleryScreen()
                                                         ComponentGalleryEntryId.Attachment -> AttachmentGalleryScreen()
                                                         ComponentGalleryEntryId.OutgoingMessage -> OutgoingMessageGalleryScreen()
                                                         ComponentGalleryEntryId.PendingPromptsStrip ->
@@ -537,6 +536,7 @@ fun MainNavigation() {
                                                         ComponentGalleryEntryId.OverflowMenu -> OverflowMenuGalleryScreen()
                                                         ComponentGalleryEntryId.BottomSheet -> BottomSheetGalleryScreen()
                                                         ComponentGalleryEntryId.Dialog -> DialogGalleryScreen()
+                                                        ComponentGalleryEntryId.Modal -> ModalGalleryScreen()
                                                         ComponentGalleryEntryId.Snackbar -> SnackbarGalleryScreen()
                                                         ComponentGalleryEntryId.ListItem -> ListItemGalleryScreen()
                                                         ComponentGalleryEntryId.ListGroup -> ListGroupGalleryScreen()

@@ -526,18 +526,22 @@ private fun BottomSheetContent(
             }
         }
 
-        Box(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .measureContentHeight(density) { measured ->
-                        if (contentHeight != measured) {
-                            contentHeight = measured
-                        }
-                    },
-        ) {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                content()
+        // A fixed-height sheet never reads the measured height. Skipping the second
+        // composition keeps stateful content (a pager) bound to one visible instance.
+        if (!alwaysFixedHeight) {
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .measureContentHeight(density) { measured ->
+                            if (contentHeight != measured) {
+                                contentHeight = measured
+                            }
+                        },
+            ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    content()
+                }
             }
         }
     }

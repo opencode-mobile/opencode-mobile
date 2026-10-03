@@ -62,24 +62,23 @@ struct OpenCodeDialog: ViewModifier {
         content.background {
             OpenCodeDialogOverlayHost(
                 isPresented: isPresented,
-                title: title,
-                subtitle: subtitle,
-                primaryOption: primaryOption,
-                secondaryOption: secondaryOption,
-                textField: textField,
+                card: OpenCodeDialogCard(
+                    title: title,
+                    subtitle: subtitle,
+                    primaryOption: primaryOption,
+                    secondaryOption: secondaryOption,
+                    textField: textField
+                ),
                 onDismiss: { isPresented = false }
             )
         }
     }
 }
 
-private struct OpenCodeDialogOverlayHost: UIViewRepresentable {
+/// Window-level scrim and fade shared by Dialog and Modal; `card` is the centered content.
+struct OpenCodeDialogOverlayHost<Card: View>: UIViewRepresentable {
     let isPresented: Bool
-    let title: String
-    let subtitle: String?
-    let primaryOption: OpenCodeDialogOption
-    let secondaryOption: OpenCodeDialogOption
-    let textField: OpenCodeDialogTextField?
+    let card: Card
     let onDismiss: () -> Void
 
     func makeCoordinator() -> Coordinator {
@@ -95,18 +94,14 @@ private struct OpenCodeDialogOverlayHost: UIViewRepresentable {
     func updateUIView(_ uiView: UIView, context: Context) {
         context.coordinator.update(
             isPresented: isPresented,
-            title: title,
-            subtitle: subtitle,
-            primaryOption: primaryOption,
-            secondaryOption: secondaryOption,
-            textField: textField,
+            card: card,
             hostView: uiView
         )
     }
 
     final class Coordinator {
         private let onDismiss: () -> Void
-        private var overlayController: UIHostingController<OpenCodeDialogOverlayContent>?
+        private var overlayController: UIHostingController<OpenCodeDialogOverlayContent<Card>>?
         private var isAnimatingOut = false
 
         init(onDismiss: @escaping () -> Void) {
@@ -115,11 +110,7 @@ private struct OpenCodeDialogOverlayHost: UIViewRepresentable {
 
         func update(
             isPresented: Bool,
-            title: String,
-            subtitle: String?,
-            primaryOption: OpenCodeDialogOption,
-            secondaryOption: OpenCodeDialogOption,
-            textField: OpenCodeDialogTextField?,
+            card: Card,
             hostView: UIView
         ) {
             guard let window = hostView.window ?? UIApplication.shared.connectedScenes
@@ -130,14 +121,7 @@ private struct OpenCodeDialogOverlayHost: UIViewRepresentable {
                 return
             }
 
-            let content = OpenCodeDialogOverlayContent(
-                title: title,
-                subtitle: subtitle,
-                primaryOption: primaryOption,
-                secondaryOption: secondaryOption,
-                textField: textField,
-                onDismiss: onDismiss
-            )
+            let content = OpenCodeDialogOverlayContent(card: card, onDismiss: onDismiss)
 
             if isPresented {
                 isAnimatingOut = false
@@ -175,12 +159,8 @@ private struct OpenCodeDialogOverlayHost: UIViewRepresentable {
     }
 }
 
-private struct OpenCodeDialogOverlayContent: View {
-    let title: String
-    let subtitle: String?
-    let primaryOption: OpenCodeDialogOption
-    let secondaryOption: OpenCodeDialogOption
-    let textField: OpenCodeDialogTextField?
+struct OpenCodeDialogOverlayContent<Card: View>: View {
+    let card: Card
     let onDismiss: () -> Void
 
     @State private var keyboardOverlap: CGFloat = 0
@@ -193,17 +173,11 @@ private struct OpenCodeDialogOverlayContent: View {
                     .contentShape(Rectangle())
                     .onTapGesture(perform: onDismiss)
 
-                OpenCodeDialogCard(
-                    title: title,
-                    subtitle: subtitle,
-                    primaryOption: primaryOption,
-                    secondaryOption: secondaryOption,
-                    textField: textField
-                )
-                .padding(.horizontal, 24)
-                .frame(maxWidth: dialogMaxWidth + 48)
-                .padding(.bottom, keyboardOverlap)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                card
+                    .padding(.horizontal, 24)
+                    .frame(maxWidth: dialogMaxWidth + 48)
+                    .padding(.bottom, keyboardOverlap)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             }
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { notification in
                 keyboardOverlap = KeyboardOverlap.amount(

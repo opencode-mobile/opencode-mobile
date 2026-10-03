@@ -119,10 +119,6 @@ class SettingsViewModel
             SessionChatDisplayPreferences.updateChipTimeline(enabled)
         }
 
-        fun setSmoothStreamingUpdates(enabled: Boolean) {
-            SessionChatDisplayPreferences.updateSmoothStreamingUpdates(enabled)
-        }
-
         fun setFollowUpDelivery(value: FollowUpDelivery) {
             SessionChatDisplayPreferences.updateFollowUpDelivery(value)
         }

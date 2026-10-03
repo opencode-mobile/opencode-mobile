@@ -7,7 +7,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 if [[ -n "${IOS_MARKETING_VERSION:-}" ]]; then
   VERSION="$IOS_MARKETING_VERSION"
 else
-  VERSION="$("$ROOT/scripts/read-app-version.sh")"
+  VERSION="$("$ROOT/scripts/read-app-version.sh" ios)"
 fi
 INFO="${TARGET_BUILD_DIR:?}/${INFOPLIST_PATH:?}"
 

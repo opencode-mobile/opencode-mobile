@@ -15,6 +15,7 @@ enum ComponentGalleryEntryID: String, Hashable {
     case typography
     case icons
     case skeletonIllustration
+    case pageIndicator
     case attachment
     case outgoingMessage
     case pendingPromptsStrip
@@ -27,6 +28,7 @@ enum ComponentGalleryEntryID: String, Hashable {
     case overflowMenu
     case bottomSheet
     case dialog
+    case modal
     case snackbar
     case listItem
     case listGroup
@@ -82,6 +84,12 @@ let componentGalleryEntries = [
         title: "Skeleton Illustration",
         description: "Wireframe hero with one spotlit element for onboarding, tutorials, and hints.",
         category: .foundations
+    ),
+    ComponentGalleryEntry(
+        id: .pageIndicator,
+        title: "Page Indicator",
+        description: "Pager position dots under onboarding and promo carousels.",
+        category: .navigation
     ),
     ComponentGalleryEntry(
         id: .typography,
@@ -183,6 +191,12 @@ let componentGalleryEntries = [
         id: .dialog,
         title: "Dialog",
         description: "Centered popup with title, optional subtitle, two options, and optional text field.",
+        category: .navigation
+    ),
+    ComponentGalleryEntry(
+        id: .modal,
+        title: "Modal",
+        description: "Centered card with a close button and custom content for promos and short walkthroughs.",
         category: .navigation
     ),
     ComponentGalleryEntry(

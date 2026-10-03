@@ -1,7 +1,6 @@
 package dev.opencode.mobile.domain.message
 
 import dev.opencode.mobile.domain.preferences.MarkdownHighlightPreferences
-import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.markdown.OpenCodeMarkdownDetector
 import dev.opencode.mobile.markdown.stableMarkdownSourceHash
 import dev.opencode.mobile.ui.sessionchat.PresentationBlockId
@@ -31,9 +30,6 @@ class DisplayMessagePipeline(
     private val timeSource: TimeSource = TimeSource.Monotonic,
     private val delayMillis: suspend (Long) -> Unit = { delay(it) },
     private val messageSync: MessageSync? = null,
-    private val smoothStreamingUpdates: () -> Boolean = {
-        SessionChatDisplayPreferences.smoothStreamingUpdates
-    },
 ) {
     constructor(
         messageSync: MessageSync,
@@ -286,7 +282,6 @@ class DisplayMessagePipeline(
             }
 
             fun isDueForMaxBatch(): Boolean {
-                if (!smoothStreamingUpdates()) return true
                 return lastPublishedAt
                     ?.elapsedNow()
                     ?.inWholeMilliseconds

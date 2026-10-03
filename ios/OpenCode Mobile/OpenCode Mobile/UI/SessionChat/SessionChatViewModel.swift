@@ -53,6 +53,11 @@ final class SessionChatViewModel {
     /// Chip-timeline step paragraphs the user expanded past `+N more`:
     /// paragraph id to the chip count at tap time.
     private var expandedStepParagraphs: [String: Int] = [:]
+    // One-time Chip timeline intro (OPE-270): offered after a long turn finishes.
+    private var chipTimelineIntroVisible = false
+    private var chipTimelineIntroNotice: String?
+    private var chipTimelineIntroTurnActive: Bool?
+    private var chipTimelineIntroTask: Task<Void, Never>?
 
     init(
         sessionID: String,
@@ -484,12 +489,74 @@ final class SessionChatViewModel {
             logChatAction(ProductAnalytics.Action.chatDismissSnackbar)
         }
         suppressedSnackbarKey = lastSnackbarKey
+        chipTimelineIntroNotice = nil
         commands.clearActionFeedback()
         composer.clearTransientErrors()
         sessionInfo.clearTransientErrors()
         timeline.clearReadyError()
         inbox.clearTopologyErrors()
         publishUiState()
+    }
+
+    func enableChipTimelineFromIntro() {
+        hideChipTimelineIntro(ProductAnalytics.Action.chipTimelineIntroEnable)
+        SessionChatDisplayPreferences.shared.setChipTimeline(true)
+        chipTimelineIntroNotice = Self.chipTimelineIntroEnabledNotice
+        publishUiState()
+    }
+
+    /// Later button, swipe, or scrim.
+    func postponeChipTimelineIntro() {
+        hideChipTimelineIntro(ProductAnalytics.Action.chipTimelineIntroLater)
+        SessionChatDisplayPreferences.shared.postponeChipTimelineIntro(nowMs: clock.nowMs())
+        publishUiState()
+    }
+
+    func dismissChipTimelineIntro() {
+        hideChipTimelineIntro(ProductAnalytics.Action.chipTimelineIntroNever)
+        SessionChatDisplayPreferences.shared.finishChipTimelineIntro()
+        publishUiState()
+    }
+
+    private func hideChipTimelineIntro(_ actionId: String) {
+        guard chipTimelineIntroVisible else { return }
+        chipTimelineIntroVisible = false
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.sessionChipTimelineIntro,
+            actionId: actionId
+        )
+    }
+
+    private func resetChipTimelineIntro() {
+        chipTimelineIntroTask?.cancel()
+        chipTimelineIntroTask = nil
+        chipTimelineIntroVisible = false
+        chipTimelineIntroNotice = nil
+        chipTimelineIntroTurnActive = nil
+    }
+
+    /// Offers the intro once a long turn goes busy → idle and stays settled.
+    private func updateChipTimelineIntroTurnActive(_ isTurnActive: Bool) {
+        let previous = chipTimelineIntroTurnActive
+        chipTimelineIntroTurnActive = isTurnActive
+        if isTurnActive {
+            chipTimelineIntroTask?.cancel()
+            chipTimelineIntroTask = nil
+            return
+        }
+        guard previous == true, !chipTimelineIntroVisible, isSessionBound else { return }
+        let toolCalls = ChipTimelineIntro.lastTurnToolCalls(timeline.loadedMessages())
+        let preferences = SessionChatDisplayPreferences.shared
+        guard preferences.shouldOfferChipTimelineIntro(turnToolCalls: toolCalls, nowMs: clock.nowMs()) else { return }
+        chipTimelineIntroTask?.cancel()
+        chipTimelineIntroTask = Task { [clock] in
+            await clock.sleep(milliseconds: Int(ChipTimelineIntro.settleDelayMs))
+            guard !Task.isCancelled, isSessionBound, uiState.sessionStatusLabel == nil,
+                  !uiState.blocksChipTimelineIntro else { return }
+            guard preferences.shouldOfferChipTimelineIntro(turnToolCalls: toolCalls, nowMs: clock.nowMs()) else { return }
+            chipTimelineIntroVisible = true
+            publishUiState()
+        }
     }
 
     func openRenameSession() {
@@ -895,6 +962,7 @@ final class SessionChatViewModel {
         OpenCodeLog.sessionChat.info("stop observing session=\(self.sessionID)")
         isSessionBound = false
         resetWorkingFooter()
+        resetChipTimelineIntro()
         composer.flushDraft()
         pendingSend = nil
         optimisticCreateTask?.cancel()
@@ -1081,6 +1149,7 @@ final class SessionChatViewModel {
         )
         if infoState.hasResolvedSessionStatus {
             repoStrip.updateTurnActive(isTurnActive)
+            updateChipTimelineIntroTurnActive(isTurnActive)
         }
         let reviewChangesState = reviewChanges.state
         let repoStripState = repoStrip.state
@@ -1099,7 +1168,9 @@ final class SessionChatViewModel {
         }()
         let snackbar = resolveSnackbar(
             transientError: transientError,
-            successNotice: composerState.followUpNotice ?? commandsState.actionSuccessMessage
+            successNotice: composerState.followUpNotice
+                ?? commandsState.actionSuccessMessage
+                ?? chipTimelineIntroNotice
         )
         // Reuse the current TimelineFrame when only composer / session-info /
         // review / command republish (same revision → no O(n) remap).
@@ -1234,7 +1305,8 @@ final class SessionChatViewModel {
             pendingSessionReplace: commandsState.pendingSessionReplace,
             pendingTerminalOpen: commandsState.pendingTerminalOpen,
             hasPendingRevert: commandsState.hasPendingRevert,
-            expandedStepParagraphs: expandedStepParagraphs
+            expandedStepParagraphs: expandedStepParagraphs,
+            chipTimelineIntroVisible: chipTimelineIntroVisible
         )
     }
 
@@ -1331,6 +1403,7 @@ final class SessionChatViewModel {
     }
 
     private static let pendingPromptFailure = "Couldn't update pending prompt"
+    static let chipTimelineIntroEnabledNotice = "Chip timeline is on. Turn it off in Settings."
 
     private struct ArmedSendAcceptance {
         let sessionID: String

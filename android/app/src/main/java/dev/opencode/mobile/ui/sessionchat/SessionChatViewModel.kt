@@ -35,6 +35,7 @@ import dev.opencode.mobile.domain.model.ModelRepository
 import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.model.NewSessionModelSelectionResolver
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
+import dev.opencode.mobile.domain.preferences.ChipTimelineIntro
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.domain.project.ProjectDomainAdapter
 import dev.opencode.mobile.domain.project.smartProjectLabel
@@ -206,6 +207,12 @@ class SessionChatViewModel
         // expansion id with the chip count at tap time; reset per session.
         private var expandedStepParagraphs: Map<String, Int> = emptyMap()
 
+        // One-time Chip timeline intro (OPE-270): offered after a long turn finishes.
+        private var chipTimelineIntroVisible = false
+        private var chipTimelineIntroNotice: String? = null
+        private var chipTimelineIntroTurnActive: Boolean? = null
+        private var chipTimelineIntroJob: Job? = null
+
         // Title / custom-answer fields change per keystroke; report the first edit per
         // dialog appearance so analytics measures engagement instead of typing volume.
         private var renameDraftEditReported = false
@@ -248,7 +255,10 @@ class SessionChatViewModel
                         isTurnActive = isTurnActive,
                         isSending = composerState.isSending,
                     )
-                    if (infoState.hasResolvedSessionStatus) repoStrip.updateTurnActive(isTurnActive)
+                    if (infoState.hasResolvedSessionStatus) {
+                        repoStrip.updateTurnActive(isTurnActive)
+                        updateChipTimelineIntroTurnActive(isTurnActive)
+                    }
                     commands.updateVisibility(
                         messages = timelineState.messages,
                         hasSelectedComposerModel = composerState.composer.selectedModel != null,
@@ -317,6 +327,7 @@ class SessionChatViewModel
             suppressedSnackbarKey = null
             snackbarSequence = 0L
             expandedStepParagraphs = emptyMap()
+            resetChipTimelineIntro()
             resetWorkingFooter()
             logI("bind session=$sessionId worktree=$worktree title=$sessionTitle")
             seedProjectIdentity(worktree)
@@ -355,6 +366,7 @@ class SessionChatViewModel
             suppressedSnackbarKey = null
             snackbarSequence = 0L
             expandedStepParagraphs = emptyMap()
+            resetChipTimelineIntro()
             resetWorkingFooter()
             logI("bind optimistic create worktree=$worktree title=$sessionTitle")
             seedProjectIdentity(worktree)
@@ -704,9 +716,66 @@ class SessionChatViewModel
             commands.consumePendingTerminalOpen()
         }
 
+        fun enableChipTimelineFromIntro() {
+            hideChipTimelineIntro(ProductAnalytics.Action.CHIP_TIMELINE_INTRO_ENABLE)
+            SessionChatDisplayPreferences.updateChipTimeline(true)
+            chipTimelineIntroNotice = CHIP_TIMELINE_INTRO_ENABLED_NOTICE
+            publishUiState()
+        }
+
+        /** Later button, swipe, scrim, or back. */
+        fun postponeChipTimelineIntro() {
+            hideChipTimelineIntro(ProductAnalytics.Action.CHIP_TIMELINE_INTRO_LATER)
+            SessionChatDisplayPreferences.postponeChipTimelineIntro(nowMs())
+            publishUiState()
+        }
+
+        fun dismissChipTimelineIntro() {
+            hideChipTimelineIntro(ProductAnalytics.Action.CHIP_TIMELINE_INTRO_NEVER)
+            SessionChatDisplayPreferences.finishChipTimelineIntro()
+            publishUiState()
+        }
+
+        private fun hideChipTimelineIntro(actionId: String) {
+            if (!chipTimelineIntroVisible) return
+            chipTimelineIntroVisible = false
+            logAction(actionId, screenId = ProductAnalytics.Screen.SESSION_CHIP_TIMELINE_INTRO)
+        }
+
+        private fun resetChipTimelineIntro() {
+            chipTimelineIntroJob?.cancel()
+            chipTimelineIntroJob = null
+            chipTimelineIntroVisible = false
+            chipTimelineIntroNotice = null
+            chipTimelineIntroTurnActive = null
+        }
+
+        /** Offers the intro once a long turn goes busy → idle and stays settled. */
+        private fun updateChipTimelineIntroTurnActive(isTurnActive: Boolean) {
+            val previous = chipTimelineIntroTurnActive
+            chipTimelineIntroTurnActive = isTurnActive
+            if (isTurnActive) {
+                chipTimelineIntroJob?.cancel()
+                return
+            }
+            if (previous != true || chipTimelineIntroVisible) return
+            val toolCalls = ChipTimelineIntro.lastTurnToolCalls(timeline.loadedMessages())
+            if (!SessionChatDisplayPreferences.shouldOfferChipTimelineIntro(toolCalls, nowMs())) return
+            chipTimelineIntroJob?.cancel()
+            chipTimelineIntroJob =
+                viewModelScope.launch {
+                    delay(ChipTimelineIntro.SETTLE_DELAY_MILLIS)
+                    if (isSessionBusy() || _uiState.value.blocksChipTimelineIntro()) return@launch
+                    if (!SessionChatDisplayPreferences.shouldOfferChipTimelineIntro(toolCalls, nowMs())) return@launch
+                    chipTimelineIntroVisible = true
+                    publishUiState()
+                }
+        }
+
         fun consumeSnackbar() {
             logAction(ProductAnalytics.Action.CHAT_DISMISS_SNACKBAR)
             suppressedSnackbarKey = lastSnackbarKey
+            chipTimelineIntroNotice = null
             commands.clearActionFeedback()
             composer.clearTransientErrors()
             sessionInfo.clearTransientErrors()
@@ -1203,7 +1272,7 @@ class SessionChatViewModel
             val snackbar =
                 resolveSnackbar(
                     transientError,
-                    composerState.followUpNotice ?: commandsState.actionSuccessMessage,
+                    composerState.followUpNotice ?: commandsState.actionSuccessMessage ?: chipTimelineIntroNotice,
                 )
             val sessionStatusLabel =
                 if (isCompacting) {
@@ -1353,6 +1422,7 @@ class SessionChatViewModel
                 forkedSessionTitle = commandsState.forkedSessionTitle,
                 pendingSessionReplace = commandsState.pendingSessionReplace,
                 expandedStepParagraphs = expandedStepParagraphs,
+                chipTimelineIntroVisible = chipTimelineIntroVisible,
                 pendingTerminalOpen = commandsState.pendingTerminalOpen,
                 hasPendingRevert = commandsState.hasPendingRevert,
                 projectLabel = projectLabel,
@@ -1461,6 +1531,7 @@ class SessionChatViewModel
             const val ModelFilterThreshold: Int = SessionChatComposer.ModelFilterThreshold
             const val PENDING_SEND_TIMEOUT_MS = 8_000L
             const val PENDING_PROMPT_FAILURE = "Couldn't update pending prompt"
+            const val CHIP_TIMELINE_INTRO_ENABLED_NOTICE = "Chip timeline is on. Turn it off in Settings."
         }
     }
 

@@ -214,28 +214,6 @@ class DisplayMessagePipelineCharacterizationTest {
         }
 
     @Test
-    fun streamingPublishesImmediatelyWhenSmoothStreamingOff() =
-        runTest(testDispatcher) {
-            val harness = startHarness(holdDelays = true, smoothStreamingUpdates = { false })
-
-            harness.source.emit(MessageListUpdate.Messages(listOf(plainAssistant("seed"))))
-            advanceUntilIdle()
-            harness.emissions.clear()
-            harness.delay.resetCallCount()
-
-            harness.source.emit(
-                MessageListUpdate.Messages(listOf(streamingAssistant("msg-1", "Hello"))),
-            )
-            advanceUntilIdle()
-
-            assertEquals(0, harness.delay.callCount)
-            assertEquals(1, harness.emissions.size)
-            val frame = harness.emissions.single() as DisplayMessageListUpdate.Messages
-            assertEquals("Hello", frame.messages.single().text)
-            assertTrue(frame.messages.single().isStreaming)
-        }
-
-    @Test
     fun streamingFlushesWhenMaxBatchAgeExceeded() =
         runTest(testDispatcher) {
             val harness = startHarness(holdDelays = true)
@@ -798,11 +776,8 @@ class DisplayMessagePipelineCharacterizationTest {
             assertTrue(harness.emissions.last() is DisplayMessageListUpdate.CacheSyncConfirmed)
         }
 
-    private fun TestScope.startHarness(
-        holdDelays: Boolean = false,
-        smoothStreamingUpdates: () -> Boolean = { true },
-    ): Harness {
-        val harness = Harness(holdDelays = holdDelays, smoothStreamingUpdates = smoothStreamingUpdates)
+    private fun TestScope.startHarness(holdDelays: Boolean = false): Harness {
+        val harness = Harness(holdDelays = holdDelays)
         harness.collectJob =
             backgroundScope.launch {
                 harness.pipeline.observeDisplayMessages("ses-1", null).collect {
@@ -814,7 +789,6 @@ class DisplayMessagePipelineCharacterizationTest {
 
     private class Harness(
         holdDelays: Boolean,
-        smoothStreamingUpdates: () -> Boolean = { true },
     ) {
         val source = ControllableSnapshotSource()
         val preparer = ControllableDisplayMessagePreparing()
@@ -828,7 +802,6 @@ class DisplayMessagePipelineCharacterizationTest {
                 contentPreparer = preparer,
                 timeSource = timeSource,
                 delayMillis = delay::delay,
-                smoothStreamingUpdates = smoothStreamingUpdates,
             )
     }
 

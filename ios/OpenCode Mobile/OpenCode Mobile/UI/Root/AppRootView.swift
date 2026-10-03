@@ -19,19 +19,22 @@ final class AppRootViewModel {
     private let connectionSessionCoordinator: ConnectionSessionCoordinator
     private let worldSignals: SceneWorldSignals
     private let appOnboardingPreferences: AppOnboardingPreferences
+    private let sessionChatDisplayPreferences: SessionChatDisplayPreferences
 
     init(
         connectionProfileStore: any ConnectionProfileStore,
         activeConnectionManager: ActiveConnectionManager,
         connectionSessionCoordinator: ConnectionSessionCoordinator,
         worldSignals: SceneWorldSignals,
-        appOnboardingPreferences: AppOnboardingPreferences
+        appOnboardingPreferences: AppOnboardingPreferences,
+        sessionChatDisplayPreferences: SessionChatDisplayPreferences
     ) {
         self.connectionProfileStore = connectionProfileStore
         self.activeConnectionManager = activeConnectionManager
         self.connectionSessionCoordinator = connectionSessionCoordinator
         self.worldSignals = worldSignals
         self.appOnboardingPreferences = appOnboardingPreferences
+        self.sessionChatDisplayPreferences = sessionChatDisplayPreferences
 
         connectionSessionCoordinator.onProfileSaved { [weak self] in
             Task { @MainActor in
@@ -43,7 +46,9 @@ final class AppRootViewModel {
     func load() async {
         await activeConnectionManager.ensureLoaded(from: connectionProfileStore)
         let hasProfile = await connectionProfileStore.activeProfile() != nil
-        if !appOnboardingPreferences.isCompleted, !hasProfile {
+        let existingInstall = appOnboardingPreferences.isCompleted || hasProfile
+        sessionChatDisplayPreferences.resolveChipTimelineForInstall(existingInstall: existingInstall)
+        if !existingInstall {
             state = .appOnboarding
         } else {
             enterHome()
