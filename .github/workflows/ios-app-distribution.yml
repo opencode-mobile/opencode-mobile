@@ -68,7 +68,7 @@ jobs:
         run: |
           set -euo pipefail
           build_number=$((1000000000 + GITHUB_RUN_NUMBER))
-          marketing_version="$(./scripts/read-app-version.sh)"
+          marketing_version="$(./scripts/read-app-version.sh ios)"
           echo "IOS_BUILD_NUMBER=$build_number" >> "$GITHUB_ENV"
           echo "IOS_MARKETING_VERSION=$marketing_version" >> "$GITHUB_ENV"
 
