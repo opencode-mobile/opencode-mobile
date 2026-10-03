@@ -265,7 +265,6 @@ enum ProductAnalytics {
         static let settingsOpenRecentWindowPicker = "settings_open_recent_window_picker"
         static let settingsToggleCollapseConsecutiveToolCalls = "settings_toggle_collapse_consecutive_tool_calls"
         static let settingsToggleChipTimeline = "settings_toggle_chip_timeline"
-        static let settingsToggleSessionListProjectPicker = "settings_toggle_session_list_project_picker"
         static let settingsClearSessionCache = "settings_clear_session_cache"
         static let settingsOpenPrivacyPolicy = "settings_open_privacy_policy"
         static let settingsToggleProductAnalytics = "settings_toggle_product_analytics"

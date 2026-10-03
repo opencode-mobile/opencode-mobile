@@ -111,30 +111,15 @@ struct SessionListHomeChromeTests {
         )
     }
 
-    @Test func newSessionLongPressAction_chipChromeDoesNothing() {
-        #expect(
-            SessionListHomeChrome.newSessionLongPressAction(
-                projects: [mobile, playground],
-                useProjectPicker: false
-            ) == .none
-        )
-    }
-
     @Test func newSessionLongPressAction_oneProjectDoesNothing() {
         #expect(
-            SessionListHomeChrome.newSessionLongPressAction(
-                projects: [mobile],
-                useProjectPicker: true
-            ) == .none
+            SessionListHomeChrome.newSessionLongPressAction(projects: [mobile]) == .none
         )
     }
 
-    @Test func newSessionLongPressAction_pickerWithTwoProjectsPresentsPicker() {
+    @Test func newSessionLongPressAction_twoProjectsPresentsPicker() {
         #expect(
-            SessionListHomeChrome.newSessionLongPressAction(
-                projects: [mobile, playground],
-                useProjectPicker: true
-            ) == .presentPicker
+            SessionListHomeChrome.newSessionLongPressAction(projects: [mobile, playground]) == .presentPicker
         )
     }
 

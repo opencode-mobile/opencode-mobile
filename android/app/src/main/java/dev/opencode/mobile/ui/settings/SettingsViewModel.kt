@@ -111,10 +111,6 @@ class SettingsViewModel
             HomeDisplayPreferences.updateRecentWindowHours(hours)
         }
 
-        fun setSessionListProjectPickerEnabled(enabled: Boolean) {
-            HomeDisplayPreferences.updateSessionListProjectPickerEnabled(enabled)
-        }
-
         fun setCollapseConsecutiveToolCalls(enabled: Boolean) {
             SessionChatDisplayPreferences.updateCollapseConsecutiveToolCalls(enabled)
         }

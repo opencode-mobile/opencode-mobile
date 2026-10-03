@@ -27,7 +27,6 @@ import dev.opencode.mobile.ui.components.SessionListStatus
 fun SessionListGalleryScreen(modifier: Modifier = Modifier) {
     var selectedFilterId by rememberSaveable { mutableStateOf(SessionListFilterTab.ALL_ID) }
     var oneProject by rememberSaveable { mutableStateOf(false) }
-    var useProjectPicker by rememberSaveable { mutableStateOf(false) }
     var showProjectPicker by rememberSaveable { mutableStateOf(false) }
     val filterTabs =
         if (oneProject) {
@@ -40,7 +39,6 @@ fun SessionListGalleryScreen(modifier: Modifier = Modifier) {
             sessions = sessionListGallerySamples,
             filterTabs = filterTabs,
             selectedFilterId = selectedFilterId,
-            useProjectPicker = useProjectPicker,
             onOpenProjectPicker = { showProjectPicker = true },
             onFilterSelected = { selectedFilterId = it },
             onSessionSelected = {},
@@ -67,11 +65,6 @@ fun SessionListGalleryScreen(modifier: Modifier = Modifier) {
                             SessionListFilterTab.ALL_ID
                         }
                 },
-            )
-            OpenCodeChoiceBadge(
-                label = "Picker",
-                selected = useProjectPicker,
-                onClick = { useProjectPicker = !useProjectPicker },
             )
         }
     }

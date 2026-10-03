@@ -81,11 +81,8 @@ object SessionListHomeChrome {
         return TerminalAction.OpenCatalog
     }
 
-    fun newSessionLongPressAction(
-        projects: List<Project>,
-        useProjectPicker: Boolean,
-    ): NewSessionAction {
-        if (!useProjectPicker || projects.size < 2) {
+    fun newSessionLongPressAction(projects: List<Project>): NewSessionAction {
+        if (projects.size < 2) {
             return NewSessionAction.None
         }
         return NewSessionAction.PresentPicker

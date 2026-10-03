@@ -69,8 +69,6 @@ fun SettingsScreen(
     onHideUserDirectoryPrefixChange: (Boolean) -> Unit,
     recentWindowHours: Int,
     onRecentWindowHoursChange: (Int) -> Unit,
-    sessionListProjectPickerEnabled: Boolean,
-    onSessionListProjectPickerEnabledChange: (Boolean) -> Unit,
     collapseConsecutiveToolCalls: Boolean,
     onCollapseConsecutiveToolCallsChange: (Boolean) -> Unit,
     chipTimeline: Boolean,
@@ -211,26 +209,6 @@ fun SettingsScreen(
                     onClick = {
                         logSettingsAction(ProductAnalytics.Action.SETTINGS_OPEN_RECENT_WINDOW_PICKER)
                         showRecentWindowPicker = true
-                    },
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                )
-
-                OpenCodeListItem(
-                    title = "Project Picker",
-                    subtitle = "Replace home filter chips with a project picker",
-                    style = OpenCodeListItemStyle.Card,
-                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Widgets, "Project Picker"),
-                    trailing = {
-                        Switch(
-                            checked = sessionListProjectPickerEnabled,
-                            onCheckedChange = { enabled ->
-                                logSettingsToggle(
-                                    ProductAnalytics.Action.SETTINGS_TOGGLE_SESSION_LIST_PROJECT_PICKER,
-                                    enabled,
-                                )
-                                onSessionListProjectPickerEnabledChange(enabled)
-                            },
-                        )
                     },
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
@@ -667,8 +645,6 @@ private fun SettingsScreenLightPreview() {
             onHideUserDirectoryPrefixChange = {},
             recentWindowHours = HomeDisplayPreferences.recentWindowHours,
             onRecentWindowHoursChange = {},
-            sessionListProjectPickerEnabled = HomeDisplayPreferences.sessionListProjectPickerEnabled,
-            onSessionListProjectPickerEnabledChange = {},
             collapseConsecutiveToolCalls =
                 SessionChatDisplayPreferences.collapseConsecutiveToolCalls,
             onCollapseConsecutiveToolCallsChange = {},
@@ -707,8 +683,6 @@ private fun SettingsScreenDarkPreview() {
             onHideUserDirectoryPrefixChange = {},
             recentWindowHours = HomeDisplayPreferences.recentWindowHours,
             onRecentWindowHoursChange = {},
-            sessionListProjectPickerEnabled = HomeDisplayPreferences.sessionListProjectPickerEnabled,
-            onSessionListProjectPickerEnabledChange = {},
             collapseConsecutiveToolCalls =
                 SessionChatDisplayPreferences.collapseConsecutiveToolCalls,
             onCollapseConsecutiveToolCallsChange = {},

@@ -4,36 +4,30 @@ struct OpenCodeSessionListDock: View {
     let filterTabs: [SessionListFilterTab]
     let selectedFilterId: String
     let createError: String?
-    let useProjectPicker: Bool
     let onOpenProjectPicker: () -> Void
     let onFilterSelected: (String) -> Void
     let onAddProject: () -> Void
     let onNewSession: () -> Void
     let onNewSessionLongPress: (() -> Void)?
-    let onRemoveProject: ((String) -> Void)?
 
     init(
         filterTabs: [SessionListFilterTab],
         selectedFilterId: String,
         createError: String? = nil,
-        useProjectPicker: Bool = false,
         onOpenProjectPicker: @escaping () -> Void = {},
         onFilterSelected: @escaping (String) -> Void = { _ in },
         onAddProject: @escaping () -> Void,
         onNewSession: @escaping () -> Void,
-        onNewSessionLongPress: (() -> Void)? = nil,
-        onRemoveProject: ((String) -> Void)? = nil
+        onNewSessionLongPress: (() -> Void)? = nil
     ) {
         self.filterTabs = filterTabs
         self.selectedFilterId = selectedFilterId
         self.createError = createError
-        self.useProjectPicker = useProjectPicker
         self.onOpenProjectPicker = onOpenProjectPicker
         self.onFilterSelected = onFilterSelected
         self.onAddProject = onAddProject
         self.onNewSession = onNewSession
         self.onNewSessionLongPress = onNewSessionLongPress
-        self.onRemoveProject = onRemoveProject
     }
 
     var body: some View {
@@ -46,27 +40,13 @@ struct OpenCodeSessionListDock: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
-                if useProjectPicker, !filterTabs.isEmpty {
+                if !filterTabs.isEmpty {
                     SessionListScopeControl(
                         tabs: filterTabs,
                         selectedId: selectedFilterId,
                         onOpen: onOpenProjectPicker,
                         onSelect: onFilterSelected
                     )
-                } else if !filterTabs.isEmpty {
-                    ScrollViewReader { proxy in
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            filterChipsRow
-                        }
-                        .onChange(of: selectedFilterId) { _, id in
-                            Task { @MainActor in
-                                await Task.yield()
-                                withAnimation(.smooth(duration: 0.22)) {
-                                    proxy.scrollTo(id)
-                                }
-                            }
-                        }
-                    }
                 }
 
                 HStack(alignment: .center, spacing: 8) {
@@ -75,36 +55,6 @@ struct OpenCodeSessionListDock: View {
                 }
             }
         }
-    }
-
-    @ViewBuilder
-    private var filterChipsRow: some View {
-        let chips = HStack(spacing: 8) {
-            ForEach(filterTabs) { tab in
-                OpenCodeFilterChip(
-                    title: tab.title,
-                    count: tab.count,
-                    selected: tab.id == selectedFilterId,
-                    action: { onFilterSelected(tab.id) },
-                    removeAction: tab.id != SessionListFilterTab.allId
-                        && tab.id == selectedFilterId
-                        ? onRemoveProject.map { remove in { remove(tab.id) } }
-                        : nil
-                )
-                .id(tab.id)
-            }
-        }
-        if #available(iOS 26, *) {
-            GlassEffectContainer(spacing: 8) {
-                chips
-            }
-        } else {
-            chips
-        }
-    }
-
-    private var selectedTab: SessionListFilterTab? {
-        filterTabs.first { $0.id == selectedFilterId } ?? filterTabs.first
     }
 
     private static let ctaHeight: CGFloat = 52

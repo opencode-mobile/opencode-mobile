@@ -11,7 +11,6 @@ struct ProjectListHomeView: View {
     @State private var showNewSessionProjectPicker = false
     @State private var showProjectPicker = false
     @State private var selectedSessionFilterId = SessionListFilterTab.allId
-    @State private var homeDisplayPreferences = HomeDisplayPreferences.shared
     @Environment(\.scenePhase) private var scenePhase
     @Binding private var presentConnectionSetupOnAppear: Bool
 
@@ -722,7 +721,6 @@ struct ProjectListHomeView: View {
             filterTabs: filterTabs,
             selectedFilterId: selectedFilterId,
             createError: createError,
-            useProjectPicker: homeDisplayPreferences.sessionListProjectPickerEnabled,
             onOpenProjectPicker: {
                 ProductAnalytics.logUserAction(
                     screenId: ProductAnalytics.Screen.home,
@@ -777,14 +775,10 @@ struct ProjectListHomeView: View {
                 }
             },
             onNewSessionLongPress: SessionListHomeChrome.newSessionLongPressAction(
-                projects: chromeProjects,
-                useProjectPicker: homeDisplayPreferences.sessionListProjectPickerEnabled
+                projects: chromeProjects
             ) == .presentPicker
                 ? { presentNewSessionProjectPicker() }
                 : nil,
-            onRemoveProject: { worktree in
-                viewModel.requestRemoveProject(worktree: worktree)
-            },
             onRefresh: { await viewModel.pullToRefresh() },
             revealNewestToken: viewModel.revealNewestToken,
             showsEmptyContent: sections.isEmpty,
@@ -793,11 +787,6 @@ struct ProjectListHomeView: View {
         .onChange(of: selectedFilterId, initial: true) { _, resolved in
             if selectedSessionFilterId != resolved {
                 selectedSessionFilterId = resolved
-            }
-        }
-        .onChange(of: homeDisplayPreferences.sessionListProjectPickerEnabled) { _, enabled in
-            if !enabled {
-                showProjectPicker = false
             }
         }
     }

@@ -165,35 +165,18 @@ class SessionListHomeChromeTest {
     }
 
     @Test
-    fun newSessionLongPressAction_chipChromeDoesNothing() {
-        assertEquals(
-            SessionListHomeChrome.NewSessionAction.None,
-            SessionListHomeChrome.newSessionLongPressAction(
-                projects = listOf(mobile, playground),
-                useProjectPicker = false,
-            ),
-        )
-    }
-
-    @Test
     fun newSessionLongPressAction_oneProjectDoesNothing() {
         assertEquals(
             SessionListHomeChrome.NewSessionAction.None,
-            SessionListHomeChrome.newSessionLongPressAction(
-                projects = listOf(mobile),
-                useProjectPicker = true,
-            ),
+            SessionListHomeChrome.newSessionLongPressAction(projects = listOf(mobile)),
         )
     }
 
     @Test
-    fun newSessionLongPressAction_pickerWithTwoProjectsPresentsPicker() {
+    fun newSessionLongPressAction_twoProjectsPresentsPicker() {
         assertEquals(
             SessionListHomeChrome.NewSessionAction.PresentPicker,
-            SessionListHomeChrome.newSessionLongPressAction(
-                projects = listOf(mobile, playground),
-                useProjectPicker = true,
-            ),
+            SessionListHomeChrome.newSessionLongPressAction(projects = listOf(mobile, playground)),
         )
     }
 

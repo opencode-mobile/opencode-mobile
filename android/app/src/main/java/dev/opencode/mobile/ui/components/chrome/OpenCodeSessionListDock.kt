@@ -11,7 +11,6 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.drag
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,9 +22,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.relocation.BringIntoViewRequester
-import androidx.compose.foundation.relocation.bringIntoViewRequester
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
@@ -95,10 +91,8 @@ fun OpenCodeSessionListDock(
     onNewSession: () -> Unit,
     modifier: Modifier = Modifier,
     createError: String? = null,
-    useProjectPicker: Boolean = false,
     onOpenProjectPicker: () -> Unit = {},
     onFilterSelected: (String) -> Unit = {},
-    onRemoveProject: ((String) -> Unit)? = null,
     onNewSessionLongPress: (() -> Unit)? = null,
 ) {
     val textStrong = openCodeColor("text-strong")
@@ -120,19 +114,12 @@ fun OpenCodeSessionListDock(
                 )
             }
 
-            if (useProjectPicker && filterTabs.isNotEmpty()) {
+            if (filterTabs.isNotEmpty()) {
                 SessionListScopeControl(
                     tabs = filterTabs,
                     selectedId = selectedFilterId,
                     onOpen = onOpenProjectPicker,
                     onSelect = onFilterSelected,
-                )
-            } else if (filterTabs.isNotEmpty()) {
-                SessionListFilterChipRow(
-                    filterTabs = filterTabs,
-                    selectedFilterId = selectedFilterId,
-                    onFilterSelected = onFilterSelected,
-                    onRemoveProject = onRemoveProject,
                 )
             }
 
@@ -172,49 +159,6 @@ fun OpenCodeSessionListDock(
                     )
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun SessionListFilterChipRow(
-    filterTabs: List<SessionListFilterTab>,
-    selectedFilterId: String,
-    onFilterSelected: (String) -> Unit,
-    onRemoveProject: ((String) -> Unit)?,
-) {
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        filterTabs.forEach { tab ->
-            val selected = tab.id == selectedFilterId
-            val showRemove =
-                tab.id != SessionListFilterTab.ALL_ID &&
-                    selected &&
-                    onRemoveProject != null
-            val bringIntoViewRequester = remember(tab.id) { BringIntoViewRequester() }
-            LaunchedEffect(selected, showRemove) {
-                if (selected) {
-                    bringIntoViewRequester.bringIntoView()
-                }
-            }
-            OpenCodeFilterChip(
-                title = tab.title,
-                count = tab.count,
-                selected = selected,
-                onClick = { onFilterSelected(tab.id) },
-                onRemove =
-                    if (showRemove) {
-                        onRemoveProject?.let { remove -> { remove(tab.id) } }
-                    } else {
-                        null
-                    },
-                modifier = Modifier.bringIntoViewRequester(bringIntoViewRequester),
-            )
         }
     }
 }

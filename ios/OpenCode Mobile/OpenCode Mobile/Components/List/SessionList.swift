@@ -136,7 +136,6 @@ struct SessionList<EmptyContent: View>: View {
     let filterTabs: [SessionListFilterTab]
     let selectedFilterId: String
     let createError: String?
-    let useProjectPicker: Bool
     let onOpenProjectPicker: () -> Void
     let onFilterSelected: (String) -> Void
     let onSessionSelected: (SessionListSession) -> Void
@@ -144,7 +143,6 @@ struct SessionList<EmptyContent: View>: View {
     let onAddProject: () -> Void
     let onNewSession: () -> Void
     let onNewSessionLongPress: (() -> Void)?
-    let onRemoveProject: ((String) -> Void)?
     let onRefresh: (() async -> Void)?
     let revealNewestToken: Int
     let showsEmptyContent: Bool
@@ -165,7 +163,6 @@ struct SessionList<EmptyContent: View>: View {
         filterTabs: [SessionListFilterTab],
         selectedFilterId: String,
         createError: String? = nil,
-        useProjectPicker: Bool = false,
         onOpenProjectPicker: @escaping () -> Void = {},
         onFilterSelected: @escaping (String) -> Void = { _ in },
         onSessionSelected: @escaping (SessionListSession) -> Void,
@@ -173,7 +170,6 @@ struct SessionList<EmptyContent: View>: View {
         onAddProject: @escaping () -> Void,
         onNewSession: @escaping () -> Void,
         onNewSessionLongPress: (() -> Void)? = nil,
-        onRemoveProject: ((String) -> Void)? = nil,
         onRefresh: (() async -> Void)? = nil,
         revealNewestToken: Int = 0,
         showsEmptyContent: Bool = false,
@@ -183,7 +179,6 @@ struct SessionList<EmptyContent: View>: View {
         self.filterTabs = filterTabs
         self.selectedFilterId = selectedFilterId
         self.createError = createError
-        self.useProjectPicker = useProjectPicker
         self.onOpenProjectPicker = onOpenProjectPicker
         self.onFilterSelected = onFilterSelected
         self.onSessionSelected = onSessionSelected
@@ -191,7 +186,6 @@ struct SessionList<EmptyContent: View>: View {
         self.onAddProject = onAddProject
         self.onNewSession = onNewSession
         self.onNewSessionLongPress = onNewSessionLongPress
-        self.onRemoveProject = onRemoveProject
         self.onRefresh = onRefresh
         self.revealNewestToken = revealNewestToken
         self.showsEmptyContent = showsEmptyContent
@@ -214,13 +208,6 @@ struct SessionList<EmptyContent: View>: View {
             .onChange(of: selectedFilterId) { _, newId in
                 scheduleListCrossfade(to: newId)
             }
-            .onChange(of: useProjectPicker) { _, isPicker in
-                if isPicker {
-                    scheduleListCrossfade(to: selectedFilterId)
-                } else {
-                    flattenList(to: selectedFilterId)
-                }
-            }
 
             OpenCodeBottomFade(
                 height: max(dockHeight + OpenCodeBottomFade.overhang, OpenCodeBottomFade.overhang)
@@ -233,13 +220,11 @@ struct SessionList<EmptyContent: View>: View {
                 filterTabs: filterTabs,
                 selectedFilterId: selectedFilterId,
                 createError: createError,
-                useProjectPicker: useProjectPicker,
                 onOpenProjectPicker: onOpenProjectPicker,
                 onFilterSelected: onFilterSelected,
                 onAddProject: onAddProject,
                 onNewSession: onNewSession,
-                onNewSessionLongPress: onNewSessionLongPress,
-                onRemoveProject: onRemoveProject
+                onNewSessionLongPress: onNewSessionLongPress
             )
             .background {
                 GeometryReader { geometry in
@@ -351,19 +336,7 @@ struct SessionList<EmptyContent: View>: View {
         status.listItemStatus(isStale: isStale)
     }
 
-    private func flattenList(to filterId: String) {
-        listCrossfadeTask?.cancel()
-        incomingFilterId = filterId
-        feedLayers = [SessionListFeedLayer(id: filterId, isOutgoing: false)]
-        incomingOpacity = 1
-        outgoingOpacity = 0
-    }
-
     private func scheduleListCrossfade(to newId: String) {
-        guard useProjectPicker else {
-            flattenList(to: newId)
-            return
-        }
         guard incomingFilterId != newId else { return }
         followingTop = true
         listCrossfadeTask?.cancel()

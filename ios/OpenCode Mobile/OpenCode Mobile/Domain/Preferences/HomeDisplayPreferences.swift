@@ -4,7 +4,6 @@ import Observation
 @Observable
 final class HomeDisplayPreferences {
     static let shared = HomeDisplayPreferences()
-    static let defaultSessionListProjectPickerEnabled = true
 
     private enum StorageKeys {
         static let showSessionListOnHome = "showSessionListOnHome"
@@ -19,9 +18,6 @@ final class HomeDisplayPreferences {
     /// When true, replace remote `/Users/…` or `/home/…` with `~` in path labels.
     private(set) var hideUserDirectoryPrefix: Bool
     private(set) var recentWindowHours: Int
-    /// When true, home Session List uses the project picker instead of chips.
-    /// Missing preference defaults on; an explicit Settings off stays chips.
-    private(set) var sessionListProjectPickerEnabled: Bool
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -35,13 +31,6 @@ final class HomeDisplayPreferences {
         } else {
             recentWindowHours = HomeSessionLadder.sanitizeWindowHours(
                 defaults.integer(forKey: StorageKeys.recentWindowHours)
-            )
-        }
-        if defaults.object(forKey: StorageKeys.sessionListProjectPickerEnabled) == nil {
-            sessionListProjectPickerEnabled = Self.defaultSessionListProjectPickerEnabled
-        } else {
-            sessionListProjectPickerEnabled = defaults.bool(
-                forKey: StorageKeys.sessionListProjectPickerEnabled
             )
         }
     }
@@ -73,11 +62,6 @@ final class HomeDisplayPreferences {
         defaults.set(sanitized, forKey: StorageKeys.recentWindowHours)
     }
 
-    func setSessionListProjectPickerEnabled(_ value: Bool) {
-        sessionListProjectPickerEnabled = value
-        defaults.set(value, forKey: StorageKeys.sessionListProjectPickerEnabled)
-    }
-
     func clear() {
         defaults.removeObject(forKey: StorageKeys.showSessionListOnHome)
         defaults.removeObject(forKey: StorageKeys.hideUserDirectoryPrefix)
@@ -86,6 +70,5 @@ final class HomeDisplayPreferences {
         defaults.removeObject(forKey: StorageKeys.sessionListProjectPickerEnabled)
         hideUserDirectoryPrefix = true
         recentWindowHours = HomeSessionLadder.defaultWindowHours
-        sessionListProjectPickerEnabled = Self.defaultSessionListProjectPickerEnabled
     }
 }

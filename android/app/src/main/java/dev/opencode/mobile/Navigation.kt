@@ -318,10 +318,6 @@ fun MainNavigation() {
                                                 recentWindowHours = HomeDisplayPreferences.recentWindowHours,
                                                 onRecentWindowHoursChange =
                                                     settingsViewModel::setRecentWindowHours,
-                                                sessionListProjectPickerEnabled =
-                                                    HomeDisplayPreferences.sessionListProjectPickerEnabled,
-                                                onSessionListProjectPickerEnabledChange =
-                                                    settingsViewModel::setSessionListProjectPickerEnabled,
                                                 collapseConsecutiveToolCalls =
                                                     SessionChatDisplayPreferences.collapseConsecutiveToolCalls,
                                                 onCollapseConsecutiveToolCallsChange =
