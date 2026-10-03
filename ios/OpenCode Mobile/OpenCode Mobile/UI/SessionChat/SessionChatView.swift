@@ -400,6 +400,13 @@ struct SessionChatView: View {
         }
         .sessionChatToolDetailSheet(target: $toolDetailTarget)
         .sessionChatSkillsSheet(target: $skillsTarget)
+        // Waits for any view-owned sheet to close so the intro never stacks on one.
+        .sessionChatChipTimelineIntroSheet(
+            isPresented: viewModel.uiState.chipTimelineIntroVisible && !viewSheetOpen,
+            onEnable: { viewModel.enableChipTimelineFromIntro() },
+            onLater: { viewModel.postponeChipTimelineIntro() },
+            onNever: { viewModel.dismissChipTimelineIntro() }
+        )
         .sessionChatTodosSheet(
             isPresented: $showSessionTodosSheet,
             todos: viewModel.uiState.sessionTodos,
@@ -677,6 +684,17 @@ struct SessionChatView: View {
     /// composer stays above the indicator unless the keyboard already replaced it.
     private var composerHomeIndicatorLift: CGFloat {
         keyboardOverlap > 0 ? 0 : bottomSafeAreaInset
+    }
+
+    private var viewSheetOpen: Bool {
+        messageActionsTarget != nil
+            || showPendingPromptsSheet
+            || toolDetailTarget != nil
+            || skillsTarget != nil
+            || showSessionTodosSheet
+            || showAttachmentSources
+            || activePicker != nil
+            || showDeleteConfirmation
     }
 
     private var blocksSessionTodosSheet: Bool {

@@ -274,6 +274,19 @@ struct SessionChatUiState: Equatable {
     /// Chip-timeline step paragraphs expanded past `+N more`:
     /// `SessionChatStepParagraphBlock.id` to the chip count at tap time.
     var expandedStepParagraphs: [String: Int] = [:]
+    /// One-time Chip timeline intro sheet (OPE-270).
+    var chipTimelineIntroVisible = false
+
+    /// A permission, question, or Screen Model-owned sheet or dialog would sit under the intro sheet.
+    var blocksChipTimelineIntro: Bool {
+        permissionRequest != nil
+            || questionRequest != nil
+            || commandsSheetVisible
+            || mcpPageVisible
+            || forkDialogVisible
+            || forkResultVisible
+            || rename.isDialogVisible
+    }
 
     var latestCompletedUserMessageID: String? {
         var latest: String?

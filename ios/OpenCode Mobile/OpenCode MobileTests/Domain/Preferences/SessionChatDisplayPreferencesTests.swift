@@ -78,6 +78,51 @@ import Testing
         #expect(defaults.object(forKey: "chipTimeline") == nil)
     }
 
+    @Test func chipTimelineIntro_laterPersistsSnoozeThenSecondLaterEndsIntro() {
+        let suite = "SessionChatDisplayPreferencesTests.chipIntroLater"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        let preferences = SessionChatDisplayPreferences(defaults: defaults)
+
+        preferences.postponeChipTimelineIntro(nowMs: 1_000)
+        let reloaded = SessionChatDisplayPreferences(defaults: defaults)
+
+        #expect(reloaded.chipTimelineIntroSnoozedUntilMs == 1_000 + ChipTimelineIntro.snoozeMs)
+        #expect(reloaded.chipTimelineIntroDone == false)
+
+        reloaded.postponeChipTimelineIntro(nowMs: 1_000 + ChipTimelineIntro.snoozeMs)
+
+        #expect(SessionChatDisplayPreferences(defaults: defaults).chipTimelineIntroDone)
+    }
+
+    @Test func chipTimelineIntro_settingsChoiceEndsIntro() {
+        let suite = "SessionChatDisplayPreferencesTests.chipIntroSettings"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        let preferences = SessionChatDisplayPreferences(defaults: defaults)
+
+        preferences.setChipTimeline(false)
+
+        #expect(preferences.chipTimelineIntroDone)
+        #expect(!preferences.shouldOfferChipTimelineIntro(turnToolCalls: 20, nowMs: 1_000))
+    }
+
+    @Test func chipTimelineIntro_clearResetsIntro() {
+        let suite = "SessionChatDisplayPreferencesTests.chipIntroClear"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        let preferences = SessionChatDisplayPreferences(defaults: defaults)
+        preferences.postponeChipTimelineIntro(nowMs: 1_000)
+        preferences.finishChipTimelineIntro()
+
+        preferences.clear()
+
+        #expect(preferences.chipTimelineIntroDone == false)
+        #expect(preferences.chipTimelineIntroSnoozedUntilMs == nil)
+        #expect(defaults.object(forKey: "chipTimelineIntroDone") == nil)
+        #expect(defaults.object(forKey: "chipTimelineIntroSnoozedUntilMs") == nil)
+    }
+
     @Test func followUpDelivery_defaultsSteerAndPersistsQueue() {
         let suite = "SessionChatDisplayPreferencesTests.followUp"
         let defaults = UserDefaults(suiteName: suite)!
