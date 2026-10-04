@@ -76,6 +76,17 @@ nonisolated enum DiagnosticLogCause: Sendable {
         if let commandError = error as? CommandError {
             return mappedFrame(name: "CommandError", error: commandError)
         }
+        // T3 errors keep the server's text (an RPC `Exit` failure cause, an HTTP
+        // body) out of `localizedDescription`; the log needs it.
+        if error is T3SocketError || error is T3ClientError {
+            return MappedFrame(
+                name: String(describing: type(of: error)),
+                message: T3ErrorText.diagnostic(error),
+                urlErrorDomain: nil,
+                urlErrorCode: nil,
+                urlErrorMessage: nil
+            )
+        }
         return nil
     }
 

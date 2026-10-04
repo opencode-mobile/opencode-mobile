@@ -328,7 +328,15 @@ nonisolated final class T3EnvironmentClient: @unchecked Sendable {
     }
 
     func dispatchCommand(_ command: [String: Any]) async throws {
-        _ = try await rpc().request(tag: "orchestration.dispatchCommand", payload: command)
+        do {
+            _ = try await rpc().request(tag: "orchestration.dispatchCommand", payload: command)
+        } catch let cancellation as CancellationError {
+            throw cancellation
+        } catch {
+            let type = T3JSON.string(command["type"]) ?? "-"
+            DiagnosticLog.warning(.chat, "T3 dispatchCommand failed type=\(type): \(T3ErrorText.diagnostic(error))")
+            throw error
+        }
     }
 
     /// One RPC round trip on the environment socket for callers outside this

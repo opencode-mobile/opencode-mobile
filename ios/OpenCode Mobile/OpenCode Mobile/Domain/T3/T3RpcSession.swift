@@ -56,6 +56,23 @@ nonisolated enum T3ErrorText {
         default: "\(error)"
         }
     }
+
+    /// One log line carrying the short message and the server's diagnostic
+    /// detail (e.g. the `Exit` failure cause), newlines collapsed. Never user-facing.
+    static func diagnostic(_ error: Error) -> String {
+        let message = userMessage(error)
+        guard let detail = detail(error).map(singleLine), !detail.isEmpty, detail != message else {
+            return message
+        }
+        return "\(message): \(detail)"
+    }
+
+    static func singleLine(_ text: String) -> String {
+        text.split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+    }
 }
 
 /// One websocket RPC session against a T3 environment.

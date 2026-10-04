@@ -341,6 +341,8 @@ struct T3EngineTests {
         #expect(object["tag"] as? String == "orchestration.dispatchCommand")
         let payload = try #require(object["payload"] as? [String: Any])
         #expect(payload["type"] as? String == "message.dispatch")
+        #expect(payload["createdBy"] as? String == "user")
+        #expect(payload["creationSource"] as? String == "mobile")
         #expect(payload["threadId"] as? String == "thread-1")
         #expect(payload["text"] as? String == "Ship it")
         let mode = try #require(payload["dispatchMode"] as? [String: Any])

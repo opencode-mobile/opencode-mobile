@@ -163,6 +163,10 @@ nonisolated enum T3RpcCodec {
     ) -> [String: Any] {
         [
             "type": "message.dispatch",
+            // Required by `OrchestrationV2CreationFields`; the server rejects the
+            // command at schema validation without them.
+            "createdBy": "user",
+            "creationSource": "mobile",
             "commandId": commandID,
             "threadId": threadID,
             "messageId": messageID,
@@ -268,22 +272,43 @@ nonisolated enum T3RpcCodec {
         ]
     }
 
-    private static func failureMessage(_ cause: Any?) -> String {
-        if let string = T3JSON.string(cause) { return string }
+    /// Server text for an `Exit` failure. Effect encodes the cause as an array
+    /// of reasons: `Fail` carries the typed `error`, `Die` the `defect` (a payload
+    /// that fails schema validation arrives as a `Die` with the formatted issue).
+    static func failureMessage(_ cause: Any?) -> String {
         if let array = cause as? [Any] {
-            let parts = array.compactMap { item -> String? in
-                if let string = T3JSON.string(item) { return string }
-                if let object = T3JSON.object(item) {
-                    return T3JSON.string(object, "message")
-                        ?? T3JSON.string(object, "_tag")
-                }
-                return nil
-            }
+            let parts = array.compactMap(reasonText)
             if !parts.isEmpty { return parts.joined(separator: "; ") }
+            return "RPC request failed"
         }
-        if let object = T3JSON.object(cause) {
-            return T3JSON.string(object, "message") ?? "RPC request failed"
+        return reasonText(cause) ?? "RPC request failed"
+    }
+
+    private static func reasonText(_ reason: Any?) -> String? {
+        if let string = T3JSON.string(reason) { return string }
+        guard let object = T3JSON.object(reason) else { return nil }
+        switch T3JSON.string(object, "_tag") {
+        case "Fail":
+            return valueText(object["error"]) ?? "Fail"
+        case "Die":
+            return valueText(object["defect"]) ?? "Die"
+        case "Interrupt":
+            return "Interrupted"
+        default:
+            return valueText(object)
         }
-        return "RPC request failed"
+    }
+
+    private static func valueText(_ value: Any?) -> String? {
+        if let string = T3JSON.string(value) { return string }
+        guard let object = T3JSON.object(value) else { return nil }
+        let tag = T3JSON.string(object, "_tag") ?? T3JSON.string(object, "name")
+        if let message = T3JSON.string(object, "message") {
+            if let tag, !message.hasPrefix(tag) { return "\(tag): \(message)" }
+            return message
+        }
+        if let tag { return tag }
+        guard let data = try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]) else { return nil }
+        return String(decoding: data, as: UTF8.self)
     }
 }
