@@ -32,7 +32,7 @@ struct T3HttpClient: Sendable {
             bearer: nil,
             orchestration: false
         )
-        return try T3ShellMapper.descriptor(from: data)
+        return try decode { try T3ShellMapper.descriptor(from: data) }
     }
 
     func exchangeToken(baseURL: URL, pairingToken: String) async throws -> String {
@@ -62,7 +62,7 @@ struct T3HttpClient: Sendable {
             bearer: bearer,
             orchestration: true
         )
-        return try T3ShellMapper.snapshot(from: data)
+        return try decode { try T3ShellMapper.snapshot(from: data) }
     }
 
     func fetchThread(baseURL: URL, bearer: String, id: String) async throws -> T3ThreadDetail {
@@ -74,7 +74,7 @@ struct T3HttpClient: Sendable {
             bearer: bearer,
             orchestration: true
         )
-        return try T3MessageMapper.detail(from: data)
+        return try decode { try T3MessageMapper.detail(from: data) }
     }
 
     func issueWebsocketTicket(baseURL: URL, bearer: String) async throws -> String {
@@ -93,16 +93,49 @@ struct T3HttpClient: Sendable {
         return ticket
     }
 
+    /// Downloads a signed asset, giving up as soon as the body is known or seen
+    /// to exceed `maxBytes`: a declared `Content-Length` over the cap is refused
+    /// before any body is read, and an undeclared body is streamed and cancelled
+    /// at the first byte past the cap (mirrors Android's streamed read).
     func fetchBytes(url: URL, maxBytes: Int) async -> Data? {
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         do {
-            let (data, response) = try await urlSession.data(for: request)
+            let (bytes, response) = try await urlSession.bytes(for: request)
             let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-            guard (200 ..< 300).contains(status), data.count <= maxBytes else { return nil }
+            guard (200 ..< 300).contains(status) else {
+                bytes.task.cancel()
+                return nil
+            }
+            let declared = response.expectedContentLength
+            if declared > Int64(maxBytes) {
+                bytes.task.cancel()
+                return nil
+            }
+            var data = Data()
+            data.reserveCapacity(declared > 0 ? Int(declared) : min(maxBytes, 256 * 1024))
+            for try await byte in bytes {
+                data.append(byte)
+                if data.count > maxBytes {
+                    bytes.task.cancel()
+                    return nil
+                }
+            }
             return data
         } catch {
             return nil
+        }
+    }
+
+    /// Parser and cast failures become a readable `.decoding`; T3's own errors pass through.
+    private func decode<T>(_ body: () throws -> T) throws -> T {
+        do {
+            return try body()
+        } catch let error as T3ClientError {
+            throw error
+        } catch {
+            DiagnosticLog.warning(.connection, "T3 response did not decode", error: error)
+            throw T3ClientError.decoding("T3 sent an unexpected response.")
         }
     }
 
@@ -264,6 +297,9 @@ struct T3PairingLink: Equatable, Sendable {
 /// The REST surface `T3EnvironmentClient` needs. `T3HttpClient` is the live
 /// implementation; tests inject a fake so socket behaviour runs offline.
 nonisolated protocol T3HttpTransport: Sendable {
+    /// Unauthenticated environment descriptor; throws `T3ClientError.unsupportedProtocol`
+    /// when the orchestration protocol is not the one this app speaks.
+    func fetchDescriptor(baseURL: URL) async throws -> T3EnvironmentDescriptor
     func fetchShell(baseURL: URL, bearer: String) async throws -> T3ShellSnapshot
     func fetchThread(baseURL: URL, bearer: String, id: String) async throws -> T3ThreadDetail
     func issueWebsocketTicket(baseURL: URL, bearer: String) async throws -> String

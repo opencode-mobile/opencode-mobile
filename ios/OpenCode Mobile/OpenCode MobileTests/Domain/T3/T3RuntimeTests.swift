@@ -42,7 +42,7 @@ struct T3RuntimeTests {
         socket.open()
         _ = try await socket.firstRequest(tag: "orchestration.dispatchCommand")
         socket.serverClose()
-        await #expect(throws: T3ClientError.self) { try await call.value }
+        await #expect(throws: T3SocketError.connectionLost(detail: "T3 websocket closed.")) { try await call.value }
     }
 
     @Test func subscribe_onDeadSessionThrowsImmediately() async throws {
@@ -53,7 +53,8 @@ struct T3RuntimeTests {
         } catch {
             thrown = error
         }
-        #expect(thrown is T3ClientError)
+        #expect(thrown as? T3SocketError == .connectionLost(detail: "T3 websocket is closed."))
+        #expect(thrown?.localizedDescription == "Lost connection to T3")
     }
 
     // MARK: - Timeouts and keepalive
@@ -161,8 +162,102 @@ struct T3RuntimeTests {
         socket.open()
         let subscribe = try await socket.firstRequest(tag: "orchestration.subscribeThread")
         socket.receive(Frames.exitFailure(requestID: subscribe.id, message: "thread gone"))
-        #expect(await waitUntil { collector.failureMessages.contains("thread gone") })
+        #expect(await waitUntil { collector.failureDetails.contains("thread gone") })
+        #expect(collector.failureMessages == ["T3 rejected the request"])
         observe.cancel()
+    }
+
+    // MARK: - Protocol re-check on fresh sockets
+
+    @Test func rpc_validatesProtocolOncePerIdentityAcrossReconnects() async throws {
+        let harness = T3Harness()
+        let first = Task { try await harness.client.dispatchCommand(["type": "noop"]) }
+        let socket1 = try await harness.connector.connection(at: 0)
+        socket1.open()
+        let request = try await socket1.firstRequest(tag: "orchestration.dispatchCommand")
+        socket1.receive(Frames.exitSuccess(requestID: request.id, value: NSNull()))
+        try await first.value
+        #expect(harness.http.descriptorCount == 1)
+
+        socket1.serverClose()
+        #expect(await waitUntil { harness.signals.connectionState == .disconnected })
+        let second = Task { try await harness.client.dispatchCommand(["type": "noop"]) }
+        let socket2 = try await harness.connector.connection(at: 1)
+        socket2.open()
+        let request2 = try await socket2.firstRequest(tag: "orchestration.dispatchCommand")
+        socket2.receive(Frames.exitSuccess(requestID: request2.id, value: NSNull()))
+        try await second.value
+        #expect(harness.http.ticketCount == 2)
+        #expect(harness.http.descriptorCount == 1, "a passed environment is not re-fetched this session")
+    }
+
+    @Test func rpc_descriptorOutageDoesNotBlockConnecting() async throws {
+        let harness = T3Harness()
+        harness.http.descriptorResult = .failure(T3ClientError.http(statusCode: 503, message: "down"))
+        let call = Task { try await harness.client.dispatchCommand(["type": "noop"]) }
+        let socket = try await harness.connector.connection(at: 0)
+        socket.open()
+        let request = try await socket.firstRequest(tag: "orchestration.dispatchCommand")
+        socket.receive(Frames.exitSuccess(requestID: request.id, value: NSNull()))
+        try await call.value
+        #expect(harness.http.descriptorCount == 1)
+    }
+
+    @MainActor
+    @Test func rpc_protocolMismatchStopsRetryingAndSurfacesError() async throws {
+        let harness = T3Harness(shellResubscribeDelay: .milliseconds(10))
+        harness.http.descriptorResult = .failure(T3ClientError.unsupportedProtocol(1))
+        harness.http.threadDetail = T3ThreadDetail(sequence: 1, thread: Fixtures.thread(id: "t1"), messages: [])
+        let repository = T3MessageRepository(client: harness.client, resubscribeDelay: .milliseconds(10))
+        let collector = UpdateCollector()
+        let observe = Task {
+            for await update in repository.observeMessages(sessionID: "t1", directory: nil) {
+                collector.append(update)
+            }
+        }
+        await harness.signals.emit(.start)
+
+        // The message stream and the connection state both show the mismatch.
+        #expect(await waitUntil { collector.failureMessages.contains(T3ClientError.unsupportedProtocol(1).errorDescription ?? "") })
+        #expect(await waitUntil { harness.signals.connectionState == .authFailed })
+        // Nothing retries: no socket ever opened and the descriptor was fetched once.
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(harness.connector.count == 0)
+        #expect(harness.http.ticketCount == 0)
+        #expect(harness.http.descriptorCount == 1)
+        #expect(harness.client.isShellLiveRunning == false)
+        #expect(await waitOnMain { repository.subscribedSessionIDs.isEmpty })
+        await #expect(throws: T3ClientError.unsupportedProtocol(1)) {
+            try await harness.client.dispatchCommand(["type": "noop"])
+        }
+        #expect(harness.http.descriptorCount == 1)
+
+        // A stop (profile switch / background) forgets the verdict so an upgraded or re-paired environment is checked again.
+        await harness.signals.emit(.stop)
+        harness.http.descriptorResult = .success(FakeT3Http.v2Descriptor)
+        await harness.signals.emit(.start)
+        let socket = try await harness.connector.connection(at: 0)
+        socket.open()
+        #expect(await waitUntil { harness.signals.connectionState == .connected })
+        #expect(harness.http.descriptorCount == 2)
+        observe.cancel()
+    }
+
+    // MARK: - Error text
+
+    @Test func errorText_isShortAndKeepsCauseForDiagnostics() {
+        #expect(T3ErrorText.userMessage(T3ClientError.accessRevoked(statusCode: 401, body: "{\"trace\":\"x\"}")) == T3ClientError.accessRevokedMessage)
+        #expect(T3ClientError.accessRevokedMessage.contains("Re-pair this environment"))
+        #expect(T3ErrorText.detail(T3ClientError.accessRevoked(statusCode: 401, body: "{\"trace\":\"x\"}")) == "{\"trace\":\"x\"}")
+        #expect(T3ErrorText.userMessage(T3SocketError.connectionLost(detail: "NSPOSIXErrorDomain 57")) == "Lost connection to T3")
+        #expect(T3ErrorText.detail(T3SocketError.connectionLost(detail: "NSPOSIXErrorDomain 57")) == "NSPOSIXErrorDomain 57")
+        #expect(T3ErrorText.userMessage(T3SocketError.rejected(cause: "ThreadNotFound")) == "T3 rejected the request")
+        #expect(T3SocketError.rejected(cause: "ThreadNotFound").localizedDescription == "T3 rejected the request")
+        #expect(T3ErrorText.detail(T3SocketError.rejected(cause: "ThreadNotFound")) == "ThreadNotFound")
+        #expect(T3ErrorText.userMessage(T3ClientError.unsupportedProtocol(1)) == T3ClientError.unsupportedProtocol(1).errorDescription)
+        #expect(T3ErrorText.userMessage(T3ClientError.http(statusCode: 500, message: "<html>stack</html>")) == "T3 request failed (500).")
+        struct Opaque: Error {}
+        #expect(T3ErrorText.userMessage(Opaque()) == "T3 request failed")
     }
 
     // MARK: - Profile switch and reset
@@ -375,12 +470,22 @@ final class T3Harness: @unchecked Sendable {
 }
 
 final class FakeT3Http: T3HttpTransport, @unchecked Sendable {
+    static let v2Descriptor = T3EnvironmentDescriptor(environmentID: "env-1", label: "Desk", orchestrationProtocolVersion: 2)
+
     private let lock = NSLock()
     private var _ticketCount = 0
     private var _shellFetchCount = 0
+    private var _descriptorCount = 0
+    private var _descriptorResult: Result<T3EnvironmentDescriptor, Error> = .success(FakeT3Http.v2Descriptor)
     private var _ticketBaseURLs: [URL] = []
     private var _shell = T3ShellSnapshot(sequence: 0, threads: [], projects: [])
     private var _threadDetail = T3ThreadDetail(sequence: 0, thread: nil, messages: [])
+
+    var descriptorCount: Int { lock.lock(); defer { lock.unlock() }; return _descriptorCount }
+    var descriptorResult: Result<T3EnvironmentDescriptor, Error> {
+        get { lock.lock(); defer { lock.unlock() }; return _descriptorResult }
+        set { lock.lock(); _descriptorResult = newValue; lock.unlock() }
+    }
 
     var ticketCount: Int { lock.lock(); defer { lock.unlock() }; return _ticketCount }
     var shellFetchCount: Int { lock.lock(); defer { lock.unlock() }; return _shellFetchCount }
@@ -393,6 +498,14 @@ final class FakeT3Http: T3HttpTransport, @unchecked Sendable {
     var threadDetail: T3ThreadDetail {
         get { lock.lock(); defer { lock.unlock() }; return _threadDetail }
         set { lock.lock(); _threadDetail = newValue; lock.unlock() }
+    }
+
+    func fetchDescriptor(baseURL _: URL) async throws -> T3EnvironmentDescriptor {
+        lock.lock()
+        _descriptorCount += 1
+        let result = _descriptorResult
+        lock.unlock()
+        return try result.get()
     }
 
     func fetchShell(baseURL _: URL, bearer _: String) async throws -> T3ShellSnapshot {
@@ -443,7 +556,7 @@ final class FakeSocketConnector: T3SocketConnector, @unchecked Sendable {
         return connections[index]
     }
 
-    private var count: Int {
+    var count: Int {
         lock.lock()
         defer { lock.unlock() }
         return connections.count
@@ -611,7 +724,15 @@ private final class UpdateCollector: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         return updates.compactMap {
-            if case let .loadFailed(error) = $0 { (error as? T3ClientError)?.errorDescription ?? "\(error)" } else { nil }
+            if case let .loadFailed(error) = $0 { T3ErrorText.userMessage(error) } else { nil }
+        }
+    }
+
+    var failureDetails: [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        return updates.compactMap {
+            if case let .loadFailed(error) = $0 { T3ErrorText.detail(error) } else { nil }
         }
     }
 }
@@ -706,4 +827,109 @@ private func waitUntil(
         try? await Task.sleep(for: .milliseconds(10))
     }
     return predicate()
+}
+
+// MARK: - Inbound image cap
+
+/// `T3HttpClient.fetchBytes` against a stubbed URL loader: the body is streamed
+/// and abandoned at the cap instead of being buffered whole first.
+@Suite(.serialized)
+struct T3HttpClientFetchBytesTests {
+    private func client() -> T3HttpClient {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [ChunkedBodyURLProtocol.self]
+        return T3HttpClient(urlSession: URLSession(configuration: configuration))
+    }
+
+    @Test func fetchBytes_returnsBodyUnderCap() async throws {
+        ChunkedBodyURLProtocol.reset(chunkSize: 1_024, chunkCount: 4, declaredLength: 4_096)
+        let data = await client().fetchBytes(url: URL(string: "https://assets.test/under")!, maxBytes: 8_192)
+        #expect(data?.count == 4_096)
+        #expect(ChunkedBodyURLProtocol.deliveredChunks == 4)
+    }
+
+    @Test func fetchBytes_refusesDeclaredLengthOverCapBeforeReadingBody() async throws {
+        ChunkedBodyURLProtocol.reset(chunkSize: 1_024, chunkCount: 64, declaredLength: 65_536)
+        let data = await client().fetchBytes(url: URL(string: "https://assets.test/declared")!, maxBytes: 8_192)
+        #expect(data == nil)
+        #expect(await waitUntil { ChunkedBodyURLProtocol.stopped })
+        #expect(ChunkedBodyURLProtocol.deliveredChunks < 64, "the download was cancelled, not drained")
+    }
+
+    @Test func fetchBytes_abortsStreamedBodyAtCap() async throws {
+        ChunkedBodyURLProtocol.reset(chunkSize: 1_024, chunkCount: 64, declaredLength: nil)
+        let data = await client().fetchBytes(url: URL(string: "https://assets.test/streamed")!, maxBytes: 8_192)
+        #expect(data == nil)
+        #expect(await waitUntil { ChunkedBodyURLProtocol.stopped })
+        #expect(ChunkedBodyURLProtocol.deliveredChunks < 64, "the download was cancelled at the cap, not drained")
+    }
+}
+
+/// Serves a body of `chunkCount` chunks, one every few milliseconds, so a
+/// cancellation can land mid-body. Static state is reset per test; the suite
+/// above is serialized.
+final class ChunkedBodyURLProtocol: URLProtocol, @unchecked Sendable {
+    private static let lock = NSLock()
+    private static var chunkSize = 1_024
+    private static var chunkCount = 1
+    private static var declaredLength: Int?
+    private static var _delivered = 0
+    private static var _stopped = false
+
+    static func reset(chunkSize: Int, chunkCount: Int, declaredLength: Int?) {
+        lock.lock()
+        self.chunkSize = chunkSize
+        self.chunkCount = chunkCount
+        self.declaredLength = declaredLength
+        _delivered = 0
+        _stopped = false
+        lock.unlock()
+    }
+
+    static var deliveredChunks: Int { lock.lock(); defer { lock.unlock() }; return _delivered }
+    static var stopped: Bool { lock.lock(); defer { lock.unlock() }; return _stopped }
+
+    private var cancelled = false
+    private let stateLock = NSLock()
+
+    override class func canInit(with _: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        Self.lock.lock()
+        let size = Self.chunkSize
+        let count = Self.chunkCount
+        let declared = Self.declaredLength
+        Self.lock.unlock()
+        var headers = ["Content-Type": "image/png"]
+        if let declared { headers["Content-Length"] = String(declared) }
+        let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: headers)!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        let chunk = Data(repeating: 0x42, count: size)
+        DispatchQueue.global().async { [weak self] in
+            for _ in 0 ..< count {
+                guard let self else { return }
+                self.stateLock.lock()
+                let cancelled = self.cancelled
+                self.stateLock.unlock()
+                if cancelled { return }
+                self.client?.urlProtocol(self, didLoad: chunk)
+                Self.lock.lock()
+                Self._delivered += 1
+                Self.lock.unlock()
+                Thread.sleep(forTimeInterval: 0.005)
+            }
+            guard let self else { return }
+            self.client?.urlProtocolDidFinishLoading(self)
+        }
+    }
+
+    override func stopLoading() {
+        stateLock.lock()
+        cancelled = true
+        stateLock.unlock()
+        Self.lock.lock()
+        Self._stopped = true
+        Self.lock.unlock()
+    }
 }

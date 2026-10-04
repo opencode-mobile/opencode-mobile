@@ -60,7 +60,7 @@ nonisolated final class URLSessionT3SocketConnection: NSObject, T3SocketConnecti
         let current = closed ? nil : task
         lock.unlock()
         guard let current else {
-            completion(T3ClientError.rpc("T3 websocket is closed."))
+            completion(T3SocketError.connectionLost(detail: "T3 websocket is closed."))
             return
         }
         current.send(.string(text), completionHandler: completion)

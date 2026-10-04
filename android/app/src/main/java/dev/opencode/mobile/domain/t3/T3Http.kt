@@ -6,6 +6,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import java.io.IOException
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -109,8 +110,13 @@ class OkHttpT3Http
 
         private suspend fun execute(request: Request): T3HttpResponse =
             withContext(Dispatchers.IO) {
-                client.newCall(request).execute().use { response ->
-                    T3HttpResponse(code = response.code, body = response.body?.string().orEmpty())
+                try {
+                    client.newCall(request).execute().use { response ->
+                        T3HttpResponse(code = response.code, body = response.body?.string().orEmpty())
+                    }
+                } catch (error: IOException) {
+                    // OkHttp's text ("failed to connect to …") is for the log, not the snackbar.
+                    throw T3TransportException(error)
                 }
             }
 

@@ -11,6 +11,7 @@ final class T3MessageRepository: MessageRepository {
     private let contentPreparer: MessageContentPreparer
     private let resubscribeDelay: Duration
     private var lastPendingRequestIDs: [String: String] = [:]
+    private var lastQuestionRequestIDs: [String: String] = [:]
     private var continuations: [UUID: Observer<MessageListUpdate>] = [:]
     private var displayContinuations: [UUID: Observer<DisplayMessageListUpdate>] = [:]
     private var subscriptions: [String: Task<Void, Never>] = [:]
@@ -129,6 +130,7 @@ final class T3MessageRepository: MessageRepository {
         subscriptions.removeAll()
         sequences.removeAll()
         lastPendingRequestIDs.removeAll()
+        lastQuestionRequestIDs.removeAll()
         snapshots.removeAll()
         transcripts.removeAll()
         preparedByID.removeAll()
@@ -233,7 +235,7 @@ final class T3MessageRepository: MessageRepository {
                     attempt = 0
                     applyLiveValue(value, sessionID: sessionID)
                 }
-                failure = T3ClientError.rpc("T3 thread subscription ended.")
+                failure = T3SocketError.connectionLost(detail: "T3 thread subscription ended.")
             } catch is CancellationError {
                 return
             } catch {
@@ -241,8 +243,16 @@ final class T3MessageRepository: MessageRepository {
             }
             if Task.isCancelled { return }
             if let failure {
-                DiagnosticLog.warning(.sse, "T3 thread subscription lost session=\(sessionID): \(failure)")
+                DiagnosticLog.warning(
+                    .sse,
+                    "T3 thread subscription lost session=\(sessionID): \(T3ErrorText.detail(failure) ?? T3ErrorText.userMessage(failure))"
+                )
                 publishFailure(sessionID: sessionID, error: failure)
+                if T3EnvironmentClient.isProtocolMismatch(failure) {
+                    // Terminal: the environment cannot be used until it is re-paired or upgraded.
+                    subscriptions.removeValue(forKey: sessionID)
+                    return
+                }
             }
             let delay = min(
                 Self.maxResubscribeDelay,
@@ -317,16 +327,41 @@ final class T3MessageRepository: MessageRepository {
                 ]
             )
         )
-        let next = thread.pendingRequestKind == "user_input" ? nil : thread.pendingRequestID
-        let previous = lastPendingRequestIDs[sessionID]
+        publishPendingChange(
+            sessionID: sessionID,
+            next: T3ShellMapper.approvalID(for: thread),
+            tracked: &lastPendingRequestIDs,
+            asked: "permission.asked",
+            replied: "permission.replied"
+        )
+        publishPendingChange(
+            sessionID: sessionID,
+            next: T3ShellMapper.questionID(for: thread),
+            tracked: &lastQuestionRequestIDs,
+            asked: "question.asked",
+            replied: "question.replied"
+        )
+    }
+
+    /// Publishes `asked` when a pending request appears or changes and
+    /// `replied` when a tracked one clears; a thread first seen with no
+    /// request publishes nothing.
+    private func publishPendingChange(
+        sessionID: String,
+        next: String?,
+        tracked: inout [String: String],
+        asked: String,
+        replied: String
+    ) {
+        let previous = tracked[sessionID]
         guard previous != next else { return }
         if let next, !next.isEmpty {
-            lastPendingRequestIDs[sessionID] = next
-            eventStream?.publishSynthetic(OpencodeEvent(type: "permission.asked", sessionID: sessionID))
+            tracked[sessionID] = next
+            eventStream?.publishSynthetic(OpencodeEvent(type: asked, sessionID: sessionID))
         } else {
-            lastPendingRequestIDs.removeValue(forKey: sessionID)
+            tracked.removeValue(forKey: sessionID)
             if previous != nil {
-                eventStream?.publishSynthetic(OpencodeEvent(type: "permission.replied", sessionID: sessionID))
+                eventStream?.publishSynthetic(OpencodeEvent(type: replied, sessionID: sessionID))
             }
         }
     }

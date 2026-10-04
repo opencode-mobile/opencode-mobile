@@ -168,7 +168,7 @@ class T3AttachmentUploader internal constructor(
         if (socket.state.value == T3SocketState.Connected) return
         val connected =
             withTimeoutOrNull(connectTimeoutMs) { socket.state.first { it == T3SocketState.Connected } } != null
-        if (!connected) throw T3RpcException("T3 websocket is not connected")
+        if (!connected) throw T3ConnectionLostException("T3 websocket is not connected")
     }
 
     companion object {

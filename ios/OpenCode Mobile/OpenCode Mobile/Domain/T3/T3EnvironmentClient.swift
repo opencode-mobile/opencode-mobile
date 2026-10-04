@@ -23,6 +23,12 @@ nonisolated final class T3EnvironmentClient: @unchecked Sendable {
     private var rpcGeneration: UInt64 = 0
     private var connectTask: Task<T3RpcSession, Error>?
     private var connectIdentity: String?
+    /// Identities whose environment descriptor passed the protocol check this
+    /// app session (never fetched again), and the ones that failed it. A failed
+    /// identity is terminal until `reset()` (profile switch / background): no
+    /// socket is opened and no loop retries, so a mismatch cannot churn.
+    private var validatedIdentities: Set<String> = []
+    private var protocolFailures: [String: T3ClientError] = [:]
     private var lifecycleRegistration: UUID?
     private let shellRefreshDebounce: Duration
     private let shellResubscribeDelay: Duration
@@ -215,7 +221,7 @@ nonisolated final class T3EnvironmentClient: @unchecked Sendable {
                     attempt = 0
                     applyShellStreamItem(item, identity: identity)
                 }
-                failure = T3ClientError.rpc("T3 shell subscription ended.")
+                failure = T3SocketError.connectionLost(detail: "T3 shell subscription ended.")
             } catch is CancellationError {
                 return
             } catch {
@@ -223,7 +229,13 @@ nonisolated final class T3EnvironmentClient: @unchecked Sendable {
             }
             if Task.isCancelled { return }
             if let failure {
-                DiagnosticLog.warning(.sse, "T3 shell subscription lost: \(failure)")
+                if Self.isProtocolMismatch(failure) {
+                    // Terminal: the connection state already shows it; retrying cannot help.
+                    DiagnosticLog.warning(.connection, "T3 shell subscription stopped: protocol mismatch")
+                    locked { if shellTask?.isCancelled == false { shellTask = nil } }
+                    return
+                }
+                DiagnosticLog.warning(.sse, "T3 shell subscription lost: \(T3ErrorText.detail(failure) ?? T3ErrorText.userMessage(failure))")
                 // The stream refused or died; a REST pass keeps home converging
                 // while the socket comes back.
                 Task { [weak self] in
@@ -421,6 +433,8 @@ nonisolated final class T3EnvironmentClient: @unchecked Sendable {
             cachedShell = nil
             cachedShellIdentity = nil
             shellLiveWanted = false
+            // A re-pair or a server upgrade deserves one fresh check next time.
+            protocolFailures = [:]
             let shell = shellTask
             shellTask = nil
             let fetch = shellFetchTask
@@ -441,12 +455,54 @@ nonisolated final class T3EnvironmentClient: @unchecked Sendable {
         fetch?.cancel()
         connect?.cancel()
         await session?.close()
+        if session != nil || connect != nil {
+            DiagnosticLog.info(.connection, "T3 socket released (stop)")
+        }
         signals.publish(.disconnected)
+    }
+
+    static func isProtocolMismatch(_ error: Error) -> Bool {
+        if case .unsupportedProtocol = error as? T3ClientError { return true }
+        return false
+    }
+
+    /// Re-checks the environment descriptor before the first socket of this app
+    /// session for `identity`. A protocol mismatch is remembered, shown on the
+    /// connection state, logged, and thrown; any other failure (host down,
+    /// descriptor missing) is logged and the connect proceeds so an unreachable
+    /// descriptor endpoint never blocks a working environment.
+    private func validateProtocolIfNeeded(baseURL: URL, identity: String) async throws {
+        if let failure = locked({ protocolFailures[identity] }) {
+            signals.publish(.authFailed)
+            throw failure
+        }
+        if locked({ validatedIdentities.contains(identity) }) { return }
+        do {
+            let descriptor = try await http.fetchDescriptor(baseURL: baseURL)
+            locked { _ = validatedIdentities.insert(identity) }
+            DiagnosticLog.info(
+                .connection,
+                "T3 environment validated protocol=\(descriptor.orchestrationProtocolVersion ?? 0) env=\(descriptor.environmentID)"
+            )
+        } catch let error as T3ClientError where Self.isProtocolMismatch(error) {
+            locked { protocolFailures[identity] = error }
+            DiagnosticLog.error(.connection, "T3 protocol mismatch; not reconnecting", error: error)
+            signals.publish(.authFailed)
+            throw error
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            DiagnosticLog.warning(.connection, "T3 environment check failed; connecting anyway", error: error)
+        }
     }
 
     private func rpc() async throws -> T3RpcSession {
         let credentials = try credentials()
         let identity = identity(of: credentials)
+        if let failure = locked({ protocolFailures[identity] }) {
+            signals.publish(.authFailed)
+            throw failure
+        }
         let http = self.http
         let baseURL = credentials.baseURL
         let bearer = credentials.bearer
@@ -480,6 +536,8 @@ nonisolated final class T3EnvironmentClient: @unchecked Sendable {
                     await stale.close()
                 }
                 try Task.checkCancellation()
+                try await self?.validateProtocolIfNeeded(baseURL: baseURL, identity: identity)
+                DiagnosticLog.info(.connection, "T3 socket connecting host=\(baseURL.host ?? "-")")
                 let ticket = try await http.issueWebsocketTicket(baseURL: baseURL, bearer: bearer)
                 guard let url = T3RpcCodec.websocketURL(httpBase: baseURL, ticket: ticket) else {
                     throw T3ClientError.decoding("Could not build the T3 websocket URL.")
@@ -502,7 +560,7 @@ nonisolated final class T3EnvironmentClient: @unchecked Sendable {
                 } ?? false
                 if !keep {
                     await session.close()
-                    throw T3ClientError.rpc("T3 connection was reset while connecting.")
+                    throw T3SocketError.connectionLost(detail: "T3 connection was reset while connecting.")
                 }
                 return session
             }
@@ -519,6 +577,9 @@ nonisolated final class T3EnvironmentClient: @unchecked Sendable {
                     connectIdentity = nil
                 }
             }
+            if !(error is CancellationError), !Self.isProtocolMismatch(error) {
+                DiagnosticLog.warning(.connection, "T3 socket connect failed", error: error)
+            }
             throw error
         }
     }
@@ -532,8 +593,10 @@ nonisolated final class T3EnvironmentClient: @unchecked Sendable {
         case .connecting:
             signals.publish(.connecting)
         case .connected:
+            DiagnosticLog.info(.connection, "T3 socket connected")
             signals.publish(.connected)
         case .disconnected:
+            DiagnosticLog.info(.connection, "T3 socket disconnected")
             signals.publish(.disconnected)
         }
     }

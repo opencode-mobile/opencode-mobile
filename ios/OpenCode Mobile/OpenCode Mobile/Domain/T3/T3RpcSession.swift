@@ -1,5 +1,63 @@
 import Foundation
 
+/// Errors raised by the T3 websocket runtime. `errorDescription` is short and
+/// user-readable; the server's own text (an `Exit` failure cause, a close
+/// reason) stays in `detail` for diagnostics and never reaches a snackbar.
+nonisolated enum T3SocketError: Error, Equatable, LocalizedError {
+    /// The socket is gone: closed by either side, replaced, never opened, or timed out.
+    case connectionLost(detail: String?)
+    /// The server answered an RPC with an `Exit` failure.
+    case rejected(cause: String)
+
+    static let connectionLostMessage = "Lost connection to T3"
+    static let rejectedMessage = "T3 rejected the request"
+
+    var errorDescription: String? {
+        switch self {
+        case .connectionLost: Self.connectionLostMessage
+        case .rejected: Self.rejectedMessage
+        }
+    }
+
+    /// Diagnostic text; never user-facing.
+    var detail: String? {
+        switch self {
+        case let .connectionLost(detail): detail
+        case let .rejected(cause): cause
+        }
+    }
+}
+
+/// The text a snackbar should show for an error that escaped the T3 runtime,
+/// and the diagnostic detail that must stay in the log.
+nonisolated enum T3ErrorText {
+    static func userMessage(_ error: Error) -> String {
+        switch error {
+        case let t3 as T3ClientError:
+            return t3.errorDescription ?? T3SocketError.rejectedMessage
+        case let socket as T3SocketError:
+            return socket.errorDescription ?? T3SocketError.rejectedMessage
+        case is CancellationError:
+            return "Cancelled"
+        case is DecodingError:
+            return "T3 sent an unexpected response"
+        default:
+            let ns = error as NSError
+            if ns.domain == NSURLErrorDomain { return error.localizedDescription }
+            return "T3 request failed"
+        }
+    }
+
+    static func detail(_ error: Error) -> String? {
+        switch error {
+        case let t3 as T3ClientError: t3.diagnosticBody
+        case let socket as T3SocketError: socket.detail
+        case is CancellationError: nil
+        default: "\(error)"
+        }
+    }
+}
+
 /// One websocket RPC session against a T3 environment.
 ///
 /// Owns pending request continuations, streaming subscriptions, the connect
@@ -63,7 +121,7 @@ nonisolated final class T3RpcSession: @unchecked Sendable {
         lock.lock()
         guard connection == nil, !closedForGood else {
             lock.unlock()
-            throw T3ClientError.rpc("T3 websocket session cannot be reused.")
+            throw T3SocketError.connectionLost(detail: "T3 websocket session cannot be reused.")
         }
         _state = .connecting
         lock.unlock()
@@ -97,7 +155,7 @@ nonisolated final class T3RpcSession: @unchecked Sendable {
                     lock.unlock()
                 case .disconnected:
                     lock.unlock()
-                    continuation.resume(throwing: T3ClientError.rpc("T3 websocket closed."))
+                    continuation.resume(throwing: T3SocketError.connectionLost(detail: "T3 websocket closed."))
                 }
             }
         } onCancel: {
@@ -114,7 +172,7 @@ nonisolated final class T3RpcSession: @unchecked Sendable {
                 lock.lock()
                 guard _state == .connected, let current = connection else {
                     lock.unlock()
-                    continuation.resume(throwing: T3ClientError.rpc("T3 websocket is closed."))
+                    continuation.resume(throwing: T3SocketError.connectionLost(detail: "T3 websocket is closed."))
                     return
                 }
                 pending[id] = continuation
@@ -127,7 +185,7 @@ nonisolated final class T3RpcSession: @unchecked Sendable {
                 lock.unlock()
                 current.send(String(decoding: data, as: UTF8.self)) { [weak self] error in
                     if let error {
-                        self?.finish(id: id, result: .failure(T3ClientError.transport(error.localizedDescription)))
+                        self?.finish(id: id, result: .failure(T3SocketError.connectionLost(detail: error.localizedDescription)))
                     }
                 }
             }
@@ -153,7 +211,7 @@ nonisolated final class T3RpcSession: @unchecked Sendable {
         lock.lock()
         guard _state == .connected, let current = connection else {
             lock.unlock()
-            continuation.finish(throwing: T3ClientError.rpc("T3 websocket is closed."))
+            continuation.finish(throwing: T3SocketError.connectionLost(detail: "T3 websocket is closed."))
             return stream
         }
         streams[id] = continuation
@@ -168,7 +226,7 @@ nonisolated final class T3RpcSession: @unchecked Sendable {
         current.send(String(decoding: data, as: UTF8.self)) { [weak self] error in
             guard let error, let self else { return }
             let continuation = self.locked { self.streams.removeValue(forKey: id) }
-            continuation?.finish(throwing: T3ClientError.transport(error.localizedDescription))
+            continuation?.finish(throwing: T3SocketError.connectionLost(detail: error.localizedDescription))
         }
         return stream
     }
@@ -218,13 +276,16 @@ nonisolated final class T3RpcSession: @unchecked Sendable {
     private static func closeError(_ reason: Error?) -> Error {
         switch reason {
         case nil:
-            T3ClientError.rpc("T3 websocket closed.")
+            T3SocketError.connectionLost(detail: "T3 websocket closed.")
         case let t3 as T3ClientError:
             t3
+        case let socket as T3SocketError:
+            socket
         case is CancellationError:
             CancellationError()
         case let other?:
-            T3ClientError.transport(other.localizedDescription)
+            // URLSession's text (POSIX codes, NSURLError prose) is for the log.
+            T3SocketError.connectionLost(detail: other.localizedDescription)
         }
     }
 
@@ -274,9 +335,9 @@ nonisolated final class T3RpcSession: @unchecked Sendable {
             let continuation = locked { streams.removeValue(forKey: requestID) }
             continuation?.finish()
         case let .exitFailure(requestID, message):
-            if finish(id: requestID, result: .failure(T3ClientError.rpc(message))) { return }
+            if finish(id: requestID, result: .failure(T3SocketError.rejected(cause: message))) { return }
             let continuation = locked { streams.removeValue(forKey: requestID) }
-            continuation?.finish(throwing: T3ClientError.rpc(message))
+            continuation?.finish(throwing: T3SocketError.rejected(cause: message))
         case .request, .ack, .unknown:
             break
         }

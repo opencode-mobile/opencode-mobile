@@ -2,6 +2,8 @@ package dev.opencode.mobile.domain.t3
 
 import dev.opencode.mobile.domain.connection.ConnectionEngine
 import dev.opencode.mobile.domain.connection.ConnectionProfile
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.event.EventStreamConnectionState
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.event.OpencodeEvent
@@ -10,6 +12,7 @@ import dev.opencode.mobile.domain.message.AttachmentThumbnailer
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.network.ActiveConnectionManager
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -68,6 +71,15 @@ class T3Runtime
         private val connectMutex = Mutex()
         private var connectedProfileId: String? = null
         private var collectorsStarted = false
+
+        /**
+         * Profiles whose environment descriptor was re-checked on a fresh socket this
+         * app session, and the ones that failed the protocol check. A failed profile
+         * never reconnects until the next [stop] (profile switch or background), so a
+         * mismatch cannot loop; a passed profile is not fetched again this session.
+         */
+        private val validatedProfileIds = mutableSetOf<String>()
+        private val protocolFailures = mutableMapOf<String, T3ProtocolException>()
 
         /** Guards subscription ids, the observed thread, and the debounce job. */
         private val subscriptionLock = Any()
@@ -138,7 +150,9 @@ class T3Runtime
                 connectedProfileId = null
                 resetSubscriptions()
             }
+            synchronized(subscriptionLock) { protocolFailures.clear() }
             clearCaches()
+            DiagnosticLog.info(DiagnosticLogArea.Connection, "T3 socket released (stop)")
             publishLive(EventStreamConnectionState.Disconnected)
         }
 
@@ -146,9 +160,20 @@ class T3Runtime
             var attempt = 0
             while (scope.isActive && live) {
                 val profile = activeProfile() ?: return
-                val connected = runCatching { ensureConnected(profile) }.isSuccess
-                if (!connected) {
+                val failure = runCatching { ensureConnected(profile) }.exceptionOrNull()
+                if (failure is CancellationException) throw failure
+                if (failure is T3ProtocolException) {
+                    // Terminal: the state and the message stream already carry it.
+                    DiagnosticLog.warning(DiagnosticLogArea.Connection, "T3 reconnect stopped: protocol mismatch")
+                    return
+                }
+                if (failure != null) {
                     attempt += 1
+                    DiagnosticLog.warning(
+                        DiagnosticLogArea.Connection,
+                        "T3 connect failed attempt=$attempt retryMs=${backoffMs(attempt)}",
+                        failure,
+                    )
                     delay(backoffMs(attempt))
                     continue
                 }
@@ -156,50 +181,55 @@ class T3Runtime
                 socket.state.first { it == T3SocketState.Disconnected }
                 if (!live) return
                 attempt = 1
+                DiagnosticLog.info(DiagnosticLogArea.Connection, "T3 socket dropped; reconnecting in ${backoffMs(attempt)}ms")
                 delay(backoffMs(attempt))
             }
         }
 
         // endregion
 
-        suspend fun refreshShell(): T3ShellSnapshot {
-            val profile = requireProfile()
-            val snapshot = api.fetchShell(profile)
-            val applied = applyShell(snapshot, publishLifecycle = false)
-            runCatching { ensureConnected(profile) }
-            return applied
-        }
+        suspend fun refreshShell(): T3ShellSnapshot =
+            guarded {
+                val profile = requireProfile()
+                val snapshot = api.fetchShell(profile)
+                val applied = applyShell(snapshot, publishLifecycle = false)
+                runCatching { ensureConnected(profile) }
+                applied
+            }
 
         suspend fun thread(id: String): T3Thread? = (_shell.value ?: refreshShell()).threads.firstOrNull { it.id == id }
 
-        suspend fun loadThreadMessages(threadId: String): List<Message> {
-            val profile = requireProfile()
-            ensureConnected(profile)
-            // Observed from here on: a drop during the REST load is re-subscribed on reconnect.
-            synchronized(subscriptionLock) { observedThreadId = threadId }
-            val snapshot = api.fetchThread(profile, threadId)
-            retryFailedImageLoads(T3MessageMapper.toMessages(snapshot))
-            val shown = replaceTranscript(threadId, snapshot)
-            subscribeThread(threadId, snapshot.snapshotSequence)
-            return shown
-        }
+        suspend fun loadThreadMessages(threadId: String): List<Message> =
+            guarded {
+                val profile = requireProfile()
+                ensureConnected(profile)
+                // Observed from here on: a drop during the REST load is re-subscribed on reconnect.
+                synchronized(subscriptionLock) { observedThreadId = threadId }
+                val snapshot = api.fetchThread(profile, threadId)
+                retryFailedImageLoads(T3MessageMapper.toMessages(snapshot))
+                val shown = replaceTranscript(threadId, snapshot)
+                subscribeThread(threadId, snapshot.snapshotSequence)
+                shown
+            }
 
         fun cachedMessages(threadId: String): List<Message> = messages[threadId].orEmpty()
 
-        suspend fun dispatch(command: JsonObject): JsonElement {
-            val profile = requireProfile()
-            ensureConnected(profile)
-            return socket.request(T3RpcCodec.DISPATCH_COMMAND, command)
-        }
+        suspend fun dispatch(command: JsonObject): JsonElement =
+            guarded {
+                val profile = requireProfile()
+                ensureConnected(profile)
+                socket.request(T3RpcCodec.DISPATCH_COMMAND, command)
+            }
 
-        suspend fun launchThread(payload: JsonObject): String {
-            val profile = requireProfile()
-            ensureConnected(profile)
-            val value = socket.request(T3RpcCodec.LAUNCH_THREAD, payload)
-            val threadId = T3Json.launchThreadId(value)
-            runCatching { refreshShell() }
-            return threadId
-        }
+        suspend fun launchThread(payload: JsonObject): String =
+            guarded {
+                val profile = requireProfile()
+                ensureConnected(profile)
+                val value = socket.request(T3RpcCodec.LAUNCH_THREAD, payload)
+                val threadId = T3Json.launchThreadId(value)
+                runCatching { refreshShell() }
+                threadId
+            }
 
         suspend fun pair(
             baseUrl: String,
@@ -210,6 +240,10 @@ class T3Runtime
 
         private suspend fun ensureConnected(profile: ConnectionProfile) {
             connectMutex.withLock {
+                synchronized(subscriptionLock) { protocolFailures[profile.id] }?.let { failure ->
+                    publishLive(EventStreamConnectionState.AuthFailed)
+                    throw failure
+                }
                 if (connectedProfileId == profile.id && socket.state.value == T3SocketState.Connected) {
                     return
                 }
@@ -217,6 +251,8 @@ class T3Runtime
                     // Switched environments without a stop(): never show another server's data.
                     clearCaches()
                 }
+                validateProtocol(profile)
+                DiagnosticLog.info(DiagnosticLogArea.Connection, "T3 socket connecting profile=${profile.id}")
                 val ticket = api.fetchWsTicket(profile)
                 connectedProfileId = profile.id
                 startCollectors()
@@ -229,16 +265,45 @@ class T3Runtime
             }
         }
 
+        /**
+         * Re-checks the environment descriptor before the first socket of this app
+         * session for [profile]. A protocol mismatch is terminal: it is remembered,
+         * shown on the connection state, and thrown so the caller's message stream
+         * or send path surfaces it. Any other failure (host down, descriptor missing) is logged and
+         * the connect proceeds, so an unreachable descriptor endpoint never blocks a
+         * working environment.
+         */
+        private suspend fun validateProtocol(profile: ConnectionProfile) {
+            if (synchronized(subscriptionLock) { profile.id in validatedProfileIds }) return
+            try {
+                val descriptor = api.validateEnvironment(profile.baseUrl)
+                synchronized(subscriptionLock) { validatedProfileIds += profile.id }
+                DiagnosticLog.info(
+                    DiagnosticLogArea.Connection,
+                    "T3 environment validated protocol=${descriptor.orchestrationProtocolVersion} env=${descriptor.environmentId}",
+                )
+            } catch (failure: T3ProtocolException) {
+                synchronized(subscriptionLock) { protocolFailures[profile.id] = failure }
+                DiagnosticLog.error(DiagnosticLogArea.Connection, "T3 protocol mismatch; not reconnecting", failure)
+                publishLive(EventStreamConnectionState.AuthFailed)
+                throw failure
+            } catch (failure: CancellationException) {
+                throw failure
+            } catch (failure: Exception) {
+                DiagnosticLog.warning(DiagnosticLogArea.Connection, "T3 environment check failed; connecting anyway", failure)
+            }
+        }
+
         private suspend fun waitUntilConnected() {
             val started = System.currentTimeMillis()
             while (socket.state.value == T3SocketState.Connecting) {
                 if (System.currentTimeMillis() - started > CONNECT_TIMEOUT_MS) {
-                    throw T3RpcException("Timed out connecting to T3 websocket")
+                    throw T3ConnectionLostException("Timed out connecting to T3 websocket")
                 }
                 delay(50)
             }
             if (socket.state.value != T3SocketState.Connected) {
-                throw T3RpcException("T3 websocket is not connected")
+                throw T3ConnectionLostException("T3 websocket is not connected")
             }
         }
 
@@ -261,6 +326,7 @@ class T3Runtime
                             T3SocketState.Disconnected ->
                                 if (live) EventStreamConnectionState.Reconnecting else EventStreamConnectionState.Disconnected
                         }
+                    DiagnosticLog.debug(DiagnosticLogArea.Connection, "T3 socket state=$state live=$live")
                     publishLive(mapped)
                 }
             }
@@ -316,7 +382,7 @@ class T3Runtime
         private suspend fun handleFrame(frame: T3RpcFrame) {
             when (frame) {
                 is T3RpcFrame.Chunk -> handleChunk(frame)
-                is T3RpcFrame.ExitFailure -> handleExit(frame.requestId, T3RpcException(frame.cause.toString()))
+                is T3RpcFrame.ExitFailure -> handleExit(frame.requestId, T3RpcException.rejected(frame.cause))
                 is T3RpcFrame.ExitSuccess -> handleExit(frame.requestId, null)
                 else -> Unit
             }
@@ -353,6 +419,10 @@ class T3Runtime
                     }
                 }
             if (error == null) return
+            DiagnosticLog.warning(
+                DiagnosticLogArea.Connection,
+                "T3 subscription refused thread=${failedThread ?: "shell"} cause=${T3Errors.detail(error) ?: "-"}",
+            )
             if (failedThread != null) {
                 _threadFailures.tryEmit(T3ThreadFailure(failedThread, error))
             } else {
@@ -412,7 +482,9 @@ class T3Runtime
 
         /**
          * Replaces the shell and publishes the diff. REST refreshes publish status and
-         * approval changes only; the shell stream also publishes thread lifecycle.
+         * approval changes only; the shell stream also publishes thread lifecycle once
+         * there is a previous snapshot to diff against (the first full snapshot would
+         * otherwise announce every existing thread as created).
          */
         private fun applyShell(
             next: T3ShellSnapshot,
@@ -626,11 +698,12 @@ class T3Runtime
         ) {
             val before = previous?.threads?.associateBy { it.id }.orEmpty()
             val after = next.threads.associateBy { it.id }
+            val lifecycle = publishLifecycle && previous != null
             for (threadId in before.keys + after.keys) {
                 val old = before[threadId]
                 val new = after[threadId]
                 if (old == new) continue
-                if (publishLifecycle) {
+                if (lifecycle) {
                     val type =
                         when {
                             old == null -> "session.created"
@@ -674,6 +747,14 @@ class T3Runtime
 
         private fun requireProfile(): ConnectionProfile =
             activeProfile() ?: throw T3ProtocolException("No active T3 environment")
+
+        /** Public entry points only ever throw T3 errors with user-readable messages. */
+        private inline fun <T> guarded(block: () -> T): T =
+            try {
+                block()
+            } catch (error: Throwable) {
+                throw T3Errors.normalize(error)
+            }
 
         private fun JsonObject.string(key: String): String? = (this[key] as? JsonPrimitive)?.contentOrNull
 

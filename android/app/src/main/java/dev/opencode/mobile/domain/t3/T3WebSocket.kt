@@ -1,5 +1,7 @@
 package dev.opencode.mobile.domain.t3
 
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -91,6 +93,7 @@ class T3WebSocket
                             response: Response,
                         ) {
                             if (id != generation) return
+                            DiagnosticLog.info(DiagnosticLogArea.Connection, "T3 socket open")
                             _state.value = T3SocketState.Connected
                         }
 
@@ -108,6 +111,7 @@ class T3WebSocket
                             reason: String,
                         ) {
                             if (id != generation) return
+                            DiagnosticLog.info(DiagnosticLogArea.Connection, "T3 socket closed code=$code reason=$reason")
                             failPending("T3 websocket closed")
                             _state.value = T3SocketState.Disconnected
                         }
@@ -118,6 +122,11 @@ class T3WebSocket
                             response: Response?,
                         ) {
                             if (id != generation) return
+                            DiagnosticLog.warning(
+                                DiagnosticLogArea.Connection,
+                                "T3 socket failed status=${response?.code ?: "-"}",
+                                t,
+                            )
                             failPending(t.message ?: "T3 websocket failed")
                             _state.value = T3SocketState.Disconnected
                         }
@@ -135,7 +144,7 @@ class T3WebSocket
             val sent = send(T3RpcCodec.encodeRequest(id, tag, payload))
             if (!sent) {
                 pending.remove(id)
-                throw T3RpcException("T3 websocket is not connected")
+                throw T3ConnectionLostException("T3 websocket is not connected")
             }
             return try {
                 deferred.await()
@@ -150,7 +159,7 @@ class T3WebSocket
         ): String {
             val id = UUID.randomUUID().toString()
             val sent = send(T3RpcCodec.encodeRequest(id, tag, payload))
-            if (!sent) throw T3RpcException("T3 websocket is not connected")
+            if (!sent) throw T3ConnectionLostException("T3 websocket is not connected")
             return id
         }
 
@@ -183,7 +192,7 @@ class T3WebSocket
                     frameChannel.trySend(frame)
                 }
                 is T3RpcFrame.ExitFailure -> {
-                    pending.remove(frame.requestId)?.completeExceptionally(T3RpcException(frame.cause.toString()))
+                    pending.remove(frame.requestId)?.completeExceptionally(T3RpcException.rejected(frame.cause))
                     frameChannel.trySend(frame)
                 }
                 else -> frameChannel.trySend(frame)
@@ -192,9 +201,9 @@ class T3WebSocket
 
         private fun send(text: String): Boolean = socket?.send(text) == true
 
-        private fun failPending(message: String) {
+        private fun failPending(detail: String) {
             pending.values.forEach { deferred ->
-                deferred.completeExceptionally(T3RpcException(message))
+                deferred.completeExceptionally(T3ConnectionLostException(detail))
             }
             pending.clear()
         }

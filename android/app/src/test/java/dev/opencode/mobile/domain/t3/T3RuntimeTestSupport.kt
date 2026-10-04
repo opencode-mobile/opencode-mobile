@@ -110,10 +110,22 @@ internal class RecordingEventStream : ForegroundEventStream {
     fun types(): List<String> = published.map { it.type + ":" + it.sessionId }
 }
 
-/** Serves the shell, thread, and ticket endpoints from in-memory JSON. */
+internal fun environmentJson(protocolVersion: Int? = 2): String =
+    T3Json.parser.encodeToString(
+        JsonObject.serializer(),
+        buildJsonObject {
+            put("environmentId", "env-1")
+            put("label", "Desk")
+            if (protocolVersion != null) put("orchestrationProtocolVersion", protocolVersion)
+        },
+    )
+
+/** Serves the environment, shell, thread, and ticket endpoints from in-memory JSON. */
 internal class FakeT3Http : T3Http {
+    var environmentJson: String = environmentJson()
     var shellJson: String = shellJson()
     val threadJson = mutableMapOf<String, String>()
+    var environmentRequests = 0
     var shellRequests = 0
     var ticketRequests = 0
 
@@ -123,6 +135,10 @@ internal class FakeT3Http : T3Http {
     ): T3HttpResponse {
         val path = url.removePrefix(t3Profile.baseUrl)
         return when {
+            path == T3Urls.ENVIRONMENT_PATH -> {
+                environmentRequests += 1
+                T3HttpResponse(200, environmentJson)
+            }
             path == T3Urls.SHELL_PATH -> {
                 shellRequests += 1
                 T3HttpResponse(200, shellJson)
@@ -171,6 +187,8 @@ internal class FakeT3Socket : T3Socket {
     val requests = mutableListOf<SentRequest>()
     var connectCalls = 0
     var disconnectCalls = 0
+    /** Simulates the socket closing under a request: fails it the way [T3WebSocket.failPending] does. */
+    var failNextRequest = false
     private var counter = 0
 
     override fun connect(url: String) {
@@ -182,7 +200,11 @@ internal class FakeT3Socket : T3Socket {
         tag: String,
         payload: JsonObject,
     ): JsonElement {
-        if (_state.value != T3SocketState.Connected) throw T3RpcException("T3 websocket is not connected")
+        if (_state.value != T3SocketState.Connected) throw T3ConnectionLostException("T3 websocket is not connected")
+        if (failNextRequest) {
+            failNextRequest = false
+            throw T3ConnectionLostException("T3 websocket closed")
+        }
         requests += SentRequest("req-${++counter}", tag, payload)
         return buildJsonObject { put("sequence", 1) }
     }
@@ -191,7 +213,7 @@ internal class FakeT3Socket : T3Socket {
         tag: String,
         payload: JsonObject,
     ): String {
-        if (_state.value != T3SocketState.Connected) throw T3RpcException("T3 websocket is not connected")
+        if (_state.value != T3SocketState.Connected) throw T3ConnectionLostException("T3 websocket is not connected")
         val id = "sub-${++counter}"
         subscribes += SentRequest(id, tag, payload)
         return id
@@ -233,6 +255,7 @@ internal fun threadJson(
     title: String = "Thread $id",
     activeRunId: String? = null,
     pendingRequestId: String? = null,
+    pendingRequestKind: String = "approval",
     archivedAt: String? = null,
 ): JsonObject =
     buildJsonObject {
@@ -247,7 +270,7 @@ internal fun threadJson(
                 "pendingRuntimeRequest",
                 buildJsonObject {
                     put("id", pendingRequestId)
-                    put("kind", "approval")
+                    put("kind", pendingRequestKind)
                 },
             )
         }
@@ -309,6 +332,15 @@ internal fun threadSnapshotJson(
             )
         },
     )
+
+internal fun shellSnapshotItem(
+    threads: List<JsonObject>,
+    sequence: Long,
+): JsonObject =
+    buildJsonObject {
+        put("kind", "snapshot")
+        put("snapshot", shellObject(threads = threads, sequence = sequence))
+    }
 
 internal fun threadUpdatedItem(
     sequence: Long,

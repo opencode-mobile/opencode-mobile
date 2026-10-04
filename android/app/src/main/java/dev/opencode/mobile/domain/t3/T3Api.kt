@@ -14,7 +14,7 @@ class T3Api
         suspend fun fetchEnvironment(baseUrl: String): T3EnvironmentDescriptor {
             val response = http.get(T3Urls.join(baseUrl, T3Urls.ENVIRONMENT_PATH))
             requireSuccess(response)
-            val descriptor = T3Json.environmentDescriptor(response.body)
+            val descriptor = decode { T3Json.environmentDescriptor(response.body) }
             val version = descriptor.orchestrationProtocolVersion
             when {
                 version == null -> throw T3ProtocolException("This T3 environment uses orchestration protocol 1; OpenCode Mobile requires 2")
@@ -44,13 +44,13 @@ class T3Api
                     contentType = "application/x-www-form-urlencoded",
                 )
             requireSuccess(response)
-            return T3Json.accessToken(response.body)
+            return decode { T3Json.accessToken(response.body) }
         }
 
         suspend fun fetchShell(profile: ConnectionProfile): T3ShellSnapshot {
             val response = http.get(T3Urls.join(profile.baseUrl, T3Urls.SHELL_PATH), orchestrationHeaders(profile))
             requireSuccess(response)
-            return T3Json.shellSnapshot(response.body)
+            return decode { T3Json.shellSnapshot(response.body) }
         }
 
         suspend fun fetchThread(
@@ -63,7 +63,7 @@ class T3Api
                     orchestrationHeaders(profile),
                 )
             requireSuccess(response)
-            return T3Json.threadSnapshot(response.body)
+            return decode { T3Json.threadSnapshot(response.body) }
         }
 
         suspend fun fetchAssetBytes(url: String): ByteArray? = http.getBytes(url)
@@ -77,7 +77,7 @@ class T3Api
                     headers = bearerHeaders(profile),
                 )
             requireSuccess(response)
-            return T3Json.wsTicket(response.body)
+            return decode { T3Json.wsTicket(response.body) }
         }
 
         suspend fun pair(
@@ -109,6 +109,17 @@ class T3Api
 
         private fun bearerHeaders(profile: ConnectionProfile): Map<String, String> =
             mapOf("Authorization" to "Bearer ${profile.password}")
+
+        /** Parser and cast failures become [T3DecodingException]; T3's own protocol errors pass through. */
+        private inline fun <T> decode(block: () -> T): T {
+            try {
+                return block()
+            } catch (error: T3ProtocolException) {
+                throw error
+            } catch (error: Exception) {
+                throw T3DecodingException(error.message, error)
+            }
+        }
 
         private fun requireSuccess(response: T3HttpResponse) {
             if (response.code in 200..299) return

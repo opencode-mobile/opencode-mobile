@@ -1,5 +1,6 @@
 package dev.opencode.mobile.domain.t3
 
+import dev.opencode.mobile.domain.event.EventStreamConnectionState
 import dev.opencode.mobile.domain.message.MessageContentPreparer
 import dev.opencode.mobile.domain.message.MessageListUpdate
 import dev.opencode.mobile.markdown.OpenCodeSyntaxHighlighter
@@ -194,7 +195,9 @@ class T3RuntimeTest {
             settle()
 
             assertEquals(listOf("gone"), failures.map { it.threadId })
-            assertTrue(failures.single().error.message!!.contains("ThreadNotFound"))
+            val refused = failures.single().error as T3RpcException
+            assertEquals("the user sees a short message", T3RpcException.REJECTED_MESSAGE, refused.message)
+            assertEquals("the server cause stays available for diagnostics", "ThreadNotFound", refused.detail)
 
             val preparer =
                 MessageContentPreparer(OpenCodeTextMateHighlightingEngine(OpenCodeSyntaxHighlighter.default)).apply {
@@ -237,5 +240,136 @@ class T3RuntimeTest {
             }
             settle()
             assertEquals(1, h.http.shellRequests - before)
+        }
+
+    @Test
+    fun firstShellSnapshotPublishesStatusAndRequestsButNoLifecycleBurst() =
+        runTest {
+            val h = Harness(this).build()
+            h.runtime.start()
+            settle()
+            val shellSub = h.socket.lastSubscribe(T3RpcCodec.SUBSCRIBE_SHELL)
+            assertNull(h.runtime.shell.value)
+
+            h.socket.chunk(
+                shellSub.id,
+                shellSnapshotItem(
+                    threads =
+                        listOf(
+                            threadJson("A"),
+                            threadJson("B", activeRunId = "run-1"),
+                            threadJson("C", pendingRequestId = "q-1", pendingRequestKind = "user_input"),
+                        ),
+                    sequence = 3,
+                ),
+            )
+            settle()
+            assertEquals(
+                "no session.created burst for threads that already existed",
+                listOf("session.status:B", "question.asked:C"),
+                h.events.types(),
+            )
+            assertEquals(listOf("A", "B", "C"), h.runtime.shell.value!!.threads.map { it.id }.sorted())
+
+            // Once a snapshot is cached, lifecycle is diffed as usual.
+            h.events.published.clear()
+            h.socket.chunk(shellSub.id, threadUpdatedItem(4, threadJson("D")))
+            settle()
+            assertEquals(listOf("session.created:D"), h.events.types())
+        }
+
+    @Test
+    fun protocolIsValidatedOncePerProfileOnFreshSockets() =
+        runTest {
+            val h = Harness(this).build()
+            h.runtime.start()
+            settle()
+            assertEquals(1, h.socket.connectCalls)
+            assertEquals("descriptor fetched before the first socket", 1, h.http.environmentRequests)
+
+            h.socket.drop()
+            settle()
+            assertEquals(2, h.socket.connectCalls)
+            assertEquals("a passed profile is not re-fetched this session", 1, h.http.environmentRequests)
+        }
+
+    @Test
+    fun protocolMismatchOnConnectStopsRetryingAndSurfacesError() =
+        runTest {
+            val h = Harness(this).build()
+            h.http.threadJson["A"] = threadSnapshotJson(sequence = 1, "m1")
+            h.http.environmentJson = environmentJson(protocolVersion = 1)
+            h.runtime.start()
+            settle()
+            assertEquals("validation failed before any socket was opened", 0, h.socket.connectCalls)
+
+            // Several backoff windows later the loop has not retried and the descriptor was fetched once.
+            advanceTimeBy(120_000)
+            runCurrent()
+            assertEquals(0, h.socket.connectCalls)
+            assertEquals("no reconnect loop on a protocol mismatch", 1, h.http.environmentRequests)
+            assertEquals(EventStreamConnectionState.AuthFailed, h.events.states.last())
+
+            // REST callers see the same readable error, still without another fetch or socket.
+            val error = runCatching { h.runtime.loadThreadMessages("A") }.exceptionOrNull()
+            assertTrue(error is T3ProtocolException)
+            assertTrue(error!!.message!!.contains("orchestration protocol 1"))
+            assertEquals(1, h.http.environmentRequests)
+            assertEquals(0, h.socket.connectCalls)
+            assertEquals(EventStreamConnectionState.AuthFailed, h.events.states.last())
+
+            // Backgrounding / profile switch forgets the verdict so a re-pair can try again.
+            h.runtime.stop()
+            h.http.environmentJson = environmentJson(protocolVersion = 2)
+            h.runtime.start()
+            settle()
+            assertEquals(1, h.socket.connectCalls)
+            assertEquals(2, h.http.environmentRequests)
+            assertEquals(EventStreamConnectionState.Connected, h.events.states.last())
+        }
+
+    @Test
+    fun protocolMismatchReachesMessageStreamAsLoadFailed() =
+        runTest {
+            val h = Harness(this).build()
+            h.http.threadJson["A"] = threadSnapshotJson(sequence = 1, "m1")
+            h.http.environmentJson = environmentJson(protocolVersion = 1)
+            val preparer =
+                MessageContentPreparer(OpenCodeTextMateHighlightingEngine(OpenCodeSyntaxHighlighter.default)).apply {
+                    computationDispatcher = Dispatchers.Unconfined
+                }
+            val repository =
+                T3MessageRepository(
+                    h.runtime,
+                    preparer,
+                    T3AttachmentUploader(h.socket, T3AttachmentTransport { _, _, _, _ -> 204 }),
+                )
+
+            val update = repository.observeMessages("A", null).first()
+            settle()
+
+            val failed = update as MessageListUpdate.LoadFailed
+            assertTrue(failed.error is T3ProtocolException)
+            assertEquals(
+                "This T3 environment uses orchestration protocol 1; OpenCode Mobile requires 2",
+                failed.error.message,
+            )
+            assertEquals(0, h.socket.connectCalls)
+            assertEquals(EventStreamConnectionState.AuthFailed, h.events.states.last())
+        }
+
+    @Test
+    fun socketDropFailsPendingRequestsWithReadableMessage() =
+        runTest {
+            val h = Harness(this).build()
+            h.runtime.start()
+            settle()
+            h.socket.drop()
+            settle()
+            // The fake reconnects immediately; a request on a dead socket is the connection-lost path.
+            h.socket.failNextRequest = true
+            val error = runCatching { h.runtime.dispatch(buildJsonObject { put("type", "noop") }) }.exceptionOrNull()
+            assertTrue(error is T3ConnectionLostException)
+            assertEquals(T3ConnectionLostException.USER_MESSAGE, error!!.message)
         }
 }

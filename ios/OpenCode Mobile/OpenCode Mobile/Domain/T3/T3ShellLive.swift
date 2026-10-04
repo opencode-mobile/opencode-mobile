@@ -5,7 +5,8 @@ import Foundation
 /// synthetic opencode-shaped events home and Session Chat already listen to.
 ///
 /// Mirrors Android `T3Runtime.applyShellStreamItem` / `publishShellChanges`
-/// so both apps publish the same `session.*` and `permission.*` events.
+/// so both apps publish the same `session.*`, `permission.*` and `question.*`
+/// events.
 nonisolated enum T3ShellLive {
     /// Result of applying one stream item.
     enum Applied: Equatable {
@@ -88,10 +89,13 @@ nonisolated enum T3ShellLive {
 
     /// Events describing the change from `previous` to `next`, per thread:
     /// lifecycle (`session.created` / `session.updated` / `session.deleted`,
-    /// only when `includeLifecycle`), then `session.status` when the running
+    /// only when `includeLifecycle` and there is a `previous` snapshot to diff
+    /// against: the first full snapshot would otherwise announce every
+    /// existing thread as created), then `session.status` when the running
     /// state flipped, then `permission.asked` / `permission.replied` when the
-    /// pending approval changed. REST refreshes pass `includeLifecycle: false`
-    /// because the caller is already reloading the list.
+    /// pending approval changed, then `question.asked` / `question.replied`
+    /// when the pending user-input request changed. REST refreshes pass
+    /// `includeLifecycle: false` because the caller is already reloading the list.
     static func events(
         previous: T3ShellSnapshot?,
         next: T3ShellSnapshot,
@@ -105,11 +109,12 @@ nonisolated enum T3ShellLive {
             ids.append(thread.id)
         }
         var events: [OpencodeEvent] = []
+        let lifecycle = includeLifecycle && previous != nil
         for id in ids {
             let old = before[id]
             let new = after[id]
             if old == new { continue }
-            if includeLifecycle {
+            if lifecycle {
                 let type: String =
                     if old == nil { "session.created" }
                     else if new == nil { "session.deleted" }
@@ -125,6 +130,12 @@ nonisolated enum T3ShellLive {
             let newApproval = new.flatMap(approvalID)
             if oldApproval != newApproval {
                 let type = (newApproval ?? "").isEmpty ? "permission.replied" : "permission.asked"
+                events.append(OpencodeEvent(type: type, sessionID: id))
+            }
+            let oldQuestion = old.flatMap(T3ShellMapper.questionID(for:))
+            let newQuestion = new.flatMap(T3ShellMapper.questionID(for:))
+            if oldQuestion != newQuestion {
+                let type = (newQuestion ?? "").isEmpty ? "question.replied" : "question.asked"
                 events.append(OpencodeEvent(type: type, sessionID: id))
             }
         }

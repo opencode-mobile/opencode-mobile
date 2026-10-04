@@ -22,8 +22,9 @@ struct T3ShellLiveTests {
             ShellItems.snapshot(sequence: 3, threads: [ShellItems.thread("A")]),
             ["kind": "synchronized"],
         ]))
-        #expect(await waitUntil { events.types == ["session.created:A"] })
-        #expect(harness.client.cachedThread(id: "A")?.title == "Thread A")
+        #expect(await waitUntil { harness.client.cachedThread(id: "A")?.title == "Thread A" })
+        try await Task.sleep(for: .milliseconds(30))
+        #expect(events.types.isEmpty, "the first snapshot does not announce existing threads as created")
 
         events.clear()
         socket.receive(Frames.chunk(requestID: subscribe.id, values: [
@@ -61,6 +62,115 @@ struct T3ShellLiveTests {
             ShellItems.threadUpdated(sequence: 7, ShellItems.thread("A")),
         ]))
         #expect(await waitUntil { events.types == ["session.updated:A", "permission.replied:A"] })
+    }
+
+    @Test func shellStream_firstSnapshotPublishesStatusAndRequestsButNoLifecycle() async throws {
+        let harness = T3Harness()
+        let events = EventCollector(signals: harness.signals)
+        await harness.signals.emit(.start)
+        let socket = try await harness.connector.connection(at: 0)
+        socket.open()
+        let subscribe = try await socket.firstRequest(tag: "orchestration.subscribeShell")
+        socket.receive(Frames.chunk(requestID: subscribe.id, values: [
+            ShellItems.snapshot(sequence: 3, threads: [
+                ShellItems.thread("A"),
+                ShellItems.thread("B", activeRunID: "run-1"),
+                ShellItems.thread("C", pendingRequestID: "q-1", pendingRequestKind: "user_input"),
+                ShellItems.thread("D", pendingRequestID: "req-1"),
+            ]),
+        ]))
+        #expect(await waitUntil { events.types.count == 3 })
+        #expect(events.types == ["session.status:B", "question.asked:C", "permission.asked:D"])
+        #expect(events.statusTypes == ["running"])
+
+        // With a cached snapshot, lifecycle is diffed as usual.
+        events.clear()
+        socket.receive(Frames.chunk(requestID: subscribe.id, values: [
+            ShellItems.threadUpdated(sequence: 4, ShellItems.thread("E")),
+        ]))
+        #expect(await waitUntil { events.types == ["session.created:E"] })
+    }
+
+    @Test func shellStream_publishesQuestionAskedAndReplied() async throws {
+        let harness = T3Harness()
+        harness.http.shell = T3ShellSnapshot(sequence: 1, threads: [Fixtures.thread(id: "A")], projects: [])
+        _ = try await harness.client.fetchShell(force: true)
+        let events = EventCollector(signals: harness.signals)
+        await harness.signals.emit(.start)
+        let socket = try await harness.connector.connection(at: 0)
+        socket.open()
+        let subscribe = try await socket.firstRequest(tag: "orchestration.subscribeShell")
+
+        socket.receive(Frames.chunk(requestID: subscribe.id, values: [
+            ShellItems.threadUpdated(sequence: 2, ShellItems.thread("A", pendingRequestID: "q-1", pendingRequestKind: "user_input")),
+        ]))
+        #expect(await waitUntil { events.types == ["session.updated:A", "question.asked:A"] })
+
+        events.clear()
+        socket.receive(Frames.chunk(requestID: subscribe.id, values: [
+            ShellItems.threadUpdated(sequence: 3, ShellItems.thread("A", pendingRequestID: "q-2", pendingRequestKind: "user_input")),
+        ]))
+        #expect(await waitUntil { events.types == ["session.updated:A", "question.asked:A"] })
+
+        events.clear()
+        socket.receive(Frames.chunk(requestID: subscribe.id, values: [
+            ShellItems.threadUpdated(sequence: 4, ShellItems.thread("A")),
+        ]))
+        #expect(await waitUntil { events.types == ["session.updated:A", "question.replied:A"] })
+
+        // Swapping a question for an approval replies the question and asks the permission.
+        events.clear()
+        socket.receive(Frames.chunk(requestID: subscribe.id, values: [
+            ShellItems.threadUpdated(sequence: 5, ShellItems.thread("A", pendingRequestID: "q-3", pendingRequestKind: "user_input")),
+            ShellItems.threadUpdated(sequence: 6, ShellItems.thread("A", pendingRequestID: "req-1")),
+        ]))
+        #expect(await waitUntil { events.types.count == 5 })
+        #expect(events.types == [
+            "session.updated:A", "question.asked:A",
+            "session.updated:A", "permission.asked:A", "question.replied:A",
+        ])
+    }
+
+    @MainActor
+    @Test func refreshActivity_publishesQuestionEventsFromThreadActivity() async throws {
+        let harness = T3Harness(shellRefreshDebounce: .zero)
+        var waiting = Fixtures.thread(id: "t1")
+        waiting.pendingRequestID = "q-1"
+        waiting.pendingRequestKind = "user_input"
+        harness.http.shell = T3ShellSnapshot(sequence: 1, threads: [waiting], projects: [])
+        harness.http.threadDetail = T3ThreadDetail(sequence: 1, thread: waiting, messages: [])
+        let eventStream = SyntheticEventRecorder()
+        let repository = T3MessageRepository(client: harness.client, eventStream: eventStream, resubscribeDelay: .seconds(30))
+        let observe = Task {
+            for await _ in repository.observeMessages(sessionID: "t1", directory: nil) {}
+        }
+        let socket = try await harness.connector.connection(at: 0)
+        socket.open()
+        let subscribe = try await socket.firstRequest(tag: "orchestration.subscribeThread")
+
+        socket.receive(Frames.chunk(requestID: subscribe.id, values: [
+            ["kind": "event", "sequence": 2, "event": ["type": "runtime-request.updated"]],
+        ]))
+        #expect(await waitUntil { eventStream.types == ["session.status:t1", "question.asked:t1"] })
+
+        eventStream.clear()
+        harness.http.shell = T3ShellSnapshot(sequence: 2, threads: [Fixtures.thread(id: "t1")], projects: [])
+        socket.receive(Frames.chunk(requestID: subscribe.id, values: [
+            ["kind": "event", "sequence": 3, "event": ["type": "thread.updated"]],
+        ]))
+        #expect(await waitUntil { eventStream.types == ["session.status:t1", "question.replied:t1"] })
+
+        // An approval on the same thread is still a permission, never a question.
+        eventStream.clear()
+        var approval = Fixtures.thread(id: "t1")
+        approval.pendingRequestID = "req-1"
+        approval.pendingRequestKind = "approval"
+        harness.http.shell = T3ShellSnapshot(sequence: 3, threads: [approval], projects: [])
+        socket.receive(Frames.chunk(requestID: subscribe.id, values: [
+            ["kind": "event", "sequence": 4, "event": ["type": "run.updated"]],
+        ]))
+        #expect(await waitUntil { eventStream.types == ["session.status:t1", "permission.asked:t1"] })
+        observe.cancel()
     }
 
     @Test func shellStream_projectItemsUpdateCacheWithoutSessionEvents() async throws {
@@ -228,7 +338,8 @@ private enum ShellItems {
         _ id: String,
         title: String? = nil,
         activeRunID: String? = nil,
-        pendingRequestID: String? = nil
+        pendingRequestID: String? = nil,
+        pendingRequestKind: String = "approval"
     ) -> [String: Any] {
         var object: [String: Any] = [
             "id": id,
@@ -239,7 +350,7 @@ private enum ShellItems {
         ]
         if let activeRunID { object["activeRunId"] = activeRunID }
         if let pendingRequestID {
-            object["pendingRuntimeRequest"] = ["id": pendingRequestID, "kind": "approval"]
+            object["pendingRuntimeRequest"] = ["id": pendingRequestID, "kind": pendingRequestKind]
         }
         return object
     }
@@ -314,6 +425,34 @@ private final class EventCollector: @unchecked Sendable {
     func clear() {
         lock.lock()
         events = []
+        lock.unlock()
+    }
+}
+
+/// Records what `T3MessageRepository.refreshActivity` publishes as synthetic events.
+private final class SyntheticEventRecorder: ForegroundEventStream, @unchecked Sendable {
+    private let lock = NSLock()
+    private var recorded: [OpencodeEvent] = []
+    var connectionState: EventStreamConnectionState { .connected }
+    func connectionStateUpdates() -> AsyncStream<EventStreamConnectionState> { AsyncStream { _ in } }
+    func events() -> AsyncStream<OpencodeEvent> { AsyncStream { _ in } }
+    func start() {}
+    func stop() async {}
+    func publishSynthetic(_ event: OpencodeEvent) {
+        lock.lock()
+        recorded.append(event)
+        lock.unlock()
+    }
+
+    var types: [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        return recorded.map { "\($0.type):\($0.sessionID ?? "-")" }
+    }
+
+    func clear() {
+        lock.lock()
+        recorded = []
         lock.unlock()
     }
 }

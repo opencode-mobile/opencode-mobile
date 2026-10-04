@@ -166,7 +166,9 @@ class T3AttachmentUploaderTest {
                 uploader.upload(profile, listOf(image()))
                 fail("expected failure")
             } catch (error: T3RpcException) {
-                assertEquals("T3 websocket is not connected", error.message)
+                assertTrue(error is T3ConnectionLostException)
+                assertEquals(T3ConnectionLostException.USER_MESSAGE, error.message)
+                assertEquals("T3 websocket is not connected", error.detail)
             }
         }
 
