@@ -236,6 +236,46 @@ class SessionInfo(
         }
     }
 
+    fun settleSession() {
+        val sessionId = boundSessionId ?: return
+        val worktree = boundWorktree ?: return
+        if (OptimisticSessionCreate.isPlaceholder(sessionId)) return
+        if (_state.value.isLifecycleActionInFlight) return
+        scope.launch {
+            _state.update {
+                it.copy(isLifecycleActionInFlight = true, lifecycleErrorMessage = null)
+            }
+            logI("settle start session=$sessionId")
+            runCatching { sessionRepository.settleSession(id = sessionId, directory = worktree) }
+                .onSuccess { settled ->
+                    if (!isCurrentBinding(sessionId, worktree)) return@onSuccess
+                    if (settled) {
+                        logI("settle success session=$sessionId")
+                        _state.update {
+                            it.copy(isLifecycleActionInFlight = false, shouldLeaveSession = true)
+                        }
+                    } else {
+                        logI("settle rejected session=$sessionId")
+                        _state.update {
+                            it.copy(
+                                isLifecycleActionInFlight = false,
+                                lifecycleErrorMessage = SETTLE_ERROR,
+                            )
+                        }
+                    }
+                }.onFailure { error ->
+                    if (!isCurrentBinding(sessionId, worktree)) return@onFailure
+                    logI("settle failure session=$sessionId error=${error.message}")
+                    _state.update {
+                        it.copy(
+                            isLifecycleActionInFlight = false,
+                            lifecycleErrorMessage = SETTLE_ERROR,
+                        )
+                    }
+                }
+        }
+    }
+
     fun deleteSession() {
         val sessionId = boundSessionId ?: return
         val worktree = boundWorktree ?: return
@@ -452,6 +492,7 @@ class SessionInfo(
         private const val TAG = "SessionInfo"
         private const val EMPTY_TITLE_ERROR = "Enter a session title"
         const val ARCHIVE_ERROR = "Couldn't archive session."
+        const val SETTLE_ERROR = "Couldn't settle session."
         const val DELETE_ERROR = "Couldn't delete session."
     }
 }

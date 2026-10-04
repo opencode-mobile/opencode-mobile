@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import dagger.hilt.android.qualifiers.ApplicationContext
+import dev.opencode.mobile.domain.connection.ConnectionEngine
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileCatalog
 import dev.opencode.mobile.domain.connection.ConnectionProfileIdentity
@@ -188,6 +189,7 @@ class DataStoreConnectionProfileStore
                                     ServerProtocol.entries.firstOrNull { it.wireValue == wire }
                                 },
                             serverUrls = record.serverUrls,
+                            engine = ConnectionEngine.fromWire(record.engine),
                         )
                     },
             )
@@ -210,6 +212,10 @@ class DataStoreConnectionProfileStore
                                     username = profile.username,
                                     serverProtocol = profile.serverProtocol?.wireValue,
                                     serverUrls = profile.serverUrls,
+                                    engine =
+                                        profile.engine.wireValue.takeUnless {
+                                            it == ConnectionEngine.OPENCODE.wireValue
+                                        },
                                 )
                             },
                     ),

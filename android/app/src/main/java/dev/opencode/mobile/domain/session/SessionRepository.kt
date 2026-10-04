@@ -182,6 +182,11 @@ interface SessionRepository {
         inboxId: String,
         directory: String? = null,
     ): Boolean = false
+
+    suspend fun settleSession(
+        id: String,
+        directory: String? = null,
+    ): Boolean = false
 }
 
 /** How the server handled a compact request. */

@@ -3,6 +3,7 @@ package dev.opencode.mobile.ui.connection
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,6 +13,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -32,6 +35,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.domain.connection.ConnectionEngine
 import dev.opencode.mobile.domain.connection.ConnectionProfileIdentity
 import dev.opencode.mobile.domain.connection.PairingQRPayload
 import dev.opencode.mobile.theme.LocalOpenCodeDarkTheme
@@ -97,14 +101,22 @@ fun ConnectionSetupFields(
     onPasswordChanged: (String) -> Unit,
     onCredentialSegmentChanged: (ConnectionCredentialSegment) -> Unit,
     onPairingCodeChanged: (String) -> Unit,
+    onEngineChanged: (ConnectionEngine) -> Unit = {},
     onPasswordFocusConsumed: () -> Unit,
     showManualForm: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val passwordFocusRequester = remember { FocusRequester() }
 
-    LaunchedEffect(uiState.requestPasswordFocus, uiState.credentialSegment, showManualForm) {
+    LaunchedEffect(uiState.requestPasswordFocus, uiState.credentialSegment, showManualForm, uiState.engine) {
         if (
+            uiState.requestPasswordFocus &&
+            uiState.engine == ConnectionEngine.T3 &&
+            showManualForm
+        ) {
+            passwordFocusRequester.requestFocus()
+            onPasswordFocusConsumed()
+        } else if (
             uiState.requestPasswordFocus &&
             uiState.credentialSegment == ConnectionCredentialSegment.Password &&
             !uiState.usesQrLayout &&
@@ -148,6 +160,52 @@ fun ConnectionSetupFields(
                 hint = "Optional name",
                 submitAction = OpenCodeTextInputSubmitAction.Next,
                 enabled = !uiState.isBusy,
+            )
+            return@Column
+        }
+        EngineChoiceRow(
+            selected = uiState.engine,
+            enabled = !uiState.isBusy,
+            onSelected = onEngineChanged,
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        if (uiState.engine == ConnectionEngine.T3) {
+            OpenCodeServerAddressInput(
+                value = uiState.baseUrl,
+                onValueChange = onBaseUrlChanged,
+                hint = "macbook.local:4096",
+                accessibilityLabel = "Host",
+                submitAction = OpenCodeTextInputSubmitAction.Next,
+                enabled = !uiState.isBusy,
+            )
+            Text(
+                text = "LAN, Tailscale MagicDNS, or tunnel — not localhost on a phone.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 6.dp, start = 2.dp),
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            OpenCodeTextInput(
+                value = uiState.name,
+                onValueChange = onNameChanged,
+                hint = "Optional name",
+                submitAction = OpenCodeTextInputSubmitAction.Next,
+                enabled = !uiState.isBusy,
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            OpenCodeTextInput(
+                value = uiState.password,
+                onValueChange = onPasswordChanged,
+                hint = "Pairing token",
+                kind = OpenCodeTextInputKind.Password,
+                enabled = !uiState.isBusy,
+                modifier = Modifier.focusRequester(passwordFocusRequester),
+            )
+            Text(
+                text = "Token from the T3 environment pairing screen.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 6.dp, start = 2.dp),
             )
             return@Column
         }
@@ -226,6 +284,33 @@ fun ConnectionSetupFields(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun EngineChoiceRow(
+    selected: ConnectionEngine,
+    enabled: Boolean,
+    onSelected: (ConnectionEngine) -> Unit,
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        FilterChip(
+            selected = selected == ConnectionEngine.OPENCODE,
+            onClick = { onSelected(ConnectionEngine.OPENCODE) },
+            enabled = enabled,
+            label = { Text("OpenCode") },
+            colors = FilterChipDefaults.filterChipColors(),
+        )
+        FilterChip(
+            selected = selected == ConnectionEngine.T3,
+            onClick = { onSelected(ConnectionEngine.T3) },
+            enabled = enabled,
+            label = { Text("T3") },
+            colors = FilterChipDefaults.filterChipColors(),
+        )
     }
 }
 

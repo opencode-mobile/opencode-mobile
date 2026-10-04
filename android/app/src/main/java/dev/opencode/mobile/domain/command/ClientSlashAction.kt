@@ -1,5 +1,7 @@
 package dev.opencode.mobile.domain.command
 
+import dev.opencode.mobile.domain.engine.SessionCapabilities
+
 enum class ClientSlashAction(
     val command: String,
     val description: String,
@@ -41,24 +43,33 @@ data class ClientSlashActionVisibilityInput(
 )
 
 object ClientSlashActionCatalog {
-    fun visibleActions(input: ClientSlashActionVisibilityInput): List<ClientSlashAction> =
+    fun visibleActions(
+        input: ClientSlashActionVisibilityInput,
+        capabilities: SessionCapabilities = SessionCapabilities.OpenCode,
+    ): List<ClientSlashAction> =
         buildList {
             add(ClientSlashAction.New)
-            add(ClientSlashAction.Terminal)
-            add(ClientSlashAction.Files)
-            if (input.visibleUserMessageCount > 0) {
+            if (capabilities.showsTerminal) {
+                add(ClientSlashAction.Terminal)
+            }
+            if (capabilities.showsFiles) {
+                add(ClientSlashAction.Files)
+            }
+            if (capabilities.showsChildSessions && input.visibleUserMessageCount > 0) {
                 add(ClientSlashAction.Fork)
             }
-            if (input.hasUndoableUserMessage) {
+            if (capabilities.showsUndo && input.hasUndoableUserMessage) {
                 add(ClientSlashAction.Undo)
             }
-            if (input.hasActiveSessionRevert) {
+            if (capabilities.showsUndo && input.hasActiveSessionRevert) {
                 add(ClientSlashAction.Redo)
             }
-            if (input.visibleUserMessageCount > 0 && input.hasSelectedComposerModel) {
+            if (capabilities.showsCompact && input.visibleUserMessageCount > 0 && input.hasSelectedComposerModel) {
                 add(ClientSlashAction.Compact)
             }
-            add(ClientSlashAction.Mcp)
+            if (capabilities.showsMcp) {
+                add(ClientSlashAction.Mcp)
+            }
         }
 
     fun visibilityInput(

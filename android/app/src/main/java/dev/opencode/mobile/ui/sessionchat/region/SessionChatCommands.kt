@@ -2,6 +2,7 @@ package dev.opencode.mobile.ui.sessionchat.region
 
 import dev.opencode.mobile.domain.command.ClientSlashActionCatalog
 import dev.opencode.mobile.domain.command.ClientSlashMessageRef
+import dev.opencode.mobile.domain.engine.SessionCapabilities
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
@@ -44,6 +45,7 @@ class SessionChatCommands(
     private val scope: CoroutineScope,
 ) {
     var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    var capabilities: SessionCapabilities = SessionCapabilities.OpenCode
 
     private var mcpJob: Job? = null
 
@@ -114,7 +116,7 @@ class SessionChatCommands(
                 )
             }
         val input = ClientSlashActionCatalog.visibilityInput(refs, currentRevertMessageId, hasSelectedComposerModel)
-        _state.update { it.copy(visibleActions = ClientSlashActionCatalog.visibleActions(input)) }
+        _state.update { it.copy(visibleActions = ClientSlashActionCatalog.visibleActions(input, capabilities)) }
     }
 
     fun observeLoadedMessages(

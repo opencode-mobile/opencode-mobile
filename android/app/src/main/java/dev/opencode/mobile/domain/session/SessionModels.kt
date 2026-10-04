@@ -15,6 +15,9 @@ data class Session(
     val updatedAtEpochMs: Long? = null,
     val archivedAtEpochMs: Long? = null,
     val revert: SessionRevert? = null,
+    val providerInstanceId: String? = null,
+    val runtimeMode: String? = null,
+    val modelId: String? = null,
 ) {
     val isArchived: Boolean
         get() = archivedAtEpochMs != null

@@ -6,6 +6,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
+import dev.opencode.mobile.domain.engine.SessionCapabilities
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.connection.userMessage
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
@@ -93,6 +94,7 @@ class MainScreenViewModel
                             variant = OpenCodeSnackbarVariant.Error,
                         )
                 },
+                capabilities = { SessionCapabilities.forProfile(activeConnectionManager.currentProfile()) },
             )
         val sessionActions: StateFlow<HomeSessionActionsUiState> = sessionActionsRegion.state
         private val _revealNewestToken = MutableStateFlow(0)
@@ -658,7 +660,7 @@ class MainScreenViewModel
                 return
             }
 
-            val worktrees = connectionProfileStore.addedWorktrees(serverBaseUrl)
+            var worktrees = connectionProfileStore.addedWorktrees(serverBaseUrl)
 
             // Disk-first home: local worktrees + Session Cache paint Loaded
             // without Probing/Loading. Live store then SWR-refreshes.
@@ -679,11 +681,10 @@ class MainScreenViewModel
             }
 
             if (worktrees.isEmpty() && !preserveContent) {
-                stopLiveObservations()
-                _uiState.value = MainScreenUiState.Empty()
                 if (!skipProbe) {
                     runCatching { projectRepository.probeServer() }
                         .onFailure { error ->
+                            stopLiveObservations()
                             _uiState.value =
                                 MainScreenUiState.ProbeFailed(
                                     when (error) {
@@ -691,9 +692,15 @@ class MainScreenViewModel
                                         else -> error.message ?: "Unable to reach the server"
                                     },
                                 )
+                            return
                         }
+                    worktrees = connectionProfileStore.addedWorktrees(serverBaseUrl)
                 }
-                return
+                if (worktrees.isEmpty()) {
+                    stopLiveObservations()
+                    _uiState.value = MainScreenUiState.Empty()
+                    return
+                }
             }
 
             if (!skipProbe) {

@@ -1,6 +1,8 @@
 package dev.opencode.mobile.ui.main.region
 
+import dev.opencode.mobile.domain.command.ClientSlashAction
 import dev.opencode.mobile.domain.command.ClientSlashActionCatalog
+import dev.opencode.mobile.domain.engine.SessionCapabilities
 import dev.opencode.mobile.domain.command.ClientSlashMessageRef
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
@@ -28,6 +30,7 @@ class HomeSessionActions(
     private val messageRepository: MessageRepository,
     private val scope: CoroutineScope,
     private val onLifecycleError: (String) -> Unit,
+    private val capabilities: () -> SessionCapabilities = { SessionCapabilities.OpenCode },
 ) {
     private val _state = MutableStateFlow(HomeSessionActionsUiState())
     val state: StateFlow<HomeSessionActionsUiState> = _state.asStateFlow()
@@ -310,7 +313,12 @@ class HomeSessionActions(
             if (current.target?.sessionId != sessionId) {
                 current
             } else {
-                current.copy(canFork = visibility.visibleUserMessageCount > 0)
+                current.copy(
+                    canFork =
+                        ClientSlashActionCatalog
+                            .visibleActions(visibility, capabilities())
+                            .contains(ClientSlashAction.Fork),
+                )
             }
         }
     }

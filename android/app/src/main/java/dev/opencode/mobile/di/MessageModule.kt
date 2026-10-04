@@ -7,7 +7,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.live.LiveStoreScope
-import dev.opencode.mobile.domain.message.DefaultMessageRepository
+import dev.opencode.mobile.domain.engine.EngineMessageRepository
 import dev.opencode.mobile.domain.message.DisplayMessagePipeline
 import dev.opencode.mobile.domain.message.MessageContentPreparer
 import dev.opencode.mobile.domain.message.MessageDomainAdapter
@@ -27,7 +27,7 @@ import javax.inject.Singleton
 abstract class MessageModule {
     @Binds
     @Singleton
-    abstract fun bindMessageRepository(impl: DefaultMessageRepository): MessageRepository
+    abstract fun bindMessageRepository(impl: EngineMessageRepository): MessageRepository
 
     @Binds
     @Singleton

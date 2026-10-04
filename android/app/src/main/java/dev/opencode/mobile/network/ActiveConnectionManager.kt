@@ -1,5 +1,6 @@
 package dev.opencode.mobile.network
 
+import dev.opencode.mobile.domain.connection.ConnectionEngine
 import dev.opencode.mobile.domain.connection.ConnectionProbing
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileIdentity
@@ -105,6 +106,9 @@ class ActiveConnectionManager(
     private suspend fun sharedProbe(force: Boolean): Result<ServerProtocol> {
         var existing: CompletableDeferred<Result<ServerProtocol>>? = null
         mutex.withLock {
+            if (profile?.engine == ConnectionEngine.T3) {
+                return Result.success(ServerProtocol.V1)
+            }
             if (!force) {
                 connection?.serverProtocol?.let { return Result.success(it) }
                 if (probeFailed) return Result.success(ServerProtocol.V1)

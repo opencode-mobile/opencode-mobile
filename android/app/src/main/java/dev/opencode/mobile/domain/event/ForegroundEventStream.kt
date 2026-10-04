@@ -12,4 +12,8 @@ interface ForegroundEventStream {
     suspend fun stop()
 
     fun onReconnectWake() {}
+
+    fun publishSynthetic(event: OpencodeEvent) {}
+
+    fun publishExternalConnectionState(state: EventStreamConnectionState) {}
 }

@@ -508,42 +508,48 @@ fun SessionChatScreen(
                                 },
                             ),
                         )
-                        add(
-                            OpenCodeOverflowMenuEntry(
-                                title = "Review changes",
-                                icon = OpenCodeIcons.Description,
-                                enabled = sessionCreated,
-                                onClick = {
-                                    logOverflowAction(ProductAnalytics.Action.CHAT_OVERFLOW_REVIEW_CHANGES)
-                                    menuExpanded = false
-                                    onReviewChangesClick(uiState.changesNavigationTarget(worktree))
-                                },
-                            ),
-                        )
-                        add(
-                            OpenCodeOverflowMenuEntry(
-                                title = "Browse files",
-                                icon = OpenCodeIcons.Folder,
-                                enabled = sessionCreated,
-                                onClick = {
-                                    logOverflowAction(ProductAnalytics.Action.CHAT_OVERFLOW_BROWSE_FILES)
-                                    menuExpanded = false
-                                    onFilesRequested(worktree)
-                                },
-                            ),
-                        )
-                        add(
-                            OpenCodeOverflowMenuEntry(
-                                title = "Session context",
-                                icon = OpenCodeIcons.Architecture,
-                                enabled = sessionCreated,
-                                onClick = {
-                                    logOverflowAction(ProductAnalytics.Action.CHAT_OVERFLOW_SESSION_CONTEXT)
-                                    menuExpanded = false
-                                    onSessionContextClick()
-                                },
-                            ),
-                        )
+                        if (uiState.capabilities.showsReview) {
+                            add(
+                                OpenCodeOverflowMenuEntry(
+                                    title = "Review changes",
+                                    icon = OpenCodeIcons.Description,
+                                    enabled = sessionCreated,
+                                    onClick = {
+                                        logOverflowAction(ProductAnalytics.Action.CHAT_OVERFLOW_REVIEW_CHANGES)
+                                        menuExpanded = false
+                                        onReviewChangesClick(uiState.changesNavigationTarget(worktree))
+                                    },
+                                ),
+                            )
+                        }
+                        if (uiState.capabilities.showsFiles) {
+                            add(
+                                OpenCodeOverflowMenuEntry(
+                                    title = "Browse files",
+                                    icon = OpenCodeIcons.Folder,
+                                    enabled = sessionCreated,
+                                    onClick = {
+                                        logOverflowAction(ProductAnalytics.Action.CHAT_OVERFLOW_BROWSE_FILES)
+                                        menuExpanded = false
+                                        onFilesRequested(worktree)
+                                    },
+                                ),
+                            )
+                        }
+                        if (uiState.capabilities.showsContext) {
+                            add(
+                                OpenCodeOverflowMenuEntry(
+                                    title = "Session context",
+                                    icon = OpenCodeIcons.Architecture,
+                                    enabled = sessionCreated,
+                                    onClick = {
+                                        logOverflowAction(ProductAnalytics.Action.CHAT_OVERFLOW_SESSION_CONTEXT)
+                                        menuExpanded = false
+                                        onSessionContextClick()
+                                    },
+                                ),
+                            )
+                        }
                         add(
                             OpenCodeOverflowMenuEntry(
                                 title = "Copy session ID",
@@ -565,6 +571,19 @@ fun SessionChatScreen(
                                     onClick = {
                                         menuExpanded = false
                                         viewModel.archiveSession()
+                                    },
+                                ),
+                            )
+                        }
+                        if (uiState.capabilities.showsSettle) {
+                            add(
+                                OpenCodeOverflowMenuEntry(
+                                    title = "Settle",
+                                    icon = OpenCodeIcons.Check,
+                                    enabled = lifecycleActionsEnabled,
+                                    onClick = {
+                                        menuExpanded = false
+                                        viewModel.settleSession()
                                     },
                                 ),
                             )
@@ -702,14 +721,16 @@ fun SessionChatScreen(
                                 )
                             },
                             onChildSessionTap = { childSessionId, childTitle ->
-                                logChatAction(ProductAnalytics.Action.CHAT_OPEN_CHILD_SESSION)
-                                onChildSessionClick(
-                                    ChildSessionNavigationTarget(
-                                        sessionId = childSessionId,
-                                        sessionTitle = childTitle,
-                                        worktree = worktree,
-                                    ),
-                                )
+                                if (uiState.capabilities.showsChildSessions) {
+                                    logChatAction(ProductAnalytics.Action.CHAT_OPEN_CHILD_SESSION)
+                                    onChildSessionClick(
+                                        ChildSessionNavigationTarget(
+                                            sessionId = childSessionId,
+                                            sessionTitle = childTitle,
+                                            worktree = worktree,
+                                        ),
+                                    )
+                                }
                             },
                             onChangesReviewTap = { assistantMessageId, initialFilePath ->
                                 logChatAction(ProductAnalytics.Action.CHAT_OPEN_CHANGES_FROM_TOOL)
@@ -932,11 +953,24 @@ fun SessionChatScreen(
                                         selectedModelLabel = uiState.composer.selectedModelLabel,
                                         selectedModeLabel = uiState.composer.selectedModeLabel,
                                         selectedVariantLabel = uiState.composer.selectedVariantLabel,
-                                        showVariant = uiState.composer.canSelectVariant,
+                                        showVariant =
+                                            uiState.capabilities.showsVariant &&
+                                                uiState.composer.canSelectVariant,
+                                        showAgent = uiState.capabilities.showsAgent,
+                                        showModel = uiState.capabilities.requiresComposerModel,
+                                        providerLabel =
+                                            uiState.providerLabel.takeIf { uiState.capabilities.showsProvider },
+                                        runtimeModeLabel =
+                                            uiState.runtimeModeLabel.takeIf { uiState.capabilities.showsRuntimeMode },
                                         sendEnabled =
                                             uiState.composer.canSend &&
-                                                uiState.composer.selectedModel != null &&
-                                                uiState.composer.isModelSelectionReady &&
+                                                (
+                                                    !uiState.capabilities.requiresComposerModel ||
+                                                        (
+                                                            uiState.composer.selectedModel != null &&
+                                                                uiState.composer.isModelSelectionReady
+                                                        )
+                                                ) &&
                                                 !uiState.isSending &&
                                                 sessionCreated &&
                                                 uiState.timeline != SessionChatTimelineState.Creating &&
@@ -944,7 +978,10 @@ fun SessionChatScreen(
                                         attachEnabled =
                                             attachmentSources.isAttachEnabled &&
                                                 sessionCreated &&
-                                                uiState.composer.isModelSelectionReady,
+                                                (
+                                                    !uiState.capabilities.requiresComposerModel ||
+                                                        uiState.composer.isModelSelectionReady
+                                                ),
                                         showStop = uiState.sessionStatusLabel != null,
                                         stopEnabled =
                                             !uiState.isAborting &&

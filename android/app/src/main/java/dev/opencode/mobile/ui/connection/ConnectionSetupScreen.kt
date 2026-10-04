@@ -28,6 +28,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import dev.opencode.mobile.ProductAnalytics
+import dev.opencode.mobile.domain.connection.ConnectionEngine
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonContrast
@@ -52,6 +53,7 @@ fun ConnectionSetupScreen(
     onPasswordChanged: (String) -> Unit,
     onCredentialSegmentChanged: (ConnectionCredentialSegment) -> Unit,
     onPairingCodeChanged: (String) -> Unit,
+    onEngineChanged: (ConnectionEngine) -> Unit = {},
     onPasswordFocusConsumed: () -> Unit,
     onSubmit: () -> Unit,
     onSnackbarDismissed: () -> Unit,
@@ -153,6 +155,7 @@ fun ConnectionSetupScreen(
                             onPasswordChanged = onPasswordChanged,
                             onCredentialSegmentChanged = onCredentialSegmentChanged,
                             onPairingCodeChanged = onPairingCodeChanged,
+                            onEngineChanged = onEngineChanged,
                             onPasswordFocusConsumed = onPasswordFocusConsumed,
                             showManualForm = uiState.showsManualForm,
                         )
@@ -165,17 +168,28 @@ fun ConnectionSetupScreen(
                                 .padding(bottom = 24.dp),
                         verticalArrangement = Arrangement.spacedBy(20.dp),
                     ) {
-                        ConnectionSetupActions(
-                            uiState = uiState,
-                            showingPairAgain = showingPairAgain,
-                            showingAddresses = showingAddresses,
-                            manualFormVisible = uiState.showsManualForm,
-                            onScan = { openPairingScanner() },
-                            onEnterPairingCode = onShowPairingCodeForm,
-                            onUseHostAndPassword = onShowHostPasswordForm,
-                            onScanInstead = onShowScanInstructions,
-                            onSubmit = onSubmit,
-                        )
+                        if (uiState.engine == ConnectionEngine.T3) {
+                            if (uiState.showsPrimaryAction) {
+                                OpenCodeButton(
+                                    variant = OpenCodeButtonVariant.FullWidthText(uiState.primaryActionLabel),
+                                    enabled = uiState.primaryEnabled,
+                                    onClick = onSubmit,
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
+                        } else {
+                            ConnectionSetupActions(
+                                uiState = uiState,
+                                showingPairAgain = showingPairAgain,
+                                showingAddresses = showingAddresses,
+                                manualFormVisible = uiState.showsManualForm,
+                                onScan = { openPairingScanner() },
+                                onEnterPairingCode = onShowPairingCodeForm,
+                                onUseHostAndPassword = onShowHostPasswordForm,
+                                onScanInstead = onShowScanInstructions,
+                                onSubmit = onSubmit,
+                            )
+                        }
                     }
                 }
             }

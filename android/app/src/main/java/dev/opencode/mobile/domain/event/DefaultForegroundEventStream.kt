@@ -2,6 +2,7 @@ package dev.opencode.mobile.domain.event
 
 import dev.opencode.mobile.data.remote.EventsApi
 import dev.opencode.mobile.data.remote.SseAttemptOutcome
+import dev.opencode.mobile.domain.connection.ConnectionEngine
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileIdentity
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
@@ -130,6 +131,10 @@ class DefaultForegroundEventStream
         override val events: SharedFlow<OpencodeEvent> = _events.asSharedFlow()
 
         override fun start() {
+            if (activeConnectionManager.currentProfile()?.engine == ConnectionEngine.T3) {
+                diagnosticLogger.info(DiagnosticLogArea.Sse, "foreground SSE skipped; T3 websocket owns liveness")
+                return
+            }
             var overlappingJob: Job? = null
             var overlappingSerial = 0L
             var newJob: Job? = null
@@ -227,6 +232,16 @@ class DefaultForegroundEventStream
         override fun onReconnectWake() {
             reconnectWakeEpoch.incrementAndGet()
             reconnectWake.tryEmit(Unit)
+        }
+
+        override fun publishSynthetic(event: OpencodeEvent) {
+            _events.tryEmit(event)
+        }
+
+        override fun publishExternalConnectionState(state: EventStreamConnectionState) {
+            if (activeConnectionManager.currentProfile()?.engine != ConnectionEngine.T3) return
+            _connectionState.value = state
+            _snapshot.value = _snapshot.value.copy(connectionState = state)
         }
 
         override suspend fun stop() {

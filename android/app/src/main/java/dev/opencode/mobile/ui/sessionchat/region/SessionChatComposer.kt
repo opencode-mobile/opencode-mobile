@@ -12,6 +12,7 @@ import dev.opencode.mobile.domain.command.ComposerSubmitIntent
 import dev.opencode.mobile.domain.command.ComposerSubmitRouting
 import dev.opencode.mobile.domain.composer.ComposerDraft
 import dev.opencode.mobile.domain.composer.ComposerDraftStore
+import dev.opencode.mobile.domain.engine.SessionCapabilities
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
@@ -85,6 +86,7 @@ class SessionChatComposer(
     private val foregroundEventStream: ForegroundEventStream? = null,
 ) {
     var ioDispatcher: CoroutineDispatcher = kotlinx.coroutines.Dispatchers.IO
+    var capabilities: SessionCapabilities = SessionCapabilities.OpenCode
 
     /** Backoff for refetching a catalog that came back empty (a server still loading providers). */
     var catalogRetryDelaysMs: List<Long> = DEFAULT_CATALOG_RETRY_DELAYS_MS
@@ -329,7 +331,19 @@ class SessionChatComposer(
         }
     }
 
-    fun loadCatalog() = loadCatalog(keepLoadedCatalogOnFailure = false)
+    fun loadCatalog() {
+        if (!capabilities.requiresComposerModel) {
+            updateComposer {
+                it.copy(
+                    isModelSelectionReady = true,
+                    modelCatalogError = null,
+                    modelNotice = null,
+                )
+            }
+            return
+        }
+        loadCatalog(keepLoadedCatalogOnFailure = false)
+    }
 
     /**
      * [emptyRetryAttempt] is non-zero only for a backoff retry of an empty answer. [force] asks
@@ -842,9 +856,11 @@ class SessionChatComposer(
                 .mapNotNull { attachment ->
                     attachmentRevisions[attachment.id]?.let { attachment.id to it }
                 }.toMap()
-        val selectedModel = composer.selectedModel ?: return
+        val selectedModel = composer.selectedModel
+        if (capabilities.requiresComposerModel && selectedModel == null) return
         if (OptimisticSessionCreate.isPlaceholder(sessionId)) return
-        if ((prompt.isEmpty() && attachments.isEmpty()) || _state.value.isSending || !composer.isModelSelectionReady) return
+        if ((prompt.isEmpty() && attachments.isEmpty()) || _state.value.isSending) return
+        if (capabilities.requiresComposerModel && !composer.isModelSelectionReady) return
 
         val collapsedDisplay =
             CommandInvocationCollapser.collapse(
@@ -950,10 +966,12 @@ class SessionChatComposer(
                                         text = text,
                                         attachments = attachments,
                                         model =
-                                            PromptModelSelection(
-                                                selectedModel.option.providerId,
-                                                selectedModel.option.modelId,
-                                            ),
+                                            selectedModel?.let {
+                                                PromptModelSelection(
+                                                    it.option.providerId,
+                                                    it.option.modelId,
+                                                )
+                                            },
                                         variant = composer.selectedVariant,
                                         mode = composer.selectedMode,
                                         agentMentions = mentions,
@@ -992,10 +1010,12 @@ class SessionChatComposer(
                                         arguments = intent.arguments,
                                         attachments = attachments,
                                         model =
-                                            PromptModelSelection(
-                                                selectedModel.option.providerId,
-                                                selectedModel.option.modelId,
-                                            ),
+                                            selectedModel?.let {
+                                                PromptModelSelection(
+                                                    it.option.providerId,
+                                                    it.option.modelId,
+                                                )
+                                            },
                                         variant = composer.selectedVariant,
                                         mode = composer.selectedMode,
                                         delivery = composer.followUpDelivery,

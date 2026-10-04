@@ -5,10 +5,14 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.data.local.ServerConnectionDefaults
+import dev.opencode.mobile.domain.connection.ConnectionEngine
 import dev.opencode.mobile.domain.connection.ConnectionProbing
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileIdentity
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
+import dev.opencode.mobile.domain.t3.T3Api
+import dev.opencode.mobile.domain.t3.T3HttpException
+import dev.opencode.mobile.domain.t3.T3ProtocolException
 import dev.opencode.mobile.domain.connection.DuplicateConnectionProfileException
 import dev.opencode.mobile.domain.connection.PairingCodeRedeemException
 import dev.opencode.mobile.domain.connection.PairingCodeRedeeming
@@ -79,6 +83,7 @@ data class ConnectionSetupUiState(
     val baseUrl: String = "",
     val username: String = ServerConnectionDefaults.USERNAME,
     val password: String = "",
+    val engine: ConnectionEngine = ConnectionEngine.OPENCODE,
     val state: ConnectionSetupState = ConnectionSetupState.Idle,
     val mode: ConnectionSetupMode = ConnectionSetupMode.First,
     val profileId: String = "",
@@ -150,6 +155,7 @@ class ConnectionSetupViewModel
         private val connectionProbeService: ConnectionProbing,
         private val connectionSessionCoordinator: ConnectionSessionCoordinator,
         private val pairingCodeRedeeming: PairingCodeRedeeming,
+        private val t3Api: T3Api,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(ConnectionSetupUiState())
         val uiState: StateFlow<ConnectionSetupUiState> = _uiState.asStateFlow()
@@ -197,12 +203,16 @@ class ConnectionSetupViewModel
                         baseUrl = initialProfile.baseUrl,
                         username = initialProfile.username,
                         password = initialProfile.password,
+                        engine = initialProfile.engine,
                         mode = ConnectionSetupMode.Edit,
                         profileId = initialProfile.id,
                         connectionUnchanged = true,
                         serverUrls = initialProfile.serverUrls,
                         entry =
-                            if (initialProfile.serverUrls.isEmpty() && !hostIsBlank(initialProfile.baseUrl)) {
+                            if (
+                                initialProfile.engine == ConnectionEngine.T3 ||
+                                (initialProfile.serverUrls.isEmpty() && !hostIsBlank(initialProfile.baseUrl))
+                            ) {
                                 ConnectionSetupEntry.Manual
                             } else {
                                 ConnectionSetupEntry.Instructions
@@ -284,6 +294,42 @@ class ConnectionSetupViewModel
 
         fun onPairingCodeChanged(value: String) {
             _uiState.value = _uiState.value.copy(pairingCode = value)
+        }
+
+        fun onEngineChanged(engine: ConnectionEngine) {
+            val current = _uiState.value
+            if (current.engine == engine || current.isBusy) return
+            val username =
+                if (engine == ConnectionEngine.T3) {
+                    ConnectionEngine.T3_USERNAME
+                } else if (current.username == ConnectionEngine.T3_USERNAME) {
+                    ServerConnectionDefaults.USERNAME
+                } else {
+                    current.username
+                }
+            addressProbeGeneration += 1
+            pendingPairingCode = null
+            pastedConnectLinkUnconfirmed = false
+            _uiState.value =
+                current.copy(
+                    engine = engine,
+                    username = username,
+                    connectionUnchanged = false,
+                    serverUrls = emptyList(),
+                    addressProbeFinished = false,
+                    unreachableUrls = emptySet(),
+                    chosenUrl = null,
+                    qrPairingReady = false,
+                    qrScanPending = false,
+                    addressRecovery = null,
+                    credentialSegment = ConnectionCredentialSegment.Password,
+                    entry =
+                        if (engine == ConnectionEngine.T3) {
+                            ConnectionSetupEntry.Manual
+                        } else {
+                            ConnectionSetupEntry.Instructions
+                        },
+                )
         }
 
         fun consumePasswordFocusRequest() {
@@ -370,6 +416,14 @@ class ConnectionSetupViewModel
          */
         fun submit(onSaved: () -> Unit) {
             if (_uiState.value.isBusy) return
+            if (_uiState.value.engine == ConnectionEngine.T3) {
+                if (hostIsBlank(_uiState.value.baseUrl)) {
+                    showError("Enter a host")
+                    return
+                }
+                pairT3ThenSave(onSaved)
+                return
+            }
             if (_uiState.value.qrScanPending && !_uiState.value.qrPairingReady) return
             if (_uiState.value.qrPairingReady) {
                 persist(onSaved)
@@ -906,6 +960,70 @@ class ConnectionSetupViewModel
                 )
         }
 
+        private fun pairT3ThenSave(onSaved: () -> Unit) {
+            val pairingToken = _uiState.value.password.trim()
+            if (pairingToken.isEmpty()) {
+                showError("Enter a pairing token")
+                return
+            }
+            viewModelScope.launch {
+                _uiState.value =
+                    _uiState.value.copy(
+                        state = ConnectionSetupState.Connecting,
+                        snackbar = null,
+                    )
+                try {
+                    val result =
+                        t3Api.pair(
+                            ConnectionProfileIdentity.normalizeBaseUrl(_uiState.value.baseUrl),
+                            pairingToken,
+                        )
+                    val name =
+                        _uiState.value.name.ifBlank {
+                            result.descriptor.label.ifBlank { result.descriptor.environmentId }
+                        }
+                    _uiState.value =
+                        _uiState.value.copy(
+                            name = name,
+                            username = ConnectionEngine.T3_USERNAME,
+                            password = result.accessToken,
+                            state = ConnectionSetupState.Saving,
+                        )
+                    connectionSessionCoordinator.saveProfile(draftProfile(), null)
+                    _uiState.value = _uiState.value.copy(state = ConnectionSetupState.Idle)
+                    onSaved()
+                } catch (error: DuplicateConnectionProfileException) {
+                    _uiState.value =
+                        _uiState.value.copy(
+                            state = ConnectionSetupState.Idle,
+                            snackbar =
+                                OpenCodeSnackbarMessage(
+                                    text = "A server with this host and username is already saved",
+                                    variant = OpenCodeSnackbarVariant.Error,
+                                ),
+                        )
+                } catch (error: T3HttpException) {
+                    showPairingError(error.body.ifBlank { error.message.orEmpty() })
+                } catch (error: T3ProtocolException) {
+                    showPairingError(error.message.orEmpty())
+                } catch (error: Throwable) {
+                    showPairingError(error.message ?: "Unable to pair with this T3 environment")
+                }
+            }
+        }
+
+        private fun showPairingError(text: String) {
+            _uiState.value =
+                _uiState.value.copy(
+                    state = ConnectionSetupState.Idle,
+                    snackbar =
+                        OpenCodeSnackbarMessage(
+                            text = text.ifBlank { "Unable to pair with this T3 environment" },
+                            variant = OpenCodeSnackbarVariant.Error,
+                        ),
+                )
+        }
+
         private fun persist(onSaved: () -> Unit) {
             pastedConnectLinkUnconfirmed = false
             logAction(
@@ -979,7 +1097,12 @@ class ConnectionSetupViewModel
         private fun draftProfile(): ConnectionProfile =
             ConnectionProfile(
                 baseUrl = _uiState.value.baseUrl,
-                username = ConnectionProfileIdentity.normalizeUsername(_uiState.value.username),
+                username =
+                    if (_uiState.value.engine == ConnectionEngine.T3) {
+                        ConnectionEngine.T3_USERNAME
+                    } else {
+                        ConnectionProfileIdentity.normalizeUsername(_uiState.value.username)
+                    },
                 password = _uiState.value.password,
                 serverProtocol =
                     detectedProtocol
@@ -987,6 +1110,7 @@ class ConnectionSetupViewModel
                 id = _uiState.value.profileId,
                 name = _uiState.value.name,
                 serverUrls = ConnectionProfileIdentity.normalizeServerUrls(_uiState.value.serverUrls),
+                engine = _uiState.value.engine,
             )
 
         private fun draftConnection(baseUrl: String = _uiState.value.baseUrl): ServerConnection =

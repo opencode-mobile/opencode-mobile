@@ -6,6 +6,7 @@ import dev.opencode.mobile.domain.agent.SelectableAgent
 import dev.opencode.mobile.domain.command.ClientSlashAction
 import dev.opencode.mobile.domain.command.ServerCommand
 import dev.opencode.mobile.domain.command.ServerCommandSource
+import dev.opencode.mobile.domain.engine.SessionCapabilities
 import dev.opencode.mobile.domain.event.LiveUpdatesLabel
 import dev.opencode.mobile.domain.mcp.McpServer
 import dev.opencode.mobile.domain.mcp.McpServerSummary
@@ -212,6 +213,9 @@ data class SessionChatUiState(
     /** Worktree to open in the File Browser; consumed by the screen once it navigates. */
     val pendingFilesOpen: String? = null,
     val hasPendingRevert: Boolean = false,
+    val capabilities: SessionCapabilities = SessionCapabilities.OpenCode,
+    val providerLabel: String? = null,
+    val runtimeModeLabel: String? = null,
     /** Smart project label for top-bar chrome; null when worktree missing. */
     val projectLabel: String? = null,
     val projectLetter: Char? = null,

@@ -1,6 +1,7 @@
 package dev.opencode.mobile.network
 
 import dev.opencode.mobile.data.local.ServerConnectionDefaults
+import dev.opencode.mobile.domain.connection.ConnectionEngine
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ServerCapabilities
 import dev.opencode.mobile.domain.connection.ServerProtocol
@@ -10,6 +11,7 @@ data class ServerConnection(
     val username: String = ServerConnectionDefaults.USERNAME,
     val password: String? = null,
     val serverProtocol: ServerProtocol? = null,
+    val engine: ConnectionEngine = ConnectionEngine.OPENCODE,
 ) {
     val apiBaseUrl: String =
         baseUrl.trimEnd('/') + '/'
@@ -31,6 +33,7 @@ data class ServerConnection(
                 username = profile.username.ifBlank { ServerConnectionDefaults.USERNAME },
                 password = profile.password.takeIf { it.isNotEmpty() },
                 serverProtocol = serverProtocol ?: profile.serverProtocol,
+                engine = profile.engine,
             )
     }
 }

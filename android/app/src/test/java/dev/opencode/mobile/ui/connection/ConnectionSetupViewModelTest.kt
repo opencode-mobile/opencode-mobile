@@ -15,6 +15,9 @@ import dev.opencode.mobile.domain.model.ModelSelectionConnectionIdentity
 import dev.opencode.mobile.domain.model.SessionModelSelection
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
 import dev.opencode.mobile.domain.project.ServerProbeError
+import dev.opencode.mobile.domain.t3.T3Api
+import dev.opencode.mobile.domain.t3.T3Http
+import dev.opencode.mobile.domain.t3.T3HttpResponse
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.OpencodeSseHttpClient
@@ -983,6 +986,7 @@ class ConnectionSetupViewModelTest {
             connectionProbeService = probe,
             connectionSessionCoordinator = coordinator(store),
             pairingCodeRedeeming = redeem,
+            t3Api = T3Api(UnusedT3Http()),
         )
 
     private fun coordinator(store: ConnectionProfileStore): ConnectionSessionCoordinator {
@@ -1045,6 +1049,20 @@ private class RecordingPairingCodeRedeeming(
         failure?.let { throw it }
         return token
     }
+}
+
+private class UnusedT3Http : T3Http {
+    override suspend fun get(
+        url: String,
+        headers: Map<String, String>,
+    ): T3HttpResponse = error("T3 HTTP should not run in OpenCode connection setup tests")
+
+    override suspend fun post(
+        url: String,
+        body: String,
+        contentType: String,
+        headers: Map<String, String>,
+    ): T3HttpResponse = error("T3 HTTP should not run in OpenCode connection setup tests")
 }
 
 private class NoOpSecureCredentialStore : SecureCredentialStore {

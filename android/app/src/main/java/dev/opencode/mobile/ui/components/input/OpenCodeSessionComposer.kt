@@ -93,6 +93,10 @@ sealed interface OpenCodeSessionComposerState {
         val selectedModeLabel: String,
         val selectedVariantLabel: String,
         val showVariant: Boolean,
+        val showAgent: Boolean = true,
+        val showModel: Boolean = true,
+        val providerLabel: String? = null,
+        val runtimeModeLabel: String? = null,
         val sendEnabled: Boolean,
         val attachEnabled: Boolean = true,
         val showStop: Boolean,
@@ -790,23 +794,45 @@ private fun PickerChipsRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                OpenCodeChoiceBadge(
-                    label = state.selectedModelLabel,
-                    selected = false,
-                    onClick = { onAction(OpenCodeSessionComposerAction.SelectModel) },
-                    variant = OpenCodeChoiceBadgeVariant.Glass,
-                )
-                OpenCodeChoiceBadge(
-                    label = state.selectedModeLabel,
-                    selected = false,
-                    onClick = { onAction(OpenCodeSessionComposerAction.SelectMode) },
-                    variant = OpenCodeChoiceBadgeVariant.Glass,
-                )
+                if (state.showModel) {
+                    OpenCodeChoiceBadge(
+                        label = state.selectedModelLabel,
+                        selected = false,
+                        onClick = { onAction(OpenCodeSessionComposerAction.SelectModel) },
+                        variant = OpenCodeChoiceBadgeVariant.Glass,
+                    )
+                }
+                if (state.showAgent) {
+                    OpenCodeChoiceBadge(
+                        label = state.selectedModeLabel,
+                        selected = false,
+                        onClick = { onAction(OpenCodeSessionComposerAction.SelectMode) },
+                        variant = OpenCodeChoiceBadgeVariant.Glass,
+                    )
+                }
                 if (state.showVariant) {
                     OpenCodeChoiceBadge(
                         label = state.selectedVariantLabel,
                         selected = false,
                         onClick = { onAction(OpenCodeSessionComposerAction.SelectVariant) },
+                        variant = OpenCodeChoiceBadgeVariant.Glass,
+                    )
+                }
+                state.providerLabel?.takeIf { it.isNotBlank() }?.let { label ->
+                    OpenCodeChoiceBadge(
+                        label = label,
+                        selected = false,
+                        enabled = false,
+                        onClick = {},
+                        variant = OpenCodeChoiceBadgeVariant.Glass,
+                    )
+                }
+                state.runtimeModeLabel?.takeIf { it.isNotBlank() }?.let { label ->
+                    OpenCodeChoiceBadge(
+                        label = label,
+                        selected = false,
+                        enabled = false,
+                        onClick = {},
                         variant = OpenCodeChoiceBadgeVariant.Glass,
                     )
                 }

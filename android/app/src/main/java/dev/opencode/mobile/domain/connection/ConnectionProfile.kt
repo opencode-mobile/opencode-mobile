@@ -8,6 +8,7 @@ data class ConnectionProfile(
     val id: String = "",
     val name: String = "",
     val serverUrls: List<String> = emptyList(),
+    val engine: ConnectionEngine = ConnectionEngine.OPENCODE,
 ) {
     val displayName: String
         get() = name.trim().ifBlank { ConnectionProfileIdentity.hostLabel(baseUrl) }

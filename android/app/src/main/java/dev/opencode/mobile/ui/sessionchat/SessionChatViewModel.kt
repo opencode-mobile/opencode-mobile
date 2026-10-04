@@ -11,6 +11,8 @@ import dev.opencode.mobile.domain.command.CommandRepository
 import dev.opencode.mobile.domain.composer.ComposerDraftStore
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
+import dev.opencode.mobile.domain.engine.SessionCapabilities
+import dev.opencode.mobile.domain.t3.T3RuntimeModeLabels
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.event.EventDomainAdapter
@@ -191,6 +193,9 @@ class SessionChatViewModel
         private var boundSessionId: String? = null
         private var boundSessionTitle: String? = null
         private var boundWorktree: String? = null
+        private var capabilities: SessionCapabilities = SessionCapabilities.OpenCode
+        private var providerLabel: String? = null
+        private var runtimeModeLabel: String? = null
         private var projectLabel: String? = null
         private var projectLetter: Char? = null
         private var projectLetterAccent: LetterAccent? = null
@@ -344,6 +349,7 @@ class SessionChatViewModel
             // even when the previous session shared the same title.
             boundSessionTitle = null
             boundWorktree = worktree
+            applyCapabilities()
             lastSnackbarKey = null
             suppressedSnackbarKey = null
             snackbarSequence = 0L
@@ -357,6 +363,9 @@ class SessionChatViewModel
                     projectLabel = projectLabel,
                     projectLetter = projectLetter,
                     projectLetterAccent = projectLetterAccent,
+                    capabilities = capabilities,
+                    providerLabel = providerLabel,
+                    runtimeModeLabel = runtimeModeLabel,
                 )
             scheduleProjectIdentityRefine(worktree)
             timeline.bind(sessionId, worktree)
@@ -370,6 +379,7 @@ class SessionChatViewModel
             viewModelScope.launch {
                 composer.loadCatalog()
             }
+            loadSessionChrome()
         }
 
         private fun bindOptimisticCreate(
@@ -383,6 +393,7 @@ class SessionChatViewModel
             boundSessionId = OptimisticSessionCreate.PLACEHOLDER_SESSION_ID
             boundSessionTitle = sessionTitle
             boundWorktree = worktree
+            applyCapabilities()
             lastSnackbarKey = null
             suppressedSnackbarKey = null
             snackbarSequence = 0L
@@ -401,6 +412,7 @@ class SessionChatViewModel
                         projectLabel = projectLabel,
                         projectLetter = projectLetter,
                         projectLetterAccent = projectLetterAccent,
+                        capabilities = capabilities,
                     )
             scheduleProjectIdentityRefine(worktree)
             timeline.bindCreating(worktree)
@@ -415,9 +427,11 @@ class SessionChatViewModel
                         withContext(ioDispatcher) {
                             val profile = connectionSessionCoordinator.currentProfile()
                             val session = sessionRepository.createSession(directory = worktree)
-                            val selection = profile?.let { newSessionModelSelectionResolver.resolve(it, worktree) }
-                            if (profile != null && selection != null) {
-                                newSessionModelSelectionResolver.seedSession(profile, worktree, session.id, selection)
+                            if (capabilities.requiresComposerModel) {
+                                val selection = profile?.let { newSessionModelSelectionResolver.resolve(it, worktree) }
+                                if (profile != null && selection != null) {
+                                    newSessionModelSelectionResolver.seedSession(profile, worktree, session.id, selection)
+                                }
                             }
                             session
                         }
@@ -459,6 +473,7 @@ class SessionChatViewModel
             viewModelScope.launch {
                 composer.loadCatalog()
             }
+            loadSessionChrome()
         }
 
         private fun bindTitleIfChanged(
@@ -523,6 +538,11 @@ class SessionChatViewModel
                 screenId = ProductAnalytics.Screen.SESSION_OVERFLOW,
             )
             sessionInfo.archiveSession()
+        }
+
+        fun settleSession() {
+            if (!hasCreatedSession()) return
+            sessionInfo.settleSession()
         }
 
         fun deleteSession() {
@@ -1269,6 +1289,30 @@ class SessionChatViewModel
             return !OptimisticSessionCreate.isPlaceholder(sessionId)
         }
 
+        private fun applyCapabilities() {
+            capabilities = SessionCapabilities.forProfile(activeConnectionManager.currentProfile())
+            composer.capabilities = capabilities
+            commands.capabilities = capabilities
+            if (!capabilities.showsProvider) providerLabel = null
+            if (!capabilities.showsRuntimeMode) runtimeModeLabel = null
+        }
+
+        private fun loadSessionChrome() {
+            val sessionId = boundSessionId ?: return
+            val worktree = boundWorktree ?: return
+            if (OptimisticSessionCreate.isPlaceholder(sessionId)) return
+            viewModelScope.launch {
+                val session =
+                    runCatching {
+                        withContext(ioDispatcher) { sessionRepository.getSession(sessionId, worktree) }
+                    }.getOrNull() ?: return@launch
+                if (boundSessionId != sessionId) return@launch
+                providerLabel = session.providerInstanceId?.takeIf { it.isNotBlank() }
+                runtimeModeLabel = T3RuntimeModeLabels.displayName(session.runtimeMode).takeIf { it.isNotBlank() }
+                publishUiState()
+            }
+        }
+
         internal fun toMessageItem(
             message: Message,
             previous: SessionChatMessageItem? = null,
@@ -1569,6 +1613,9 @@ class SessionChatViewModel
                 pendingTerminalOpen = commandsState.pendingTerminalOpen,
                 pendingFilesOpen = commandsState.pendingFilesOpen,
                 hasPendingRevert = commandsState.hasPendingRevert,
+                capabilities = capabilities,
+                providerLabel = providerLabel,
+                runtimeModeLabel = runtimeModeLabel,
                 projectLabel = projectLabel,
                 projectLetter = projectLetter,
                 projectLetterAccent = projectLetterAccent,
