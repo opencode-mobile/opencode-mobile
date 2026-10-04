@@ -38,6 +38,7 @@ import dev.opencode.mobile.domain.model.SessionModelSelectionStore
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.SessionRepository
+import dev.opencode.mobile.domain.t3.T3Errors
 import dev.opencode.mobile.domain.text.TitleCaseIdentifier
 import dev.opencode.mobile.ui.sessionchat.AttachmentPresentationMapper
 import dev.opencode.mobile.ui.sessionchat.LatestAgentHint
@@ -1636,7 +1637,7 @@ class SessionChatComposer(
         }
 
     private fun logSendFailure(throwable: Throwable) {
-        DiagnosticLog.error(DiagnosticLogArea.Chat, "sendPromptAsync failed", throwable)
+        DiagnosticLog.error(DiagnosticLogArea.Chat, T3Errors.diagnosticMessage("sendPromptAsync failed", throwable), throwable)
     }
 
     private fun logI(message: String) {

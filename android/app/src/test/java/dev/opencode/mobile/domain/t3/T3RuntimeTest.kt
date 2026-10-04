@@ -1,5 +1,6 @@
 package dev.opencode.mobile.domain.t3
 
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogBuffer
 import dev.opencode.mobile.domain.event.EventStreamConnectionState
 import dev.opencode.mobile.domain.message.MessageContentPreparer
 import dev.opencode.mobile.domain.message.MessageListUpdate
@@ -15,6 +16,7 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
@@ -371,5 +373,33 @@ class T3RuntimeTest {
             val error = runCatching { h.runtime.dispatch(buildJsonObject { put("type", "noop") }) }.exceptionOrNull()
             assertTrue(error is T3ConnectionLostException)
             assertEquals(T3ConnectionLostException.USER_MESSAGE, error!!.message)
+        }
+
+    @Test
+    fun dispatchRejectionLogsServerCauseToDiagnostics() =
+        runTest {
+            DiagnosticLogBuffer.resetSharedForTests()
+            val h = Harness(this).build()
+            h.runtime.start()
+            settle()
+            h.socket.rejectNextRequestWith = JsonPrimitive("SchemaError: Missing key creationSource")
+            val error =
+                runCatching {
+                    h.runtime.dispatch(buildJsonObject { put("type", "message.dispatch") })
+                }.exceptionOrNull()
+            assertEquals(T3RpcException.REJECTED_MESSAGE, error!!.message)
+            val logged =
+                DiagnosticLogBuffer.shared
+                    .snapshot()
+                    .entries
+                    .map { it.message }
+            assertTrue(
+                logged.toString(),
+                logged.any {
+                    it.contains("T3 dispatch failed type=message.dispatch") &&
+                        it.contains("SchemaError: Missing key creationSource")
+                },
+            )
+            DiagnosticLogBuffer.resetSharedForTests()
         }
 }

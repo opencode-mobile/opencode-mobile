@@ -221,10 +221,21 @@ class T3Runtime
         fun cachedMessages(threadId: String): List<Message> = messages[threadId].orEmpty()
 
         suspend fun dispatch(command: JsonObject): JsonElement =
-            guarded {
-                val profile = requireProfile()
-                ensureConnected(profile)
-                socket.request(T3RpcCodec.DISPATCH_COMMAND, command)
+            try {
+                guarded {
+                    val profile = requireProfile()
+                    ensureConnected(profile)
+                    socket.request(T3RpcCodec.DISPATCH_COMMAND, command)
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Throwable) {
+                DiagnosticLog.warning(
+                    DiagnosticLogArea.Chat,
+                    T3Errors.diagnosticMessage("T3 dispatch failed type=${command.string("type") ?: "-"}", error),
+                    error,
+                )
+                throw error
             }
 
         suspend fun launchThread(payload: JsonObject): String =

@@ -11,6 +11,12 @@ object T3Commands {
     /** Supervised: every tool call needs approval. The default for a new thread. */
     const val DEFAULT_RUNTIME_MODE = "approval-required"
 
+    /** `OrchestrationV2Actor` for commands the user typed; required on `message.dispatch`. */
+    const val CREATED_BY_USER = "user"
+
+    /** `OrchestrationV2CreationSource` identifying this client; required on `message.dispatch`. */
+    const val CREATION_SOURCE_MOBILE = "mobile"
+
     fun commandId(): String = UUID.randomUUID().toString()
 
     fun messageDispatch(
@@ -24,6 +30,8 @@ object T3Commands {
     ): JsonObject =
         buildJsonObject {
             put("type", "message.dispatch")
+            put("createdBy", CREATED_BY_USER)
+            put("creationSource", CREATION_SOURCE_MOBILE)
             put("commandId", commandId)
             put("threadId", threadId)
             put("messageId", messageId)

@@ -115,6 +115,15 @@ object T3Errors {
     /** The text a snackbar should show for [error]. */
     fun userMessage(error: Throwable): String = normalize(error).message ?: T3RpcException.REJECTED_MESSAGE
 
+    /**
+     * [message] for a diagnostic log line, with the server's own detail (an RPC
+     * `Exit` failure cause, an HTTP body) appended when [error] carries one.
+     */
+    fun diagnosticMessage(
+        message: String,
+        error: Throwable,
+    ): String = detail(error)?.takeIf { it.isNotBlank() }?.let { "$message detail=$it" } ?: message
+
     /** Diagnostic detail that must never be shown to the user, when the error carries one. */
     fun detail(error: Throwable): String? =
         when (error) {

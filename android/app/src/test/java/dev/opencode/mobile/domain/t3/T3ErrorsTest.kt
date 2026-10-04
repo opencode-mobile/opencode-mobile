@@ -1,5 +1,7 @@
 package dev.opencode.mobile.domain.t3
 
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -30,6 +32,21 @@ class T3ErrorsTest {
         assertEquals(T3RpcException.REJECTED_MESSAGE, error.message)
         assertEquals("ThreadNotFound: thr-1", error.detail)
         assertEquals("ThreadNotFound: thr-1", T3Errors.detail(error))
+    }
+
+    @Test
+    fun diagnosticMessage_appendsExitFailureCauseButUserMessageStaysGeneric() {
+        val cause =
+            buildJsonObject {
+                put("_tag", JsonPrimitive("Fail"))
+                put("error", JsonPrimitive("SchemaError: Missing key createdBy"))
+            }
+        val error = T3RpcException.rejected(cause)
+        val logged = T3Errors.diagnosticMessage("sendPromptAsync failed", error)
+        assertTrue(logged.startsWith("sendPromptAsync failed detail="))
+        assertTrue(logged.contains("SchemaError: Missing key createdBy"))
+        assertEquals(T3RpcException.REJECTED_MESSAGE, T3Errors.userMessage(error))
+        assertEquals("plain", T3Errors.diagnosticMessage("plain", IllegalStateException("x")))
     }
 
     @Test

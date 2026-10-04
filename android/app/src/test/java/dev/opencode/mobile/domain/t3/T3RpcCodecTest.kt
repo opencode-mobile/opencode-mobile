@@ -30,6 +30,25 @@ class T3RpcCodecTest {
     }
 
     @Test
+    fun messageDispatch_includesRequiredCreationFields() {
+        val payload =
+            T3Commands.messageDispatch(
+                threadId = "thr-1",
+                text = "Hello",
+                modelSelection = null,
+                running = false,
+                messageId = "msg-1",
+                commandId = "cmd-1",
+            )
+        assertEquals("user", payload["createdBy"]!!.jsonPrimitive.content)
+        assertEquals("mobile", payload["creationSource"]!!.jsonPrimitive.content)
+        val dispatchMode = payload["dispatchMode"]!!.jsonObject
+        assertEquals("start_immediately", dispatchMode["type"]!!.jsonPrimitive.content)
+        assertTrue(payload.containsKey("attachments"))
+        assertTrue(!payload.containsKey("modelSelection"))
+    }
+
+    @Test
     fun runtimeRequestRespond_mapsAllowOnceToAccept() {
         val payload =
             T3Commands.runtimeRequestRespond(

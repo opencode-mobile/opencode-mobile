@@ -190,6 +190,9 @@ internal class FakeT3Socket : T3Socket {
     /** Simulates the socket closing under a request: fails it the way [T3WebSocket.failPending] does. */
     var failNextRequest = false
 
+    /** Simulates the server answering the next request with an `Exit` failure carrying this cause. */
+    var rejectNextRequestWith: JsonElement? = null
+
     /** Success values by RPC tag; any other tag answers `{"sequence":1}`. */
     val responses = mutableMapOf<String, JsonElement>()
     private var counter = 0
@@ -207,6 +210,10 @@ internal class FakeT3Socket : T3Socket {
         if (failNextRequest) {
             failNextRequest = false
             throw T3ConnectionLostException("T3 websocket closed")
+        }
+        rejectNextRequestWith?.let { cause ->
+            rejectNextRequestWith = null
+            throw T3RpcException.rejected(cause)
         }
         requests += SentRequest("req-${++counter}", tag, payload)
         return responses[tag] ?: buildJsonObject { put("sequence", 1) }
