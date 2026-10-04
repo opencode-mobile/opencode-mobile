@@ -8,8 +8,32 @@ protocol T3EngineClient: Sendable {
     func cachedThread(id: String) -> T3Thread?
     func fetchThread(id: String) async throws -> T3ThreadDetail
     func dispatchCommand(_ command: [String: Any]) async throws
-    /// Launches a thread in `projectID`, or in the environment's first project when nil.
-    func launchThread(title: String?, projectID: String?) async throws -> Session
+    /// Launches a thread in `projectID`, or in the environment's first project
+    /// when nil. A nil `selection` is resolved from the harness catalogue
+    /// (`T3ModelSelectionResolver`); a nil `runtimeMode` means approval-required.
+    func launchThread(
+        title: String?,
+        projectID: String?,
+        selection: T3ModelSelection?,
+        runtimeMode: String?
+    ) async throws -> Session
+    /// Provider catalogue (`server.getConfig`), cached per connection unless `force`.
+    func fetchHarnessCatalog(force: Bool) async throws -> T3HarnessCatalog
+    /// Opens the environment socket in the background so the connection
+    /// indicator shows connecting / connected before the first request.
+    func warmConnection()
+}
+
+extension T3EngineClient {
+    func launchThread(title: String?, projectID: String?) async throws -> Session {
+        try await launchThread(title: title, projectID: projectID, selection: nil, runtimeMode: nil)
+    }
+
+    func fetchHarnessCatalog(force _: Bool) async throws -> T3HarnessCatalog {
+        throw T3ClientError.notConnected
+    }
+
+    func warmConnection() {}
 }
 
 extension T3EnvironmentClient: T3EngineClient {}

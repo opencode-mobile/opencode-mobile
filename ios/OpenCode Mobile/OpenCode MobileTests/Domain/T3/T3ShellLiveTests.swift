@@ -8,7 +8,7 @@ import Testing
 /// after a reconnect, coalesces forced REST refreshes, and tears down on stop.
 struct T3ShellLiveTests {
     @Test func shellStream_updatesCacheAndPublishesHomeEvents() async throws {
-        let harness = T3Harness()
+        let harness = T3ClientHarness()
         let events = EventCollector(signals: harness.signals)
         await harness.signals.emit(.start)
 
@@ -65,7 +65,7 @@ struct T3ShellLiveTests {
     }
 
     @Test func shellStream_firstSnapshotPublishesStatusAndRequestsButNoLifecycle() async throws {
-        let harness = T3Harness()
+        let harness = T3ClientHarness()
         let events = EventCollector(signals: harness.signals)
         await harness.signals.emit(.start)
         let socket = try await harness.connector.connection(at: 0)
@@ -92,7 +92,7 @@ struct T3ShellLiveTests {
     }
 
     @Test func shellStream_publishesQuestionAskedAndReplied() async throws {
-        let harness = T3Harness()
+        let harness = T3ClientHarness()
         harness.http.shell = T3ShellSnapshot(sequence: 1, threads: [Fixtures.thread(id: "A")], projects: [])
         _ = try await harness.client.fetchShell(force: true)
         let events = EventCollector(signals: harness.signals)
@@ -133,7 +133,7 @@ struct T3ShellLiveTests {
 
     @MainActor
     @Test func refreshActivity_publishesQuestionEventsFromThreadActivity() async throws {
-        let harness = T3Harness(shellRefreshDebounce: .zero)
+        let harness = T3ClientHarness(shellRefreshDebounce: .zero)
         var waiting = Fixtures.thread(id: "t1")
         waiting.pendingRequestID = "q-1"
         waiting.pendingRequestKind = "user_input"
@@ -174,7 +174,7 @@ struct T3ShellLiveTests {
     }
 
     @Test func shellStream_projectItemsUpdateCacheWithoutSessionEvents() async throws {
-        let harness = T3Harness()
+        let harness = T3ClientHarness()
         let events = EventCollector(signals: harness.signals)
         await harness.signals.emit(.start)
         let socket = try await harness.connector.connection(at: 0)
@@ -197,7 +197,7 @@ struct T3ShellLiveTests {
     }
 
     @Test func shellStream_resubscribesFromLastSequenceAfterReconnect() async throws {
-        let harness = T3Harness()
+        let harness = T3ClientHarness()
         harness.http.shell = T3ShellSnapshot(sequence: 3, threads: [Fixtures.thread(id: "A")], projects: [])
         _ = try await harness.client.fetchShell(force: true)
         await harness.signals.emit(.start)
@@ -223,7 +223,7 @@ struct T3ShellLiveTests {
     }
 
     @Test func fetchShell_coalescesForcedRefreshesAndSharesInFlightRequest() async throws {
-        let harness = T3Harness(shellRefreshDebounce: .milliseconds(200))
+        let harness = T3ClientHarness(shellRefreshDebounce: .milliseconds(200))
         harness.http.shell = Fixtures.shell(threadID: "A")
         let start = ContinuousClock.now
         _ = try await harness.client.fetchShell(force: true)
@@ -241,7 +241,7 @@ struct T3ShellLiveTests {
     }
 
     @Test func fetchShell_restRefreshPublishesStatusButNotLifecycle() async throws {
-        let harness = T3Harness(shellRefreshDebounce: .zero)
+        let harness = T3ClientHarness(shellRefreshDebounce: .zero)
         let events = EventCollector(signals: harness.signals)
         harness.http.shell = T3ShellSnapshot(sequence: 1, threads: [Fixtures.thread(id: "A")], projects: [])
         _ = try await harness.client.fetchShell(force: true)
@@ -259,7 +259,7 @@ struct T3ShellLiveTests {
     }
 
     @Test func fetchShell_doesNotRegressBelowLiveSequence() async throws {
-        let harness = T3Harness(shellRefreshDebounce: .zero)
+        let harness = T3ClientHarness(shellRefreshDebounce: .zero)
         await harness.signals.emit(.start)
         let socket = try await harness.connector.connection(at: 0)
         socket.open()
@@ -276,7 +276,7 @@ struct T3ShellLiveTests {
     }
 
     @Test func lifecycleStop_tearsDownShellSubscription() async throws {
-        let harness = T3Harness()
+        let harness = T3ClientHarness()
         await harness.signals.emit(.start)
         let socket = try await harness.connector.connection(at: 0)
         socket.open()
@@ -295,7 +295,8 @@ struct T3ShellLiveTests {
         let socket2 = try await harness.connector.connection(at: 1)
         socket2.open()
         try await Task.sleep(for: .milliseconds(100))
-        #expect(socket2.frames(tag: "Request").isEmpty)
+        // Only the connect-time catalogue refresh may go out; no shell subscription.
+        #expect(socket2.frames(tag: "Request").allSatisfy { $0["tag"] as? String == T3JSON.serverGetConfigTag })
         #expect(harness.client.isShellLiveRunning == false)
     }
 

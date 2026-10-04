@@ -166,6 +166,14 @@ nonisolated enum T3Auth {
 nonisolated enum T3RuntimeModeLabel {
     /// The runtime modes the orchestration contract accepts, in picker order.
     static let allModes: [String] = ["approval-required", "auto-accept-edits", "auto", "full-access"]
+    /// Mode a new thread launches with unless the caller picks another.
+    static let defaultMode = "approval-required"
+
+    /// The modes a harness offers, in picker order; every mode when it does not say.
+    static func modes(supported: [String]) -> [String] {
+        let known = allModes.filter(supported.contains)
+        return known.isEmpty ? allModes : known
+    }
 
     static func displayName(_ raw: String?) -> String? {
         guard let raw, !raw.isEmpty else { return nil }

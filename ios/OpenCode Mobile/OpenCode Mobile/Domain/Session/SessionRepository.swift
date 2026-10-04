@@ -5,6 +5,14 @@ protocol SessionRepository: Sendable {
     func listPendingQuestions(directory: String?) async throws -> [QuestionRequest]
     func listSessions(directory: String?) async throws -> [Session]
     func createSession(parentID: String?, title: String?, directory: String?) async throws -> Session
+    /// Creation with engine-specific choices (T3 harness, model, runtime mode).
+    /// Engines without those choices ignore them.
+    func createSession(
+        parentID: String?,
+        title: String?,
+        directory: String?,
+        options: SessionCreateOptions
+    ) async throws -> Session
     func getAllSessionStatuses(directory: String?) async throws -> [SessionStatus]
     func getSession(id: String, directory: String?) async throws -> Session
     func updateSession(id: String, title: String?, directory: String?) async throws -> Session
@@ -47,6 +55,21 @@ protocol SessionRepository: Sendable {
     func setModelSelection(id: String, providerInstanceID: String, modelID: String, directory: String?) async throws -> Session
 }
 
+/// Optional creation choices. Empty fields fall back to the engine's defaults.
+nonisolated struct SessionCreateOptions: Equatable, Sendable {
+    var providerInstanceID: String?
+    var modelID: String?
+    var runtimeMode: String?
+
+    init(providerInstanceID: String? = nil, modelID: String? = nil, runtimeMode: String? = nil) {
+        self.providerInstanceID = providerInstanceID
+        self.modelID = modelID
+        self.runtimeMode = runtimeMode
+    }
+
+    static let defaults = SessionCreateOptions()
+}
+
 /// How the server handled a compact request.
 nonisolated enum CompactionStart: Sendable, Equatable {
     /// The server returned after the summary was written.
@@ -56,6 +79,15 @@ nonisolated enum CompactionStart: Sendable, Equatable {
 }
 
 extension SessionRepository {
+    func createSession(
+        parentID: String?,
+        title: String?,
+        directory: String?,
+        options _: SessionCreateOptions
+    ) async throws -> Session {
+        try await createSession(parentID: parentID, title: title, directory: directory)
+    }
+
     func compactSession(id: String, providerID: String, modelID: String) async throws -> CompactionStart {
         _ = try await summarizeSession(id: id, providerID: providerID, modelID: modelID)
         return .finished

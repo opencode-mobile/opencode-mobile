@@ -664,7 +664,8 @@ extension Container {
                 liveUpdates: self.liveUpdates(),
                 lastTurnReviewChangesStore: self.lastTurnReviewChangesStore(),
                 syncCoordinator: self.syncCoordinator(),
-                mcpRepository: self.mcpRepository()
+                mcpRepository: self.mcpRepository(),
+                harnessRepository: DefaultT3HarnessRepository(client: self.t3EnvironmentClient())
             )
         }
     }

@@ -39,6 +39,8 @@ nonisolated final class T3EnvironmentClient: @unchecked Sendable {
     /// True between lifecycle `start` and `stop`: the shell subscription is kept alive.
     private var shellLiveWanted = false
     private var shellTask: Task<Void, Never>?
+    private var cachedCatalog: T3HarnessCatalog?
+    private var cachedCatalogIdentity: String?
 
     static let defaultShellRefreshDebounce: Duration = .milliseconds(400)
     static let defaultShellResubscribeDelay: Duration = .seconds(1)
@@ -335,20 +337,107 @@ nonisolated final class T3EnvironmentClient: @unchecked Sendable {
         try await rpc().request(tag: tag, payload: payload)
     }
 
+    // MARK: - Harness catalogue
+
+    /// Provider catalogue from `server.getConfig`, cached for the current
+    /// connection identity. `force` refetches (connect, explicit refresh).
+    func fetchHarnessCatalog(force: Bool) async throws -> T3HarnessCatalog {
+        let credentials = try credentials()
+        let identity = identity(of: credentials)
+        if !force, let cached = locked({ cachedCatalogIdentity == identity ? cachedCatalog : nil }) {
+            return cached
+        }
+        let value = try await rpcRequest(tag: T3JSON.serverGetConfigTag, payload: [:])
+        guard let catalog = T3JSON.harnessCatalog(from: value) else {
+            throw T3ClientError.decoding("T3 did not return its provider catalogue.")
+        }
+        locked {
+            cachedCatalog = catalog
+            cachedCatalogIdentity = identity
+        }
+        DiagnosticLog.info(.connection, "T3 harness catalogue loaded harnesses=\(catalog.harnesses.count)")
+        return catalog
+    }
+
+    /// Cached catalogue for the active connection, if any (no network).
+    var cachedHarnessCatalog: T3HarnessCatalog? {
+        guard let credentials = try? credentials() else { return nil }
+        let identity = identity(of: credentials)
+        return locked { cachedCatalogIdentity == identity ? cachedCatalog : nil }
+    }
+
+    /// Refreshes the catalogue on a socket that just connected. Uses that
+    /// session directly (never `rpc()`), so a profile switch racing the
+    /// refresh cannot reopen or cancel another environment's socket.
+    private func refreshHarnessCatalog(on session: T3RpcSession, identity: String) {
+        Task { [weak self] in
+            guard let value = try? await session.request(tag: T3JSON.serverGetConfigTag, payload: [:]),
+                  let catalog = T3JSON.harnessCatalog(from: value),
+                  let self
+            else { return }
+            self.locked {
+                guard self.rpcIdentity == identity else { return }
+                self.cachedCatalog = catalog
+                self.cachedCatalogIdentity = identity
+            }
+        }
+    }
+
+    /// The selection a launch uses: the caller's, else the resolver over the
+    /// catalogue (refetched once when the cached one has nothing usable). A
+    /// server that cannot answer `server.getConfig` falls back to the project
+    /// default or another thread's selection.
+    private func launchSelection(
+        explicit: T3ModelSelection?,
+        project: T3Project,
+        shell: T3ShellSnapshot
+    ) async throws -> T3ModelSelection {
+        if let explicit, !explicit.instanceID.isEmpty, !explicit.model.isEmpty {
+            return explicit
+        }
+        var catalog: T3HarnessCatalog?
+        do {
+            catalog = try await fetchHarnessCatalog(force: false)
+            if let catalog, let selection = T3ModelSelectionResolver.resolve(
+                catalog: catalog,
+                projectDefault: project.defaultModelSelection
+            ) {
+                return selection
+            }
+            catalog = try await fetchHarnessCatalog(force: true)
+        } catch let error as T3ClientError where Self.isProtocolMismatch(error) {
+            throw error
+        } catch {
+            DiagnosticLog.warning(.connection, "T3 harness catalogue unavailable; using shell selection", error: error)
+        }
+        if let catalog {
+            if let selection = T3ModelSelectionResolver.resolve(catalog: catalog, projectDefault: project.defaultModelSelection) {
+                return selection
+            }
+            throw T3ClientError.rpc(T3ModelSelectionResolver.noHarnessMessage)
+        }
+        if let selection = project.defaultModelSelection ?? shell.threads.compactMap(\.modelSelection).first {
+            return selection
+        }
+        throw T3ClientError.rpc(T3ModelSelectionResolver.noHarnessMessage)
+    }
+
     /// Launches a thread in `projectID` when it names a project of this
     /// environment; otherwise in the environment's first project.
-    func launchThread(title: String?, projectID: String? = nil) async throws -> Session {
+    func launchThread(
+        title: String?,
+        projectID: String?,
+        selection explicitSelection: T3ModelSelection?,
+        runtimeMode: String?
+    ) async throws -> Session {
         let shell = try await fetchShell(force: false)
         let requested = projectID.flatMap { id in shell.projects.first { $0.id == id } }
         guard let project = requested ?? shell.projects.first else {
             throw T3ClientError.decoding("This T3 environment has no projects yet.")
         }
-        let selection =
-            project.defaultModelSelection
-            ?? shell.threads.compactMap(\.modelSelection).first
-        guard let selection else {
-            throw T3ClientError.decoding("This T3 environment has no model selection yet.")
-        }
+        let selection = try await launchSelection(explicit: explicitSelection, project: project, shell: shell)
+        let mode = runtimeMode.flatMap { T3RuntimeModeLabel.allModes.contains($0) ? $0 : nil }
+            ?? T3RuntimeModeLabel.defaultMode
         let resolvedTitle = {
             let trimmed = title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             return trimmed.isEmpty ? "New thread" : trimmed
@@ -357,7 +446,8 @@ nonisolated final class T3EnvironmentClient: @unchecked Sendable {
             commandID: UUID().uuidString,
             projectID: project.id,
             title: resolvedTitle,
-            selection: selection
+            selection: selection,
+            runtimeMode: mode
         )
         let value = try await rpc().request(tag: "orchestration.launchThread", payload: payload)
         if let object = T3JSON.object(value) {
@@ -381,7 +471,7 @@ nonisolated final class T3EnvironmentClient: @unchecked Sendable {
                     parentID: nil,
                     updatedAtEpochMs: Int64(Date().timeIntervalSince1970 * 1_000),
                     providerInstanceID: selection.instanceID,
-                    runtimeMode: "approval-required",
+                    runtimeMode: mode,
                     modelName: selection.model
                 )
             }
@@ -432,6 +522,8 @@ nonisolated final class T3EnvironmentClient: @unchecked Sendable {
             () -> (T3RpcSession?, Task<T3RpcSession, Error>?, Task<Void, Never>?, Task<T3ShellSnapshot, Error>?) in
             cachedShell = nil
             cachedShellIdentity = nil
+            cachedCatalog = nil
+            cachedCatalogIdentity = nil
             shellLiveWanted = false
             // A re-pair or a server upgrade deserves one fresh check next time.
             protocolFailures = [:]
@@ -562,6 +654,7 @@ nonisolated final class T3EnvironmentClient: @unchecked Sendable {
                     await session.close()
                     throw T3SocketError.connectionLost(detail: "T3 connection was reset while connecting.")
                 }
+                self?.refreshHarnessCatalog(on: session, identity: identity)
                 return session
             }
             connectIdentity = identity

@@ -253,7 +253,8 @@ nonisolated enum T3RpcCodec {
         commandID: String,
         projectID: String,
         title: String,
-        selection: T3ModelSelection
+        selection: T3ModelSelection,
+        runtimeMode: String = T3RuntimeModeLabel.defaultMode
     ) -> [String: Any] {
         [
             "commandId": commandID,
@@ -261,7 +262,7 @@ nonisolated enum T3RpcCodec {
             "projectId": projectID,
             "title": title,
             "modelSelection": modelSelectionPayload(selection),
-            "runtimeMode": "approval-required",
+            "runtimeMode": runtimeMode,
             "interactionMode": "default",
             "workspaceStrategy": ["type": "root"],
         ]

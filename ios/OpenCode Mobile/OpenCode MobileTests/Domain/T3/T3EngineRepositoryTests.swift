@@ -282,10 +282,28 @@ final class FakeT3EngineClient: T3EngineClient, @unchecked Sendable {
     private(set) var forcedShellFetches = 0
     private(set) var dispatched: [[String: Any]] = []
     private(set) var launchedProjectIDs: [String?] = []
+    private(set) var launchedSelections: [T3ModelSelection?] = []
+    private(set) var launchedRuntimeModes: [String?] = []
+    private(set) var catalogFetches: [Bool] = []
+    private(set) var warmCount = 0
+    private let catalog: T3HarnessCatalog?
 
-    init(snapshot: T3ShellSnapshot, cachedSnapshot: T3ShellSnapshot? = nil) {
+    init(snapshot: T3ShellSnapshot, cachedSnapshot: T3ShellSnapshot? = nil, catalog: T3HarnessCatalog? = nil) {
         self.snapshot = snapshot
         self.cachedSnapshot = cachedSnapshot ?? snapshot
+        self.catalog = catalog
+    }
+
+    func fetchHarnessCatalog(force: Bool) async throws -> T3HarnessCatalog {
+        lock.lock(); defer { lock.unlock() }
+        catalogFetches.append(force)
+        guard let catalog else { throw T3ClientError.notConnected }
+        return catalog
+    }
+
+    func warmConnection() {
+        lock.lock(); defer { lock.unlock() }
+        warmCount += 1
     }
 
     func fetchShell(force: Bool) async throws -> T3ShellSnapshot {
@@ -313,9 +331,16 @@ final class FakeT3EngineClient: T3EngineClient, @unchecked Sendable {
         dispatched.append(command)
     }
 
-    func launchThread(title: String?, projectID: String?) async throws -> Session {
+    func launchThread(
+        title: String?,
+        projectID: String?,
+        selection: T3ModelSelection?,
+        runtimeMode: String?
+    ) async throws -> Session {
         lock.lock(); defer { lock.unlock() }
         launchedProjectIDs.append(projectID)
+        launchedSelections.append(selection)
+        launchedRuntimeModes.append(runtimeMode)
         return Session(
             id: "t-new",
             title: title ?? "New thread",

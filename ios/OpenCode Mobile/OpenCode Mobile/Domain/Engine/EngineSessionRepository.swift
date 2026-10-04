@@ -35,6 +35,15 @@ struct EngineSessionRepository: SessionRepository, Sendable {
         try await selected().createSession(parentID: parentID, title: title, directory: directory)
     }
 
+    func createSession(
+        parentID: String?,
+        title: String?,
+        directory: String?,
+        options: SessionCreateOptions
+    ) async throws -> Session {
+        try await selected().createSession(parentID: parentID, title: title, directory: directory, options: options)
+    }
+
     func getAllSessionStatuses(directory: String?) async throws -> [SessionStatus] {
         try await selected().getAllSessionStatuses(directory: directory)
     }
@@ -190,5 +199,30 @@ struct EngineSessionRepository: SessionRepository, Sendable {
 
     func settleSession(id: String, directory: String?) async throws -> Bool {
         try await selected().settleSession(id: id, directory: directory)
+    }
+
+    func listArchivedSessions(directory: String?) async throws -> [Session] {
+        try await selected().listArchivedSessions(directory: directory)
+    }
+
+    func unarchiveSession(id: String, directory: String?) async throws -> Session {
+        try await selected().unarchiveSession(id: id, directory: directory)
+    }
+
+    func unsettleSession(id: String, directory: String?) async throws -> Bool {
+        try await selected().unsettleSession(id: id, directory: directory)
+    }
+
+    func setRuntimeMode(id: String, runtimeMode: String, directory: String?) async throws -> Session {
+        try await selected().setRuntimeMode(id: id, runtimeMode: runtimeMode, directory: directory)
+    }
+
+    func setModelSelection(id: String, providerInstanceID: String, modelID: String, directory: String?) async throws -> Session {
+        try await selected().setModelSelection(
+            id: id,
+            providerInstanceID: providerInstanceID,
+            modelID: modelID,
+            directory: directory
+        )
     }
 }

@@ -73,6 +73,8 @@ struct ModelSelectionOption: Equatable, Sendable, Identifiable {
     let contextLimitTokens: Int64?
     let supportsImageInput: Bool
     let supportsPdfInput: Bool
+    /// Show `modelName` verbatim instead of title-casing it (catalogues with human names).
+    let usesVerbatimModelName: Bool
 
     init(
         providerID: String,
@@ -82,7 +84,8 @@ struct ModelSelectionOption: Equatable, Sendable, Identifiable {
         variants: [String],
         contextLimitTokens: Int64? = nil,
         supportsImageInput: Bool = true,
-        supportsPdfInput: Bool = true
+        supportsPdfInput: Bool = true,
+        usesVerbatimModelName: Bool = false
     ) {
         self.providerID = providerID
         self.providerName = providerName
@@ -92,9 +95,13 @@ struct ModelSelectionOption: Equatable, Sendable, Identifiable {
         self.contextLimitTokens = contextLimitTokens
         self.supportsImageInput = supportsImageInput
         self.supportsPdfInput = supportsPdfInput
+        self.usesVerbatimModelName = usesVerbatimModelName
     }
 
-    var modelLabel: String { TitleCaseIdentifier.displayName(for: modelName.isEmpty ? modelID : modelName) }
+    var modelLabel: String {
+        let raw = modelName.isEmpty ? modelID : modelName
+        return usesVerbatimModelName ? raw : TitleCaseIdentifier.displayName(for: raw)
+    }
     var providerLabel: String { providerName.isEmpty ? providerID : providerName }
     var displayLabel: String { "\(modelLabel) · \(providerLabel)" }
     var supportsVariants: Bool { !variants.isEmpty }

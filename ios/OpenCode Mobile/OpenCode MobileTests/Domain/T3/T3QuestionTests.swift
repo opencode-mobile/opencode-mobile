@@ -371,7 +371,12 @@ private final class FakeQuestionClient: T3EngineClient, @unchecked Sendable {
         dispatched.append(command)
     }
 
-    func launchThread(title _: String?, projectID _: String?) async throws -> Session {
+    func launchThread(
+        title _: String?,
+        projectID _: String?,
+        selection _: T3ModelSelection?,
+        runtimeMode _: String?
+    ) async throws -> Session {
         throw T3ClientError.notConnected
     }
 }

@@ -509,7 +509,7 @@ struct SessionChatView: View {
                 activePicker: $activePicker,
                 activeModelProviderID: $activeModelProviderID,
                 modelFilterText: $modelFilterText,
-                composer: viewModel.uiState.composer,
+                composer: pickerComposerState,
                 onSelectModel: { viewModel.selectModel($0) },
                 onSelectMode: { viewModel.selectMode($0) },
                 onSelectVariant: { viewModel.selectVariant($0) }
@@ -1093,7 +1093,7 @@ struct SessionChatView: View {
                 )
             )
         }
-        // The shell exposes no provider/model catalogue, so the selection is read-only.
+        // Read-only summary; the composer chip changes the selection.
         if viewModel.uiState.capabilities.showsModelSelection, let model = viewModel.uiState.modelSelectionLabel {
             entries.append(
                 OpenCodeOverflowMenuEntry(
@@ -1212,6 +1212,7 @@ struct SessionChatView: View {
             )
         } else {
             let capabilities = viewModel.uiState.capabilities
+            let harnessPicker = viewModel.uiState.harnessPicker
             let modelReady = capabilities.requiresComposerModel
                 ? composer.selectedModel != nil && composer.isModelSelectionReady
                 : true
@@ -1224,13 +1225,14 @@ struct SessionChatView: View {
                     selectionRevision: composer.selectionRevision,
                     attachments: composer.attachments.map(attachmentPresentation),
                     showPendingRevert: viewModel.uiState.hasPendingRevert,
-                    selectedModelLabel: composer.selectedModelLabel,
+                    selectedModelLabel: harnessPicker?.chipLabel ?? composer.selectedModelLabel,
                     selectedModeLabel: composer.selectedModeLabel,
                     selectedVariantLabel: composer.selectedVariantLabel,
                     showVariant: composer.canSelectVariant && capabilities.showsVariant,
-                    showModel: capabilities.requiresComposerModel,
+                    showModel: capabilities.requiresComposerModel || harnessPicker != nil,
                     showAgent: capabilities.showsAgent,
-                    showProvider: capabilities.showsProvider,
+                    // The harness chip already names the provider.
+                    showProvider: capabilities.showsProvider && harnessPicker == nil,
                     showRuntimeMode: capabilities.showsRuntimeMode,
                     providerLabel: viewModel.uiState.providerLabel ?? "",
                     runtimeModeLabel: viewModel.uiState.runtimeModeLabel ?? "",
@@ -1289,6 +1291,18 @@ struct SessionChatView: View {
                 case let .textChanged(text, selectionStart, _):
                     viewModel.updateComposerText(text, cursor: selectionStart)
                 case .selectModel:
+                    if let harnessPicker = viewModel.uiState.harnessPicker {
+                        if harnessPicker.isLocked {
+                            viewModel.showHarnessLockedNotice()
+                        } else if harnessPicker.options.isEmpty {
+                            Task { await viewModel.retryHarnessCatalog() }
+                        } else {
+                            logChatAction(ProductAnalytics.Action.composerOpenModelPicker)
+                            activeModelProviderID = harnessPicker.selectedOption?.providerID
+                            activePicker = .model
+                        }
+                        return
+                    }
                     guard !composer.modelOptions.isEmpty else {
                         Task { await viewModel.retryModelCatalog() }
                         return
@@ -1511,6 +1525,16 @@ struct SessionChatView: View {
             from: nil,
             for: nil
         )
+    }
+
+    /// Composer state the picker sheet reads; on T3 its model level is the harness catalogue.
+    private var pickerComposerState: SessionChatComposerState {
+        var composer = viewModel.uiState.composer
+        if let harnessPicker = viewModel.uiState.harnessPicker {
+            composer.modelOptions = harnessPicker.options
+            composer.selectedModel = harnessPicker.selectedOption.map { ModelSelection(option: $0, selectedVariant: nil) }
+        }
+        return composer
     }
 
     private var composerAttachmentSources: ComposerAttachmentSources {

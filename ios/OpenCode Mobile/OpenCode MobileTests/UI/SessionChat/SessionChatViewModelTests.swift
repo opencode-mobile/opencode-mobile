@@ -3965,6 +3965,74 @@ struct SessionChatViewModelTests {
         #expect(viewModel.uiState.dictation?.volatile == "ger")
     }
 
+    // MARK: - T3 harness picker
+
+    @Test func t3HarnessPicker_suppliesChipPickerAndRuntimeModesFromCatalogue() async {
+        let client = FakeT3EngineClient(snapshot: T3HarnessCatalogTests.shell(), catalog: T3HarnessCatalogTests.catalog())
+        let sessionRepository = FakeChatSessionRepository(
+            getSessionResult: Session(
+                id: "ses-1", title: "Title", slug: nil, projectID: nil, directory: "/repo", parentID: nil,
+                updatedAtEpochMs: nil, providerInstanceID: "codex", runtimeMode: "approval-required", modelName: "gpt-5"
+            )
+        )
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(),
+            sessionRepository: sessionRepository,
+            engine: .t3,
+            harnessRepository: DefaultT3HarnessRepository(client: client)
+        )
+        defer { viewModel.stopObserving() }
+
+        let loaded = await waitUntil { viewModel.uiState.harnessPicker?.chipLabel == "Codex · GPT-5" }
+        #expect(loaded)
+        let picker = viewModel.uiState.harnessPicker
+        // Harness first, its models beneath; a thread with history only offers its own harness.
+        #expect(picker?.options.prefix(2).map(\.id) == ["codex:gpt-5", "codex:gpt-4"])
+        #expect(picker?.selectedOption?.id == "codex:gpt-5")
+        #expect(viewModel.uiState.providerLabel == "Codex")
+        #expect(viewModel.uiState.modelSelectionLabel == "Codex · GPT-5")
+        #expect(viewModel.uiState.runtimeModeOptions == ["approval-required", "full-access"])
+        #expect(client.warmCount == 1)
+    }
+
+    @Test func t3HarnessPicker_absentOnOpenCode() async {
+        let client = FakeT3EngineClient(snapshot: T3HarnessCatalogTests.shell(), catalog: T3HarnessCatalogTests.catalog())
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(),
+            harnessRepository: DefaultT3HarnessRepository(client: client)
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+
+        #expect(viewModel.uiState.harnessPicker == nil)
+        #expect(viewModel.uiState.runtimeModeOptions == T3RuntimeModeLabel.allModes)
+        #expect(client.warmCount == 0)
+    }
+
+    @Test func t3OptimisticCreate_launchesWithResolvedHarnessSelection() async {
+        let client = FakeT3EngineClient(snapshot: T3HarnessCatalogTests.shell(), catalog: T3HarnessCatalogTests.catalog())
+        let sessionRepository = FakeChatSessionRepository(
+            createSessionResult: Session(
+                id: "ses-new", title: "Created", slug: nil, projectID: nil, directory: "/repo", parentID: nil,
+                updatedAtEpochMs: nil, providerInstanceID: "codex", runtimeMode: "approval-required", modelName: "gpt-5"
+            )
+        )
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(),
+            sessionRepository: sessionRepository,
+            sessionID: OptimisticSessionCreate.placeholderSessionID,
+            sessionTitle: "New Session",
+            engine: .t3,
+            harnessRepository: DefaultT3HarnessRepository(client: client)
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+
+        #expect(viewModel.uiState.sessionID == "ses-new")
+        #expect(sessionRepository.createSessionCallCount == 1)
+        #expect(sessionRepository.createSessionOptions == SessionCreateOptions(providerInstanceID: "codex", modelID: "gpt-5"))
+    }
+
     private func makeViewModel(
         messageRepository: (any MessageRepository)? = nil,
         eventStream: FakeForegroundEventStream? = nil,
@@ -3983,7 +4051,9 @@ struct SessionChatViewModelTests {
         serverProtocol: ServerProtocol = .v1,
         liveUpdates: any LiveUpdates = FixedLiveUpdates(),
         clock: any SyncClock = SystemSyncClock(),
-        catalogRetryDelaysMs: [Int] = []
+        catalogRetryDelaysMs: [Int] = [],
+        engine: ConnectionEngine = .opencode,
+        harnessRepository: (any T3HarnessRepository)? = nil
     ) -> SessionChatViewModel {
         let eventStream = eventStream ?? FakeForegroundEventStream()
         // Mutations (send/rename/fork/new/permissions) require Connected; default fakes start Idle.
@@ -4006,7 +4076,10 @@ struct SessionChatViewModelTests {
             }
         let selectionStore = sessionModelSelectionStore ?? InMemorySessionModelSelectionStore()
         let draftStore = composerDraftStore ?? InMemoryComposerDraftStore()
-        let activeConnectionManager = activeConnectionManager ?? Self.makeActiveConnectionManager(serverProtocol: serverProtocol)
+        let activeConnectionManager = activeConnectionManager ?? Self.makeActiveConnectionManager(
+            serverProtocol: serverProtocol,
+            engine: engine
+        )
         // A fresh store per view model keeps each test's first open cold unless it shares one.
         let catalogStore = modelCatalogStore ?? ModelCatalogStore(
             modelRepository: modelRepository,
@@ -4037,6 +4110,7 @@ struct SessionChatViewModelTests {
             ),
             liveUpdates: liveUpdates,
             clock: clock,
+            harnessRepository: harnessRepository,
             catalogRetryDelaysMs: catalogRetryDelaysMs
         )
         viewModel.startObserving()
@@ -4079,10 +4153,13 @@ struct SessionChatViewModelTests {
         return (store, connection, agents)
     }
 
-    private static func makeActiveConnectionManager(serverProtocol: ServerProtocol = .v1) -> ActiveConnectionManager {
+    private static func makeActiveConnectionManager(
+        serverProtocol: ServerProtocol = .v1,
+        engine: ConnectionEngine = .opencode
+    ) -> ActiveConnectionManager {
         let activeConnectionManager = ActiveConnectionManager()
         activeConnectionManager.apply(
-            ConnectionProfile(baseURL: "http://127.0.0.1:4096/", username: "opencode", password: ""),
+            ConnectionProfile(baseURL: "http://127.0.0.1:4096/", username: "opencode", password: "", engine: engine),
             serverProtocol: serverProtocol
         )
         return activeConnectionManager
@@ -4840,6 +4917,7 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
     var createSessionResult: Session?
     private(set) var createSessionDirectory: String?
     private(set) var createSessionCallCount = 0
+    private(set) var createSessionOptions: SessionCreateOptions?
     var forkSessionResult: Session?
     private(set) var forkSessionRequest: ForkRequest?
     private(set) var abortCallCount = 0
@@ -4933,6 +5011,16 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
         if let listSessionsError { throw listSessionsError }
         return sessions
     }
+    func createSession(
+        parentID: String?,
+        title: String?,
+        directory: String?,
+        options: SessionCreateOptions
+    ) async throws -> Session {
+        createSessionOptions = options
+        return try await createSession(parentID: parentID, title: title, directory: directory)
+    }
+
     func createSession(parentID: String?, title: String?, directory: String?) async throws -> Session {
         createSessionCallCount += 1
         createSessionDirectory = directory

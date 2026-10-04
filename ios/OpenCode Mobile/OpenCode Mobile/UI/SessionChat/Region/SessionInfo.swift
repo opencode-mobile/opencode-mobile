@@ -111,6 +111,13 @@ final class SessionInfo {
         notifyChange()
     }
 
+    /// Reflects a session the caller already fetched (e.g. after a model change).
+    func applySessionChrome(_ session: Session) {
+        guard session.id == state.sessionID else { return }
+        applyChrome(from: session)
+        notifyChange()
+    }
+
     private func applyChrome(from session: Session) {
         state.providerInstanceID = session.providerInstanceID
         state.runtimeMode = session.runtimeMode

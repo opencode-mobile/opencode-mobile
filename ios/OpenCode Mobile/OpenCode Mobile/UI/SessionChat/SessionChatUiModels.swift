@@ -308,6 +308,10 @@ struct SessionChatUiState: Equatable {
     /// Settings gate for the composer mic. The OS availability gate is applied in the view.
     var composerDictationEnabled: Bool = false
     var dictation: ComposerDictationUiState? = nil
+    /// T3 harness + model chip and picker; nil on engines that use the composer catalogue.
+    var harnessPicker: SessionChatHarnessPickerUiState? = nil
+    /// Runtime modes the session menu offers (the harness's supported ones when known).
+    var runtimeModeOptions: [String] = T3RuntimeModeLabel.allModes
 
     /// A permission, question, or Screen Model-owned sheet or dialog would sit under the intro sheet.
     var blocksChipTimelineIntro: Bool {

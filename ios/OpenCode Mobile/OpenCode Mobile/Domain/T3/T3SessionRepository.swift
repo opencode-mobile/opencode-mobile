@@ -104,12 +104,36 @@ final class T3SessionRepository: SessionRepository, @unchecked Sendable {
             }
     }
 
-    func createSession(parentID _: String?, title: String?, directory: String?) async throws -> Session {
+    func createSession(parentID: String?, title: String?, directory: String?) async throws -> Session {
+        try await createSession(parentID: parentID, title: title, directory: directory, options: .defaults)
+    }
+
+    /// Launches a thread in the project owning `directory`. An explicit
+    /// harness + model goes to the launch as-is; otherwise the client resolves
+    /// one from the harness catalogue.
+    func createSession(
+        parentID _: String?,
+        title: String?,
+        directory: String?,
+        options: SessionCreateOptions
+    ) async throws -> Session {
         let snapshot = try await client.fetchShell(force: true)
         guard let project = T3ProjectSelection.project(for: directory, in: snapshot) else {
             throw SessionError.http(statusCode: 400, message: "This T3 environment has no projects")
         }
-        let session = try await client.launchThread(title: title, projectID: project.id)
+        let selection: T3ModelSelection? = {
+            let instance = options.providerInstanceID?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let model = options.modelID?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            guard !instance.isEmpty, !model.isEmpty else { return nil }
+            return T3ModelSelection(instanceID: instance, model: model)
+        }()
+        let runtimeMode = options.runtimeMode.flatMap { T3RuntimeModeLabel.allModes.contains($0) ? $0 : nil }
+        let session = try await client.launchThread(
+            title: title,
+            projectID: project.id,
+            selection: selection,
+            runtimeMode: runtimeMode
+        )
         guard session.directory == nil else { return session }
         return Self.withDirectory(session, Self.nonEmpty(directory) ?? project.workspaceRoot)
     }

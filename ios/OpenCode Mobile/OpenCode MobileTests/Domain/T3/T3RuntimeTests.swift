@@ -12,7 +12,7 @@ struct T3RuntimeTests {
     // MARK: - Socket reuse and reconnect
 
     @Test func rpc_reconnectsWithFreshTicketAfterServerClose() async throws {
-        let harness = T3Harness()
+        let harness = T3ClientHarness()
         let first = Task { try await harness.client.dispatchCommand(["type": "noop"]) }
         let socket1 = try await harness.connector.connection(at: 0)
         socket1.open()
@@ -36,7 +36,7 @@ struct T3RuntimeTests {
     }
 
     @Test func pendingRequest_failsInsteadOfHangingWhenSocketCloses() async throws {
-        let harness = T3Harness()
+        let harness = T3ClientHarness()
         let call = Task { try await harness.client.dispatchCommand(["type": "noop"]) }
         let socket = try await harness.connector.connection(at: 0)
         socket.open()
@@ -60,7 +60,7 @@ struct T3RuntimeTests {
     // MARK: - Timeouts and keepalive
 
     @Test func request_timesOutAndInterruptsServer() async throws {
-        let harness = T3Harness(requestTimeout: .milliseconds(80))
+        let harness = T3ClientHarness(requestTimeout: .milliseconds(80))
         let call = Task { try await harness.client.dispatchCommand(["type": "noop"]) }
         let socket = try await harness.connector.connection(at: 0)
         socket.open()
@@ -74,7 +74,7 @@ struct T3RuntimeTests {
     }
 
     @Test func connect_timesOutWhenSocketNeverOpens() async throws {
-        let harness = T3Harness(connectTimeout: .milliseconds(80))
+        let harness = T3ClientHarness(connectTimeout: .milliseconds(80))
         await #expect(throws: T3ClientError.transport("Timed out connecting to the T3 websocket.")) {
             try await harness.client.dispatchCommand(["type": "noop"])
         }
@@ -84,7 +84,7 @@ struct T3RuntimeTests {
     }
 
     @Test func keepalive_sendsPingAndAnswersServerPing() async throws {
-        let harness = T3Harness(keepaliveInterval: .milliseconds(30))
+        let harness = T3ClientHarness(keepaliveInterval: .milliseconds(30))
         let call = Task { try await harness.client.dispatchCommand(["type": "noop"]) }
         let socket = try await harness.connector.connection(at: 0)
         socket.open()
@@ -100,7 +100,7 @@ struct T3RuntimeTests {
 
     @MainActor
     @Test func subscription_reestablishesAfterReconnectFromLastKnownSequence() async throws {
-        let harness = T3Harness()
+        let harness = T3ClientHarness()
         harness.http.threadDetail = T3ThreadDetail(
             sequence: 5,
             thread: Fixtures.thread(id: "t1"),
@@ -149,7 +149,7 @@ struct T3RuntimeTests {
 
     @MainActor
     @Test func subscription_rpcFailureReachesObserversAsLoadFailed() async throws {
-        let harness = T3Harness()
+        let harness = T3ClientHarness()
         harness.http.threadDetail = T3ThreadDetail(sequence: 1, thread: Fixtures.thread(id: "t1"), messages: [])
         let repository = T3MessageRepository(client: harness.client, resubscribeDelay: .seconds(30))
         let collector = UpdateCollector()
@@ -170,7 +170,7 @@ struct T3RuntimeTests {
     // MARK: - Protocol re-check on fresh sockets
 
     @Test func rpc_validatesProtocolOncePerIdentityAcrossReconnects() async throws {
-        let harness = T3Harness()
+        let harness = T3ClientHarness()
         let first = Task { try await harness.client.dispatchCommand(["type": "noop"]) }
         let socket1 = try await harness.connector.connection(at: 0)
         socket1.open()
@@ -192,7 +192,7 @@ struct T3RuntimeTests {
     }
 
     @Test func rpc_descriptorOutageDoesNotBlockConnecting() async throws {
-        let harness = T3Harness()
+        let harness = T3ClientHarness()
         harness.http.descriptorResult = .failure(T3ClientError.http(statusCode: 503, message: "down"))
         let call = Task { try await harness.client.dispatchCommand(["type": "noop"]) }
         let socket = try await harness.connector.connection(at: 0)
@@ -205,7 +205,7 @@ struct T3RuntimeTests {
 
     @MainActor
     @Test func rpc_protocolMismatchStopsRetryingAndSurfacesError() async throws {
-        let harness = T3Harness(shellResubscribeDelay: .milliseconds(10))
+        let harness = T3ClientHarness(shellResubscribeDelay: .milliseconds(10))
         harness.http.descriptorResult = .failure(T3ClientError.unsupportedProtocol(1))
         harness.http.threadDetail = T3ThreadDetail(sequence: 1, thread: Fixtures.thread(id: "t1"), messages: [])
         let repository = T3MessageRepository(client: harness.client, resubscribeDelay: .milliseconds(10))
@@ -263,7 +263,7 @@ struct T3RuntimeTests {
     // MARK: - Profile switch and reset
 
     @Test func profileSwitch_closesOldSocketAndDropsShellCache() async throws {
-        let harness = T3Harness()
+        let harness = T3ClientHarness()
         harness.http.shell = Fixtures.shell(threadID: "t-a")
         _ = try await harness.client.fetchShell(force: true)
         #expect(harness.client.cachedThread(id: "t-a") != nil)
@@ -286,7 +286,7 @@ struct T3RuntimeTests {
     }
 
     @Test func lifecycleStop_resetsSocketAndCache() async throws {
-        let harness = T3Harness()
+        let harness = T3ClientHarness()
         harness.http.shell = Fixtures.shell(threadID: "t-a")
         _ = try await harness.client.fetchShell(force: true)
         let socket = try await harness.connector.connection(at: 0)
@@ -360,7 +360,7 @@ struct T3RuntimeTests {
     // MARK: - launchThread
 
     @Test func launchThread_usesRequestedProjectAndItsDefaultModel() async throws {
-        let harness = T3Harness()
+        let harness = T3ClientHarness()
         harness.http.shell = T3ShellSnapshot(
             sequence: 1,
             threads: [],
@@ -372,6 +372,11 @@ struct T3RuntimeTests {
         let call = Task { try await harness.client.launchThread(title: "Hi", projectID: "p2") }
         let socket = try await harness.connector.connection(at: 0)
         socket.open()
+        let responder = T3ConfigResponder.start(socket, config: T3ConfigFixtures.config(providers: [
+            T3ConfigFixtures.provider("i1", models: [T3ConfigFixtures.model("m1")]),
+            T3ConfigFixtures.provider("i2", models: [T3ConfigFixtures.model("m2")]),
+        ]))
+        defer { responder.cancel() }
         let request = try await socket.firstRequest(tag: "orchestration.launchThread")
         #expect(request.payload["projectId"] as? String == "p2")
         let selection = request.payload["modelSelection"] as? [String: Any]
@@ -385,7 +390,7 @@ struct T3RuntimeTests {
     }
 
     @Test func launchThread_fallsBackToFirstProjectForUnknownProjectID() async throws {
-        let harness = T3Harness()
+        let harness = T3ClientHarness()
         harness.http.shell = T3ShellSnapshot(
             sequence: 1,
             threads: [],
@@ -396,6 +401,10 @@ struct T3RuntimeTests {
         let call = Task { try await harness.client.launchThread(title: "Hi", projectID: "missing") }
         let socket = try await harness.connector.connection(at: 0)
         socket.open()
+        let responder = T3ConfigResponder.start(socket, config: T3ConfigFixtures.config(providers: [
+            T3ConfigFixtures.provider("i1", models: [T3ConfigFixtures.model("m1")]),
+        ]))
+        defer { responder.cancel() }
         let request = try await socket.firstRequest(tag: "orchestration.launchThread")
         #expect(request.payload["projectId"] as? String == "p1")
         socket.receive(Frames.exitSuccess(requestID: request.id, value: [
@@ -405,7 +414,7 @@ struct T3RuntimeTests {
     }
 }
 
-// MARK: - T3Harness
+// MARK: - T3ClientHarness
 
 private final class ProfileBox: @unchecked Sendable {
     private let lock = NSLock()
@@ -424,7 +433,7 @@ private final class ProfileBox: @unchecked Sendable {
     }
 }
 
-final class T3Harness: @unchecked Sendable {
+final class T3ClientHarness: @unchecked Sendable {
     let http: FakeT3Http
     let connector: FakeSocketConnector
     let signals: T3LiveSignals
