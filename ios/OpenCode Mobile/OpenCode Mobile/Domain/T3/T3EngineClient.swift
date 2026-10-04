@@ -12,14 +12,7 @@ protocol T3EngineClient: Sendable {
     func launchThread(title: String?, projectID: String?) async throws -> Session
 }
 
-extension T3EnvironmentClient: T3EngineClient {
-    func launchThread(title: String?, projectID _: String?) async throws -> Session {
-        // `T3EnvironmentClient.launchThread(title:)` resolves the project itself
-        // (first project in the shell); its websocket session is private to that
-        // file, so the project hint cannot be forwarded from an extension yet.
-        try await launchThread(title: title)
-    }
-}
+extension T3EnvironmentClient: T3EngineClient {}
 
 enum T3ProjectSelection {
     /// Picks the project that owns `directory`: its workspace root or a thread
