@@ -11,6 +11,15 @@ struct ProjectSectionItem: Identifiable, Equatable {
     let allSessions: [SessionListItem]
     let loadError: String?
     var sessionsFromCache: Bool = false
+    /// Archived and settled sessions listed after the active ones; T3 only.
+    var archivedSessions: [SessionListItem] = []
+}
+
+/// Where a home session row sits in its lifecycle; drives the long-press actions.
+enum HomeSessionLifecycle: Equatable {
+    case active
+    case archived
+    case settled
 }
 
 struct AddProjectDirectoryItem: Identifiable, Equatable {
@@ -105,6 +114,7 @@ final class ProjectListHomeViewModel {
     /// Stays false until a message fetch confirms the session is forkable.
     var sessionActionsCanFork: Bool { sessionActionsRegion.canFork }
     var sessionActionsCanArchive: Bool { sessionActionsRegion.canArchive }
+    var sessionActionsLifecycle: HomeSessionLifecycle { sessionActionsRegion.lifecycle }
     var sessionRenameDialog: HomeSessionTitleDialogState { sessionActionsRegion.renameDialog }
     var sessionForkDialog: HomeSessionTitleDialogState { sessionActionsRegion.forkDialog }
     var sessionForkResult: HomeSessionForkResultState { sessionActionsRegion.forkResult }
@@ -528,7 +538,8 @@ final class ProjectListHomeViewModel {
             sessionId: sessionId,
             title: title,
             worktree: worktree,
-            canArchive: activeConnectionManager.capabilities.supportsSessionArchive
+            canArchive: activeConnectionManager.capabilities.supportsSessionArchive,
+            lifecycle: sessionLifecycle(sessionId: sessionId, worktree: worktree)
         )
     }
 
@@ -900,6 +911,42 @@ final class ProjectListHomeViewModel {
         }
     }
 
+    /// Archived and settled sessions for engines that list them; a failed load hides the rows.
+    private func loadArchivedItems(worktree: String) async -> [SessionListItem] {
+        guard SessionCapabilities.forEngine(activeConnectionManager.currentProfile()?.engine ?? .opencode).showsArchivedSessions
+        else { return [] }
+        let archived = (try? await sessionRepository.listArchivedSessions(directory: worktree)) ?? []
+        return archived
+            .rootSessions()
+            .sorted { ($0.updatedAtEpochMs ?? 0) > ($1.updatedAtEpochMs ?? 0) }
+            .map { session in
+                var item = sessionAdapter.listItem(from: session, worktree: worktree)
+                item.lifecycle = session.isArchived ? .archived : (session.isSettled ? .settled : .active)
+                return item
+            }
+    }
+
+    /// Whether a home row is an active, archived, or settled session.
+    private func sessionLifecycle(sessionId: String, worktree: String) -> HomeSessionLifecycle {
+        guard case let .loaded(sections, _, _, _) = state,
+              let section = sections.first(where: { $0.worktree == worktree }),
+              let row = section.archivedSessions.first(where: { $0.id == sessionId })
+        else { return .active }
+        return row.lifecycle
+    }
+
+    func unarchiveSessionAction() async {
+        guard sessionActionsTarget != nil, sessionActionsLifecycle == .archived, !sessionActionInFlight else { return }
+        let restored = await sessionActionsRegion.chooseUnarchive()
+        if restored { await refresh() }
+    }
+
+    func unsettleSessionAction() async {
+        guard sessionActionsTarget != nil, sessionActionsLifecycle == .settled, !sessionActionInFlight else { return }
+        let restored = await sessionActionsRegion.chooseUnsettle()
+        if restored { await refresh() }
+    }
+
     private func loadSection(worktree: String) async -> ProjectSectionItem {
         do {
             _ = try await projectRepository.getCurrentProject(directory: worktree)
@@ -923,7 +970,7 @@ final class ProjectListHomeViewModel {
                     )
                 }
             let name = ProjectDomainAdapter.displayName(from: worktree)
-            return ProjectSectionItem(
+            var section = ProjectSectionItem(
                 id: worktree,
                 worktree: worktree,
                 displayName: name,
@@ -933,6 +980,8 @@ final class ProjectListHomeViewModel {
                 allSessions: items,
                 loadError: nil
             )
+            section.archivedSessions = await loadArchivedItems(worktree: worktree)
+            return section
         } catch {
             let name = ProjectDomainAdapter.displayName(from: worktree)
             return ProjectSectionItem(
@@ -1131,7 +1180,8 @@ final class ProjectListHomeViewModel {
             letterAccent: section.letterAccent,
             allSessions: items,
             loadError: section.loadError,
-            sessionsFromCache: sessionsFromCache
+            sessionsFromCache: sessionsFromCache,
+            archivedSessions: section.archivedSessions
         )
         let updatedSections =
             sections.map { current in

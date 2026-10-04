@@ -12,6 +12,7 @@ import dev.opencode.mobile.domain.composer.ComposerDraftStore
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.engine.SessionCapabilities
+import dev.opencode.mobile.domain.t3.T3ProviderLabels
 import dev.opencode.mobile.domain.t3.T3RuntimeModeLabels
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
@@ -196,6 +197,8 @@ class SessionChatViewModel
         private var capabilities: SessionCapabilities = SessionCapabilities.OpenCode
         private var providerLabel: String? = null
         private var runtimeModeLabel: String? = null
+        private var runtimeMode: String? = null
+        private var modelSelectionLabel: String? = null
         private var projectLabel: String? = null
         private var projectLetter: Char? = null
         private var projectLetterAccent: LetterAccent? = null
@@ -366,6 +369,8 @@ class SessionChatViewModel
                     capabilities = capabilities,
                     providerLabel = providerLabel,
                     runtimeModeLabel = runtimeModeLabel,
+                    runtimeMode = runtimeMode,
+                    modelSelectionLabel = modelSelectionLabel,
                 )
             scheduleProjectIdentityRefine(worktree)
             timeline.bind(sessionId, worktree)
@@ -543,6 +548,17 @@ class SessionChatViewModel
         fun settleSession() {
             if (!hasCreatedSession()) return
             sessionInfo.settleSession()
+        }
+
+        /** Applies a runtime mode from the session menu and refreshes the chrome labels. */
+        fun selectRuntimeMode(mode: String) {
+            if (!hasCreatedSession() || !capabilities.canSetRuntimeMode) return
+            if (mode == runtimeMode) return
+            sessionInfo.setRuntimeMode(mode) { session ->
+                if (boundSessionId != session.id) return@setRuntimeMode
+                applySessionChrome(session)
+                publishUiState()
+            }
         }
 
         fun deleteSession() {
@@ -1294,7 +1310,18 @@ class SessionChatViewModel
             composer.capabilities = capabilities
             commands.capabilities = capabilities
             if (!capabilities.showsProvider) providerLabel = null
-            if (!capabilities.showsRuntimeMode) runtimeModeLabel = null
+            if (!capabilities.showsRuntimeMode) {
+                runtimeModeLabel = null
+                runtimeMode = null
+            }
+            if (!capabilities.showsModelSelection) modelSelectionLabel = null
+        }
+
+        private fun applySessionChrome(session: Session) {
+            providerLabel = T3ProviderLabels.displayName(session.providerInstanceId)
+            runtimeMode = session.runtimeMode?.takeIf { it.isNotBlank() }
+            runtimeModeLabel = T3RuntimeModeLabels.displayName(session.runtimeMode).takeIf { it.isNotBlank() }
+            modelSelectionLabel = T3ProviderLabels.modelSelectionLabel(session.providerInstanceId, session.modelId)
         }
 
         private fun loadSessionChrome() {
@@ -1307,8 +1334,7 @@ class SessionChatViewModel
                         withContext(ioDispatcher) { sessionRepository.getSession(sessionId, worktree) }
                     }.getOrNull() ?: return@launch
                 if (boundSessionId != sessionId) return@launch
-                providerLabel = session.providerInstanceId?.takeIf { it.isNotBlank() }
-                runtimeModeLabel = T3RuntimeModeLabels.displayName(session.runtimeMode).takeIf { it.isNotBlank() }
+                applySessionChrome(session)
                 publishUiState()
             }
         }
@@ -1616,6 +1642,8 @@ class SessionChatViewModel
                 capabilities = capabilities,
                 providerLabel = providerLabel,
                 runtimeModeLabel = runtimeModeLabel,
+                runtimeMode = runtimeMode,
+                modelSelectionLabel = modelSelectionLabel,
                 projectLabel = projectLabel,
                 projectLetter = projectLetter,
                 projectLetterAccent = projectLetterAccent,

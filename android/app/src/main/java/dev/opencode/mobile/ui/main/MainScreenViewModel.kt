@@ -95,6 +95,7 @@ class MainScreenViewModel
                         )
                 },
                 capabilities = { SessionCapabilities.forProfile(activeConnectionManager.currentProfile()) },
+                onSessionRestored = { refresh() },
             )
         val sessionActions: StateFlow<HomeSessionActionsUiState> = sessionActionsRegion.state
         private val _revealNewestToken = MutableStateFlow(0)
@@ -478,7 +479,35 @@ class MainScreenViewModel
                 title = title,
                 worktree = worktree,
                 canArchive = activeConnectionManager.currentCapabilities().supportsSessionArchive,
+                lifecycle = sessionLifecycle(sessionId, worktree),
             )
+        }
+
+        /** Whether a home row is an active, archived, or settled session. */
+        private fun sessionLifecycle(
+            sessionId: String,
+            worktree: String,
+        ): HomeSessionLifecycle {
+            val state = _uiState.value as? MainScreenUiState.Loaded ?: return HomeSessionLifecycle.Active
+            val section = state.sections.firstOrNull { it.worktree == worktree } ?: return HomeSessionLifecycle.Active
+            val archived = section.archivedSessions.firstOrNull { it.id == sessionId } ?: return HomeSessionLifecycle.Active
+            return when {
+                archived.isArchived -> HomeSessionLifecycle.Archived
+                archived.isSettled -> HomeSessionLifecycle.Settled
+                else -> HomeSessionLifecycle.Active
+            }
+        }
+
+        fun chooseUnarchive() {
+            val state = sessionActions.value
+            if (state.target == null || state.lifecycle != HomeSessionLifecycle.Archived || state.lifecycleInFlight) return
+            sessionActionsRegion.chooseUnarchive()
+        }
+
+        fun chooseUnsettle() {
+            val state = sessionActions.value
+            if (state.target == null || state.lifecycle != HomeSessionLifecycle.Settled || state.lifecycleInFlight) return
+            sessionActionsRegion.chooseUnsettle()
         }
 
         /**
@@ -831,7 +860,23 @@ class MainScreenViewModel
                 letterAccent = letterAccentForWorktree(worktree),
                 allSessions = summaries,
                 loadError = null,
+                archivedSessions = loadArchivedSummaries(worktree),
             )
+        }
+
+        /** Archived and settled sessions for engines that list them; a failed load hides the rows. */
+        private suspend fun loadArchivedSummaries(worktree: String): List<SessionSummary> {
+            val capabilities = SessionCapabilities.forProfile(activeConnectionManager.currentProfile())
+            if (!capabilities.showsArchivedSessions) return emptyList()
+            val archived = runCatching { sessionRepository.listArchivedSessions(directory = worktree) }.getOrDefault(emptyList())
+            return archived
+                .rootSessions()
+                .sortedByDescending { it.updatedAtEpochMs ?: 0L }
+                .map { session ->
+                    sessionDomainAdapter
+                        .toSessionSummary(session)
+                        .copy(isArchived = session.isArchived, isSettled = session.isSettled && !session.isArchived)
+                }
         }
 
         private suspend fun openDirectoryNavigator() {
@@ -1096,9 +1141,17 @@ data class HomeSessionActionsUiState(
     val forkedTitle: String = "",
     val deleteConfirmVisible: Boolean = false,
     val lifecycleInFlight: Boolean = false,
+    val lifecycle: HomeSessionLifecycle = HomeSessionLifecycle.Active,
 ) {
     val hasOpenDialog: Boolean
         get() = renameVisible || forkVisible || forkResultVisible || deleteConfirmVisible || lifecycleInFlight
+}
+
+/** Where a home session row sits in its lifecycle; drives the long-press actions. */
+enum class HomeSessionLifecycle {
+    Active,
+    Archived,
+    Settled,
 }
 
 data class ProjectSectionUi(
@@ -1110,6 +1163,8 @@ data class ProjectSectionUi(
     val allSessions: List<SessionSummary>,
     val loadError: String? = null,
     val sessionsFromCache: Boolean = false,
+    /** Archived and settled sessions listed after the active ones; T3 only. */
+    val archivedSessions: List<SessionSummary> = emptyList(),
 )
 
 data class AddProjectDirectoryUi(

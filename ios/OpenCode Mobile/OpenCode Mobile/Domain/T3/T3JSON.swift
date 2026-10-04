@@ -164,6 +164,9 @@ nonisolated enum T3Auth {
 }
 
 nonisolated enum T3RuntimeModeLabel {
+    /// The runtime modes the orchestration contract accepts, in picker order.
+    static let allModes: [String] = ["approval-required", "auto-accept-edits", "auto", "full-access"]
+
     static func displayName(_ raw: String?) -> String? {
         guard let raw, !raw.isEmpty else { return nil }
         return switch raw {
@@ -173,6 +176,34 @@ nonisolated enum T3RuntimeModeLabel {
         case "full-access": "Full access"
         default: raw
         }
+    }
+}
+
+nonisolated enum T3ProviderLabel {
+    /// Human label for a provider instance id. The shell carries no provider
+    /// catalogue, so the driver part of the slug is title-cased and a numeric
+    /// instance suffix dropped: `codex-1` -> `Codex`, `claude-code` -> `Claude Code`.
+    static func displayName(_ instanceID: String?) -> String? {
+        let raw = instanceID?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !raw.isEmpty else { return nil }
+        var words = raw
+            .split(whereSeparator: { $0 == "-" || $0 == "_" })
+            .map(String.init)
+            .filter { !$0.isEmpty }
+        while let last = words.last, last.allSatisfy(\.isNumber) {
+            words.removeLast()
+        }
+        guard !words.isEmpty else { return raw }
+        return words.map { $0.prefix(1).uppercased() + $0.dropFirst() }.joined(separator: " ")
+    }
+
+    /// `Codex · gpt-5` when a model is known, else the provider label alone.
+    static func modelSelectionLabel(instanceID: String?, model: String?) -> String? {
+        let modelName = model?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard let provider = displayName(instanceID) else {
+            return modelName.isEmpty ? nil : modelName
+        }
+        return modelName.isEmpty ? provider : "\(provider) · \(modelName)"
     }
 }
 
@@ -224,10 +255,19 @@ struct T3Thread: Equatable, Sendable {
     var isActiveListItem: Bool {
         if deletedAt != nil { return false }
         if archivedAt != nil { return false }
-        if settledAt != nil {
-            return settledOverride == "active"
-        }
+        if isSettled { return false }
         return true
+    }
+
+    var isArchived: Bool { archivedAt != nil }
+
+    /// Settled by the user or the sweep and not re-activated with an override.
+    var isSettled: Bool { settledAt != nil && settledOverride != "active" }
+
+    /// Archived or settled: hidden from the active list, restorable from home.
+    var isArchivedListItem: Bool {
+        if deletedAt != nil { return false }
+        return isArchived || isSettled
     }
 }
 
@@ -245,6 +285,11 @@ struct T3ShellSnapshot: Equatable, Sendable {
 
     var activeThreads: [T3Thread] {
         threads.filter(\.isActiveListItem)
+    }
+
+    /// Archived and settled threads (the shell's `archivedThreads` plus settled active ones).
+    var archivedThreads: [T3Thread] {
+        threads.filter(\.isArchivedListItem)
     }
 
     func thread(id: String) -> T3Thread? {

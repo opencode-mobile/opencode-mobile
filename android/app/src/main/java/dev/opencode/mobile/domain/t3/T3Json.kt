@@ -51,6 +51,7 @@ object T3Json {
             threads = obj.array("threads").mapNotNull { thread(it) },
             projects = obj.array("projects").mapNotNull { project(it) },
             snapshotSequence = obj.long("snapshotSequence") ?: 0L,
+            archivedThreads = obj.array("archivedThreads").mapNotNull { thread(it) },
         )
     }
 
@@ -235,6 +236,7 @@ object T3Json {
             modelSelection = model,
             pendingRequestId = pending?.string("id"),
             pendingRequestKind = pending?.string("kind"),
+            createdAt = obj.string("createdAt"),
         )
     }
 

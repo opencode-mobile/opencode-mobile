@@ -39,6 +39,12 @@ protocol SessionRepository: Sendable {
     func steerPendingPrompt(sessionID: String, inboxID: String) async throws -> Bool
     func queuePendingPrompt(sessionID: String, inboxID: String) async throws -> Bool
     func settleSession(id: String, directory: String?) async throws -> Bool
+    /// Archived or settled sessions hidden from `listSessions`; engines without the concept return nothing.
+    func listArchivedSessions(directory: String?) async throws -> [Session]
+    func unarchiveSession(id: String, directory: String?) async throws -> Session
+    func unsettleSession(id: String, directory: String?) async throws -> Bool
+    func setRuntimeMode(id: String, runtimeMode: String, directory: String?) async throws -> Session
+    func setModelSelection(id: String, providerInstanceID: String, modelID: String, directory: String?) async throws -> Session
 }
 
 /// How the server handled a compact request.
@@ -109,6 +115,22 @@ extension SessionRepository {
     }
 
     func settleSession(id _: String, directory _: String?) async throws -> Bool { false }
+
+    func listArchivedSessions(directory _: String?) async throws -> [Session] { [] }
+
+    func unarchiveSession(id _: String, directory _: String?) async throws -> Session {
+        throw SessionError.http(statusCode: 400, message: "Unarchive is not available")
+    }
+
+    func unsettleSession(id _: String, directory _: String?) async throws -> Bool { false }
+
+    func setRuntimeMode(id _: String, runtimeMode _: String, directory _: String?) async throws -> Session {
+        throw SessionError.http(statusCode: 400, message: "Runtime mode is not available")
+    }
+
+    func setModelSelection(id _: String, providerInstanceID _: String, modelID _: String, directory _: String?) async throws -> Session {
+        throw SessionError.http(statusCode: 400, message: "Model selection is not available")
+    }
 }
 
 struct DefaultSessionRepository: SessionRepository, Sendable {

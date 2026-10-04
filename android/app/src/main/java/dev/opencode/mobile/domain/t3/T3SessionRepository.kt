@@ -73,11 +73,60 @@ class T3SessionRepository
             id: String,
             directory: String?,
         ): Session {
-            val thread =
-                runtime.thread(id)
-                    ?: runtime.refreshShell().threads.firstOrNull { it.id == id }
-                    ?: throw SessionError.Http(404, "Thread not found")
+            val thread = findThread(id) ?: throw SessionError.Http(404, "Thread not found")
             return T3SessionMapper.toSession(thread, directory ?: thread.worktreePath)
+        }
+
+        override suspend fun listArchivedSessions(directory: String?): List<Session> {
+            val snapshot = runtime.refreshShell()
+            return snapshot.allThreads
+                .filter(T3Activity::isArchivedListRow)
+                .filter { thread -> directory.isNullOrBlank() || matchesDirectory(thread, snapshot, directory) }
+                .map { thread -> T3SessionMapper.toSession(thread, directory ?: thread.worktreePath) }
+        }
+
+        override suspend fun unarchiveSession(
+            id: String,
+            directory: String?,
+        ): Session {
+            runtime.dispatch(T3Commands.threadUnarchive(id))
+            val session = refreshedSession(id, directory)
+            return session.copy(archivedAtEpochMs = null)
+        }
+
+        override suspend fun unsettleSession(
+            id: String,
+            directory: String?,
+        ): Boolean {
+            runtime.dispatch(T3Commands.threadUnsettle(id))
+            runCatching { runtime.refreshShell() }
+            return true
+        }
+
+        override suspend fun setRuntimeMode(
+            id: String,
+            runtimeMode: String,
+            directory: String?,
+        ): Session {
+            if (runtimeMode !in T3RuntimeModeLabels.allModes) {
+                throw SessionError.Http(400, "Unknown runtime mode: $runtimeMode")
+            }
+            runtime.dispatch(T3Commands.threadRuntimeModeSet(id, runtimeMode))
+            return refreshedSession(id, directory).copy(runtimeMode = runtimeMode)
+        }
+
+        override suspend fun setModelSelection(
+            id: String,
+            providerInstanceId: String,
+            modelId: String,
+            directory: String?,
+        ): Session {
+            if (providerInstanceId.isBlank() || modelId.isBlank()) {
+                throw SessionError.Http(400, "A provider instance and model are required")
+            }
+            val selection = T3ModelSelection(instanceId = providerInstanceId, model = modelId)
+            runtime.dispatch(T3Commands.threadModelSelectionSet(id, selection))
+            return refreshedSession(id, directory).copy(providerInstanceId = providerInstanceId, modelId = modelId)
         }
 
         override suspend fun updateSession(
@@ -113,7 +162,7 @@ class T3SessionRepository
             id: String,
             directory: String?,
         ): Boolean {
-            val thread = runtime.thread(id) ?: runtime.refreshShell().threads.firstOrNull { it.id == id }
+            val thread = findThread(id)
             val runId = thread?.activeRunId
             if (runId.isNullOrBlank()) return true
             runtime.dispatch(T3Commands.runInterrupt(id, runId))
@@ -270,6 +319,24 @@ class T3SessionRepository
         }
 
         override suspend fun getVcsInfo(directory: String?): VcsInfo = VcsInfo(currentBranch = null, defaultBranch = null)
+
+        /** The thread by id from the cached shell, including archived ones, else after a refresh. */
+        private suspend fun findThread(id: String): T3Thread? =
+            runtime.thread(id)
+                ?: runtime.shell.value?.archivedThreads?.firstOrNull { it.id == id }
+                ?: runtime.refreshShell().thread(id)
+
+        /** The session after a command: refreshed from the shell, else from the cached thread. */
+        private suspend fun refreshedSession(
+            id: String,
+            directory: String?,
+        ): Session {
+            val thread =
+                runCatching { runtime.refreshShell().thread(id) }.getOrNull()
+                    ?: findThread(id)
+                    ?: throw SessionError.Http(404, "Thread not found")
+            return T3SessionMapper.toSession(thread, directory ?: thread.worktreePath)
+        }
 
         /** The thread waiting on [requestId]; found by id, else by its pending question. */
         private suspend fun questionThread(

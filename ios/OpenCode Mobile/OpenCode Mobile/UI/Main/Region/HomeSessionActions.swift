@@ -9,6 +9,7 @@ final class HomeSessionActions {
     private(set) var sheetVisible = false
     private(set) var canFork = false
     private(set) var canArchive = true
+    private(set) var lifecycle: HomeSessionLifecycle = .active
     private(set) var renameDialog = HomeSessionTitleDialogState()
     private(set) var forkDialog = HomeSessionTitleDialogState()
     private(set) var forkResult = HomeSessionForkResultState()
@@ -34,14 +35,64 @@ final class HomeSessionActions {
         self.capabilities = capabilities
     }
 
-    func begin(sessionId: String, title: String, worktree: String, canArchive: Bool) {
+    func begin(sessionId: String, title: String, worktree: String, canArchive: Bool, lifecycle: HomeSessionLifecycle = .active) {
         let next = HomeSessionActionTarget(sessionId: sessionId, title: title, worktree: worktree)
         target = next
         sheetVisible = true
         canFork = false
-        self.canArchive = canArchive
+        self.canArchive = canArchive && lifecycle == .active
+        self.lifecycle = lifecycle
         forkGateTask?.cancel()
+        // Archived and settled rows only restore or delete; fork stays off.
+        guard lifecycle == .active else { return }
         forkGateTask = Task { await resolveForkVisibility(next) }
+    }
+
+    /// Restores an archived session; true when the server accepted it.
+    func chooseUnarchive() async -> Bool {
+        guard let target, lifecycle == .archived, !actionInFlight else { return false }
+        sheetVisible = false
+        actionInFlight = true
+        OpenCodeLog.sessionChat.info("home unarchive start session=\(target.sessionId)")
+        do {
+            _ = try await sessionRepository.unarchiveSession(id: target.sessionId, directory: target.worktree)
+            OpenCodeLog.sessionChat.info("home unarchive success session=\(target.sessionId)")
+            actionInFlight = false
+            clear()
+            return true
+        } catch {
+            OpenCodeLog.sessionChat.warning(
+                "home unarchive failed session=\(target.sessionId) error=\(error.localizedDescription)"
+            )
+            actionInFlight = false
+            clear()
+            onLifecycleError?(Self.unarchiveError)
+            return false
+        }
+    }
+
+    /// Re-activates a settled session; true when the server accepted it.
+    func chooseUnsettle() async -> Bool {
+        guard let target, lifecycle == .settled, !actionInFlight else { return false }
+        sheetVisible = false
+        actionInFlight = true
+        OpenCodeLog.sessionChat.info("home unsettle start session=\(target.sessionId)")
+        do {
+            let restored = try await sessionRepository.unsettleSession(id: target.sessionId, directory: target.worktree)
+            OpenCodeLog.sessionChat.info("home unsettle \(restored ? "success" : "rejected") session=\(target.sessionId)")
+            actionInFlight = false
+            clear()
+            if !restored { onLifecycleError?(Self.unsettleError) }
+            return restored
+        } catch {
+            OpenCodeLog.sessionChat.warning(
+                "home unsettle failed session=\(target.sessionId) error=\(error.localizedDescription)"
+            )
+            actionInFlight = false
+            clear()
+            onLifecycleError?(Self.unsettleError)
+            return false
+        }
     }
 
     func dismissSheet() {
@@ -276,6 +327,7 @@ final class HomeSessionActions {
         sheetVisible = false
         canFork = false
         canArchive = true
+        lifecycle = .active
     }
 
     private func mutationErrorMessage(_ error: Error) -> String {
@@ -292,5 +344,7 @@ final class HomeSessionActions {
 
     private static let emptyTitleError = "Enter a session title"
     private static let archiveError = "Couldn't archive session."
+    private static let unarchiveError = "Couldn't unarchive session."
+    private static let unsettleError = "Couldn't unsettle session."
     private static let deleteError = "Couldn't delete session."
 }

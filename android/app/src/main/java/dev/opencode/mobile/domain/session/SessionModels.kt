@@ -18,9 +18,14 @@ data class Session(
     val providerInstanceId: String? = null,
     val runtimeMode: String? = null,
     val modelId: String? = null,
+    /** T3: when the thread was settled and not re-activated; null for active sessions. */
+    val settledAtEpochMs: Long? = null,
 ) {
     val isArchived: Boolean
         get() = archivedAtEpochMs != null
+
+    val isSettled: Boolean
+        get() = settledAtEpochMs != null
 }
 
 data class SessionRevert(
@@ -42,6 +47,8 @@ data class SessionSummary(
     val updatedAtEpochMs: Long? = null,
     val isReady: Boolean = false,
     val statusStale: Boolean = false,
+    val isArchived: Boolean = false,
+    val isSettled: Boolean = false,
 )
 
 data class SessionStatus(

@@ -255,6 +255,12 @@ final class SessionChatViewModel {
         sessionInfo.archiveSession()
     }
 
+    /// Applies a runtime mode from the session menu; the chrome follows the server's answer.
+    func selectRuntimeMode(_ mode: String) async {
+        guard sessionCapabilities.canSetRuntimeMode else { return }
+        await sessionInfo.setRuntimeMode(mode)
+    }
+
     func settleSession() {
         guard hasCreatedSession else { return }
         sessionInfo.settleSession()
@@ -1356,8 +1362,13 @@ final class SessionChatViewModel {
             sessionID: infoState.sessionID.isEmpty ? sessionID : infoState.sessionID,
             sessionTitle: infoState.sessionTitle.isEmpty ? sessionTitle : infoState.sessionTitle,
             capabilities: sessionCapabilities,
-            providerLabel: infoState.providerInstanceID,
+            providerLabel: T3ProviderLabel.displayName(infoState.providerInstanceID),
             runtimeModeLabel: T3RuntimeModeLabel.displayName(infoState.runtimeMode),
+            runtimeMode: infoState.runtimeMode,
+            modelSelectionLabel: T3ProviderLabel.modelSelectionLabel(
+                instanceID: infoState.providerInstanceID,
+                model: infoState.modelName
+            ),
             projectLabel: projectLabel,
             projectLetter: projectLetter,
             projectLetterAccent: projectLetterAccent,

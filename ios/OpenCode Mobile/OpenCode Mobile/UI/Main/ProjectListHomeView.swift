@@ -320,11 +320,13 @@ struct ProjectListHomeView: View {
                 isPresented: sessionActionsSheetBinding,
                 title: "Session actions"
             ) {
-                OpenCodeBottomSheetEntry(
-                    title: "Rename session",
-                    startDecorator: .icon(.edit),
-                    action: { viewModel.openSessionRename() }
-                )
+                if viewModel.sessionActionsLifecycle == .active {
+                    OpenCodeBottomSheetEntry(
+                        title: "Rename session",
+                        startDecorator: .icon(.edit),
+                        action: { viewModel.openSessionRename() }
+                    )
+                }
                 if viewModel.sessionActionsCanFork {
                     OpenCodeBottomSheetEntry(
                         title: "Fork session",
@@ -338,6 +340,22 @@ struct ProjectListHomeView: View {
                         enabled: !viewModel.sessionActionInFlight,
                         startDecorator: .icon(.archive),
                         action: { Task { await viewModel.archiveSessionAction() } }
+                    )
+                }
+                if viewModel.sessionActionsLifecycle == .archived {
+                    OpenCodeBottomSheetEntry(
+                        title: "Unarchive",
+                        enabled: !viewModel.sessionActionInFlight,
+                        startDecorator: .icon(.archive),
+                        action: { Task { await viewModel.unarchiveSessionAction() } }
+                    )
+                }
+                if viewModel.sessionActionsLifecycle == .settled {
+                    OpenCodeBottomSheetEntry(
+                        title: "Unsettle",
+                        enabled: !viewModel.sessionActionInFlight,
+                        startDecorator: .icon(.check),
+                        action: { Task { await viewModel.unsettleSessionAction() } }
                     )
                 }
                 OpenCodeBottomSheetEntry(
@@ -990,6 +1008,8 @@ struct SessionListItem: Identifiable, Hashable {
     /// Unique per optimistic new-session navigation so back-stack entries do not reuse a promoted chat.
     let optimisticNavigationInstanceID: UUID?
     let parentID: String?
+    /// Active rows come from `listSessions`; archived and settled ones from `listArchivedSessions`.
+    var lifecycle: HomeSessionLifecycle = .active
 
     init(
         id: String,
@@ -1050,10 +1070,32 @@ enum HomeSplitSelection {
     }
 }
 
+extension SessionListItem {
+    /// `Archived · 2h ago` for restorable rows; the relative time alone for active ones.
+    var homeCaption: String {
+        let relative = updatedAtEpochMs.map { RelativeTimeFormatting.format(epochMs: $0) } ?? ""
+        let prefix: String
+        switch lifecycle {
+        case .active: return relative
+        case .archived: prefix = "Archived"
+        case .settled: prefix = "Settled"
+        }
+        return relative.isEmpty ? prefix : "\(prefix) · \(relative)"
+    }
+}
+
 extension Array where Element == ProjectSectionItem {
+    /// Active rows newest first, then archived and settled rows newest first.
     func crossProjectSessionListSessions() -> [SessionListSession] {
+        let active = crossProjectRows(\.allSessions)
+        let activeIDs = Set(active.map(\.id))
+        let archived = crossProjectRows(\.archivedSessions).filter { !activeIDs.contains($0.id) }
+        return active + archived
+    }
+
+    private func crossProjectRows(_ sessionsOf: (ProjectSectionItem) -> [SessionListItem]) -> [SessionListSession] {
         let flattened = flatMap { section in
-            section.allSessions.map { session in
+            sessionsOf(section).map { session in
                 (section: section, session: session)
             }
         }
@@ -1088,7 +1130,7 @@ extension Array where Element == ProjectSectionItem {
                 subtitle: section.pathSubtitle,
                 status: session.sessionListStatus(),
                 statusIsStale: session.statusIsStale,
-                caption: session.updatedAtEpochMs.map { RelativeTimeFormatting.format(epochMs: $0) } ?? "",
+                caption: session.homeCaption,
                 updatedAtEpochMs: session.updatedAtEpochMs
             )
         }

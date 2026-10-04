@@ -216,6 +216,10 @@ data class SessionChatUiState(
     val capabilities: SessionCapabilities = SessionCapabilities.OpenCode,
     val providerLabel: String? = null,
     val runtimeModeLabel: String? = null,
+    /** Raw contract runtime mode (`approval-required`, ...); drives the picker's selection. */
+    val runtimeMode: String? = null,
+    /** `Codex · gpt-5` style label of the thread's current model selection. */
+    val modelSelectionLabel: String? = null,
     /** Smart project label for top-bar chrome; null when worktree missing. */
     val projectLabel: String? = null,
     val projectLetter: Char? = null,

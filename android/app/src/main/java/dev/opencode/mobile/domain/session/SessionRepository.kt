@@ -187,6 +187,32 @@ interface SessionRepository {
         id: String,
         directory: String? = null,
     ): Boolean = false
+
+    /** Archived or settled sessions hidden from [listSessions]; engines without the concept return nothing. */
+    suspend fun listArchivedSessions(directory: String? = null): List<Session> = emptyList()
+
+    suspend fun unarchiveSession(
+        id: String,
+        directory: String? = null,
+    ): Session = throw SessionError.Http(400, "Unarchive is not available")
+
+    suspend fun unsettleSession(
+        id: String,
+        directory: String? = null,
+    ): Boolean = false
+
+    suspend fun setRuntimeMode(
+        id: String,
+        runtimeMode: String,
+        directory: String? = null,
+    ): Session = throw SessionError.Http(400, "Runtime mode is not available")
+
+    suspend fun setModelSelection(
+        id: String,
+        providerInstanceId: String,
+        modelId: String,
+        directory: String? = null,
+    ): Session = throw SessionError.Http(400, "Model selection is not available")
 }
 
 /** How the server handled a compact request. */

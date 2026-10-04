@@ -13,6 +13,7 @@ struct SessionChatView: View {
     /// `sessionNavigationTaskID` the current `viewModelStorage` was built for.
     @State private var viewModelTaskID: String?
     @State private var activePicker: ComposerPickerKind?
+    @State private var showRuntimeModePicker = false
     @State private var activeModelProviderID: String?
     @State private var modelFilterText = ""
     @State private var showSessionContext = false
@@ -489,6 +490,21 @@ struct SessionChatView: View {
                 completedCount: viewModel.uiState.sessionTodoCompletedCount,
                 totalCount: max(viewModel.uiState.sessionTodoTotalCount, 1)
             )
+            .openCodeBottomSheet(isPresented: $showRuntimeModePicker, title: "Runtime mode") {
+                ForEach(T3RuntimeModeLabel.allModes, id: \.self) { mode in
+                    OpenCodeBottomSheetEntry(
+                        title: T3RuntimeModeLabel.displayName(mode) ?? mode,
+                        enabled: !viewModel.uiState.isLifecycleActionInFlight,
+                        endDecorator: mode == viewModel.uiState.runtimeMode
+                            ? .icon(.check, accessibilityLabel: "Selected")
+                            : .none,
+                        action: {
+                            showRuntimeModePicker = false
+                            Task { await viewModel.selectRuntimeMode(mode) }
+                        }
+                    )
+                }
+            }
             .sessionChatPickerSheet(
                 activePicker: $activePicker,
                 activeModelProviderID: $activeModelProviderID,
@@ -1061,6 +1077,30 @@ struct SessionChatView: View {
                         menuExpanded = false
                         viewModel.settleSession()
                     }
+                )
+            )
+        }
+        if viewModel.uiState.capabilities.canSetRuntimeMode {
+            entries.append(
+                OpenCodeOverflowMenuEntry(
+                    title: viewModel.uiState.runtimeModeLabel.map { "Runtime mode · \($0)" } ?? "Runtime mode",
+                    icon: .architecture,
+                    enabled: lifecycleEnabled,
+                    action: {
+                        menuExpanded = false
+                        showRuntimeModePicker = true
+                    }
+                )
+            )
+        }
+        // The shell exposes no provider/model catalogue, so the selection is read-only.
+        if viewModel.uiState.capabilities.showsModelSelection, let model = viewModel.uiState.modelSelectionLabel {
+            entries.append(
+                OpenCodeOverflowMenuEntry(
+                    title: "Model · \(model)",
+                    icon: .description,
+                    enabled: false,
+                    action: {}
                 )
             )
         }

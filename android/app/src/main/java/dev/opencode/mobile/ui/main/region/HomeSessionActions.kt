@@ -12,6 +12,7 @@ import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.ui.main.HomeSessionActionTarget
 import dev.opencode.mobile.ui.main.HomeSessionActionsUiState
+import dev.opencode.mobile.ui.main.HomeSessionLifecycle
 import dev.opencode.mobile.ui.main.SessionOpenTarget
 import dev.opencode.mobile.ui.main.suggestedHomeForkTitle
 import kotlinx.coroutines.CoroutineScope
@@ -31,6 +32,8 @@ class HomeSessionActions(
     private val scope: CoroutineScope,
     private val onLifecycleError: (String) -> Unit,
     private val capabilities: () -> SessionCapabilities = { SessionCapabilities.OpenCode },
+    /** An archived or settled session came back; home reloads its sections. */
+    private val onSessionRestored: () -> Unit = {},
 ) {
     private val _state = MutableStateFlow(HomeSessionActionsUiState())
     val state: StateFlow<HomeSessionActionsUiState> = _state.asStateFlow()
@@ -43,6 +46,7 @@ class HomeSessionActions(
         title: String,
         worktree: String,
         canArchive: Boolean,
+        lifecycle: HomeSessionLifecycle = HomeSessionLifecycle.Active,
     ) {
         forkGateJob?.cancel()
         forkedOpenTarget = null
@@ -55,9 +59,55 @@ class HomeSessionActions(
                         worktree = worktree,
                     ),
                 sheetVisible = true,
-                canArchive = canArchive,
+                canArchive = canArchive && lifecycle == HomeSessionLifecycle.Active,
+                lifecycle = lifecycle,
             )
-        forkGateJob = scope.launch { resolveForkAvailability(sessionId, worktree) }
+        // Archived and settled rows only restore or delete; fork stays off.
+        if (lifecycle == HomeSessionLifecycle.Active) {
+            forkGateJob = scope.launch { resolveForkAvailability(sessionId, worktree) }
+        }
+    }
+
+    fun chooseUnarchive() {
+        val snapshot = _state.value
+        val target = snapshot.target ?: return
+        if (snapshot.lifecycle != HomeSessionLifecycle.Archived) return
+        if (snapshot.lifecycleInFlight) return
+        _state.update { it.copy(sheetVisible = false, lifecycleInFlight = true) }
+        logI("unarchive start session=${target.sessionId}")
+        scope.launch {
+            runCatching { sessionRepository.unarchiveSession(id = target.sessionId, directory = target.worktree) }
+                .onSuccess {
+                    logI("unarchive success session=${target.sessionId}")
+                    clear(target.sessionId)
+                    onSessionRestored()
+                }.onFailure { error ->
+                    logW("unarchive failed session=${target.sessionId} message=${error.message}")
+                    clear(target.sessionId)
+                    onLifecycleError(UNARCHIVE_ERROR)
+                }
+        }
+    }
+
+    fun chooseUnsettle() {
+        val snapshot = _state.value
+        val target = snapshot.target ?: return
+        if (snapshot.lifecycle != HomeSessionLifecycle.Settled) return
+        if (snapshot.lifecycleInFlight) return
+        _state.update { it.copy(sheetVisible = false, lifecycleInFlight = true) }
+        logI("unsettle start session=${target.sessionId}")
+        scope.launch {
+            runCatching { sessionRepository.unsettleSession(id = target.sessionId, directory = target.worktree) }
+                .onSuccess { restored ->
+                    logI("unsettle ${if (restored) "success" else "rejected"} session=${target.sessionId}")
+                    clear(target.sessionId)
+                    if (restored) onSessionRestored() else onLifecycleError(UNSETTLE_ERROR)
+                }.onFailure { error ->
+                    logW("unsettle failed session=${target.sessionId} message=${error.message}")
+                    clear(target.sessionId)
+                    onLifecycleError(UNSETTLE_ERROR)
+                }
+        }
     }
 
     fun dismissSheet() {
@@ -355,6 +405,8 @@ class HomeSessionActions(
     private companion object {
         const val EMPTY_TITLE_ERROR = "Enter a session title"
         const val ARCHIVE_ERROR = "Couldn't archive session."
+        const val UNARCHIVE_ERROR = "Couldn't unarchive session."
+        const val UNSETTLE_ERROR = "Couldn't unsettle session."
         const val DELETE_ERROR = "Couldn't delete session."
         const val OUTCOME_BLOCKED = "blocked"
         const val OUTCOME_SUCCESS = "success"

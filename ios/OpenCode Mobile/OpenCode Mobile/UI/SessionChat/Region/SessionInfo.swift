@@ -107,9 +107,43 @@ final class SessionInfo {
             return
         }
         guard state.sessionID == sessionID else { return }
+        applyChrome(from: session)
+        notifyChange()
+    }
+
+    private func applyChrome(from session: Session) {
         state.providerInstanceID = session.providerInstanceID
         state.runtimeMode = session.runtimeMode
+        state.modelName = session.modelName
+    }
+
+    /// Changes the thread's runtime mode and reflects the server's answer in the chrome.
+    func setRuntimeMode(_ runtimeMode: String) async {
+        guard !state.sessionID.isEmpty,
+              !OptimisticSessionCreate.isPlaceholder(state.sessionID),
+              !state.isLifecycleActionInFlight,
+              runtimeMode != state.runtimeMode else { return }
+        let sessionID = state.sessionID
+        state.isLifecycleActionInFlight = true
+        state.lifecycleErrorMessage = nil
         notifyChange()
+        OpenCodeLog.sessionChat.info("runtime mode start session=\(sessionID) mode=\(runtimeMode)")
+        do {
+            let session = try await sessionRepository.setRuntimeMode(id: sessionID, runtimeMode: runtimeMode, directory: worktree)
+            guard state.sessionID == sessionID else { return }
+            OpenCodeLog.sessionChat.info("runtime mode success session=\(sessionID) mode=\(session.runtimeMode ?? "")")
+            state.isLifecycleActionInFlight = false
+            applyChrome(from: session)
+            notifyChange()
+        } catch {
+            guard state.sessionID == sessionID else { return }
+            OpenCodeLog.sessionChat.info(
+                "runtime mode failure session=\(sessionID) error=\(error.localizedDescription)"
+            )
+            state.isLifecycleActionInFlight = false
+            state.lifecycleErrorMessage = Self.runtimeModeError
+            notifyChange()
+        }
     }
 
     func stopObserving() {
@@ -404,4 +438,5 @@ final class SessionInfo {
     private static let archiveError = "Couldn't archive session."
     private static let settleError = "Couldn't settle session."
     private static let deleteError = "Couldn't delete session."
+    private static let runtimeModeError = "Couldn't change runtime mode."
 }

@@ -17,6 +17,12 @@ data class SessionCapabilities(
     val showsTerminal: Boolean = true,
     val showsReview: Boolean = true,
     val showsFiles: Boolean = true,
+    /** The user can change the thread's runtime mode from the session menu. */
+    val canSetRuntimeMode: Boolean = false,
+    /** The session menu shows the thread's provider/model selection. */
+    val showsModelSelection: Boolean = false,
+    /** Home lists archived and settled sessions with restore actions. */
+    val showsArchivedSessions: Boolean = false,
 ) {
     val requiresComposerModel: Boolean
         get() = !showsProvider
@@ -53,6 +59,9 @@ data class SessionCapabilities(
                 showsTerminal = false,
                 showsReview = false,
                 showsFiles = false,
+                canSetRuntimeMode = true,
+                showsModelSelection = true,
+                showsArchivedSessions = true,
             )
 
         fun forEngine(engine: ConnectionEngine): SessionCapabilities =

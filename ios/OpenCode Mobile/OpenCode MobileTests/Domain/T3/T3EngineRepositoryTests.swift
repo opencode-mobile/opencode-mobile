@@ -275,7 +275,7 @@ struct T3EngineRepositoryTests {
 
 // MARK: - Fakes
 
-private final class FakeT3EngineClient: T3EngineClient, @unchecked Sendable {
+final class FakeT3EngineClient: T3EngineClient, @unchecked Sendable {
     private let lock = NSLock()
     private var snapshot: T3ShellSnapshot
     private var cachedSnapshot: T3ShellSnapshot

@@ -86,6 +86,8 @@ data class HomeSessionActionsCallbacks(
     val onForkOpen: () -> Unit = {},
     val onForkStay: () -> Unit = {},
     val onChooseArchive: () -> Unit = {},
+    val onChooseUnarchive: () -> Unit = {},
+    val onChooseUnsettle: () -> Unit = {},
     val onChooseDelete: () -> Unit = {},
     val onConfirmDelete: () -> Unit = {},
     val onDismissDeleteConfirm: () -> Unit = {},
@@ -150,6 +152,8 @@ fun MainScreen(
                 onForkOpen = viewModel::chooseForkOpen,
                 onForkStay = viewModel::chooseForkStay,
                 onChooseArchive = viewModel::chooseArchive,
+                onChooseUnarchive = viewModel::chooseUnarchive,
+                onChooseUnsettle = viewModel::chooseUnsettle,
                 onChooseDelete = viewModel::chooseDelete,
                 onConfirmDelete = viewModel::confirmDelete,
                 onDismissDeleteConfirm = viewModel::dismissDeleteConfirm,
@@ -674,25 +678,43 @@ private fun HomeSessionActions(
         title = "Session actions",
         onDismissRequest = callbacks.onDismissSheet,
     ) {
-        OpenCodeBottomSheetEntry(
-            title = "Rename session",
-            startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Edit, null),
-            onClick = callbacks.onChooseRename,
-        )
-        if (state.canFork) {
-            OpenCodeBottomSheetEntry(
-                title = "Fork session",
-                startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.ContentCopy, null),
-                onClick = callbacks.onChooseFork,
-            )
-        }
-        if (state.canArchive) {
-            OpenCodeBottomSheetEntry(
-                title = "Archive",
-                enabled = !state.lifecycleInFlight,
-                startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Archive, null),
-                onClick = callbacks.onChooseArchive,
-            )
+        when (state.lifecycle) {
+            HomeSessionLifecycle.Archived ->
+                OpenCodeBottomSheetEntry(
+                    title = "Unarchive",
+                    enabled = !state.lifecycleInFlight,
+                    startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Archive, null),
+                    onClick = callbacks.onChooseUnarchive,
+                )
+            HomeSessionLifecycle.Settled ->
+                OpenCodeBottomSheetEntry(
+                    title = "Unsettle",
+                    enabled = !state.lifecycleInFlight,
+                    startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check, null),
+                    onClick = callbacks.onChooseUnsettle,
+                )
+            HomeSessionLifecycle.Active -> {
+                OpenCodeBottomSheetEntry(
+                    title = "Rename session",
+                    startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Edit, null),
+                    onClick = callbacks.onChooseRename,
+                )
+                if (state.canFork) {
+                    OpenCodeBottomSheetEntry(
+                        title = "Fork session",
+                        startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.ContentCopy, null),
+                        onClick = callbacks.onChooseFork,
+                    )
+                }
+                if (state.canArchive) {
+                    OpenCodeBottomSheetEntry(
+                        title = "Archive",
+                        enabled = !state.lifecycleInFlight,
+                        startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Archive, null),
+                        onClick = callbacks.onChooseArchive,
+                    )
+                }
+            }
         }
         OpenCodeBottomSheetEntry(
             title = "Delete",
@@ -998,11 +1020,26 @@ private class DisplayedSessions {
     var value: List<SessionListSession> = emptyList()
 }
 
+/** Active rows newest first, then archived and settled rows newest first. */
 internal fun List<ProjectSectionUi>.toCrossProjectSessionListSessions(): List<SessionListSession> {
-    val flattened =
-        flatMap { section ->
-            section.allSessions.map { session -> section to session }
-        }
+    val active = crossProjectRows { it.allSessions }.toDedupedSessionList()
+    val activeIds = active.map { it.id }.toSet()
+    val archived =
+        crossProjectRows { it.archivedSessions }
+            .filter { (_, session) -> session.id !in activeIds }
+            .toDedupedSessionList()
+    return active + archived
+}
+
+private fun List<ProjectSectionUi>.crossProjectRows(
+    sessionsOf: (ProjectSectionUi) -> List<SessionSummary>,
+): List<Pair<ProjectSectionUi, SessionSummary>> =
+    flatMap { section ->
+        sessionsOf(section).map { session -> section to session }
+    }
+
+private fun List<Pair<ProjectSectionUi, SessionSummary>>.toDedupedSessionList(): List<SessionListSession> {
+    val flattened = this
     val chosenIndexById = mutableMapOf<String, Int>()
     flattened.forEachIndexed { index, (_, session) ->
         val timestamp = session.updatedAtEpochMs ?: 0L
@@ -1028,7 +1065,7 @@ internal fun List<ProjectSectionUi>.toCrossProjectSessionListSessions(): List<Se
                 letterAccent = section.letterAccent,
                 subtitle = section.pathSubtitle,
                 status = session.toSessionListStatus(),
-                caption = session.updatedAtEpochMs?.let(RelativeTimeFormatting::format).orEmpty(),
+                caption = session.homeCaption(),
                 updatedAtEpochMs = session.updatedAtEpochMs,
                 retryAttempt = session.retryAttempt(),
                 statusStale = session.statusStale,
@@ -1054,6 +1091,18 @@ private fun SessionSummary.toSessionListStatus(hasPendingPermission: Boolean = f
         statusLabel?.startsWith("Retrying") == true -> SessionListStatus.Retrying
         else -> if (isReady) SessionListStatus.Ready else SessionListStatus.Idle
     }
+
+/** `Archived · 2h ago` for restorable rows; the relative time alone for active ones. */
+internal fun SessionSummary.homeCaption(): String {
+    val relative = updatedAtEpochMs?.let(RelativeTimeFormatting::format).orEmpty()
+    val lifecycle =
+        when {
+            isArchived -> "Archived"
+            isSettled -> "Settled"
+            else -> return relative
+        }
+    return if (relative.isEmpty()) lifecycle else "$lifecycle · $relative"
+}
 
 private fun SessionSummary.retryAttempt(): Int? =
     statusLabel

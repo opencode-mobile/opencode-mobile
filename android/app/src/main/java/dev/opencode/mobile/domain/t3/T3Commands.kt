@@ -69,6 +69,52 @@ object T3Commands {
             put("threadId", threadId)
         }
 
+    fun threadUnarchive(
+        threadId: String,
+        commandId: String = commandId(),
+    ): JsonObject =
+        buildJsonObject {
+            put("type", "thread.unarchive")
+            put("commandId", commandId)
+            put("threadId", threadId)
+        }
+
+    /** Re-activates a settled thread; the contract only allows the `user` reason from clients. */
+    fun threadUnsettle(
+        threadId: String,
+        commandId: String = commandId(),
+    ): JsonObject =
+        buildJsonObject {
+            put("type", "thread.unsettle")
+            put("commandId", commandId)
+            put("threadId", threadId)
+            put("reason", "user")
+        }
+
+    fun threadRuntimeModeSet(
+        threadId: String,
+        runtimeMode: String,
+        commandId: String = commandId(),
+    ): JsonObject =
+        buildJsonObject {
+            put("type", "thread.runtime-mode.set")
+            put("commandId", commandId)
+            put("threadId", threadId)
+            put("runtimeMode", runtimeMode)
+        }
+
+    fun threadModelSelectionSet(
+        threadId: String,
+        modelSelection: T3ModelSelection,
+        commandId: String = commandId(),
+    ): JsonObject =
+        buildJsonObject {
+            put("type", "thread.model-selection.set")
+            put("commandId", commandId)
+            put("threadId", threadId)
+            put("modelSelection", encodeModelSelection(modelSelection))
+        }
+
     fun threadDelete(
         threadId: String,
         commandId: String = commandId(),

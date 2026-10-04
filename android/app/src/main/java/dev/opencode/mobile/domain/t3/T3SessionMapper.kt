@@ -26,12 +26,13 @@ object T3SessionMapper {
             title = thread.title.ifBlank { "Untitled" },
             projectId = thread.projectId,
             directory = directory ?: thread.worktreePath,
-            createdAtEpochMs = T3MessageMapper.epochMs(thread.updatedAt),
+            createdAtEpochMs = T3MessageMapper.epochMs(thread.createdAt),
             updatedAtEpochMs = T3MessageMapper.epochMs(thread.updatedAt),
             archivedAtEpochMs = T3MessageMapper.epochMs(thread.archivedAt),
             providerInstanceId = thread.providerInstanceId,
             runtimeMode = thread.runtimeMode,
             modelId = thread.modelSelection?.model,
+            settledAtEpochMs = if (T3Activity.isSettled(thread)) T3MessageMapper.epochMs(thread.settledAt) else null,
         )
 
     fun approvalId(thread: T3Thread): String? {

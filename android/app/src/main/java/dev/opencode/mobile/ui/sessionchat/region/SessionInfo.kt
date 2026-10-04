@@ -276,6 +276,39 @@ class SessionInfo(
         }
     }
 
+    /** Changes the thread's runtime mode; [onApplied] receives the refreshed session. */
+    fun setRuntimeMode(
+        runtimeMode: String,
+        onApplied: (dev.opencode.mobile.domain.session.Session) -> Unit = {},
+    ) {
+        val sessionId = boundSessionId ?: return
+        val worktree = boundWorktree ?: return
+        if (OptimisticSessionCreate.isPlaceholder(sessionId)) return
+        if (_state.value.isLifecycleActionInFlight) return
+        scope.launch {
+            _state.update {
+                it.copy(isLifecycleActionInFlight = true, lifecycleErrorMessage = null)
+            }
+            logI("runtime mode start session=$sessionId mode=$runtimeMode")
+            runCatching { sessionRepository.setRuntimeMode(id = sessionId, runtimeMode = runtimeMode, directory = worktree) }
+                .onSuccess { session ->
+                    if (!isCurrentBinding(sessionId, worktree)) return@onSuccess
+                    logI("runtime mode success session=$sessionId mode=${session.runtimeMode}")
+                    _state.update { it.copy(isLifecycleActionInFlight = false) }
+                    onApplied(session)
+                }.onFailure { error ->
+                    if (!isCurrentBinding(sessionId, worktree)) return@onFailure
+                    logI("runtime mode failure session=$sessionId error=${error.message}")
+                    _state.update {
+                        it.copy(
+                            isLifecycleActionInFlight = false,
+                            lifecycleErrorMessage = RUNTIME_MODE_ERROR,
+                        )
+                    }
+                }
+        }
+    }
+
     fun deleteSession() {
         val sessionId = boundSessionId ?: return
         val worktree = boundWorktree ?: return
@@ -494,5 +527,6 @@ class SessionInfo(
         const val ARCHIVE_ERROR = "Couldn't archive session."
         const val SETTLE_ERROR = "Couldn't settle session."
         const val DELETE_ERROR = "Couldn't delete session."
+        const val RUNTIME_MODE_ERROR = "Couldn't change runtime mode."
     }
 }

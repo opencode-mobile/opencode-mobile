@@ -213,6 +213,10 @@ struct SessionChatUiState: Equatable {
     var capabilities: SessionCapabilities = .opencode
     var providerLabel: String? = nil
     var runtimeModeLabel: String? = nil
+    /// Raw contract runtime mode (`approval-required`, ...); drives the picker's selection.
+    var runtimeMode: String? = nil
+    /// `Codex · gpt-5` style label of the thread's current model selection.
+    var modelSelectionLabel: String? = nil
     /// Smart project label for top-bar chrome; nil when worktree missing.
     var projectLabel: String? = nil
     var projectLetter: Character? = nil
@@ -670,6 +674,7 @@ struct SessionInfoRegionState: Equatable {
     var errorMessage: String?
     var providerInstanceID: String?
     var runtimeMode: String?
+    var modelName: String?
 
     mutating func applyStatus(
         authoritative: String?,

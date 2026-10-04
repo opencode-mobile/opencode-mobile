@@ -16,6 +16,12 @@ nonisolated struct SessionCapabilities: Equatable, Sendable {
     var showsTerminal: Bool
     var showsReview: Bool
     var showsFiles: Bool
+    /// The user can change the thread's runtime mode from the session menu.
+    var canSetRuntimeMode = false
+    /// The session menu shows the thread's provider/model selection.
+    var showsModelSelection = false
+    /// Home lists archived and settled sessions with restore actions.
+    var showsArchivedSessions = false
 
     static let opencode = SessionCapabilities(
         showsAgent: true,
@@ -46,7 +52,10 @@ nonisolated struct SessionCapabilities: Equatable, Sendable {
         showsSettle: true,
         showsTerminal: false,
         showsReview: false,
-        showsFiles: false
+        showsFiles: false,
+        canSetRuntimeMode: true,
+        showsModelSelection: true,
+        showsArchivedSessions: true
     )
 
     static func forEngine(_ engine: ConnectionEngine) -> SessionCapabilities {

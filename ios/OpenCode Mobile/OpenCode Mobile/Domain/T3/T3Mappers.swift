@@ -44,8 +44,16 @@ nonisolated enum T3ShellMapper {
             providerInstanceID: thread.providerInstanceID,
             runtimeMode: thread.runtimeMode,
             modelName: thread.modelSelection?.model,
-            activeRunID: thread.activeRunID
+            activeRunID: thread.activeRunID,
+            settledAtEpochMs: thread.isSettled ? T3JSON.epochMs(thread.settledAt) : nil
         )
+    }
+
+    /// Archived and settled threads as sessions, newest first.
+    static func archivedSessions(from snapshot: T3ShellSnapshot, directory: String? = nil) -> [Session] {
+        snapshot.archivedThreads.map { thread in
+            session(from: thread, directory: directory ?? projectRoot(for: thread, in: snapshot))
+        }
     }
 
     static func statuses(from snapshot: T3ShellSnapshot) -> [SessionStatus] {

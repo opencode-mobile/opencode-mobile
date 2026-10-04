@@ -38,13 +38,26 @@ data class T3Thread(
     val modelSelection: T3ModelSelection?,
     val pendingRequestId: String? = null,
     val pendingRequestKind: String? = null,
+    val createdAt: String? = null,
 )
 
 data class T3ShellSnapshot(
     val threads: List<T3Thread>,
     val projects: List<T3Project>,
     val snapshotSequence: Long = 0,
-)
+    /** Threads the server lists under `archivedThreads`; never merged into [threads]. */
+    val archivedThreads: List<T3Thread> = emptyList(),
+) {
+    /** Active and archived threads; an id present in both resolves to the active copy. */
+    val allThreads: List<T3Thread>
+        get() {
+            if (archivedThreads.isEmpty()) return threads
+            val activeIds = threads.mapTo(HashSet()) { it.id }
+            return threads + archivedThreads.filterNot { it.id in activeIds }
+        }
+
+    fun thread(id: String): T3Thread? = threads.firstOrNull { it.id == id } ?: archivedThreads.firstOrNull { it.id == id }
+}
 
 data class T3Attachment(
     val id: String,
@@ -138,6 +151,9 @@ data class T3PairingResult(
 )
 
 object T3RuntimeModeLabels {
+    /** The runtime modes the orchestration contract accepts, in picker order. */
+    val allModes: List<String> = listOf("approval-required", "auto-accept-edits", "auto", "full-access")
+
     fun displayName(runtimeMode: String?): String =
         when (runtimeMode) {
             "approval-required" -> "Supervised"
@@ -146,6 +162,35 @@ object T3RuntimeModeLabels {
             "full-access" -> "Full access"
             else -> runtimeMode.orEmpty()
         }
+}
+
+object T3ProviderLabels {
+    /**
+     * Human label for a provider instance id. The shell carries no provider
+     * catalogue, so the driver part of the slug is title-cased and a numeric
+     * instance suffix dropped: `codex-1` -> `Codex`, `claude-code` -> `Claude Code`.
+     */
+    fun displayName(instanceId: String?): String? {
+        val raw = instanceId?.trim().orEmpty()
+        if (raw.isEmpty()) return null
+        val words =
+            raw
+                .split('-', '_')
+                .filter { it.isNotBlank() }
+                .dropLastWhile { it.all(Char::isDigit) }
+        if (words.isEmpty()) return raw
+        return words.joinToString(" ") { word -> word.replaceFirstChar { it.uppercaseChar() } }
+    }
+
+    /** `Codex · gpt-5` when a model is known, else the provider label alone. */
+    fun modelSelectionLabel(
+        instanceId: String?,
+        model: String?,
+    ): String? {
+        val provider = displayName(instanceId) ?: return model?.takeIf { it.isNotBlank() }
+        val modelName = model?.trim().orEmpty()
+        return if (modelName.isEmpty()) provider else "$provider · $modelName"
+    }
 }
 
 object T3Activity {
@@ -162,7 +207,18 @@ object T3Activity {
     fun isActiveListRow(thread: T3Thread): Boolean {
         if (!thread.deletedAt.isNullOrBlank()) return false
         if (!thread.archivedAt.isNullOrBlank()) return false
-        if (!thread.settledAt.isNullOrBlank() && thread.settledOverride != "active") return false
+        if (isSettled(thread)) return false
         return true
+    }
+
+    fun isArchived(thread: T3Thread): Boolean = !thread.archivedAt.isNullOrBlank()
+
+    /** Settled by the user or the sweep and not re-activated with an override. */
+    fun isSettled(thread: T3Thread): Boolean = !thread.settledAt.isNullOrBlank() && thread.settledOverride != "active"
+
+    /** Archived or settled threads: hidden from the active list, restorable from home. */
+    fun isArchivedListRow(thread: T3Thread): Boolean {
+        if (!thread.deletedAt.isNullOrBlank()) return false
+        return isArchived(thread) || isSettled(thread)
     }
 }

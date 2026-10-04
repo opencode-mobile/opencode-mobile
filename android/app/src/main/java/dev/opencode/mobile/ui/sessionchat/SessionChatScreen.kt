@@ -58,6 +58,7 @@ import dev.opencode.mobile.domain.preferences.DeveloperToolsPreferences
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.SessionTodoList
 import dev.opencode.mobile.theme.OpenCodeTheme
+import dev.opencode.mobile.domain.t3.T3RuntimeModeLabels
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
 import dev.opencode.mobile.ui.components.OpenCodeActionPill
 import dev.opencode.mobile.ui.components.OpenCodeActionPillVariant
@@ -175,6 +176,7 @@ fun SessionChatScreen(
     val attachmentSources = uiState.composer.attachmentSources(DeveloperToolsPreferences.unlocked)
     var menuExpanded by rememberSaveable { mutableStateOf(false) }
     var showDeleteConfirmation by remember { mutableStateOf(false) }
+    var showRuntimeModePicker by rememberSaveable { mutableStateOf(false) }
     var activePicker by remember { mutableStateOf<ComposerPickerKind?>(null) }
     var activeModelProviderId by remember { mutableStateOf<String?>(null) }
     var modelFilterText by remember { mutableStateOf("") }
@@ -585,6 +587,30 @@ fun SessionChatScreen(
                                         menuExpanded = false
                                         viewModel.settleSession()
                                     },
+                                ),
+                            )
+                        }
+                        if (uiState.capabilities.canSetRuntimeMode) {
+                            add(
+                                OpenCodeOverflowMenuEntry(
+                                    title = uiState.runtimeModeLabel?.let { "Runtime mode · $it" } ?: "Runtime mode",
+                                    icon = OpenCodeIcons.Architecture,
+                                    enabled = lifecycleActionsEnabled,
+                                    onClick = {
+                                        menuExpanded = false
+                                        showRuntimeModePicker = true
+                                    },
+                                ),
+                            )
+                        }
+                        // The shell exposes no provider/model catalogue, so the selection is read-only.
+                        uiState.modelSelectionLabel?.takeIf { uiState.capabilities.showsModelSelection }?.let { label ->
+                            add(
+                                OpenCodeOverflowMenuEntry(
+                                    title = "Model · $label",
+                                    icon = OpenCodeIcons.Description,
+                                    enabled = false,
+                                    onClick = {},
                                 ),
                             )
                         }
@@ -1276,6 +1302,29 @@ fun SessionChatScreen(
                 activePicker = null
             },
         )
+
+        OpenCodeBottomSheet(
+            visible = showRuntimeModePicker,
+            title = "Runtime mode",
+            onDismissRequest = { showRuntimeModePicker = false },
+        ) {
+            T3RuntimeModeLabels.allModes.forEach { mode ->
+                OpenCodeBottomSheetEntry(
+                    title = T3RuntimeModeLabels.displayName(mode),
+                    enabled = lifecycleActionsEnabled,
+                    endDecorator =
+                        if (mode == uiState.runtimeMode) {
+                            BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check, "Selected")
+                        } else {
+                            BottomSheetEntryDecorator.None
+                        },
+                    onClick = {
+                        showRuntimeModePicker = false
+                        viewModel.selectRuntimeMode(mode)
+                    },
+                )
+            }
+        }
 
         OpenCodeDialog(
             visible = uiState.rename.isDialogVisible,

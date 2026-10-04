@@ -236,6 +236,69 @@ final class T3SessionRepository: SessionRepository, @unchecked Sendable {
         return true
     }
 
+    func listArchivedSessions(directory: String?) async throws -> [Session] {
+        let snapshot = try await client.fetchShell(force: true)
+        return snapshot.archivedThreads
+            .filter { T3ProjectSelection.matches($0, directory: directory, in: snapshot) }
+            .map { thread in
+                T3ShellMapper.session(
+                    from: thread,
+                    directory: Self.fallbackDirectory(directory, thread: thread, snapshot: snapshot)
+                )
+            }
+    }
+
+    func unarchiveSession(id: String, directory: String?) async throws -> Session {
+        try await client.dispatchCommand(
+            T3SessionCommands.unarchiveCommand(commandID: UUID().uuidString, threadID: id)
+        )
+        let thread = try await resolveThread(id: id, refresh: true)
+        var session = T3ShellMapper.session(from: thread, directory: await resolvedDirectory(directory, thread: thread))
+        session.archivedAtEpochMs = nil
+        return session
+    }
+
+    func unsettleSession(id: String, directory _: String?) async throws -> Bool {
+        try await client.dispatchCommand(
+            T3SessionCommands.unsettleCommand(commandID: UUID().uuidString, threadID: id)
+        )
+        _ = try? await client.fetchShell(force: true)
+        return true
+    }
+
+    func setRuntimeMode(id: String, runtimeMode: String, directory: String?) async throws -> Session {
+        guard T3RuntimeModeLabel.allModes.contains(runtimeMode) else {
+            throw SessionError.http(statusCode: 400, message: "Unknown runtime mode: \(runtimeMode)")
+        }
+        try await client.dispatchCommand(
+            T3SessionCommands.runtimeModeSetCommand(commandID: UUID().uuidString, threadID: id, runtimeMode: runtimeMode)
+        )
+        let thread = try await resolveThread(id: id, refresh: true)
+        var session = T3ShellMapper.session(from: thread, directory: await resolvedDirectory(directory, thread: thread))
+        session.runtimeMode = runtimeMode
+        return session
+    }
+
+    func setModelSelection(id: String, providerInstanceID: String, modelID: String, directory: String?) async throws -> Session {
+        let instance = providerInstanceID.trimmingCharacters(in: .whitespacesAndNewlines)
+        let model = modelID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !instance.isEmpty, !model.isEmpty else {
+            throw SessionError.http(statusCode: 400, message: "A provider instance and model are required")
+        }
+        try await client.dispatchCommand(
+            T3SessionCommands.modelSelectionSetCommand(
+                commandID: UUID().uuidString,
+                threadID: id,
+                selection: T3ModelSelection(instanceID: instance, model: model)
+            )
+        )
+        let thread = try await resolveThread(id: id, refresh: true)
+        var session = T3ShellMapper.session(from: thread, directory: await resolvedDirectory(directory, thread: thread))
+        session.providerInstanceID = instance
+        session.modelName = model
+        return session
+    }
+
     // MARK: - Helpers
 
     /// The thread waiting on `requestID`; found by id, else by its pending question.
@@ -306,6 +369,7 @@ final class T3SessionRepository: SessionRepository, @unchecked Sendable {
         copy.runtimeMode = session.runtimeMode
         copy.modelName = session.modelName
         copy.activeRunID = session.activeRunID
+        copy.settledAtEpochMs = session.settledAtEpochMs
         return copy
     }
 

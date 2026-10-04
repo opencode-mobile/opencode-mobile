@@ -17,8 +17,11 @@ struct Session: Sendable, Equatable {
     var runtimeMode: String? = nil
     var modelName: String? = nil
     var activeRunID: String? = nil
+    /// T3: when the thread was settled and not re-activated; nil for active sessions.
+    var settledAtEpochMs: Int64? = nil
 
     var isArchived: Bool { archivedAtEpochMs != nil }
+    var isSettled: Bool { settledAtEpochMs != nil }
 }
 
 struct SessionRevert: Sendable, Equatable {
