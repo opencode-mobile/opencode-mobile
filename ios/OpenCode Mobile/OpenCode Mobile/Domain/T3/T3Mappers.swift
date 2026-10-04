@@ -16,17 +16,27 @@ nonisolated enum T3ShellMapper {
         return T3ShellSnapshot(sequence: sequence, threads: threads, projects: projects)
     }
 
-    static func sessions(from snapshot: T3ShellSnapshot) -> [Session] {
-        snapshot.activeThreads.map(session(from:))
+    static func sessions(from snapshot: T3ShellSnapshot, directory: String? = nil) -> [Session] {
+        snapshot.activeThreads.map { thread in
+            session(from: thread, directory: directory ?? projectRoot(for: thread, in: snapshot))
+        }
     }
 
-    static func session(from thread: T3Thread) -> Session {
+    /// Workspace root of the project that owns `thread`; the directory a
+    /// root-strategy thread (no worktree of its own) belongs to.
+    static func projectRoot(for thread: T3Thread, in snapshot: T3ShellSnapshot) -> String? {
+        snapshot.projects.first { $0.id == thread.projectID }?.workspaceRoot
+    }
+
+    /// `directory` fills in `Session.directory` when the thread has no worktree
+    /// of its own (root workspace strategy).
+    static func session(from thread: T3Thread, directory: String? = nil) -> Session {
         Session(
             id: thread.id,
             title: thread.title,
             slug: nil,
             projectID: thread.projectID,
-            directory: thread.worktreePath,
+            directory: thread.worktreePath ?? directory,
             parentID: nil,
             createdAtEpochMs: thread.createdAtEpochMs,
             updatedAtEpochMs: thread.updatedAtEpochMs,

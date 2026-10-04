@@ -90,9 +90,17 @@ extension Container {
 
     var projectRepository: Factory<any ProjectRepository> {
         self {
-            DefaultProjectRepository(
-                api: self.projectsAPIClient(),
-                adapter: self.projectDomainAdapter(),
+            EngineProjectRepository(
+                opencode: DefaultProjectRepository(
+                    api: self.projectsAPIClient(),
+                    adapter: self.projectDomainAdapter(),
+                    activeConnectionManager: self.activeConnectionManager()
+                ),
+                t3: T3ProjectRepository(
+                    client: self.t3EnvironmentClient(),
+                    activeConnectionManager: self.activeConnectionManager(),
+                    connectionProfileStore: self.connectionProfileStore()
+                ),
                 activeConnectionManager: self.activeConnectionManager()
             )
         }.singleton

@@ -757,6 +757,12 @@ final class ProjectListHomeViewModel {
                     try await projectRepository.probeServer()
                 } catch {
                     state = .probeFailed(error.localizedDescription)
+                    return
+                }
+                // A probe may seed worktrees (T3 project roots); paint them now.
+                let seeded = await connectionProfileStore.addedWorktrees(serverBaseURL: serverBaseURL)
+                if !seeded.isEmpty {
+                    await runHomeLoad(skipProbe: true)
                 }
             }
             return
