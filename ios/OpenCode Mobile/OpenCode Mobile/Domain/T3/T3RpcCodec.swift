@@ -53,6 +53,21 @@ nonisolated enum T3RpcCodec {
         try JSONSerialization.data(withJSONObject: ["_tag": "Pong"])
     }
 
+    /// Client keepalive; the server answers with `Pong`.
+    static func encodePing() throws -> Data {
+        try JSONSerialization.data(withJSONObject: ["_tag": "Ping"])
+    }
+
+    /// Effect RPC `Interrupt`: cancels the server-side fiber for a streaming
+    /// request so chunks stop being produced for an observer that went away.
+    static func encodeInterrupt(requestID: String) throws -> Data {
+        try JSONSerialization.data(withJSONObject: [
+            "_tag": "Interrupt",
+            "requestId": requestID,
+            "interruptors": [Any](),
+        ])
+    }
+
     static func parseFrame(_ data: Data) throws -> T3RpcFrame {
         let json = try JSONSerialization.jsonObject(with: data)
         return parseFrame(json)

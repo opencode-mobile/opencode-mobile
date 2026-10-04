@@ -260,3 +260,14 @@ struct T3PairingLink: Equatable, Sendable {
         value.replacingOccurrences(of: "+", with: " ").removingPercentEncoding ?? value
     }
 }
+
+/// The REST surface `T3EnvironmentClient` needs. `T3HttpClient` is the live
+/// implementation; tests inject a fake so socket behaviour runs offline.
+nonisolated protocol T3HttpTransport: Sendable {
+    func fetchShell(baseURL: URL, bearer: String) async throws -> T3ShellSnapshot
+    func fetchThread(baseURL: URL, bearer: String, id: String) async throws -> T3ThreadDetail
+    func issueWebsocketTicket(baseURL: URL, bearer: String) async throws -> String
+    func fetchBytes(url: URL, maxBytes: Int) async -> Data?
+}
+
+extension T3HttpClient: T3HttpTransport {}

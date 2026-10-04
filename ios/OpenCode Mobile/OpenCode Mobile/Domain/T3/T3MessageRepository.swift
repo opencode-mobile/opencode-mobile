@@ -2,13 +2,21 @@ import Foundation
 
 @MainActor
 final class T3MessageRepository: MessageRepository {
+    static let defaultResubscribeDelay: Duration = .seconds(1)
+    static let maxResubscribeDelay: Duration = .seconds(10)
+
     private let client: T3EnvironmentClient
     private let eventStream: (any ForegroundEventStream)?
     private let contentPreparer: MessageContentPreparer
+    private let resubscribeDelay: Duration
     private var lastPendingRequestIDs: [String: String] = [:]
-    private var continuations: [UUID: AsyncStream<MessageListUpdate>.Continuation] = [:]
-    private var displayContinuations: [UUID: AsyncStream<DisplayMessageListUpdate>.Continuation] = [:]
+    private var continuations: [UUID: Observer<MessageListUpdate>] = [:]
+    private var displayContinuations: [UUID: Observer<DisplayMessageListUpdate>] = [:]
     private var subscriptions: [String: Task<Void, Never>] = [:]
+    /// Last known thread sequence per session: `snapshotSequence` from REST or
+    /// a snapshot item, or `sequence` from a live event item. A re-established
+    /// subscription resumes from here.
+    private var sequences: [String: Int] = [:]
     private var snapshots: [String: [Message]] = [:]
     private var transcripts: [String: T3Transcript] = [:]
     private var preparedByID: [String: DisplayMessage] = [:]
@@ -17,23 +25,40 @@ final class T3MessageRepository: MessageRepository {
     private var imageAttempts: Set<String> = []
     private var imageLoads: Set<String> = []
 
+    private struct Observer<Update> {
+        let sessionID: String
+        let continuation: AsyncStream<Update>.Continuation
+    }
+
     init(
         client: T3EnvironmentClient,
         eventStream: (any ForegroundEventStream)? = nil,
-        contentPreparer: MessageContentPreparer = .shared
+        contentPreparer: MessageContentPreparer = .shared,
+        resubscribeDelay: Duration = T3MessageRepository.defaultResubscribeDelay
     ) {
         self.client = client
         self.eventStream = eventStream
         self.contentPreparer = contentPreparer
+        self.resubscribeDelay = resubscribeDelay
+    }
+
+    /// Sessions with a live subscription task. Exposed for tests.
+    var subscribedSessionIDs: Set<String> {
+        Set(subscriptions.keys)
+    }
+
+    func lastKnownSequence(sessionID: String) -> Int? {
+        sequences[sessionID]
     }
 
     func observeMessages(sessionID: String, directory: String?) -> AsyncStream<MessageListUpdate> {
         let id = UUID()
         let (stream, continuation) = AsyncStream.makeStream(of: MessageListUpdate.self)
-        continuations[id] = continuation
+        continuations[id] = Observer(sessionID: sessionID, continuation: continuation)
         continuation.onTermination = { [weak self] _ in
             Task { @MainActor in
                 self?.continuations.removeValue(forKey: id)
+                self?.stopSubscriptionIfUnobserved(sessionID: sessionID)
             }
         }
         Task { [weak self] in
@@ -44,7 +69,7 @@ final class T3MessageRepository: MessageRepository {
             } catch {
                 continuation.yield(.loadFailed(error))
             }
-            self.startSubscription(sessionID: sessionID)
+            self.ensureSubscription(sessionID: sessionID)
         }
         return stream
     }
@@ -52,10 +77,11 @@ final class T3MessageRepository: MessageRepository {
     func observeDisplayMessages(sessionID: String, directory: String?) -> AsyncStream<DisplayMessageListUpdate> {
         let id = UUID()
         let (stream, continuation) = AsyncStream.makeStream(of: DisplayMessageListUpdate.self)
-        displayContinuations[id] = continuation
+        displayContinuations[id] = Observer(sessionID: sessionID, continuation: continuation)
         continuation.onTermination = { [weak self] _ in
             Task { @MainActor in
                 self?.displayContinuations.removeValue(forKey: id)
+                self?.stopSubscriptionIfUnobserved(sessionID: sessionID)
             }
         }
         Task { [weak self] in
@@ -66,7 +92,7 @@ final class T3MessageRepository: MessageRepository {
             } catch {
                 continuation.yield(.loadFailed(error))
             }
-            self.startSubscription(sessionID: sessionID)
+            self.ensureSubscription(sessionID: sessionID)
         }
         return stream
     }
@@ -78,8 +104,9 @@ final class T3MessageRepository: MessageRepository {
         let messages = T3MessageMapper.domainMessages(from: transcript)
         retryFailedImageLoads(in: messages)
         snapshots[sessionID] = messages
+        sequences[sessionID] = max(sequences[sessionID] ?? 0, detail.sequence)
         publish(sessionID: sessionID, messages: messages)
-        startSubscription(sessionID: sessionID, afterSequence: detail.sequence)
+        ensureSubscription(sessionID: sessionID)
         return T3MessageMapper.applyingImagePreviews(messages, previews: imagePreviews)
     }
 
@@ -93,6 +120,12 @@ final class T3MessageRepository: MessageRepository {
     }
 
     func clearMessageCache() {
+        for (_, task) in subscriptions {
+            task.cancel()
+        }
+        subscriptions.removeAll()
+        sequences.removeAll()
+        lastPendingRequestIDs.removeAll()
         snapshots.removeAll()
         transcripts.removeAll()
         preparedByID.removeAll()
@@ -100,6 +133,13 @@ final class T3MessageRepository: MessageRepository {
         imagePreviews.removeAll()
         imageAttempts.removeAll()
         imageLoads.removeAll()
+        // Sessions still on screen re-subscribe from sequence 0 and receive a
+        // fresh snapshot instead of silently losing live updates.
+        let observed = Set(continuations.values.map(\.sessionID))
+            .union(displayContinuations.values.map(\.sessionID))
+        for sessionID in observed {
+            ensureSubscription(sessionID: sessionID)
+        }
     }
 
     func listMessages(sessionID: String, directory: String?) async throws -> [Message] {
@@ -151,18 +191,58 @@ final class T3MessageRepository: MessageRepository {
         throw T3ClientError.decoding("Thread not found")
     }
 
-    private func startSubscription(sessionID: String, afterSequence: Int? = nil) {
-        if subscriptions[sessionID] != nil, afterSequence == nil { return }
-        subscriptions[sessionID]?.cancel()
-        let sequence = afterSequence ?? 0
+    // MARK: - Live subscription
+
+    private func hasObservers(sessionID: String) -> Bool {
+        continuations.values.contains { $0.sessionID == sessionID }
+            || displayContinuations.values.contains { $0.sessionID == sessionID }
+    }
+
+    private func stopSubscriptionIfUnobserved(sessionID: String) {
+        guard !hasObservers(sessionID: sessionID) else { return }
+        subscriptions.removeValue(forKey: sessionID)?.cancel()
+    }
+
+    /// Starts the live subscription loop for an observed session. The loop
+    /// keeps running until the last observer goes away: when the socket dies or
+    /// the server ends the stream it surfaces the failure, waits, and
+    /// re-subscribes from the last known sequence.
+    private func ensureSubscription(sessionID: String) {
+        guard hasObservers(sessionID: sessionID) else { return }
+        guard subscriptions[sessionID] == nil else { return }
         subscriptions[sessionID] = Task { [weak self] in
-            guard let self else { return }
-            for await value in self.client.subscribeThread(id: sessionID, afterSequence: sequence) {
-                if Task.isCancelled { return }
-                await MainActor.run {
-                    self.applyLiveValue(value, sessionID: sessionID)
+            await self?.runSubscription(sessionID: sessionID)
+        }
+    }
+
+    private func runSubscription(sessionID: String) async {
+        var attempt = 0
+        while !Task.isCancelled {
+            let afterSequence = sequences[sessionID] ?? 0
+            var failure: Error?
+            do {
+                for try await value in client.subscribeThread(id: sessionID, afterSequence: afterSequence) {
+                    if Task.isCancelled { return }
+                    attempt = 0
+                    applyLiveValue(value, sessionID: sessionID)
                 }
+                failure = T3ClientError.rpc("T3 thread subscription ended.")
+            } catch is CancellationError {
+                return
+            } catch {
+                failure = error
             }
+            if Task.isCancelled { return }
+            if let failure {
+                DiagnosticLog.warning(.sse, "T3 thread subscription lost session=\(sessionID): \(failure)")
+                publishFailure(sessionID: sessionID, error: failure)
+            }
+            let delay = min(
+                Self.maxResubscribeDelay,
+                resubscribeDelay * (1 << min(attempt, 4))
+            )
+            attempt += 1
+            try? await Task.sleep(for: delay)
         }
     }
 
@@ -175,6 +255,7 @@ final class T3MessageRepository: MessageRepository {
     ]
 
     private func applyLiveValue(_ value: Any, sessionID: String) {
+        trackSequence(value, sessionID: sessionID)
         if let transcript = T3MessageMapper.transcript(fromSnapshotItem: value) {
             transcripts[sessionID] = transcript
             let messages = T3MessageMapper.domainMessages(from: transcript)
@@ -194,6 +275,21 @@ final class T3MessageRepository: MessageRepository {
         guard next != (snapshots[sessionID] ?? []) else { return }
         snapshots[sessionID] = next
         publish(sessionID: sessionID, messages: next)
+    }
+
+    private func trackSequence(_ value: Any, sessionID: String) {
+        guard let object = T3JSON.object(value) else { return }
+        let sequence: Int?
+        switch T3JSON.string(object, "kind") {
+        case "snapshot":
+            sequence = T3JSON.int(object["snapshotSequence"])
+        case "event":
+            sequence = T3JSON.int(object["sequence"])
+        default:
+            sequence = nil
+        }
+        guard let sequence else { return }
+        sequences[sessionID] = max(sequences[sessionID] ?? 0, sequence)
     }
 
     private static func isActivityEvent(_ value: Any) -> Bool {
@@ -228,10 +324,21 @@ final class T3MessageRepository: MessageRepository {
         }
     }
 
+    private func publishFailure(sessionID: String, error: Error) {
+        for observer in continuations.values where observer.sessionID == sessionID {
+            observer.continuation.yield(.loadFailed(error))
+        }
+        for observer in displayContinuations.values where observer.sessionID == sessionID {
+            observer.continuation.yield(.loadFailed(error))
+        }
+    }
+
     private func publish(sessionID: String, messages: [Message]) {
         let shown = T3MessageMapper.applyingImagePreviews(messages, previews: imagePreviews)
         let update = MessageListUpdate.messages(shown, isFromCache: false)
-        continuations.values.forEach { $0.yield(update) }
+        for observer in continuations.values where observer.sessionID == sessionID {
+            observer.continuation.yield(update)
+        }
         prepareGeneration += 1
         let generation = prepareGeneration
         let previous = preparedByID
@@ -241,7 +348,9 @@ final class T3MessageRepository: MessageRepository {
             guard self.prepareGeneration == generation else { return }
             self.preparedByID = Dictionary(uniqueKeysWithValues: display.map { ($0.id, $0) })
             let prepared = DisplayMessageListUpdate.messages(display, isFromCache: false)
-            self.displayContinuations.values.forEach { $0.yield(prepared) }
+            for observer in self.displayContinuations.values where observer.sessionID == sessionID {
+                observer.continuation.yield(prepared)
+            }
         }
         scheduleImageLoads(sessionID: sessionID, messages: shown)
     }

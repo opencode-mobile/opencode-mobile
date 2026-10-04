@@ -314,6 +314,7 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
     private let occupancy: @Sendable () -> StreamOccupancy
     private let emitProfileSwitched: @Sendable () -> Void
     private let hasActiveConnection: @Sendable () -> Bool
+    private let resetEngineRuntime: @Sendable () async -> Void
     private let profileChangeGate = ProfileChangeGate()
     private let lock = NSLock()
     private var profileSavedHandlers: [() -> Void] = []
@@ -338,7 +339,8 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
         bindReadyProfile: @escaping @Sendable (String?) async -> Void = { _ in },
         occupancy: @escaping @Sendable () -> StreamOccupancy = { .active },
         emitProfileSwitched: @escaping @Sendable () -> Void = {},
-        hasActiveConnection: @escaping @Sendable () -> Bool = { false }
+        hasActiveConnection: @escaping @Sendable () -> Bool = { false },
+        resetEngineRuntime: @escaping @Sendable () async -> Void = { await T3LiveSignals.shared.emit(.stop) }
     ) {
         self.activeConnectionManager = activeConnectionManager
         self.connectionProfileStore = connectionProfileStore
@@ -352,6 +354,7 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
         self.occupancy = occupancy
         self.emitProfileSwitched = emitProfileSwitched
         self.hasActiveConnection = hasActiveConnection
+        self.resetEngineRuntime = resetEngineRuntime
     }
 
     func onProfileSaved(_ handler: @escaping () -> Void) {
@@ -430,6 +433,9 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
         if let stream = eventStream() {
             await stream.stop()
         }
+        // The T3 socket and shell cache are bound to the outgoing profile;
+        // close them before the new profile is bound so nothing leaks across.
+        await resetEngineRuntime()
         syncCoordinator()?.beginProfileSwitch(generation: generation)
 
         let nextProfile = await connectionProfileStore.activeProfile()

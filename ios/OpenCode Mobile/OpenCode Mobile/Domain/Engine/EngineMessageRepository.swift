@@ -53,7 +53,10 @@ final class EngineMessageRepository: MessageRepository {
     }
 
     func clearMessageCache() {
-        selected().clearMessageCache()
+        // Clearing is engine-agnostic: a profile switch must not leave the
+        // other engine's transcripts and image previews behind.
+        opencode.clearMessageCache()
+        t3.clearMessageCache()
     }
 
     func listMessages(sessionID: String, directory: String?) async throws -> [Message] {
