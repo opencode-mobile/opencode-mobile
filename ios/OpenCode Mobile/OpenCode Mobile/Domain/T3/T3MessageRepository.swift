@@ -6,6 +6,7 @@ final class T3MessageRepository: MessageRepository {
     static let maxResubscribeDelay: Duration = .seconds(10)
 
     private let client: T3EnvironmentClient
+    private let uploader: T3AttachmentUploader
     private let eventStream: (any ForegroundEventStream)?
     private let contentPreparer: MessageContentPreparer
     private let resubscribeDelay: Duration
@@ -34,9 +35,11 @@ final class T3MessageRepository: MessageRepository {
         client: T3EnvironmentClient,
         eventStream: (any ForegroundEventStream)? = nil,
         contentPreparer: MessageContentPreparer = .shared,
-        resubscribeDelay: Duration = T3MessageRepository.defaultResubscribeDelay
+        resubscribeDelay: Duration = T3MessageRepository.defaultResubscribeDelay,
+        uploader: T3AttachmentUploader? = nil
     ) {
         self.client = client
+        self.uploader = uploader ?? T3AttachmentUploader(client: client)
         self.eventStream = eventStream
         self.contentPreparer = contentPreparer
         self.resubscribeDelay = resubscribeDelay
@@ -171,6 +174,9 @@ final class T3MessageRepository: MessageRepository {
         guard let selection = thread.modelSelection else {
             throw T3ClientError.decoding("This thread has no model selection.")
         }
+        // Upload first: a failed transfer surfaces through the send-error path
+        // and nothing is dispatched without its bytes stored server-side.
+        let attachments = try await uploader.upload(options.attachments)
         try await client.dispatchCommand(
             T3RpcCodec.messageDispatchCommand(
                 commandID: UUID().uuidString,
@@ -178,7 +184,8 @@ final class T3MessageRepository: MessageRepository {
                 messageID: UUID().uuidString,
                 text: options.text,
                 selection: selection,
-                isRunning: thread.isBusy
+                isRunning: thread.isBusy,
+                attachments: attachments
             )
         )
     }

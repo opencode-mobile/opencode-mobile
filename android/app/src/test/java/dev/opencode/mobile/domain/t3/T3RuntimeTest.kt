@@ -200,7 +200,12 @@ class T3RuntimeTest {
                 MessageContentPreparer(OpenCodeTextMateHighlightingEngine(OpenCodeSyntaxHighlighter.default)).apply {
                     computationDispatcher = Dispatchers.Unconfined
                 }
-            val repository = T3MessageRepository(h.runtime, preparer)
+            val repository =
+                T3MessageRepository(
+                    h.runtime,
+                    preparer,
+                    T3AttachmentUploader(h.socket, T3AttachmentTransport { _, _, _, _ -> 204 }),
+                )
             backgroundScope.launch {
                 val update = repository.observeMessages("gone", null).first { it is MessageListUpdate.LoadFailed }
                 failures += T3ThreadFailure("flow", (update as MessageListUpdate.LoadFailed).error)

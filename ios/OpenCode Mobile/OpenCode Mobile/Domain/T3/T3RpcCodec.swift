@@ -145,7 +145,8 @@ nonisolated enum T3RpcCodec {
         messageID: String,
         text: String,
         selection: T3ModelSelection,
-        isRunning: Bool
+        isRunning: Bool,
+        attachments: [T3Attachment] = []
     ) -> [String: Any] {
         [
             "type": "message.dispatch",
@@ -153,9 +154,20 @@ nonisolated enum T3RpcCodec {
             "threadId": threadID,
             "messageId": messageID,
             "text": text,
-            "attachments": [Any](),
+            "attachments": attachments.map(chatAttachmentPayload),
             "dispatchMode": dispatchMode(isRunning: isRunning),
             "modelSelection": modelSelectionPayload(selection),
+        ]
+    }
+
+    /// `ChatAttachment` as persisted by the server: a stored id plus its metadata.
+    static func chatAttachmentPayload(_ attachment: T3Attachment) -> [String: Any] {
+        [
+            "type": attachment.type,
+            "id": attachment.id,
+            "name": attachment.name,
+            "mimeType": attachment.mimeType,
+            "sizeBytes": attachment.sizeBytes,
         ]
     }
 

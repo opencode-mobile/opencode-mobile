@@ -23,6 +23,7 @@ class T3MessageRepository
     constructor(
         private val runtime: T3Runtime,
         private val contentPreparer: MessageContentPreparer,
+        private val uploader: T3AttachmentUploader,
     ) : MessageRepository {
         override fun observeMessages(
             sessionId: String,
@@ -102,12 +103,20 @@ class T3MessageRepository
                     ?: thread?.providerInstanceId?.takeIf { it.isNotBlank() }?.let { instanceId ->
                         T3ModelSelection(instanceId = instanceId, model = thread.modelSelection?.model)
                     }
+            val attachments =
+                if (options.attachments.isEmpty()) {
+                    emptyList()
+                } else {
+                    val profile = runtime.activeProfile() ?: throw T3RpcException("No active T3 environment.")
+                    uploader.upload(profile, options.attachments)
+                }
             runtime.dispatch(
                 T3Commands.messageDispatch(
                     threadId = sessionId,
                     text = options.text,
                     modelSelection = model,
                     running = running,
+                    attachments = attachments,
                 ),
             )
         }

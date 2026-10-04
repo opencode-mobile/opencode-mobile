@@ -150,6 +150,12 @@ nonisolated final class T3EnvironmentClient: @unchecked Sendable {
         _ = try await rpc().request(tag: "orchestration.dispatchCommand", payload: command)
     }
 
+    /// One RPC round trip on the environment socket for callers outside this
+    /// file (attachment uploads). Connects on demand like every other request.
+    func rpcRequest(tag: String, payload: [String: Any]) async throws -> Any? {
+        try await rpc().request(tag: tag, payload: payload)
+    }
+
     /// Launches a thread in `projectID` when it names a project of this
     /// environment; otherwise in the environment's first project.
     func launchThread(title: String?, projectID: String? = nil) async throws -> Session {

@@ -15,6 +15,7 @@ object T3Commands {
         text: String,
         modelSelection: T3ModelSelection?,
         running: Boolean,
+        attachments: List<T3Attachment> = emptyList(),
         messageId: String = commandId(),
         commandId: String = commandId(),
     ): JsonObject =
@@ -24,7 +25,7 @@ object T3Commands {
             put("threadId", threadId)
             put("messageId", messageId)
             put("text", text)
-            put("attachments", JsonArray(emptyList()))
+            put("attachments", JsonArray(attachments.map(::encodeAttachment)))
             put(
                 "dispatchMode",
                 buildJsonObject {
@@ -143,6 +144,16 @@ object T3Commands {
         buildJsonObject {
             if (afterSequence != null) put("afterSequence", afterSequence)
             put("requestCompletionMarker", true)
+        }
+
+    /** `ChatAttachment` as persisted by the server: a stored id plus its metadata. */
+    private fun encodeAttachment(attachment: T3Attachment): JsonObject =
+        buildJsonObject {
+            put("type", attachment.type)
+            put("id", attachment.id)
+            put("name", attachment.name)
+            put("mimeType", attachment.mimeType)
+            put("sizeBytes", attachment.sizeBytes)
         }
 
     private fun encodeModelSelection(selection: T3ModelSelection): JsonObject =
