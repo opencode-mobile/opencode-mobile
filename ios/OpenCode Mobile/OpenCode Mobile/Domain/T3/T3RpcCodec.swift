@@ -128,6 +128,19 @@ nonisolated enum T3RpcCodec {
         return components?.url
     }
 
+    static let subscribeShellTag = "orchestration.subscribeShell"
+
+    /// `orchestration.subscribeShell` input. With `afterSequence` the server
+    /// replays shell events after that sequence instead of sending the full
+    /// snapshot again; without it the first item is a `snapshot`.
+    static func subscribeShellPayload(afterSequence: Int?) -> [String: Any] {
+        var payload: [String: Any] = ["requestCompletionMarker": true]
+        if let afterSequence, afterSequence > 0 {
+            payload["afterSequence"] = afterSequence
+        }
+        return payload
+    }
+
     static func dispatchMode(isRunning: Bool) -> [String: Any] {
         ["type": isRunning ? "queue_after_active" : "start_immediately"]
     }

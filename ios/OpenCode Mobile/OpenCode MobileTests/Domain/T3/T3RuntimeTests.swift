@@ -12,7 +12,7 @@ struct T3RuntimeTests {
     // MARK: - Socket reuse and reconnect
 
     @Test func rpc_reconnectsWithFreshTicketAfterServerClose() async throws {
-        let harness = Harness()
+        let harness = T3Harness()
         let first = Task { try await harness.client.dispatchCommand(["type": "noop"]) }
         let socket1 = try await harness.connector.connection(at: 0)
         socket1.open()
@@ -36,7 +36,7 @@ struct T3RuntimeTests {
     }
 
     @Test func pendingRequest_failsInsteadOfHangingWhenSocketCloses() async throws {
-        let harness = Harness()
+        let harness = T3Harness()
         let call = Task { try await harness.client.dispatchCommand(["type": "noop"]) }
         let socket = try await harness.connector.connection(at: 0)
         socket.open()
@@ -59,7 +59,7 @@ struct T3RuntimeTests {
     // MARK: - Timeouts and keepalive
 
     @Test func request_timesOutAndInterruptsServer() async throws {
-        let harness = Harness(requestTimeout: .milliseconds(80))
+        let harness = T3Harness(requestTimeout: .milliseconds(80))
         let call = Task { try await harness.client.dispatchCommand(["type": "noop"]) }
         let socket = try await harness.connector.connection(at: 0)
         socket.open()
@@ -73,7 +73,7 @@ struct T3RuntimeTests {
     }
 
     @Test func connect_timesOutWhenSocketNeverOpens() async throws {
-        let harness = Harness(connectTimeout: .milliseconds(80))
+        let harness = T3Harness(connectTimeout: .milliseconds(80))
         await #expect(throws: T3ClientError.transport("Timed out connecting to the T3 websocket.")) {
             try await harness.client.dispatchCommand(["type": "noop"])
         }
@@ -83,7 +83,7 @@ struct T3RuntimeTests {
     }
 
     @Test func keepalive_sendsPingAndAnswersServerPing() async throws {
-        let harness = Harness(keepaliveInterval: .milliseconds(30))
+        let harness = T3Harness(keepaliveInterval: .milliseconds(30))
         let call = Task { try await harness.client.dispatchCommand(["type": "noop"]) }
         let socket = try await harness.connector.connection(at: 0)
         socket.open()
@@ -99,7 +99,7 @@ struct T3RuntimeTests {
 
     @MainActor
     @Test func subscription_reestablishesAfterReconnectFromLastKnownSequence() async throws {
-        let harness = Harness()
+        let harness = T3Harness()
         harness.http.threadDetail = T3ThreadDetail(
             sequence: 5,
             thread: Fixtures.thread(id: "t1"),
@@ -148,7 +148,7 @@ struct T3RuntimeTests {
 
     @MainActor
     @Test func subscription_rpcFailureReachesObserversAsLoadFailed() async throws {
-        let harness = Harness()
+        let harness = T3Harness()
         harness.http.threadDetail = T3ThreadDetail(sequence: 1, thread: Fixtures.thread(id: "t1"), messages: [])
         let repository = T3MessageRepository(client: harness.client, resubscribeDelay: .seconds(30))
         let collector = UpdateCollector()
@@ -168,7 +168,7 @@ struct T3RuntimeTests {
     // MARK: - Profile switch and reset
 
     @Test func profileSwitch_closesOldSocketAndDropsShellCache() async throws {
-        let harness = Harness()
+        let harness = T3Harness()
         harness.http.shell = Fixtures.shell(threadID: "t-a")
         _ = try await harness.client.fetchShell(force: true)
         #expect(harness.client.cachedThread(id: "t-a") != nil)
@@ -191,7 +191,7 @@ struct T3RuntimeTests {
     }
 
     @Test func lifecycleStop_resetsSocketAndCache() async throws {
-        let harness = Harness()
+        let harness = T3Harness()
         harness.http.shell = Fixtures.shell(threadID: "t-a")
         _ = try await harness.client.fetchShell(force: true)
         let socket = try await harness.connector.connection(at: 0)
@@ -265,7 +265,7 @@ struct T3RuntimeTests {
     // MARK: - launchThread
 
     @Test func launchThread_usesRequestedProjectAndItsDefaultModel() async throws {
-        let harness = Harness()
+        let harness = T3Harness()
         harness.http.shell = T3ShellSnapshot(
             sequence: 1,
             threads: [],
@@ -290,7 +290,7 @@ struct T3RuntimeTests {
     }
 
     @Test func launchThread_fallsBackToFirstProjectForUnknownProjectID() async throws {
-        let harness = Harness()
+        let harness = T3Harness()
         harness.http.shell = T3ShellSnapshot(
             sequence: 1,
             threads: [],
@@ -310,7 +310,7 @@ struct T3RuntimeTests {
     }
 }
 
-// MARK: - Harness
+// MARK: - T3Harness
 
 private final class ProfileBox: @unchecked Sendable {
     private let lock = NSLock()
@@ -329,7 +329,7 @@ private final class ProfileBox: @unchecked Sendable {
     }
 }
 
-private final class Harness: @unchecked Sendable {
+final class T3Harness: @unchecked Sendable {
     let http: FakeT3Http
     let connector: FakeSocketConnector
     let signals: T3LiveSignals
@@ -339,7 +339,9 @@ private final class Harness: @unchecked Sendable {
     init(
         connectTimeout: Duration = .seconds(5),
         requestTimeout: Duration = .seconds(5),
-        keepaliveInterval: Duration = .seconds(60)
+        keepaliveInterval: Duration = .seconds(60),
+        shellRefreshDebounce: Duration = T3EnvironmentClient.defaultShellRefreshDebounce,
+        shellResubscribeDelay: Duration = .milliseconds(10)
     ) {
         let http = FakeT3Http()
         let connector = FakeSocketConnector()
@@ -361,7 +363,9 @@ private final class Harness: @unchecked Sendable {
                     onStateChange: onStateChange
                 )
             },
-            signals: signals
+            signals: signals,
+            shellRefreshDebounce: shellRefreshDebounce,
+            shellResubscribeDelay: shellResubscribeDelay
         )
     }
 
@@ -370,14 +374,16 @@ private final class Harness: @unchecked Sendable {
     }
 }
 
-private final class FakeT3Http: T3HttpTransport, @unchecked Sendable {
+final class FakeT3Http: T3HttpTransport, @unchecked Sendable {
     private let lock = NSLock()
     private var _ticketCount = 0
+    private var _shellFetchCount = 0
     private var _ticketBaseURLs: [URL] = []
     private var _shell = T3ShellSnapshot(sequence: 0, threads: [], projects: [])
     private var _threadDetail = T3ThreadDetail(sequence: 0, thread: nil, messages: [])
 
     var ticketCount: Int { lock.lock(); defer { lock.unlock() }; return _ticketCount }
+    var shellFetchCount: Int { lock.lock(); defer { lock.unlock() }; return _shellFetchCount }
     var ticketBaseURLs: [URL] { lock.lock(); defer { lock.unlock() }; return _ticketBaseURLs }
     var shell: T3ShellSnapshot {
         get { lock.lock(); defer { lock.unlock() }; return _shell }
@@ -389,7 +395,12 @@ private final class FakeT3Http: T3HttpTransport, @unchecked Sendable {
         set { lock.lock(); _threadDetail = newValue; lock.unlock() }
     }
 
-    func fetchShell(baseURL _: URL, bearer _: String) async throws -> T3ShellSnapshot { shell }
+    func fetchShell(baseURL _: URL, bearer _: String) async throws -> T3ShellSnapshot {
+        lock.lock()
+        _shellFetchCount += 1
+        lock.unlock()
+        return shell
+    }
 
     func fetchThread(baseURL _: URL, bearer _: String, id: String) async throws -> T3ThreadDetail {
         var detail = threadDetail
@@ -409,7 +420,7 @@ private final class FakeT3Http: T3HttpTransport, @unchecked Sendable {
     func fetchBytes(url _: URL, maxBytes _: Int) async -> Data? { nil }
 }
 
-private final class FakeSocketConnector: T3SocketConnector, @unchecked Sendable {
+final class FakeSocketConnector: T3SocketConnector, @unchecked Sendable {
     private let lock = NSLock()
     private var connections: [FakeSocketConnection] = []
 
@@ -439,7 +450,7 @@ private final class FakeSocketConnector: T3SocketConnector, @unchecked Sendable 
     }
 }
 
-private final class FakeSocketConnection: T3SocketConnection, @unchecked Sendable {
+final class FakeSocketConnection: T3SocketConnection, @unchecked Sendable {
     struct Request {
         let id: String
         let tag: String
@@ -515,7 +526,7 @@ private final class FakeSocketConnection: T3SocketConnection, @unchecked Sendabl
     }
 }
 
-private enum Frames {
+enum Frames {
     static func exitSuccess(requestID: String, value: Any) -> String {
         encode(["_tag": "Exit", "requestId": requestID, "exit": ["_tag": "Success", "value": value]])
     }
@@ -533,7 +544,7 @@ private enum Frames {
     }
 }
 
-private enum Fixtures {
+enum Fixtures {
     static func thread(id: String) -> T3Thread {
         T3Thread(
             id: id,

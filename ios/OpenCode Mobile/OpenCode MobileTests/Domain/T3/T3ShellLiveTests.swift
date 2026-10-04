@@ -1,0 +1,338 @@
+import Foundation
+import Testing
+@testable import OpenCode_Mobile
+
+/// Live home updates for the T3 engine: the shell subscription keeps the
+/// client cache current and publishes the same synthetic `session.*` /
+/// `permission.*` events Android does, re-subscribes from the last sequence
+/// after a reconnect, coalesces forced REST refreshes, and tears down on stop.
+struct T3ShellLiveTests {
+    @Test func shellStream_updatesCacheAndPublishesHomeEvents() async throws {
+        let harness = T3Harness()
+        let events = EventCollector(signals: harness.signals)
+        await harness.signals.emit(.start)
+
+        let socket = try await harness.connector.connection(at: 0)
+        socket.open()
+        let subscribe = try await socket.firstRequest(tag: "orchestration.subscribeShell")
+        #expect(subscribe.payload["afterSequence"] == nil)
+        #expect(subscribe.payload["requestCompletionMarker"] as? Bool == true)
+
+        socket.receive(Frames.chunk(requestID: subscribe.id, values: [
+            ShellItems.snapshot(sequence: 3, threads: [ShellItems.thread("A")]),
+            ["kind": "synchronized"],
+        ]))
+        #expect(await waitUntil { events.types == ["session.created:A"] })
+        #expect(harness.client.cachedThread(id: "A")?.title == "Thread A")
+
+        events.clear()
+        socket.receive(Frames.chunk(requestID: subscribe.id, values: [
+            ShellItems.threadUpdated(sequence: 4, ShellItems.thread("B", activeRunID: "run-1")),
+        ]))
+        #expect(await waitUntil { events.types == ["session.created:B", "session.status:B"] })
+        #expect(events.statusTypes == ["running"])
+
+        events.clear()
+        socket.receive(Frames.chunk(requestID: subscribe.id, values: [
+            ShellItems.threadUpdated(sequence: 5, ShellItems.thread("A", pendingRequestID: "req-9")),
+        ]))
+        #expect(await waitUntil { events.types == ["session.updated:A", "permission.asked:A"] })
+
+        events.clear()
+        socket.receive(Frames.chunk(requestID: subscribe.id, values: [
+            ShellItems.threadUpdated(sequence: 2, ShellItems.thread("A", title: "stale")),
+        ]))
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(events.types.isEmpty)
+        #expect(harness.client.cachedThread(id: "A")?.title == "Thread A")
+
+        socket.receive(Frames.chunk(requestID: subscribe.id, values: [
+            ShellItems.threadRemoved(sequence: 6, "B"),
+        ]))
+        #expect(await waitUntil { events.types == ["session.deleted:B", "session.status:B"] })
+        #expect(events.statusTypes == ["idle"])
+        #expect(harness.client.cachedThread(id: "B") == nil)
+        let shell = try await harness.client.fetchShell(force: false)
+        #expect(shell.sequence == 6)
+        #expect(shell.threads.map(\.id) == ["A"])
+
+        events.clear()
+        socket.receive(Frames.chunk(requestID: subscribe.id, values: [
+            ShellItems.threadUpdated(sequence: 7, ShellItems.thread("A")),
+        ]))
+        #expect(await waitUntil { events.types == ["session.updated:A", "permission.replied:A"] })
+    }
+
+    @Test func shellStream_projectItemsUpdateCacheWithoutSessionEvents() async throws {
+        let harness = T3Harness()
+        let events = EventCollector(signals: harness.signals)
+        await harness.signals.emit(.start)
+        let socket = try await harness.connector.connection(at: 0)
+        socket.open()
+        let subscribe = try await socket.firstRequest(tag: "orchestration.subscribeShell")
+        socket.receive(Frames.chunk(requestID: subscribe.id, values: [
+            ShellItems.snapshot(sequence: 1, threads: []),
+            [
+                "kind": "project.updated",
+                "sequence": 2,
+                "project": ["id": "p2", "title": "Two", "workspaceRoot": "/two"],
+            ],
+        ]))
+        #expect(await waitUntil { harness.client.cachedShellProjectIDs == ["p1", "p2"] })
+        socket.receive(Frames.chunk(requestID: subscribe.id, values: [
+            ["kind": "project.removed", "sequence": 3, "projectId": "p1"],
+        ]))
+        #expect(await waitUntil { harness.client.cachedShellProjectIDs == ["p2"] })
+        #expect(events.types.isEmpty)
+    }
+
+    @Test func shellStream_resubscribesFromLastSequenceAfterReconnect() async throws {
+        let harness = T3Harness()
+        harness.http.shell = T3ShellSnapshot(sequence: 3, threads: [Fixtures.thread(id: "A")], projects: [])
+        _ = try await harness.client.fetchShell(force: true)
+        await harness.signals.emit(.start)
+
+        let socket1 = try await harness.connector.connection(at: 0)
+        socket1.open()
+        let subscribe1 = try await socket1.firstRequest(tag: "orchestration.subscribeShell")
+        #expect(subscribe1.payload["afterSequence"] as? Int == 3)
+
+        socket1.receive(Frames.chunk(requestID: subscribe1.id, values: [
+            ShellItems.threadUpdated(sequence: 5, ShellItems.thread("A", title: "Renamed")),
+        ]))
+        #expect(await waitUntil { harness.client.cachedThread(id: "A")?.title == "Renamed" })
+
+        socket1.serverClose()
+        let socket2 = try await harness.connector.connection(at: 1)
+        socket2.open()
+        let subscribe2 = try await socket2.firstRequest(tag: "orchestration.subscribeShell")
+        #expect(subscribe2.payload["afterSequence"] as? Int == 5)
+        #expect(harness.http.ticketCount == 2)
+        // The cache survived the socket loss; only the subscription moved.
+        #expect(harness.client.cachedThread(id: "A")?.title == "Renamed")
+    }
+
+    @Test func fetchShell_coalescesForcedRefreshesAndSharesInFlightRequest() async throws {
+        let harness = T3Harness(shellRefreshDebounce: .milliseconds(200))
+        harness.http.shell = Fixtures.shell(threadID: "A")
+        let start = ContinuousClock.now
+        _ = try await harness.client.fetchShell(force: true)
+        #expect(harness.http.shellFetchCount == 1)
+
+        async let first = harness.client.fetchShell(force: true)
+        async let second = harness.client.fetchShell(force: true)
+        async let third = harness.client.fetchShell(force: true)
+        _ = try await (first, second, third)
+        #expect(harness.http.shellFetchCount == 2)
+        #expect(ContinuousClock.now - start >= .milliseconds(200))
+
+        _ = try await harness.client.fetchShell(force: false)
+        #expect(harness.http.shellFetchCount == 2)
+    }
+
+    @Test func fetchShell_restRefreshPublishesStatusButNotLifecycle() async throws {
+        let harness = T3Harness(shellRefreshDebounce: .zero)
+        let events = EventCollector(signals: harness.signals)
+        harness.http.shell = T3ShellSnapshot(sequence: 1, threads: [Fixtures.thread(id: "A")], projects: [])
+        _ = try await harness.client.fetchShell(force: true)
+        try await Task.sleep(for: .milliseconds(20))
+        #expect(events.types.isEmpty)
+
+        var running = Fixtures.thread(id: "A")
+        running.activeRunID = "run-1"
+        running.pendingRequestID = "req-1"
+        running.pendingRequestKind = "approval"
+        harness.http.shell = T3ShellSnapshot(sequence: 2, threads: [running, Fixtures.thread(id: "B")], projects: [])
+        _ = try await harness.client.fetchShell(force: true)
+        #expect(await waitUntil { events.types == ["session.status:A", "permission.asked:A"] })
+        #expect(events.statusTypes == ["running"])
+    }
+
+    @Test func fetchShell_doesNotRegressBelowLiveSequence() async throws {
+        let harness = T3Harness(shellRefreshDebounce: .zero)
+        await harness.signals.emit(.start)
+        let socket = try await harness.connector.connection(at: 0)
+        socket.open()
+        let subscribe = try await socket.firstRequest(tag: "orchestration.subscribeShell")
+        socket.receive(Frames.chunk(requestID: subscribe.id, values: [
+            ShellItems.snapshot(sequence: 5, threads: [ShellItems.thread("A", title: "Live")]),
+        ]))
+        #expect(await waitUntil { harness.client.cachedThread(id: "A")?.title == "Live" })
+
+        harness.http.shell = T3ShellSnapshot(sequence: 3, threads: [ShellItemsSwift.thread(id: "A", title: "Old")], projects: [])
+        let shell = try await harness.client.fetchShell(force: true)
+        #expect(shell.sequence == 5)
+        #expect(harness.client.cachedThread(id: "A")?.title == "Live")
+    }
+
+    @Test func lifecycleStop_tearsDownShellSubscription() async throws {
+        let harness = T3Harness()
+        await harness.signals.emit(.start)
+        let socket = try await harness.connector.connection(at: 0)
+        socket.open()
+        _ = try await socket.firstRequest(tag: "orchestration.subscribeShell")
+        #expect(harness.client.isShellLiveRunning)
+
+        await harness.signals.emit(.stop)
+        #expect(socket.isClosed)
+        #expect(harness.client.isShellLiveRunning == false)
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(harness.http.ticketCount == 1)
+
+        // A plain REST fetch after stop does not revive the subscription.
+        harness.http.shell = Fixtures.shell(threadID: "A")
+        _ = try await harness.client.fetchShell(force: true)
+        let socket2 = try await harness.connector.connection(at: 1)
+        socket2.open()
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(socket2.frames(tag: "Request").isEmpty)
+        #expect(harness.client.isShellLiveRunning == false)
+    }
+
+    @Test func foregroundEventStream_forwardsT3ShellEventsWhileLive() async throws {
+        let signals = T3LiveSignals()
+        let stream = DefaultForegroundEventStream(
+            api: EventsAPIClient(
+                connectionProvider: { ServerConnection(baseURL: URL(string: "http://t3-a.test/")!, password: "secret") },
+                urlSession: URLSession(configuration: .ephemeral)
+            ),
+            adapter: EventDomainAdapter(),
+            engineProvider: { .t3 },
+            t3ConnectionStates: { signals.connectionStateUpdates() },
+            t3Lifecycle: { _ in },
+            t3Events: { signals.eventUpdates() }
+        )
+        let received = StringCollector()
+        let observe = Task {
+            for await event in stream.events() {
+                received.append("\(event.type):\(event.sessionID ?? "-")")
+            }
+        }
+        stream.start()
+        #expect(await waitUntil { signals.hasEventSubscribers })
+        signals.publishEvent(OpencodeEvent(type: "session.created", sessionID: "A"))
+        #expect(await waitUntil { received.values == ["session.created:A"] })
+
+        await stream.stop()
+        signals.publishEvent(OpencodeEvent(type: "session.updated", sessionID: "A"))
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(received.values == ["session.created:A"])
+        observe.cancel()
+    }
+}
+
+// MARK: - Helpers
+
+private enum ShellItems {
+    static func thread(
+        _ id: String,
+        title: String? = nil,
+        activeRunID: String? = nil,
+        pendingRequestID: String? = nil
+    ) -> [String: Any] {
+        var object: [String: Any] = [
+            "id": id,
+            "title": title ?? "Thread \(id)",
+            "projectId": "p1",
+            "status": "idle",
+            "modelSelection": ["instanceId": "i1", "model": "m1"],
+        ]
+        if let activeRunID { object["activeRunId"] = activeRunID }
+        if let pendingRequestID {
+            object["pendingRuntimeRequest"] = ["id": pendingRequestID, "kind": "approval"]
+        }
+        return object
+    }
+
+    static func snapshot(sequence: Int, threads: [[String: Any]]) -> [String: Any] {
+        [
+            "kind": "snapshot",
+            "snapshot": [
+                "schemaVersion": 1,
+                "snapshotSequence": sequence,
+                "threads": threads,
+                "archivedThreads": [Any](),
+                "projects": [["id": "p1", "title": "One", "workspaceRoot": "/one"]],
+            ],
+        ]
+    }
+
+    static func threadUpdated(sequence: Int, _ thread: [String: Any]) -> [String: Any] {
+        ["kind": "thread.updated", "sequence": sequence, "location": "active", "thread": thread]
+    }
+
+    static func threadRemoved(sequence: Int, _ id: String) -> [String: Any] {
+        ["kind": "thread.removed", "sequence": sequence, "location": "active", "threadId": id]
+    }
+}
+
+private extension T3EnvironmentClient {
+    var cachedShellProjectIDs: [String]? {
+        cachedShellSnapshot?.projects.map(\.id)
+    }
+}
+
+private enum ShellItemsSwift {
+    static func thread(id: String, title: String) -> T3Thread {
+        var thread = Fixtures.thread(id: id)
+        thread.title = title
+        return thread
+    }
+}
+
+private final class EventCollector: @unchecked Sendable {
+    private let lock = NSLock()
+    private var events: [OpencodeEvent] = []
+    private var task: Task<Void, Never>?
+
+    init(signals: T3LiveSignals) {
+        let stream = signals.eventUpdates()
+        task = Task { [weak self] in
+            for await event in stream {
+                guard let self else { return }
+                self.lock.lock()
+                self.events.append(event)
+                self.lock.unlock()
+            }
+        }
+    }
+
+    deinit { task?.cancel() }
+
+    var types: [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        return events.map { "\($0.type):\($0.sessionID ?? "-")" }
+    }
+
+    var statusTypes: [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        return events.compactMap { $0.rawProperties?["status"]?.dictionaryValue?["type"]?.stringValue }
+    }
+
+    func clear() {
+        lock.lock()
+        events = []
+        lock.unlock()
+    }
+}
+
+private final class StringCollector: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _values: [String] = []
+    var values: [String] { lock.lock(); defer { lock.unlock() }; return _values }
+    func append(_ value: String) { lock.lock(); _values.append(value); lock.unlock() }
+}
+
+private func waitUntil(
+    timeoutMs: Int = 5_000,
+    _ predicate: @escaping @Sendable () -> Bool
+) async -> Bool {
+    let deadline = Date().addingTimeInterval(TimeInterval(timeoutMs) / 1_000)
+    while Date() < deadline {
+        if predicate() { return true }
+        try? await Task.sleep(for: .milliseconds(10))
+    }
+    return predicate()
+}

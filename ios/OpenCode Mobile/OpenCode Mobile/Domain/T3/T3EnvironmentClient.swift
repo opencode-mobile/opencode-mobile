@@ -24,6 +24,19 @@ nonisolated final class T3EnvironmentClient: @unchecked Sendable {
     private var connectTask: Task<T3RpcSession, Error>?
     private var connectIdentity: String?
     private var lifecycleRegistration: UUID?
+    private let shellRefreshDebounce: Duration
+    private let shellResubscribeDelay: Duration
+    private var shellFetchTask: Task<T3ShellSnapshot, Error>?
+    private var shellFetchIdentity: String?
+    private var lastShellFetchStart: ContinuousClock.Instant?
+    private var lastShellFetchIdentity: String?
+    /// True between lifecycle `start` and `stop`: the shell subscription is kept alive.
+    private var shellLiveWanted = false
+    private var shellTask: Task<Void, Never>?
+
+    static let defaultShellRefreshDebounce: Duration = .milliseconds(400)
+    static let defaultShellResubscribeDelay: Duration = .seconds(1)
+    static let maxShellResubscribeDelay: Duration = .seconds(16)
 
     convenience init(
         connectionProvider: @escaping @Sendable () -> ServerConnection?,
@@ -39,19 +52,23 @@ nonisolated final class T3EnvironmentClient: @unchecked Sendable {
         connectionProvider: @escaping @Sendable () -> ServerConnection?,
         http: any T3HttpTransport,
         makeSession: @escaping SessionFactory = { onStateChange in T3RpcSession(onStateChange: onStateChange) },
-        signals: T3LiveSignals = .shared
+        signals: T3LiveSignals = .shared,
+        shellRefreshDebounce: Duration = T3EnvironmentClient.defaultShellRefreshDebounce,
+        shellResubscribeDelay: Duration = T3EnvironmentClient.defaultShellResubscribeDelay
     ) {
         self.connectionProvider = connectionProvider
         self.http = http
         self.makeSession = makeSession
         self.signals = signals
+        self.shellRefreshDebounce = shellRefreshDebounce
+        self.shellResubscribeDelay = shellResubscribeDelay
         lifecycleRegistration = signals.onLifecycle { [weak self] lifecycle in
             guard let self else { return }
             switch lifecycle {
             case .stop:
                 await self.reset()
             case .start:
-                self.warmConnection()
+                self.startShellLive()
             }
         }
     }
@@ -81,19 +98,162 @@ nonisolated final class T3EnvironmentClient: @unchecked Sendable {
         signals.connectionState
     }
 
+    /// REST shell. `force` bypasses the cache but is coalesced: concurrent
+    /// callers share one in-flight request, and a forced fetch that starts
+    /// within `shellRefreshDebounce` of the previous one waits for the window
+    /// to elapse so bursts of thread activity collapse into a single request.
+    /// The result never regresses the cache below a newer live sequence.
     func fetchShell(force: Bool = false) async throws -> T3ShellSnapshot {
         let credentials = try credentials()
         let identity = identity(of: credentials)
         if !force, let cached = locked({ cachedShellIdentity == identity ? cachedShell : nil }) {
             return cached
         }
-        let snapshot = try await http.fetchShell(baseURL: credentials.baseURL, bearer: credentials.bearer)
-        locked {
-            cachedShell = snapshot
-            cachedShellIdentity = identity
+        let http = self.http
+        let debounce = shellRefreshDebounce
+        let task: Task<T3ShellSnapshot, Error> = locked {
+            if let shellFetchTask, shellFetchIdentity == identity {
+                return shellFetchTask
+            }
+            let now = ContinuousClock.now
+            var wait: Duration = .zero
+            if force, lastShellFetchIdentity == identity, let last = lastShellFetchStart {
+                let elapsed = now - last
+                if elapsed < debounce { wait = debounce - elapsed }
+            }
+            let created = Task<T3ShellSnapshot, Error> { [weak self] in
+                if wait > .zero {
+                    try await Task.sleep(for: wait)
+                }
+                guard let self else { throw CancellationError() }
+                self.locked {
+                    self.lastShellFetchStart = ContinuousClock.now
+                    self.lastShellFetchIdentity = identity
+                }
+                let snapshot = try await http.fetchShell(baseURL: credentials.baseURL, bearer: credentials.bearer)
+                return self.applyRestShell(snapshot, identity: identity)
+            }
+            shellFetchTask = created
+            shellFetchIdentity = identity
+            return created
         }
+        defer {
+            locked {
+                if shellFetchTask == task {
+                    shellFetchTask = nil
+                    shellFetchIdentity = nil
+                }
+            }
+        }
+        let snapshot = try await task.value
         warmConnection()
         return snapshot
+    }
+
+    /// Stores a REST snapshot unless the live stream already moved past it,
+    /// and publishes status / approval changes (no lifecycle: the caller is
+    /// reloading the list itself).
+    private func applyRestShell(_ snapshot: T3ShellSnapshot, identity: String) -> T3ShellSnapshot {
+        let (previous, applied) = locked { () -> (T3ShellSnapshot?, T3ShellSnapshot) in
+            let previous = cachedShellIdentity == identity ? cachedShell : nil
+            if let previous, snapshot.sequence > 0, snapshot.sequence < previous.sequence {
+                return (previous, previous)
+            }
+            cachedShell = snapshot
+            cachedShellIdentity = identity
+            return (previous, snapshot)
+        }
+        if applied != previous {
+            publishShellEvents(T3ShellLive.events(previous: previous, next: applied, includeLifecycle: false))
+        }
+        return applied
+    }
+
+    private func publishShellEvents(_ events: [OpencodeEvent]) {
+        for event in events {
+            signals.publishEvent(event)
+        }
+    }
+
+    // MARK: - Shell subscription
+
+    /// Keeps `orchestration.subscribeShell` running until `reset()`. Items
+    /// update the cached shell and publish the resulting synthetic events; a
+    /// dead socket re-subscribes from the last applied sequence through the
+    /// client's normal reconnect.
+    func startShellLive() {
+        locked { shellLiveWanted = true }
+        ensureShellSubscription()
+    }
+
+    var isShellLiveRunning: Bool {
+        locked { shellTask != nil }
+    }
+
+    private func ensureShellSubscription() {
+        guard (try? credentials()) != nil else { return }
+        locked {
+            guard shellLiveWanted, shellTask == nil else { return }
+            shellTask = Task { [weak self] in
+                await self?.runShellSubscription()
+            }
+        }
+    }
+
+    private func runShellSubscription() async {
+        var attempt = 0
+        while !Task.isCancelled {
+            var failure: Error?
+            do {
+                let credentials = try credentials()
+                let identity = identity(of: credentials)
+                let session = try await rpc()
+                let afterSequence = locked { cachedShellIdentity == identity ? cachedShell?.sequence : nil }
+                let payload = T3RpcCodec.subscribeShellPayload(afterSequence: afterSequence)
+                for try await item in session.subscribe(tag: T3RpcCodec.subscribeShellTag, payload: payload) {
+                    if Task.isCancelled { return }
+                    attempt = 0
+                    applyShellStreamItem(item, identity: identity)
+                }
+                failure = T3ClientError.rpc("T3 shell subscription ended.")
+            } catch is CancellationError {
+                return
+            } catch {
+                failure = error
+            }
+            if Task.isCancelled { return }
+            if let failure {
+                DiagnosticLog.warning(.sse, "T3 shell subscription lost: \(failure)")
+                // The stream refused or died; a REST pass keeps home converging
+                // while the socket comes back.
+                Task { [weak self] in
+                    _ = try? await self?.fetchShell(force: true)
+                }
+            }
+            let delay = min(
+                Self.maxShellResubscribeDelay,
+                shellResubscribeDelay * (1 << min(attempt, 4))
+            )
+            attempt += 1
+            try? await Task.sleep(for: delay)
+        }
+    }
+
+    private func applyShellStreamItem(_ item: Any, identity: String) {
+        let outcome = locked { () -> (T3ShellSnapshot?, T3ShellSnapshot)? in
+            let current = cachedShellIdentity == identity ? cachedShell : nil
+            switch T3ShellLive.apply(item, to: current) {
+            case .ignored, .synchronized:
+                return nil
+            case let .replaced(next, _):
+                if let current, next.sequence > 0, next.sequence < current.sequence { return nil }
+                cachedShell = next
+                cachedShellIdentity = identity
+                return (current, next)
+            }
+        }
+        guard let (previous, next) = outcome else { return }
+        publishShellEvents(T3ShellLive.events(previous: previous, next: next, includeLifecycle: true))
     }
 
     func replaceShell(_ snapshot: T3ShellSnapshot) {
@@ -103,6 +263,13 @@ nonisolated final class T3EnvironmentClient: @unchecked Sendable {
             cachedShell = snapshot
             cachedShellIdentity = identity
         }
+    }
+
+    /// Cached shell for the active connection, if any (no network).
+    var cachedShellSnapshot: T3ShellSnapshot? {
+        guard let credentials = try? credentials() else { return nil }
+        let identity = identity(of: credentials)
+        return locked { cachedShellIdentity == identity ? cachedShell : nil }
     }
 
     func cachedThread(id: String) -> T3Thread? {
@@ -249,9 +416,18 @@ nonisolated final class T3EnvironmentClient: @unchecked Sendable {
     /// Drops the socket and every identity-bound cache. Called on profile switch
     /// and when the app leaves the foreground; the next call reconnects lazily.
     func reset() async {
-        let (session, connect) = locked { () -> (T3RpcSession?, Task<T3RpcSession, Error>?) in
+        let (session, connect, shell, fetch) = locked {
+            () -> (T3RpcSession?, Task<T3RpcSession, Error>?, Task<Void, Never>?, Task<T3ShellSnapshot, Error>?) in
             cachedShell = nil
             cachedShellIdentity = nil
+            shellLiveWanted = false
+            let shell = shellTask
+            shellTask = nil
+            let fetch = shellFetchTask
+            shellFetchTask = nil
+            shellFetchIdentity = nil
+            lastShellFetchStart = nil
+            lastShellFetchIdentity = nil
             let session = rpcSession
             rpcSession = nil
             rpcIdentity = nil
@@ -259,8 +435,10 @@ nonisolated final class T3EnvironmentClient: @unchecked Sendable {
             connectIdentity = nil
             let connect = connectTask
             connectTask = nil
-            return (session, connect)
+            return (session, connect, shell, fetch)
         }
+        shell?.cancel()
+        fetch?.cancel()
         connect?.cancel()
         await session?.close()
         signals.publish(.disconnected)
@@ -269,84 +447,74 @@ nonisolated final class T3EnvironmentClient: @unchecked Sendable {
     private func rpc() async throws -> T3RpcSession {
         let credentials = try credentials()
         let identity = identity(of: credentials)
-        let (existing, stale) = locked { () -> (T3RpcSession?, T3RpcSession?) in
-            guard let session = rpcSession else { return (nil, nil) }
-            if rpcIdentity == identity, !session.isClosed {
-                return (session, nil)
-            }
-            // Dead socket or a different environment: never reuse it.
-            rpcSession = nil
-            rpcIdentity = nil
-            rpcGeneration += 1
-            return (nil, session)
-        }
-        if let existing { return existing }
-        if let stale {
-            await stale.close()
-        }
         let http = self.http
         let baseURL = credentials.baseURL
         let bearer = credentials.bearer
         let makeSession = self.makeSession
-        let generation = locked { () -> UInt64 in
-            rpcGeneration += 1
-            return rpcGeneration
-        }
-        let publish: @Sendable (T3SocketState) -> Void = { [weak self] state in
-            self?.publishSocketState(state, generation: generation)
-        }
-        let created = Task { @concurrent in
-            try Task.checkCancellation()
-            let ticket = try await http.issueWebsocketTicket(baseURL: baseURL, bearer: bearer)
-            guard let url = T3RpcCodec.websocketURL(httpBase: baseURL, ticket: ticket) else {
-                throw T3ClientError.decoding("Could not build the T3 websocket URL.")
-            }
-            let session = makeSession(publish)
-            do {
-                try await session.connect(url: url)
-                try Task.checkCancellation()
-                return session
-            } catch {
-                await session.close()
-                throw error
-            }
-        }
-        let taskToAwait: Task<T3RpcSession, Error> = locked {
+        // Created and registered under one lock so two concurrent callers can
+        // never open two sockets; the new connect settles the previous one
+        // (stale socket or cancelled connect) before opening its own.
+        let task: Task<T3RpcSession, Error> = locked {
             if let session = rpcSession, rpcIdentity == identity, !session.isClosed {
-                created.cancel()
                 return Task { session }
             }
             if let connectTask, connectIdentity == identity {
-                created.cancel()
                 return connectTask
             }
-            connectTask?.cancel()
+            // Dead socket or a different environment: never reuse it.
+            let stale = rpcSession
+            rpcSession = nil
+            rpcIdentity = nil
+            let previous = connectTask
+            previous?.cancel()
+            rpcGeneration += 1
+            let generation = rpcGeneration
+            let publish: @Sendable (T3SocketState) -> Void = { [weak self] state in
+                self?.publishSocketState(state, generation: generation)
+            }
+            let created = Task<T3RpcSession, Error> { @concurrent [weak self] in
+                if let previous {
+                    _ = try? await previous.value
+                }
+                if let stale {
+                    await stale.close()
+                }
+                try Task.checkCancellation()
+                let ticket = try await http.issueWebsocketTicket(baseURL: baseURL, bearer: bearer)
+                guard let url = T3RpcCodec.websocketURL(httpBase: baseURL, ticket: ticket) else {
+                    throw T3ClientError.decoding("Could not build the T3 websocket URL.")
+                }
+                let session = makeSession(publish)
+                do {
+                    try await session.connect(url: url)
+                    try Task.checkCancellation()
+                } catch {
+                    await session.close()
+                    throw error
+                }
+                let keep = self?.locked { () -> Bool in
+                    guard let self, self.rpcGeneration == generation else { return false }
+                    self.rpcSession = session
+                    self.rpcIdentity = identity
+                    self.connectTask = nil
+                    self.connectIdentity = nil
+                    return true
+                } ?? false
+                if !keep {
+                    await session.close()
+                    throw T3ClientError.rpc("T3 connection was reset while connecting.")
+                }
+                return session
+            }
             connectIdentity = identity
             connectTask = created
             return created
         }
-        if taskToAwait != created {
-            // A concurrent caller owns the connect; just share its outcome.
-            return try await taskToAwait.value
-        }
         do {
-            let session = try await created.value
-            let keep = locked { () -> Bool in
-                guard connectIdentity == identity, connectTask == created else { return false }
-                rpcSession = session
-                rpcIdentity = identity
-                connectTask = nil
-                connectIdentity = nil
-                return true
-            }
-            if !keep {
-                await session.close()
-                throw T3ClientError.rpc("T3 connection was reset while connecting.")
-            }
-            return session
+            return try await task.value
         } catch {
             locked {
-                if connectTask == created {
+                if connectTask == task {
                     connectTask = nil
                     connectIdentity = nil
                 }

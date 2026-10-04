@@ -20,6 +20,7 @@ nonisolated final class T3LiveSignals: @unchecked Sendable {
     private var _connectionState: EventStreamConnectionState = .disconnected
     private var stateContinuations: [UUID: AsyncStream<EventStreamConnectionState>.Continuation] = [:]
     private var lifecycleHandlers: [UUID: @Sendable (Lifecycle) async -> Void] = [:]
+    private var eventContinuations: [UUID: AsyncStream<OpencodeEvent>.Continuation] = [:]
 
     var connectionState: EventStreamConnectionState {
         lock.lock()
@@ -55,6 +56,39 @@ nonisolated final class T3LiveSignals: @unchecked Sendable {
                 self.lock.unlock()
             }
         }
+    }
+
+    /// Synthetic opencode-shaped events derived from the T3 shell (thread
+    /// lifecycle, status, approvals). `DefaultForegroundEventStream` forwards
+    /// them to its subscribers while a T3 profile is live.
+    func publishEvent(_ event: OpencodeEvent) {
+        lock.lock()
+        let conts = Array(eventContinuations.values)
+        lock.unlock()
+        for continuation in conts {
+            continuation.yield(event)
+        }
+    }
+
+    var hasEventSubscribers: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return !eventContinuations.isEmpty
+    }
+
+    func eventUpdates() -> AsyncStream<OpencodeEvent> {
+        let id = UUID()
+        let (stream, continuation) = AsyncStream.makeStream(of: OpencodeEvent.self)
+        lock.lock()
+        eventContinuations[id] = continuation
+        lock.unlock()
+        continuation.onTermination = { [weak self] _ in
+            guard let self else { return }
+            self.lock.lock()
+            self.eventContinuations.removeValue(forKey: id)
+            self.lock.unlock()
+        }
+        return stream
     }
 
     @discardableResult

@@ -35,6 +35,8 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
     private let engineProvider: @Sendable () -> ConnectionEngine
     private let t3ConnectionStates: @Sendable () -> AsyncStream<EventStreamConnectionState>
     private let t3Lifecycle: @Sendable (T3LiveSignals.Lifecycle) async -> Void
+    /// Synthetic events the T3 client derives from its live shell.
+    private let t3Events: @Sendable () -> AsyncStream<OpencodeEvent>
     /// True while occupancy follows the T3 socket instead of SSE leases.
     private var t3Occupancy = false
     private let connectionEpoch: ConnectionEpoch
@@ -79,7 +81,8 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         protocolProbe: (@Sendable () async -> ServerProtocol)? = nil,
         engineProvider: (@Sendable () -> ConnectionEngine)? = nil,
         t3ConnectionStates: (@Sendable () -> AsyncStream<EventStreamConnectionState>)? = nil,
-        t3Lifecycle: (@Sendable (T3LiveSignals.Lifecycle) async -> Void)? = nil
+        t3Lifecycle: (@Sendable (T3LiveSignals.Lifecycle) async -> Void)? = nil,
+        t3Events: (@Sendable () -> AsyncStream<OpencodeEvent>)? = nil
     ) {
         self.api = api
         self.eventIngress = SseEventIngress(adapter: adapter)
@@ -98,6 +101,7 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         self.engineProvider = engineProvider ?? { .opencode }
         self.t3ConnectionStates = t3ConnectionStates ?? { T3LiveSignals.shared.connectionStateUpdates() }
         self.t3Lifecycle = t3Lifecycle ?? { await T3LiveSignals.shared.emit($0) }
+        self.t3Events = t3Events ?? { T3LiveSignals.shared.eventUpdates() }
     }
 
     func publishSynthetic(_ event: OpencodeEvent) {
@@ -220,13 +224,27 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         protocolConfirmed = true
         t3Occupancy = true
         let states = t3ConnectionStates
+        let events = t3Events
         let lifecycle = t3Lifecycle
         occupancyTask = Task { [weak self] in
+            // Subscribe to shell events before `start` so nothing published
+            // during the client's first snapshot is missed.
+            let eventStream = events()
             await lifecycle(.start)
-            for await state in states() {
-                guard let self, !Task.isCancelled, self.stillCurrent(generation) else { return }
-                self.applyConnectionState(state, generation: generation)
-                self.publishT3Snapshot(state: state, generation: generation)
+            await withTaskGroup(of: Void.self) { group in
+                group.addTask { [weak self] in
+                    for await state in states() {
+                        guard let self, !Task.isCancelled, self.stillCurrent(generation) else { return }
+                        self.applyConnectionState(state, generation: generation)
+                        self.publishT3Snapshot(state: state, generation: generation)
+                    }
+                }
+                group.addTask { [weak self] in
+                    for await event in eventStream {
+                        guard let self, !Task.isCancelled, self.stillCurrent(generation) else { return }
+                        self.publish(event)
+                    }
+                }
             }
         }
         lock.unlock()
