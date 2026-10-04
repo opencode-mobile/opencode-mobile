@@ -1,5 +1,6 @@
 package dev.opencode.mobile.domain.t3
 
+import dev.opencode.mobile.domain.session.SessionCreateOptions
 import dev.opencode.mobile.domain.session.SessionError
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
@@ -413,12 +414,164 @@ class T3SessionControlsTest {
                     },
                 )
             h.socket.connect(t3Profile.baseUrl)
+            h.socket.responses[T3RpcCodec.SERVER_GET_CONFIG] = serverConfigJson(listOf(harnessJson("codex-1")))
 
             runCatching { h.repository.createSession(parentId = null, title = "New", directory = "/repos/a") }
 
             val launch = h.socket.requests.last { it.tag == T3RpcCodec.LAUNCH_THREAD }.payload
             assertEquals("approval-required", launch.str("runtimeMode"))
             assertEquals("codex-1", launch["modelSelection"]!!.jsonObject["instanceId"]!!.jsonPrimitive.content)
+        }
+
+    /** A shell whose only project has no default model selection (nullable by contract). */
+    private fun shellWithoutProjectDefault(): String = shell(threads = emptyList())
+
+    private fun launchPayload(h: Harness): JsonObject =
+        h.socket.requests
+            .last { it.tag == T3RpcCodec.LAUNCH_THREAD }
+            .payload
+
+    private fun launchSelection(h: Harness): Pair<String?, String?> {
+        val selection = launchPayload(h)["modelSelection"]!!.jsonObject
+        return selection.str("instanceId") to selection.str("model")
+    }
+
+    @Test
+    fun createSession_withoutProjectDefault_fallsBackToGlobalDefault() =
+        runTest {
+            val h = Harness(this).build()
+            h.http.shellJson = shellWithoutProjectDefault()
+            h.socket.connect(t3Profile.baseUrl)
+            h.socket.responses[T3RpcCodec.SERVER_GET_CONFIG] =
+                serverConfigJson(
+                    providers = listOf(harnessJson("codex-1"), harnessJson("claude-1")),
+                    defaultInstanceId = "claude-1",
+                    defaultModel = "opus",
+                )
+
+            runCatching { h.repository.createSession(parentId = null, title = "New", directory = "/repos/a") }
+
+            assertEquals("claude-1" to "opus", launchSelection(h))
+        }
+
+    @Test
+    fun createSession_withoutAnyDefault_usesFirstUsableHarnessDefaultModel() =
+        runTest {
+            val h = Harness(this).build()
+            h.http.shellJson = shellWithoutProjectDefault()
+            h.socket.connect(t3Profile.baseUrl)
+            h.socket.responses[T3RpcCodec.SERVER_GET_CONFIG] =
+                serverConfigJson(
+                    providers =
+                        listOf(
+                            harnessJson("codex-1", enabled = false),
+                            harnessJson(
+                                "claude-1",
+                                models = listOf(harnessModelJson("sonnet"), harnessModelJson("opus", isDefault = true)),
+                            ),
+                        ),
+                )
+
+            runCatching { h.repository.createSession(parentId = null, title = "New", directory = "/repos/a") }
+
+            assertEquals("claude-1" to "opus", launchSelection(h))
+        }
+
+    @Test
+    fun createSession_passesExplicitSelectionAndRuntimeModeIntoLaunch() =
+        runTest {
+            val h = Harness(this).build()
+            h.http.shellJson = shellWithoutProjectDefault()
+            h.socket.connect(t3Profile.baseUrl)
+            h.socket.responses[T3RpcCodec.SERVER_GET_CONFIG] =
+                serverConfigJson(
+                    providers =
+                        listOf(
+                            harnessJson("codex-1"),
+                            harnessJson("claude-1", models = listOf(harnessModelJson("sonnet"), harnessModelJson("opus"))),
+                        ),
+                    defaultInstanceId = "codex-1",
+                )
+
+            runCatching {
+                h.repository.createSession(
+                    parentId = null,
+                    title = "New",
+                    directory = "/repos/a",
+                    options =
+                        SessionCreateOptions(
+                            providerId = "claude-1",
+                            modelId = "opus",
+                            runtimeMode = "full-access",
+                        ),
+                )
+            }
+
+            assertEquals("claude-1" to "opus", launchSelection(h))
+            assertEquals("full-access", launchPayload(h).str("runtimeMode"))
+        }
+
+    @Test
+    fun createSession_runtimeModeOutsideHarnessSupportFallsBackToSupervised() =
+        runTest {
+            val h = Harness(this).build()
+            h.http.shellJson = shellWithoutProjectDefault()
+            h.socket.connect(t3Profile.baseUrl)
+            h.socket.responses[T3RpcCodec.SERVER_GET_CONFIG] =
+                serverConfigJson(
+                    listOf(harnessJson("codex-1", supportedRuntimeModes = listOf("approval-required", "auto"))),
+                )
+
+            runCatching {
+                h.repository.createSession(
+                    parentId = null,
+                    title = "New",
+                    directory = "/repos/a",
+                    options = SessionCreateOptions(runtimeMode = "full-access"),
+                )
+            }
+
+            assertEquals("approval-required", launchPayload(h).str("runtimeMode"))
+        }
+
+    @Test
+    fun createSession_withoutUsableHarness_failsWithConfigureMessageAndNoLaunch() =
+        runTest {
+            val h = Harness(this).build()
+            h.http.shellJson = shellWithoutProjectDefault()
+            h.socket.connect(t3Profile.baseUrl)
+            h.socket.responses[T3RpcCodec.SERVER_GET_CONFIG] =
+                serverConfigJson(listOf(harnessJson("codex-1", authStatus = "unauthenticated")))
+
+            try {
+                h.repository.createSession(parentId = null, title = "New", directory = "/repos/a")
+                fail("creation must fail without a usable harness")
+            } catch (error: SessionError.Http) {
+                assertEquals("No T3 harness is available. Configure a provider in T3 Code first.", error.message)
+            }
+            assertTrue(h.socket.requests.none { it.tag == T3RpcCodec.LAUNCH_THREAD })
+        }
+
+    @Test
+    fun serverConfig_isCachedPerProfileAndRefreshedOnRequest() =
+        runTest {
+            val h = Harness(this).build()
+            h.socket.connect(t3Profile.baseUrl)
+            h.socket.responses[T3RpcCodec.SERVER_GET_CONFIG] = serverConfigJson(listOf(harnessJson("codex-1")))
+
+            val first = h.runtime.serverConfig()
+            h.runtime.serverConfig()
+            assertEquals(1, h.socket.requests.count { it.tag == T3RpcCodec.SERVER_GET_CONFIG })
+            assertEquals(listOf("codex-1"), first.harnesses.map { it.instanceId })
+
+            h.socket.responses[T3RpcCodec.SERVER_GET_CONFIG] = serverConfigJson(listOf(harnessJson("claude-1")))
+            val refreshed = h.runtime.serverConfig(forceRefresh = true)
+            assertEquals(2, h.socket.requests.count { it.tag == T3RpcCodec.SERVER_GET_CONFIG })
+            assertEquals(listOf("claude-1"), refreshed.harnesses.map { it.instanceId })
+            assertEquals(refreshed, h.runtime.cachedServerConfig())
+
+            h.runtime.stop()
+            assertNull(h.runtime.cachedServerConfig())
         }
 
     // endregion

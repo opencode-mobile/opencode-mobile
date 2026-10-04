@@ -13,6 +13,17 @@ interface SessionRepository {
         directory: String? = null,
     ): Session
 
+    /**
+     * Creates a session with an explicit model and runtime mode. Engines without
+     * creation-time choices ignore [options] and create as [createSession] does.
+     */
+    suspend fun createSession(
+        parentId: String?,
+        title: String?,
+        directory: String?,
+        options: SessionCreateOptions,
+    ): Session = createSession(parentId, title, directory)
+
     suspend fun getAllSessionStatuses(directory: String? = null): List<SessionStatus>
 
     suspend fun getSession(
@@ -214,6 +225,13 @@ interface SessionRepository {
         directory: String? = null,
     ): Session = throw SessionError.Http(400, "Model selection is not available")
 }
+
+/** Creation-time choices for a new session; null fields fall back to the server's defaults. */
+data class SessionCreateOptions(
+    val providerId: String? = null,
+    val modelId: String? = null,
+    val runtimeMode: String? = null,
+)
 
 /** How the server handled a compact request. */
 enum class CompactionStart {

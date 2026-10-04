@@ -115,6 +115,11 @@ class T3Runtime
 
         val socketState: StateFlow<T3SocketState> = socket.state
 
+        /** The provider catalogue of the active profile; null until first loaded. */
+        private val serverConfigCache = MutableStateFlow<T3ServerConfig?>(null)
+        private var serverConfigProfileId: String? = null
+        private val serverConfigMutex = Mutex()
+
         fun activeProfile(): ConnectionProfile? {
             val profile = activeConnectionManager.currentProfile() ?: return null
             return profile.takeIf { it.engine == ConnectionEngine.T3 }
@@ -130,6 +135,7 @@ class T3Runtime
                 if (liveJob?.isActive == true) return
                 liveJob = scope.launch { reconnectLoop() }
             }
+            if (socket.state.value != T3SocketState.Connected) publishLive(EventStreamConnectionState.Connecting)
         }
 
         /** Background or profile switch: drop the socket and forget everything cached. */
@@ -231,6 +237,43 @@ class T3Runtime
                 threadId
             }
 
+        /**
+         * The provider catalogue (`server.getConfig`) for the active profile. Served from
+         * the per-profile cache unless [forceRefresh]; a reconnect refreshes a loaded cache.
+         */
+        suspend fun serverConfig(forceRefresh: Boolean = false): T3ServerConfig =
+            guarded {
+                val profile = requireProfile()
+                serverConfigMutex.withLock {
+                    val cached = serverConfigCache.value
+                    if (!forceRefresh && cached != null && serverConfigProfileId == profile.id) return@withLock cached
+                    ensureConnected(profile)
+                    val value = socket.request(T3RpcCodec.SERVER_GET_CONFIG, JsonObject(emptyMap()))
+                    val config = T3Json.serverConfig(value)
+                    if (activeProfile()?.id == profile.id) {
+                        serverConfigProfileId = profile.id
+                        serverConfigCache.value = config
+                    }
+                    DiagnosticLog.info(
+                        DiagnosticLogArea.Connection,
+                        "T3 server config harnesses=${config.harnesses.size} usable=${config.harnesses.count { it.isUsable }}",
+                    )
+                    config
+                }
+            }
+
+        /** The cached catalogue when it belongs to the active profile. */
+        fun cachedServerConfig(): T3ServerConfig? {
+            val profile = activeProfile() ?: return null
+            return serverConfigCache.value?.takeIf { serverConfigProfileId == profile.id }
+        }
+
+        /** Refreshes a catalogue that was already loaded; a never-loaded one stays lazy. */
+        private fun scheduleServerConfigRefresh() {
+            if (serverConfigCache.value == null) return
+            scope.launch { runCatching { serverConfig(forceRefresh = true) } }
+        }
+
         suspend fun pair(
             baseUrl: String,
             pairingToken: String,
@@ -251,6 +294,7 @@ class T3Runtime
                     // Switched environments without a stop(): never show another server's data.
                     clearCaches()
                 }
+                publishLive(EventStreamConnectionState.Connecting)
                 validateProtocol(profile)
                 DiagnosticLog.info(DiagnosticLogArea.Connection, "T3 socket connecting profile=${profile.id}")
                 val ticket = api.fetchWsTicket(profile)
@@ -262,6 +306,7 @@ class T3Runtime
                 waitUntilConnected()
                 resubscribe()
                 publishLive(EventStreamConnectionState.Connected)
+                scheduleServerConfigRefresh()
             }
         }
 
@@ -676,6 +721,8 @@ class T3Runtime
          */
         private suspend fun clearCaches() {
             synchronized(shellLock) { _shell.value = null }
+            serverConfigCache.value = null
+            serverConfigProfileId = null
             messageMutex.withLock {
                 conversationByThread.clear()
                 turnItemsByThread.clear()

@@ -5584,6 +5584,188 @@ class SessionChatViewModelTest {
             text = "Change it",
             metadataLabel = "Build",
         )
+
+    // region T3 harness and model selection
+
+    private val t3ChatProfile =
+        ConnectionProfile(
+            baseUrl = "http://127.0.0.1:8787",
+            username = dev.opencode.mobile.domain.connection.ConnectionEngine.T3_USERNAME,
+            password = "token",
+            id = "profile-t3",
+            engine = dev.opencode.mobile.domain.connection.ConnectionEngine.T3,
+        )
+
+    private fun t3Option(
+        providerId: String,
+        providerName: String,
+        modelId: String,
+        modelName: String,
+    ) = ModelSelectionOption(
+        providerId = providerId,
+        providerName = providerName,
+        modelId = modelId,
+        modelName = modelName,
+        modelNameIsDisplayReady = true,
+    )
+
+    private val claudeOpus = t3Option("claude-1", "Claude", "claude-opus-4", "Opus")
+    private val claudeSonnet = t3Option("claude-1", "Claude", "claude-sonnet-4", "Sonnet")
+    private val codexGpt = t3Option("codex-1", "Codex", "gpt-5", "GPT-5")
+
+    private fun t3Catalog(requiresNewThread: Boolean) =
+        ModelSelectionCatalog(
+            options = listOf(claudeOpus, claudeSonnet, codexGpt),
+            serverDefault = codexGpt,
+            providerTraits =
+                mapOf(
+                    "claude-1" to
+                        ModelProviderTraits(
+                            supportedRuntimeModes = listOf("approval-required", "full-access"),
+                            requiresNewSessionForModelChange = requiresNewThread,
+                        ),
+                    "codex-1" to ModelProviderTraits(),
+                ),
+        )
+
+    private fun selectedOption(viewModel: SessionChatViewModel): ModelSelectionOption? =
+        viewModel.uiState.value.composer.selectedModel
+            ?.option
+
+    private fun t3ThreadSession() =
+        Session(
+            id = "ses-1",
+            title = "Title",
+            directory = "/repo",
+            providerInstanceId = "claude-1",
+            modelId = "claude-opus-4",
+            runtimeMode = "approval-required",
+        )
+
+    @Test
+    fun t3Thread_composerOffersHarnessCatalogueAndPinsTheThreadModel() =
+        runTest(testDispatcher) {
+            val sessionRepository = FakeSessionRepository(getSessionResult = t3ThreadSession())
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(messages = emptyList()),
+                    modelRepository = FakeModelRepository(t3Catalog(requiresNewThread = false)),
+                    sessionRepository = sessionRepository,
+                    connectionProfileStore = FakeConnectionProfileStore(active = t3ChatProfile),
+                )
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertTrue(state.capabilities.showsComposerModel)
+            assertEquals(listOf("claude-1", "claude-1", "codex-1"), state.composer.modelOptions.map { it.providerId })
+            // The thread's own selection outranks the server default.
+            assertEquals(claudeOpus, state.composer.selectedModel?.option)
+            assertEquals("Claude · Opus", state.composer.selectedProviderModelLabel)
+            assertEquals("Claude · Opus", state.modelSelectionLabel)
+            assertEquals("Claude", state.providerLabel)
+            assertEquals(listOf("approval-required", "full-access"), state.runtimeModeOptions)
+            assertNull(state.modelChangeLock)
+        }
+
+    @Test
+    fun t3StartedThread_requiresNewThreadBlocksModelChangeWithNotice() =
+        runTest(testDispatcher) {
+            val sessionRepository = FakeSessionRepository(getSessionResult = t3ThreadSession())
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(),
+                    modelRepository = FakeModelRepository(t3Catalog(requiresNewThread = true)),
+                    sessionRepository = sessionRepository,
+                    connectionProfileStore = FakeConnectionProfileStore(active = t3ChatProfile),
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            val lock = viewModel.uiState.value.modelChangeLock
+            assertEquals("claude-1", lock?.providerId)
+            assertEquals(true, lock?.modelsLocked)
+
+            viewModel.selectModel(claudeSonnet)
+            advanceUntilIdle()
+
+            assertTrue(sessionRepository.modelSelectionRequests.isEmpty())
+            assertEquals(claudeOpus, selectedOption(viewModel))
+            assertEquals(
+                ModelChangeLock.CHANGE_MODEL_NOTICE,
+                viewModel.uiState.value.composer.modelNotice,
+            )
+        }
+
+    @Test
+    fun t3StartedThread_flexibleHarnessDispatchesModelSelection() =
+        runTest(testDispatcher) {
+            val sessionRepository = FakeSessionRepository(getSessionResult = t3ThreadSession())
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(),
+                    modelRepository = FakeModelRepository(t3Catalog(requiresNewThread = false)),
+                    sessionRepository = sessionRepository,
+                    connectionProfileStore = FakeConnectionProfileStore(active = t3ChatProfile),
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.selectModel(codexGpt)
+            advanceUntilIdle()
+            assertTrue("a started thread never switches providers", sessionRepository.modelSelectionRequests.isEmpty())
+
+            viewModel.selectModel(claudeSonnet)
+            advanceUntilIdle()
+
+            assertEquals(listOf(Triple("ses-1", "claude-1", "claude-sonnet-4")), sessionRepository.modelSelectionRequests)
+            assertEquals(claudeSonnet, selectedOption(viewModel))
+            assertEquals("Claude · Sonnet", viewModel.uiState.value.modelSelectionLabel)
+        }
+
+    @Test
+    fun t3NewThread_createsWithRememberedSelection() =
+        runTest(testDispatcher) {
+            val store = FakeSessionModelSelectionStore()
+            store.saveNewSessionPreference(
+                ModelSelectionConnectionIdentity(t3ChatProfile.baseUrl, t3ChatProfile.username),
+                "/repo",
+                SessionModelSelection(providerId = "claude-1", modelId = "claude-sonnet-4"),
+            )
+            val sessionRepository =
+                FakeSessionRepository(
+                    createSessionResult =
+                        Session(
+                            id = "ses-new",
+                            title = "New thread",
+                            directory = "/repo",
+                            providerInstanceId = "claude-1",
+                            modelId = "claude-sonnet-4",
+                        ),
+                )
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(messages = emptyList()),
+                    modelRepository = FakeModelRepository(t3Catalog(requiresNewThread = true)),
+                    sessionModelSelectionStore = store,
+                    sessionRepository = sessionRepository,
+                    connectionProfileStore = FakeConnectionProfileStore(active = t3ChatProfile),
+                )
+
+            viewModel.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, "New Session", "/repo")
+            advanceUntilIdle()
+
+            assertEquals("ses-new", viewModel.uiState.value.sessionId)
+            assertEquals("claude-1", sessionRepository.createSessionOptions?.providerId)
+            assertEquals("claude-sonnet-4", sessionRepository.createSessionOptions?.modelId)
+            assertEquals(claudeSonnet, selectedOption(viewModel))
+            // No history yet: the requires-new-thread harness still lets the empty thread change.
+            assertNull(viewModel.uiState.value.modelChangeLock)
+        }
+
+    // endregion
+
 }
 
 private class RecordingSessionReadyStore : SessionReadyStore {
@@ -6148,6 +6330,34 @@ private class FakeSessionRepository(
         return createSessionResult ?: Session(id = "new-ses", title = title.orEmpty(), directory = directory)
     }
 
+    var createSessionOptions: dev.opencode.mobile.domain.session.SessionCreateOptions? = null
+
+    override suspend fun createSession(
+        parentId: String?,
+        title: String?,
+        directory: String?,
+        options: dev.opencode.mobile.domain.session.SessionCreateOptions,
+    ): Session {
+        createSessionOptions = options
+        return createSession(parentId, title, directory)
+    }
+
+    val modelSelectionRequests = mutableListOf<Triple<String, String, String>>()
+
+    override suspend fun setModelSelection(
+        id: String,
+        providerInstanceId: String,
+        modelId: String,
+        directory: String?,
+    ): Session {
+        modelSelectionRequests += Triple(id, providerInstanceId, modelId)
+        val updated =
+            (getSessionResult ?: Session(id = id, title = "Title", directory = directory))
+                .copy(providerInstanceId = providerInstanceId, modelId = modelId)
+        getSessionResult = updated
+        return updated
+    }
+
     override suspend fun getAllSessionStatuses(directory: String?): List<SessionStatus> {
         sessionStatusError?.let { throw it }
         return listOf(SessionStatus(sessionId = "ses-1", raw = mapOf("type" to sessionStatusType)))
@@ -6373,6 +6583,9 @@ private class FakeQuestionLiveStore(
     override fun observeQuestions(directory: String): Flow<List<QuestionRequest>> = requests
 
     override fun clearCache() = Unit
+}
+
+
 }
 
 private fun questionRequest(

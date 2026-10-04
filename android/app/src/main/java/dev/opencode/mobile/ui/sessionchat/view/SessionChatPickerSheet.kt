@@ -11,6 +11,7 @@ import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
 import dev.opencode.mobile.domain.agent.SelectableAgent
+import dev.opencode.mobile.domain.model.ModelChangeLock
 import dev.opencode.mobile.domain.model.ModelSelection
 import dev.opencode.mobile.domain.model.ModelSelectionCatalog
 import dev.opencode.mobile.domain.model.ModelSelectionOption
@@ -58,6 +59,7 @@ internal fun SessionChatPickerSheet(
     modelFilterText: String,
     modelOptions: List<ModelSelectionOption>,
     selectedModel: ModelSelectionOption?,
+    modelChangeLock: ModelChangeLock? = null,
     selectedMode: String,
     selectableAgents: List<SelectableAgent>,
     selectedVariant: String?,
@@ -159,6 +161,7 @@ internal fun SessionChatPickerSheet(
                     providers = modelCatalog.providers,
                     activeProvider = activeModelProvider,
                     selectedModel = selectedModel,
+                    modelChangeLock = modelChangeLock,
                     filterText = modelFilterText,
                     onSelectProvider = { provider ->
                         ProductAnalytics.logUserAction(
@@ -210,14 +213,24 @@ private fun ModelPickerSheetContent(
     providers: List<ModelSelectionProvider>,
     activeProvider: ModelSelectionProvider?,
     selectedModel: ModelSelectionOption?,
+    modelChangeLock: ModelChangeLock?,
     filterText: String,
     onSelectProvider: (ModelSelectionProvider) -> Unit,
     onSelectModel: (ModelSelectionOption) -> Unit,
 ) {
+    // A started session that cannot switch says why, then shows the blocked rows disabled.
+    modelChangeLock?.let { lock ->
+        OpenCodeBottomSheetEntry(
+            title = lock.notice,
+            enabled = false,
+            onClick = {},
+        )
+    }
     if (activeProvider == null) {
         providers.forEach { provider ->
             OpenCodeBottomSheetEntry(
                 title = provider.label,
+                enabled = modelChangeLock == null || modelChangeLock.providerId == provider.id,
                 endDecorator =
                     if (provider.id == selectedModel?.providerId) {
                         BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check, "Selected")
@@ -239,6 +252,7 @@ private fun ModelPickerSheetContent(
             filteredModels.forEach { model ->
                 OpenCodeBottomSheetEntry(
                     title = model.modelLabel,
+                    enabled = modelChangeLock?.blockReason(model) == null,
                     endDecorator =
                         if (model == selectedModel) {
                             BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check, "Selected")

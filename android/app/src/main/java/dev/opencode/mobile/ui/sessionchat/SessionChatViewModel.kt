@@ -11,6 +11,7 @@ import dev.opencode.mobile.domain.command.CommandRepository
 import dev.opencode.mobile.domain.composer.ComposerDraftStore
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
+import dev.opencode.mobile.domain.connection.ConnectionEngine
 import dev.opencode.mobile.domain.engine.SessionCapabilities
 import dev.opencode.mobile.domain.t3.T3ProviderLabels
 import dev.opencode.mobile.domain.t3.T3RuntimeModeLabels
@@ -35,8 +36,11 @@ import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.model.ModelCatalogStore
+import dev.opencode.mobile.domain.model.ModelChangeLock
+import dev.opencode.mobile.domain.model.ModelRepository
 import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.model.NewSessionModelSelectionResolver
+import dev.opencode.mobile.domain.model.SessionModelSelection
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
 import dev.opencode.mobile.domain.preferences.ChipTimelineIntro
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
@@ -47,6 +51,7 @@ import dev.opencode.mobile.domain.session.PermissionRequest
 import dev.opencode.mobile.domain.session.QuestionRequest
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionActivity
+import dev.opencode.mobile.domain.session.SessionCreateOptions
 import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionTodoList
@@ -199,6 +204,10 @@ class SessionChatViewModel
         private var runtimeModeLabel: String? = null
         private var runtimeMode: String? = null
         private var modelSelectionLabel: String? = null
+
+        /** The provider and model the server records on the session (T3). */
+        private var sessionProviderId: String? = null
+        private var sessionModelId: String? = null
         private var projectLabel: String? = null
         private var projectLetter: Char? = null
         private var projectLetterAccent: LetterAccent? = null
@@ -239,6 +248,7 @@ class SessionChatViewModel
         private var pendingSend: PendingSend? = null
         private var armedSendAcceptance: ArmedSendAcceptance? = null
         private val newSessionModelSelectionResolver = newSessionModelSelectionResolver
+        private val liveStream = foregroundEventStream
         private val connectionSessionCoordinator = connectionSessionCoordinator
 
         init {
@@ -431,6 +441,9 @@ class SessionChatViewModel
                     runCatching {
                         withContext(ioDispatcher) {
                             val profile = connectionSessionCoordinator.currentProfile()
+                            if (capabilities.choosesModelAtCreate) {
+                                return@withContext createWithModelSelection(profile, worktree)
+                            }
                             val session = sessionRepository.createSession(directory = worktree)
                             if (capabilities.requiresComposerModel) {
                                 val selection = profile?.let { newSessionModelSelectionResolver.resolve(it, worktree) }
@@ -449,6 +462,44 @@ class SessionChatViewModel
                         timeline.showCreateFailed(createSessionErrorMessage(error))
                     }
                 }
+        }
+
+        /**
+         * Creates a session that keeps its own model: the remembered new-session choice
+         * (else the engine default) is passed to creation and seeded as the session's
+         * selection so the chip opens on what the server launched.
+         */
+        private suspend fun createWithModelSelection(
+            profile: dev.opencode.mobile.domain.connection.ConnectionProfile?,
+            worktree: String,
+        ): Session {
+            val selection = profile?.let { newSessionModelSelectionResolver.resolve(it, worktree) }
+            val session =
+                sessionRepository.createSession(
+                    parentId = null,
+                    title = null,
+                    directory = worktree,
+                    options =
+                        SessionCreateOptions(
+                            providerId = selection?.providerId,
+                            modelId = selection?.modelId,
+                        ),
+                )
+            val providerId = session.providerInstanceId ?: selection?.providerId
+            val modelId = session.modelId ?: selection?.modelId
+            if (profile != null && providerId != null && modelId != null) {
+                newSessionModelSelectionResolver.seedSession(
+                    profile,
+                    worktree,
+                    session.id,
+                    SessionModelSelection(
+                        providerId = providerId,
+                        modelId = modelId,
+                        savedAtEpochMs = System.currentTimeMillis(),
+                    ),
+                )
+            }
+            return session
         }
 
         private fun createSessionErrorMessage(error: Throwable): String =
@@ -720,8 +771,41 @@ class SessionChatViewModel
                 actionId = ProductAnalytics.Action.MODEL_PICKER_SELECT_MODEL,
                 screenId = ProductAnalytics.Screen.SESSION_MODEL_PICKER,
             )
-            composer.selectModel(option)
+            if (!capabilities.choosesModelAtCreate || !hasCreatedSession()) {
+                // OpenCode sends carry the model; a session still being created takes the
+                // choice as the remembered new-session preference.
+                composer.selectModel(option)
+                return
+            }
+            currentModelChangeLock()?.blockReason(option)?.let { notice ->
+                logI("model selection blocked provider=${option.providerId}")
+                composer.showModelNotice(notice)
+                return
+            }
+            if (option.providerId == sessionProviderId && option.modelId == sessionModelId) {
+                composer.selectModel(option)
+                return
+            }
+            sessionInfo.setModelSelection(option.providerId, option.modelId) { session ->
+                if (boundSessionId != session.id) return@setModelSelection
+                applySessionChrome(session)
+                composer.selectModel(option)
+                publishUiState()
+            }
         }
+
+        /** The lock for the bound session from its recorded selection and loaded history. */
+        private fun currentModelChangeLock(): ModelChangeLock? =
+            if (capabilities.choosesModelAtCreate && hasCreatedSession()) {
+                ModelChangeLock.of(
+                    hasStarted = timeline.loadedMessages().isNotEmpty(),
+                    providerId = sessionProviderId,
+                    modelId = sessionModelId,
+                    traits = composer.state.value.composer.modelProviderTraits,
+                )
+            } else {
+                null
+            }
 
         fun selectMode(mode: String) {
             logAction(
@@ -1306,9 +1390,16 @@ class SessionChatViewModel
         }
 
         private fun applyCapabilities() {
-            capabilities = SessionCapabilities.forProfile(activeConnectionManager.currentProfile())
+            val profile = activeConnectionManager.currentProfile()
+            capabilities = SessionCapabilities.forProfile(profile)
             composer.capabilities = capabilities
             commands.capabilities = capabilities
+            sessionProviderId = null
+            sessionModelId = null
+            if (profile?.engine == ConnectionEngine.T3) {
+                // The T3 socket connects lazily; warm it so the chrome reads connecting -> connected.
+                liveStream.start()
+            }
             if (!capabilities.showsProvider) providerLabel = null
             if (!capabilities.showsRuntimeMode) {
                 runtimeModeLabel = null
@@ -1318,10 +1409,38 @@ class SessionChatViewModel
         }
 
         private fun applySessionChrome(session: Session) {
+            sessionProviderId = session.providerInstanceId?.takeIf { it.isNotBlank() }
+            sessionModelId = session.modelId?.takeIf { it.isNotBlank() }
             providerLabel = T3ProviderLabels.displayName(session.providerInstanceId)
             runtimeMode = session.runtimeMode?.takeIf { it.isNotBlank() }
             runtimeModeLabel = T3RuntimeModeLabels.displayName(session.runtimeMode).takeIf { it.isNotBlank() }
             modelSelectionLabel = T3ProviderLabels.modelSelectionLabel(session.providerInstanceId, session.modelId)
+            if (capabilities.choosesModelAtCreate) {
+                composer.applySessionSelection(sessionProviderId, sessionModelId)
+            }
+        }
+
+        /** Catalogue labels for the session's provider and model, else the id-derived fallbacks. */
+        private fun sessionChromeLabels(composerState: SessionChatComposerRegionState): Pair<String?, String?> {
+            val providerId = sessionProviderId ?: return providerLabel to modelSelectionLabel
+            val options = composerState.composer.modelOptions
+            val providerName =
+                options.firstOrNull { it.providerId == providerId }?.providerLabel
+                    ?: return providerLabel to modelSelectionLabel
+            val modelName =
+                options.firstOrNull { it.providerId == providerId && it.modelId == sessionModelId }?.modelLabel
+                    ?: sessionModelId
+            return providerName to (modelName?.let { "$providerName · $it" } ?: providerName)
+        }
+
+        private fun runtimeModeOptions(composerState: SessionChatComposerRegionState): List<String> {
+            if (!capabilities.canSetRuntimeMode) return emptyList()
+            val supported =
+                sessionProviderId
+                    ?.let { composerState.composer.modelProviderTraits[it] }
+                    ?.supportedRuntimeModes
+                    ?.filter { it in T3RuntimeModeLabels.allModes }
+            return supported?.takeIf { it.isNotEmpty() } ?: T3RuntimeModeLabels.allModes
         }
 
         private fun loadSessionChrome() {
@@ -1421,6 +1540,7 @@ class SessionChatViewModel
             inboxState: SessionChatInboxRegionState,
         ): SessionChatUiState {
             inbox.refilterOrphans()
+            val chromeLabels = sessionChromeLabels(composerState)
             val inboxSnapshot = inbox.state.value
             val visibleQuestion = inboxSnapshot.visibleQuestionRequest
             val questionDraft = inboxSnapshot.questionDraft
@@ -1640,10 +1760,12 @@ class SessionChatViewModel
                 pendingFilesOpen = commandsState.pendingFilesOpen,
                 hasPendingRevert = commandsState.hasPendingRevert,
                 capabilities = capabilities,
-                providerLabel = providerLabel,
+                providerLabel = chromeLabels.first,
                 runtimeModeLabel = runtimeModeLabel,
                 runtimeMode = runtimeMode,
-                modelSelectionLabel = modelSelectionLabel,
+                modelSelectionLabel = chromeLabels.second,
+                runtimeModeOptions = runtimeModeOptions(composerState),
+                modelChangeLock = currentModelChangeLock(),
                 projectLabel = projectLabel,
                 projectLetter = projectLetter,
                 projectLetterAccent = projectLetterAccent,

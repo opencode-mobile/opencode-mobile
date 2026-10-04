@@ -99,6 +99,9 @@ class SessionChatComposer(
     private var loadedCatalog: ModelSelectionCatalog? = null
     private var loadedSelectableAgents = false
     private var cachedSelection: SessionModelSelection? = null
+
+    /** The selection the server records on the session (T3); outranks every local hint. */
+    private var sessionSelection: SessionModelSelection? = null
     private var newSessionPreference: SessionModelSelection? = null
     private var initialSelectionState = InitialSelectionState.LoadingCache
     private var latestTimelineState: SessionChatTimelineRegionState? = null
@@ -160,6 +163,7 @@ class SessionChatComposer(
         loadedCatalog = null
         loadedSelectableAgents = false
         cachedSelection = null
+        sessionSelection = null
         newSessionPreference = null
         initialSelectionState = InitialSelectionState.LoadingCache
         latestTimelineState = null
@@ -332,7 +336,7 @@ class SessionChatComposer(
     }
 
     fun loadCatalog() {
-        if (!capabilities.requiresComposerModel) {
+        if (!capabilities.showsComposerModel) {
             updateComposer {
                 it.copy(
                     isModelSelectionReady = true,
@@ -454,17 +458,21 @@ class SessionChatComposer(
                 return
             }
         }
-        val staleCached = staleCachedSelection()
+        val authoritative = sessionSelection?.takeIf { catalog.option(it.providerId, it.modelId) != null }
+        val staleCached = if (authoritative != null) null else staleCachedSelection()
         val validCached = cachedSelection?.takeIf { staleCached == null }
         val validUserHint = historyHints.user?.takeIf { catalog.option(it.providerId, it.modelId) != null }
         val validAssistantHint = historyHints.assistant?.takeIf { catalog.option(it.providerId, it.modelId) != null }
         val validPreference = newSessionPreference?.takeIf { catalog.option(it.providerId, it.modelId) != null }
-        val chosen = chooseInitialSelection(validCached, validUserHint, validAssistantHint, validPreference)
+        val chosen =
+            authoritative?.let { InitialSelection.Session(it) }
+                ?: chooseInitialSelection(validCached, validUserHint, validAssistantHint, validPreference)
         val option =
             when (chosen) {
                 is InitialSelection.Cached -> catalog.option(chosen.value.providerId, chosen.value.modelId)
                 is InitialSelection.History -> catalog.option(chosen.value.providerId, chosen.value.modelId)
                 is InitialSelection.Preference -> catalog.option(chosen.value.providerId, chosen.value.modelId)
+                is InitialSelection.Session -> catalog.option(chosen.value.providerId, chosen.value.modelId)
                 null -> null
             } ?: catalog.serverDefault ?: catalog.options.first()
         val rememberedVariant =
@@ -472,6 +480,7 @@ class SessionChatComposer(
                 is InitialSelection.Cached -> chosen.value.variant
                 is InitialSelection.History -> chosen.value.variant
                 is InitialSelection.Preference -> chosen.value.variant
+                is InitialSelection.Session -> cachedSelection?.variant
                 null -> null
             }
         val variant = resolvedVariant(rememberedVariant, option)
@@ -529,6 +538,44 @@ class SessionChatComposer(
         } else {
             InitialSelectionState.Resolved
         }
+
+    /**
+     * Pins the chip to the model the server records on the session (T3 threads keep
+     * their own selection; sends never carry the composer's). Applies now when the
+     * catalogue is loaded, else when the initial selection resolves.
+     */
+    fun applySessionSelection(
+        providerId: String?,
+        modelId: String?,
+    ) {
+        if (providerId.isNullOrBlank() || modelId.isNullOrBlank()) return
+        sessionSelection = SessionModelSelection(providerId = providerId, modelId = modelId)
+        if (initialSelectionState != InitialSelectionState.Resolved &&
+            initialSelectionState != InitialSelectionState.FailedWithFallback
+        ) {
+            applyInitialSelectionIfReady()
+            return
+        }
+        val option = loadedCatalog?.option(providerId, modelId) ?: return
+        if (_state.value.composer.selectedModel
+                ?.option == option
+        ) {
+            return
+        }
+        updateComposer { composer ->
+            composer.copy(
+                selectedModel = ModelSelection(option, null),
+                selectedVariant = null,
+                modelNotice = null,
+            )
+        }
+        persistCurrentSelection(updatePreference = false)
+    }
+
+    /** Shows [notice] under the composer until the next model change. */
+    fun showModelNotice(notice: String) {
+        updateComposer { it.copy(modelNotice = notice) }
+    }
 
     private fun chooseInitialSelection(
         cached: SessionModelSelection?,
@@ -1441,7 +1488,13 @@ class SessionChatComposer(
             return
         }
         loadedCatalog = catalog
-        updateComposer { it.copy(modelOptions = catalog.options, modelCatalogError = null) }
+        updateComposer {
+            it.copy(
+                modelOptions = catalog.options,
+                modelProviderTraits = catalog.providerTraits,
+                modelCatalogError = null,
+            )
+        }
         revalidateSelection(catalog)
         applyInitialSelectionIfReady()
     }
@@ -1633,6 +1686,12 @@ class SessionChatComposer(
             val value: SessionModelSelection,
         ) : InitialSelection {
             override val sourceName = "new-session-preference"
+        }
+
+        data class Session(
+            val value: SessionModelSelection,
+        ) : InitialSelection {
+            override val sourceName = "session-record"
         }
     }
 }

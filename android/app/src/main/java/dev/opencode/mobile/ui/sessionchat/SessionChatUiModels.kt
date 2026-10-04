@@ -14,6 +14,8 @@ import dev.opencode.mobile.domain.message.Attachment
 import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.ToolStatus
+import dev.opencode.mobile.domain.model.ModelChangeLock
+import dev.opencode.mobile.domain.model.ModelProviderTraits
 import dev.opencode.mobile.domain.model.ModelSelection
 import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.session.FileDiff
@@ -32,6 +34,7 @@ data class SessionChatComposerState(
     val attachments: List<Attachment> = emptyList(),
     val selectedModel: ModelSelection? = null,
     val modelOptions: List<ModelSelectionOption> = emptyList(),
+    val modelProviderTraits: Map<String, ModelProviderTraits> = emptyMap(),
     val selectedMode: String = SelectableAgent.DefaultId,
     val selectableAgents: List<SelectableAgent> = SelectableAgent.Fallback,
     val selectedVariant: String? = null,
@@ -51,6 +54,14 @@ data class SessionChatComposerState(
 
     val selectedModelLabel: String
         get() = if (isModelSelectionReady) selectedModel?.modelLabel ?: "Model" else "Loading model…"
+
+    /** `<provider> · <model>` once a model is selected; null while none is. */
+    val selectedProviderModelLabel: String?
+        get() =
+            selectedModel
+                ?.option
+                ?.takeIf { isModelSelectionReady }
+                ?.let { "${it.providerLabel} · ${it.modelLabel}" }
 
     val selectedVariantLabel: String
         get() = TitleCaseIdentifier.displayName(selectedVariant ?: ModelSelection.DefaultVariantLabel)
@@ -220,6 +231,10 @@ data class SessionChatUiState(
     val runtimeMode: String? = null,
     /** `Codex · gpt-5` style label of the thread's current model selection. */
     val modelSelectionLabel: String? = null,
+    /** Runtime modes the session's provider accepts, in picker order. */
+    val runtimeModeOptions: List<String> = emptyList(),
+    /** Why the picker cannot change a started session's model; null when it can. */
+    val modelChangeLock: ModelChangeLock? = null,
     /** Smart project label for top-bar chrome; null when worktree missing. */
     val projectLabel: String? = null,
     val projectLetter: Char? = null,

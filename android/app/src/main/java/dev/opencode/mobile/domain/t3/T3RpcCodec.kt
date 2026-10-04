@@ -50,6 +50,7 @@ object T3RpcCodec {
     const val SUBSCRIBE_THREAD = "orchestration.subscribeThread"
     const val SUBSCRIBE_SHELL = "orchestration.subscribeShell"
     const val LAUNCH_THREAD = "orchestration.launchThread"
+    const val SERVER_GET_CONFIG = "server.getConfig"
 
     fun encodeRequest(
         id: String,

@@ -309,6 +309,46 @@ class SessionInfo(
         }
     }
 
+    /** Dispatches a model change for the bound session; [onApplied] receives the refreshed session. */
+    fun setModelSelection(
+        providerId: String,
+        modelId: String,
+        onApplied: (dev.opencode.mobile.domain.session.Session) -> Unit = {},
+    ) {
+        val sessionId = boundSessionId ?: return
+        val worktree = boundWorktree ?: return
+        if (OptimisticSessionCreate.isPlaceholder(sessionId)) return
+        if (_state.value.isLifecycleActionInFlight) return
+        scope.launch {
+            _state.update {
+                it.copy(isLifecycleActionInFlight = true, lifecycleErrorMessage = null)
+            }
+            logI("model selection start session=$sessionId provider=$providerId")
+            runCatching {
+                sessionRepository.setModelSelection(
+                    id = sessionId,
+                    providerInstanceId = providerId,
+                    modelId = modelId,
+                    directory = worktree,
+                )
+            }.onSuccess { session ->
+                if (!isCurrentBinding(sessionId, worktree)) return@onSuccess
+                logI("model selection success session=$sessionId provider=${session.providerInstanceId}")
+                _state.update { it.copy(isLifecycleActionInFlight = false) }
+                onApplied(session)
+            }.onFailure { error ->
+                if (!isCurrentBinding(sessionId, worktree)) return@onFailure
+                logI("model selection failure session=$sessionId error=${error.message}")
+                _state.update {
+                    it.copy(
+                        isLifecycleActionInFlight = false,
+                        lifecycleErrorMessage = MODEL_SELECTION_ERROR,
+                    )
+                }
+            }
+        }
+    }
+
     fun deleteSession() {
         val sessionId = boundSessionId ?: return
         val worktree = boundWorktree ?: return
@@ -528,5 +568,6 @@ class SessionInfo(
         const val SETTLE_ERROR = "Couldn't settle session."
         const val DELETE_ERROR = "Couldn't delete session."
         const val RUNTIME_MODE_ERROR = "Couldn't change runtime mode."
+        const val MODEL_SELECTION_ERROR = "Couldn't change the model."
     }
 }

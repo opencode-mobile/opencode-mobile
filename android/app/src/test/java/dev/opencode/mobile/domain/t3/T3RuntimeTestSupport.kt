@@ -189,6 +189,9 @@ internal class FakeT3Socket : T3Socket {
     var disconnectCalls = 0
     /** Simulates the socket closing under a request: fails it the way [T3WebSocket.failPending] does. */
     var failNextRequest = false
+
+    /** Success values by RPC tag; any other tag answers `{"sequence":1}`. */
+    val responses = mutableMapOf<String, JsonElement>()
     private var counter = 0
 
     override fun connect(url: String) {
@@ -206,7 +209,7 @@ internal class FakeT3Socket : T3Socket {
             throw T3ConnectionLostException("T3 websocket closed")
         }
         requests += SentRequest("req-${++counter}", tag, payload)
-        return buildJsonObject { put("sequence", 1) }
+        return responses[tag] ?: buildJsonObject { put("sequence", 1) }
     }
 
     override fun sendSubscribe(
@@ -386,6 +389,81 @@ internal fun messageUpdatedEvent(
                 put("id", id)
                 put("role", "assistant")
                 put("text", text)
+            },
+        )
+    }
+
+internal fun harnessJson(
+    instanceId: String,
+    driver: String = instanceId.substringBefore('-'),
+    displayName: String? = null,
+    enabled: Boolean = true,
+    installed: Boolean = true,
+    status: String = "ready",
+    authStatus: String = "authenticated",
+    supportedRuntimeModes: List<String>? = null,
+    requiresNewThreadForModelChange: Boolean? = null,
+    models: List<JsonObject> = listOf(harnessModelJson("$instanceId-model", isDefault = true)),
+): JsonObject =
+    buildJsonObject {
+        put("instanceId", instanceId)
+        put("driver", driver)
+        if (displayName != null) put("displayName", displayName)
+        put("enabled", enabled)
+        put("installed", installed)
+        put("version", "1.0.0")
+        put("status", status)
+        put("auth", buildJsonObject { put("status", authStatus) })
+        put("checkedAt", "2026-10-04T00:00:00Z")
+        if (supportedRuntimeModes != null) {
+            put("supportedRuntimeModes", JsonArray(supportedRuntimeModes.map(::JsonPrimitive)))
+        }
+        if (requiresNewThreadForModelChange != null) {
+            put("requiresNewThreadForModelChange", requiresNewThreadForModelChange)
+        }
+        put("models", JsonArray(models))
+        put("slashCommands", JsonArray(emptyList()))
+        put("skills", JsonArray(emptyList()))
+    }
+
+internal fun harnessModelJson(
+    slug: String,
+    name: String = slug,
+    shortName: String? = null,
+    isDefault: Boolean? = null,
+    isCustom: Boolean = false,
+): JsonObject =
+    buildJsonObject {
+        put("slug", slug)
+        put("name", name)
+        if (shortName != null) put("shortName", shortName)
+        if (isDefault != null) put("isDefault", isDefault)
+        put("isCustom", isCustom)
+        put("capabilities", kotlinx.serialization.json.JsonNull)
+    }
+
+internal fun serverConfigJson(
+    providers: List<JsonObject>,
+    defaultInstanceId: String? = null,
+    defaultModel: String? = null,
+): JsonObject =
+    buildJsonObject {
+        put("cwd", "/repos")
+        put("providers", JsonArray(providers))
+        put(
+            "settings",
+            buildJsonObject {
+                if (defaultInstanceId != null) {
+                    put(
+                        "defaultModelSelection",
+                        buildJsonObject {
+                            put("instanceId", defaultInstanceId)
+                            if (defaultModel != null) put("model", defaultModel)
+                        },
+                    )
+                } else {
+                    put("defaultModelSelection", kotlinx.serialization.json.JsonNull)
+                }
             },
         )
     }

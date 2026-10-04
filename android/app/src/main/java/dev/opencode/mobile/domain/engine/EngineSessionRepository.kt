@@ -9,6 +9,7 @@ import dev.opencode.mobile.domain.session.PermissionRequest
 import dev.opencode.mobile.domain.session.QuestionInfo
 import dev.opencode.mobile.domain.session.QuestionRequest
 import dev.opencode.mobile.domain.session.Session
+import dev.opencode.mobile.domain.session.SessionCreateOptions
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.domain.session.SessionTodo
@@ -61,6 +62,13 @@ class EngineSessionRepository private constructor(
             title: String?,
             directory: String?,
         ): Session = delegate().createSession(parentId, title, directory)
+
+        override suspend fun createSession(
+            parentId: String?,
+            title: String?,
+            directory: String?,
+            options: SessionCreateOptions,
+        ): Session = delegate().createSession(parentId, title, directory, options)
 
         override suspend fun getAllSessionStatuses(directory: String?): List<SessionStatus> =
             delegate().getAllSessionStatuses(directory)
@@ -228,4 +236,29 @@ class EngineSessionRepository private constructor(
             id: String,
             directory: String?,
         ): Boolean = delegate().settleSession(id, directory)
+
+        override suspend fun listArchivedSessions(directory: String?): List<Session> = delegate().listArchivedSessions(directory)
+
+        override suspend fun unarchiveSession(
+            id: String,
+            directory: String?,
+        ): Session = delegate().unarchiveSession(id, directory)
+
+        override suspend fun unsettleSession(
+            id: String,
+            directory: String?,
+        ): Boolean = delegate().unsettleSession(id, directory)
+
+        override suspend fun setRuntimeMode(
+            id: String,
+            runtimeMode: String,
+            directory: String?,
+        ): Session = delegate().setRuntimeMode(id, runtimeMode, directory)
+
+        override suspend fun setModelSelection(
+            id: String,
+            providerInstanceId: String,
+            modelId: String,
+            directory: String?,
+        ): Session = delegate().setModelSelection(id, providerInstanceId, modelId, directory)
     }

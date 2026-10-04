@@ -8,6 +8,9 @@ import kotlinx.serialization.json.put
 import java.util.UUID
 
 object T3Commands {
+    /** Supervised: every tool call needs approval. The default for a new thread. */
+    const val DEFAULT_RUNTIME_MODE = "approval-required"
+
     fun commandId(): String = UUID.randomUUID().toString()
 
     fun messageDispatch(
@@ -141,6 +144,7 @@ object T3Commands {
         projectId: String,
         title: String,
         modelSelection: T3ModelSelection,
+        runtimeMode: String = DEFAULT_RUNTIME_MODE,
         commandId: String = commandId(),
     ): JsonObject =
         buildJsonObject {
@@ -148,7 +152,7 @@ object T3Commands {
             put("projectId", projectId)
             put("title", title.ifBlank { "New thread" })
             put("modelSelection", encodeModelSelection(modelSelection))
-            put("runtimeMode", "approval-required")
+            put("runtimeMode", runtimeMode)
             put("interactionMode", "default")
             put("workspaceStrategy", buildJsonObject { put("type", "root") })
         }

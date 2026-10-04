@@ -19,6 +19,64 @@ data class T3ModelSelection(
     val model: String?,
 )
 
+/** One model a harness serves; [slug] is the wire value sent in a model selection. */
+data class T3HarnessModel(
+    val slug: String,
+    val name: String,
+    val shortName: String? = null,
+    val isDefault: Boolean = false,
+    val isLegacy: Boolean = false,
+    val isCustom: Boolean = false,
+) {
+    /** Picker and chip label: the short name when the server gives one. */
+    val label: String get() = shortName?.takeIf { it.isNotBlank() } ?: name.ifBlank { slug }
+}
+
+/**
+ * A configured provider instance ("harness") from `server.getConfig`. [instanceId]
+ * is the routing key; [available] folds installed, auth, probe status, and the
+ * server's availability flag into one "can start a turn now" fact.
+ */
+data class T3Harness(
+    val instanceId: String,
+    val displayName: String,
+    val driver: String,
+    val enabled: Boolean,
+    val available: Boolean,
+    val status: String,
+    /** Null when the server does not advertise the list; then every mode is offered. */
+    val supportedRuntimeModes: List<String>? = null,
+    val requiresNewThreadForModelChange: Boolean = false,
+    val models: List<T3HarnessModel> = emptyList(),
+) {
+    /** Enabled and available: may be offered in the picker and chosen as a fallback. */
+    val isUsable: Boolean get() = enabled && available && models.isNotEmpty()
+
+    /** Declared built-in default, else the first built-in model, else any model. */
+    val defaultModel: T3HarnessModel?
+        get() =
+            models.firstOrNull { it.isDefault && !it.isCustom }
+                ?: models.firstOrNull { !it.isCustom }
+                ?: models.firstOrNull()
+
+    fun model(slug: String?): T3HarnessModel? = models.firstOrNull { it.slug == slug }
+
+    /** Runtime modes this harness accepts, in contract order; every known mode when unadvertised. */
+    val runtimeModes: List<String>
+        get() {
+            val advertised = supportedRuntimeModes ?: return T3RuntimeModeLabels.allModes
+            return T3RuntimeModeLabels.allModes.filter { it in advertised }.ifEmpty { T3RuntimeModeLabels.allModes }
+        }
+}
+
+/** The provider catalogue and global default from `server.getConfig`. */
+data class T3ServerConfig(
+    val harnesses: List<T3Harness>,
+    val defaultModelSelection: T3ModelSelection? = null,
+) {
+    fun harness(instanceId: String?): T3Harness? = harnesses.firstOrNull { it.instanceId == instanceId }
+}
+
 data class T3Thread(
     val id: String,
     val title: String,
@@ -179,6 +237,18 @@ object T3ProviderLabels {
                 .filter { it.isNotBlank() }
                 .dropLastWhile { it.all(Char::isDigit) }
         if (words.isEmpty()) return raw
+        return words.joinToString(" ") { word -> word.replaceFirstChar { it.uppercaseChar() } }
+    }
+
+    /** Title-cases a driver slug, splitting camelCase too: `claudeAgent` -> `Claude Agent`. */
+    fun driverDisplayName(driver: String): String {
+        val words =
+            driver
+                .trim()
+                .replace(Regex("([a-z0-9])([A-Z])"), "$1 $2")
+                .split('-', '_', ' ')
+                .filter { it.isNotBlank() }
+        if (words.isEmpty()) return driver
         return words.joinToString(" ") { word -> word.replaceFirstChar { it.uppercaseChar() } }
     }
 

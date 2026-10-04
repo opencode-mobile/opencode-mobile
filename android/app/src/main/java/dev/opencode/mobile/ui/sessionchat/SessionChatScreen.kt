@@ -603,14 +603,19 @@ fun SessionChatScreen(
                                 ),
                             )
                         }
-                        // The shell exposes no provider/model catalogue, so the selection is read-only.
+                        // Opens the composer's model picker once the provider catalogue is loaded.
                         uiState.modelSelectionLabel?.takeIf { uiState.capabilities.showsModelSelection }?.let { label ->
+                            val canPick = uiState.composer.modelOptions.isNotEmpty()
                             add(
                                 OpenCodeOverflowMenuEntry(
                                     title = "Model · $label",
                                     icon = OpenCodeIcons.Description,
-                                    enabled = false,
-                                    onClick = {},
+                                    enabled = canPick && lifecycleActionsEnabled,
+                                    onClick = {
+                                        menuExpanded = false
+                                        activeModelProviderId = null
+                                        activePicker = ComposerPickerKind.Model
+                                    },
                                 ),
                             )
                         }
@@ -976,16 +981,26 @@ fun SessionChatScreen(
                                         attachments =
                                             uiState.composer.attachments.map(AttachmentPresentationMapper::from),
                                         showPendingRevert = uiState.hasPendingRevert,
-                                        selectedModelLabel = uiState.composer.selectedModelLabel,
+                                        selectedModelLabel =
+                                            if (uiState.capabilities.labelsComposerModelWithProvider) {
+                                                uiState.composer.selectedProviderModelLabel
+                                                    ?: uiState.modelSelectionLabel
+                                                    ?: uiState.composer.selectedModelLabel
+                                            } else {
+                                                uiState.composer.selectedModelLabel
+                                            },
                                         selectedModeLabel = uiState.composer.selectedModeLabel,
                                         selectedVariantLabel = uiState.composer.selectedVariantLabel,
                                         showVariant =
                                             uiState.capabilities.showsVariant &&
                                                 uiState.composer.canSelectVariant,
                                         showAgent = uiState.capabilities.showsAgent,
-                                        showModel = uiState.capabilities.requiresComposerModel,
+                                        showModel = uiState.capabilities.showsComposerModel,
                                         providerLabel =
-                                            uiState.providerLabel.takeIf { uiState.capabilities.showsProvider },
+                                            uiState.providerLabel.takeIf {
+                                                uiState.capabilities.showsProvider &&
+                                                    !uiState.capabilities.labelsComposerModelWithProvider
+                                            },
                                         runtimeModeLabel =
                                             uiState.runtimeModeLabel.takeIf { uiState.capabilities.showsRuntimeMode },
                                         sendEnabled =
@@ -1276,6 +1291,7 @@ fun SessionChatScreen(
             modelFilterText = modelFilterText,
             modelOptions = uiState.composer.modelOptions,
             selectedModel = uiState.composer.selectedModel?.option,
+            modelChangeLock = uiState.modelChangeLock,
             selectedMode = uiState.composer.selectedMode,
             selectableAgents = uiState.composer.selectableAgents,
             selectedVariant = uiState.composer.selectedVariant,
@@ -1308,7 +1324,7 @@ fun SessionChatScreen(
             title = "Runtime mode",
             onDismissRequest = { showRuntimeModePicker = false },
         ) {
-            T3RuntimeModeLabels.allModes.forEach { mode ->
+            uiState.runtimeModeOptions.ifEmpty { T3RuntimeModeLabels.allModes }.forEach { mode ->
                 OpenCodeBottomSheetEntry(
                     title = T3RuntimeModeLabels.displayName(mode),
                     enabled = lifecycleActionsEnabled,

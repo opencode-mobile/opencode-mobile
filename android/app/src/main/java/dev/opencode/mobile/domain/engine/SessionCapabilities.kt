@@ -23,9 +23,18 @@ data class SessionCapabilities(
     val showsModelSelection: Boolean = false,
     /** Home lists archived and settled sessions with restore actions. */
     val showsArchivedSessions: Boolean = false,
+    /** The composer shows the model chip and picker backed by the engine's catalogue. */
+    val showsComposerModel: Boolean = !showsProvider,
+    /** The model chip reads `<provider> · <model>` and replaces the read-only provider chip. */
+    val labelsComposerModelWithProvider: Boolean = false,
 ) {
+    /** A send needs a composer model; engines that keep the model on the session do not. */
     val requiresComposerModel: Boolean
         get() = !showsProvider
+
+    /** The session keeps its own model, chosen when it is created and changed by command. */
+    val choosesModelAtCreate: Boolean
+        get() = showsComposerModel && !requiresComposerModel
 
     companion object {
         val OpenCode =
@@ -62,6 +71,8 @@ data class SessionCapabilities(
                 canSetRuntimeMode = true,
                 showsModelSelection = true,
                 showsArchivedSessions = true,
+                showsComposerModel = true,
+                labelsComposerModelWithProvider = true,
             )
 
         fun forEngine(engine: ConnectionEngine): SessionCapabilities =

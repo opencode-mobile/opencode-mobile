@@ -5,6 +5,7 @@ import dev.opencode.mobile.domain.session.PermissionRequest
 import dev.opencode.mobile.domain.session.QuestionInfo
 import dev.opencode.mobile.domain.session.QuestionRequest
 import dev.opencode.mobile.domain.session.Session
+import dev.opencode.mobile.domain.session.SessionCreateOptions
 import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionStatus
@@ -31,6 +32,18 @@ class T3SessionRepository
             parentId: String?,
             title: String?,
             directory: String?,
+        ): Session = createSession(parentId, title, directory, SessionCreateOptions())
+
+        /**
+         * Launches a thread in the project owning [directory]. The model is the explicit
+         * [options] choice when its harness is usable, else the project override, the
+         * global default, and the first usable harness (see [T3ModelSelectionResolver]).
+         */
+        override suspend fun createSession(
+            parentId: String?,
+            title: String?,
+            directory: String?,
+            options: SessionCreateOptions,
         ): Session {
             val snapshot = runtime.refreshShell()
             val project =
@@ -40,25 +53,58 @@ class T3SessionRepository
                         snapshot.threads.any { it.projectId == project.id && it.worktreePath == directory }
                 } ?: snapshot.projects.firstOrNull()
                     ?: throw SessionError.Http(400, "This T3 environment has no projects")
+            val projectDefault =
+                project.defaultInstanceId
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { T3ModelSelection(instanceId = it, model = project.defaultModel) }
+            val explicit =
+                options.providerId
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { T3ModelSelection(instanceId = it, model = options.modelId?.takeIf { model -> model.isNotBlank() }) }
+            val config = runCatching { runtime.serverConfig() }.getOrNull()
             val model =
-                T3ModelSelection(
-                    instanceId = project.defaultInstanceId.orEmpty(),
-                    model = project.defaultModel,
-                )
-            if (model.instanceId.isBlank()) {
-                throw SessionError.Http(400, "This T3 project has no model selection")
-            }
+                if (config == null) {
+                    // An older server without a catalogue: trust the explicit choice, then the project.
+                    explicit ?: projectDefault
+                } else {
+                    T3ModelSelectionResolver.resolveExplicit(
+                        harnesses = config.harnesses,
+                        explicit = explicit,
+                        projectDefault = projectDefault,
+                        globalDefault = config.defaultModelSelection,
+                    )
+                } ?: throw SessionError.Http(400, T3ModelSelectionResolver.NO_HARNESS_MESSAGE)
+            val runtimeMode = launchRuntimeMode(options.runtimeMode, config?.harness(model.instanceId))
             val threadId =
                 runtime.launchThread(
                     T3Commands.launchThread(
                         projectId = project.id,
                         title = title ?: "New thread",
                         modelSelection = model,
+                        runtimeMode = runtimeMode,
                     ),
                 )
             val thread = runtime.thread(threadId)
             return thread?.let { T3SessionMapper.toSession(it, directory ?: project.workspaceRoot) }
-                ?: Session(id = threadId, title = title ?: "New thread", directory = directory ?: project.workspaceRoot)
+                ?: Session(
+                    id = threadId,
+                    title = title ?: "New thread",
+                    directory = directory ?: project.workspaceRoot,
+                    providerInstanceId = model.instanceId,
+                    modelId = model.model,
+                    runtimeMode = runtimeMode,
+                )
+        }
+
+        /** The requested mode when the harness accepts it, else supervised, else the harness's first mode. */
+        private fun launchRuntimeMode(
+            requested: String?,
+            harness: T3Harness?,
+        ): String {
+            val allowed = harness?.runtimeModes ?: T3RuntimeModeLabels.allModes
+            return requested?.takeIf { it in allowed }
+                ?: T3Commands.DEFAULT_RUNTIME_MODE.takeIf { it in allowed }
+                ?: allowed.first()
         }
 
         override suspend fun getAllSessionStatuses(directory: String?): List<SessionStatus> {

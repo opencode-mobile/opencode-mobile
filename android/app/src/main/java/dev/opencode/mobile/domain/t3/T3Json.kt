@@ -240,6 +240,70 @@ object T3Json {
         )
     }
 
+    /** `server.getConfig` success value: the provider catalogue and the global default selection. */
+    fun serverConfig(element: JsonElement): T3ServerConfig {
+        val obj = element as? JsonObject ?: throw T3ProtocolException("server.getConfig did not return an object")
+        val settings = obj.obj("settings")
+        return T3ServerConfig(
+            harnesses = obj.array("providers").mapNotNull { runCatching { harness(it) }.getOrNull() },
+            defaultModelSelection = modelSelection(settings?.get("defaultModelSelection")),
+        )
+    }
+
+    /** One `ServerProvider`; an entry without an instance id is skipped. */
+    fun harness(element: JsonElement): T3Harness? {
+        val obj = element as? JsonObject ?: return null
+        val instanceId = obj.string("instanceId")?.trim().orEmpty()
+        if (instanceId.isEmpty()) return null
+        val driver = obj.string("driver")?.trim().orEmpty()
+        val status = obj.string("status")?.trim().orEmpty()
+        val authStatus = obj.obj("auth")?.string("status")?.trim()
+        val installed = obj.boolean("installed") ?: true
+        val available =
+            installed &&
+                obj.string("availability") != "unavailable" &&
+                authStatus != "unauthenticated" &&
+                status !in setOf("error", "disabled")
+        val runtimeModes =
+            (obj["supportedRuntimeModes"] as? JsonArray)?.let { modes ->
+                stringList(modes.toList()).filter { it in T3RuntimeModeLabels.allModes }
+            }
+        return T3Harness(
+            instanceId = instanceId,
+            displayName =
+                obj.string("displayName")?.trim()?.takeIf { it.isNotEmpty() }
+                    ?: driver.takeIf { it.isNotEmpty() }?.let(T3ProviderLabels::driverDisplayName)
+                    ?: T3ProviderLabels.displayName(instanceId)
+                    ?: instanceId,
+            driver = driver,
+            enabled = obj.boolean("enabled") ?: true,
+            available = available,
+            status = status,
+            supportedRuntimeModes = runtimeModes,
+            requiresNewThreadForModelChange = obj.boolean("requiresNewThreadForModelChange") ?: false,
+            models = obj.array("models").mapNotNull(::harnessModel),
+        )
+    }
+
+    private fun harnessModel(element: JsonElement): T3HarnessModel? {
+        val obj = element as? JsonObject ?: return null
+        val slug = obj.string("slug")?.trim().orEmpty()
+        if (slug.isEmpty()) return null
+        return T3HarnessModel(
+            slug = slug,
+            name =
+                obj
+                    .string("name")
+                    ?.trim()
+                    .orEmpty()
+                    .ifEmpty { slug },
+            shortName = obj.string("shortName")?.trim()?.takeIf { it.isNotEmpty() },
+            isDefault = obj.boolean("isDefault") ?: false,
+            isLegacy = obj.boolean("isLegacy") ?: false,
+            isCustom = obj.boolean("isCustom") ?: false,
+        )
+    }
+
     fun launchThreadId(value: JsonElement): String {
         val obj = value as? JsonObject
         val id = obj?.string("threadId") ?: obj?.string("id")
