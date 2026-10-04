@@ -77,9 +77,14 @@ nonisolated enum T3JSON {
     }
 }
 
+/// Errors from a T3 host. `errorDescription` is always user-readable and never
+/// echoes the server body; the raw body stays on the case for diagnostics.
 nonisolated enum T3ClientError: Error, Equatable, LocalizedError {
     case transport(String)
+    /// Non-2xx reply other than 401/403. `message` is the raw server body (diagnostics only).
     case http(statusCode: Int, message: String?)
+    /// 401/403 from the T3 host: the stored access token no longer works and the user must pair again.
+    case accessRevoked(statusCode: Int, body: String?)
     case decoding(String)
     case unsupportedProtocol(Int)
     case missingAccessToken
@@ -90,8 +95,10 @@ nonisolated enum T3ClientError: Error, Equatable, LocalizedError {
         switch self {
         case let .transport(message):
             message
-        case let .http(_, message):
-            message ?? "Request failed"
+        case let .http(statusCode, _):
+            "T3 request failed (\(statusCode))."
+        case .accessRevoked:
+            Self.accessRevokedMessage
         case let .decoding(message):
             message
         case let .unsupportedProtocol(version):
@@ -103,6 +110,25 @@ nonisolated enum T3ClientError: Error, Equatable, LocalizedError {
         case let .rpc(message):
             message
         }
+    }
+
+    static let accessRevokedMessage = "T3 access was revoked or expired. Re-pair this environment."
+
+    /// Raw server body for logs; never user-facing.
+    var diagnosticBody: String? {
+        switch self {
+        case let .http(_, message): message
+        case let .accessRevoked(_, body): body
+        default: nil
+        }
+    }
+
+    /// Maps a non-2xx status to the dedicated 401/403 case or a plain `.http`.
+    static func fromStatus(_ statusCode: Int, body: String?) -> T3ClientError {
+        if statusCode == 401 || statusCode == 403 {
+            return .accessRevoked(statusCode: statusCode, body: body)
+        }
+        return .http(statusCode: statusCode, message: body)
     }
 }
 

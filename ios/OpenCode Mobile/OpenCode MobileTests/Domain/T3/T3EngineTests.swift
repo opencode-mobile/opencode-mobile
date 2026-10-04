@@ -14,6 +14,47 @@ struct T3EngineTests {
         #expect(pairs["client_device_type"] == T3Auth.clientDeviceType)
     }
 
+    @Test func normalizeBaseURL_defaultsToHttpsWithoutScheme() {
+        #expect(T3HttpClient.withDefaultScheme("t3.example:3000") == "https://t3.example:3000")
+        #expect(T3HttpClient.withDefaultScheme("  t3.example:3000  ") == "https://t3.example:3000")
+        #expect(T3HttpClient.withDefaultScheme("http://10.0.0.2:3000/") == "http://10.0.0.2:3000/")
+        #expect(T3HttpClient.withDefaultScheme("") == "")
+        #expect(T3HttpClient.normalizeBaseURL("t3.example:3000").absoluteString == "https://t3.example:3000/")
+        #expect(T3HttpClient.normalizeBaseURL("http://10.0.0.2:3000").absoluteString == "http://10.0.0.2:3000/")
+    }
+
+    @Test func clientError_mapsUnauthorizedToAccessRevokedWithoutServerBody() {
+        let revoked = T3ClientError.fromStatus(401, body: "{\"error\":\"invalid_token\"}")
+        #expect(revoked == .accessRevoked(statusCode: 401, body: "{\"error\":\"invalid_token\"}"))
+        #expect(revoked.errorDescription == T3ClientError.accessRevokedMessage)
+        #expect(revoked.diagnosticBody == "{\"error\":\"invalid_token\"}")
+        #expect(T3ClientError.fromStatus(403, body: nil) == .accessRevoked(statusCode: 403, body: nil))
+        let server = T3ClientError.fromStatus(500, body: "<html>stack trace</html>")
+        #expect(server == .http(statusCode: 500, message: "<html>stack trace</html>"))
+        #expect(server.errorDescription == "T3 request failed (500).")
+        #expect(server.diagnosticBody == "<html>stack trace</html>")
+    }
+
+    @Test func pairingLink_parsesDesktopAndHostedForms() {
+        let desktop = T3PairingLink.parse("http://192.168.0.160:3773/pair#token=pair-abc")
+        #expect(desktop == T3PairingLink(baseURL: "http://192.168.0.160:3773/", pairingToken: "pair-abc", label: ""))
+        let query = T3PairingLink.parse("https://desk.tail1234.ts.net/pair?token=pair%20xyz")
+        #expect(query?.baseURL == "https://desk.tail1234.ts.net/")
+        #expect(query?.pairingToken == "pair xyz")
+        let hosted = T3PairingLink.parse(
+            "https://app.t3.codes/pair?host=https%3A%2F%2Fdesk.tail1234.ts.net%3A3773&label=Desk#token=pair-hosted"
+        )
+        #expect(hosted == T3PairingLink(baseURL: "https://desk.tail1234.ts.net:3773/", pairingToken: "pair-hosted", label: "Desk"))
+    }
+
+    @Test func pairingLink_rejectsNonPairingPayloads() {
+        #expect(T3PairingLink.parse("{\"urls\":[\"http://192.168.0.160:4096\"],\"username\":\"opencode\"}") == nil)
+        #expect(T3PairingLink.parse("http://192.168.0.160:3773/") == nil)
+        #expect(T3PairingLink.parse("http://192.168.0.160:3773/pair") == nil)
+        #expect(T3PairingLink.parse("ftp://192.168.0.160/pair#token=x") == nil)
+        #expect(T3PairingLink.parse("") == nil)
+    }
+
     @Test func shellJSON_returnsOnlyActiveSessions() throws {
         let json = """
         {

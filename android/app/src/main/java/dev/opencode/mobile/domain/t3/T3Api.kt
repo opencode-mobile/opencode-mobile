@@ -27,6 +27,12 @@ class T3Api
             return descriptor
         }
 
+        /**
+         * Cheap re-check of an existing environment: re-fetches the descriptor and
+         * throws [T3ProtocolException] when the orchestration protocol no longer matches.
+         */
+        suspend fun validateEnvironment(baseUrl: String): T3EnvironmentDescriptor = fetchEnvironment(baseUrl)
+
         suspend fun exchangeToken(
             baseUrl: String,
             pairingToken: String,
@@ -106,6 +112,6 @@ class T3Api
 
         private fun requireSuccess(response: T3HttpResponse) {
             if (response.code in 200..299) return
-            throw T3HttpException(response.code, response.body)
+            throw T3HttpException.from(response.code, response.body)
         }
     }

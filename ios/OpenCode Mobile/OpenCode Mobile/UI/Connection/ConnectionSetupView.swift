@@ -75,6 +75,13 @@ struct ConnectionSetupView: View {
 
                 Group {
                     if viewModel.engine == .t3 {
+                        if !isKeyboardVisible {
+                            OpenCodeButton(
+                                variant: .link(title: "Scan a T3 pairing QR"),
+                                enabled: !viewModel.isBusy,
+                                action: openPairingScanner
+                            )
+                        }
                         if viewModel.showsPrimaryAction {
                             OpenCodeButton(
                                 variant: .fullWidthText(title: viewModel.primaryActionLabel),
@@ -251,13 +258,17 @@ struct ConnectionSetupView: View {
             )
             OpenCodeTextInput(
                 text: $viewModel.pairingToken,
-                hint: "Pairing token",
+                hint: viewModel.hasStoredT3Token ? "Paste a new pairing token to re-pair" : "Pairing token",
                 kind: .password,
                 enabled: !viewModel.isBusy,
                 isFocused: $pairingTokenFocused,
                 onSubmit: { pairingTokenFocused = false }
             )
-            Text("Paste the environment pairing token from T3 Code.")
+            Text(
+                viewModel.hasStoredT3Token
+                    ? "This environment is already paired. Leave blank to keep the current access, or paste a new pairing token to re-pair."
+                    : "Paste the environment pairing token from T3 Code."
+            )
                 .font(OpenCodeTypography.bodySecondary)
                 .foregroundStyle(OpenCodeColors.textBase)
                 .padding(.leading, 2)

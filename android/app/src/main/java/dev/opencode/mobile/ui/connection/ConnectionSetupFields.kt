@@ -196,13 +196,23 @@ fun ConnectionSetupFields(
             OpenCodeTextInput(
                 value = uiState.password,
                 onValueChange = onPasswordChanged,
-                hint = "Pairing token",
+                hint =
+                    if (uiState.hasStoredT3Token) {
+                        "Paste a new pairing token to re-pair"
+                    } else {
+                        "Pairing token"
+                    },
                 kind = OpenCodeTextInputKind.Password,
                 enabled = !uiState.isBusy,
                 modifier = Modifier.focusRequester(passwordFocusRequester),
             )
             Text(
-                text = "Token from the T3 environment pairing screen.",
+                text =
+                    if (uiState.hasStoredT3Token) {
+                        "This environment is already paired. Leave blank to keep the current access, or paste a new pairing token to re-pair."
+                    } else {
+                        "Token from the T3 environment pairing screen."
+                    },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 6.dp, start = 2.dp),

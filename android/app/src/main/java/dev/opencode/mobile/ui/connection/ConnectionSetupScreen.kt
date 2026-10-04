@@ -169,6 +169,13 @@ fun ConnectionSetupScreen(
                         verticalArrangement = Arrangement.spacedBy(20.dp),
                     ) {
                         if (uiState.engine == ConnectionEngine.T3) {
+                            if (!WindowInsets.isImeVisible) {
+                                OpenCodeButton(
+                                    variant = OpenCodeButtonVariant.Link("Scan a T3 pairing QR"),
+                                    enabled = !uiState.isBusy,
+                                    onClick = { openPairingScanner() },
+                                )
+                            }
                             if (uiState.showsPrimaryAction) {
                                 OpenCodeButton(
                                     variant = OpenCodeButtonVariant.FullWidthText(uiState.primaryActionLabel),

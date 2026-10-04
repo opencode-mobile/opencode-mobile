@@ -131,6 +131,8 @@ final class ConnectionSetupViewModel {
     private var savedPassword = ""
     private var savedProtocol: ServerProtocol?
     private var savedEngine: ConnectionEngine = .opencode
+    /// Access token of the T3 profile being edited. Reused unless the user pastes a new pairing token.
+    private var storedAccessToken = ""
     private var isEditingExistingProfile = false
     private var pendingPairingCode: String?
     private var scannedQrPassword = ""
@@ -148,6 +150,9 @@ final class ConnectionSetupViewModel {
     /// Base URL written by QR apply, profile load, or address choice. The view
     /// change handler must not treat that write as the user editing the host.
     private var systemBaseURL: String?
+
+    /// Scheme-only host shown when T3 is picked with an empty address, so the field defaults to https.
+    private static let t3EmptyHost = "https://"
 
     init(
         connectionProbeService: ConnectionProbing,
@@ -208,20 +213,24 @@ final class ConnectionSetupViewModel {
         unreachableAddresses = []
         entry = isEditingExistingProfile ? .manual : .instructions
         if let initialProfile, mode == .edit {
+            let isT3 = initialProfile.engine == .t3
             name = initialProfile.name
             setBaseURLFromSystem(initialProfile.baseURL)
             serverURLs = ConnectionProfileIdentity.normalizedAddressList(initialProfile.serverURLs)
             username = initialProfile.username
-            password = initialProfile.password
-            pairingToken = initialProfile.engine == .t3 ? initialProfile.password : ""
+            // T3 keeps the access token out of the form: the pairing-token field only
+            // ever carries a freshly pasted token, so "unchanged" means it is blank.
+            password = isT3 ? "" : initialProfile.password
+            pairingToken = ""
             engine = initialProfile.engine
             profileId = initialProfile.id
             detectedProtocol = initialProfile.serverProtocol
             savedBaseURL = initialProfile.baseURL
             savedUsername = initialProfile.username
-            savedPassword = initialProfile.password
+            savedPassword = isT3 ? "" : initialProfile.password
             savedProtocol = initialProfile.serverProtocol
             savedEngine = initialProfile.engine
+            storedAccessToken = isT3 ? initialProfile.password : ""
         } else {
             name = ""
             setBaseURLFromSystem(ConnectionProfile.formDefaults.baseURL)
@@ -236,7 +245,13 @@ final class ConnectionSetupViewModel {
             savedPassword = ""
             savedProtocol = nil
             savedEngine = .opencode
+            storedAccessToken = ""
         }
+    }
+
+    /// Editing a paired T3 profile: the access token stays in storage and is never shown in the form.
+    var hasStoredT3Token: Bool {
+        engine == .t3 && !storedAccessToken.isEmpty
     }
 
     var screenTitle: String {
@@ -287,7 +302,7 @@ final class ConnectionSetupViewModel {
             ConnectionProfileIdentity.normalizeBaseURL(baseURL) ==
             ConnectionProfileIdentity.normalizeBaseURL(savedBaseURL) &&
             (engine == .t3
-                ? pairingToken == savedPassword
+                ? trimmedPairingToken.isEmpty
                 : ConnectionProfileIdentity.normalizeUsername(username) ==
                 ConnectionProfileIdentity.normalizeUsername(savedUsername) &&
                 password == savedPassword)
@@ -303,6 +318,10 @@ final class ConnectionSetupViewModel {
 
     var primaryEnabled: Bool {
         !isBusy
+    }
+
+    private var trimmedPairingToken: String {
+        pairingToken.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     func onFieldChanged() {
@@ -346,12 +365,20 @@ final class ConnectionSetupViewModel {
         engine = next
         if next == .t3 {
             username = T3Auth.username
+            if Self.hostIsBlank(baseURL) {
+                baseURL = Self.t3EmptyHost
+            }
             if !serverURLs.isEmpty {
                 leaveQRMode()
             }
             entry = .manual
-        } else if username == T3Auth.username {
-            username = ConnectionProfile.formDefaults.username
+        } else {
+            if username == T3Auth.username {
+                username = ConnectionProfile.formDefaults.username
+            }
+            if baseURL.trimmingCharacters(in: .whitespacesAndNewlines) == Self.t3EmptyHost {
+                baseURL = ""
+            }
             if !usesQRLayout {
                 entry = .instructions
             }
@@ -368,6 +395,18 @@ final class ConnectionSetupViewModel {
     }
 
     func applyPairingQR(_ raw: String) async {
+        if let link = T3PairingLink.parse(raw) {
+            applyT3PairingLink(link)
+            return
+        }
+        if engine == .t3 {
+            snackbar = OpenCodeSnackbarMessage(text: "This isn't a T3 pairing link", variant: .error)
+            logConnectionAction(
+                ProductAnalytics.Action.connectionPairingQRScan,
+                outcome: ProductAnalytics.Outcome.failure
+            )
+            return
+        }
         switch PairingQRPayload.parse(raw) {
         case let .success(credentials):
             apply(credentials)
@@ -397,6 +436,32 @@ final class ConnectionSetupViewModel {
                 outcome: ProductAnalytics.Outcome.failure
             )
         }
+    }
+
+    private func applyT3PairingLink(_ link: T3PairingLink) {
+        if PairingQRPayload.isLoopback(link.baseURL) {
+            snackbar = OpenCodeSnackbarMessage(text: "That QR only has a localhost address", variant: .error)
+            logConnectionAction(
+                ProductAnalytics.Action.connectionPairingQRScan,
+                outcome: ProductAnalytics.Outcome.failure
+            )
+            return
+        }
+        if engine != .t3 {
+            selectEngine(.t3)
+        }
+        baseURL = link.baseURL
+        username = T3Auth.username
+        pairingToken = link.pairingToken
+        if name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            name = link.label
+        }
+        snackbar = nil
+        onFieldChanged()
+        logConnectionAction(
+            ProductAnalytics.Action.connectionPairingQRScan,
+            outcome: ProductAnalytics.Outcome.success
+        )
     }
 
     func pairingQRCameraDenied() {
@@ -457,20 +522,41 @@ final class ConnectionSetupViewModel {
         }
     }
 
+    /// T3 save routing:
+    /// - rename-only edit (same host, no new token): save, no network;
+    /// - host changed, no new token: re-validate the descriptor, keep the stored access token;
+    /// - new pairing token pasted (add or edit): pair again and replace the stored token.
     private func submitT3() async -> Bool {
-        if pairingToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        let normalized = ConnectionProfileIdentity.normalizeBaseURL(T3HttpClient.withDefaultScheme(baseURL))
+        if normalized != baseURL {
+            baseURL = normalized
+            onFieldChanged()
+        }
+        let token = trimmedPairingToken
+        // Also set after a successful pair in add mode, so a retry after a failed save
+        // never resends the access token as a pairing token.
+        let hasStoredToken = !storedAccessToken.isEmpty
+        if !token.isEmpty {
+            return await pairT3ThenSave(pairingToken: token)
+        }
+        if !hasStoredToken {
             snackbar = OpenCodeSnackbarMessage(text: "Enter a pairing token", variant: .error)
             return false
         }
-        if canSubmitWithoutProbe {
+        if connectionUnchanged {
             return await persist()
         }
+        return await validateT3ThenSave()
+    }
+
+    private func pairT3ThenSave(pairingToken token: String) async -> Bool {
         state = .connecting
         snackbar = nil
         do {
-            let result = try await t3PairingClient.pair(baseURL: baseURL, pairingToken: pairingToken)
-            password = result.accessToken
-            pairingToken = result.accessToken
+            let result = try await t3PairingClient.pair(baseURL: baseURL, pairingToken: token)
+            storedAccessToken = result.accessToken
+            pairingToken = ""
+            password = ""
             username = T3Auth.username
             if name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 name = result.label
@@ -479,7 +565,7 @@ final class ConnectionSetupViewModel {
         } catch {
             state = .idle
             snackbar = OpenCodeSnackbarMessage(
-                text: error.localizedDescription,
+                text: Self.t3PairingErrorText(error, pairingAttempt: true),
                 variant: .error
             )
             logConnectionAction(
@@ -488,6 +574,34 @@ final class ConnectionSetupViewModel {
             )
             return false
         }
+    }
+
+    private func validateT3ThenSave() async -> Bool {
+        state = .connecting
+        snackbar = nil
+        do {
+            _ = try await t3PairingClient.validateEnvironment(baseURL: baseURL)
+            return await persist()
+        } catch {
+            state = .idle
+            snackbar = OpenCodeSnackbarMessage(
+                text: Self.t3PairingErrorText(error, pairingAttempt: false),
+                variant: .error
+            )
+            logConnectionAction(
+                ProductAnalytics.Action.connectionTest,
+                outcome: ProductAnalytics.Outcome.failure
+            )
+            return false
+        }
+    }
+
+    /// User-readable text only; `T3ClientError.diagnosticBody` never reaches the snackbar.
+    static func t3PairingErrorText(_ error: Error, pairingAttempt: Bool) -> String {
+        if case .accessRevoked = error as? T3ClientError, pairingAttempt {
+            return "T3 rejected this pairing token. Paste a new pairing token from T3 Code."
+        }
+        return error.localizedDescription
     }
 
     private func probeThenSave(
@@ -917,7 +1031,7 @@ final class ConnectionSetupViewModel {
             baseURL: baseURL,
             serverURLs: serverURLs,
             username: engine == .t3 ? T3Auth.username : ConnectionProfileIdentity.normalizeUsername(username),
-            password: engine == .t3 ? pairingToken : password,
+            password: engine == .t3 ? (trimmedPairingToken.isEmpty ? storedAccessToken : trimmedPairingToken) : password,
             serverProtocol: engine == .t3
                 ? nil
                 : pairedProtocol ?? detectedProtocol ?? (connectionUnchanged ? savedProtocol : nil),

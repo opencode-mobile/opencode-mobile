@@ -1,6 +1,7 @@
 package dev.opencode.mobile.ui.connection
 
 import dev.opencode.mobile.domain.composer.InMemoryComposerDraftStore
+import dev.opencode.mobile.domain.connection.ConnectionEngine
 import dev.opencode.mobile.domain.connection.ConnectionProbing
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
@@ -967,6 +968,219 @@ class ConnectionSetupViewModelTest {
             assertEquals("leftover-code", viewModel.uiState.value.pairingCode)
         }
 
+    @Test
+    fun t3Edit_hidesStoredAccessTokenFromForm() {
+        val viewModel = viewModel(probe = neverProbe())
+        viewModel.configure(initialProfile = t3Profile(), mode = ConnectionSetupMode.Edit)
+        val state = viewModel.uiState.value
+        assertEquals("", state.password)
+        assertTrue(state.hasStoredT3Token)
+        assertTrue(state.connectionUnchanged)
+    }
+
+    @Test
+    fun t3Edit_renameOnly_savesWithoutPairingAndKeepsToken() =
+        runTest(dispatcher) {
+            val store = RecordingConnectionProfileStore()
+            val http = RecordingT3Http()
+            val viewModel = viewModel(store = store, probe = neverProbe(), t3Http = http)
+            viewModel.configure(initialProfile = t3Profile(), mode = ConnectionSetupMode.Edit)
+            viewModel.onNameChanged("Desk renamed")
+            var saved = false
+            viewModel.submit { saved = true }
+            advanceUntilIdle()
+            assertTrue(saved)
+            assertTrue(http.requests.isEmpty())
+            val profile = store.saved.last()
+            assertEquals("Desk renamed", profile.name)
+            assertEquals("stored-access-token", profile.password)
+            assertEquals(ConnectionEngine.T3, profile.engine)
+            assertNull(viewModel.uiState.value.snackbar)
+        }
+
+    @Test
+    fun t3Edit_changedHostWithoutToken_validatesEnvironmentAndKeepsToken() =
+        runTest(dispatcher) {
+            val store = RecordingConnectionProfileStore()
+            val http = RecordingT3Http()
+            val viewModel = viewModel(store = store, probe = neverProbe(), t3Http = http)
+            viewModel.configure(initialProfile = t3Profile(), mode = ConnectionSetupMode.Edit)
+            viewModel.onBaseUrlChanged("https://desk.tail1234.ts.net/")
+            assertFalse(viewModel.uiState.value.connectionUnchanged)
+            var saved = false
+            viewModel.submit { saved = true }
+            advanceUntilIdle()
+            assertTrue(saved)
+            assertEquals(
+                listOf("GET https://desk.tail1234.ts.net/.well-known/t3/environment"),
+                http.requests,
+            )
+            assertEquals("https://desk.tail1234.ts.net/", store.saved.last().baseUrl)
+            assertEquals("stored-access-token", store.saved.last().password)
+        }
+
+    @Test
+    fun t3Edit_changedHostWithNewToken_pairsAgainAtNewHost() =
+        runTest(dispatcher) {
+            val store = RecordingConnectionProfileStore()
+            val http = RecordingT3Http()
+            val viewModel = viewModel(store = store, probe = neverProbe(), t3Http = http)
+            viewModel.configure(initialProfile = t3Profile(), mode = ConnectionSetupMode.Edit)
+            viewModel.onBaseUrlChanged("https://desk.tail1234.ts.net/")
+            viewModel.onPasswordChanged("fresh-pairing-token")
+            var saved = false
+            viewModel.submit { saved = true }
+            advanceUntilIdle()
+            assertTrue(saved)
+            assertTrue(http.requests.contains("POST https://desk.tail1234.ts.net/oauth/token"))
+            assertEquals("fresh-pairing-token", http.lastPairingToken)
+            assertEquals("new-access-token", store.saved.last().password)
+            assertEquals("https://desk.tail1234.ts.net/", store.saved.last().baseUrl)
+        }
+
+    @Test
+    fun t3Edit_newTokenSameHost_pairsAndReplacesStoredToken() =
+        runTest(dispatcher) {
+            val store = RecordingConnectionProfileStore()
+            val http = RecordingT3Http()
+            val viewModel = viewModel(store = store, probe = neverProbe(), t3Http = http)
+            viewModel.configure(initialProfile = t3Profile(), mode = ConnectionSetupMode.Edit)
+            viewModel.onPasswordChanged("fresh-pairing-token")
+            assertFalse(viewModel.uiState.value.connectionUnchanged)
+            var saved = false
+            viewModel.submit { saved = true }
+            advanceUntilIdle()
+            assertTrue(saved)
+            assertEquals("fresh-pairing-token", http.lastPairingToken)
+            assertEquals("new-access-token", store.saved.last().password)
+            assertEquals("t3-1", store.saved.last().id)
+        }
+
+    @Test
+    fun t3Edit_changedHostProtocolMismatch_doesNotSave() =
+        runTest(dispatcher) {
+            val store = RecordingConnectionProfileStore()
+            val http = RecordingT3Http(protocolVersion = 1)
+            val viewModel = viewModel(store = store, probe = neverProbe(), t3Http = http)
+            viewModel.configure(initialProfile = t3Profile(), mode = ConnectionSetupMode.Edit)
+            viewModel.onBaseUrlChanged("https://other.example/")
+            var saved = false
+            viewModel.submit { saved = true }
+            advanceUntilIdle()
+            assertFalse(saved)
+            assertTrue(store.saved.isEmpty())
+            assertEquals(
+                "This T3 environment uses orchestration protocol 1; OpenCode Mobile requires 2",
+                viewModel.uiState.value.snackbar?.text,
+            )
+        }
+
+    @Test
+    fun t3Add_rejectedPairingToken_showsReadableMessageNotServerBody() =
+        runTest(dispatcher) {
+            val http = RecordingT3Http(tokenStatus = 401, tokenBody = """{"error":"invalid_grant","trace":"secret"}""")
+            val viewModel = viewModel(probe = neverProbe(), t3Http = http)
+            viewModel.configure(initialProfile = null, mode = ConnectionSetupMode.Add)
+            viewModel.onEngineChanged(ConnectionEngine.T3)
+            viewModel.onBaseUrlChanged("https://desk.example/")
+            viewModel.onPasswordChanged("stale-pairing-token")
+            var saved = false
+            viewModel.submit { saved = true }
+            advanceUntilIdle()
+            assertFalse(saved)
+            val text = viewModel.uiState.value.snackbar?.text.orEmpty()
+            assertEquals("T3 rejected this pairing token. Paste a new pairing token from T3 Code.", text)
+            assertFalse(text.contains("secret"))
+        }
+
+    @Test
+    fun t3Add_hostWithoutScheme_defaultsToHttps() =
+        runTest(dispatcher) {
+            val store = RecordingConnectionProfileStore()
+            val http = RecordingT3Http()
+            val viewModel = viewModel(store = store, probe = neverProbe(), t3Http = http)
+            viewModel.configure(initialProfile = null, mode = ConnectionSetupMode.Add)
+            viewModel.onEngineChanged(ConnectionEngine.T3)
+            assertEquals("https://", viewModel.uiState.value.baseUrl)
+            viewModel.onBaseUrlChanged("desk.tail1234.ts.net:3773")
+            viewModel.onPasswordChanged("pair-token")
+            var saved = false
+            viewModel.submit { saved = true }
+            advanceUntilIdle()
+            assertTrue(saved)
+            assertEquals("https://desk.tail1234.ts.net:3773/", store.saved.last().baseUrl)
+            assertTrue(http.requests.first().startsWith("GET https://desk.tail1234.ts.net:3773/"))
+        }
+
+    @Test
+    fun openCodeAdd_hostWithoutScheme_staysOnDefaultProbePath() =
+        runTest(dispatcher) {
+            val store = RecordingConnectionProfileStore()
+            val viewModel = viewModel(store = store, probe = ConnectionProbing { ServerProtocol.V1 })
+            viewModel.configure(initialProfile = null, mode = ConnectionSetupMode.Add)
+            viewModel.onBaseUrlChanged("http://10.0.0.1:4096/")
+            var saved = false
+            viewModel.submit { saved = true }
+            advanceUntilIdle()
+            assertTrue(saved)
+            assertEquals("http://10.0.0.1:4096/", store.saved.last().baseUrl)
+        }
+
+    @Test
+    fun applyPairingQR_t3DesktopLink_switchesEngineAndFillsHostAndToken() {
+        val viewModel = viewModel(probe = neverProbe())
+        viewModel.configure(initialProfile = null, mode = ConnectionSetupMode.Add)
+        viewModel.applyPairingQR("http://192.168.0.160:3773/pair#token=pair-abc")
+        val state = viewModel.uiState.value
+        assertEquals(ConnectionEngine.T3, state.engine)
+        assertEquals("http://192.168.0.160:3773/", state.baseUrl)
+        assertEquals("pair-abc", state.password)
+        assertEquals(ConnectionEngine.T3_USERNAME, state.username)
+        assertNull(state.snackbar)
+    }
+
+    @Test
+    fun applyPairingQR_t3HostedLink_usesBackendHostAndLabel() {
+        val viewModel = viewModel(probe = neverProbe())
+        viewModel.configure(initialProfile = null, mode = ConnectionSetupMode.Add)
+        viewModel.applyPairingQR(
+            "https://app.t3.codes/pair?host=https%3A%2F%2Fdesk.tail1234.ts.net&label=Desk#token=pair-hosted",
+        )
+        val state = viewModel.uiState.value
+        assertEquals(ConnectionEngine.T3, state.engine)
+        assertEquals("https://desk.tail1234.ts.net/", state.baseUrl)
+        assertEquals("pair-hosted", state.password)
+        assertEquals("Desk", state.name)
+    }
+
+    @Test
+    fun applyPairingQR_t3LoopbackLink_showsSnackbar() {
+        val viewModel = viewModel(probe = neverProbe())
+        viewModel.configure(initialProfile = null, mode = ConnectionSetupMode.Add)
+        viewModel.applyPairingQR("http://127.0.0.1:3773/pair#token=pair-abc")
+        assertEquals("That QR only has a localhost address", viewModel.uiState.value.snackbar?.text)
+        assertEquals("", viewModel.uiState.value.baseUrl)
+    }
+
+    @Test
+    fun applyPairingQR_invalidWhileT3Selected_showsT3Message() {
+        val viewModel = viewModel(probe = neverProbe())
+        viewModel.configure(initialProfile = null, mode = ConnectionSetupMode.Add)
+        viewModel.onEngineChanged(ConnectionEngine.T3)
+        viewModel.applyPairingQR("nope")
+        assertEquals("This isn't a T3 pairing link", viewModel.uiState.value.snackbar?.text)
+    }
+
+    private fun t3Profile(): ConnectionProfile =
+        ConnectionProfile(
+            baseUrl = "https://desk.example/",
+            username = ConnectionEngine.T3_USERNAME,
+            password = "stored-access-token",
+            id = "t3-1",
+            name = "Desk",
+            engine = ConnectionEngine.T3,
+        )
+
     private fun neverProbe(): ConnectionProbing = ConnectionProbing { error("probe should not run") }
 
     private fun unauthorizedUntilPassword(): ConnectionProbing =
@@ -981,12 +1195,13 @@ class ConnectionSetupViewModelTest {
         store: RecordingConnectionProfileStore = RecordingConnectionProfileStore(),
         probe: ConnectionProbing,
         redeem: PairingCodeRedeeming = PairingCodeRedeeming { _, _ -> error("redeem should not run") },
+        t3Http: T3Http = UnusedT3Http(),
     ): ConnectionSetupViewModel =
         ConnectionSetupViewModel(
             connectionProbeService = probe,
             connectionSessionCoordinator = coordinator(store),
             pairingCodeRedeeming = redeem,
-            t3Api = T3Api(UnusedT3Http()),
+            t3Api = T3Api(t3Http),
         )
 
     private fun coordinator(store: ConnectionProfileStore): ConnectionSessionCoordinator {
@@ -1064,6 +1279,52 @@ private class UnusedT3Http : T3Http {
         headers: Map<String, String>,
     ): T3HttpResponse = error("T3 HTTP should not run in OpenCode connection setup tests")
 }
+
+private class RecordingT3Http(
+    private val protocolVersion: Int = 2,
+    private val tokenStatus: Int = 200,
+    private val tokenBody: String = """{"access_token":"new-access-token"}""",
+) : T3Http {
+    val requests = mutableListOf<String>()
+    var lastPairingToken: String? = null
+
+    override suspend fun get(
+        url: String,
+        headers: Map<String, String>,
+    ): T3HttpResponse {
+        requests += "GET $url"
+        return when {
+            url.endsWith("/.well-known/t3/environment") ->
+                T3HttpResponse(
+                    200,
+                    """{"environmentId":"env-1","label":"Desk","orchestrationProtocolVersion":$protocolVersion}""",
+                )
+            url.endsWith("/api/orchestration/shell") -> T3HttpResponse(200, """{"threads":[],"projects":[]}""")
+            else -> T3HttpResponse(404, "")
+        }
+    }
+
+    override suspend fun post(
+        url: String,
+        body: String,
+        contentType: String,
+        headers: Map<String, String>,
+    ): T3HttpResponse {
+        requests += "POST $url"
+        if (url.endsWith("/oauth/token")) {
+            lastPairingToken =
+                body
+                    .split("&")
+                    .map { it.split("=", limit = 2) }
+                    .firstOrNull { it.first() == "subject_token" }
+                    ?.getOrNull(1)
+                    ?.let { java.net.URLDecoder.decode(it, Charsets.UTF_8.name()) }
+            return T3HttpResponse(tokenStatus, tokenBody)
+        }
+        return T3HttpResponse(404, "")
+    }
+}
+
 
 private class NoOpSecureCredentialStore : SecureCredentialStore {
     override fun readPassword(serverBaseUrl: String): String? = null
