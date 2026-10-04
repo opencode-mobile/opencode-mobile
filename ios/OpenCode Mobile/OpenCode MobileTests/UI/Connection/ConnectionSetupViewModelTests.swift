@@ -832,6 +832,52 @@ struct ConnectionSetupViewModelTests {
         #expect(viewModel.usesQRLayout)
         #expect(viewModel.snackbar == nil)
     }
+
+    @Test func submit_t3_exchangesTokenAndSavesEngine() async {
+        let store = RecordingConnectionProfileStore()
+        let pairing = FakeT3PairingClient(
+            result: .success(T3PairingResult(accessToken: "access-token", label: "Desk"))
+        )
+        let viewModel = ConnectionSetupViewModel(
+            connectionProbeService: FakeConnectionProbeService(result: .success(.v1)),
+            connectionSessionCoordinator: ConnectionSessionCoordinator(
+                activeConnectionManager: ActiveConnectionManager(),
+                connectionProfileStore: store
+            ),
+            t3PairingClient: pairing,
+            mode: .add
+        )
+        viewModel.selectEngine(.t3)
+        viewModel.baseURL = "http://10.0.0.2:3000/"
+        viewModel.pairingToken = "pair-token"
+        let saved = await viewModel.submit()
+        #expect(saved == true)
+        #expect(store.saved.last?.engine == .t3)
+        #expect(store.saved.last?.username == T3Auth.username)
+        #expect(store.saved.last?.password == "access-token")
+        #expect(store.saved.last?.name == "Desk")
+        #expect(store.saved.last?.serverProtocol == nil)
+    }
+
+    @Test func submit_t3_showsPairingError() async {
+        let viewModel = ConnectionSetupViewModel(
+            connectionProbeService: FakeConnectionProbeService(result: .success(.v1)),
+            connectionSessionCoordinator: ConnectionSessionCoordinator(
+                activeConnectionManager: ActiveConnectionManager(),
+                connectionProfileStore: FakeSetupConnectionProfileStore()
+            ),
+            t3PairingClient: FakeT3PairingClient(
+                result: .failure(T3ClientError.unsupportedProtocol(1))
+            ),
+            mode: .add
+        )
+        viewModel.selectEngine(.t3)
+        viewModel.baseURL = "http://10.0.0.2:3000/"
+        viewModel.pairingToken = "pair-token"
+        let saved = await viewModel.submit()
+        #expect(saved == false)
+        #expect(viewModel.snackbar?.text == T3ClientError.unsupportedProtocol(1).errorDescription)
+    }
 }
 
 private let qrScanFailureMessage = "QR didn't connect. OpenCode 2's pairing API is still changing, so a scan can fail while this app is working. Enter the host and connect. Password is optional. A pairing code works too."
@@ -1008,6 +1054,14 @@ private final class RecordingConnectionProfileStore: ConnectionProfileStore, @un
     func removeWorktree(serverBaseURL: String, worktree: String) async {}
     func setAddedWorktrees(serverBaseURL: String, worktrees: [String]) async {}
     func clearAll() async { saved.removeAll() }
+}
+
+private struct FakeT3PairingClient: T3PairingClient {
+    let result: Result<T3PairingResult, Error>
+
+    func pair(baseURL _: String, pairingToken _: String) async throws -> T3PairingResult {
+        try result.get()
+    }
 }
 
 private struct FakeSetupConnectionProfileStore: ConnectionProfileStore {

@@ -167,7 +167,10 @@ final class ProjectListHomeViewModel {
         self.sessionCache = sessionCache
         self.sessionActionsRegion = HomeSessionActions(
             sessionRepository: sessionRepository,
-            messageRepository: messageRepository
+            messageRepository: messageRepository,
+            capabilities: { [activeConnectionManager] in
+                SessionCapabilities.forEngine(activeConnectionManager.currentProfile()?.engine ?? .opencode)
+            }
         )
         lastHomeHiddenAtEpochMs = HomeDisplayPreferences.shared.lastHomeHiddenAtEpochMs()
         sessionActionsRegion.onLifecycleError = { [weak self] message in

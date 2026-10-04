@@ -19,16 +19,19 @@ final class HomeSessionActions {
 
     private let sessionRepository: any SessionRepository
     private let messageRepository: any MessageRepository
+    private let capabilities: () -> SessionCapabilities
 
     private var forkGateTask: Task<Void, Never>?
     private var forkedOpenTarget: SessionListItem?
 
     init(
         sessionRepository: any SessionRepository,
-        messageRepository: any MessageRepository
+        messageRepository: any MessageRepository,
+        capabilities: @escaping () -> SessionCapabilities = { .opencode }
     ) {
         self.sessionRepository = sessionRepository
         self.messageRepository = messageRepository
+        self.capabilities = capabilities
     }
 
     func begin(sessionId: String, title: String, worktree: String, canArchive: Bool) {
@@ -253,7 +256,9 @@ final class HomeSessionActions {
             revertMessageID: nil,
             hasSelectedComposerModel: false
         )
-        canFork = ClientSlashActionCatalog.visibleActions(input).contains(.fork)
+        canFork = ClientSlashActionCatalog.visibleActions(input)
+            .filter { capabilities().allowsClientSlashAction($0) }
+            .contains(.fork)
     }
 
     private var hasOpenDialog: Bool {

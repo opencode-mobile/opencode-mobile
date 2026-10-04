@@ -187,8 +187,13 @@ final class SessionChatViewModel {
         repoStrip.onChange = { [weak self] in self?.publishUiState() }
         commands.onChange = { [weak self] in self?.publishUiState() }
         inbox.onChange = { [weak self] in self?.publishUiState() }
+        composer.setRequiresComposerModel(sessionCapabilities.requiresComposerModel)
         refreshProjectIdentity()
         publishUiState()
+    }
+
+    private var sessionCapabilities: SessionCapabilities {
+        SessionCapabilities.forEngine(activeConnectionManager.currentProfile()?.engine ?? .opencode)
     }
 
     func startObserving() {
@@ -248,6 +253,11 @@ final class SessionChatViewModel {
     func archiveSession() {
         guard hasCreatedSession else { return }
         sessionInfo.archiveSession()
+    }
+
+    func settleSession() {
+        guard hasCreatedSession else { return }
+        sessionInfo.settleSession()
     }
 
     func deleteSession() {
@@ -1249,7 +1259,8 @@ final class SessionChatViewModel {
         let composerState = composer.state
         commands.updateVisibility(
             messages: timelineState.messages,
-            hasSelectedComposerModel: composerState.composer.selectedModel != nil
+            hasSelectedComposerModel: composerState.composer.selectedModel != nil,
+            capabilities: sessionCapabilities
         )
         commands.observeLoadedMessages(
             timeline.loadedMessages(),
@@ -1344,6 +1355,9 @@ final class SessionChatViewModel {
         uiState = SessionChatUiState(
             sessionID: infoState.sessionID.isEmpty ? sessionID : infoState.sessionID,
             sessionTitle: infoState.sessionTitle.isEmpty ? sessionTitle : infoState.sessionTitle,
+            capabilities: sessionCapabilities,
+            providerLabel: infoState.providerInstanceID,
+            runtimeModeLabel: T3RuntimeModeLabel.displayName(infoState.runtimeMode),
             projectLabel: projectLabel,
             projectLetter: projectLetter,
             projectLetterAccent: projectLetterAccent,

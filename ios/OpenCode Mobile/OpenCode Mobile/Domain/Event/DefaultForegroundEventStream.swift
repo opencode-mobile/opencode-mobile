@@ -32,6 +32,7 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
     private let protocolHint: @Sendable () -> ServerProtocol
     private let cachedProtocol: @Sendable () -> ServerProtocol?
     private let protocolProbe: (@Sendable () async -> ServerProtocol)?
+    private let engineProvider: @Sendable () -> ConnectionEngine
     private let connectionEpoch: ConnectionEpoch
     private var occupancyTask: Task<Void, Never>?
     private var revisionTask: Task<Void, Never>?
@@ -71,7 +72,8 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         credentialFingerprint: (@Sendable () async -> String)? = nil,
         protocolHint: (@Sendable () -> ServerProtocol)? = nil,
         cachedProtocol: (@Sendable () -> ServerProtocol?)? = nil,
-        protocolProbe: (@Sendable () async -> ServerProtocol)? = nil
+        protocolProbe: (@Sendable () async -> ServerProtocol)? = nil,
+        engineProvider: (@Sendable () -> ConnectionEngine)? = nil
     ) {
         self.api = api
         self.eventIngress = SseEventIngress(adapter: adapter)
@@ -87,6 +89,11 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         self.protocolHint = protocolHint ?? { api.eventProtocol }
         self.cachedProtocol = cachedProtocol ?? { nil }
         self.protocolProbe = protocolProbe
+        self.engineProvider = engineProvider ?? { .opencode }
+    }
+
+    func publishSynthetic(_ event: OpencodeEvent) {
+        publish(event)
     }
 
     func events() -> AsyncStream<OpencodeEvent> {
@@ -139,6 +146,10 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
     }
 
     func start() {
+        if engineProvider() == .t3 {
+            startT3IdleConnected()
+            return
+        }
         lock.lock()
         if authTerminal {
             lock.unlock()
@@ -172,6 +183,55 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         }
         lock.unlock()
         _ = connectionEpoch.bump()
+    }
+
+    private func startT3IdleConnected() {
+        lock.lock()
+        occupancyTask?.cancel()
+        revisionTask?.cancel()
+        protocolProbeTask?.cancel()
+        occupancyTask = nil
+        revisionTask = nil
+        protocolProbeTask = nil
+        let leaseWork = cancelAllLeasesLocked()
+        occupancySerial += 1
+        streamGeneration += 1
+        let generation = streamGeneration
+        occupancyTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(3_600))
+                _ = self
+            }
+        }
+        appliedConfig = nil
+        pendingStartConfig = nil
+        authTerminal = false
+        protocolConfirmed = true
+        _connectionState = .connected
+        _snapshot = LiveConnectionSnapshot(
+            config: nil,
+            generation: generation,
+            connectionState: .connected,
+            requiredTargets: ["t3"],
+            liveTargets: ["t3"]
+        )
+        let stateConts = Array(connectionStateContinuations.values)
+        let snapConts = Array(snapshotContinuations.values)
+        let snapshot = _snapshot
+        lock.unlock()
+        DiagnosticLog.info(.sse, "foreground SSE idle for T3 engine")
+        for continuation in stateConts {
+            continuation.yield(.connected)
+        }
+        for continuation in snapConts {
+            continuation.yield(snapshot)
+        }
+        for loop in leaseWork.loops {
+            loop.cancel()
+        }
+        for stream in leaseWork.streams {
+            stream.cancel()
+        }
     }
 
     func stop() async {
@@ -480,6 +540,10 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
 
     private func reconcileLeases(_ config: LiveConnectionConfig, generation: UInt64) {
         guard stillCurrent(generation), isOccupying() else { return }
+        if engineProvider() == .t3 {
+            startT3IdleConnected()
+            return
+        }
         lock.lock()
         if authTerminal {
             lock.unlock()

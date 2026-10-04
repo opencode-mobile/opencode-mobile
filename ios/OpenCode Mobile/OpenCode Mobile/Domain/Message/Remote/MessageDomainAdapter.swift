@@ -699,6 +699,8 @@ nonisolated struct MessageDomainAdapter: Sendable {
             .command
         case "tool":
             .tool
+        case "system":
+            .system
         default:
             .unknown
         }

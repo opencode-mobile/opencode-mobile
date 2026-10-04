@@ -38,6 +38,7 @@ protocol SessionRepository: Sendable {
     func cancelPendingPrompt(sessionID: String, inboxID: String) async throws -> Bool
     func steerPendingPrompt(sessionID: String, inboxID: String) async throws -> Bool
     func queuePendingPrompt(sessionID: String, inboxID: String) async throws -> Bool
+    func settleSession(id: String, directory: String?) async throws -> Bool
 }
 
 /// How the server handled a compact request.
@@ -106,6 +107,8 @@ extension SessionRepository {
     func getVcsStatus(directory: String?) async throws -> [VcsFileStatus] {
         throw SessionError.http(statusCode: 404, message: "VCS endpoints are unavailable")
     }
+
+    func settleSession(id _: String, directory _: String?) async throws -> Bool { false }
 }
 
 struct DefaultSessionRepository: SessionRepository, Sendable {

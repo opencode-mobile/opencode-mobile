@@ -51,6 +51,7 @@ final class SessionChatComposer {
     private var catalogRefreshTask: Task<Void, Never>?
     private var catalogRetryTask: Task<Void, Never>?
     private let catalogRetryDelaysMs: [Int]
+    private(set) var requiresComposerModel = true
 
     init(
         sessionID: String,
@@ -131,11 +132,22 @@ final class SessionChatComposer {
         loadSelectableAgents()
     }
 
+    func setRequiresComposerModel(_ value: Bool) {
+        requiresComposerModel = value
+        if !value {
+            updateComposer { $0.isModelSelectionReady = true }
+        }
+    }
+
     func startCatalogLoads() {
-        loadServerCommands()
-        loadMentionableAgents()
-        loadSelectableAgents()
-        startCatalogEventRefresh()
+        if requiresComposerModel {
+            loadServerCommands()
+            loadMentionableAgents()
+            loadSelectableAgents()
+            startCatalogEventRefresh()
+        } else {
+            updateComposer { $0.isModelSelectionReady = true }
+        }
     }
 
     func stopCatalogEventRefresh() {
@@ -194,6 +206,10 @@ final class SessionChatComposer {
 
     /// `force` asks the shared catalog for a fresh answer instead of joining one in flight.
     func loadCatalog(force: Bool = false) async {
+        guard requiresComposerModel else {
+            updateComposer { $0.isModelSelectionReady = true }
+            return
+        }
         await loadCatalog(force: force, emptyRetryAttempt: 0)
     }
 
@@ -721,13 +737,13 @@ final class SessionChatComposer {
             }
         )
         guard !OptimisticSessionCreate.isPlaceholder(sessionID) else { return }
-        guard (!trimmed.isEmpty || !submittedAttachments.isEmpty),
-              let selectedModel = state.composer.selectedModel,
-              state.composer.isModelSelectionReady,
-              !state.isSending
-        else { return }
+        guard (!trimmed.isEmpty || !submittedAttachments.isEmpty), !state.isSending else { return }
+        if requiresComposerModel {
+            guard state.composer.selectedModel != nil, state.composer.isModelSelectionReady else { return }
+        }
 
         let composer = state.composer
+        let selectedModel = composer.selectedModel
 
         let attachmentBlocks = submittedAttachments.map { attachment in
             SessionChatTimelineBlock.attachment(
@@ -829,7 +845,7 @@ final class SessionChatComposer {
                     mentions: [AgentMention],
                     sessionID: String,
                     attachments: [Attachment],
-                    model: ModelSelection,
+                    model: ModelSelection?,
                     worktree: String?
                 ) async throws {
                     func send(delivery: FollowUpDelivery) async throws {
@@ -838,10 +854,12 @@ final class SessionChatComposer {
                             options: PromptSendOptions(
                                 text: text,
                                 attachments: attachments,
-                                model: PromptModelSelection(
-                                    providerID: model.option.providerID,
-                                    modelID: model.option.modelID
-                                ),
+                                model: model.map {
+                                    PromptModelSelection(
+                                        providerID: $0.option.providerID,
+                                        modelID: $0.option.modelID
+                                    )
+                                },
                                 variant: composer.selectedVariant,
                                 mode: composer.selectedMode,
                                 agentMentions: mentions,
@@ -869,22 +887,38 @@ final class SessionChatComposer {
                 }
                 switch intent {
                 case let .serverCommand(command, arguments):
-                    try await commandRepository.runCommand(
-                        sessionID: sessionID,
-                        options: CommandRunOptions(
-                            command: command,
-                            arguments: arguments,
-                            attachments: submittedAttachments,
-                            model: PromptModelSelection(
-                                providerID: selectedModel.option.providerID,
-                                modelID: selectedModel.option.modelID
+                    if let selectedModel {
+                        try await commandRepository.runCommand(
+                            sessionID: sessionID,
+                            options: CommandRunOptions(
+                                command: command,
+                                arguments: arguments,
+                                attachments: submittedAttachments,
+                                model: PromptModelSelection(
+                                    providerID: selectedModel.option.providerID,
+                                    modelID: selectedModel.option.modelID
+                                ),
+                                variant: composer.selectedVariant,
+                                mode: composer.selectedMode,
+                                delivery: composer.followUpDelivery
                             ),
-                            variant: composer.selectedVariant,
-                            mode: composer.selectedMode,
-                            delivery: composer.followUpDelivery
-                        ),
-                        directory: worktree
-                    )
+                            directory: worktree
+                        )
+                    } else {
+                        try await messageRepository.sendPromptAsync(
+                            sessionID: sessionID,
+                            options: PromptSendOptions(
+                                text: trimmed,
+                                attachments: submittedAttachments,
+                                model: nil,
+                                variant: composer.selectedVariant,
+                                mode: composer.selectedMode,
+                                agentMentions: mentionsForSend,
+                                delivery: composer.followUpDelivery
+                            ),
+                            directory: worktree
+                        )
+                    }
                 case let .prompt(text):
                     try await sendPrompt(
                         text: text,

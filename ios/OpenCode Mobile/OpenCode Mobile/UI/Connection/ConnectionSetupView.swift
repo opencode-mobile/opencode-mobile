@@ -11,6 +11,7 @@ struct ConnectionSetupView: View {
     @State private var usernameFocused = false
     @State private var passwordFocused = false
     @State private var pairingCodeFocused = false
+    @State private var pairingTokenFocused = false
     @Environment(\.colorScheme) private var colorScheme
     @State private var showRemoveConfirm = false
     @State private var showPairingScanner = false
@@ -47,12 +48,17 @@ struct ConnectionSetupView: View {
                                 .contentShape(Rectangle())
                                 .onTapGesture(perform: dismissKeyboard)
                             VStack(alignment: .leading, spacing: 12) {
-                        if viewModel.usesQRLayout {
+                        if viewModel.engine == .t3, !viewModel.usesQRLayout {
+                            enginePicker
+                            t3ManualFields
+                        } else if viewModel.usesQRLayout {
                             savedAddressContent
                             connectionNameField
                         } else if viewModel.showsInstructionEssay {
+                            enginePicker
                             instructionEssay
                         } else {
+                            enginePicker
                             manualHostField
                             connectionNameField
                             manualCredentials
@@ -67,7 +73,24 @@ struct ConnectionSetupView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                connectionSetupActions
+                Group {
+                    if viewModel.engine == .t3 {
+                        if viewModel.showsPrimaryAction {
+                            OpenCodeButton(
+                                variant: .fullWidthText(title: viewModel.primaryActionLabel),
+                                enabled: viewModel.primaryEnabled
+                            ) {
+                                Task {
+                                    if await viewModel.submit() {
+                                        onDismiss()
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        connectionSetupActions
+                    }
+                }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 24)
                 }
@@ -100,6 +123,9 @@ struct ConnectionSetupView: View {
         }
         .onChange(of: viewModel.password) { _, _ in
             logFieldEditOnce(&loggedPasswordEdit, ProductAnalytics.Action.connectionEditPassword)
+            viewModel.onFieldChanged()
+        }
+        .onChange(of: viewModel.pairingToken) { _, _ in
             viewModel.onFieldChanged()
         }
         .onChange(of: viewModel.requestPasswordFocus) { _, needsFocus in
@@ -175,6 +201,66 @@ struct ConnectionSetupView: View {
                     .padding(.leading, 2)
                 ConnectionSetupSavedAddressRows(rows: viewModel.savedAddressRows)
             }
+        }
+    }
+
+    private var enginePicker: some View {
+        HStack(spacing: 8) {
+            OpenCodeChoiceBadge(
+                label: "OpenCode",
+                selected: viewModel.engine == .opencode,
+                enabled: !viewModel.isBusy,
+                variant: .glass,
+                action: { viewModel.selectEngine(.opencode) }
+            )
+            OpenCodeChoiceBadge(
+                label: "T3",
+                selected: viewModel.engine == .t3,
+                enabled: !viewModel.isBusy,
+                variant: .glass,
+                action: { viewModel.selectEngine(.t3) }
+            )
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Server engine")
+    }
+
+    private var t3ManualFields: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            OpenCodeServerAddressInput(
+                value: $viewModel.baseURL,
+                hint: "t3.example:3000",
+                accessibilityLabel: "Host",
+                enabled: !viewModel.isBusy,
+                submitAction: .next,
+                isFocused: $urlFocused,
+                onSubmit: { pairingTokenFocused = true }
+            )
+            Text("LAN, Tailscale MagicDNS, or tunnel — not localhost on a phone.")
+                .font(OpenCodeTypography.bodySecondary)
+                .foregroundStyle(OpenCodeColors.textBase)
+                .padding(.leading, 2)
+            OpenCodeTextInput(
+                text: $viewModel.name,
+                hint: "Optional name",
+                kind: .text,
+                enabled: !viewModel.isBusy,
+                submitAction: .next,
+                isFocused: $nameFocused,
+                onSubmit: { pairingTokenFocused = true }
+            )
+            OpenCodeTextInput(
+                text: $viewModel.pairingToken,
+                hint: "Pairing token",
+                kind: .password,
+                enabled: !viewModel.isBusy,
+                isFocused: $pairingTokenFocused,
+                onSubmit: { pairingTokenFocused = false }
+            )
+            Text("Paste the environment pairing token from T3 Code.")
+                .font(OpenCodeTypography.bodySecondary)
+                .foregroundStyle(OpenCodeColors.textBase)
+                .padding(.leading, 2)
         }
     }
 
@@ -389,6 +475,7 @@ struct ConnectionSetupView: View {
         usernameFocused = false
         passwordFocused = false
         pairingCodeFocused = false
+        pairingTokenFocused = false
         UIApplication.shared.sendAction(
             #selector(UIResponder.resignFirstResponder),
             to: nil,

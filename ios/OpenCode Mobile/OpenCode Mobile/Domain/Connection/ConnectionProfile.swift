@@ -1,5 +1,10 @@
 import Foundation
 
+nonisolated enum ConnectionEngine: String, Sendable {
+    case opencode
+    case t3
+}
+
 nonisolated struct ConnectionProfile: Equatable, Sendable {
     var baseURL: String
     /// Every non-loopback address from a QR. Empty for a typed connection.
@@ -7,6 +12,7 @@ nonisolated struct ConnectionProfile: Equatable, Sendable {
     var username: String
     var password: String
     var serverProtocol: ServerProtocol?
+    var engine: ConnectionEngine = .opencode
     var id: String = ""
     var name: String = ""
 

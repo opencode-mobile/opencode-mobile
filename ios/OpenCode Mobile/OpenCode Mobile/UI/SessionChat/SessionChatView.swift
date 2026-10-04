@@ -300,6 +300,7 @@ struct SessionChatView: View {
                         skillsTarget = target
                     },
                     onChildSessionTap: { sessionID, title in
+                        guard viewModel.uiState.capabilities.showsChildSessions else { return }
                         logChatAction(ProductAnalytics.Action.chatOpenChildSession)
                         childSessionTarget = ChildSessionNavigationTarget(
                             sessionID: sessionID,
@@ -981,36 +982,50 @@ struct SessionChatView: View {
                     viewModel.openRenameSession()
                 }
             ),
-            OpenCodeOverflowMenuEntry(
-                title: "Review changes",
-                icon: .description,
-                enabled: sessionCreated,
-                action: {
-                    logOverflowAction(ProductAnalytics.Action.chatOverflowReviewChanges)
-                    menuExpanded = false
-                    changesTarget = viewModel.uiState.changesNavigationTarget(worktree: session.worktree)
-                }
-            ),
-            OpenCodeOverflowMenuEntry(
-                title: "Browse files",
-                icon: .folder,
-                enabled: sessionCreated,
-                action: {
-                    logOverflowAction(ProductAnalytics.Action.chatOverflowBrowseFiles)
-                    menuExpanded = false
-                    filesRoute = FilesRoute(worktree: session.worktree)
-                }
-            ),
-            OpenCodeOverflowMenuEntry(
-                title: "Session context",
-                icon: .architecture,
-                enabled: sessionCreated,
-                action: {
-                    logOverflowAction(ProductAnalytics.Action.chatOverflowSessionContext)
-                    menuExpanded = false
-                    showSessionContext = true
-                }
-            ),
+        ]
+        if viewModel.uiState.capabilities.showsReview {
+            entries.append(
+                OpenCodeOverflowMenuEntry(
+                    title: "Review changes",
+                    icon: .description,
+                    enabled: sessionCreated,
+                    action: {
+                        logOverflowAction(ProductAnalytics.Action.chatOverflowReviewChanges)
+                        menuExpanded = false
+                        changesTarget = viewModel.uiState.changesNavigationTarget(worktree: session.worktree)
+                    }
+                )
+            )
+        }
+        if viewModel.uiState.capabilities.showsFiles {
+            entries.append(
+                OpenCodeOverflowMenuEntry(
+                    title: "Browse files",
+                    icon: .folder,
+                    enabled: sessionCreated,
+                    action: {
+                        logOverflowAction(ProductAnalytics.Action.chatOverflowBrowseFiles)
+                        menuExpanded = false
+                        filesRoute = FilesRoute(worktree: session.worktree)
+                    }
+                )
+            )
+        }
+        if viewModel.uiState.capabilities.showsContext {
+            entries.append(
+                OpenCodeOverflowMenuEntry(
+                    title: "Session context",
+                    icon: .architecture,
+                    enabled: sessionCreated,
+                    action: {
+                        logOverflowAction(ProductAnalytics.Action.chatOverflowSessionContext)
+                        menuExpanded = false
+                        showSessionContext = true
+                    }
+                )
+            )
+        }
+        entries.append(
             OpenCodeOverflowMenuEntry(
                 title: "Copy session ID",
                 icon: .contentCopy,
@@ -1020,8 +1035,8 @@ struct SessionChatView: View {
                     menuExpanded = false
                     UIPasteboard.general.string = viewModel.uiState.sessionID
                 }
-            ),
-        ]
+            )
+        )
         if viewModel.uiState.supportsSessionArchive {
             entries.append(
                 OpenCodeOverflowMenuEntry(
@@ -1032,6 +1047,19 @@ struct SessionChatView: View {
                         logOverflowAction(ProductAnalytics.Action.chatOverflowArchive)
                         menuExpanded = false
                         viewModel.archiveSession()
+                    }
+                )
+            )
+        }
+        if viewModel.uiState.capabilities.showsSettle {
+            entries.append(
+                OpenCodeOverflowMenuEntry(
+                    title: "Settle",
+                    icon: .check,
+                    enabled: lifecycleEnabled,
+                    action: {
+                        menuExpanded = false
+                        viewModel.settleSession()
                     }
                 )
             )
@@ -1139,10 +1167,14 @@ struct SessionChatView: View {
                 .init(
                     selectedModelLabel: composer.selectedModelLabel,
                     selectedVariantLabel: composer.selectedVariantLabel,
-                    showVariant: composer.canSelectVariant
+                    showVariant: composer.canSelectVariant && viewModel.uiState.capabilities.showsVariant
                 )
             )
         } else {
+            let capabilities = viewModel.uiState.capabilities
+            let modelReady = capabilities.requiresComposerModel
+                ? composer.selectedModel != nil && composer.isModelSelectionReady
+                : true
             state = .prompt(
                 .init(
                     text: composer.text,
@@ -1155,11 +1187,16 @@ struct SessionChatView: View {
                     selectedModelLabel: composer.selectedModelLabel,
                     selectedModeLabel: composer.selectedModeLabel,
                     selectedVariantLabel: composer.selectedVariantLabel,
-                    showVariant: composer.canSelectVariant,
+                    showVariant: composer.canSelectVariant && capabilities.showsVariant,
+                    showModel: capabilities.requiresComposerModel,
+                    showAgent: capabilities.showsAgent,
+                    showProvider: capabilities.showsProvider,
+                    showRuntimeMode: capabilities.showsRuntimeMode,
+                    providerLabel: viewModel.uiState.providerLabel ?? "",
+                    runtimeModeLabel: viewModel.uiState.runtimeModeLabel ?? "",
                     sendEnabled:
                         composer.hasSendableContent &&
-                        composer.selectedModel != nil &&
-                        composer.isModelSelectionReady &&
+                        modelReady &&
                         !isSending &&
                         !OptimisticSessionCreate.isPlaceholder(viewModel.uiState.sessionID) &&
                         viewModel.uiState.timeline != .creating &&

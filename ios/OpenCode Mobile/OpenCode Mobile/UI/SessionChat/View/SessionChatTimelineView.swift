@@ -559,7 +559,7 @@ private struct SessionChatMessageRow: View {
                     onExpandStepParagraph: onExpandStepParagraph
                 )
                 .frame(maxWidth: .infinity, alignment: .leading)
-            case .command, .tool, .unknown:
+            case .system, .command, .tool, .unknown:
                 FallbackMessageBubble(
                     roleLabel: message.role.displayLabel,
                     text: message.text

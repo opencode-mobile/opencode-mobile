@@ -93,8 +93,23 @@ final class SessionInfo {
         observationTask = Task {
             async let statusLoop: Void = info.observeActivity()
             async let connectionLoop: Void = info.observeConnectionState()
-            _ = await (statusLoop, connectionLoop)
+            async let metadata: Void = info.refreshSessionMetadata()
+            _ = await (statusLoop, connectionLoop, metadata)
         }
+    }
+
+    private func refreshSessionMetadata() async {
+        let sessionID = state.sessionID
+        guard !sessionID.isEmpty,
+              !OptimisticSessionCreate.isPlaceholder(sessionID)
+        else { return }
+        guard let session = try? await sessionRepository.getSession(id: sessionID, directory: worktree) else {
+            return
+        }
+        guard state.sessionID == sessionID else { return }
+        state.providerInstanceID = session.providerInstanceID
+        state.runtimeMode = session.runtimeMode
+        notifyChange()
     }
 
     func stopObserving() {
@@ -179,6 +194,40 @@ final class SessionInfo {
             activity: activity,
             ttlMs: ttlMs
         )
+    }
+
+    func settleSession() {
+        guard !state.sessionID.isEmpty,
+              !OptimisticSessionCreate.isPlaceholder(state.sessionID),
+              !state.isLifecycleActionInFlight else { return }
+        let sessionID = state.sessionID
+        state.isLifecycleActionInFlight = true
+        state.lifecycleErrorMessage = nil
+        notifyChange()
+        OpenCodeLog.sessionChat.info("settle start session=\(sessionID)")
+        Task {
+            do {
+                let settled = try await sessionRepository.settleSession(id: sessionID, directory: worktree)
+                guard state.sessionID == sessionID else { return }
+                state.isLifecycleActionInFlight = false
+                if settled {
+                    OpenCodeLog.sessionChat.info("settle success session=\(sessionID)")
+                    state.shouldLeaveSession = true
+                } else {
+                    OpenCodeLog.sessionChat.info("settle rejected session=\(sessionID)")
+                    state.lifecycleErrorMessage = Self.settleError
+                }
+                notifyChange()
+            } catch {
+                guard state.sessionID == sessionID else { return }
+                OpenCodeLog.sessionChat.info(
+                    "settle failure session=\(sessionID) error=\(error.localizedDescription)"
+                )
+                state.isLifecycleActionInFlight = false
+                state.lifecycleErrorMessage = Self.settleError
+                notifyChange()
+            }
+        }
     }
 
     func archiveSession() {
@@ -353,5 +402,6 @@ final class SessionInfo {
 
     private static let emptyTitleError = "Enter a session title"
     private static let archiveError = "Couldn't archive session."
+    private static let settleError = "Couldn't settle session."
     private static let deleteError = "Couldn't delete session."
 }

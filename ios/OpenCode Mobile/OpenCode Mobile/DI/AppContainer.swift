@@ -118,13 +118,27 @@ extension Container {
         }.singleton
     }
 
+    var t3EnvironmentClient: Factory<T3EnvironmentClient> {
+        self {
+            T3EnvironmentClient(connectionProvider: self.connectionProvider())
+        }.singleton
+    }
+
+    var t3PairingClient: Factory<any T3PairingClient> {
+        self { T3PairingService() }.singleton
+    }
+
     var sessionRepository: Factory<any SessionRepository> {
         self {
-            DefaultSessionRepository(
-                api: self.sessionsAPIClient(),
-                adapter: self.sessionDomainAdapter(),
-                sessionModelSelectionStore: self.sessionModelSelectionStore(),
-                composerDraftStore: self.composerDraftStore(),
+            EngineSessionRepository(
+                opencode: DefaultSessionRepository(
+                    api: self.sessionsAPIClient(),
+                    adapter: self.sessionDomainAdapter(),
+                    sessionModelSelectionStore: self.sessionModelSelectionStore(),
+                    composerDraftStore: self.composerDraftStore(),
+                    activeConnectionManager: self.activeConnectionManager()
+                ),
+                t3: T3SessionRepository(client: self.t3EnvironmentClient()),
                 activeConnectionManager: self.activeConnectionManager()
             )
         }.singleton
@@ -277,13 +291,21 @@ extension Container {
 
     var messageRepository: Factory<any MessageRepository> {
         self { @MainActor in
-            DefaultMessageRepository(
-                api: self.messagesAPIClient(),
-                adapter: self.messageDomainAdapter(),
-                messageSync: self.messageSync(),
-                displayMessagePipeline: self.displayMessagePipeline(),
-                contentPreparer: self.messageContentPreparer(),
-                messageRemote: self.messageRemote()
+            EngineMessageRepository(
+                opencode: DefaultMessageRepository(
+                    api: self.messagesAPIClient(),
+                    adapter: self.messageDomainAdapter(),
+                    messageSync: self.messageSync(),
+                    displayMessagePipeline: self.displayMessagePipeline(),
+                    contentPreparer: self.messageContentPreparer(),
+                    messageRemote: self.messageRemote()
+                ),
+                t3: T3MessageRepository(
+                    client: self.t3EnvironmentClient(),
+                    eventStream: self.foregroundEventStream(),
+                    contentPreparer: self.messageContentPreparer()
+                ),
+                activeConnectionManager: self.activeConnectionManager()
             )
         }.singleton
     }
@@ -443,7 +465,8 @@ extension Container {
                 },
                 protocolHint: { manager.protocolHint() },
                 cachedProtocol: { manager.serverProtocol },
-                protocolProbe: { await manager.currentProtocolOrProbe() }
+                protocolProbe: { await manager.currentProtocolOrProbe() },
+                engineProvider: { manager.currentProfile()?.engine ?? .opencode }
             )
         }.singleton
     }
@@ -686,6 +709,7 @@ extension Container {
             connectionProbeService: shared.connectionProbing(),
             connectionSessionCoordinator: shared.connectionSessionCoordinator(),
             pairingCodeRedeemer: PairingCodeRedeemer(),
+            t3PairingClient: shared.t3PairingClient(),
             initialProfile: initialProfile,
             mode: mode
         )

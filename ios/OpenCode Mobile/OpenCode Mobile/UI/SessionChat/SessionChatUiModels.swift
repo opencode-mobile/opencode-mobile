@@ -78,7 +78,7 @@ extension SessionChatRow: MessageListTimelineHeightEstimating {
             switch role {
             case .user:
                 .outgoing
-            case .assistant:
+            case .assistant, .system:
                 .assistant
             case .tool, .command, .unknown:
                 .compact
@@ -210,6 +210,9 @@ struct ComposerDictationUiState: Equatable {
 struct SessionChatUiState: Equatable {
     var sessionID: String
     var sessionTitle: String
+    var capabilities: SessionCapabilities = .opencode
+    var providerLabel: String? = nil
+    var runtimeModeLabel: String? = nil
     /// Smart project label for top-bar chrome; nil when worktree missing.
     var projectLabel: String? = nil
     var projectLetter: Character? = nil
@@ -665,6 +668,8 @@ struct SessionInfoRegionState: Equatable {
     var lifecycleErrorMessage: String?
     var shouldLeaveSession = false
     var errorMessage: String?
+    var providerInstanceID: String?
+    var runtimeMode: String?
 
     mutating func applyStatus(
         authoritative: String?,

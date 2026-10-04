@@ -10,8 +10,10 @@ nonisolated protocol ForegroundEventStream: AnyObject, Sendable {
     func start()
     func stop() async
     func onReconnectWake()
+    func publishSynthetic(_ event: OpencodeEvent)
 }
 
 extension ForegroundEventStream {
     func onReconnectWake() {}
+    func publishSynthetic(_ event: OpencodeEvent) {}
 }

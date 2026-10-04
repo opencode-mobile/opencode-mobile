@@ -13,6 +13,10 @@ struct Session: Sendable, Equatable {
     let updatedAtEpochMs: Int64?
     var archivedAtEpochMs: Int64? = nil
     var revert: SessionRevert? = nil
+    var providerInstanceID: String? = nil
+    var runtimeMode: String? = nil
+    var modelName: String? = nil
+    var activeRunID: String? = nil
 
     var isArchived: Bool { archivedAtEpochMs != nil }
 }

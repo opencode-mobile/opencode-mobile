@@ -13,6 +13,12 @@ enum OpenCodeSessionComposerState {
         let selectedModeLabel: String
         let selectedVariantLabel: String
         let showVariant: Bool
+        let showModel: Bool
+        let showAgent: Bool
+        let showProvider: Bool
+        let showRuntimeMode: Bool
+        let providerLabel: String
+        let runtimeModeLabel: String
         let sendEnabled: Bool
         let attachEnabled: Bool
         let showStop: Bool
@@ -32,6 +38,12 @@ enum OpenCodeSessionComposerState {
             selectedModeLabel: String,
             selectedVariantLabel: String,
             showVariant: Bool,
+            showModel: Bool = true,
+            showAgent: Bool = true,
+            showProvider: Bool = false,
+            showRuntimeMode: Bool = false,
+            providerLabel: String = "",
+            runtimeModeLabel: String = "",
             sendEnabled: Bool,
             attachEnabled: Bool = true,
             showStop: Bool,
@@ -50,6 +62,12 @@ enum OpenCodeSessionComposerState {
             self.selectedModeLabel = selectedModeLabel
             self.selectedVariantLabel = selectedVariantLabel
             self.showVariant = showVariant
+            self.showModel = showModel
+            self.showAgent = showAgent
+            self.showProvider = showProvider
+            self.showRuntimeMode = showRuntimeMode
+            self.providerLabel = providerLabel
+            self.runtimeModeLabel = runtimeModeLabel
             self.sendEnabled = sendEnabled
             self.attachEnabled = attachEnabled
             self.showStop = showStop
@@ -525,24 +543,46 @@ struct OpenCodeSessionComposer: View {
     private func pickerChipsRow(_ prompt: OpenCodeSessionComposerState.Prompt) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             let chips = HStack(spacing: 8) {
-                OpenCodeChoiceBadge(
-                    label: prompt.selectedModelLabel,
-                    selected: false,
-                    variant: .glass,
-                    action: { onAction(.selectModel) }
-                )
-                OpenCodeChoiceBadge(
-                    label: prompt.selectedModeLabel,
-                    selected: false,
-                    variant: .glass,
-                    action: { onAction(.selectMode) }
-                )
+                if prompt.showModel {
+                    OpenCodeChoiceBadge(
+                        label: prompt.selectedModelLabel,
+                        selected: false,
+                        variant: .glass,
+                        action: { onAction(.selectModel) }
+                    )
+                }
+                if prompt.showAgent {
+                    OpenCodeChoiceBadge(
+                        label: prompt.selectedModeLabel,
+                        selected: false,
+                        variant: .glass,
+                        action: { onAction(.selectMode) }
+                    )
+                }
                 if prompt.showVariant {
                     OpenCodeChoiceBadge(
                         label: prompt.selectedVariantLabel,
                         selected: false,
                         variant: .glass,
                         action: { onAction(.selectVariant) }
+                    )
+                }
+                if prompt.showProvider, !prompt.providerLabel.isEmpty {
+                    OpenCodeChoiceBadge(
+                        label: prompt.providerLabel,
+                        selected: false,
+                        enabled: false,
+                        variant: .glass,
+                        action: {}
+                    )
+                }
+                if prompt.showRuntimeMode, !prompt.runtimeModeLabel.isEmpty {
+                    OpenCodeChoiceBadge(
+                        label: prompt.runtimeModeLabel,
+                        selected: false,
+                        enabled: false,
+                        variant: .glass,
+                        action: {}
                     )
                 }
             }

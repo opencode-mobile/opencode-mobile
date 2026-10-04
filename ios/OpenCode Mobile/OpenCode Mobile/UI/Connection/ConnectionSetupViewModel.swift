@@ -111,6 +111,8 @@ final class ConnectionSetupViewModel {
     }
     var pairingCode = ""
     private(set) var credentialSegment: ConnectionCredentialSegment = .password
+    var pairingToken = ""
+    var engine: ConnectionEngine = .opencode
     private(set) var state: ConnectionSetupState = .idle
     private(set) var mode: ConnectionSetupMode = .first
     private(set) var profileId = ""
@@ -122,11 +124,13 @@ final class ConnectionSetupViewModel {
     private let connectionProbeService: ConnectionProbing
     private let connectionSessionCoordinator: ConnectionSessionCoordinator
     private let pairingCodeRedeemer: any PairingCodeRedeeming
+    private let t3PairingClient: any T3PairingClient
     private var detectedProtocol: ServerProtocol?
     private var savedBaseURL = ""
     private var savedUsername = ""
     private var savedPassword = ""
     private var savedProtocol: ServerProtocol?
+    private var savedEngine: ConnectionEngine = .opencode
     private var isEditingExistingProfile = false
     private var pendingPairingCode: String?
     private var scannedQrPassword = ""
@@ -149,12 +153,14 @@ final class ConnectionSetupViewModel {
         connectionProbeService: ConnectionProbing,
         connectionSessionCoordinator: ConnectionSessionCoordinator,
         pairingCodeRedeemer: any PairingCodeRedeeming = PairingCodeRedeemer(),
+        t3PairingClient: any T3PairingClient = T3PairingService(),
         initialProfile: ConnectionProfile? = nil,
         mode: ConnectionSetupMode = .first
     ) {
         self.connectionProbeService = connectionProbeService
         self.connectionSessionCoordinator = connectionSessionCoordinator
         self.pairingCodeRedeemer = pairingCodeRedeemer
+        self.t3PairingClient = t3PairingClient
         configure(initialProfile: initialProfile, mode: mode)
     }
 
@@ -207,23 +213,29 @@ final class ConnectionSetupViewModel {
             serverURLs = ConnectionProfileIdentity.normalizedAddressList(initialProfile.serverURLs)
             username = initialProfile.username
             password = initialProfile.password
+            pairingToken = initialProfile.engine == .t3 ? initialProfile.password : ""
+            engine = initialProfile.engine
             profileId = initialProfile.id
             detectedProtocol = initialProfile.serverProtocol
             savedBaseURL = initialProfile.baseURL
             savedUsername = initialProfile.username
             savedPassword = initialProfile.password
             savedProtocol = initialProfile.serverProtocol
+            savedEngine = initialProfile.engine
         } else {
             name = ""
             setBaseURLFromSystem(ConnectionProfile.formDefaults.baseURL)
             serverURLs = []
             username = ConnectionProfile.formDefaults.username
             password = ConnectionProfile.formDefaults.password
+            pairingToken = ""
+            engine = .opencode
             profileId = ""
             savedBaseURL = ""
             savedUsername = ""
             savedPassword = ""
             savedProtocol = nil
+            savedEngine = .opencode
         }
     }
 
@@ -271,11 +283,14 @@ final class ConnectionSetupViewModel {
 
     var connectionUnchanged: Bool {
         isEditingExistingProfile &&
+            engine == savedEngine &&
             ConnectionProfileIdentity.normalizeBaseURL(baseURL) ==
             ConnectionProfileIdentity.normalizeBaseURL(savedBaseURL) &&
-            ConnectionProfileIdentity.normalizeUsername(username) ==
-            ConnectionProfileIdentity.normalizeUsername(savedUsername) &&
-            password == savedPassword
+            (engine == .t3
+                ? pairingToken == savedPassword
+                : ConnectionProfileIdentity.normalizeUsername(username) ==
+                ConnectionProfileIdentity.normalizeUsername(savedUsername) &&
+                password == savedPassword)
     }
 
     var canSubmitWithoutProbe: Bool {
@@ -324,6 +339,24 @@ final class ConnectionSetupViewModel {
     func showScanInstructions() {
         guard !usesQRLayout else { return }
         entry = .instructions
+    }
+
+    func selectEngine(_ next: ConnectionEngine) {
+        guard engine != next, !isBusy else { return }
+        engine = next
+        if next == .t3 {
+            username = T3Auth.username
+            if !serverURLs.isEmpty {
+                leaveQRMode()
+            }
+            entry = .manual
+        } else if username == T3Auth.username {
+            username = ConnectionProfile.formDefaults.username
+            if !usesQRLayout {
+                entry = .instructions
+            }
+        }
+        onFieldChanged()
     }
 
     func consumePasswordFocusRequest() {
@@ -394,6 +427,9 @@ final class ConnectionSetupViewModel {
             snackbar = OpenCodeSnackbarMessage(text: "Enter a host", variant: .error)
             return false
         }
+        if engine == .t3 {
+            return await submitT3()
+        }
         if adoptPastedConnectLink() {
             if let code = pendingPairingCode, !code.isEmpty, password.isEmpty {
                 return await redeemThenSave(code: code)
@@ -418,6 +454,39 @@ final class ConnectionSetupViewModel {
             // Typed codes redeem for user opencode. The username field is hidden here.
             username = ConnectionProfile.formDefaults.username
             return await redeemThenSave(code: code)
+        }
+    }
+
+    private func submitT3() async -> Bool {
+        if pairingToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            snackbar = OpenCodeSnackbarMessage(text: "Enter a pairing token", variant: .error)
+            return false
+        }
+        if canSubmitWithoutProbe {
+            return await persist()
+        }
+        state = .connecting
+        snackbar = nil
+        do {
+            let result = try await t3PairingClient.pair(baseURL: baseURL, pairingToken: pairingToken)
+            password = result.accessToken
+            pairingToken = result.accessToken
+            username = T3Auth.username
+            if name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                name = result.label
+            }
+            return await persist()
+        } catch {
+            state = .idle
+            snackbar = OpenCodeSnackbarMessage(
+                text: error.localizedDescription,
+                variant: .error
+            )
+            logConnectionAction(
+                ProductAnalytics.Action.connectionTest,
+                outcome: ProductAnalytics.Outcome.failure
+            )
+            return false
         }
     }
 
@@ -847,9 +916,12 @@ final class ConnectionSetupViewModel {
         ConnectionProfile(
             baseURL: baseURL,
             serverURLs: serverURLs,
-            username: ConnectionProfileIdentity.normalizeUsername(username),
-            password: password,
-            serverProtocol: pairedProtocol ?? detectedProtocol ?? (connectionUnchanged ? savedProtocol : nil),
+            username: engine == .t3 ? T3Auth.username : ConnectionProfileIdentity.normalizeUsername(username),
+            password: engine == .t3 ? pairingToken : password,
+            serverProtocol: engine == .t3
+                ? nil
+                : pairedProtocol ?? detectedProtocol ?? (connectionUnchanged ? savedProtocol : nil),
+            engine: engine,
             id: profileId,
             name: name
         )

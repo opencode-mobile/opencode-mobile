@@ -28,6 +28,43 @@ struct ConnectionProfileStoreTests {
         )
         let loaded = await store.activeProfile()
         #expect(loaded?.serverProtocol == .v2)
+        #expect(loaded?.engine == .opencode)
+    }
+
+    @Test func saveAndLoadPersistsT3Engine() async throws {
+        let defaults = isolatedDefaults()
+        let store = UserDefaultsConnectionProfileStore(
+            defaults: defaults,
+            secureCredentialStore: InMemorySecureCredentialStore()
+        )
+        try await store.saveProfile(
+            ConnectionProfile(
+                baseURL: "http://127.0.0.1:3000/",
+                username: "t3",
+                password: "bearer",
+                engine: .t3,
+                name: "Desk"
+            )
+        )
+        let loaded = await store.activeProfile()
+        #expect(loaded?.engine == .t3)
+        #expect(loaded?.username == "t3")
+        #expect(loaded?.name == "Desk")
+    }
+
+    @Test func loadCatalogWithoutEngineDefaultsToOpenCode() async {
+        let defaults = isolatedDefaults()
+        let catalog = """
+        {"activeId":"p1","profiles":[{"id":"p1","name":"Mac","baseURL":"http://127.0.0.1:4096/","username":"opencode"}]}
+        """
+        defaults.set(Data(catalog.utf8), forKey: "connection_profiles_v2")
+        let store = UserDefaultsConnectionProfileStore(
+            defaults: defaults,
+            secureCredentialStore: InMemorySecureCredentialStore()
+        )
+        let loaded = await store.activeProfile()
+        #expect(loaded?.engine == .opencode)
+        #expect(loaded?.id == "p1")
     }
 
     @Test func addWorktree_preservesInsertionOrder() async {
