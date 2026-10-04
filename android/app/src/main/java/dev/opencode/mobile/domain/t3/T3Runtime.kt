@@ -656,6 +656,12 @@ class T3Runtime
                     val type = if (newApproval.isNullOrBlank()) "permission.replied" else "permission.asked"
                     eventStream.publishSynthetic(OpencodeEvent(type = type, sessionId = threadId))
                 }
+                val oldQuestion = old?.let(T3SessionMapper::questionId)
+                val newQuestion = new?.let(T3SessionMapper::questionId)
+                if (oldQuestion != newQuestion) {
+                    val type = if (newQuestion.isNullOrBlank()) "question.replied" else "question.asked"
+                    eventStream.publishSynthetic(OpencodeEvent(type = type, sessionId = threadId))
+                }
             }
         }
 

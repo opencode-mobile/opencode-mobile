@@ -2,6 +2,8 @@ package dev.opencode.mobile.domain.t3
 
 import dev.opencode.mobile.domain.session.PermissionDecision
 import dev.opencode.mobile.domain.session.PermissionRequest
+import dev.opencode.mobile.domain.session.QuestionInfo
+import dev.opencode.mobile.domain.session.QuestionRequest
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
@@ -15,6 +17,7 @@ class T3SessionRepository
     @Inject
     constructor(
         private val runtime: T3Runtime,
+        private val api: T3Api,
     ) : SessionRepository {
         override suspend fun listSessions(directory: String?): List<Session> {
             val snapshot = runtime.refreshShell()
@@ -189,7 +192,65 @@ class T3SessionRepository
             return snapshot.threads
                 .filter(T3Activity::isActiveListRow)
                 .filter { thread -> directory.isNullOrBlank() || matchesDirectory(thread, snapshot, directory) }
-                .mapNotNull(T3SessionMapper::toPermission)
+                .filter { thread -> T3SessionMapper.approvalId(thread) != null }
+                .mapNotNull { thread -> T3SessionMapper.toPermission(thread, turnItems(thread.id)) }
+        }
+
+        override suspend fun listPendingQuestions(directory: String?): List<QuestionRequest> {
+            val snapshot = runtime.refreshShell()
+            return snapshot.threads
+                .filter(T3Activity::isActiveListRow)
+                .filter { thread -> directory.isNullOrBlank() || matchesDirectory(thread, snapshot, directory) }
+                .filter { thread -> T3SessionMapper.questionId(thread) != null }
+                .mapNotNull { thread -> T3SessionMapper.toQuestionRequest(thread, turnItems(thread.id)) }
+        }
+
+        override suspend fun replyToQuestion(
+            requestId: String,
+            answers: List<List<String>>,
+            directory: String?,
+        ): Boolean = replyToQuestion(sessionId = "", requestId = requestId, answers = answers, directory = directory)
+
+        override suspend fun replyToQuestion(
+            sessionId: String,
+            requestId: String,
+            answers: List<List<String>>,
+            directory: String?,
+        ): Boolean = replyToQuestion(sessionId, requestId, answers, emptyList(), directory)
+
+        override suspend fun replyToQuestion(
+            sessionId: String,
+            requestId: String,
+            answers: List<List<String>>,
+            questions: List<QuestionInfo>,
+            directory: String?,
+        ): Boolean {
+            val thread = questionThread(sessionId, requestId) ?: return false
+            val known =
+                questions.takeIf { list -> list.isNotEmpty() && list.all { !it.fieldKey.isNullOrBlank() } }
+                    ?: T3SessionMapper.toQuestionRequest(thread, turnItems(thread.id))?.questions
+                    ?: return false
+            val encoded = T3QuestionCommands.encodeAnswers(known, answers)
+            if (encoded.isEmpty()) return false
+            runtime.dispatch(T3QuestionCommands.userInputRespond(thread.id, requestId, encoded))
+            runCatching { runtime.refreshShell() }
+            return true
+        }
+
+        override suspend fun rejectQuestion(
+            requestId: String,
+            directory: String?,
+        ): Boolean = rejectQuestion(sessionId = "", requestId = requestId, directory = directory)
+
+        override suspend fun rejectQuestion(
+            sessionId: String,
+            requestId: String,
+            directory: String?,
+        ): Boolean {
+            val thread = questionThread(sessionId, requestId) ?: return false
+            runtime.dispatch(T3QuestionCommands.userInputDismiss(thread.id, requestId))
+            runCatching { runtime.refreshShell() }
+            return true
         }
 
         override suspend fun respondToPermission(
@@ -209,6 +270,27 @@ class T3SessionRepository
         }
 
         override suspend fun getVcsInfo(directory: String?): VcsInfo = VcsInfo(currentBranch = null, defaultBranch = null)
+
+        /** The thread waiting on [requestId]; found by id, else by its pending question. */
+        private suspend fun questionThread(
+            sessionId: String,
+            requestId: String,
+        ): T3Thread? {
+            val snapshot = runtime.refreshShell()
+            val thread =
+                if (sessionId.isNotBlank()) {
+                    snapshot.threads.firstOrNull { it.id == sessionId }
+                } else {
+                    snapshot.threads.firstOrNull { T3SessionMapper.questionId(it) == requestId }
+                }
+            return thread?.takeIf { T3SessionMapper.questionId(it) == requestId }
+        }
+
+        /** The thread projection's turn items; a failed fetch degrades to an empty list. */
+        private suspend fun turnItems(threadId: String): List<T3TurnItem> {
+            val profile = runtime.activeProfile() ?: return emptyList()
+            return runCatching { api.fetchThread(profile, threadId).turnItems }.getOrDefault(emptyList())
+        }
 
         private fun matchesDirectory(
             thread: T3Thread,

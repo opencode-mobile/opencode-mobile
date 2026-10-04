@@ -94,19 +94,106 @@ nonisolated enum T3ShellMapper {
         )
     }
 
-    static func permissionRequest(from thread: T3Thread) -> PermissionRequest? {
+    private static let userInputKind = "user_input"
+    private static let dynamicToolKind = "dynamic_tool_call"
+    /// Turn items that describe the tool a `dynamic_tool_call` approval is waiting on.
+    private static let toolItemTypes: Set<String> = ["tool_call", "dynamic_tool", "command_execution", "file_change", "mcp_tool_call"]
+    private static let settledItemStatuses: Set<String> = ["completed", "failed", "cancelled", "declined", "interrupted", "rolled_back"]
+
+    /// The pending approval request id; nil when the thread waits on the user instead.
+    static func approvalID(for thread: T3Thread) -> String? {
         guard let id = thread.pendingRequestID, !id.isEmpty else { return nil }
-        guard let kind = thread.pendingRequestKind, !kind.isEmpty, kind != "user_input" else { return nil }
+        guard thread.pendingRequestKind != userInputKind else { return nil }
+        return id
+    }
+
+    /// The pending `user_input` request id; nil when the thread is not waiting on the user.
+    static func questionID(for thread: T3Thread) -> String? {
+        guard let id = thread.pendingRequestID, !id.isEmpty else { return nil }
+        guard thread.pendingRequestKind == userInputKind else { return nil }
+        return id
+    }
+
+    static func permissionRequest(from thread: T3Thread) -> PermissionRequest? {
+        permissionRequest(from: thread, turnItems: [])
+    }
+
+    /// The approval prompt. `turnItems` (the thread projection) supplies what is
+    /// being approved; without them the card still shows the request kind.
+    static func permissionRequest(from thread: T3Thread, turnItems: [T3TurnItem]) -> PermissionRequest? {
+        guard let id = approvalID(for: thread) else { return nil }
+        guard let kind = thread.pendingRequestKind, !kind.isEmpty else { return nil }
+        let approval = turnItems.last { $0.type == "approval_request" && $0.requestID == id }
+        let tool = approval == nil ? pendingToolItem(in: turnItems) : nil
+        let requestKind = approval?.requestKind ?? kind
+        let detail = approval?.prompt ?? tool?.inputText.flatMap(nonEmpty) ?? tool?.fileName
+        let toolName = tool?.toolName ?? approval?.appName
+        let title = approval?.title ?? tool?.title
+        var metadata: [String: AnyCodable] = ["kind": .string(requestKind)]
+        if let toolName { metadata["tool"] = .string(toolName) }
+        if let title = title.flatMap(nonEmpty) { metadata["title"] = .string(title) }
+        if let appName = approval?.appName { metadata["appName"] = .string(appName) }
+        if let detail {
+            switch requestKind {
+            case "command": metadata["command"] = .string(detail)
+            case "file-change", "file-read": metadata["filepath"] = .string(detail)
+            default: metadata["prompt"] = .string(detail)
+            }
+        }
+        for (key, value) in tool?.inputFields ?? [:] where metadata[key] == nil {
+            metadata[key] = .string(value)
+        }
         return PermissionRequest(
             id: id,
             sessionID: thread.id,
-            permission: kind.replacingOccurrences(of: "-", with: "_"),
-            patterns: [],
-            metadata: [:],
+            permission: permissionName(requestKind: requestKind, toolName: toolName),
+            patterns: detail.map { [$0] } ?? [],
+            metadata: metadata,
             always: ["this session"],
             toolMessageID: nil,
             toolCallID: nil
         )
+    }
+
+    /// The question card for a thread waiting on `user_input`; needs the thread's turn items.
+    static func questionRequest(from thread: T3Thread, turnItems: [T3TurnItem]) -> QuestionRequest? {
+        guard let id = questionID(for: thread) else { return nil }
+        let item = turnItems.last { $0.type == "user_input_request" && $0.requestID == id }
+            ?? turnItems.last { $0.type == "user_input_request" && !settledItemStatuses.contains($0.status?.lowercased() ?? "") }
+        guard let item else { return nil }
+        let questions = item.questions.map(questionInfo(from:))
+        guard !questions.isEmpty else { return nil }
+        return QuestionRequest(id: id, sessionID: thread.id, questions: questions, toolMessageID: nil, toolCallID: nil)
+    }
+
+    static func questionInfo(from question: T3UserInputQuestion) -> QuestionInfo {
+        QuestionInfo(
+            question: question.question,
+            header: question.header.isEmpty ? question.question : question.header,
+            options: question.options.map { option in
+                QuestionOption(label: option.label, description: option.description, value: option.value)
+            },
+            multiple: question.multiSelect,
+            custom: question.allowCustomAnswer,
+            fieldKey: question.id
+        )
+    }
+
+    private static func permissionName(requestKind: String, toolName: String?) -> String {
+        if requestKind == dynamicToolKind {
+            return toolName.flatMap(nonEmpty) ?? "tool"
+        }
+        return requestKind.replacingOccurrences(of: "-", with: "_")
+    }
+
+    private static func pendingToolItem(in turnItems: [T3TurnItem]) -> T3TurnItem? {
+        turnItems.last { item in
+            toolItemTypes.contains(item.type) && !settledItemStatuses.contains(item.status?.lowercased() ?? "")
+        }
+    }
+
+    private static func nonEmpty(_ value: String) -> String? {
+        value.isEmpty ? nil : value
     }
 
     static func project(from value: Any) -> T3Project? {
@@ -165,7 +252,46 @@ nonisolated enum T3MessageMapper {
             ?? T3ShellMapper.thread(from: root["thread"] as Any)
         let messages = T3JSON.array(projection["messages"]).compactMap { message(from: $0) }
         let turnItems = turnItems(from: projection)
-        return T3ThreadDetail(sequence: sequence, thread: thread, messages: messages, turnItems: turnItems)
+        let runtimeRequests = T3JSON.array(projection["runtimeRequests"]).compactMap { runtimeRequest(from: $0) }
+        return T3ThreadDetail(
+            sequence: sequence,
+            thread: thread,
+            messages: messages,
+            turnItems: turnItems,
+            runtimeRequests: runtimeRequests
+        )
+    }
+
+    private static func runtimeRequest(from value: Any) -> T3RuntimeRequest? {
+        guard let object = T3JSON.object(value), let id = T3JSON.string(object, "id") else { return nil }
+        return T3RuntimeRequest(
+            id: id,
+            kind: T3JSON.string(object, "kind") ?? "",
+            status: T3JSON.string(object, "status") ?? "pending"
+        )
+    }
+
+    static func userInputQuestion(from value: Any) -> T3UserInputQuestion? {
+        guard let object = T3JSON.object(value),
+              let id = T3JSON.string(object, "id"),
+              let question = T3JSON.string(object, "question")
+        else { return nil }
+        let options = T3JSON.array(object["options"]).compactMap { raw -> T3UserInputOption? in
+            guard let option = T3JSON.object(raw), let label = T3JSON.string(option, "label") else { return nil }
+            return T3UserInputOption(
+                label: label,
+                description: T3JSON.string(option, "description") ?? "",
+                value: option["value"] as? String
+            )
+        }
+        return T3UserInputQuestion(
+            id: id,
+            header: T3JSON.string(object, "header") ?? "",
+            question: question,
+            options: options,
+            multiSelect: T3JSON.bool(object["multiSelect"]),
+            allowCustomAnswer: object["allowCustomAnswer"] == nil ? true : T3JSON.bool(object["allowCustomAnswer"])
+        )
     }
 
     static func messages(from json: Any) -> [Message] {
@@ -390,7 +516,12 @@ nonisolated enum T3MessageMapper {
             prompt: plainText(object["prompt"]),
             progress: plainText(object["progress"]),
             result: plainText(object["result"]),
-            childThreadID: plainText(object["childThreadId"])
+            childThreadID: plainText(object["childThreadId"]),
+            requestID: plainText(object["requestId"]),
+            requestKind: plainText(object["requestKind"]),
+            appName: plainText(object["appName"]),
+            responseMode: plainText(object["responseMode"]),
+            questions: T3JSON.array(object["questions"]).compactMap { userInputQuestion(from: $0) }
         )
     }
 

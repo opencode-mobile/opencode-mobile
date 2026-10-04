@@ -87,12 +87,43 @@ data class T3TurnItem(
     val progress: String? = null,
     val result: String? = null,
     val childThreadId: String? = null,
+    /** `approval_request` / `user_input_request` items point at the runtime request they render. */
+    val requestId: String? = null,
+    /** Provider request kind of an `approval_request` item (`command`, `file-change`, ...). */
+    val requestKind: String? = null,
+    /** App requesting access on an `mcp-elicitation` approval. */
+    val appName: String? = null,
+    /** `message` when the user may dismiss the question and answer in chat instead. */
+    val responseMode: String? = null,
+    val questions: List<T3UserInputQuestion> = emptyList(),
+)
+
+data class T3UserInputOption(
+    val label: String,
+    val description: String,
+    val value: String? = null,
+)
+
+data class T3UserInputQuestion(
+    val id: String,
+    val header: String,
+    val question: String,
+    val options: List<T3UserInputOption>,
+    val multiSelect: Boolean = false,
+    val allowCustomAnswer: Boolean = true,
+)
+
+data class T3RuntimeRequest(
+    val id: String,
+    val kind: String,
+    val status: String,
 )
 
 data class T3ThreadSnapshot(
     val messages: List<T3ConversationMessage>,
     val snapshotSequence: Long = 0,
     val turnItems: List<T3TurnItem> = emptyList(),
+    val runtimeRequests: List<T3RuntimeRequest> = emptyList(),
 )
 
 data class T3WsTicket(

@@ -67,6 +67,43 @@ object T3Json {
             messages = messages,
             snapshotSequence = obj.long("snapshotSequence") ?: projection.long("snapshotSequence") ?: 0L,
             turnItems = turnItemsOf(projection),
+            runtimeRequests = projection.array("runtimeRequests").mapNotNull(::runtimeRequest),
+        )
+    }
+
+    private fun runtimeRequest(element: JsonElement): T3RuntimeRequest? {
+        val obj = element as? JsonObject ?: return null
+        val id = obj.string("id")?.trim().orEmpty()
+        if (id.isEmpty()) return null
+        return T3RuntimeRequest(
+            id = id,
+            kind = obj.string("kind")?.trim().orEmpty(),
+            status = obj.string("status")?.trim().orEmpty().ifEmpty { "pending" },
+        )
+    }
+
+    fun userInputQuestion(element: JsonElement): T3UserInputQuestion? {
+        val obj = element as? JsonObject ?: return null
+        val id = obj.string("id")?.trim().orEmpty()
+        val question = obj.string("question")?.trim().orEmpty()
+        if (id.isEmpty() || question.isEmpty()) return null
+        return T3UserInputQuestion(
+            id = id,
+            header = obj.string("header")?.trim().orEmpty(),
+            question = question,
+            options =
+                obj.array("options").mapNotNull { option ->
+                    val optionObj = option as? JsonObject ?: return@mapNotNull null
+                    val label = optionObj.string("label")?.trim().orEmpty()
+                    if (label.isEmpty()) return@mapNotNull null
+                    T3UserInputOption(
+                        label = label,
+                        description = optionObj.string("description")?.trim().orEmpty(),
+                        value = stringValue(optionObj["value"]),
+                    )
+                },
+            multiSelect = obj.boolean("multiSelect") ?: false,
+            allowCustomAnswer = obj.boolean("allowCustomAnswer") ?: true,
         )
     }
 
@@ -115,6 +152,11 @@ object T3Json {
             progress = obj.string("progress"),
             result = obj.string("result"),
             childThreadId = obj.string("childThreadId"),
+            requestId = obj.string("requestId")?.trim()?.takeIf { it.isNotEmpty() },
+            requestKind = obj.string("requestKind")?.trim()?.takeIf { it.isNotEmpty() },
+            appName = obj.string("appName")?.trim()?.takeIf { it.isNotEmpty() },
+            responseMode = obj.string("responseMode")?.trim()?.takeIf { it.isNotEmpty() },
+            questions = obj.array("questions").mapNotNull(::userInputQuestion),
         )
     }
 

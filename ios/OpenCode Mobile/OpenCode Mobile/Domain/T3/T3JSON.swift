@@ -293,6 +293,36 @@ struct T3TurnItem: Equatable, Sendable {
     var progress: String? = nil
     var result: String? = nil
     var childThreadID: String? = nil
+    /// `approval_request` / `user_input_request` items point at the runtime request they render.
+    var requestID: String? = nil
+    /// Provider request kind of an `approval_request` item (`command`, `file-change`, ...).
+    var requestKind: String? = nil
+    /// App requesting access on an `mcp-elicitation` approval.
+    var appName: String? = nil
+    /// `message` when the user may dismiss the question and answer in chat instead.
+    var responseMode: String? = nil
+    var questions: [T3UserInputQuestion] = []
+}
+
+struct T3UserInputOption: Equatable, Sendable {
+    var label: String
+    var description: String
+    var value: String? = nil
+}
+
+struct T3UserInputQuestion: Equatable, Sendable {
+    var id: String
+    var header: String
+    var question: String
+    var options: [T3UserInputOption]
+    var multiSelect: Bool = false
+    var allowCustomAnswer: Bool = true
+}
+
+struct T3RuntimeRequest: Equatable, Sendable {
+    var id: String
+    var kind: String
+    var status: String
 }
 
 struct T3Transcript: Equatable, Sendable {
@@ -305,4 +335,5 @@ struct T3ThreadDetail: Equatable, Sendable {
     var thread: T3Thread?
     var messages: [T3ConversationMessage]
     var turnItems: [T3TurnItem] = []
+    var runtimeRequests: [T3RuntimeRequest] = []
 }

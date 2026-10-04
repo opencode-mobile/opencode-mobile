@@ -9,15 +9,88 @@ final class T3SessionRepository: SessionRepository, @unchecked Sendable {
 
     func listPendingPermissions(directory: String?) async throws -> [PermissionRequest] {
         let snapshot = try await client.fetchShell(force: true)
-        return snapshot.activeThreads
+        let waiting = snapshot.activeThreads
             .filter { T3ProjectSelection.matches($0, directory: directory, in: snapshot) }
-            .compactMap(T3ShellMapper.permissionRequest(from:))
+            .filter { T3ShellMapper.approvalID(for: $0) != nil }
+        var requests: [PermissionRequest] = []
+        for thread in waiting {
+            if let request = T3ShellMapper.permissionRequest(from: thread, turnItems: await turnItems(threadID: thread.id)) {
+                requests.append(request)
+            }
+        }
+        return requests
     }
 
     func getVcsInfo(directory _: String?) async throws -> VcsInfo {
         VcsInfo(currentBranch: nil, defaultBranch: nil)
     }
-    func listPendingQuestions(directory _: String?) async throws -> [QuestionRequest] { [] }
+
+    func listPendingQuestions(directory: String?) async throws -> [QuestionRequest] {
+        let snapshot = try await client.fetchShell(force: true)
+        let waiting = snapshot.activeThreads
+            .filter { T3ProjectSelection.matches($0, directory: directory, in: snapshot) }
+            .filter { T3ShellMapper.questionID(for: $0) != nil }
+        var requests: [QuestionRequest] = []
+        for thread in waiting {
+            if let request = T3ShellMapper.questionRequest(from: thread, turnItems: await turnItems(threadID: thread.id)) {
+                requests.append(request)
+            }
+        }
+        return requests
+    }
+
+    func replyToQuestion(questionID: String, answers: [[String]], directory: String?) async throws -> Bool {
+        try await replyToQuestion(questionID: questionID, answers: answers, directory: directory, sessionID: nil, questions: [])
+    }
+
+    func replyToQuestion(questionID: String, answers: [[String]], directory: String?, sessionID: String?) async throws -> Bool {
+        try await replyToQuestion(questionID: questionID, answers: answers, directory: directory, sessionID: sessionID, questions: [])
+    }
+
+    /// Answers the thread's pending `user_input` request. Question ids come from
+    /// the caller's `questions` when they carry field keys, else from the thread.
+    func replyToQuestion(
+        questionID: String,
+        answers: [[String]],
+        directory _: String?,
+        sessionID: String?,
+        questions: [QuestionInfo]
+    ) async throws -> Bool {
+        guard let thread = try await questionThread(sessionID: sessionID, requestID: questionID) else { return false }
+        let known: [QuestionInfo]
+        if !questions.isEmpty, questions.allSatisfy({ !($0.fieldKey ?? "").isEmpty }) {
+            known = questions
+        } else if let request = T3ShellMapper.questionRequest(from: thread, turnItems: await turnItems(threadID: thread.id)) {
+            known = request.questions
+        } else {
+            return false
+        }
+        let encoded = T3QuestionCodec.encodeAnswers(questions: known, answers: answers)
+        guard !encoded.isEmpty else { return false }
+        try await client.dispatchCommand(
+            T3QuestionCodec.userInputRespondCommand(
+                commandID: UUID().uuidString,
+                threadID: thread.id,
+                requestID: questionID,
+                answers: encoded
+            )
+        )
+        _ = try? await client.fetchShell(force: true)
+        return true
+    }
+
+    func rejectQuestion(questionID: String, directory: String?) async throws -> Bool {
+        try await rejectQuestion(questionID: questionID, directory: directory, sessionID: nil)
+    }
+
+    func rejectQuestion(questionID: String, directory _: String?, sessionID: String?) async throws -> Bool {
+        guard let thread = try await questionThread(sessionID: sessionID, requestID: questionID) else { return false }
+        try await client.dispatchCommand(
+            T3QuestionCodec.userInputDismissCommand(commandID: UUID().uuidString, threadID: thread.id, requestID: questionID)
+        )
+        _ = try? await client.fetchShell(force: true)
+        return true
+    }
 
     func listSessions(directory: String?) async throws -> [Session] {
         let snapshot = try await client.fetchShell(force: true)
@@ -164,6 +237,24 @@ final class T3SessionRepository: SessionRepository, @unchecked Sendable {
     }
 
     // MARK: - Helpers
+
+    /// The thread waiting on `requestID`; found by id, else by its pending question.
+    private func questionThread(sessionID: String?, requestID: String) async throws -> T3Thread? {
+        let snapshot = try await client.fetchShell(force: true)
+        let thread: T3Thread?
+        if let sessionID = Self.nonEmpty(sessionID) {
+            thread = snapshot.thread(id: sessionID)
+        } else {
+            thread = snapshot.threads.first { T3ShellMapper.questionID(for: $0) == requestID }
+        }
+        guard let thread, T3ShellMapper.questionID(for: thread) == requestID else { return nil }
+        return thread
+    }
+
+    /// The thread projection's turn items; a failed fetch degrades to an empty list.
+    private func turnItems(threadID: String) async -> [T3TurnItem] {
+        (try? await client.fetchThread(id: threadID))?.turnItems ?? []
+    }
 
     /// Finds the thread in the cache (unless `refresh`), then the shell, then
     /// the thread detail endpoint. Throws 404 when none of them know it.
