@@ -289,9 +289,17 @@ final class SessionChatViewModel {
         sessionInfo.archiveSession()
     }
 
-    /// Applies a runtime mode from the session menu; the chrome follows the server's answer.
+    /// Applies a runtime mode from the composer badge or session menu. Before the
+    /// thread exists the pick is held and launches the thread; afterwards the
+    /// chrome follows the server's answer.
     func selectRuntimeMode(_ mode: String) async {
-        guard sessionCapabilities.canSetRuntimeMode else { return }
+        guard sessionCapabilities.canSetRuntimeMode,
+              T3RuntimeModeLabel.allModes.contains(mode) else { return }
+        if let picker = activeHarnessPicker {
+            guard picker.selectRuntimeMode(mode, isCreated: hasCreatedSession) else { return }
+        } else if !hasCreatedSession {
+            return
+        }
         await sessionInfo.setRuntimeMode(mode)
     }
 
@@ -1254,13 +1262,15 @@ final class SessionChatViewModel {
                 let profile = activeConnectionManager.currentProfile()
                 if let picker = activeHarnessPicker {
                     let selection = await picker.selectionForNewThread()
+                    let runtimeMode = await picker.runtimeModeForNewThread()
                     let session = try await sessionRepository.createSession(
                         parentID: nil,
                         title: nil,
                         directory: worktree,
                         options: SessionCreateOptions(
                             providerInstanceID: selection?.instanceID,
-                            modelID: selection?.model
+                            modelID: selection?.model,
+                            runtimeMode: runtimeMode
                         )
                     )
                     guard !Task.isCancelled else { return }
@@ -1273,6 +1283,9 @@ final class SessionChatViewModel {
                     } ?? selection
                     if let changed = await picker.didCreateThread(sessionID: session.id, launchedWith: launched) {
                         sessionInfo.applySessionChrome(changed)
+                    }
+                    if let mode = picker.runtimeModeToApplyAfterCreate(launchedWith: session.runtimeMode ?? runtimeMode) {
+                        await sessionInfo.setRuntimeMode(mode)
                     }
                     return
                 }
@@ -1454,13 +1467,17 @@ final class SessionChatViewModel {
             threadSelection: threadModelSelection,
             hasStarted: threadHasStarted
         )
+        let runtimeMode = activeHarnessPicker?.displayedRuntimeMode(
+            threadMode: infoState.runtimeMode,
+            isCreated: hasCreatedSession
+        ) ?? infoState.runtimeMode
         var nextUiState = SessionChatUiState(
             sessionID: infoState.sessionID.isEmpty ? sessionID : infoState.sessionID,
             sessionTitle: infoState.sessionTitle.isEmpty ? sessionTitle : infoState.sessionTitle,
             capabilities: sessionCapabilities,
             providerLabel: harnessState?.harnessLabel ?? T3ProviderLabel.displayName(infoState.providerInstanceID),
-            runtimeModeLabel: T3RuntimeModeLabel.displayName(infoState.runtimeMode),
-            runtimeMode: infoState.runtimeMode,
+            runtimeModeLabel: T3RuntimeModeLabel.displayName(runtimeMode),
+            runtimeMode: runtimeMode,
             modelSelectionLabel: harnessState?.selectionLabel
                 ?? T3ProviderLabel.modelSelectionLabel(
                     instanceID: infoState.providerInstanceID,

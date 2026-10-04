@@ -19,6 +19,8 @@ enum OpenCodeSessionComposerState {
         let showRuntimeMode: Bool
         let providerLabel: String
         let runtimeModeLabel: String
+        /// The runtime-mode badge is tappable (`selectRuntimeMode`); display-only otherwise.
+        let runtimeModeEnabled: Bool
         let sendEnabled: Bool
         let attachEnabled: Bool
         let showStop: Bool
@@ -44,6 +46,7 @@ enum OpenCodeSessionComposerState {
             showRuntimeMode: Bool = false,
             providerLabel: String = "",
             runtimeModeLabel: String = "",
+            runtimeModeEnabled: Bool = false,
             sendEnabled: Bool,
             attachEnabled: Bool = true,
             showStop: Bool,
@@ -68,6 +71,7 @@ enum OpenCodeSessionComposerState {
             self.showRuntimeMode = showRuntimeMode
             self.providerLabel = providerLabel
             self.runtimeModeLabel = runtimeModeLabel
+            self.runtimeModeEnabled = runtimeModeEnabled
             self.sendEnabled = sendEnabled
             self.attachEnabled = attachEnabled
             self.showStop = showStop
@@ -223,6 +227,7 @@ enum OpenCodeSessionComposerAction {
     case selectModel
     case selectMode
     case selectVariant
+    case selectRuntimeMode
     case attach
     case openCommands
     case removeAttachment(String)
@@ -580,9 +585,9 @@ struct OpenCodeSessionComposer: View {
                     OpenCodeChoiceBadge(
                         label: prompt.runtimeModeLabel,
                         selected: false,
-                        enabled: false,
+                        enabled: prompt.runtimeModeEnabled,
                         variant: .glass,
-                        action: {}
+                        action: { onAction(.selectRuntimeMode) }
                     )
                 }
             }

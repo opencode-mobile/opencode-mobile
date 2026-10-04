@@ -313,6 +313,11 @@ struct SessionChatUiState: Equatable {
     /// Runtime modes the session menu offers (the harness's supported ones when known).
     var runtimeModeOptions: [String] = T3RuntimeModeLabel.allModes
 
+    /// The composer's runtime-mode badge opens the runtime-mode sheet; display-only otherwise.
+    var runtimeModeBadgeSelectable: Bool {
+        capabilities.canSetRuntimeMode && runtimeMode != nil
+    }
+
     /// A permission, question, or Screen Model-owned sheet or dialog would sit under the intro sheet.
     var blocksChipTimelineIntro: Bool {
         permissionRequest != nil

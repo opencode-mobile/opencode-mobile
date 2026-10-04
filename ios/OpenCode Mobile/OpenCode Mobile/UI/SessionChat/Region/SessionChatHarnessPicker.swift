@@ -17,6 +17,10 @@ final class SessionChatHarnessPicker {
     private(set) var pendingSelection: T3ModelSelection?
     private(set) var isApplying = false
     private(set) var rememberedSelection: T3ModelSelection?
+    /// Runtime mode picked before the thread exists (or while it is being created).
+    private(set) var pendingRuntimeMode: String?
+    /// Runtime mode last chosen for a new thread on this profile + worktree.
+    private(set) var rememberedRuntimeMode: String?
 
     private let worktree: String
     private let repository: any T3HarnessRepository
@@ -93,9 +97,49 @@ final class SessionChatHarnessPicker {
             return
         }
         let stored = await store.loadNewSessionPreference(connectionIdentity: identity, worktree: worktree)
+        let storedMode = await store.loadNewSessionRuntimeMode(connectionIdentity: identity, worktree: worktree)
         preferenceLoaded = true
         rememberedSelection = stored.map { T3ModelSelection(instanceID: $0.providerID, model: $0.modelID) }
+        rememberedRuntimeMode = storedMode.flatMap { T3RuntimeModeLabel.allModes.contains($0) ? $0 : nil }
         notifyChange()
+    }
+
+    /// The runtime mode a new thread launches with: the user's pick, else the
+    /// remembered one, else the contract default.
+    func runtimeModeForNewThread() async -> String {
+        if let pendingRuntimeMode { return pendingRuntimeMode }
+        if !preferenceLoaded { await loadRememberedSelection() }
+        return rememberedRuntimeMode ?? T3RuntimeModeLabel.defaultMode
+    }
+
+    /// The mode the composer badge and sheet show: a pending pick first, then
+    /// the thread's own mode, then (before creation) the new-thread default.
+    func displayedRuntimeMode(threadMode: String?, isCreated: Bool) -> String? {
+        if let pendingRuntimeMode { return pendingRuntimeMode }
+        if let threadMode, !threadMode.isEmpty { return threadMode }
+        return isCreated ? nil : rememberedRuntimeMode ?? T3RuntimeModeLabel.defaultMode
+    }
+
+    /// Records a runtime-mode pick as the new-thread default. Before the thread
+    /// exists it becomes the creation input; returns whether the caller still
+    /// has to apply it on the server.
+    func selectRuntimeMode(_ mode: String, isCreated: Bool) -> Bool {
+        rememberRuntimeMode(mode)
+        guard isCreated else {
+            pendingRuntimeMode = mode
+            notifyChange()
+            return false
+        }
+        return true
+    }
+
+    /// After launch: the pending mode the launch did not carry; nil when the
+    /// thread already runs with it. Clears the pending pick either way.
+    func runtimeModeToApplyAfterCreate(launchedWith: String?) -> String? {
+        guard let pending = pendingRuntimeMode else { return nil }
+        pendingRuntimeMode = nil
+        notifyChange()
+        return pending == launchedWith ? nil : pending
     }
 
     /// The selection a new thread launches with: the user's pick, else the
@@ -255,6 +299,16 @@ final class SessionChatHarnessPicker {
         let store = store
         Task {
             await store.saveNewSessionPreference(connectionIdentity: identity, worktree: worktree, selection: stored)
+        }
+    }
+
+    private func rememberRuntimeMode(_ mode: String) {
+        rememberedRuntimeMode = mode
+        guard let identity = currentIdentity() else { return }
+        let worktree = worktree
+        let store = store
+        Task {
+            await store.saveNewSessionRuntimeMode(connectionIdentity: identity, worktree: worktree, runtimeMode: mode)
         }
     }
 

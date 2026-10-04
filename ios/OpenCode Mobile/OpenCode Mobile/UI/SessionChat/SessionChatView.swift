@@ -1085,7 +1085,8 @@ struct SessionChatView: View {
                 OpenCodeOverflowMenuEntry(
                     title: viewModel.uiState.runtimeModeLabel.map { "Runtime mode · \($0)" } ?? "Runtime mode",
                     icon: .architecture,
-                    enabled: lifecycleEnabled,
+                    // A not-yet-created thread takes the pick as its launch mode.
+                    enabled: !viewModel.uiState.isLifecycleActionInFlight,
                     action: {
                         menuExpanded = false
                         showRuntimeModePicker = true
@@ -1236,6 +1237,7 @@ struct SessionChatView: View {
                     showRuntimeMode: capabilities.showsRuntimeMode,
                     providerLabel: viewModel.uiState.providerLabel ?? "",
                     runtimeModeLabel: viewModel.uiState.runtimeModeLabel ?? "",
+                    runtimeModeEnabled: viewModel.uiState.runtimeModeBadgeSelectable,
                     sendEnabled:
                         composer.hasSendableContent &&
                         modelReady &&
@@ -1316,6 +1318,9 @@ struct SessionChatView: View {
                 case .selectVariant:
                     logChatAction(ProductAnalytics.Action.composerOpenVariantPicker)
                     activePicker = .variant
+                case .selectRuntimeMode:
+                    guard viewModel.uiState.runtimeModeBadgeSelectable else { return }
+                    showRuntimeModePicker = true
                 case .attach:
                     logChatAction(ProductAnalytics.Action.composerAttach)
                     let sources = composerAttachmentSources

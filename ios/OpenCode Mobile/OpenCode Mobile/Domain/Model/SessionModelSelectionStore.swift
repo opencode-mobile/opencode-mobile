@@ -43,6 +43,16 @@ protocol SessionModelSelectionStore: Sendable {
         worktree: String,
         selection: SessionModelSelection
     ) async
+    /// T3 runtime mode the user last chose for a new thread on this profile + worktree.
+    func loadNewSessionRuntimeMode(
+        connectionIdentity: ModelSelectionConnectionIdentity,
+        worktree: String
+    ) async -> String?
+    func saveNewSessionRuntimeMode(
+        connectionIdentity: ModelSelectionConnectionIdentity,
+        worktree: String,
+        runtimeMode: String
+    ) async
     func clearAll() async
     /// Synchronous reads for a Session Chat's first frame; `nil` when the store only loads asynchronously.
     func peekSession(
@@ -71,6 +81,22 @@ extension SessionModelSelectionStore {
     ) -> SessionModelSelection? {
         nil
     }
+}
+
+extension SessionModelSelectionStore {
+    /// Stores without T3 runtime-mode memory start every new thread on the default mode.
+    func loadNewSessionRuntimeMode(
+        connectionIdentity _: ModelSelectionConnectionIdentity,
+        worktree _: String
+    ) async -> String? {
+        nil
+    }
+
+    func saveNewSessionRuntimeMode(
+        connectionIdentity _: ModelSelectionConnectionIdentity,
+        worktree _: String,
+        runtimeMode _: String
+    ) async {}
 }
 
 struct UserDefaultsSessionModelSelectionStore: SessionModelSelectionStore, @unchecked Sendable {
@@ -170,6 +196,22 @@ struct UserDefaultsSessionModelSelectionStore: SessionModelSelectionStore, @unch
         saveIfNewer(withTimestamp(selection), key: preferenceKey(connectionIdentity, worktree: worktree))
     }
 
+    func loadNewSessionRuntimeMode(
+        connectionIdentity: ModelSelectionConnectionIdentity,
+        worktree: String
+    ) async -> String? {
+        let stored = defaults.string(forKey: runtimeModeKey(connectionIdentity, worktree: worktree))
+        return stored.flatMap { $0.isEmpty ? nil : $0 }
+    }
+
+    func saveNewSessionRuntimeMode(
+        connectionIdentity: ModelSelectionConnectionIdentity,
+        worktree: String,
+        runtimeMode: String
+    ) async {
+        defaults.set(runtimeMode, forKey: runtimeModeKey(connectionIdentity, worktree: worktree))
+    }
+
     func clearAll() async {
         let keys = defaults.dictionaryRepresentation().keys.filter {
             $0.hasPrefix(prefix) || $0.hasPrefix(Self.versionPrefix)
@@ -207,6 +249,10 @@ struct UserDefaultsSessionModelSelectionStore: SessionModelSelectionStore, @unch
 
     private func preferenceKey(_ identity: ModelSelectionConnectionIdentity, worktree: String) -> String {
         preferencePrefix(identity) + encoded(worktree)
+    }
+
+    private func runtimeModeKey(_ identity: ModelSelectionConnectionIdentity, worktree: String) -> String {
+        "\(Self.versionPrefix)|runtimeMode|\(identityKey(identity))|" + encoded(worktree)
     }
 
     private func sessionPrefix(_ identity: ModelSelectionConnectionIdentity) -> String {
