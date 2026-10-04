@@ -18,9 +18,13 @@ class T3ProjectRepository
         override suspend fun probeServer() {
             val snapshot = runtime.refreshShell()
             val profile = activeConnectionManager.currentProfile() ?: return
-            val worktrees = snapshot.projects.map { it.workspaceRoot }.filter { it.isNotBlank() }
-            if (worktrees.isNotEmpty()) {
-                connectionProfileStore.setAddedWorktrees(profile.baseUrl, worktrees)
+            val roots = snapshot.projects.map { it.workspaceRoot }.filter { it.isNotBlank() }
+            if (roots.isEmpty()) return
+            // Project roots join the user's own worktrees; they never replace them.
+            val existing = connectionProfileStore.addedWorktrees(profile.baseUrl)
+            val merged = (existing + roots).distinct()
+            if (merged != existing) {
+                connectionProfileStore.setAddedWorktrees(profile.baseUrl, merged)
             }
         }
 

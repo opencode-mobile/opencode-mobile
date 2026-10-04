@@ -203,7 +203,7 @@ object T3Json {
         return id
     }
 
-    private fun project(element: JsonElement): T3Project? {
+    fun project(element: JsonElement): T3Project? {
         val obj = element as? JsonObject ?: return null
         val id = obj.string("id")?.trim().orEmpty()
         if (id.isEmpty()) return null

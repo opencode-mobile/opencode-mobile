@@ -48,6 +48,7 @@ sealed interface T3RpcFrame {
 object T3RpcCodec {
     const val DISPATCH_COMMAND = "orchestration.dispatchCommand"
     const val SUBSCRIBE_THREAD = "orchestration.subscribeThread"
+    const val SUBSCRIBE_SHELL = "orchestration.subscribeShell"
     const val LAUNCH_THREAD = "orchestration.launchThread"
 
     fun encodeRequest(

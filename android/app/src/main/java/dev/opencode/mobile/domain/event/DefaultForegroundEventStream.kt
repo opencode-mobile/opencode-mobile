@@ -12,6 +12,8 @@ import dev.opencode.mobile.domain.connection.ReadyDeviceNetworkPath
 import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogger
+import dev.opencode.mobile.domain.t3.NoopT3LiveSession
+import dev.opencode.mobile.domain.t3.T3LiveSession
 import dev.opencode.mobile.domain.message.ConnectionEpoch
 import dev.opencode.mobile.network.ActiveConnectionManager
 import kotlinx.coroutines.CancellationException
@@ -60,6 +62,8 @@ class DefaultForegroundEventStream
         private val activeConnectionManager: ActiveConnectionManager,
         private val connectionProfileStore: ConnectionProfileStore,
         private val deviceNetworkPath: DeviceNetworkPath = ReadyDeviceNetworkPath,
+        /** Lazy breaks the T3Runtime -> ForegroundEventStream -> T3LiveSession cycle. */
+        private val t3LiveSession: dagger.Lazy<T3LiveSession> = dagger.Lazy { NoopT3LiveSession },
     ) : LiveConnection {
         internal constructor(
             eventsApi: EventsApi,
@@ -133,6 +137,7 @@ class DefaultForegroundEventStream
         override fun start() {
             if (activeConnectionManager.currentProfile()?.engine == ConnectionEngine.T3) {
                 diagnosticLogger.info(DiagnosticLogArea.Sse, "foreground SSE skipped; T3 websocket owns liveness")
+                t3LiveSession.get().start()
                 return
             }
             var overlappingJob: Job? = null
@@ -246,6 +251,8 @@ class DefaultForegroundEventStream
 
         override suspend fun stop() {
             diagnosticLogger.info(DiagnosticLogArea.Sse, "foreground SSE stream stopping")
+            // Always: the profile may already have switched away from T3.
+            t3LiveSession.get().stop()
             val generation: Long
             val snapshot: LiveConnectionSnapshot
             val occupancyToJoin: Job?

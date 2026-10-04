@@ -127,13 +127,21 @@ object T3Commands {
             PermissionDecision.Deny -> "decline"
         }
 
+    /** A null [afterSequence] asks the server for a full snapshot before live events. */
     fun subscribeThread(
         threadId: String,
-        afterSequence: Long,
+        afterSequence: Long?,
     ): JsonObject =
         buildJsonObject {
             put("threadId", threadId)
-            put("afterSequence", afterSequence)
+            if (afterSequence != null) put("afterSequence", afterSequence)
+            put("requestCompletionMarker", true)
+        }
+
+    /** A null [afterSequence] asks the server for a full shell snapshot before live events. */
+    fun subscribeShell(afterSequence: Long?): JsonObject =
+        buildJsonObject {
+            if (afterSequence != null) put("afterSequence", afterSequence)
             put("requestCompletionMarker", true)
         }
 

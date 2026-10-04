@@ -1,13 +1,12 @@
 package dev.opencode.mobile.domain.t3
 
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.channels.BufferOverflow
-import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import okhttp3.OkHttpClient
@@ -27,10 +26,32 @@ enum class T3SocketState {
     Connected,
 }
 
+/** Transport seam for [T3Runtime]; [T3WebSocket] is the OkHttp implementation. */
+interface T3Socket {
+    /** Lossless, in-order delivery of every parsed frame from the current socket. */
+    val frames: Flow<T3RpcFrame>
+    val state: StateFlow<T3SocketState>
+
+    fun connect(url: String)
+
+    suspend fun request(
+        tag: String,
+        payload: JsonObject,
+    ): JsonElement
+
+    /** Sends a streaming request and returns its id; chunks arrive on [frames]. */
+    fun sendSubscribe(
+        tag: String,
+        payload: JsonObject,
+    ): String
+
+    fun disconnect()
+}
+
 @Singleton
 class T3WebSocket
     @Inject
-    constructor() {
+    constructor() : T3Socket {
         private val client =
             OkHttpClient
                 .Builder()
@@ -39,11 +60,13 @@ class T3WebSocket
                 .build()
 
         private val pending = ConcurrentHashMap<String, CompletableDeferred<JsonElement>>()
-        private val _frames = MutableSharedFlow<T3RpcFrame>(extraBufferCapacity = 64, onBufferOverflow = BufferOverflow.DROP_OLDEST)
-        val frames: SharedFlow<T3RpcFrame> = _frames.asSharedFlow()
+
+        /** Unbounded so a chunk is never dropped between ack and delivery. */
+        private val frameChannel = Channel<T3RpcFrame>(Channel.UNLIMITED)
+        override val frames: Flow<T3RpcFrame> = frameChannel.receiveAsFlow()
 
         private val _state = MutableStateFlow(T3SocketState.Disconnected)
-        val state: StateFlow<T3SocketState> = _state.asStateFlow()
+        override val state: StateFlow<T3SocketState> = _state.asStateFlow()
 
         @Volatile
         private var socket: WebSocket? = null
@@ -52,12 +75,11 @@ class T3WebSocket
         private var generation = 0
 
         @Synchronized
-        fun connect(url: String) {
+        override fun connect(url: String) {
             generation += 1
             val id = generation
             socket?.cancel()
-            pending.values.forEach { it.cancel() }
-            pending.clear()
+            failPending("T3 websocket replaced")
             _state.value = T3SocketState.Connecting
             val request = Request.Builder().url(url).build()
             socket =
@@ -103,7 +125,7 @@ class T3WebSocket
                 )
         }
 
-        suspend fun request(
+        override suspend fun request(
             tag: String,
             payload: JsonObject,
         ): JsonElement {
@@ -122,7 +144,7 @@ class T3WebSocket
             }
         }
 
-        fun sendSubscribe(
+        override fun sendSubscribe(
             tag: String,
             payload: JsonObject,
         ): String {
@@ -132,7 +154,8 @@ class T3WebSocket
             return id
         }
 
-        fun disconnect() {
+        @Synchronized
+        override fun disconnect() {
             generation += 1
             socket?.close(1000, null)
             socket = null
@@ -150,18 +173,20 @@ class T3WebSocket
             when (frame) {
                 is T3RpcFrame.Ping -> webSocket.send(T3RpcCodec.encodePong())
                 is T3RpcFrame.Chunk -> {
+                    // Queue first, then ack: the unbounded channel never rejects, so
+                    // the server only sees an ack for a chunk we hold.
+                    frameChannel.trySend(frame)
                     webSocket.send(T3RpcCodec.encodeAck(frame.requestId))
-                    _frames.tryEmit(frame)
                 }
                 is T3RpcFrame.ExitSuccess -> {
                     pending.remove(frame.requestId)?.complete(frame.value)
-                    _frames.tryEmit(frame)
+                    frameChannel.trySend(frame)
                 }
                 is T3RpcFrame.ExitFailure -> {
                     pending.remove(frame.requestId)?.completeExceptionally(T3RpcException(frame.cause.toString()))
-                    _frames.tryEmit(frame)
+                    frameChannel.trySend(frame)
                 }
-                else -> _frames.tryEmit(frame)
+                else -> frameChannel.trySend(frame)
             }
         }
 

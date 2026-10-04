@@ -9,7 +9,9 @@ import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.PromptSendOptions
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.transform
 import javax.inject.Inject
@@ -26,11 +28,15 @@ class T3MessageRepository
             sessionId: String,
             directory: String?,
         ): Flow<MessageListUpdate> =
-            runtime.messageLists
-                .map { lists -> lists[sessionId].orEmpty() }
-                .distinctUntilChanged()
-                .map<List<Message>, MessageListUpdate> { messages -> MessageListUpdate.Messages(messages) }
-                .onStart {
+            merge(
+                runtime.messageLists
+                    .map { lists -> lists[sessionId].orEmpty() }
+                    .distinctUntilChanged()
+                    .map<List<Message>, MessageListUpdate> { messages -> MessageListUpdate.Messages(messages) },
+                runtime.threadFailures
+                    .filter { failure -> failure.threadId == sessionId }
+                    .map<T3ThreadFailure, MessageListUpdate> { failure -> MessageListUpdate.LoadFailed(failure.error) },
+            ).onStart {
                     val loaded = runCatching { runtime.loadThreadMessages(sessionId) }.getOrElse { error ->
                         emit(MessageListUpdate.LoadFailed(error))
                         return@onStart
