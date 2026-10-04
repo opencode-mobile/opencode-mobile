@@ -233,6 +233,8 @@ data class SessionChatUiState(
     val modelSelectionLabel: String? = null,
     /** Runtime modes the session's provider accepts, in picker order. */
     val runtimeModeOptions: List<String> = emptyList(),
+    /** The composer's runtime-mode badge opens the runtime-mode picker (engines that can set it). */
+    val runtimeModeSelectable: Boolean = false,
     /** Why the picker cannot change a started session's model; null when it can. */
     val modelChangeLock: ModelChangeLock? = null,
     /** Smart project label for top-bar chrome; null when worktree missing. */

@@ -13,6 +13,7 @@ import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.connection.ConnectionEngine
 import dev.opencode.mobile.domain.engine.SessionCapabilities
+import dev.opencode.mobile.domain.t3.T3Commands
 import dev.opencode.mobile.domain.t3.T3ProviderLabels
 import dev.opencode.mobile.domain.t3.T3RuntimeModeLabels
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
@@ -38,6 +39,7 @@ import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.model.ModelCatalogStore
 import dev.opencode.mobile.domain.model.ModelChangeLock
 import dev.opencode.mobile.domain.model.ModelRepository
+import dev.opencode.mobile.domain.model.ModelSelectionConnectionIdentity
 import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.model.NewSessionModelSelectionResolver
 import dev.opencode.mobile.domain.model.SessionModelSelection
@@ -102,7 +104,7 @@ class SessionChatViewModel
         foregroundEventStream: ForegroundEventStream,
         eventDomainAdapter: EventDomainAdapter,
         connectionSessionCoordinator: ConnectionSessionCoordinator,
-        sessionModelSelectionStore: SessionModelSelectionStore,
+        private val sessionModelSelectionStore: SessionModelSelectionStore,
         composerDraftStore: ComposerDraftStore,
         newSessionModelSelectionResolver: NewSessionModelSelectionResolver,
         private val connectionProfileStore: ConnectionProfileStore,
@@ -203,6 +205,9 @@ class SessionChatViewModel
         private var providerLabel: String? = null
         private var runtimeModeLabel: String? = null
         private var runtimeMode: String? = null
+
+        /** Runtime mode the user picked on a not-yet-created thread; launched with the thread. */
+        private var pendingRuntimeMode: String? = null
         private var modelSelectionLabel: String? = null
 
         /** The provider and model the server records on the session (T3). */
@@ -409,6 +414,7 @@ class SessionChatViewModel
             boundSessionTitle = sessionTitle
             boundWorktree = worktree
             applyCapabilities()
+            if (capabilities.canSetRuntimeMode) applyRuntimeModeChrome(T3Commands.DEFAULT_RUNTIME_MODE)
             lastSnackbarKey = null
             suppressedSnackbarKey = null
             snackbarSequence = 0L
@@ -428,6 +434,9 @@ class SessionChatViewModel
                         projectLetter = projectLetter,
                         projectLetterAccent = projectLetterAccent,
                         capabilities = capabilities,
+                        runtimeModeLabel = runtimeModeLabel,
+                        runtimeMode = runtimeMode,
+                        runtimeModeSelectable = isRuntimeModeSelectable(),
                     )
             scheduleProjectIdentityRefine(worktree)
             timeline.bindCreating(worktree)
@@ -438,11 +447,13 @@ class SessionChatViewModel
             commands.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, worktree)
             optimisticCreateJob =
                 viewModelScope.launch {
+                    applyRememberedRuntimeMode(worktree)
+                    val launchRuntimeMode = runtimeMode.takeIf { capabilities.canSetRuntimeMode }
                     runCatching {
                         withContext(ioDispatcher) {
                             val profile = connectionSessionCoordinator.currentProfile()
                             if (capabilities.choosesModelAtCreate) {
-                                return@withContext createWithModelSelection(profile, worktree)
+                                return@withContext createWithModelSelection(profile, worktree, launchRuntimeMode)
                             }
                             val session = sessionRepository.createSession(directory = worktree)
                             if (capabilities.requiresComposerModel) {
@@ -455,7 +466,11 @@ class SessionChatViewModel
                         }
                     }.onSuccess { session ->
                         logI("optimistic create success id=${session.id}")
+                        val chosenWhileCreating = pendingRuntimeMode?.takeIf { it != launchRuntimeMode }
+                        pendingRuntimeMode = null
                         promoteOptimisticSession(session.id, session.title, worktree)
+                        // A mode picked after the launch request left goes through the server round trip.
+                        chosenWhileCreating?.let(::applyRuntimeModeOnServer)
                     }.onFailure { error ->
                         if (error is CancellationException) throw error
                         logI("optimistic create failed error=${error.message}")
@@ -472,6 +487,7 @@ class SessionChatViewModel
         private suspend fun createWithModelSelection(
             profile: dev.opencode.mobile.domain.connection.ConnectionProfile?,
             worktree: String,
+            runtimeMode: String?,
         ): Session {
             val selection = profile?.let { newSessionModelSelectionResolver.resolve(it, worktree) }
             val session =
@@ -483,6 +499,7 @@ class SessionChatViewModel
                         SessionCreateOptions(
                             providerId = selection?.providerId,
                             modelId = selection?.modelId,
+                            runtimeMode = runtimeMode,
                         ),
                 )
             val providerId = session.providerInstanceId ?: selection?.providerId
@@ -601,14 +618,67 @@ class SessionChatViewModel
             sessionInfo.settleSession()
         }
 
-        /** Applies a runtime mode from the session menu and refreshes the chrome labels. */
+        /**
+         * Applies a runtime mode from the composer badge or session menu. A not-yet-created
+         * thread keeps it locally and launches with it; a created one goes to the server.
+         * Either way it becomes the remembered default for new threads in this worktree.
+         */
         fun selectRuntimeMode(mode: String) {
-            if (!hasCreatedSession() || !capabilities.canSetRuntimeMode) return
+            if (boundSessionId == null || !capabilities.canSetRuntimeMode) return
+            if (mode !in T3RuntimeModeLabels.allModes) return
+            if (!hasCreatedSession()) {
+                pendingRuntimeMode = mode
+                applyRuntimeModeChrome(mode)
+                rememberRuntimeMode(mode)
+                publishUiState()
+                return
+            }
             if (mode == runtimeMode) return
+            applyRuntimeModeOnServer(mode)
+        }
+
+        private fun applyRuntimeModeOnServer(mode: String) {
             sessionInfo.setRuntimeMode(mode) { session ->
                 if (boundSessionId != session.id) return@setRuntimeMode
                 applySessionChrome(session)
+                session.runtimeMode?.takeIf { it.isNotBlank() }?.let(::rememberRuntimeMode)
                 publishUiState()
+            }
+        }
+
+        private fun applyRuntimeModeChrome(mode: String) {
+            runtimeMode = mode
+            runtimeModeLabel = T3RuntimeModeLabels.displayName(mode).takeIf { it.isNotBlank() }
+        }
+
+        private fun isRuntimeModeSelectable(): Boolean = capabilities.canSetRuntimeMode && !runtimeModeLabel.isNullOrBlank()
+
+        private fun runtimeModeIdentity(): ModelSelectionConnectionIdentity? =
+            connectionSessionCoordinator.currentProfile()?.let { ModelSelectionConnectionIdentity(it.baseUrl, it.username) }
+
+        /** Pre-fills a new thread's mode with the last one chosen for this profile and worktree. */
+        private suspend fun applyRememberedRuntimeMode(worktree: String) {
+            if (!capabilities.canSetRuntimeMode) return
+            val identity = runtimeModeIdentity() ?: return
+            val remembered =
+                withContext(ioDispatcher) {
+                    runCatching { sessionModelSelectionStore.loadNewSessionRuntimeMode(identity, worktree) }
+                        .onFailure { logI("load remembered runtime mode failed error=${it.message}") }
+                        .getOrNull()
+                }?.takeIf { it in T3RuntimeModeLabels.allModes } ?: return
+            if (pendingRuntimeMode != null || hasCreatedSession() || boundWorktree != worktree) return
+            applyRuntimeModeChrome(remembered)
+            publishUiState()
+        }
+
+        private fun rememberRuntimeMode(mode: String) {
+            val worktree = boundWorktree ?: return
+            val identity = runtimeModeIdentity() ?: return
+            viewModelScope.launch {
+                withContext(ioDispatcher) {
+                    runCatching { sessionModelSelectionStore.saveNewSessionRuntimeMode(identity, worktree, mode) }
+                        .onFailure { logI("save remembered runtime mode failed error=${it.message}") }
+                }
             }
         }
 
@@ -1394,6 +1464,7 @@ class SessionChatViewModel
             capabilities = SessionCapabilities.forProfile(profile)
             composer.capabilities = capabilities
             commands.capabilities = capabilities
+            pendingRuntimeMode = null
             sessionProviderId = null
             sessionModelId = null
             if (profile?.engine == ConnectionEngine.T3) {
@@ -1435,8 +1506,14 @@ class SessionChatViewModel
 
         private fun runtimeModeOptions(composerState: SessionChatComposerRegionState): List<String> {
             if (!capabilities.canSetRuntimeMode) return emptyList()
-            val supported =
+            // A not-yet-created thread offers the modes of the harness it will launch on.
+            val providerId =
                 sessionProviderId
+                    ?: composerState.composer.selectedModel
+                        ?.option
+                        ?.providerId
+            val supported =
+                providerId
                     ?.let { composerState.composer.modelProviderTraits[it] }
                     ?.supportedRuntimeModes
                     ?.filter { it in T3RuntimeModeLabels.allModes }
@@ -1765,6 +1842,7 @@ class SessionChatViewModel
                 runtimeMode = runtimeMode,
                 modelSelectionLabel = chromeLabels.second,
                 runtimeModeOptions = runtimeModeOptions(composerState),
+                runtimeModeSelectable = isRuntimeModeSelectable(),
                 modelChangeLock = currentModelChangeLock(),
                 projectLabel = projectLabel,
                 projectLetter = projectLetter,

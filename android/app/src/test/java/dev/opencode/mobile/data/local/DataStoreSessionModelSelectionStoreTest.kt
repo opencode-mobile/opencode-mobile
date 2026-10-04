@@ -37,6 +37,22 @@ class DataStoreSessionModelSelectionStoreTest {
         }
 
     @Test
+    fun newSessionRuntimeModeIsScopedToIdentityAndWorktreeAndKeepsModelPreference() =
+        runTest {
+            val store = store(backgroundScope)
+            val alice = identity("alice")
+            store.saveNewSessionPreference(alice, "/repo", selection("gpt-4", timestamp = 2_000))
+
+            store.saveNewSessionRuntimeMode(alice, "/repo", "auto-accept-edits")
+            store.saveNewSessionRuntimeMode(alice, "/repo", "full-access")
+
+            assertEquals("full-access", store.loadNewSessionRuntimeMode(alice, "/repo"))
+            assertNull(store.loadNewSessionRuntimeMode(identity("bob"), "/repo"))
+            assertNull(store.loadNewSessionRuntimeMode(alice, "/other"))
+            assertEquals("gpt-4", store.loadNewSessionPreference(alice, "/repo")?.modelId)
+        }
+
+    @Test
     fun saveAndLoad_roundTripsAgentId() =
         runTest {
             val store = store(backgroundScope)

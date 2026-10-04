@@ -97,6 +97,8 @@ sealed interface OpenCodeSessionComposerState {
         val showModel: Boolean = true,
         val providerLabel: String? = null,
         val runtimeModeLabel: String? = null,
+        /** When true the runtime-mode badge is a control that emits [OpenCodeSessionComposerAction.SelectRuntimeMode]. */
+        val runtimeModeSelectable: Boolean = false,
         val sendEnabled: Boolean,
         val attachEnabled: Boolean = true,
         val showStop: Boolean,
@@ -175,6 +177,8 @@ sealed interface OpenCodeSessionComposerAction {
     data object SelectMode : OpenCodeSessionComposerAction
 
     data object SelectVariant : OpenCodeSessionComposerAction
+
+    data object SelectRuntimeMode : OpenCodeSessionComposerAction
 
     data object Attach : OpenCodeSessionComposerAction
 
@@ -831,8 +835,8 @@ private fun PickerChipsRow(
                     OpenCodeChoiceBadge(
                         label = label,
                         selected = false,
-                        enabled = false,
-                        onClick = {},
+                        enabled = state.runtimeModeSelectable,
+                        onClick = { onAction(OpenCodeSessionComposerAction.SelectRuntimeMode) },
                         variant = OpenCodeChoiceBadgeVariant.Glass,
                     )
                 }

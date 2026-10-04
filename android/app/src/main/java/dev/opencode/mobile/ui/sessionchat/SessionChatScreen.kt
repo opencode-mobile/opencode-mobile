@@ -198,6 +198,8 @@ fun SessionChatScreen(
         }
     val sessionCreated = !OptimisticSessionCreate.isPlaceholder(uiState.sessionId)
     val lifecycleActionsEnabled = sessionCreated && !uiState.isLifecycleActionInFlight
+    // A not-yet-created thread keeps the choice locally and launches with it.
+    val runtimeModePickerEnabled = !uiState.isLifecycleActionInFlight
     var showAttachmentSource by rememberSaveable { mutableStateOf(false) }
 
     val blocksSessionTodosSheet = uiState.permissionRequest != null || uiState.questionRequest != null
@@ -595,7 +597,7 @@ fun SessionChatScreen(
                                 OpenCodeOverflowMenuEntry(
                                     title = uiState.runtimeModeLabel?.let { "Runtime mode · $it" } ?: "Runtime mode",
                                     icon = OpenCodeIcons.Architecture,
-                                    enabled = lifecycleActionsEnabled,
+                                    enabled = runtimeModePickerEnabled,
                                     onClick = {
                                         menuExpanded = false
                                         showRuntimeModePicker = true
@@ -1003,6 +1005,7 @@ fun SessionChatScreen(
                                             },
                                         runtimeModeLabel =
                                             uiState.runtimeModeLabel.takeIf { uiState.capabilities.showsRuntimeMode },
+                                        runtimeModeSelectable = uiState.runtimeModeSelectable,
                                         sendEnabled =
                                             uiState.composer.canSend &&
                                                 (
@@ -1073,6 +1076,9 @@ fun SessionChatScreen(
                                     OpenCodeSessionComposerAction.SelectMode -> {
                                         logChatAction(ProductAnalytics.Action.COMPOSER_OPEN_MODE_PICKER)
                                         activePicker = ComposerPickerKind.Mode
+                                    }
+                                    OpenCodeSessionComposerAction.SelectRuntimeMode -> {
+                                        if (uiState.runtimeModeSelectable) showRuntimeModePicker = true
                                     }
                                     OpenCodeSessionComposerAction.SelectVariant -> {
                                         logChatAction(ProductAnalytics.Action.COMPOSER_OPEN_VARIANT_PICKER)
@@ -1327,7 +1333,7 @@ fun SessionChatScreen(
             uiState.runtimeModeOptions.ifEmpty { T3RuntimeModeLabels.allModes }.forEach { mode ->
                 OpenCodeBottomSheetEntry(
                     title = T3RuntimeModeLabels.displayName(mode),
-                    enabled = lifecycleActionsEnabled,
+                    enabled = runtimeModePickerEnabled,
                     endDecorator =
                         if (mode == uiState.runtimeMode) {
                             BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check, "Selected")

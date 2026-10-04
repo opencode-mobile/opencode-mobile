@@ -65,6 +65,7 @@ import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionRevert
 import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.domain.sync.testSyncCoordinator
+import dev.opencode.mobile.domain.t3.T3RuntimeModeLabels
 import dev.opencode.mobile.markdown.OpenCodeBundledJoniMarkdownHighlighter
 import dev.opencode.mobile.markdown.OpenCodeMarkdownDetector
 import dev.opencode.mobile.markdown.OpenCodeMarkdownParser
@@ -5764,6 +5765,154 @@ class SessionChatViewModelTest {
             assertNull(viewModel.uiState.value.modelChangeLock)
         }
 
+    private val t3Identity = ModelSelectionConnectionIdentity(t3ChatProfile.baseUrl, t3ChatProfile.username)
+
+    private fun t3NewThreadRepository() =
+        FakeSessionRepository(
+            createSessionResult =
+                Session(
+                    id = "ses-new",
+                    title = "New thread",
+                    directory = "/repo",
+                    providerInstanceId = "claude-1",
+                    modelId = "claude-opus-4",
+                    runtimeMode = "full-access",
+                ),
+        )
+
+    @Test
+    fun t3NewThread_runtimeModeChosenBeforeCreateUpdatesBadgeAndLaunchesWithIt() =
+        runTest(testDispatcher) {
+            val store = FakeSessionModelSelectionStore()
+            val sessionRepository = t3NewThreadRepository()
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(messages = emptyList()),
+                    modelRepository = FakeModelRepository(t3Catalog(requiresNewThread = false)),
+                    sessionModelSelectionStore = store,
+                    sessionRepository = sessionRepository,
+                    connectionProfileStore = FakeConnectionProfileStore(active = t3ChatProfile),
+                )
+
+            viewModel.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, "New Session", "/repo")
+            assertEquals("approval-required", viewModel.uiState.value.runtimeMode)
+            assertEquals("Supervised", viewModel.uiState.value.runtimeModeLabel)
+            assertTrue(viewModel.uiState.value.runtimeModeSelectable)
+
+            viewModel.selectRuntimeMode("full-access")
+            assertEquals("full-access", viewModel.uiState.value.runtimeMode)
+            assertEquals("Full access", viewModel.uiState.value.runtimeModeLabel)
+            advanceUntilIdle()
+
+            assertEquals("ses-new", viewModel.uiState.value.sessionId)
+            assertEquals("full-access", sessionRepository.createSessionOptions?.runtimeMode)
+            assertTrue("launch carries the mode; no extra round trip", sessionRepository.runtimeModeRequests.isEmpty())
+            assertEquals("full-access", store.runtimeModes["${t3Identity.serverBaseUrl}|${t3Identity.username}|/repo"])
+        }
+
+    @Test
+    fun t3NewThread_rememberedRuntimeModePrefillsAndLaunches() =
+        runTest(testDispatcher) {
+            val store = FakeSessionModelSelectionStore()
+            store.saveNewSessionRuntimeMode(t3Identity, "/repo", "auto-accept-edits")
+            val sessionRepository = t3NewThreadRepository()
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(messages = emptyList()),
+                    modelRepository = FakeModelRepository(t3Catalog(requiresNewThread = false)),
+                    sessionModelSelectionStore = store,
+                    sessionRepository = sessionRepository,
+                    connectionProfileStore = FakeConnectionProfileStore(active = t3ChatProfile),
+                )
+
+            viewModel.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, "New Session", "/repo")
+            advanceUntilIdle()
+
+            assertEquals("auto-accept-edits", sessionRepository.createSessionOptions?.runtimeMode)
+        }
+
+    @Test
+    fun t3NewThread_withoutRememberedModeLaunchesSupervised() =
+        runTest(testDispatcher) {
+            val sessionRepository = t3NewThreadRepository()
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(messages = emptyList()),
+                    modelRepository = FakeModelRepository(t3Catalog(requiresNewThread = false)),
+                    sessionRepository = sessionRepository,
+                    connectionProfileStore = FakeConnectionProfileStore(active = t3ChatProfile),
+                )
+
+            viewModel.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, "New Session", "/repo")
+            advanceUntilIdle()
+
+            assertEquals("approval-required", sessionRepository.createSessionOptions?.runtimeMode)
+        }
+
+    @Test
+    fun t3StartedThread_selectRuntimeModeCallsServerAndRemembersIt() =
+        runTest(testDispatcher) {
+            val store = FakeSessionModelSelectionStore()
+            val sessionRepository = FakeSessionRepository(getSessionResult = t3ThreadSession())
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(),
+                    modelRepository = FakeModelRepository(t3Catalog(requiresNewThread = false)),
+                    sessionModelSelectionStore = store,
+                    sessionRepository = sessionRepository,
+                    connectionProfileStore = FakeConnectionProfileStore(active = t3ChatProfile),
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.runtimeModeSelectable)
+
+            viewModel.selectRuntimeMode("full-access")
+            advanceUntilIdle()
+
+            assertEquals(listOf("ses-1" to "full-access"), sessionRepository.runtimeModeRequests)
+            assertEquals("full-access", viewModel.uiState.value.runtimeMode)
+            assertEquals("Full access", viewModel.uiState.value.runtimeModeLabel)
+            assertEquals("full-access", store.runtimeModes["${t3Identity.serverBaseUrl}|${t3Identity.username}|/repo"])
+        }
+
+    @Test
+    fun t3NewThread_withoutLoadedCatalogueOffersAllRuntimeModes() =
+        runTest(testDispatcher) {
+            val sessionRepository = FakeSessionRepository(createSessionError = SessionError.Transport(IllegalStateException("offline")))
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(messages = emptyList()),
+                    modelRepository = FakeModelRepository(t3Catalog(requiresNewThread = false)),
+                    sessionRepository = sessionRepository,
+                    connectionProfileStore = FakeConnectionProfileStore(active = t3ChatProfile),
+                )
+
+            viewModel.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, "New Session", "/repo")
+            advanceUntilIdle()
+
+            assertEquals(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, viewModel.uiState.value.sessionId)
+            assertEquals(T3RuntimeModeLabels.allModes, viewModel.uiState.value.runtimeModeOptions)
+            // The choice is kept locally on the not-yet-created thread.
+            viewModel.selectRuntimeMode("auto")
+            assertEquals("Auto", viewModel.uiState.value.runtimeModeLabel)
+            assertTrue(sessionRepository.runtimeModeRequests.isEmpty())
+        }
+
+    @Test
+    fun openCodeSession_runtimeModeBadgeIsNotSelectable() =
+        runTest(testDispatcher) {
+            val sessionRepository = FakeSessionRepository()
+            val viewModel = createViewModel(FakeMessageRepository(), sessionRepository = sessionRepository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertFalse(viewModel.uiState.value.runtimeModeSelectable)
+            viewModel.selectRuntimeMode("full-access")
+            advanceUntilIdle()
+            assertTrue(sessionRepository.runtimeModeRequests.isEmpty())
+            assertNull(viewModel.uiState.value.runtimeMode)
+        }
+
     // endregion
 
 }
@@ -5800,6 +5949,7 @@ private class FakeSessionModelSelectionStore(
 ) : SessionModelSelectionStore {
     private val saved = mutableMapOf<String, SessionModelSelection>()
     private val preferences = mutableMapOf<String, SessionModelSelection>()
+    val runtimeModes = mutableMapOf<String, String>()
 
     fun seed(
         serverBaseUrl: String,
@@ -5872,6 +6022,19 @@ private class FakeSessionModelSelectionStore(
         selection: SessionModelSelection,
     ) {
         preferences["${connectionIdentity.serverBaseUrl}|${connectionIdentity.username}|$worktree"] = selection
+    }
+
+    override suspend fun loadNewSessionRuntimeMode(
+        connectionIdentity: ModelSelectionConnectionIdentity,
+        worktree: String,
+    ): String? = runtimeModes["${connectionIdentity.serverBaseUrl}|${connectionIdentity.username}|$worktree"]
+
+    override suspend fun saveNewSessionRuntimeMode(
+        connectionIdentity: ModelSelectionConnectionIdentity,
+        worktree: String,
+        runtimeMode: String,
+    ) {
+        runtimeModes["${connectionIdentity.serverBaseUrl}|${connectionIdentity.username}|$worktree"] = runtimeMode
     }
 
     fun preference(
@@ -6340,6 +6503,21 @@ private class FakeSessionRepository(
     ): Session {
         createSessionOptions = options
         return createSession(parentId, title, directory)
+    }
+
+    val runtimeModeRequests = mutableListOf<Pair<String, String>>()
+
+    override suspend fun setRuntimeMode(
+        id: String,
+        runtimeMode: String,
+        directory: String?,
+    ): Session {
+        runtimeModeRequests += id to runtimeMode
+        val updated =
+            (getSessionResult ?: Session(id = id, title = "Title", directory = directory))
+                .copy(runtimeMode = runtimeMode)
+        getSessionResult = updated
+        return updated
     }
 
     val modelSelectionRequests = mutableListOf<Triple<String, String, String>>()
