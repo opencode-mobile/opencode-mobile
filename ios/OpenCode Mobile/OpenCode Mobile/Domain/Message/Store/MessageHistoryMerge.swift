@@ -45,7 +45,9 @@ nonisolated enum MessageHistoryMerge {
         // A local message inside the tail's window that the tail lacks was removed
         // on the server (a committed revert): it must not make the tail look stale.
         let remoteIDs = Set(remote.map(\.id))
-        let localWindow = local[firstOverlap...lastOverlap].filter { remoteIDs.contains($0.id) }
+        let lower = min(firstOverlap, lastOverlap)
+        let upper = max(firstOverlap, lastOverlap)
+        let localWindow = local[lower...upper].filter { remoteIDs.contains($0.id) }
         return MessageSnapshotAuthority.isAheadOrEqual(remote: remote, local: localWindow)
     }
 

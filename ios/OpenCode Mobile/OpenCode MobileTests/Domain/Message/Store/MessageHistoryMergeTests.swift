@@ -115,6 +115,19 @@ struct MessageHistoryMergeTests {
         #expect(MessageHistoryMerge.applyTail(local: local, tail: tail).map(\.id) == ["u1", "a1", "u3", "a3"])
     }
 
+    @Test func reorderedOverlapAcceptsEqualMessagesWithoutTrapping() {
+        let local = [
+            message("c", role: .user),
+            message("a", role: .assistant),
+        ]
+        let tail = [
+            message("a", role: .assistant),
+            message("c", role: .user),
+        ]
+
+        #expect(MessageHistoryMerge.shouldAcceptTail(remote: tail, local: local))
+    }
+
     @Test func tailWhoseNewTurnReplacedACachedRevertedTurnDropsIt() {
         let local = [
             message("u1", role: .user, text: "First prompt"),
