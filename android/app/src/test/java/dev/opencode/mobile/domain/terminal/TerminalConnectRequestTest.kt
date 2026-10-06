@@ -3,7 +3,9 @@ package dev.opencode.mobile.domain.terminal
 import dev.opencode.mobile.domain.connection.ServerProtocol
 import io.ktor.http.Url
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.Base64
 
@@ -121,5 +123,24 @@ class TerminalConnectRequestTest {
         assertEquals("tick-2", url.parameters["ticket"])
         assertNull(url.parameters["auth_token"])
         assertNull(request.authorization)
+    }
+
+    @Test
+    fun directoryWithSpace_percentEncodesSpaceAsPercent20() {
+        val request =
+            connectRequest(
+                id = "pty_1",
+                directory = "/my repo",
+                protocol = ServerProtocol.V1,
+                baseUrl = "https://example.test",
+                cursor = "0",
+                username = "opencode",
+                password = "",
+            )
+
+        assertTrue(request.url.contains("directory=%2Fmy%20repo"))
+        assertFalse(request.url.contains(" "))
+        assertFalse(request.url.contains("+"))
+        assertFalse(request.url.contains("my+repo"))
     }
 }
