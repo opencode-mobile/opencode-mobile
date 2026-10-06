@@ -5,6 +5,7 @@ import androidx.compose.animation.core.EaseInOut
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -16,6 +17,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -33,9 +35,16 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.height
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import dev.opencode.mobile.domain.home.HomeSettleGesture
 import dev.opencode.mobile.domain.home.HomeSessionLadder
 import dev.opencode.mobile.domain.home.HomeSessionLadderKind
 import dev.opencode.mobile.domain.home.HomeSessionLadderSection
+import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.domain.home.HomeSessionOrderStabilizer
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.theme.LetterAccent
@@ -52,6 +61,7 @@ enum class SessionListStatus {
     Running,
     Retrying,
     Ready,
+    Snoozed,
 }
 
 data class SessionListSession(
@@ -68,6 +78,10 @@ data class SessionListSession(
     val retryAttempt: Int? = null,
     /** Cached activity that has not been confirmed by REST yet. */
     val statusStale: Boolean = false,
+    /** Empty hides swipe. Home fills this only when settle is available. */
+    val settleGestures: List<HomeSettleGesture> = emptyList(),
+    /** Settled-page rows keep the letter and caption and drop the status pill. */
+    val showStatus: Boolean = true,
 )
 
 data class SessionListFilterTab(
@@ -132,6 +146,9 @@ fun SessionList(
     selectedSessionId: String? = null,
     /** Rows of [selectedFilterId] in display order (sections flattened, top to bottom). */
     onDisplayedSessionsChange: ((List<SessionListSession>) -> Unit)? = null,
+    settledSessions: List<SessionListSession> = emptyList(),
+    onOpenSettled: (() -> Unit)? = null,
+    onSettleGesture: ((SessionListSession, HomeSettleGesture) -> Unit)? = null,
 ) {
     val background = openCodeColor("background-base")
     val borderWeaker = openCodeColor("border-weaker-base")
@@ -175,6 +192,9 @@ fun SessionList(
                     onSessionLongPress = onSessionLongPress,
                     onDisplayedSessionsChange =
                         onDisplayedSessionsChange.takeIf { filterId == selectedFilterId },
+                    settledSessions = settledSessions,
+                    onOpenSettled = onOpenSettled,
+                    onSettleGesture = onSettleGesture,
                 )
             }
 
@@ -220,6 +240,9 @@ private fun SessionListFeedPage(
     onSessionSelected: (SessionListSession) -> Unit,
     onSessionLongPress: ((SessionListSession) -> Unit)?,
     onDisplayedSessionsChange: ((List<SessionListSession>) -> Unit)?,
+    settledSessions: List<SessionListSession> = emptyList(),
+    onOpenSettled: (() -> Unit)? = null,
+    onSettleGesture: ((SessionListSession, HomeSettleGesture) -> Unit)? = null,
 ) {
     val recentWindowHours = HomeDisplayPreferences.recentWindowHours
     val visibleSessions =
@@ -329,6 +352,9 @@ private fun SessionListFeedPage(
         selectedSessionId = selectedSessionId,
         onSessionSelected = onSessionSelected,
         onSessionLongPress = onSessionLongPress,
+        settledCount = settledSessions.visibleForFilter(filterId).size,
+        onOpenSettled = onOpenSettled,
+        onSettleGesture = onSettleGesture,
         modifier =
             Modifier
                 .fillMaxSize()
@@ -347,6 +373,9 @@ private fun SessionListFeed(
     selectedSessionId: String?,
     onSessionSelected: (SessionListSession) -> Unit,
     onSessionLongPress: ((SessionListSession) -> Unit)?,
+    settledCount: Int = 0,
+    onOpenSettled: (() -> Unit)? = null,
+    onSettleGesture: ((SessionListSession, HomeSettleGesture) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     if (visibleSessions.isEmpty() && emptyContent != null) {
@@ -383,6 +412,7 @@ private fun SessionListFeed(
                                 selected = session.id == selectedSessionId,
                                 onSessionSelected = onSessionSelected,
                                 onSessionLongPress = onSessionLongPress,
+                                onSettleGesture = onSettleGesture,
                             )
                         }
                     }
@@ -404,12 +434,47 @@ private fun SessionListFeed(
                                 selected = session.id == selectedSessionId,
                                 onSessionSelected = onSessionSelected,
                                 onSessionLongPress = onSessionLongPress,
+                                onSettleGesture = onSettleGesture,
                             )
                         }
                     }
                 }
             }
+            if (settledCount > 0 && onOpenSettled != null) {
+                item(key = "settled-link") {
+                    SettledSessionsLink(count = settledCount, onClick = onOpenSettled)
+                }
+            }
         }
+    }
+}
+
+@Composable
+private fun SettledSessionsLink(
+    count: Int,
+    onClick: () -> Unit,
+) {
+    val tint = openCodeColor("text-interactive-base")
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(56.dp)
+                .clickable(onClick = onClick)
+                .padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = if (count == 1) "1 settled" else "$count settled",
+            color = tint,
+            style = MaterialTheme.typography.bodyLarge,
+        )
+        Icon(
+            imageVector = OpenCodeIcons.ChevronRight,
+            contentDescription = null,
+            tint = tint,
+        )
     }
 }
 
@@ -422,23 +487,29 @@ private fun SessionListRow(
     selected: Boolean,
     onSessionSelected: (SessionListSession) -> Unit,
     onSessionLongPress: ((SessionListSession) -> Unit)?,
+    onSettleGesture: ((SessionListSession, HomeSettleGesture) -> Unit)? = null,
 ) {
     val status = session.status.toListItemStatus(session.retryAttempt, stale = session.statusStale)
-    OpenCodeListItem(
-        title = session.title,
-        subtitle = compactHomePath(session.subtitle),
-        status = status,
-        caption = session.caption.takeIf { it.isNotEmpty() },
-        startDecorator =
-            StartDecorator.Letter(
-                character = session.letter,
-                accent = session.letterAccent,
-                statusDot = if (showStatusDot) status.tone else null,
-            ),
-        selected = selected,
-        onClick = { onSessionSelected(session) },
-        onLongPress = onSessionLongPress?.let { handler -> { handler(session) } },
-    )
+    SettleSwipeRow(
+        gestures = session.settleGestures,
+        onGesture = { gesture -> onSettleGesture?.invoke(session, gesture) },
+    ) {
+        OpenCodeListItem(
+            title = session.title,
+            subtitle = compactHomePath(session.subtitle).takeIf { session.subtitle.isNotBlank() },
+            status = if (session.showStatus) status else null,
+            caption = session.caption.takeIf { it.isNotEmpty() },
+            startDecorator =
+                StartDecorator.Letter(
+                    character = session.letter,
+                    accent = session.letterAccent,
+                    statusDot = if (showStatusDot && session.showStatus) status.tone else null,
+                ),
+            selected = selected,
+            onClick = { onSessionSelected(session) },
+            onLongPress = onSessionLongPress?.let { handler -> { handler(session) } },
+        )
+    }
     if (showDivider) {
         HorizontalDivider(
             modifier = Modifier.padding(start = 60.dp),
@@ -544,6 +615,7 @@ internal fun SessionListStatus.toListItemStatus(
                 SessionListStatus.Running -> OpenCodeListItemStatusTone.Interactive
                 SessionListStatus.Retrying -> OpenCodeListItemStatusTone.Warning
                 SessionListStatus.Ready -> OpenCodeListItemStatusTone.Success
+                SessionListStatus.Snoozed -> OpenCodeListItemStatusTone.Warning
             }
         }
     return when (this) {
@@ -555,6 +627,7 @@ internal fun SessionListStatus.toListItemStatus(
                 tone = tone,
             )
         SessionListStatus.Ready -> OpenCodeListItemStatus(text = "Ready", tone = tone)
+        SessionListStatus.Snoozed -> OpenCodeListItemStatus(text = "Snoozed", tone = tone)
     }
 }
 

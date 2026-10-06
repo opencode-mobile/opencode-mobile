@@ -20,12 +20,21 @@ data class Session(
     val modelId: String? = null,
     /** T3: when the thread was settled and not re-activated; null for active sessions. */
     val settledAtEpochMs: Long? = null,
+    /** T3: scheduled wake, whether or not the snooze is still in effect. */
+    val snoozedUntilEpochMs: Long? = null,
+    /** Why snooze is unavailable: "Still running" or "Waiting on you". */
+    val snoozeBlockReason: String? = null,
 ) {
     val isArchived: Boolean
         get() = archivedAtEpochMs != null
 
     val isSettled: Boolean
         get() = settledAtEpochMs != null
+
+    val snoozeBlocked: Boolean
+        get() = snoozeBlockReason != null
+
+    fun isSnoozed(nowEpochMs: Long): Boolean = !isSettled && snoozedUntilEpochMs != null && snoozedUntilEpochMs > nowEpochMs
 }
 
 data class SessionRevert(
@@ -49,6 +58,9 @@ data class SessionSummary(
     val statusStale: Boolean = false,
     val isArchived: Boolean = false,
     val isSettled: Boolean = false,
+    val snoozedUntilEpochMs: Long? = null,
+    val snoozeBlockReason: String? = null,
+    val settledAtEpochMs: Long? = null,
 )
 
 data class SessionStatus(

@@ -237,6 +237,7 @@ object T3Json {
             pendingRequestId = pending?.string("id"),
             pendingRequestKind = pending?.string("kind"),
             createdAt = obj.string("createdAt"),
+            snoozedUntil = obj.string("snoozedUntil"),
         )
     }
 

@@ -20,6 +20,7 @@ enum HomeSessionLifecycle: Equatable {
     case active
     case archived
     case settled
+    case snoozed
 }
 
 struct AddProjectDirectoryItem: Identifiable, Equatable {
@@ -115,6 +116,15 @@ final class ProjectListHomeViewModel {
     var sessionActionsCanFork: Bool { sessionActionsRegion.canFork }
     var sessionActionsCanArchive: Bool { sessionActionsRegion.canArchive }
     var sessionActionsLifecycle: HomeSessionLifecycle { sessionActionsRegion.lifecycle }
+    var sessionActionsShowsSettle: Bool { sessionActionsRegion.showsSettle }
+    var sessionActionsSnoozeBlockReason: String? { sessionActionsRegion.snoozeBlockReason }
+    var snoozeSheetVisible: Bool { sessionActionsRegion.snoozeVisible }
+    var snoozeAmount: String { sessionActionsRegion.snoozeAmount }
+    var snoozeUnit: SnoozeUnit { sessionActionsRegion.snoozeUnit }
+    var snoozeError: String? { sessionActionsRegion.snoozeError }
+    var showsHomeSettle: Bool {
+        SessionCapabilities.forEngine(activeConnectionManager.currentProfile()?.engine ?? .opencode).showsSettle
+    }
     var sessionRenameDialog: HomeSessionTitleDialogState { sessionActionsRegion.renameDialog }
     var sessionForkDialog: HomeSessionTitleDialogState { sessionActionsRegion.forkDialog }
     var sessionForkResult: HomeSessionForkResultState { sessionActionsRegion.forkResult }
@@ -141,6 +151,9 @@ final class ProjectListHomeViewModel {
     }
     private var liveObservationTasks: [Task<Void, Never>] = []
     private var observedWorktrees: [String] = []
+    private var archivedByWorktree: [String: [SessionListItem]] = [:]
+    private var archivedReloadTask: Task<Void, Never>?
+    private var archivedGeneration = 0
     private var liveSessionsByWorktree: [String: SessionListSnapshot] = [:]
     private var liveStatusesByWorktree: [String: SessionActivitySnapshot] = [:]
     private var liveReadyIdsByWorktree: [String: Set<String>] = [:]
@@ -228,6 +241,18 @@ final class ProjectListHomeViewModel {
         await runHomeLoad()
     }
 
+    /// Settle, snooze, and wake change which list a thread belongs to.
+    /// `refresh` returns immediately while live observations are running, and that
+    /// path never loads settled threads, so the row would stay on the ladder.
+    private func reloadAfterSessionLifecycle() async {
+        await sessionLiveStore.invalidate(directory: nil)
+        await refreshArchivedSessions()
+    }
+
+    private var showsArchivedSessions: Bool {
+        SessionCapabilities.forEngine(activeConnectionManager.currentProfile()?.engine ?? .opencode).showsArchivedSessions
+    }
+
     func showServersSheet() {
         serversChrome.sheetVisible = true
     }
@@ -271,6 +296,7 @@ final class ProjectListHomeViewModel {
             }
             await sessionLiveStore.invalidate(directory: nil)
             await sessionStatusLiveStore.invalidate(directory: nil)
+            await refreshArchivedSessions()
         default:
             break
         }
@@ -440,6 +466,10 @@ final class ProjectListHomeViewModel {
         }
         lastHomeHiddenAtEpochMs = nil
         HomeDisplayPreferences.shared.setLastHomeHiddenAtEpochMs(nil)
+        // A settle from the session screen leaves home covered. Reveal reloads the lists.
+        if showsArchivedSessions {
+            Task { await reloadAfterSessionLifecycle() }
+        }
     }
 
     /// Applies a new added-project order from the project picker. The order
@@ -534,13 +564,43 @@ final class ProjectListHomeViewModel {
             presentation: ProductAnalytics.Presentation.sheet,
             trigger: ProductAnalytics.Trigger.present
         )
+        let details = sessionActionDetails(sessionId: sessionId, worktree: worktree)
         sessionActionsRegion.begin(
             sessionId: sessionId,
             title: title,
             worktree: worktree,
             canArchive: activeConnectionManager.capabilities.supportsSessionArchive,
-            lifecycle: sessionLifecycle(sessionId: sessionId, worktree: worktree)
+            lifecycle: details.lifecycle,
+            showsSettle: showsHomeSettle,
+            snoozeBlockReason: details.snoozeBlockReason
         )
+    }
+
+    func onSettleGesture(sessionId: String, title: String, worktree: String, gesture: HomeSettleGesture) async {
+        let details = sessionActionDetails(sessionId: sessionId, worktree: worktree)
+        sessionActionsRegion.begin(
+            sessionId: sessionId,
+            title: title,
+            worktree: worktree,
+            canArchive: activeConnectionManager.capabilities.supportsSessionArchive,
+            lifecycle: details.lifecycle,
+            showsSettle: showsHomeSettle,
+            snoozeBlockReason: details.snoozeBlockReason,
+            presentSheet: false
+        )
+        let restored: Bool
+        switch gesture {
+        case .settle:
+            restored = await sessionActionsRegion.chooseSettle()
+        case .snooze:
+            sessionActionsRegion.openSnooze()
+            restored = false
+        case .wake:
+            restored = await sessionActionsRegion.chooseWake()
+        case .unsettle:
+            restored = await sessionActionsRegion.chooseUnsettle()
+        }
+        if restored { await reloadAfterSessionLifecycle() }
     }
 
     /// Dismissal from the sheet chrome. Action handlers hide the sheet themselves and
@@ -926,25 +986,82 @@ final class ProjectListHomeViewModel {
             }
     }
 
-    /// Whether a home row is an active, archived, or settled session.
-    private func sessionLifecycle(sessionId: String, worktree: String) -> HomeSessionLifecycle {
+    private struct SessionActionDetails {
+        var lifecycle: HomeSessionLifecycle
+        var snoozeBlockReason: String?
+    }
+
+    /// Active rows can be snoozed; archived and settled rows come from the restore list.
+    private func sessionActionDetails(sessionId: String, worktree: String) -> SessionActionDetails {
         guard case let .loaded(sections, _, _, _) = state,
-              let section = sections.first(where: { $0.worktree == worktree }),
-              let row = section.archivedSessions.first(where: { $0.id == sessionId })
-        else { return .active }
-        return row.lifecycle
+              let section = sections.first(where: { $0.worktree == worktree })
+        else { return SessionActionDetails(lifecycle: .active, snoozeBlockReason: nil) }
+        if let active = section.allSessions.first(where: { $0.id == sessionId }) {
+            let now = Int64(Date().timeIntervalSince1970 * 1000)
+            let snoozed = HomeSettleFeed.isSnoozed(
+                snoozedUntilEpochMs: active.snoozedUntilEpochMs,
+                nowEpochMs: now,
+                isSettled: active.lifecycle == .settled
+            )
+            return SessionActionDetails(
+                lifecycle: snoozed ? .snoozed : .active,
+                snoozeBlockReason: active.snoozeBlockReason
+            )
+        }
+        guard let row = section.archivedSessions.first(where: { $0.id == sessionId }) else {
+            return SessionActionDetails(lifecycle: .active, snoozeBlockReason: nil)
+        }
+        return SessionActionDetails(lifecycle: row.lifecycle, snoozeBlockReason: nil)
     }
 
     func unarchiveSessionAction() async {
         guard sessionActionsTarget != nil, sessionActionsLifecycle == .archived, !sessionActionInFlight else { return }
         let restored = await sessionActionsRegion.chooseUnarchive()
-        if restored { await refresh() }
+        if restored { await reloadAfterSessionLifecycle() }
     }
 
     func unsettleSessionAction() async {
         guard sessionActionsTarget != nil, sessionActionsLifecycle == .settled, !sessionActionInFlight else { return }
         let restored = await sessionActionsRegion.chooseUnsettle()
-        if restored { await refresh() }
+        if restored { await reloadAfterSessionLifecycle() }
+    }
+
+    func settleSessionAction() async {
+        guard sessionActionsTarget != nil, sessionActionsLifecycle == .active, !sessionActionInFlight else { return }
+        let restored = await sessionActionsRegion.chooseSettle()
+        if restored { await reloadAfterSessionLifecycle() }
+    }
+
+    func wakeSessionAction() async {
+        guard sessionActionsTarget != nil, sessionActionsLifecycle == .snoozed, !sessionActionInFlight else { return }
+        let restored = await sessionActionsRegion.chooseWake()
+        if restored { await reloadAfterSessionLifecycle() }
+    }
+
+    func openSnooze() {
+        sessionActionsRegion.openSnooze()
+    }
+
+    func dismissSnooze() {
+        sessionActionsRegion.dismissSnooze()
+    }
+
+    func updateSnoozeAmount(_ text: String) {
+        sessionActionsRegion.updateSnoozeAmount(text)
+    }
+
+    func cycleSnoozeUnit() {
+        sessionActionsRegion.cycleSnoozeUnit()
+    }
+
+    func chooseSnoozePreset(untilEpochMs: Int64) async {
+        let restored = await sessionActionsRegion.chooseSnoozePreset(untilEpochMs: untilEpochMs)
+        if restored { await reloadAfterSessionLifecycle() }
+    }
+
+    func confirmCustomSnooze() async {
+        let restored = await sessionActionsRegion.confirmCustomSnooze()
+        if restored { await reloadAfterSessionLifecycle() }
     }
 
     private func loadSection(worktree: String) async -> ProjectSectionItem {
@@ -1093,6 +1210,8 @@ final class ProjectListHomeViewModel {
         if liveObservationsRunning(for: worktrees) { return }
         stopLiveObservations()
         observedWorktrees = worktrees
+        archivedReloadTask?.cancel()
+        archivedReloadTask = Task { await refreshArchivedSessions() }
         liveObservationTasks =
             worktrees.map { worktree in
                 Task {
@@ -1102,12 +1221,52 @@ final class ProjectListHomeViewModel {
     }
 
     private func stopLiveObservations() {
+        archivedGeneration += 1
+        archivedReloadTask?.cancel()
+        archivedReloadTask = nil
+        archivedByWorktree = [:]
         liveObservationTasks.forEach { $0.cancel() }
         liveObservationTasks = []
         observedWorktrees = []
         liveSessionsByWorktree = [:]
         liveStatusesByWorktree = [:]
         liveReadyIdsByWorktree = [:]
+    }
+
+    /// Settled and archived rows are not in the live session list. Keep the latest fetch.
+    private func refreshArchivedSessions() async {
+        let generation = archivedGeneration
+        guard case let .loaded(sections, _, _, _) = state, showsArchivedSessions else { return }
+        var fetched: [String: [SessionListItem]] = [:]
+        for section in sections {
+            fetched[section.worktree] = await loadArchivedItems(worktree: section.worktree)
+        }
+        guard generation == archivedGeneration else { return }
+        for (worktree, items) in fetched {
+            archivedByWorktree[worktree] = items
+        }
+        applyArchivedSessions()
+    }
+
+    private func applyArchivedSessions() {
+        guard case let .loaded(sections, showAdd, navigator, createError) = state else { return }
+        var changed = false
+        let updated = sections.map { section -> ProjectSectionItem in
+            guard let archived = archivedByWorktree[section.worktree], archived != section.archivedSessions else {
+                return section
+            }
+            changed = true
+            var copy = section
+            copy.archivedSessions = archived
+            return copy
+        }
+        guard changed else { return }
+        state = .loaded(
+            sections: updated,
+            showAddProjectSheet: showAdd,
+            navigator: navigator,
+            projectSessionCreateError: createError
+        )
     }
 
     private func liveObservationsRunning(for worktrees: [String]) -> Bool {
@@ -1181,7 +1340,7 @@ final class ProjectListHomeViewModel {
             allSessions: items,
             loadError: section.loadError,
             sessionsFromCache: sessionsFromCache,
-            archivedSessions: section.archivedSessions
+            archivedSessions: archivedByWorktree[worktree] ?? section.archivedSessions
         )
         let updatedSections =
             sections.map { current in

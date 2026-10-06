@@ -10,6 +10,12 @@ final class HomeSessionActions {
     private(set) var canFork = false
     private(set) var canArchive = true
     private(set) var lifecycle: HomeSessionLifecycle = .active
+    private(set) var showsSettle = false
+    private(set) var snoozeBlockReason: String?
+    private(set) var snoozeVisible = false
+    private(set) var snoozeAmount = "1"
+    private(set) var snoozeUnit: SnoozeUnit = .hours
+    private(set) var snoozeError: String?
     private(set) var renameDialog = HomeSessionTitleDialogState()
     private(set) var forkDialog = HomeSessionTitleDialogState()
     private(set) var forkResult = HomeSessionForkResultState()
@@ -35,17 +41,143 @@ final class HomeSessionActions {
         self.capabilities = capabilities
     }
 
-    func begin(sessionId: String, title: String, worktree: String, canArchive: Bool, lifecycle: HomeSessionLifecycle = .active) {
+    func begin(
+        sessionId: String,
+        title: String,
+        worktree: String,
+        canArchive: Bool,
+        lifecycle: HomeSessionLifecycle = .active,
+        showsSettle: Bool = false,
+        snoozeBlockReason: String? = nil,
+        presentSheet: Bool = true
+    ) {
         let next = HomeSessionActionTarget(sessionId: sessionId, title: title, worktree: worktree)
         target = next
-        sheetVisible = true
+        sheetVisible = presentSheet
         canFork = false
         self.canArchive = canArchive && lifecycle == .active
         self.lifecycle = lifecycle
+        self.showsSettle = showsSettle
+        self.snoozeBlockReason = snoozeBlockReason
+        snoozeVisible = false
+        snoozeAmount = "1"
+        snoozeUnit = .hours
+        snoozeError = nil
         forkGateTask?.cancel()
-        // Archived and settled rows only restore or delete; fork stays off.
-        guard lifecycle == .active else { return }
+        // Archived, settled, and snoozed rows do not fork. Swipes skip the lookup.
+        guard presentSheet, lifecycle == .active else { return }
         forkGateTask = Task { await resolveForkVisibility(next) }
+    }
+
+    /// Settles the armed session. True when the server accepted it.
+    func chooseSettle() async -> Bool {
+        guard let target, lifecycle == .active, !actionInFlight else { return false }
+        sheetVisible = false
+        snoozeVisible = false
+        actionInFlight = true
+        OpenCodeLog.sessionChat.info("home settle start session=\(target.sessionId)")
+        do {
+            let restored = try await sessionRepository.settleSession(id: target.sessionId, directory: target.worktree)
+            OpenCodeLog.sessionChat.info("home settle \(restored ? "success" : "rejected") session=\(target.sessionId)")
+            actionInFlight = false
+            clear()
+            if !restored { onLifecycleError?(Self.settleError) }
+            return restored
+        } catch {
+            OpenCodeLog.sessionChat.warning("home settle failed session=\(target.sessionId) error=\(error.localizedDescription)")
+            actionInFlight = false
+            clear()
+            onLifecycleError?(Self.settleError)
+            return false
+        }
+    }
+
+    /// Hides the action sheet and keeps the target so the snooze sheet can commit.
+    func openSnooze() {
+        guard target != nil, lifecycle == .active, snoozeBlockReason == nil else { return }
+        sheetVisible = false
+        snoozeVisible = true
+        snoozeError = nil
+    }
+
+    func dismissSnooze() {
+        guard !actionInFlight else { return }
+        clear()
+    }
+
+    func updateSnoozeAmount(_ text: String) {
+        snoozeAmount = String(text.filter(\.isNumber).prefix(4))
+        snoozeError = nil
+    }
+
+    func cycleSnoozeUnit() {
+        switch snoozeUnit {
+        case .minutes: snoozeUnit = .hours
+        case .hours: snoozeUnit = .days
+        case .days: snoozeUnit = .minutes
+        }
+        snoozeError = nil
+    }
+
+    func chooseSnoozePreset(untilEpochMs: Int64) async -> Bool {
+        await snooze(untilEpochMs: untilEpochMs)
+    }
+
+    func confirmCustomSnooze(nowEpochMs: Int64 = Int64(Date().timeIntervalSince1970 * 1000)) async -> Bool {
+        let amount = Int(snoozeAmount) ?? 0
+        guard let until = HomeSettleFeed.snoozeUntilFromDuration(amount: amount, unit: snoozeUnit, nowEpochMs: nowEpochMs) else {
+            snoozeError = "Enter a number of minutes, hours, or days."
+            return false
+        }
+        return await snooze(untilEpochMs: until)
+    }
+
+    func chooseWake() async -> Bool {
+        guard let target, lifecycle == .snoozed, !actionInFlight else { return false }
+        sheetVisible = false
+        actionInFlight = true
+        OpenCodeLog.sessionChat.info("home wake start session=\(target.sessionId)")
+        do {
+            let restored = try await sessionRepository.wakeSession(id: target.sessionId, directory: target.worktree)
+            OpenCodeLog.sessionChat.info("home wake \(restored ? "success" : "rejected") session=\(target.sessionId)")
+            actionInFlight = false
+            clear()
+            if !restored { onLifecycleError?(Self.wakeError) }
+            return restored
+        } catch {
+            OpenCodeLog.sessionChat.warning("home wake failed session=\(target.sessionId) error=\(error.localizedDescription)")
+            actionInFlight = false
+            clear()
+            onLifecycleError?(Self.wakeError)
+            return false
+        }
+    }
+
+    private func snooze(untilEpochMs: Int64) async -> Bool {
+        guard let target, !actionInFlight, snoozeBlockReason == nil else { return false }
+        sheetVisible = false
+        snoozeVisible = false
+        actionInFlight = true
+        let until = HomeSettleFeed.isoTimestamp(epochMs: untilEpochMs)
+        OpenCodeLog.sessionChat.info("home snooze start session=\(target.sessionId) until=\(until)")
+        do {
+            let restored = try await sessionRepository.snoozeSession(
+                id: target.sessionId,
+                snoozedUntil: until,
+                directory: target.worktree
+            )
+            OpenCodeLog.sessionChat.info("home snooze \(restored ? "success" : "rejected") session=\(target.sessionId)")
+            actionInFlight = false
+            clear()
+            if !restored { onLifecycleError?(Self.snoozeErrorMessage) }
+            return restored
+        } catch {
+            OpenCodeLog.sessionChat.warning("home snooze failed session=\(target.sessionId) error=\(error.localizedDescription)")
+            actionInFlight = false
+            clear()
+            onLifecycleError?(Self.snoozeErrorMessage)
+            return false
+        }
     }
 
     /// Restores an archived session; true when the server accepted it.
@@ -318,6 +450,7 @@ final class HomeSessionActions {
             || forkResult.isVisible
             || deleteConfirmVisible
             || actionInFlight
+            || snoozeVisible
     }
 
     private func clear() {
@@ -328,6 +461,12 @@ final class HomeSessionActions {
         canFork = false
         canArchive = true
         lifecycle = .active
+        showsSettle = false
+        snoozeBlockReason = nil
+        snoozeVisible = false
+        snoozeAmount = "1"
+        snoozeUnit = .hours
+        snoozeError = nil
     }
 
     private func mutationErrorMessage(_ error: Error) -> String {
@@ -346,5 +485,8 @@ final class HomeSessionActions {
     private static let archiveError = "Couldn't archive session."
     private static let unarchiveError = "Couldn't unarchive session."
     private static let unsettleError = "Couldn't unsettle session."
+    private static let settleError = "Couldn't settle session."
+    private static let snoozeErrorMessage = "Couldn't snooze session."
+    private static let wakeError = "Couldn't wake session."
     private static let deleteError = "Couldn't delete session."
 }

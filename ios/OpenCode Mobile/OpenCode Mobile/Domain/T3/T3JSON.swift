@@ -246,6 +246,7 @@ struct T3Thread: Equatable, Sendable {
     var createdAtEpochMs: Int64?
     var pendingRequestID: String? = nil
     var pendingRequestKind: String? = nil
+    var snoozedUntil: String? = nil
 
     var isBusy: Bool {
         if activeRunID != nil { return true }

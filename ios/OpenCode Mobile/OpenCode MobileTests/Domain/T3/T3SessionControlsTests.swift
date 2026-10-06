@@ -178,6 +178,42 @@ struct T3SessionControlsTests {
         #expect(client.dispatched.count == 2)
     }
 
+    @Test func snoozeAndWake_dispatchContractCommands() async throws {
+        let client = FakeT3EngineClient(snapshot: Self.snapshot([Self.thread(id: "thr-1")]))
+        let repository = T3SessionRepository(client: client)
+
+        #expect(try await repository.snoozeSession(id: "thr-1", snoozedUntil: "2099-01-01T00:00:00Z", directory: "/repos/alpha"))
+        let snooze = Self.lastCommand(client)
+        #expect(snooze["type"] as? String == "thread.snooze")
+        #expect(snooze["threadId"] as? String == "thr-1")
+        #expect(snooze["snoozedUntil"] as? String == "2099-01-01T00:00:00Z")
+        #expect(snooze["reason"] == nil)
+
+        #expect(try await repository.wakeSession(id: "thr-1", directory: "/repos/alpha"))
+        let wake = Self.lastCommand(client)
+        #expect(wake["type"] as? String == "thread.unsnooze")
+        #expect(wake["threadId"] as? String == "thr-1")
+        #expect(wake["reason"] as? String == "user")
+    }
+
+    @Test func session_mapsSnoozeAndBlockReason() {
+        var snoozed = Self.thread(id: "thr-s")
+        snoozed.snoozedUntil = "2099-01-01T00:00:00Z"
+        let snoozedSession = T3ShellMapper.session(from: snoozed)
+        #expect(snoozedSession.snoozedUntilEpochMs == T3JSON.epochMs("2099-01-01T00:00:00Z"))
+        #expect(snoozedSession.snoozeBlockReason == nil)
+
+        var running = Self.thread(id: "thr-r", activeRunID: "run-1")
+        running.pendingRequestID = "req"
+        running.snoozedUntil = "2099-01-01T00:00:00Z"
+        #expect(T3ShellMapper.session(from: running).snoozeBlockReason == "Still running")
+
+        var waiting = Self.thread(id: "thr-w")
+        waiting.pendingRequestID = "req"
+        waiting.pendingRequestKind = "user_input"
+        #expect(T3ShellMapper.session(from: waiting).snoozeBlockReason == "Waiting on you")
+    }
+
     @Test func deleteSession_dispatchesThreadDelete() async throws {
         let client = FakeT3EngineClient(snapshot: Self.snapshot([Self.thread(id: "thr-1")]))
         let repository = T3SessionRepository(client: client)

@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -29,6 +30,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
 import dev.opencode.mobile.domain.connection.ConnectionProfileIdentity
+import dev.opencode.mobile.domain.home.HomeSettleFeed
+import dev.opencode.mobile.domain.home.HomeSettleGesture
 import dev.opencode.mobile.domain.session.SessionSummary
 import dev.opencode.mobile.domain.time.RelativeTimeFormatting
 import dev.opencode.mobile.theme.LetterAccent
@@ -52,13 +55,16 @@ import dev.opencode.mobile.ui.components.OpenCodeEmptyState
 import dev.opencode.mobile.ui.components.OpenCodeEmptyStateAction
 import dev.opencode.mobile.ui.components.OpenCodeStatusStack
 import dev.opencode.mobile.ui.components.OpenCodeStatusStackStyle
+import dev.opencode.mobile.ui.components.OpenCodeTextInput
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarAction
+import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
 import dev.opencode.mobile.ui.components.OpenCodeTopBarSubtitleAccessory
 import dev.opencode.mobile.ui.components.SessionList
 import dev.opencode.mobile.ui.components.SessionListFilterTab
 import dev.opencode.mobile.ui.components.SessionListProjectPickerRows
 import dev.opencode.mobile.ui.components.SessionListSession
+import dev.opencode.mobile.ui.components.visibleForFilter
 import dev.opencode.mobile.ui.components.SessionListStatus
 import dev.opencode.mobile.ui.components.StartDecorator
 import dev.opencode.mobile.ui.connection.ConnectionOnboardingScreen
@@ -88,6 +94,15 @@ data class HomeSessionActionsCallbacks(
     val onChooseArchive: () -> Unit = {},
     val onChooseUnarchive: () -> Unit = {},
     val onChooseUnsettle: () -> Unit = {},
+    val onChooseSettle: () -> Unit = {},
+    val onChooseWake: () -> Unit = {},
+    val onChooseSnooze: () -> Unit = {},
+    val onDismissSnooze: () -> Unit = {},
+    val onSnoozeAmountChange: (String) -> Unit = {},
+    val onCycleSnoozeUnit: () -> Unit = {},
+    val onSnoozePreset: (Long) -> Unit = {},
+    val onConfirmCustomSnooze: () -> Unit = {},
+    val onSettleGesture: (SessionListSession, HomeSettleGesture) -> Unit = { _, _ -> },
     val onChooseDelete: () -> Unit = {},
     val onConfirmDelete: () -> Unit = {},
     val onDismissDeleteConfirm: () -> Unit = {},
@@ -154,6 +169,17 @@ fun MainScreen(
                 onChooseArchive = viewModel::chooseArchive,
                 onChooseUnarchive = viewModel::chooseUnarchive,
                 onChooseUnsettle = viewModel::chooseUnsettle,
+                onChooseSettle = viewModel::chooseSettle,
+                onChooseWake = viewModel::chooseWake,
+                onChooseSnooze = viewModel::openSnooze,
+                onDismissSnooze = viewModel::dismissSnooze,
+                onSnoozeAmountChange = viewModel::updateSnoozeAmount,
+                onCycleSnoozeUnit = viewModel::cycleSnoozeUnit,
+                onSnoozePreset = viewModel::chooseSnoozePreset,
+                onConfirmCustomSnooze = viewModel::confirmCustomSnooze,
+                onSettleGesture = { session, gesture ->
+                    viewModel.onSettleGesture(session.id, session.title, session.worktree, gesture)
+                },
                 onChooseDelete = viewModel::chooseDelete,
                 onConfirmDelete = viewModel::confirmDelete,
                 onDismissDeleteConfirm = viewModel::dismissDeleteConfirm,
@@ -189,6 +215,7 @@ fun MainScreen(
             viewModel.dismissServersSheet()
             onManageServersClick()
         },
+        showsHomeSettle = viewModel.showsHomeSettle(),
         modifier = modifier,
         selectedSessionId = selectedSessionId,
         sessionKeyboardNavigationEnabled = sessionKeyboardNavigationEnabled,
@@ -236,6 +263,7 @@ internal fun MainScreen(
     onManageServersClick: () -> Unit = {},
     selectedSessionId: String? = null,
     sessionKeyboardNavigationEnabled: Boolean = false,
+    showsHomeSettle: Boolean = false,
 ) {
     val pendingOpenSession = (uiState as? MainScreenUiState.Loaded)?.pendingOpenSession
     LaunchedEffect(pendingOpenSession) {
@@ -259,6 +287,10 @@ internal fun MainScreen(
 
     var showNewSessionProjectPicker by rememberSaveable { mutableStateOf(false) }
     var selectedFilterId by rememberSaveable { mutableStateOf(SessionListFilterTab.ALL_ID) }
+    var settledPageVisible by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(showsHomeSettle) {
+        if (!showsHomeSettle) settledPageVisible = false
+    }
     val loadedSections = (uiState as? MainScreenUiState.Loaded)?.sections.orEmpty()
     val chromeProjects = loadedSections.toHomeChromeProjects()
     val showTerminalAction =
@@ -297,6 +329,28 @@ internal fun MainScreen(
 
     Box(modifier = modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
+            val settledCount =
+                if (settledPageVisible) {
+                    val sections =
+                        when (uiState) {
+                            is MainScreenUiState.Loaded -> uiState.sections
+                            else -> emptyList()
+                        }
+                    sections
+                        .homeFeed(showsSettle = true, nowEpochMs = System.currentTimeMillis())
+                        .settled
+                        .visibleForFilter(selectedFilterId)
+                        .size
+                } else {
+                    0
+                }
+            if (settledPageVisible) {
+                OpenCodeTopBar(
+                    title = "Settled",
+                    subtitle = if (settledCount == 1) "1 thread" else "$settledCount threads",
+                    leading = OpenCodeTopBarLeading.Back(onClick = { settledPageVisible = false }),
+                )
+            } else {
             OpenCodeTopBar(
                 title = serversChrome.title,
                 onTitleClick = if (serversChrome.isSwitcher) onTitleClick else null,
@@ -341,6 +395,7 @@ internal fun MainScreen(
                         )
                     },
             )
+            }
 
             when (uiState) {
                 is MainScreenUiState.Disconnected -> {
@@ -416,6 +471,10 @@ internal fun MainScreen(
                         onReorderProjects = onReorderProjects,
                         removalSnackbar = removalSnackbar,
                         onSessionLongPress = sessionActionsCallbacks.onSessionLongPress,
+                        showsSettle = showsHomeSettle,
+                        settledPageVisible = settledPageVisible,
+                        onOpenSettled = { settledPageVisible = true },
+                        onSettleGesture = sessionActionsCallbacks.onSettleGesture,
                         revealNewestToken = revealNewestToken,
                         pendingSelectedFilterId = pendingSelectedFilterId,
                         onConsumePendingSelectedFilter = onConsumePendingSelectedFilter,
@@ -693,7 +752,39 @@ private fun HomeSessionActions(
                     startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check, null),
                     onClick = callbacks.onChooseUnsettle,
                 )
+            HomeSessionLifecycle.Snoozed -> {
+                OpenCodeBottomSheetEntry(
+                    title = "Wake",
+                    enabled = !state.lifecycleInFlight,
+                    startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check, null),
+                    onClick = callbacks.onChooseWake,
+                )
+                OpenCodeBottomSheetEntry(
+                    title = "Rename session",
+                    startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Edit, null),
+                    onClick = callbacks.onChooseRename,
+                )
+            }
             HomeSessionLifecycle.Active -> {
+                if (state.showsSettle) {
+                    OpenCodeBottomSheetEntry(
+                        title = "Settle",
+                        enabled = !state.lifecycleInFlight,
+                        startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check, null),
+                        onClick = callbacks.onChooseSettle,
+                    )
+                    OpenCodeBottomSheetEntry(
+                        title =
+                            if (state.snoozeBlockReason != null) {
+                                "Snooze · ${state.snoozeBlockReason}"
+                            } else {
+                                "Snooze"
+                            },
+                        enabled = state.snoozeBlockReason == null && !state.lifecycleInFlight,
+                        startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check, null),
+                        onClick = callbacks.onChooseSnooze,
+                    )
+                }
                 OpenCodeBottomSheetEntry(
                     title = "Rename session",
                     startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Edit, null),
@@ -722,6 +813,36 @@ private fun HomeSessionActions(
             destructive = true,
             startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Close, null),
             onClick = callbacks.onChooseDelete,
+        )
+    }
+
+    OpenCodeBottomSheet(
+        visible = state.snoozeVisible,
+        title = "Snooze until",
+        onDismissRequest = callbacks.onDismissSnooze,
+    ) {
+        HomeSettleFeed.snoozePresets(System.currentTimeMillis()).forEach { preset ->
+            OpenCodeBottomSheetEntry(
+                title = "${preset.label} · ${preset.whenLabel}",
+                onClick = { callbacks.onSnoozePreset(preset.atEpochMs) },
+            )
+        }
+        OpenCodeTextInput(
+            value = state.snoozeAmount,
+            onValueChange = callbacks.onSnoozeAmountChange,
+            hint = "Amount",
+            accessibilityLabel = "Snooze amount",
+            errorMessage = state.snoozeError,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        )
+        OpenCodeBottomSheetEntry(
+            title = state.snoozeUnit.label,
+            onClick = callbacks.onCycleSnoozeUnit,
+        )
+        OpenCodeButton(
+            variant = OpenCodeButtonVariant.CompactText("Snooze"),
+            onClick = callbacks.onConfirmCustomSnooze,
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
         )
     }
 
@@ -846,6 +967,10 @@ private fun HomeProjectsContent(
     onReorderProjects: (List<String>) -> Unit,
     removalSnackbar: OpenCodeSnackbarMessage?,
     onSessionLongPress: (SessionListSession) -> Unit,
+    showsSettle: Boolean = false,
+    settledPageVisible: Boolean = false,
+    onOpenSettled: () -> Unit = {},
+    onSettleGesture: (SessionListSession, HomeSettleGesture) -> Unit = { _, _ -> },
     revealNewestToken: Int = 0,
     pendingSelectedFilterId: String? = null,
     onConsumePendingSelectedFilter: () -> Unit = {},
@@ -892,12 +1017,13 @@ private fun HomeProjectsContent(
         onRefresh = onRefresh,
         modifier = modifier.fillMaxSize(),
     ) {
-        val sessions = sections.toCrossProjectSessionListSessions()
+        val nowEpochMs = System.currentTimeMillis()
+        val feed = sections.homeFeed(showsSettle = showsSettle, nowEpochMs = nowEpochMs)
         val chromeProjects = sections.toHomeChromeProjects()
         val filterTabs =
             SessionListHomeChrome.filterTabs(
                 projects = chromeProjects,
-                sessionCount = sessions.size,
+                sessionCount = if (showsSettle) feed.activeCount else feed.ladder.size,
             )
         var showProjectPicker by rememberSaveable { mutableStateOf(false) }
         val resolvedFilterId =
@@ -928,8 +1054,28 @@ private fun HomeProjectsContent(
             presentation = ProductAnalytics.Presentation.SHEET,
             visible = showProjectPicker,
         )
+        if (settledPageVisible) {
+            SettledSessionsPage(
+                sessions = feed.settled.visibleForFilter(resolvedFilterId),
+                onSessionSelected = { session ->
+                    onSessionClick(
+                        SessionOpenTarget(
+                            sessionId = session.id,
+                            title = session.title,
+                            worktree = session.worktree,
+                        ),
+                    )
+                },
+                onSessionLongPress = onSessionLongPress,
+                onSettleGesture = onSettleGesture,
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else {
         SessionList(
-            sessions = sessions,
+            sessions = feed.ladder,
+            settledSessions = if (showsSettle) feed.settled else emptyList(),
+            onOpenSettled = if (showsSettle) onOpenSettled else null,
+            onSettleGesture = if (showsSettle) onSettleGesture else null,
             filterTabs = filterTabs,
             selectedFilterId = resolvedFilterId,
             createError = projectSessionCreateError,
@@ -986,6 +1132,7 @@ private fun HomeProjectsContent(
                     null
                 },
         )
+        }
         OpenCodeBottomSheet(
             visible = showProjectPicker,
             title = "Filter by project",
@@ -1020,31 +1167,74 @@ private class DisplayedSessions {
     var value: List<SessionListSession> = emptyList()
 }
 
-/** Active rows newest first, then archived and settled rows newest first. */
-internal fun List<ProjectSectionUi>.toCrossProjectSessionListSessions(): List<SessionListSession> {
-    val active = crossProjectRows { it.allSessions }.toDedupedSessionList()
-    val activeIds = active.map { it.id }.toSet()
-    val archived =
-        crossProjectRows { it.archivedSessions }
-            .filter { (_, session) -> session.id !in activeIds }
-            .toDedupedSessionList()
-    return active + archived
+private data class HomeFeed(
+    val ladder: List<SessionListSession>,
+    val settled: List<SessionListSession>,
+    val activeCount: Int,
+)
+
+/** Active rows on the ladder. Settled rows move to [HomeFeed.settled] only when settle is on. */
+private fun List<ProjectSectionUi>.homeFeed(
+    showsSettle: Boolean,
+    nowEpochMs: Long,
+): HomeFeed {
+    if (!showsSettle) {
+        val ladder = crossProjectRows { it.allSessions } + crossProjectRows { it.archivedSessions }
+        return HomeFeed(ladder = ladder, settled = emptyList(), activeCount = ladder.size)
+    }
+    val ladder =
+        crossProjectRows({ it.allSessions }, nowEpochMs, showsSettle = true) +
+            crossProjectRows(
+                { section -> section.archivedSessions.filterNot { it.isSettled } },
+                nowEpochMs,
+                showsSettle = true,
+            )
+    val settled =
+        crossProjectRows(
+            { section -> section.archivedSessions.filter { it.isSettled } },
+            nowEpochMs,
+            showsSettle = true,
+            settledPage = true,
+        )
+    return HomeFeed(
+        ladder = ladder,
+        settled = settled,
+        activeCount = sumOf { it.allSessions.size },
+    )
 }
+
+/** Active rows newest first, then archived rows newest first. */
+internal fun List<ProjectSectionUi>.toCrossProjectSessionListSessions(): List<SessionListSession> =
+    crossProjectRows { it.allSessions } + crossProjectRows { it.archivedSessions }
 
 private fun List<ProjectSectionUi>.crossProjectRows(
     sessionsOf: (ProjectSectionUi) -> List<SessionSummary>,
-): List<Pair<ProjectSectionUi, SessionSummary>> =
-    flatMap { section ->
-        sessionsOf(section).map { session -> section to session }
-    }
-
-private fun List<Pair<ProjectSectionUi, SessionSummary>>.toDedupedSessionList(): List<SessionListSession> {
-    val flattened = this
+    nowEpochMs: Long = 0L,
+    showsSettle: Boolean = false,
+    settledPage: Boolean = false,
+): List<SessionListSession> {
+    val flattened =
+        flatMap { section ->
+            sessionsOf(section).map { session -> section to session }
+        }
     val chosenIndexById = mutableMapOf<String, Int>()
     flattened.forEachIndexed { index, (_, session) ->
-        val timestamp = session.updatedAtEpochMs ?: 0L
+        val timestamp =
+            if (settledPage) {
+                session.settledAtEpochMs ?: session.updatedAtEpochMs ?: 0L
+            } else {
+                session.updatedAtEpochMs ?: 0L
+            }
         val chosenIndex = chosenIndexById[session.id]
-        val chosenTimestamp = chosenIndex?.let { flattened[it].second.updatedAtEpochMs ?: 0L }
+        val chosenTimestamp =
+            chosenIndex?.let { chosen ->
+                val chosenSession = flattened[chosen].second
+                if (settledPage) {
+                    chosenSession.settledAtEpochMs ?: chosenSession.updatedAtEpochMs ?: 0L
+                } else {
+                    chosenSession.updatedAtEpochMs ?: 0L
+                }
+            }
         if (chosenTimestamp == null || timestamp > chosenTimestamp) {
             chosenIndexById[session.id] = index
         }
@@ -1052,26 +1242,62 @@ private fun List<Pair<ProjectSectionUi, SessionSummary>>.toDedupedSessionList():
     return chosenIndexById.values
         .sortedWith(
             compareByDescending<Int> { index ->
-                flattened[index].second.updatedAtEpochMs ?: 0L
+                val session = flattened[index].second
+                if (settledPage) {
+                    session.settledAtEpochMs ?: session.updatedAtEpochMs ?: 0L
+                } else {
+                    session.updatedAtEpochMs ?: 0L
+                }
             }.thenBy { index -> index },
         )
         .map { index ->
             val (section, session) = flattened[index]
+            val snoozed =
+                showsSettle &&
+                    !settledPage &&
+                    HomeSettleFeed.isSnoozed(session.snoozedUntilEpochMs, nowEpochMs, session.isSettled)
+            val gestures =
+                when {
+                    !showsSettle -> emptyList()
+                    settledPage -> listOf(HomeSettleGesture.Unsettle)
+                    else ->
+                        HomeSettleFeed.gestures(
+                            showsSettle = true,
+                            isSettled = false,
+                            isSnoozed = snoozed,
+                            snoozeBlocked = session.snoozeBlockReason != null,
+                            isArchived = session.isArchived,
+                        )
+                }
+            val until = session.snoozedUntilEpochMs
             SessionListSession(
                 id = session.id,
                 title = session.title,
                 worktree = section.worktree,
                 letter = section.letter,
                 letterAccent = section.letterAccent,
-                subtitle = section.pathSubtitle,
-                status = session.toSessionListStatus(),
-                caption = session.homeCaption(),
+                subtitle =
+                    when {
+                        settledPage -> ""
+                        snoozed && until != null -> "Until ${HomeSettleFeed.untilLabel(until, nowEpochMs)}"
+                        else -> section.pathSubtitle
+                    },
+                status = if (snoozed) SessionListStatus.Snoozed else session.toSessionListStatus(),
+                caption =
+                    when {
+                        settledPage -> session.settledAtEpochMs?.let(RelativeTimeFormatting::format).orEmpty()
+                        snoozed && until != null -> HomeSettleFeed.wakeInLabel(until, nowEpochMs)
+                        else -> session.homeCaption()
+                    },
                 updatedAtEpochMs = session.updatedAtEpochMs,
                 retryAttempt = session.retryAttempt(),
                 statusStale = session.statusStale,
+                settleGestures = gestures,
+                showStatus = !settledPage,
             )
         }
 }
+
 
 internal fun List<ProjectSectionUi>.toHomeChromeProjects(): List<SessionListHomeChrome.Project> {
     val counts = toCrossProjectSessionListSessions().groupingBy { it.worktree }.eachCount()

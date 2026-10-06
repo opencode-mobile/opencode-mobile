@@ -51,6 +51,10 @@ protocol SessionRepository: Sendable {
     func listArchivedSessions(directory: String?) async throws -> [Session]
     func unarchiveSession(id: String, directory: String?) async throws -> Session
     func unsettleSession(id: String, directory: String?) async throws -> Bool
+    /// Hides the thread until `snoozedUntil`, an ISO-8601 timestamp. Engines without snooze ignore it.
+    func snoozeSession(id: String, snoozedUntil: String, directory: String?) async throws -> Bool
+    /// Clears a snooze. Engines without snooze ignore it.
+    func wakeSession(id: String, directory: String?) async throws -> Bool
     func setRuntimeMode(id: String, runtimeMode: String, directory: String?) async throws -> Session
     func setModelSelection(id: String, providerInstanceID: String, modelID: String, directory: String?) async throws -> Session
 }
@@ -155,6 +159,10 @@ extension SessionRepository {
     }
 
     func unsettleSession(id _: String, directory _: String?) async throws -> Bool { false }
+
+    func snoozeSession(id _: String, snoozedUntil _: String, directory _: String?) async throws -> Bool { false }
+
+    func wakeSession(id _: String, directory _: String?) async throws -> Bool { false }
 
     func setRuntimeMode(id _: String, runtimeMode _: String, directory _: String?) async throws -> Session {
         throw SessionError.http(statusCode: 400, message: "Runtime mode is not available")

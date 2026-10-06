@@ -213,6 +213,14 @@ struct EngineSessionRepository: SessionRepository, Sendable {
         try await selected().unsettleSession(id: id, directory: directory)
     }
 
+    func snoozeSession(id: String, snoozedUntil: String, directory: String?) async throws -> Bool {
+        try await selected().snoozeSession(id: id, snoozedUntil: snoozedUntil, directory: directory)
+    }
+
+    func wakeSession(id: String, directory: String?) async throws -> Bool {
+        try await selected().wakeSession(id: id, directory: directory)
+    }
+
     func setRuntimeMode(id: String, runtimeMode: String, directory: String?) async throws -> Session {
         try await selected().setRuntimeMode(id: id, runtimeMode: runtimeMode, directory: directory)
     }

@@ -7,11 +7,12 @@ enum SessionListStatus: Hashable {
     case running
     case retrying(attempt: Int?)
     case ready
+    case snoozed
 
     var isAttention: Bool {
         switch self {
         case .running, .retrying, .ready: true
-        case .idle: false
+        case .idle, .snoozed: false
         }
     }
 
@@ -34,6 +35,8 @@ enum SessionListStatus: Hashable {
             )
         case .ready:
             base = OpenCodeListItemStatus(text: "Ready", tone: .success)
+        case .snoozed:
+            base = OpenCodeListItemStatus(text: "Snoozed", tone: .warning)
         }
         if isStale {
             return OpenCodeListItemStatus(text: base.text, tone: .stale)
@@ -53,6 +56,10 @@ struct SessionListSession: Identifiable, Hashable {
     let statusIsStale: Bool
     let caption: String
     let updatedAtEpochMs: Int64?
+    /// Empty hides swipe. Home fills this only when settle is available.
+    let settleGestures: [HomeSettleGesture]
+    /// Settled-page rows keep the letter and caption and drop the status pill.
+    let showStatus: Bool
 
     init(
         id: String,
@@ -64,7 +71,9 @@ struct SessionListSession: Identifiable, Hashable {
         status: SessionListStatus,
         statusIsStale: Bool = false,
         caption: String,
-        updatedAtEpochMs: Int64? = nil
+        updatedAtEpochMs: Int64? = nil,
+        settleGestures: [HomeSettleGesture] = [],
+        showStatus: Bool = true
     ) {
         self.id = id
         self.title = title
@@ -76,6 +85,8 @@ struct SessionListSession: Identifiable, Hashable {
         self.statusIsStale = statusIsStale
         self.caption = caption
         self.updatedAtEpochMs = updatedAtEpochMs
+        self.settleGestures = settleGestures
+        self.showStatus = showStatus
     }
 }
 
@@ -154,6 +165,9 @@ struct SessionList<EmptyContent: View>: View {
     let onDisplayedSessionsChange: (([SessionListSession]) -> Void)?
     let showsEmptyContent: Bool
     let emptyContent: EmptyContent
+    let settledSessions: [SessionListSession]
+    let onOpenSettled: (() -> Void)?
+    let onSettleGesture: ((SessionListSession, HomeSettleGesture) -> Void)?
 
     @State private var bottomSafeAreaInset: CGFloat = 0
     @State private var dockHeight: CGFloat = 0
@@ -183,6 +197,9 @@ struct SessionList<EmptyContent: View>: View {
         revealSelectedSessionToken: Int = 0,
         onDisplayedSessionsChange: (([SessionListSession]) -> Void)? = nil,
         showsEmptyContent: Bool = false,
+        settledSessions: [SessionListSession] = [],
+        onOpenSettled: (() -> Void)? = nil,
+        onSettleGesture: ((SessionListSession, HomeSettleGesture) -> Void)? = nil,
         @ViewBuilder emptyContent: () -> EmptyContent = { EmptyView() }
     ) {
         self.sessions = sessions
@@ -203,6 +220,9 @@ struct SessionList<EmptyContent: View>: View {
         self.onDisplayedSessionsChange = onDisplayedSessionsChange
         self.showsEmptyContent = showsEmptyContent
         self.emptyContent = emptyContent()
+        self.settledSessions = settledSessions
+        self.onOpenSettled = onOpenSettled
+        self.onSettleGesture = onSettleGesture
         _incomingFilterId = State(initialValue: selectedFilterId)
         _feedLayers = State(initialValue: [SessionListFeedLayer(id: selectedFilterId, isOutgoing: false)])
     }
@@ -292,7 +312,8 @@ struct SessionList<EmptyContent: View>: View {
                     bottomObscuredHeight: dockHeight,
                     followingTop: isCurrent ? $followingTop : .constant(true),
                     onRefresh: isCurrent ? onRefresh : nil,
-                    onDisplayedSessionsChange: isCurrent ? onDisplayedSessionsChange : nil
+                    onDisplayedSessionsChange: isCurrent ? onDisplayedSessionsChange : nil,
+                    footer: settledLink(for: filterId)
                 ) { section in
                     switch section.kind {
                     case .recent:
@@ -335,33 +356,44 @@ struct SessionList<EmptyContent: View>: View {
     }
 
     private func sessionRow(_ session: SessionListSession, showStatusDot: Bool) -> some View {
-        OpenCodeListItem(
-            title: session.title,
-            subtitle: compactHomePath(
-                session.subtitle,
-                hideUserDirectoryPrefix: homeDisplayPreferences.hideUserDirectoryPrefix
-            ),
-            status: listItemStatus(session.status, isStale: session.statusIsStale),
-            caption: session.caption.isEmpty ? nil : session.caption,
-            selected: selectedSessionId == session.id,
-            startDecorator: .letter(
-                session.letter,
-                session.letterAccent,
-                statusDot: showStatusDot ? listItemStatus(session.status, isStale: session.statusIsStale).tone : nil
-            ),
-            action: { onSessionSelected(session) },
-            onLongPress: onSessionLongPress.map { handler in { handler(session) } }
-        )
-        .background {
-            if selectedSessionId == session.id {
-                GeometryReader { geometry in
-                    Color.clear.preference(
-                        key: SessionListSelectedRowFrameKey.self,
-                        value: geometry.frame(in: .named(sessionListViewportSpace))
-                    )
+        let status = listItemStatus(session.status, isStale: session.statusIsStale)
+        return SettleSwipeRow(gestures: session.settleGestures) { gesture in
+            onSettleGesture?(session, gesture)
+        } content: {
+            OpenCodeListItem(
+                title: session.title,
+                subtitle: session.subtitle.isEmpty ? nil : compactHomePath(
+                    session.subtitle,
+                    hideUserDirectoryPrefix: homeDisplayPreferences.hideUserDirectoryPrefix
+                ),
+                status: session.showStatus ? status : nil,
+                caption: session.caption.isEmpty ? nil : session.caption,
+                selected: selectedSessionId == session.id,
+                startDecorator: .letter(
+                    session.letter,
+                    session.letterAccent,
+                    statusDot: showStatusDot && session.showStatus ? status.tone : nil
+                ),
+                action: { onSessionSelected(session) },
+                onLongPress: onSessionLongPress.map { handler in { handler(session) } }
+            )
+            .background {
+                if selectedSessionId == session.id {
+                    GeometryReader { geometry in
+                        Color.clear.preference(
+                            key: SessionListSelectedRowFrameKey.self,
+                            value: geometry.frame(in: .named(sessionListViewportSpace))
+                        )
+                    }
                 }
             }
         }
+    }
+
+    private func settledLink(for filterId: String) -> AnyView {
+        let count = settledSessions.visibleForFilter(filterId).count
+        guard count > 0, let onOpenSettled else { return AnyView(EmptyView()) }
+        return AnyView(SettledSessionsLink(count: count, action: onOpenSettled))
     }
 
     private func listItemStatus(_ status: SessionListStatus, isStale: Bool) -> OpenCodeListItemStatus {
@@ -511,6 +543,7 @@ private struct SessionListStabilizedScrollView<SectionContent: View>: View {
     @Binding var followingTop: Bool
     let onRefresh: (() async -> Void)?
     let onDisplayedSessionsChange: (([SessionListSession]) -> Void)?
+    let footer: AnyView
     let sectionContent: (HomeSessionLadderSection<SessionListSession>) -> SectionContent
 
     @State private var previousSections: [HomeSessionLadderSection<SessionListSession>]
@@ -530,6 +563,7 @@ private struct SessionListStabilizedScrollView<SectionContent: View>: View {
         followingTop: Binding<Bool>,
         onRefresh: (() async -> Void)?,
         onDisplayedSessionsChange: (([SessionListSession]) -> Void)?,
+        footer: AnyView = AnyView(EmptyView()),
         @ViewBuilder sectionContent: @escaping (HomeSessionLadderSection<SessionListSession>) -> SectionContent
     ) {
         self.visible = visible
@@ -541,6 +575,7 @@ private struct SessionListStabilizedScrollView<SectionContent: View>: View {
         _followingTop = followingTop
         self.onRefresh = onRefresh
         self.onDisplayedSessionsChange = onDisplayedSessionsChange
+        self.footer = footer
         self.sectionContent = sectionContent
         let seeded = SessionListStabilizedOrder.apply(
             visible: visible,
@@ -568,6 +603,7 @@ private struct SessionListStabilizedScrollView<SectionContent: View>: View {
             bottomObscuredHeight: bottomObscuredHeight,
             followingTop: $followingTop,
             onRefresh: onRefresh,
+            footer: footer,
             sectionContent: sectionContent
         )
         .onAppear { ingest() }
@@ -616,6 +652,7 @@ private struct SessionListScrollView<SectionContent: View>: View {
     let bottomObscuredHeight: CGFloat
     @Binding var followingTop: Bool
     let onRefresh: (() async -> Void)?
+    let footer: AnyView
     let sectionContent: (HomeSessionLadderSection<SessionListSession>) -> SectionContent
 
     @State private var viewportHeight: CGFloat = 0
@@ -630,6 +667,7 @@ private struct SessionListScrollView<SectionContent: View>: View {
         bottomObscuredHeight: CGFloat,
         followingTop: Binding<Bool>,
         onRefresh: (() async -> Void)?,
+        footer: AnyView = AnyView(EmptyView()),
         @ViewBuilder sectionContent: @escaping (HomeSessionLadderSection<SessionListSession>) -> SectionContent
     ) {
         self.ladderSections = ladderSections
@@ -640,6 +678,7 @@ private struct SessionListScrollView<SectionContent: View>: View {
         self.bottomObscuredHeight = bottomObscuredHeight
         _followingTop = followingTop
         self.onRefresh = onRefresh
+        self.footer = footer
         self.sectionContent = sectionContent
     }
 
@@ -653,6 +692,7 @@ private struct SessionListScrollView<SectionContent: View>: View {
                     ForEach(ladderSections, id: \.id) { section in
                         sectionContent(section)
                     }
+                    footer
                 }
                 Color.clear.frame(height: sessionListFallbackBottomSpacer)
             }
@@ -758,6 +798,28 @@ private func remoteUnixHomePrefix(_ path: String) -> String? {
     let user = parts[2]
     guard !user.isEmpty else { return nil }
     return "/\(root)/\(user)"
+}
+
+private struct SettledSessionsLink: View {
+    let count: Int
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack {
+                Text(count == 1 ? "1 settled" : "\(count) settled")
+                Spacer()
+                OpenCodeIconImage(icon: .chevronRight, size: 18)
+            }
+            .font(OpenCodeTypography.body)
+            .foregroundStyle(OpenCodeColors.textInteractiveBase)
+            .padding(.horizontal, 16)
+            .frame(height: 56)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("settledLink")
+    }
 }
 
 extension Array where Element == SessionListSession {

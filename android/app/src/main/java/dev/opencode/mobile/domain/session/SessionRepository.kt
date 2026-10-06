@@ -212,6 +212,19 @@ interface SessionRepository {
         directory: String? = null,
     ): Boolean = false
 
+    /** Hides the thread until [snoozedUntil], an ISO-8601 timestamp. Engines without snooze ignore it. */
+    suspend fun snoozeSession(
+        id: String,
+        snoozedUntil: String,
+        directory: String? = null,
+    ): Boolean = false
+
+    /** Clears a snooze. Engines without snooze ignore it. */
+    suspend fun wakeSession(
+        id: String,
+        directory: String? = null,
+    ): Boolean = false
+
     suspend fun setRuntimeMode(
         id: String,
         runtimeMode: String,

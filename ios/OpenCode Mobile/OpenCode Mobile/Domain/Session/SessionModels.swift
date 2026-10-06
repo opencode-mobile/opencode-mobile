@@ -19,9 +19,19 @@ struct Session: Sendable, Equatable {
     var activeRunID: String? = nil
     /// T3: when the thread was settled and not re-activated; nil for active sessions.
     var settledAtEpochMs: Int64? = nil
+    /// T3: scheduled wake, whether or not the snooze is still in effect.
+    var snoozedUntilEpochMs: Int64? = nil
+    /// Why snooze is unavailable: "Still running" or "Waiting on you".
+    var snoozeBlockReason: String? = nil
 
     var isArchived: Bool { archivedAtEpochMs != nil }
     var isSettled: Bool { settledAtEpochMs != nil }
+    var snoozeBlocked: Bool { snoozeBlockReason != nil }
+
+    func isSnoozed(nowEpochMs: Int64) -> Bool {
+        guard !isSettled, let snoozedUntilEpochMs else { return false }
+        return snoozedUntilEpochMs > nowEpochMs
+    }
 }
 
 struct SessionRevert: Sendable, Equatable {

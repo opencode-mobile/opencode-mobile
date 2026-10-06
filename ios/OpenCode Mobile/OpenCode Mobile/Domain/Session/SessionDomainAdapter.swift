@@ -85,7 +85,10 @@ nonisolated struct SessionDomainAdapter: Sendable {
             updatedAtEpochMs: session.updatedAtEpochMs,
             isReady: isReady,
             statusIsStale: statusIsStale,
-            parentID: session.parentID
+            parentID: session.parentID,
+            snoozedUntilEpochMs: session.snoozedUntilEpochMs,
+            snoozeBlockReason: session.snoozeBlockReason,
+            settledAtEpochMs: session.settledAtEpochMs
         )
     }
 

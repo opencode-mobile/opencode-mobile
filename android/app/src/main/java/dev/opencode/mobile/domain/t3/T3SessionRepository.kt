@@ -220,6 +220,26 @@ class T3SessionRepository
             directory: String?,
         ): Boolean {
             runtime.dispatch(T3Commands.threadSettle(id))
+            runCatching { runtime.refreshShell() }
+            return true
+        }
+
+        override suspend fun snoozeSession(
+            id: String,
+            snoozedUntil: String,
+            directory: String?,
+        ): Boolean {
+            runtime.dispatch(T3Commands.threadSnooze(id, snoozedUntil))
+            runCatching { runtime.refreshShell() }
+            return true
+        }
+
+        override suspend fun wakeSession(
+            id: String,
+            directory: String?,
+        ): Boolean {
+            runtime.dispatch(T3Commands.threadUnsnooze(id))
+            runCatching { runtime.refreshShell() }
             return true
         }
 

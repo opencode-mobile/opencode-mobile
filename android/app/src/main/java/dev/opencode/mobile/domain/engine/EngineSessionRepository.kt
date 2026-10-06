@@ -249,6 +249,17 @@ class EngineSessionRepository private constructor(
             directory: String?,
         ): Boolean = delegate().unsettleSession(id, directory)
 
+        override suspend fun snoozeSession(
+            id: String,
+            snoozedUntil: String,
+            directory: String?,
+        ): Boolean = delegate().snoozeSession(id, snoozedUntil, directory)
+
+        override suspend fun wakeSession(
+            id: String,
+            directory: String?,
+        ): Boolean = delegate().wakeSession(id, directory)
+
         override suspend fun setRuntimeMode(
             id: String,
             runtimeMode: String,

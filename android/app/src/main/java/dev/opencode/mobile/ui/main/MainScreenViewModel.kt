@@ -7,6 +7,9 @@ import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.engine.SessionCapabilities
+import dev.opencode.mobile.domain.home.HomeSettleFeed
+import dev.opencode.mobile.domain.home.HomeSettleGesture
+import dev.opencode.mobile.domain.home.SnoozeUnit
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.connection.userMessage
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
@@ -56,6 +59,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 
 @HiltViewModel
@@ -95,7 +99,7 @@ class MainScreenViewModel
                         )
                 },
                 capabilities = { SessionCapabilities.forProfile(activeConnectionManager.currentProfile()) },
-                onSessionRestored = { refresh() },
+                onSessionRestored = { reloadAfterSessionLifecycle() },
             )
         val sessionActions: StateFlow<HomeSessionActionsUiState> = sessionActionsRegion.state
         private val _revealNewestToken = MutableStateFlow(0)
@@ -120,6 +124,9 @@ class MainScreenViewModel
             get() = activeConnectionManager.current()?.baseUrl.orEmpty()
         private var liveObservationJobs: List<Job> = emptyList()
         private var observedWorktrees: List<String> = emptyList()
+        private val archivedByWorktree = ConcurrentHashMap<String, List<SessionSummary>>()
+        private var archivedReloadJob: Job? = null
+        private var archivedGeneration = 0
 
         // Title fields report one edit per dialog appearance instead of per keystroke.
         private var renameDraftEditReported = false
@@ -145,6 +152,18 @@ class MainScreenViewModel
         fun refresh() {
             viewModelScope.launch {
                 refreshSuspending()
+            }
+        }
+
+        /**
+         * Settle, snooze, and wake change which list a thread belongs to.
+         * [refresh] returns immediately while live observations are running, and that
+         * path never loads settled threads, so the row would stay on the ladder.
+         */
+        private fun reloadAfterSessionLifecycle() {
+            viewModelScope.launch {
+                sessionLiveStore.invalidate(null)
+                refreshArchivedSessions()
             }
         }
 
@@ -196,6 +215,7 @@ class MainScreenViewModel
                         try {
                             sessionLiveStore.invalidate(null)
                             sessionStatusLiveStore.invalidate(null)
+                            refreshArchivedSessions()
                         } finally {
                             _userRefreshing.value = false
                         }
@@ -370,6 +390,10 @@ class MainScreenViewModel
             }
             lastHomeHiddenAtEpochMs = null
             HomeDisplayPreferences.setLastHomeHiddenAtEpochMs(null)
+            // A settle from the session screen leaves home covered. Reveal reloads the lists.
+            if (SessionCapabilities.forProfile(activeConnectionManager.currentProfile()).showsArchivedSessions) {
+                reloadAfterSessionLifecycle()
+            }
         }
 
         /**
@@ -474,28 +498,76 @@ class MainScreenViewModel
                 ProductAnalytics.Screen.HOME,
                 ProductAnalytics.Action.HOME_LONG_PRESS_SESSION,
             )
+            val details = sessionActionDetails(sessionId, worktree)
             sessionActionsRegion.begin(
                 sessionId = sessionId,
                 title = title,
                 worktree = worktree,
                 canArchive = activeConnectionManager.currentCapabilities().supportsSessionArchive,
-                lifecycle = sessionLifecycle(sessionId, worktree),
+                lifecycle = details.lifecycle,
+                showsSettle = showsHomeSettle(),
+                snoozeBlockReason = details.snoozeBlockReason,
             )
         }
 
-        /** Whether a home row is an active, archived, or settled session. */
-        private fun sessionLifecycle(
+        fun showsHomeSettle(): Boolean = SessionCapabilities.forProfile(activeConnectionManager.currentProfile()).showsSettle
+
+        fun onSettleGesture(
+            sessionId: String,
+            title: String,
+            worktree: String,
+            gesture: HomeSettleGesture,
+        ) {
+            val details = sessionActionDetails(sessionId, worktree)
+            sessionActionsRegion.begin(
+                sessionId = sessionId,
+                title = title,
+                worktree = worktree,
+                canArchive = activeConnectionManager.currentCapabilities().supportsSessionArchive,
+                lifecycle = details.lifecycle,
+                showsSettle = showsHomeSettle(),
+                snoozeBlockReason = details.snoozeBlockReason,
+                presentSheet = false,
+            )
+            when (gesture) {
+                HomeSettleGesture.Settle -> sessionActionsRegion.chooseSettle()
+                HomeSettleGesture.Snooze -> sessionActionsRegion.openSnooze()
+                HomeSettleGesture.Wake -> sessionActionsRegion.chooseWake()
+                HomeSettleGesture.Unsettle -> sessionActionsRegion.chooseUnsettle()
+            }
+        }
+
+        private data class SessionActionDetails(
+            val lifecycle: HomeSessionLifecycle,
+            val snoozeBlockReason: String?,
+        )
+
+        /** Active rows can be snoozed; archived and settled rows come from the restore list. */
+        private fun sessionActionDetails(
             sessionId: String,
             worktree: String,
-        ): HomeSessionLifecycle {
-            val state = _uiState.value as? MainScreenUiState.Loaded ?: return HomeSessionLifecycle.Active
-            val section = state.sections.firstOrNull { it.worktree == worktree } ?: return HomeSessionLifecycle.Active
-            val archived = section.archivedSessions.firstOrNull { it.id == sessionId } ?: return HomeSessionLifecycle.Active
-            return when {
-                archived.isArchived -> HomeSessionLifecycle.Archived
-                archived.isSettled -> HomeSessionLifecycle.Settled
-                else -> HomeSessionLifecycle.Active
+        ): SessionActionDetails {
+            val state = _uiState.value as? MainScreenUiState.Loaded
+                ?: return SessionActionDetails(HomeSessionLifecycle.Active, null)
+            val section = state.sections.firstOrNull { it.worktree == worktree }
+                ?: return SessionActionDetails(HomeSessionLifecycle.Active, null)
+            val active = section.allSessions.firstOrNull { it.id == sessionId }
+            if (active != null) {
+                val snoozed = HomeSettleFeed.isSnoozed(active.snoozedUntilEpochMs, System.currentTimeMillis(), active.isSettled)
+                return SessionActionDetails(
+                    lifecycle = if (snoozed) HomeSessionLifecycle.Snoozed else HomeSessionLifecycle.Active,
+                    snoozeBlockReason = active.snoozeBlockReason,
+                )
             }
+            val archived = section.archivedSessions.firstOrNull { it.id == sessionId }
+                ?: return SessionActionDetails(HomeSessionLifecycle.Active, null)
+            val lifecycle =
+                when {
+                    archived.isArchived -> HomeSessionLifecycle.Archived
+                    archived.isSettled -> HomeSessionLifecycle.Settled
+                    else -> HomeSessionLifecycle.Active
+                }
+            return SessionActionDetails(lifecycle, null)
         }
 
         fun chooseUnarchive() {
@@ -508,6 +580,42 @@ class MainScreenViewModel
             val state = sessionActions.value
             if (state.target == null || state.lifecycle != HomeSessionLifecycle.Settled || state.lifecycleInFlight) return
             sessionActionsRegion.chooseUnsettle()
+        }
+
+        fun chooseSettle() {
+            val state = sessionActions.value
+            if (state.target == null || state.lifecycle != HomeSessionLifecycle.Active || state.lifecycleInFlight) return
+            sessionActionsRegion.chooseSettle()
+        }
+
+        fun chooseWake() {
+            val state = sessionActions.value
+            if (state.target == null || state.lifecycle != HomeSessionLifecycle.Snoozed || state.lifecycleInFlight) return
+            sessionActionsRegion.chooseWake()
+        }
+
+        fun openSnooze() {
+            sessionActionsRegion.openSnooze()
+        }
+
+        fun dismissSnooze() {
+            sessionActionsRegion.dismissSnooze()
+        }
+
+        fun updateSnoozeAmount(text: String) {
+            sessionActionsRegion.updateSnoozeAmount(text)
+        }
+
+        fun cycleSnoozeUnit() {
+            sessionActionsRegion.cycleSnoozeUnit()
+        }
+
+        fun chooseSnoozePreset(untilEpochMs: Long) {
+            sessionActionsRegion.chooseSnoozePreset(untilEpochMs)
+        }
+
+        fun confirmCustomSnooze() {
+            sessionActionsRegion.confirmCustomSnooze()
         }
 
         /**
@@ -875,7 +983,13 @@ class MainScreenViewModel
                 .map { session ->
                     sessionDomainAdapter
                         .toSessionSummary(session)
-                        .copy(isArchived = session.isArchived, isSettled = session.isSettled && !session.isArchived)
+                        .copy(
+                            isArchived = session.isArchived,
+                            isSettled = session.isSettled && !session.isArchived,
+                            snoozedUntilEpochMs = session.snoozedUntilEpochMs,
+                            snoozeBlockReason = session.snoozeBlockReason,
+                            settledAtEpochMs = session.settledAtEpochMs,
+                        )
                 }
         }
 
@@ -988,6 +1102,8 @@ class MainScreenViewModel
             if (liveObservationsRunning(worktrees)) return
             stopLiveObservations()
             observedWorktrees = worktrees
+            archivedReloadJob?.cancel()
+            archivedReloadJob = viewModelScope.launch { refreshArchivedSessions() }
             liveObservationJobs =
                 worktrees.map { worktree ->
                     viewModelScope.launch {
@@ -1011,9 +1127,37 @@ class MainScreenViewModel
         }
 
         private fun stopLiveObservations() {
+            archivedGeneration += 1
+            archivedReloadJob?.cancel()
+            archivedReloadJob = null
+            archivedByWorktree.clear()
             liveObservationJobs.forEach { it.cancel() }
             liveObservationJobs = emptyList()
             observedWorktrees = emptyList()
+        }
+
+        /** Settled and archived rows are not in the live session list. Keep the latest fetch. */
+        private suspend fun refreshArchivedSessions() {
+            val generation = archivedGeneration
+            val loaded = _uiState.value as? MainScreenUiState.Loaded ?: return
+            if (!SessionCapabilities.forProfile(activeConnectionManager.currentProfile()).showsArchivedSessions) return
+            val fetched =
+                loaded.sections.associate { section ->
+                    section.worktree to loadArchivedSummaries(section.worktree)
+                }
+            if (generation != archivedGeneration) return
+            archivedByWorktree.putAll(fetched)
+            applyArchivedSessions()
+        }
+
+        private fun applyArchivedSessions() {
+            val loaded = _uiState.value as? MainScreenUiState.Loaded ?: return
+            val sections =
+                loaded.sections.map { section ->
+                    val archived = archivedByWorktree[section.worktree] ?: return@map section
+                    if (archived == section.archivedSessions) section else section.copy(archivedSessions = archived)
+                }
+            _uiState.value = loaded.copy(sections = sections)
         }
 
         private fun liveObservationsRunning(worktrees: List<String>): Boolean =
@@ -1050,6 +1194,7 @@ class MainScreenViewModel
                 section.copy(
                     allSessions = summaries,
                     sessionsFromCache = sessionsFromCache,
+                    archivedSessions = archivedByWorktree[worktree] ?: section.archivedSessions,
                 )
             val updatedSections =
                 state.sections.map { current ->
@@ -1142,9 +1287,15 @@ data class HomeSessionActionsUiState(
     val deleteConfirmVisible: Boolean = false,
     val lifecycleInFlight: Boolean = false,
     val lifecycle: HomeSessionLifecycle = HomeSessionLifecycle.Active,
+    val showsSettle: Boolean = false,
+    val snoozeBlockReason: String? = null,
+    val snoozeVisible: Boolean = false,
+    val snoozeAmount: String = "1",
+    val snoozeUnit: SnoozeUnit = SnoozeUnit.Hours,
+    val snoozeError: String? = null,
 ) {
     val hasOpenDialog: Boolean
-        get() = renameVisible || forkVisible || forkResultVisible || deleteConfirmVisible || lifecycleInFlight
+        get() = renameVisible || forkVisible || forkResultVisible || deleteConfirmVisible || lifecycleInFlight || snoozeVisible
 }
 
 /** Where a home session row sits in its lifecycle; drives the long-press actions. */
@@ -1152,6 +1303,7 @@ enum class HomeSessionLifecycle {
     Active,
     Archived,
     Settled,
+    Snoozed,
 }
 
 data class ProjectSectionUi(

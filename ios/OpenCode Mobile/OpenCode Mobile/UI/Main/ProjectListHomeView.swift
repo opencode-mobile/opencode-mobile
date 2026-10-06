@@ -20,6 +20,7 @@ struct ProjectListHomeView: View {
     @State private var displayedSessions: [SessionListSession] = []
     /// Bumped when a keyboard shortcut selects a row so the list scrolls it into view.
     @State private var revealSelectedSessionToken = 0
+    @State private var settledPageVisible = false
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Binding private var presentConnectionSetupOnAppear: Bool
@@ -154,6 +155,9 @@ struct ProjectListHomeView: View {
                 } else {
                     viewModel.markHomeHidden()
                 }
+            }
+            .onChange(of: viewModel.showsHomeSettle) { _, shows in
+                if !shows { settledPageVisible = false }
             }
             .onAppear {
                 if isHomeVisible {
@@ -320,7 +324,29 @@ struct ProjectListHomeView: View {
                 isPresented: sessionActionsSheetBinding,
                 title: "Session actions"
             ) {
-                if viewModel.sessionActionsLifecycle == .active {
+                if viewModel.sessionActionsLifecycle == .snoozed {
+                    OpenCodeBottomSheetEntry(
+                        title: "Wake",
+                        enabled: !viewModel.sessionActionInFlight,
+                        startDecorator: .icon(.check),
+                        action: { Task { await viewModel.wakeSessionAction() } }
+                    )
+                }
+                if viewModel.sessionActionsLifecycle == .active && viewModel.sessionActionsShowsSettle {
+                    OpenCodeBottomSheetEntry(
+                        title: "Settle",
+                        enabled: !viewModel.sessionActionInFlight,
+                        startDecorator: .icon(.check),
+                        action: { Task { await viewModel.settleSessionAction() } }
+                    )
+                    OpenCodeBottomSheetEntry(
+                        title: viewModel.sessionActionsSnoozeBlockReason.map { "Snooze · \($0)" } ?? "Snooze",
+                        enabled: viewModel.sessionActionsSnoozeBlockReason == nil && !viewModel.sessionActionInFlight,
+                        startDecorator: .icon(.check),
+                        action: { viewModel.openSnooze() }
+                    )
+                }
+                if viewModel.sessionActionsLifecycle == .active || viewModel.sessionActionsLifecycle == .snoozed {
                     OpenCodeBottomSheetEntry(
                         title: "Rename session",
                         startDecorator: .icon(.edit),
@@ -365,6 +391,35 @@ struct ProjectListHomeView: View {
                     startDecorator: .icon(.close),
                     action: { viewModel.requestDeleteSessionAction() }
                 )
+            }
+            .openCodeBottomSheet(
+                isPresented: snoozeSheetBinding,
+                title: "Snooze until",
+                contentMode: .form
+            ) {
+                ForEach(HomeSettleFeed.snoozePresets(nowEpochMs: homeNowEpochMs), id: \.id) { preset in
+                    OpenCodeBottomSheetEntry(
+                        title: "\(preset.label) · \(preset.whenLabel)",
+                        action: { Task { await viewModel.chooseSnoozePreset(untilEpochMs: preset.atEpochMs) } }
+                    )
+                }
+                OpenCodeTextInput(
+                    text: snoozeAmountBinding,
+                    hint: "Amount",
+                    accessibilityLabel: "Snooze amount",
+                    errorMessage: viewModel.snoozeError
+                )
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                OpenCodeBottomSheetEntry(
+                    title: viewModel.snoozeUnit.label,
+                    action: { viewModel.cycleSnoozeUnit() }
+                )
+                OpenCodeButton(variant: .compactText(title: "Snooze")) {
+                    Task { await viewModel.confirmCustomSnooze() }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(16)
             }
             .fullScreenCover(item: $connectionSetupPresentation) { presentation in
                 ConnectionSetupView(
@@ -608,15 +663,23 @@ struct ProjectListHomeView: View {
 
     private var homePane: some View {
         VStack(spacing: 0) {
-            OpenCodeTopBar(
-                title: viewModel.serversChrome.title,
-                subtitleAccessory: showsLiveUpdatesStatus
-                    ? .statusDot(viewModel.liveUpdatesConnectionStatus.openCodeStatus)
-                    : nil,
-                actions: homeTopBarActions,
-                onTitleClick: viewModel.serversChrome.isSwitcher ? { viewModel.showServersSheet() } : nil,
-                titleMenuExpanded: viewModel.serversChrome.sheetVisible
-            )
+            if settledPageVisible && viewModel.showsHomeSettle {
+                OpenCodeTopBar(
+                    title: "Settled",
+                    subtitle: settledPageCount == 1 ? "1 thread" : "\(settledPageCount) threads",
+                    leading: .back { settledPageVisible = false }
+                )
+            } else {
+                OpenCodeTopBar(
+                    title: viewModel.serversChrome.title,
+                    subtitleAccessory: showsLiveUpdatesStatus
+                        ? .statusDot(viewModel.liveUpdatesConnectionStatus.openCodeStatus)
+                        : nil,
+                    actions: homeTopBarActions,
+                    onTitleClick: viewModel.serversChrome.isSwitcher ? { viewModel.showServersSheet() } : nil,
+                    titleMenuExpanded: viewModel.serversChrome.sheetVisible
+                )
+            }
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -783,14 +846,51 @@ struct ProjectListHomeView: View {
     private var projectPickerTabs: [SessionListFilterTab] {
         switch viewModel.state {
         case let .loaded(sections, _, _, _):
-            let sessions = sections.crossProjectSessionListSessions()
+            let feed = sections.homeFeed(showsSettle: viewModel.showsHomeSettle, nowEpochMs: homeNowEpochMs)
             return SessionListHomeChrome.filterTabs(
                 projects: sections.homeChromeProjects(),
-                sessionCount: sessions.count
+                sessionCount: viewModel.showsHomeSettle ? feed.activeCount : feed.ladder.count
             )
         default:
             return []
         }
+    }
+
+    /// Filtered settled rows behind the Settled top bar. Zero until that page is open.
+    private var settledPageCount: Int {
+        guard settledPageVisible, viewModel.showsHomeSettle,
+              case let .loaded(sections, _, _, _) = viewModel.state
+        else { return 0 }
+        let feed = sections.homeFeed(showsSettle: true, nowEpochMs: homeNowEpochMs)
+        let tabs = SessionListHomeChrome.filterTabs(
+            projects: sections.homeChromeProjects(),
+            sessionCount: feed.activeCount
+        )
+        let resolved = SessionListHomeChrome.resolvedFilterId(
+            selectedId: selectedSessionFilterId,
+            tabs: tabs
+        )
+        return feed.settled.visibleForFilter(resolved).count
+    }
+
+    private var homeNowEpochMs: Int64 {
+        Int64(Date().timeIntervalSince1970 * 1000)
+    }
+
+    private var snoozeSheetBinding: Binding<Bool> {
+        Binding(
+            get: { viewModel.snoozeSheetVisible },
+            set: { presented in
+                if !presented { viewModel.dismissSnooze() }
+            }
+        )
+    }
+
+    private var snoozeAmountBinding: Binding<String> {
+        Binding(
+            get: { viewModel.snoozeAmount },
+            set: { viewModel.updateSnoozeAmount($0) }
+        )
     }
 
     private var projectPickerBinding: Binding<Bool> {
@@ -913,18 +1013,56 @@ struct ProjectListHomeView: View {
         sections: [ProjectSectionItem],
         createError: String?
     ) -> some View {
-        let sessions = sections.crossProjectSessionListSessions()
+        let showsSettle = viewModel.showsHomeSettle
+        let feed = sections.homeFeed(showsSettle: showsSettle, nowEpochMs: homeNowEpochMs)
         let chromeProjects = sections.homeChromeProjects()
         let filterTabs = SessionListHomeChrome.filterTabs(
             projects: chromeProjects,
-            sessionCount: sessions.count
+            sessionCount: showsSettle ? feed.activeCount : feed.ladder.count
         )
         let selectedFilterId = SessionListHomeChrome.resolvedFilterId(
             selectedId: selectedSessionFilterId,
             tabs: filterTabs
         )
+        Group {
+            if settledPageVisible && showsSettle {
+                SettledSessionsPage(
+                    sessions: feed.settled.visibleForFilter(selectedFilterId),
+                    onSessionSelected: { session in
+                        ProductAnalytics.logUserAction(
+                            screenId: ProductAnalytics.Screen.home,
+                            actionId: ProductAnalytics.Action.homeOpenSession
+                        )
+                        openSession(
+                            SessionListItem(
+                                id: session.id,
+                                title: session.title,
+                                worktree: session.worktree
+                            )
+                        )
+                    },
+                    onSessionLongPress: { session in
+                        viewModel.onSessionLongPress(
+                            sessionId: session.id,
+                            title: session.title,
+                            worktree: session.worktree
+                        )
+                    },
+                    onSettleGesture: { session, gesture in
+                        Task {
+                            await viewModel.onSettleGesture(
+                                sessionId: session.id,
+                                title: session.title,
+                                worktree: session.worktree,
+                                gesture: gesture
+                            )
+                        }
+                    },
+                    onRefresh: { await viewModel.pullToRefresh() }
+                )
+            } else {
         SessionList(
-            sessions: sessions,
+            sessions: feed.ladder,
             filterTabs: filterTabs,
             selectedFilterId: selectedFilterId,
             selectedSessionId: isSplitLayout ? selectedSession?.id : nil,
@@ -986,8 +1124,24 @@ struct ProjectListHomeView: View {
                 }
             },
             showsEmptyContent: sections.isEmpty,
+            settledSessions: showsSettle ? feed.settled : [],
+            onOpenSettled: showsSettle ? { settledPageVisible = true } : nil,
+            onSettleGesture: showsSettle
+                ? { session, gesture in
+                    Task {
+                        await viewModel.onSettleGesture(
+                            sessionId: session.id,
+                            title: session.title,
+                            worktree: session.worktree,
+                            gesture: gesture
+                        )
+                    }
+                }
+                : nil,
             emptyContent: { NoProjectsEmptyState() }
         )
+            }
+        }
         .onChange(of: selectedFilterId, initial: true) { _, resolved in
             if selectedSessionFilterId != resolved {
                 selectedSessionFilterId = resolved
@@ -1010,6 +1164,9 @@ struct SessionListItem: Identifiable, Hashable {
     let parentID: String?
     /// Active rows come from `listSessions`; archived and settled ones from `listArchivedSessions`.
     var lifecycle: HomeSessionLifecycle = .active
+    var snoozedUntilEpochMs: Int64? = nil
+    var snoozeBlockReason: String? = nil
+    var settledAtEpochMs: Int64? = nil
 
     init(
         id: String,
@@ -1021,7 +1178,10 @@ struct SessionListItem: Identifiable, Hashable {
         isReady: Bool = false,
         statusIsStale: Bool = false,
         optimisticNavigationInstanceID: UUID? = nil,
-        parentID: String? = nil
+        parentID: String? = nil,
+        snoozedUntilEpochMs: Int64? = nil,
+        snoozeBlockReason: String? = nil,
+        settledAtEpochMs: Int64? = nil
     ) {
         self.id = id
         self.title = title
@@ -1033,6 +1193,9 @@ struct SessionListItem: Identifiable, Hashable {
         self.statusIsStale = statusIsStale
         self.optimisticNavigationInstanceID = optimisticNavigationInstanceID
         self.parentID = parentID
+        self.snoozedUntilEpochMs = snoozedUntilEpochMs
+        self.snoozeBlockReason = snoozeBlockReason
+        self.settledAtEpochMs = settledAtEpochMs
     }
 }
 
@@ -1076,7 +1239,7 @@ extension SessionListItem {
         let relative = updatedAtEpochMs.map { RelativeTimeFormatting.format(epochMs: $0) } ?? ""
         let prefix: String
         switch lifecycle {
-        case .active: return relative
+        case .active, .snoozed: return relative
         case .archived: prefix = "Archived"
         case .settled: prefix = "Settled"
         }
@@ -1084,8 +1247,40 @@ extension SessionListItem {
     }
 }
 
+private struct HomeFeed {
+    var ladder: [SessionListSession]
+    var settled: [SessionListSession]
+    var activeCount: Int
+}
+
 extension Array where Element == ProjectSectionItem {
-    /// Active rows newest first, then archived and settled rows newest first.
+    /// Active rows stay on the ladder. Settled rows move off it only when settle is on.
+    func homeFeed(showsSettle: Bool, nowEpochMs: Int64) -> HomeFeed {
+        if !showsSettle {
+            let ladder = crossProjectSessionListSessions()
+            return HomeFeed(ladder: ladder, settled: [], activeCount: ladder.count)
+        }
+        let ladder =
+            crossProjectRows(\.allSessions, nowEpochMs: nowEpochMs, showsSettle: true)
+            + crossProjectRows(
+                { $0.archivedSessions.filter { $0.lifecycle != .settled } },
+                nowEpochMs: nowEpochMs,
+                showsSettle: true
+            )
+        let settled = crossProjectRows(
+            { $0.archivedSessions.filter { $0.lifecycle == .settled } },
+            nowEpochMs: nowEpochMs,
+            showsSettle: true,
+            settledPage: true
+        )
+        return HomeFeed(
+            ladder: ladder,
+            settled: settled,
+            activeCount: reduce(0) { $0 + $1.allSessions.count }
+        )
+    }
+
+    /// Active rows newest first, then archived rows newest first.
     func crossProjectSessionListSessions() -> [SessionListSession] {
         let active = crossProjectRows(\.allSessions)
         let activeIDs = Set(active.map(\.id))
@@ -1093,7 +1288,12 @@ extension Array where Element == ProjectSectionItem {
         return active + archived
     }
 
-    private func crossProjectRows(_ sessionsOf: (ProjectSectionItem) -> [SessionListItem]) -> [SessionListSession] {
+    private func crossProjectRows(
+        _ sessionsOf: (ProjectSectionItem) -> [SessionListItem],
+        nowEpochMs: Int64 = 0,
+        showsSettle: Bool = false,
+        settledPage: Bool = false
+    ) -> [SessionListSession] {
         let flattened = flatMap { section in
             sessionsOf(section).map { session in
                 (section: section, session: session)
@@ -1101,9 +1301,9 @@ extension Array where Element == ProjectSectionItem {
         }
         var chosenIndexById: [String: Int] = [:]
         for (index, row) in flattened.enumerated() {
-            let timestamp = row.session.updatedAtEpochMs ?? 0
+            let timestamp = sortEpoch(row.session, settledPage: settledPage)
             if let chosenIndex = chosenIndexById[row.session.id] {
-                let chosenTimestamp = flattened[chosenIndex].session.updatedAtEpochMs ?? 0
+                let chosenTimestamp = sortEpoch(flattened[chosenIndex].session, settledPage: settledPage)
                 if timestamp > chosenTimestamp {
                     chosenIndexById[row.session.id] = index
                 }
@@ -1112,29 +1312,86 @@ extension Array where Element == ProjectSectionItem {
             }
         }
         return chosenIndexById.values.sorted { lhs, rhs in
-            let leftTimestamp = flattened[lhs].session.updatedAtEpochMs ?? 0
-            let rightTimestamp = flattened[rhs].session.updatedAtEpochMs ?? 0
+            let leftTimestamp = sortEpoch(flattened[lhs].session, settledPage: settledPage)
+            let rightTimestamp = sortEpoch(flattened[rhs].session, settledPage: settledPage)
             if leftTimestamp != rightTimestamp {
                 return leftTimestamp > rightTimestamp
             }
             return lhs < rhs
         }.map { index in
-            let section = flattened[index].section
-            let session = flattened[index].session
-            return SessionListSession(
-                id: session.id,
-                title: session.title,
-                worktree: section.worktree,
-                letter: section.letter,
-                letterAccent: section.letterAccent,
-                subtitle: section.pathSubtitle,
-                status: session.sessionListStatus(),
-                statusIsStale: session.statusIsStale,
-                caption: session.homeCaption,
-                updatedAtEpochMs: session.updatedAtEpochMs
+            sessionListRow(
+                section: flattened[index].section,
+                session: flattened[index].session,
+                nowEpochMs: nowEpochMs,
+                showsSettle: showsSettle,
+                settledPage: settledPage
             )
         }
     }
+
+    private func sortEpoch(_ session: SessionListItem, settledPage: Bool) -> Int64 {
+        if settledPage {
+            return session.settledAtEpochMs ?? session.updatedAtEpochMs ?? 0
+        }
+        return session.updatedAtEpochMs ?? 0
+    }
+
+    private func sessionListRow(
+        section: ProjectSectionItem,
+        session: SessionListItem,
+        nowEpochMs: Int64,
+        showsSettle: Bool,
+        settledPage: Bool
+    ) -> SessionListSession {
+        let snoozed =
+            showsSettle && !settledPage && HomeSettleFeed.isSnoozed(
+                snoozedUntilEpochMs: session.snoozedUntilEpochMs,
+                nowEpochMs: nowEpochMs,
+                isSettled: session.lifecycle == .settled
+            )
+        let gestures: [HomeSettleGesture]
+        if !showsSettle {
+            gestures = []
+        } else if settledPage {
+            gestures = [.unsettle]
+        } else {
+            gestures = HomeSettleFeed.gestures(
+                showsSettle: true,
+                isSettled: false,
+                isSnoozed: snoozed,
+                snoozeBlocked: session.snoozeBlockReason != nil,
+                isArchived: session.lifecycle == .archived
+            )
+        }
+        let until = session.snoozedUntilEpochMs
+        let subtitle: String
+        let caption: String
+        if settledPage {
+            subtitle = ""
+            caption = session.settledAtEpochMs.map { RelativeTimeFormatting.format(epochMs: $0) } ?? ""
+        } else if snoozed, let until {
+            subtitle = "Until \(HomeSettleFeed.untilLabel(epochMs: until, nowEpochMs: nowEpochMs))"
+            caption = HomeSettleFeed.wakeInLabel(snoozedUntilEpochMs: until, nowEpochMs: nowEpochMs)
+        } else {
+            subtitle = section.pathSubtitle
+            caption = session.homeCaption
+        }
+        return SessionListSession(
+            id: session.id,
+            title: session.title,
+            worktree: section.worktree,
+            letter: section.letter,
+            letterAccent: section.letterAccent,
+            subtitle: subtitle,
+            status: snoozed ? .snoozed : session.sessionListStatus(),
+            statusIsStale: session.statusIsStale,
+            caption: caption,
+            updatedAtEpochMs: session.updatedAtEpochMs,
+            settleGestures: gestures,
+            showStatus: !settledPage
+        )
+    }
+
 
     func homeChromeProjects() -> [SessionListHomeChrome.Project] {
         let counts = Dictionary(grouping: crossProjectSessionListSessions(), by: \.worktree).mapValues(\.count)

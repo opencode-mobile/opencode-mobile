@@ -102,6 +102,31 @@ object T3Commands {
             put("reason", "user")
         }
 
+    /** [snoozedUntil] is an ISO-8601 timestamp. */
+    fun threadSnooze(
+        threadId: String,
+        snoozedUntil: String,
+        commandId: String = commandId(),
+    ): JsonObject =
+        buildJsonObject {
+            put("type", "thread.snooze")
+            put("commandId", commandId)
+            put("threadId", threadId)
+            put("snoozedUntil", snoozedUntil)
+        }
+
+    /** Clears a snooze; the contract only allows the `user` reason from clients. */
+    fun threadUnsnooze(
+        threadId: String,
+        commandId: String = commandId(),
+    ): JsonObject =
+        buildJsonObject {
+            put("type", "thread.unsnooze")
+            put("commandId", commandId)
+            put("threadId", threadId)
+            put("reason", "user")
+        }
+
     fun threadRuntimeModeSet(
         threadId: String,
         runtimeMode: String,

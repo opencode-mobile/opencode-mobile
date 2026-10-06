@@ -21,6 +21,26 @@ nonisolated enum T3SessionCommands {
         ]
     }
 
+    /// `snoozedUntil` is an ISO-8601 timestamp.
+    static func snoozeCommand(commandID: String, threadID: String, snoozedUntil: String) -> [String: Any] {
+        [
+            "type": "thread.snooze",
+            "commandId": commandID,
+            "threadId": threadID,
+            "snoozedUntil": snoozedUntil,
+        ]
+    }
+
+    /// Clears a snooze; the contract only allows the `user` reason from clients.
+    static func unsnoozeCommand(commandID: String, threadID: String) -> [String: Any] {
+        [
+            "type": "thread.unsnooze",
+            "commandId": commandID,
+            "threadId": threadID,
+            "reason": "user",
+        ]
+    }
+
     static func runtimeModeSetCommand(commandID: String, threadID: String, runtimeMode: String) -> [String: Any] {
         [
             "type": "thread.runtime-mode.set",

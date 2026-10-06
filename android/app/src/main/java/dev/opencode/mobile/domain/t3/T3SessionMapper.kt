@@ -33,7 +33,16 @@ object T3SessionMapper {
             runtimeMode = thread.runtimeMode,
             modelId = thread.modelSelection?.model,
             settledAtEpochMs = if (T3Activity.isSettled(thread)) T3MessageMapper.epochMs(thread.settledAt) else null,
+            snoozedUntilEpochMs = T3MessageMapper.epochMs(thread.snoozedUntil),
+            snoozeBlockReason = snoozeBlockReason(thread),
         )
+
+    /** Running wins over a pending prompt. Either one blocks a new snooze. */
+    fun snoozeBlockReason(thread: T3Thread): String? {
+        if (T3Activity.isRunning(thread)) return "Still running"
+        if (!thread.pendingRequestId.isNullOrBlank()) return "Waiting on you"
+        return null
+    }
 
     fun approvalId(thread: T3Thread): String? {
         val id = thread.pendingRequestId?.takeIf { it.isNotBlank() } ?: return null

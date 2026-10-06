@@ -69,6 +69,9 @@ class T3SessionControlsTest {
         model: String = "gpt-5",
         createdAt: String? = "2026-10-01T08:00:00Z",
         updatedAt: String? = "2026-10-03T12:00:00Z",
+        snoozedUntil: String? = null,
+        pendingRequestId: String? = null,
+        pendingRequestKind: String? = null,
     ): JsonObject =
         buildJsonObject {
             put("id", id)
@@ -91,6 +94,16 @@ class T3SessionControlsTest {
             if (deletedAt != null) put("deletedAt", deletedAt)
             if (createdAt != null) put("createdAt", createdAt)
             if (updatedAt != null) put("updatedAt", updatedAt)
+            if (snoozedUntil != null) put("snoozedUntil", snoozedUntil)
+            if (pendingRequestId != null) {
+                put(
+                    "pendingRuntimeRequest",
+                    buildJsonObject {
+                        put("id", pendingRequestId)
+                        if (pendingRequestKind != null) put("kind", pendingRequestKind)
+                    },
+                )
+            }
         }
 
     private fun shell(
@@ -165,6 +178,32 @@ class T3SessionControlsTest {
                 T3Json.thread(thread("thr-4", settledAt = "2026-10-02T00:00:00Z", settledOverride = "active"))!!,
             )
         assertFalse(overridden.isSettled)
+    }
+
+    @Test
+    fun toSession_mapsSnoozeAndBlockReason() {
+        val snoozed = T3SessionMapper.toSession(T3Json.thread(thread("thr-s", snoozedUntil = "2099-01-01T00:00:00Z"))!!)
+        assertEquals(T3MessageMapper.epochMs("2099-01-01T00:00:00Z"), snoozed.snoozedUntilEpochMs)
+        assertNull(snoozed.snoozeBlockReason)
+
+        val running =
+            T3SessionMapper.toSession(
+                T3Json.thread(
+                    thread(
+                        "thr-r",
+                        activeRunId = "run-1",
+                        snoozedUntil = "2099-01-01T00:00:00Z",
+                        pendingRequestId = "req",
+                    ),
+                )!!,
+            )
+        assertEquals("Still running", running.snoozeBlockReason)
+
+        val waiting =
+            T3SessionMapper.toSession(
+                T3Json.thread(thread("thr-w", pendingRequestId = "req", pendingRequestKind = "user_input"))!!,
+            )
+        assertEquals("Waiting on you", waiting.snoozeBlockReason)
     }
 
     @Test
@@ -277,6 +316,26 @@ class T3SessionControlsTest {
             assertEquals("thr-1", unsettle.str("threadId"))
             assertEquals("user", unsettle.str("reason"))
             assertEquals(2, h.dispatched().size)
+        }
+
+    @Test
+    fun snoozeAndWake_dispatchContractCommands() =
+        runTest {
+            val h = Harness(this).build()
+            h.http.shellJson = shell(threads = listOf(thread("thr-1")))
+
+            assertTrue(h.repository.snoozeSession("thr-1", snoozedUntil = "2099-01-01T00:00:00Z", directory = "/repos/a"))
+            val snooze = h.lastCommand()
+            assertEquals("thread.snooze", snooze.str("type"))
+            assertEquals("thr-1", snooze.str("threadId"))
+            assertEquals("2099-01-01T00:00:00Z", snooze.str("snoozedUntil"))
+            assertNull(snooze["reason"])
+
+            assertTrue(h.repository.wakeSession("thr-1", directory = "/repos/a"))
+            val wake = h.lastCommand()
+            assertEquals("thread.unsnooze", wake.str("type"))
+            assertEquals("thr-1", wake.str("threadId"))
+            assertEquals("user", wake.str("reason"))
         }
 
     @Test

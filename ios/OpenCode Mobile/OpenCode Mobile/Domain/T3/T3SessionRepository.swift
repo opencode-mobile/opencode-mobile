@@ -257,6 +257,7 @@ final class T3SessionRepository: SessionRepository, @unchecked Sendable {
         try await client.dispatchCommand(
             T3RpcCodec.settleCommand(commandID: UUID().uuidString, threadID: id)
         )
+        _ = try? await client.fetchShell(force: true)
         return true
     }
 
@@ -285,6 +286,22 @@ final class T3SessionRepository: SessionRepository, @unchecked Sendable {
     func unsettleSession(id: String, directory _: String?) async throws -> Bool {
         try await client.dispatchCommand(
             T3SessionCommands.unsettleCommand(commandID: UUID().uuidString, threadID: id)
+        )
+        _ = try? await client.fetchShell(force: true)
+        return true
+    }
+
+    func snoozeSession(id: String, snoozedUntil: String, directory _: String?) async throws -> Bool {
+        try await client.dispatchCommand(
+            T3SessionCommands.snoozeCommand(commandID: UUID().uuidString, threadID: id, snoozedUntil: snoozedUntil)
+        )
+        _ = try? await client.fetchShell(force: true)
+        return true
+    }
+
+    func wakeSession(id: String, directory _: String?) async throws -> Bool {
+        try await client.dispatchCommand(
+            T3SessionCommands.unsnoozeCommand(commandID: UUID().uuidString, threadID: id)
         )
         _ = try? await client.fetchShell(force: true)
         return true
@@ -394,6 +411,8 @@ final class T3SessionRepository: SessionRepository, @unchecked Sendable {
         copy.modelName = session.modelName
         copy.activeRunID = session.activeRunID
         copy.settledAtEpochMs = session.settledAtEpochMs
+        copy.snoozedUntilEpochMs = session.snoozedUntilEpochMs
+        copy.snoozeBlockReason = session.snoozeBlockReason
         return copy
     }
 

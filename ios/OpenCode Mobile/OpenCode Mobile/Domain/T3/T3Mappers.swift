@@ -45,8 +45,17 @@ nonisolated enum T3ShellMapper {
             runtimeMode: thread.runtimeMode,
             modelName: thread.modelSelection?.model,
             activeRunID: thread.activeRunID,
-            settledAtEpochMs: thread.isSettled ? T3JSON.epochMs(thread.settledAt) : nil
+            settledAtEpochMs: thread.isSettled ? T3JSON.epochMs(thread.settledAt) : nil,
+            snoozedUntilEpochMs: T3JSON.epochMs(thread.snoozedUntil),
+            snoozeBlockReason: snoozeBlockReason(for: thread)
         )
+    }
+
+    /// Running wins over a pending prompt. Either one blocks a new snooze.
+    static func snoozeBlockReason(for thread: T3Thread) -> String? {
+        if thread.isBusy { return "Still running" }
+        if let id = thread.pendingRequestID, !id.isEmpty { return "Waiting on you" }
+        return nil
     }
 
     /// Archived and settled threads as sessions, newest first.
@@ -98,7 +107,8 @@ nonisolated enum T3ShellMapper {
             updatedAtEpochMs: T3JSON.epochMs(object["updatedAt"]),
             createdAtEpochMs: T3JSON.epochMs(object["createdAt"]),
             pendingRequestID: pending.flatMap { T3JSON.string($0, "id") },
-            pendingRequestKind: pending.flatMap { T3JSON.string($0, "kind") }
+            pendingRequestKind: pending.flatMap { T3JSON.string($0, "kind") },
+            snoozedUntil: T3JSON.string(object["snoozedUntil"])
         )
     }
 

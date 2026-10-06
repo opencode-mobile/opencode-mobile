@@ -97,6 +97,7 @@ data class T3Thread(
     val pendingRequestId: String? = null,
     val pendingRequestKind: String? = null,
     val createdAt: String? = null,
+    val snoozedUntil: String? = null,
 )
 
 data class T3ShellSnapshot(
