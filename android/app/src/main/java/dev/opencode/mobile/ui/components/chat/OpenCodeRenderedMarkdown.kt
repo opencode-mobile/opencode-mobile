@@ -116,23 +116,25 @@ fun OpenCodeRenderedMarkdown(
         onExpandableChange(isExpandable)
     }
 
-    Column(
-        modifier =
-            visibleModifier.onSizeChanged { size ->
-                val height = with(density) { size.height.toDp() }
-                if (height.value.roundToInt() > 0) {
-                    onContentHeightChange(height)
-                }
-            },
-        verticalArrangement = Arrangement.spacedBy(blockSpacingFor(variant)),
-    ) {
-        document.blocks.forEach { block ->
-            MarkdownBlockView(
-                block = block,
-                variant = variant,
-                isStreaming = isStreaming,
-                onLinkTap = onLinkTap,
-            )
+    SelectionContainer {
+        Column(
+            modifier =
+                visibleModifier.onSizeChanged { size ->
+                    val height = with(density) { size.height.toDp() }
+                    if (height.value.roundToInt() > 0) {
+                        onContentHeightChange(height)
+                    }
+                },
+            verticalArrangement = Arrangement.spacedBy(blockSpacingFor(variant)),
+        ) {
+            document.blocks.forEach { block ->
+                MarkdownBlockView(
+                    block = block,
+                    variant = variant,
+                    isStreaming = isStreaming,
+                    onLinkTap = onLinkTap,
+                )
+            }
         }
     }
 }
@@ -291,14 +293,12 @@ private fun CodeBlockView(
                 .horizontalScroll(scrollState)
                 .padding(horizontal = 12.dp, vertical = 10.dp),
     ) {
-        SelectionContainer {
-            Text(
-                text = annotated,
-                modifier = Modifier.wrapContentWidth(Alignment.Start, unbounded = true),
-                style = CodeTextStyle,
-                softWrap = false,
-            )
-        }
+        Text(
+            text = annotated,
+            modifier = Modifier.wrapContentWidth(Alignment.Start, unbounded = true),
+            style = CodeTextStyle,
+            softWrap = false,
+        )
     }
 }
 
@@ -510,8 +510,7 @@ private fun MarkdownInlineText(
     onLinkTap: ((String) -> Unit)?,
 ) {
     val colors = markdownTextColors()
-    // LinkAnnotation keeps link taps without ClickableText's full-text pointer
-    // ownership, so parent combinedClickable long-press (message actions) still fires.
+    // LinkAnnotation keeps link taps inside the document selection scope.
     val annotated = rememberMarkdownAnnotatedString(inlines, colors, onLinkTap)
     Text(
         text = annotated,

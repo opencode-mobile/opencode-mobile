@@ -599,7 +599,7 @@ private struct SessionChatMessageRow: View {
                         }
                         return nil
                     }(),
-                    onLongPress: {
+                    onMessageActions: {
                         guard message.renderedMarkdown != nil else { return nil }
                         return { openMessageActions(showsRevertMessage: true) }
                     }()
@@ -655,15 +655,24 @@ private struct SessionChatMessageActionsGestureModifier: ViewModifier {
     func body(content: Content) -> some View {
         if renderedMarkdown != nil {
             content
-                .onLongPressGesture(perform: onOpenMessageActions)
-                .accessibilityLabel(accessibilityLabel)
-                .accessibilityHint("Long press to show message actions")
         } else {
             content
                 .onTapGesture(perform: onOpenMessageActions)
                 .accessibilityLabel(accessibilityLabel)
                 .accessibilityHint("Shows message actions")
         }
+    }
+}
+
+private struct SessionChatMessageActionsButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        OpenCodeButton(
+            variant: .iconCircle(.moreVert, accessibilityLabel: "Message actions"),
+            contrast: .low,
+            action: action
+        )
     }
 }
 
@@ -705,8 +714,27 @@ private struct AssistantMessageContent: View {
         )
     }
 
+    /// One actions button for the message when it has prose. Tool-only rows
+    /// never opened the sheet from a text gesture, so they stay without one.
+    private var showsMessageActionsButton: Bool {
+        blocks.contains { block in
+            switch block {
+            case .text:
+                return true
+            case .stepParagraph(_, let paragraph):
+                return paragraph.text != nil
+            case .attachment, .toolCard, .toolGroup, .childSessionRow, .reasoning, .stopNote:
+                return false
+            }
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
+            if showsMessageActionsButton {
+                SessionChatMessageActionsButton(action: onOpenMessageActions)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            }
             // A step paragraph's block id grows with every tool; identify it by
             // its stable paragraph id so a new chip updates the row in place.
             ForEach(blocks, id: \.rowIdentity) { block in

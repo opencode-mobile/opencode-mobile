@@ -702,6 +702,7 @@ private struct InlineMarkdownText: View {
         Text(NativeMarkdownAttributedString.inline(inlines, font: font, color: color))
             .lineSpacing(lineSpacing)
             .fixedSize(horizontal: false, vertical: true)
+            .textSelection(.enabled)
     }
 }
 
@@ -718,9 +719,11 @@ private struct DeferredHighlightedCodeText: View {
             Text(code)
                 .font(OpenCodeTypography.code)
                 .foregroundStyle(OpenCodeColors.textStrong)
+                .textSelection(.enabled)
         } else {
             Text(NativeMarkdownAttributedString.code(code, spans: spans))
                 .font(OpenCodeTypography.code)
+                .textSelection(.enabled)
         }
     }
 }
@@ -741,6 +744,7 @@ private struct DeferredHighlightedDiffBlock: View {
                 let line = lines[index]
                 Text(NativeMarkdownAttributedString.code(line.text, spans: line.spans))
                     .font(OpenCodeTypography.code)
+                    .textSelection(.enabled)
                     .fixedSize(horizontal: true, vertical: false)
                     .frame(minWidth: 320, alignment: .leading)
                     .padding(.horizontal, 12)

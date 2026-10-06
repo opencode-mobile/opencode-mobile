@@ -56,6 +56,7 @@ struct OpenCodeOutgoingMessage: View {
     let metadataLabel: String
     let onTap: (() -> Void)?
     let onLongPress: (() -> Void)?
+    let onMessageActions: (() -> Void)?
 
     init(
         text: String,
@@ -63,7 +64,8 @@ struct OpenCodeOutgoingMessage: View {
         attachments: [OpenCodeAttachmentPresentation] = [],
         metadataLabel: String,
         onTap: (() -> Void)? = nil,
-        onLongPress: (() -> Void)? = nil
+        onLongPress: (() -> Void)? = nil,
+        onMessageActions: (() -> Void)? = nil
     ) {
         self.content = attachments.map(OpenCodeOutgoingMessageContent.attachment) + [
             .text(id: "message", text: text),
@@ -72,6 +74,7 @@ struct OpenCodeOutgoingMessage: View {
         self.metadataLabel = metadataLabel
         self.onTap = onTap
         self.onLongPress = onLongPress
+        self.onMessageActions = onMessageActions
     }
 
     init(
@@ -79,23 +82,29 @@ struct OpenCodeOutgoingMessage: View {
         renderedMarkdown: NativeMarkdownDocument? = nil,
         metadataLabel: String,
         onTap: (() -> Void)? = nil,
-        onLongPress: (() -> Void)? = nil
+        onLongPress: (() -> Void)? = nil,
+        onMessageActions: (() -> Void)? = nil
     ) {
         self.content = content
         self.renderedMarkdown = renderedMarkdown
         self.metadataLabel = metadataLabel
         self.onTap = onTap
         self.onLongPress = onLongPress
+        self.onMessageActions = onMessageActions
     }
 
     var body: some View {
+        let actionsTextID = messageActionsTextID
         OutgoingMessageTrailingMaxWidthLayout(maxWidthFraction: outgoingMessageMaxWidthFraction) {
             VStack(alignment: .trailing, spacing: 4) {
                 ForEach(content) { item in
                     switch item {
-                    case .text(_, let text):
+                    case .text(let id, let text):
                         if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                            interactiveTextPill(text: text)
+                            interactiveTextPill(
+                                text: text,
+                                showsMessageActions: id == actionsTextID
+                            )
                         }
                     case .attachment(let attachment):
                         OpenCodeMessageAttachment(attachment: attachment)
@@ -106,38 +115,63 @@ struct OpenCodeOutgoingMessage: View {
         }
     }
 
-    private func textPill(text: String) -> some View {
-        pillContent(text: text)
-            .padding(.horizontal, outgoingMessagePaddingHorizontal)
-            .padding(.vertical, outgoingMessagePaddingVertical)
-            .background(
-                OpenCodeColors.surfaceInteractiveWeak,
-                in: RoundedRectangle(cornerRadius: 8)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+    /// One actions button on the text bubble. Markdown user messages open the
+    /// sheet from that button; plain bubbles keep their tap.
+    private var messageActionsTextID: String? {
+        guard onMessageActions != nil else { return nil }
+        for item in content {
+            if case .text(let id, let text) = item,
+               !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return id
+            }
+        }
+        return nil
+    }
+
+    private func textPill(text: String, showsMessageActions: Bool) -> some View {
+        VStack(alignment: .trailing, spacing: 4) {
+            if showsMessageActions, let onMessageActions {
+                OpenCodeButton(
+                    variant: .iconCircle(.moreVert, accessibilityLabel: "Message actions"),
+                    contrast: .low,
+                    action: onMessageActions
+                )
+            }
+            pillContent(text: text)
+        }
+        .padding(.horizontal, outgoingMessagePaddingHorizontal)
+        .padding(.vertical, outgoingMessagePaddingVertical)
+        .background(
+            OpenCodeColors.surfaceInteractiveWeak,
+            in: RoundedRectangle(cornerRadius: 8)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
     @ViewBuilder
-    private func interactiveTextPill(text: String) -> some View {
-        switch (onTap, onLongPress) {
-        case (let onTap?, let onLongPress?):
-            textPill(text: text)
-                .onTapGesture(perform: onTap)
-                .onLongPressGesture(perform: onLongPress)
-                .accessibilityLabel("Outgoing message")
-                .accessibilityHint("Shows message actions")
-        case (nil, let onLongPress?):
-            textPill(text: text)
-                .onLongPressGesture(perform: onLongPress)
-                .accessibilityLabel("Outgoing message")
-                .accessibilityHint("Long press to show message actions")
-        case (let onTap?, nil):
-            textPill(text: text)
-                .onTapGesture(perform: onTap)
-                .accessibilityLabel("Outgoing message")
-                .accessibilityHint("Shows message actions")
-        case (nil, nil):
-            textPill(text: text)
+    private func interactiveTextPill(text: String, showsMessageActions: Bool) -> some View {
+        if showsMessageActions {
+            textPill(text: text, showsMessageActions: true)
+        } else {
+            switch (onTap, onLongPress) {
+            case (let onTap?, let onLongPress?):
+                textPill(text: text, showsMessageActions: false)
+                    .onTapGesture(perform: onTap)
+                    .onLongPressGesture(perform: onLongPress)
+                    .accessibilityLabel("Outgoing message")
+                    .accessibilityHint("Shows message actions")
+            case (nil, let onLongPress?):
+                textPill(text: text, showsMessageActions: false)
+                    .onLongPressGesture(perform: onLongPress)
+                    .accessibilityLabel("Outgoing message")
+            case (let onTap?, nil):
+                textPill(text: text, showsMessageActions: false)
+                    .onTapGesture(perform: onTap)
+                    .accessibilityLabel("Outgoing message")
+                    .accessibilityHint("Shows message actions")
+            case (nil, nil):
+                textPill(text: text, showsMessageActions: false)
+            }
         }
     }
 
