@@ -762,6 +762,41 @@ class ConnectionSetupViewModelTest {
         }
 
     @Test
+    fun submit_pairingCodeSegment_customUsername_savesAndProbesAsOpencode() =
+        runTest(dispatcher) {
+            val store = RecordingConnectionProfileStore()
+            val redeem = RecordingPairingCodeRedeeming(token = "typed-token")
+            val probed = mutableListOf<Pair<String, String?>>()
+            val viewModel =
+                viewModel(
+                    store = store,
+                    probe =
+                        ConnectionProbing { connection ->
+                            probed += connection.username to connection.password
+                            if (connection.password.isNullOrEmpty()) {
+                                throw ServerProbeError.Http(401, "Unauthorized")
+                            }
+                            ServerProtocol.V2
+                        },
+                    redeem = redeem,
+                )
+            viewModel.configure(initialProfile = null, mode = ConnectionSetupMode.Add)
+            viewModel.onUsernameChanged("alice")
+            viewModel.onCredentialSegmentChanged(ConnectionCredentialSegment.PairingCode)
+            viewModel.onBaseUrlChanged("http://10.0.0.8:4096/")
+            viewModel.onPairingCodeChanged("once-code")
+            var saved = false
+            viewModel.submit { saved = true }
+            advanceUntilIdle()
+            assertTrue(saved)
+            assertEquals(listOf("http://10.0.0.8:4096/" to "once-code"), redeem.calls)
+            assertEquals("opencode", store.saved.last().username)
+            val authenticated = probed.filter { !it.second.isNullOrEmpty() }
+            assertEquals(1, authenticated.size)
+            assertTrue(probed.all { it.first == "opencode" })
+        }
+
+    @Test
     fun submit_pairingCodeSegment_blankCode_showsSnackbarWithoutRedeem() =
         runTest(dispatcher) {
             val redeem = RecordingPairingCodeRedeeming()

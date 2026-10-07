@@ -152,17 +152,10 @@ struct V2SessionRemote: SessionRemote, Sendable {
         sessionID: String?,
         questions: [QuestionInfo]
     ) async throws -> Bool {
-        if questionID.hasPrefix("frm_") {
-            return try await api.replyToFormV2(
-                sessionID: sessionID ?? "",
-                formID: questionID,
-                body: V2FormReplyRequestDTO(answer: adapter.formAnswer(questions: questions, answers: answers))
-            )
-        }
-        return try await api.replyToQuestionV2(
+        try await api.replyToFormV2(
             sessionID: sessionID ?? "",
-            questionID: questionID,
-            body: QuestionReplyRequestDTO(answers: answers)
+            formID: questionID,
+            body: V2FormReplyRequestDTO(answer: adapter.formAnswer(questions: questions, answers: answers))
         )
     }
 
@@ -171,10 +164,7 @@ struct V2SessionRemote: SessionRemote, Sendable {
     }
 
     func rejectQuestion(questionID: String, directory _: String?, sessionID: String?) async throws -> Bool {
-        if questionID.hasPrefix("frm_") {
-            return try await api.cancelFormV2(sessionID: sessionID ?? "", formID: questionID)
-        }
-        return try await api.rejectQuestionV2(sessionID: sessionID ?? "", questionID: questionID)
+        try await api.cancelFormV2(sessionID: sessionID ?? "", formID: questionID)
     }
 
     func cancelPendingPrompt(sessionID: String, inboxID: String) async throws -> Bool {

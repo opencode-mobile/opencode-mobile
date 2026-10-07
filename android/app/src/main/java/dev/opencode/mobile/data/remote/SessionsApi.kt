@@ -393,26 +393,6 @@ class SessionsApi private constructor(
             }.bodyOnSuccess<ApiListEnvelope<V2FormInfoDto>>()
             .data
 
-    suspend fun replyToQuestionV2(
-        sessionId: String,
-        requestId: String,
-        body: QuestionReplyRequestDto,
-    ): Boolean =
-        httpClient
-            .get()
-            .post("api/session/$sessionId/question/$requestId/reply") {
-                setJsonBody(json, body)
-            }.ensureSuccess()
-
-    suspend fun rejectQuestionV2(
-        sessionId: String,
-        requestId: String,
-    ): Boolean =
-        httpClient
-            .get()
-            .post("api/session/$sessionId/question/$requestId/reject")
-            .ensureSuccess()
-
     suspend fun replyToFormV2(
         sessionId: String,
         formId: String,
@@ -583,8 +563,7 @@ class SessionsApi private constructor(
 
     /**
      * Live v2 404s can omit Content-Type. Decoding first then throws
-     * [io.ktor.client.call.NoTransformationFoundException] instead of HTTP 404,
-     * which skips the question→form fallback.
+     * [io.ktor.client.call.NoTransformationFoundException] instead of HTTP 404.
      */
     private suspend inline fun <reified T> HttpResponse.bodyOnSuccess(): T {
         if (!status.isSuccess()) throw failure()

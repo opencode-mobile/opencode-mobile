@@ -439,22 +439,6 @@ struct SessionProtocolRepositoryTests {
         #expect(ProtocolRoutingURLProtocol.requests[0].url?.path.contains("/api/question/request") != true)
     }
 
-    @Test func v2ReplyToQuestionUsesSessionScopedPath() async throws {
-        ProtocolRoutingURLProtocol.reset(responses: [.noContent])
-        let repository = makeSessionRepository(serverProtocol: .v2)
-
-        let ok = try await repository.replyToQuestion(
-            questionID: "que_1",
-            answers: [["Yes"]],
-            directory: "/repo",
-            sessionID: "ses_1"
-        )
-
-        #expect(ok)
-        let request = try #require(ProtocolRoutingURLProtocol.requests.first)
-        #expect(request.url?.path.hasSuffix("/api/session/ses_1/question/que_1/reply") == true)
-    }
-
     @Test func v2ReplyToFormUsesFieldKeysAndOptionValues() async throws {
         ProtocolRoutingURLProtocol.reset(responses: [.noContent])
         let repository = makeSessionRepository(serverProtocol: .v2)

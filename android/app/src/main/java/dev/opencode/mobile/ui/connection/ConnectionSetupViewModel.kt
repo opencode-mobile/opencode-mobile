@@ -347,6 +347,8 @@ class ConnectionSetupViewModel
                         showError("Enter a pairing code")
                         return
                     }
+                    // Typed codes redeem for user opencode. The username field is hidden here.
+                    updateFields(username = ServerConnectionDefaults.USERNAME)
                     redeemTypedPairingCode(code, onSaved)
                 }
             }

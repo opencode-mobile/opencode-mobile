@@ -583,34 +583,6 @@ class SessionProtocolRepositoryTest {
         }
 
     @Test
-    fun v2ReplyToQuestion_usesSessionScopedPath() =
-        runTest {
-            val requests = mutableListOf<HttpRequestData>()
-            val client =
-                testClient { request ->
-                    requests += request
-                    respond("", HttpStatusCode.NoContent)
-                }
-            val repository =
-                DefaultSessionRepository(
-                    SessionsApi(client, json),
-                    SessionDomainAdapter(),
-                    activeConnectionManager = manager(ServerProtocol.V2),
-                )
-
-            val ok = repository.replyToQuestion("ses_1", "que_1", listOf(listOf("Yes")), "/repo")
-
-            assertTrue(ok)
-            assertTrue(
-                requests
-                    .single()
-                    .url.encodedPath
-                    .contains("/api/session/ses_1/question/que_1/reply"),
-            )
-            assertTrue(requests.single().requestBodyText().contains("\"answers\""))
-        }
-
-    @Test
     fun v2ReplyToForm_sendsFieldKeysAndOptionValues() =
         runTest {
             val requests = mutableListOf<HttpRequestData>()
