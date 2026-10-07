@@ -10,6 +10,8 @@ struct ConnectionSetupView: View {
     @State private var urlFocused = false
     @State private var usernameFocused = false
     @State private var passwordFocused = false
+    @State private var pairingCodeFocused = false
+    @Environment(\.colorScheme) private var colorScheme
     @State private var showRemoveConfirm = false
     @State private var showPairingScanner = false
     /// Field-edit Analytics fires once per field so keystrokes are not events and
@@ -60,10 +62,11 @@ struct ConnectionSetupView: View {
                                 submitAction: .next,
                                 isFocused: $urlFocused,
                                 onSubmit: {
-                                    if viewModel.credentialsExpanded {
+                                    switch viewModel.credentialSegment {
+                                    case .password:
                                         usernameFocused = true
-                                    } else {
-                                        nameFocused = true
+                                    case .pairingCode:
+                                        pairingCodeFocused = true
                                     }
                                 }
                             )
@@ -81,41 +84,23 @@ struct ConnectionSetupView: View {
                             submitAction: .next,
                             isFocused: $nameFocused,
                             onSubmit: {
-                                if !viewModel.usesQRLayout, viewModel.credentialsExpanded {
-                                    usernameFocused = true
-                                } else {
+                                if viewModel.usesQRLayout {
                                     nameFocused = false
+                                } else {
+                                    switch viewModel.credentialSegment {
+                                    case .password:
+                                        usernameFocused = true
+                                    case .pairingCode:
+                                        pairingCodeFocused = true
+                                    }
                                 }
                             }
                         )
 
                         if !viewModel.usesQRLayout {
-                            Button {
-                                viewModel.setCredentialsExpanded(!viewModel.credentialsExpanded)
-                            } label: {
-                                HStack {
-                                    Text("Username & password")
-                                        .font(OpenCodeTypography.body)
-                                        .foregroundStyle(OpenCodeColors.textBase)
-                                    Spacer()
-                                    OpenCodeIconImage(
-                                        icon: viewModel.credentialsExpanded ? .collapseContent : .expandContent,
-                                        size: 20
-                                    )
-                                    .foregroundStyle(OpenCodeColors.textBase)
-                                }
-                                .contentShape(Rectangle())
-                                .padding(.vertical, 10)
-                            }
-                            .buttonStyle(.plain)
-                            .disabled(viewModel.isBusy)
-                            .accessibilityLabel(
-                                viewModel.credentialsExpanded
-                                    ? "Collapse username and password"
-                                    : "Expand username and password"
-                            )
-
-                            if viewModel.credentialsExpanded {
+                            credentialSegmentControl
+                            switch viewModel.credentialSegment {
+                            case .password:
                                 OpenCodeTextInput(
                                     text: $viewModel.username,
                                     hint: "Username",
@@ -127,13 +112,24 @@ struct ConnectionSetupView: View {
                                 )
                                 OpenCodeTextInput(
                                     text: $viewModel.password,
-                                    hint: "Password",
+                                    hint: "Password, optional",
                                     kind: .password,
                                     enabled: !viewModel.isBusy,
                                     isFocused: $passwordFocused,
                                     onSubmit: { passwordFocused = false }
                                 )
-                                Text("Default user is opencode. Password from OPENCODE_SERVER_PASSWORD.")
+                                Text("Default user is opencode. Password is optional.")
+                                    .font(OpenCodeTypography.bodySecondary)
+                                    .foregroundStyle(OpenCodeColors.textBase)
+                                    .padding(.leading, 2)
+                            case .pairingCode:
+                                ConnectionPairingCodeField(
+                                    text: $viewModel.pairingCode,
+                                    enabled: !viewModel.isBusy,
+                                    isFocused: $pairingCodeFocused,
+                                    onSubmit: { pairingCodeFocused = false }
+                                )
+                                Text("From the pair link. Works once and expires in 5 minutes.")
                                     .font(OpenCodeTypography.bodySecondary)
                                     .foregroundStyle(OpenCodeColors.textBase)
                                     .padding(.leading, 2)
@@ -153,13 +149,15 @@ struct ConnectionSetupView: View {
                     if !isKeyboardVisible {
                         pairingQREntry
                     }
-                    OpenCodeButton(
-                        variant: .fullWidthText(title: viewModel.primaryActionLabel),
-                        enabled: viewModel.primaryEnabled
-                    ) {
-                        Task {
-                            if await viewModel.submit() {
-                                onDismiss()
+                    if viewModel.showsPrimaryAction {
+                        OpenCodeButton(
+                            variant: .fullWidthText(title: viewModel.primaryActionLabel),
+                            enabled: viewModel.primaryEnabled
+                        ) {
+                            Task {
+                                if await viewModel.submit() {
+                                    onDismiss()
+                                }
                             }
                         }
                     }
@@ -222,7 +220,7 @@ struct ConnectionSetupView: View {
             PairingQRScannerView(
                 onScanned: { raw in
                     showPairingScanner = false
-                    viewModel.applyPairingQR(raw)
+                    Task { await viewModel.applyPairingQR(raw) }
                 },
                 onDismiss: { showPairingScanner = false }
             )
@@ -256,6 +254,45 @@ struct ConnectionSetupView: View {
         }
     }
 
+    private var credentialSegmentControl: some View {
+        HStack(spacing: 2) {
+            credentialSegmentButton(.password, title: "Password")
+            credentialSegmentButton(.pairingCode, title: "Pairing code")
+        }
+        .padding(2)
+        .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    private func credentialSegmentButton(
+        _ segment: ConnectionCredentialSegment,
+        title: String
+    ) -> some View {
+        let selected = viewModel.credentialSegment == segment
+        return Button {
+            viewModel.selectCredentialSegment(segment)
+        } label: {
+            Text(title)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(selected ? segmentSelectedText : OpenCodeColors.textBase)
+                .frame(maxWidth: .infinity, minHeight: 32)
+                .background(
+                    selected ? segmentSelectedFill : Color.clear,
+                    in: RoundedRectangle(cornerRadius: 8)
+                )
+        }
+        .buttonStyle(.plain)
+        .disabled(viewModel.isBusy)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    private var segmentSelectedFill: Color {
+        colorScheme == .dark ? OpenCodeColors.textStrong : OpenCodeColors.surfaceBase
+    }
+
+    private var segmentSelectedText: Color {
+        colorScheme == .dark ? OpenCodeColors.backgroundBase : OpenCodeColors.textStrong
+    }
+
     private var pairingQREntry: some View {
         Button(action: openPairingScanner) {
             VStack(spacing: 3) {
@@ -281,6 +318,7 @@ struct ConnectionSetupView: View {
         nameFocused = false
         usernameFocused = false
         passwordFocused = false
+        pairingCodeFocused = false
         UIApplication.shared.sendAction(
             #selector(UIResponder.resignFirstResponder),
             to: nil,
@@ -438,6 +476,45 @@ private struct ConnectionSetupPreview: View {
             initialProfile: profile,
             mode: mode
         )
+    }
+}
+
+private struct ConnectionPairingCodeField: View {
+    @Binding var text: String
+    var enabled: Bool
+    var isFocused: Binding<Bool>
+    var onSubmit: () -> Void
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        TextField("Pairing code", text: $text)
+            .font(OpenCodeTypography.body)
+            .foregroundStyle(OpenCodeColors.textStrong)
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+            .focused($focused)
+            .submitLabel(.done)
+            .onSubmit(onSubmit)
+            .padding(.horizontal, 12)
+            .frame(minHeight: 48)
+            .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: 8))
+            .overlay {
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(focused ? OpenCodeColors.interactive : OpenCodeColors.borderWeakerBase, lineWidth: focused ? 2 : 1)
+            }
+            .disabled(!enabled)
+            .opacity(enabled ? 1 : 0.6)
+            .accessibilityLabel("Pairing code")
+            .onChange(of: focused) { _, value in
+                if isFocused.wrappedValue != value {
+                    isFocused.wrappedValue = value
+                }
+            }
+            .onChange(of: isFocused.wrappedValue, initial: true) { _, value in
+                if focused != value {
+                    focused = value
+                }
+            }
     }
 }
 

@@ -1,17 +1,18 @@
 package dev.opencode.mobile.ui.connection
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -21,18 +22,24 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.domain.connection.ConnectionProfileIdentity
 import dev.opencode.mobile.domain.connection.PairingQRPayload
+import dev.opencode.mobile.theme.LocalOpenCodeDarkTheme
+import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.OpenCodeServerAddressInput
 import dev.opencode.mobile.ui.components.OpenCodeTextInput
 import dev.opencode.mobile.ui.components.OpenCodeTextInputKind
 import dev.opencode.mobile.ui.components.OpenCodeTextInputSubmitAction
-import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 internal const val QrAddressHint =
     "Both addresses are saved. Nothing to pick. The app uses Tailscale when it answers, " +
@@ -68,16 +75,19 @@ fun ConnectionSetupFields(
     onBaseUrlChanged: (String) -> Unit,
     onUsernameChanged: (String) -> Unit,
     onPasswordChanged: (String) -> Unit,
-    onCredentialsExpandedChanged: (Boolean) -> Unit,
+    onCredentialSegmentChanged: (ConnectionCredentialSegment) -> Unit,
+    onPairingCodeChanged: (String) -> Unit,
     onPasswordFocusConsumed: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val passwordFocusRequester = remember { FocusRequester() }
 
-    LaunchedEffect(uiState.requestPasswordFocus, uiState.credentialsExpanded) {
-        if (uiState.requestPasswordFocus && uiState.credentialsExpanded && !uiState.usesQrLayout) {
-            // Wait a frame so AnimatedVisibility has composed the password field.
-            kotlinx.coroutines.yield()
+    LaunchedEffect(uiState.requestPasswordFocus, uiState.credentialSegment) {
+        if (
+            uiState.requestPasswordFocus &&
+            uiState.credentialSegment == ConnectionCredentialSegment.Password &&
+            !uiState.usesQrLayout
+        ) {
             passwordFocusRequester.requestFocus()
             onPasswordFocusConsumed()
         }
@@ -130,42 +140,20 @@ fun ConnectionSetupFields(
             submitAction = OpenCodeTextInputSubmitAction.Next,
             enabled = !uiState.isBusy,
         )
-        Spacer(modifier = Modifier.height(4.dp))
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .clickable(
-                        enabled = !uiState.isBusy,
-                        role = Role.Button,
-                        onClick = { onCredentialsExpandedChanged(!uiState.credentialsExpanded) },
-                    ).padding(vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = "Username & password",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.weight(1f),
-            )
-            Icon(
-                imageVector =
-                    if (uiState.credentialsExpanded) {
-                        OpenCodeIcons.CollapseContent
-                    } else {
-                        OpenCodeIcons.ExpandContent
-                    },
-                contentDescription = if (uiState.credentialsExpanded) "Collapse" else "Expand",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(20.dp),
-            )
-        }
-        AnimatedVisibility(visible = uiState.credentialsExpanded) {
-            Column {
+        Spacer(modifier = Modifier.height(12.dp))
+        CredentialSegmentControl(
+            selected = uiState.credentialSegment,
+            enabled = !uiState.isBusy,
+            onSelected = onCredentialSegmentChanged,
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        when (uiState.credentialSegment) {
+            ConnectionCredentialSegment.Password -> {
                 OpenCodeTextInput(
                     value = uiState.username,
                     onValueChange = onUsernameChanged,
                     hint = "Username",
+                    kind = OpenCodeTextInputKind.Username,
                     submitAction = OpenCodeTextInputSubmitAction.Next,
                     enabled = !uiState.isBusy,
                 )
@@ -173,16 +161,81 @@ fun ConnectionSetupFields(
                 OpenCodeTextInput(
                     value = uiState.password,
                     onValueChange = onPasswordChanged,
-                    hint = "Password",
+                    hint = "Password, optional",
                     kind = OpenCodeTextInputKind.Password,
                     enabled = !uiState.isBusy,
                     modifier = Modifier.focusRequester(passwordFocusRequester),
                 )
                 Text(
-                    text = "Default user is opencode. Password from OPENCODE_SERVER_PASSWORD.",
+                    text = "Default user is opencode. Password is optional.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 6.dp, start = 2.dp),
+                )
+            }
+            ConnectionCredentialSegment.PairingCode -> {
+                OpenCodeTextInput(
+                    value = uiState.pairingCode,
+                    onValueChange = onPairingCodeChanged,
+                    hint = "Pairing code",
+                    kind = OpenCodeTextInputKind.Url,
+                    enabled = !uiState.isBusy,
+                )
+                Text(
+                    text = "From the pair link. Works once and expires in 5 minutes.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 6.dp, start = 2.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CredentialSegmentControl(
+    selected: ConnectionCredentialSegment,
+    enabled: Boolean,
+    onSelected: (ConnectionCredentialSegment) -> Unit,
+) {
+    val isDark = LocalOpenCodeDarkTheme.current
+    val track = openCodeColor("surface-raised-base")
+    val selectedFill = if (isDark) openCodeColor("text-strong") else openCodeColor("surface-base")
+    val selectedText = if (isDark) openCodeColor("background-base") else openCodeColor("text-strong")
+    val unselectedText = openCodeColor("text-base")
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(36.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(track)
+                .padding(2.dp),
+    ) {
+        listOf(
+            ConnectionCredentialSegment.Password to "Password",
+            ConnectionCredentialSegment.PairingCode to "Pairing code",
+        ).forEach { (segment, label) ->
+            val isSelected = segment == selected
+            Box(
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (isSelected) selectedFill else Color.Transparent)
+                        .clickable(
+                            enabled = enabled,
+                            role = Role.Tab,
+                            onClick = { onSelected(segment) },
+                        ).semantics { this.selected = isSelected },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (isSelected) selectedText else unselectedText,
                 )
             }
         }

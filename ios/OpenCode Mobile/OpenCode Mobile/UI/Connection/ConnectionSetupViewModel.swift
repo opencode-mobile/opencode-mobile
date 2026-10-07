@@ -13,6 +13,16 @@ enum ConnectionSetupMode: Equatable {
     case edit
 }
 
+enum ConnectionCredentialSegment: Equatable {
+    case password
+    case pairingCode
+}
+
+private enum ConnectFailureOrigin {
+    case manual
+    case scannedQr
+}
+
 struct ConnectionSetupAddressRow: Identifiable, Equatable {
     var url: String
     var title: String
@@ -28,6 +38,7 @@ struct ConnectionSetupAddressRow: Identifiable, Equatable {
 @Observable
 final class ConnectionSetupViewModel {
     static let qrSavedAddressesHint = "Both addresses are saved. Nothing to pick. The app uses Tailscale when it answers, and the local address when it does not. No password."
+    static let qrScanFailureMessage = "QR didn't connect. OpenCode 2's pairing API is still changing, so a scan can fail while this app is working. Enter the host and connect. Password is optional. A pairing code works too."
 
     var name = ""
     var baseURL = "" {
@@ -46,10 +57,11 @@ final class ConnectionSetupViewModel {
             }
         }
     }
+    var pairingCode = ""
+    private(set) var credentialSegment: ConnectionCredentialSegment = .password
     private(set) var state: ConnectionSetupState = .idle
     private(set) var mode: ConnectionSetupMode = .first
     private(set) var profileId = ""
-    private(set) var credentialsExpanded = false
     private(set) var requestPasswordFocus = false
     private(set) var snackbar: OpenCodeSnackbarMessage?
 
@@ -63,6 +75,11 @@ final class ConnectionSetupViewModel {
     private var savedProtocol: ServerProtocol?
     private var isEditingExistingProfile = false
     private var pendingPairingCode: String?
+    private var scannedQrPassword = ""
+    /// Set after a scanned QR has been probed and, when it carries a code, redeemed.
+    /// Save then stores the profile without spending the code again.
+    private(set) var qrPairingReady = false
+    private var pairedProtocol: ServerProtocol?
     private var addressProbeFinished = false
     private var unreachableAddresses = Set<String>()
     private var suppressServerURLClear = false
@@ -107,9 +124,13 @@ final class ConnectionSetupViewModel {
         self.mode = mode
         isEditingExistingProfile = initialProfile != nil && mode == .edit
         pendingPairingCode = nil
+        scannedQrPassword = ""
+        pairingCode = ""
+        credentialSegment = .password
+        qrPairingReady = false
+        pairedProtocol = nil
         detectedProtocol = nil
         state = .idle
-        credentialsExpanded = false
         requestPasswordFocus = false
         snackbar = nil
         addressProbeFinished = false
@@ -155,8 +176,14 @@ final class ConnectionSetupViewModel {
         case .saving:
             "Saving…"
         case .idle:
-            mode == .edit ? "Save" : "Connect"
+            if mode == .edit || qrPairingReady { "Save" } else { "Connect" }
         }
+    }
+
+    /// A scanned QR shows Save only after pairing succeeds. A failed scan returns to the manual form, where Connect stays visible.
+    var showsPrimaryAction: Bool {
+        if usesQRLayout, !isBusy, !qrPairingReady { return false }
+        return true
     }
 
     var canRemove: Bool {
@@ -185,6 +212,7 @@ final class ConnectionSetupViewModel {
     }
 
     func onFieldChanged() {
+        guard pairedProtocol == nil else { return }
         detectedProtocol = connectionUnchanged ? savedProtocol : nil
     }
 
@@ -200,8 +228,8 @@ final class ConnectionSetupViewModel {
         onFieldChanged()
     }
 
-    func setCredentialsExpanded(_ expanded: Bool) {
-        credentialsExpanded = expanded
+    func selectCredentialSegment(_ segment: ConnectionCredentialSegment) {
+        credentialSegment = segment
     }
 
     func consumePasswordFocusRequest() {
@@ -212,7 +240,7 @@ final class ConnectionSetupViewModel {
         snackbar = nil
     }
 
-    func applyPairingQR(_ raw: String) {
+    func applyPairingQR(_ raw: String) async {
         switch PairingQRPayload.parse(raw) {
         case let .success(credentials):
             apply(credentials)
@@ -220,6 +248,7 @@ final class ConnectionSetupViewModel {
                 ProductAnalytics.Action.connectionPairingQRScan,
                 outcome: ProductAnalytics.Outcome.success
             )
+            await completeScannedPairing()
         case .failure(.invalidPayload):
             snackbar = OpenCodeSnackbarMessage(
                 text: "This isn't an OpenCode 2 pairing QR",
@@ -259,21 +288,45 @@ final class ConnectionSetupViewModel {
     @discardableResult
     func submit() async -> Bool {
         guard !isBusy else { return false }
-        adoptPastedConnectLink()
+        if usesQRLayout, !qrPairingReady {
+            return false
+        }
+        if qrPairingReady {
+            return await persist()
+        }
         if Self.hostIsBlank(baseURL) {
             snackbar = OpenCodeSnackbarMessage(text: "Enter a host", variant: .error)
             return false
         }
-        if let code = pendingPairingCode, !code.isEmpty, password.isEmpty {
+        if adoptPastedConnectLink() {
+            if let code = pendingPairingCode, !code.isEmpty, password.isEmpty {
+                return await redeemThenSave(code: code)
+            }
+            if canSubmitWithoutProbe {
+                return await persist()
+            }
+            return await probeThenSave()
+        }
+        switch credentialSegment {
+        case .password:
+            if canSubmitWithoutProbe {
+                return await persist()
+            }
+            return await probeThenSave()
+        case .pairingCode:
+            let code = pairingCode.trimmingCharacters(in: .whitespacesAndNewlines)
+            if code.isEmpty {
+                snackbar = OpenCodeSnackbarMessage(text: "Enter a pairing code", variant: .error)
+                return false
+            }
             return await redeemThenSave(code: code)
         }
-        if canSubmitWithoutProbe {
-            return await persist()
-        }
-        return await probeThenSave()
     }
 
-    private func probeThenSave() async -> Bool {
+    private func probeThenSave(
+        persistOnSuccess: Bool = true,
+        origin: ConnectFailureOrigin = .manual
+    ) async -> Bool {
         state = .connecting
         snackbar = nil
         let candidates = urlsToProbe()
@@ -299,7 +352,11 @@ final class ConnectionSetupViewModel {
                 ProductAnalytics.Action.connectionTest,
                 outcome: ProductAnalytics.Outcome.success
             )
-            return await persist()
+            if persistOnSuccess {
+                return await persist()
+            }
+            markQrPaired(winner.1)
+            return true
         }
         detectedProtocol = nil
         let probeErrors = outcomes.compactMap { _, result -> ServerProbeError? in
@@ -309,7 +366,8 @@ final class ConnectionSetupViewModel {
         handleProbeFailure(
             probeErrors.first(where: { $0.probeStatus == .authFailed })
                 ?? probeErrors.last
-                ?? .transport("Unable to reach the server")
+                ?? .transport("Unable to reach the server"),
+            origin: origin
         )
         logConnectionAction(
             ProductAnalytics.Action.connectionTest,
@@ -319,7 +377,11 @@ final class ConnectionSetupViewModel {
     }
 
     /// Unauthenticated reachability, then one redeem against the host that answered.
-    private func redeemThenSave(code: String) async -> Bool {
+    private func redeemThenSave(
+        code: String,
+        persistOnSuccess: Bool = true,
+        origin: ConnectFailureOrigin = .manual
+    ) async -> Bool {
         state = .connecting
         snackbar = nil
         let candidates = urlsToProbe()
@@ -334,7 +396,7 @@ final class ConnectionSetupViewModel {
                 guard case let .failure(error) = result else { return nil }
                 return error as? ServerProbeError
             }
-            handleProbeFailure(probeErrors.last ?? .transport("Unable to reach the server"))
+            handleProbeFailure(probeErrors.last ?? .transport("Unable to reach the server"), origin: origin)
             logConnectionAction(
                 ProductAnalytics.Action.connectionTest,
                 outcome: ProductAnalytics.Outcome.failure
@@ -353,14 +415,18 @@ final class ConnectionSetupViewModel {
             detectedProtocol = nil
             switch error {
             case .expired:
-                pendingPairingCode = nil
-                state = .idle
-                snackbar = OpenCodeSnackbarMessage(
-                    text: "This pairing link expired or was already used",
-                    variant: .error
-                )
+                if origin == .scannedQr {
+                    presentScannedQrFailure()
+                } else {
+                    pendingPairingCode = nil
+                    state = .idle
+                    snackbar = OpenCodeSnackbarMessage(
+                        text: "This pairing link expired or was already used",
+                        variant: .error
+                    )
+                }
             case .unreachable:
-                handleProbeFailure(.transport("Unable to reach the server"))
+                handleProbeFailure(.transport("Unable to reach the server"), origin: origin)
             }
             logConnectionAction(
                 ProductAnalytics.Action.connectionTest,
@@ -369,7 +435,7 @@ final class ConnectionSetupViewModel {
             return false
         } catch {
             detectedProtocol = nil
-            handleProbeFailure(.transport("Unable to reach the server"))
+            handleProbeFailure(.transport("Unable to reach the server"), origin: origin)
             logConnectionAction(
                 ProductAnalytics.Action.connectionTest,
                 outcome: ProductAnalytics.Outcome.failure
@@ -384,10 +450,14 @@ final class ConnectionSetupViewModel {
                 ProductAnalytics.Action.connectionTest,
                 outcome: ProductAnalytics.Outcome.success
             )
-            return await persist()
+            if persistOnSuccess {
+                return await persist()
+            }
+            markQrPaired(detected)
+            return true
         } catch let error as ServerProbeError {
             detectedProtocol = nil
-            handleProbeFailure(error)
+            handleProbeFailure(error, origin: origin)
             logConnectionAction(
                 ProductAnalytics.Action.connectionTest,
                 outcome: ProductAnalytics.Outcome.failure
@@ -395,7 +465,7 @@ final class ConnectionSetupViewModel {
             return false
         } catch {
             detectedProtocol = nil
-            handleProbeFailure(.transport("Unable to reach the server"))
+            handleProbeFailure(.transport("Unable to reach the server"), origin: origin)
             logConnectionAction(
                 ProductAnalytics.Action.connectionTest,
                 outcome: ProductAnalytics.Outcome.failure
@@ -404,14 +474,15 @@ final class ConnectionSetupViewModel {
         }
     }
 
-    private func adoptPastedConnectLink() {
+    private func adoptPastedConnectLink() -> Bool {
         let trimmed = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, !trimmed.hasPrefix("{") else { return }
+        guard !trimmed.isEmpty, !trimmed.hasPrefix("{") else { return false }
         guard case let .success(credentials) = PairingQRPayload.parse(trimmed),
               let code = credentials.code,
               !code.isEmpty
-        else { return }
+        else { return false }
         apply(credentials)
+        return true
     }
 
     private func apply(_ credentials: PairingQRCredentials) {
@@ -419,6 +490,9 @@ final class ConnectionSetupViewModel {
         serverURLs = ConnectionProfileIdentity.normalizedAddressList(credentials.urls)
         addressProbeFinished = false
         unreachableAddresses = []
+        qrPairingReady = false
+        pairedProtocol = nil
+        scannedQrPassword = credentials.password
         username = credentials.username
         password = credentials.password
         if let code = credentials.code, !code.isEmpty {
@@ -426,7 +500,6 @@ final class ConnectionSetupViewModel {
         } else {
             pendingPairingCode = nil
         }
-        credentialsExpanded = true
         snackbar = nil
         onFieldChanged()
     }
@@ -477,18 +550,57 @@ final class ConnectionSetupViewModel {
         unreachableAddresses = []
         addressProbeFinished = false
         pendingPairingCode = nil
+        qrPairingReady = false
+        pairedProtocol = nil
         password = ""
-        credentialsExpanded = false
+        credentialSegment = .password
     }
 
-    private func handleProbeFailure(_ error: ServerProbeError) {
+    /// Probe every saved address and redeem a pairing code. Does not store the profile.
+    private func completeScannedPairing() async {
+        if let code = pendingPairingCode, !code.isEmpty, password.isEmpty {
+            _ = await redeemThenSave(code: code, persistOnSuccess: false, origin: .scannedQr)
+            return
+        }
+        _ = await probeThenSave(persistOnSuccess: false, origin: .scannedQr)
+    }
+
+    private func markQrPaired(_ detected: ServerProtocol) {
+        pairedProtocol = detected
+        detectedProtocol = detected
+        pendingPairingCode = nil
+        qrPairingReady = true
+        state = .idle
+    }
+
+    private func handleProbeFailure(_ error: ServerProbeError, origin: ConnectFailureOrigin = .manual) {
+        if origin == .scannedQr {
+            presentScannedQrFailure()
+            return
+        }
         let authFailed = error.probeStatus == .authFailed
         state = .idle
-        if authFailed {
-            credentialsExpanded = true
+        if authFailed, credentialSegment == .password, !usesQRLayout {
             requestPasswordFocus = true
         }
         snackbar = OpenCodeSnackbarMessage(text: error.probeUserMessage, variant: .error)
+    }
+
+    private func presentScannedQrFailure() {
+        let keptPassword = scannedQrPassword
+        serverURLs = []
+        unreachableAddresses = []
+        addressProbeFinished = false
+        qrPairingReady = false
+        pairedProtocol = nil
+        credentialSegment = .password
+        requestPasswordFocus = false
+        if password != keptPassword {
+            password = keptPassword
+        }
+        pendingPairingCode = nil
+        state = .idle
+        snackbar = OpenCodeSnackbarMessage(text: Self.qrScanFailureMessage, variant: .error)
     }
 
     private func persist() async -> Bool {
@@ -547,9 +659,9 @@ final class ConnectionSetupViewModel {
         ConnectionProfile(
             baseURL: baseURL,
             serverURLs: serverURLs,
-            username: username,
+            username: ConnectionProfileIdentity.normalizeUsername(username),
             password: password,
-            serverProtocol: detectedProtocol ?? (connectionUnchanged ? savedProtocol : nil),
+            serverProtocol: pairedProtocol ?? detectedProtocol ?? (connectionUnchanged ? savedProtocol : nil),
             id: profileId,
             name: name
         )

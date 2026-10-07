@@ -56,7 +56,8 @@ fun ConnectionSetupScreen(
     onBaseUrlChanged: (String) -> Unit,
     onUsernameChanged: (String) -> Unit,
     onPasswordChanged: (String) -> Unit,
-    onCredentialsExpandedChanged: (Boolean) -> Unit,
+    onCredentialSegmentChanged: (ConnectionCredentialSegment) -> Unit,
+    onPairingCodeChanged: (String) -> Unit,
     onPasswordFocusConsumed: () -> Unit,
     onSubmit: () -> Unit,
     onSnackbarDismissed: () -> Unit,
@@ -151,7 +152,8 @@ fun ConnectionSetupScreen(
                             onBaseUrlChanged = onBaseUrlChanged,
                             onUsernameChanged = onUsernameChanged,
                             onPasswordChanged = onPasswordChanged,
-                            onCredentialsExpandedChanged = onCredentialsExpandedChanged,
+                            onCredentialSegmentChanged = onCredentialSegmentChanged,
+                            onPairingCodeChanged = onPairingCodeChanged,
                             onPasswordFocusConsumed = onPasswordFocusConsumed,
                         )
                     }
@@ -169,12 +171,14 @@ fun ConnectionSetupScreen(
                                 onClick = { openPairingScanner() },
                             )
                         }
-                        OpenCodeButton(
-                            variant = OpenCodeButtonVariant.FullWidthText(uiState.primaryActionLabel),
-                            enabled = uiState.primaryEnabled,
-                            onClick = onSubmit,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
+                        if (uiState.showsPrimaryAction) {
+                            OpenCodeButton(
+                                variant = OpenCodeButtonVariant.FullWidthText(uiState.primaryActionLabel),
+                                enabled = uiState.primaryEnabled,
+                                onClick = onSubmit,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
                     }
                 }
             }
@@ -271,7 +275,8 @@ private fun ConnectionSetupScreenPreview() {
             onBaseUrlChanged = {},
             onUsernameChanged = {},
             onPasswordChanged = {},
-            onCredentialsExpandedChanged = {},
+            onCredentialSegmentChanged = {},
+            onPairingCodeChanged = {},
             onPasswordFocusConsumed = {},
             onSubmit = {},
             onSnackbarDismissed = {},
@@ -291,14 +296,14 @@ private fun ConnectionSetupScreenEditPreview() {
                     mode = ConnectionSetupMode.Edit,
                     profileId = "profile-1",
                     connectionUnchanged = true,
-                    credentialsExpanded = true,
                 ),
             onNavigateBack = {},
             onNameChanged = {},
             onBaseUrlChanged = {},
             onUsernameChanged = {},
             onPasswordChanged = {},
-            onCredentialsExpandedChanged = {},
+            onCredentialSegmentChanged = {},
+            onPairingCodeChanged = {},
             onPasswordFocusConsumed = {},
             onSubmit = {},
             onSnackbarDismissed = {},

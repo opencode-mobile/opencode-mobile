@@ -15,7 +15,7 @@ struct ConnectionSetupViewModelTests {
         )
         #expect(viewModel.baseURL.isEmpty)
         #expect(viewModel.primaryActionLabel == "Connect")
-        #expect(viewModel.credentialsExpanded == false)
+        #expect(viewModel.credentialSegment == .password)
         #expect(ConnectionSetupViewModel.hostIsBlank(viewModel.baseURL))
     }
 
@@ -68,7 +68,7 @@ struct ConnectionSetupViewModelTests {
         viewModel.password = "wrong"
         let saved = await viewModel.submit()
         #expect(saved == false)
-        #expect(viewModel.credentialsExpanded == true)
+        #expect(viewModel.credentialSegment == .password)
         #expect(viewModel.requestPasswordFocus == true)
         #expect(viewModel.snackbar?.text == "Authentication failed")
     }
@@ -87,7 +87,7 @@ struct ConnectionSetupViewModelTests {
         viewModel.baseURL = "http://10.0.0.1:4096/"
         let saved = await viewModel.submit()
         #expect(saved == false)
-        #expect(viewModel.credentialsExpanded == false)
+        #expect(viewModel.credentialSegment == .password)
         #expect(viewModel.snackbar?.text == "Unable to reach the server")
     }
 
@@ -141,6 +141,7 @@ struct ConnectionSetupViewModelTests {
             mode: .edit
         )
         #expect(viewModel.primaryActionLabel == "Save")
+        #expect(viewModel.credentialSegment == .password)
         #expect(viewModel.canSubmitWithoutProbe == true)
 
         viewModel.baseURL = "http://10.0.0.9:4096/"
@@ -163,7 +164,7 @@ struct ConnectionSetupViewModelTests {
         #expect(ConnectionSetupViewModel.hostIsBlank("http://10.0.0.1:4096/") == false)
     }
 
-    @Test func applyPairingQR_fillsHostAndExpandsCredentials() {
+    @Test func applyPairingQR_fillsHostAndExpandsCredentials() async {
         let viewModel = ConnectionSetupViewModel(
             connectionProbeService: FakeConnectionProbeService(result: .success(.v1)),
             connectionSessionCoordinator: ConnectionSessionCoordinator(
@@ -172,7 +173,7 @@ struct ConnectionSetupViewModelTests {
             ),
             mode: .add
         )
-        viewModel.applyPairingQR(
+        await viewModel.applyPairingQR(
             """
             {"urls":["http://192.168.0.160:4096"],"username":"opencode","password":"secret"}
             """
@@ -180,11 +181,14 @@ struct ConnectionSetupViewModelTests {
         #expect(viewModel.baseURL == "http://192.168.0.160:4096/")
         #expect(viewModel.username == "opencode")
         #expect(viewModel.password == "secret")
-        #expect(viewModel.credentialsExpanded == true)
+        #expect(viewModel.usesQRLayout)
+        #expect(viewModel.qrPairingReady)
+        #expect(viewModel.primaryActionLabel == "Save")
+        #expect(viewModel.showsPrimaryAction)
         #expect(viewModel.snackbar == nil)
     }
 
-    @Test func applyPairingQR_fillsTailscaleHostWhenPresent() {
+    @Test func applyPairingQR_fillsTailscaleHostWhenPresent() async {
         let viewModel = ConnectionSetupViewModel(
             connectionProbeService: FakeConnectionProbeService(result: .success(.v1)),
             connectionSessionCoordinator: ConnectionSessionCoordinator(
@@ -193,7 +197,7 @@ struct ConnectionSetupViewModelTests {
             ),
             mode: .add
         )
-        viewModel.applyPairingQR(
+        await viewModel.applyPairingQR(
             """
             {"urls":["http://192.168.0.160:4096","http://100.84.57.15:4096"],"username":"opencode","password":"secret"}
             """
@@ -212,7 +216,7 @@ struct ConnectionSetupViewModelTests {
             ),
             mode: .add
         )
-        viewModel.applyPairingQR(
+        await viewModel.applyPairingQR(
             """
             {"urls":["http://192.168.0.160:4096","http://100.84.57.15:4096"],"username":"opencode","password":"secret"}
             """
@@ -246,7 +250,7 @@ struct ConnectionSetupViewModelTests {
             ),
             mode: .add
         )
-        viewModel.applyPairingQR(
+        await viewModel.applyPairingQR(
             """
             {"urls":["http://192.168.0.160:4096","http://100.84.57.15:4096"],"username":"opencode","password":"secret"}
             """
@@ -272,7 +276,7 @@ struct ConnectionSetupViewModelTests {
             ),
             mode: .add
         )
-        viewModel.applyPairingQR(
+        await viewModel.applyPairingQR(
             """
             {"urls":["http://192.168.0.160:4096","http://100.84.57.15:4096"],"username":"opencode","password":"secret"}
             """
@@ -289,29 +293,39 @@ struct ConnectionSetupViewModelTests {
 
         let saved = await viewModel.submit()
         #expect(saved == true)
-        #expect(probe.probed == ["http://10.0.0.9:4096/"])
+        #expect(probe.probed.contains("http://10.0.0.9:4096/"))
+        #expect(probe.probed.last == "http://10.0.0.9:4096/")
         #expect(store.saved.last?.baseURL == "http://10.0.0.9:4096/")
         #expect(store.saved.last?.serverURLs.isEmpty == true)
     }
 
     @Test func submit_pairingQR_authFailure_doesNotSave() async {
+        let store = RecordingConnectionProfileStore()
         let probe = RecordingURLProbeService(authFailingHosts: ["192.168.0.160", "100.84.57.15"])
         let viewModel = ConnectionSetupViewModel(
             connectionProbeService: probe,
             connectionSessionCoordinator: ConnectionSessionCoordinator(
                 activeConnectionManager: ActiveConnectionManager(),
-                connectionProfileStore: FakeSetupConnectionProfileStore()
+                connectionProfileStore: store
             ),
             mode: .add
         )
-        viewModel.applyPairingQR(
+        await viewModel.applyPairingQR(
             """
             {"urls":["http://192.168.0.160:4096","http://100.84.57.15:4096"],"username":"opencode","password":"wrong"}
             """
         )
-        let saved = await viewModel.submit()
-        #expect(saved == false)
-        #expect(viewModel.snackbar?.text == "Authentication failed")
+        #expect(viewModel.usesQRLayout == false)
+        #expect(viewModel.serverURLs.isEmpty)
+        #expect(viewModel.baseURL == "http://100.84.57.15:4096/")
+        #expect(viewModel.password == "wrong")
+        #expect(viewModel.credentialSegment == .password)
+        #expect(viewModel.showsPrimaryAction)
+        #expect(viewModel.primaryEnabled)
+        #expect(viewModel.primaryActionLabel == "Connect")
+        #expect(viewModel.snackbar?.text == qrScanFailureMessage)
+        #expect(viewModel.snackbar?.variant == .error)
+        #expect(store.saved.isEmpty)
     }
 
     @Test func submit_pairingQR_customHost_probesOnlyEditedURL() async {
@@ -324,7 +338,7 @@ struct ConnectionSetupViewModelTests {
             ),
             mode: .add
         )
-        viewModel.applyPairingQR(
+        await viewModel.applyPairingQR(
             """
             {"urls":["http://192.168.0.160:4096","http://100.84.57.15:4096"],"username":"opencode","password":"secret"}
             """
@@ -333,10 +347,11 @@ struct ConnectionSetupViewModelTests {
         viewModel.onFieldChanged()
         let saved = await viewModel.submit()
         #expect(saved == true)
-        #expect(probe.probed == ["http://10.0.0.1:4096/"])
+        #expect(probe.probed.contains("http://10.0.0.1:4096/"))
+        #expect(probe.probed.last == "http://10.0.0.1:4096/")
     }
 
-    @Test func applyPairingQR_invalid_showsSnackbar() {
+    @Test func applyPairingQR_invalid_showsSnackbar() async {
         let viewModel = ConnectionSetupViewModel(
             connectionProbeService: FakeConnectionProbeService(result: .success(.v1)),
             connectionSessionCoordinator: ConnectionSessionCoordinator(
@@ -345,7 +360,7 @@ struct ConnectionSetupViewModelTests {
             ),
             mode: .add
         )
-        viewModel.applyPairingQR("nope")
+        await viewModel.applyPairingQR("nope")
         #expect(viewModel.snackbar?.text == "This isn't an OpenCode 2 pairing QR")
         #expect(viewModel.baseURL.isEmpty)
     }
@@ -363,27 +378,25 @@ struct ConnectionSetupViewModelTests {
         #expect(viewModel.snackbar?.text == "Allow camera access to scan the pairing QR")
     }
 
-    @Test func applyPairingQR_codeJSON_fillsTailscaleAndLeavesPasswordEmpty() {
-        let viewModel = ConnectionSetupViewModel(
-            connectionProbeService: FakeConnectionProbeService(result: .success(.v1)),
-            connectionSessionCoordinator: ConnectionSessionCoordinator(
-                activeConnectionManager: ActiveConnectionManager(),
-                connectionProfileStore: FakeSetupConnectionProfileStore()
-            ),
-            mode: .add
+    @Test func applyPairingQR_codeJSON_pairsAndOffersSave() async {
+        let store = RecordingConnectionProfileStore()
+        let redeemer = ScriptedPairingRedeemer(token: "paired-token")
+        let viewModel = makePairingSetupViewModel(
+            probe: ScriptedHostProbe(),
+            redeemer: redeemer,
+            store: store
         )
-        viewModel.applyPairingQR(
-            """
-            {"code":"abc_DEF-123","urls":["http://192.168.1.2:49374","http://100.64.0.3:49374"]}
-            """
-        )
+        await viewModel.applyPairingQR(pairingCodeJSON)
         #expect(viewModel.baseURL == "http://100.64.0.3:49374/")
         #expect(viewModel.username == "opencode")
-        #expect(viewModel.password.isEmpty)
-        #expect(viewModel.credentialsExpanded == true)
+        #expect(viewModel.password == "paired-token")
+        #expect(viewModel.qrPairingReady)
+        #expect(viewModel.primaryActionLabel == "Save")
+        #expect(viewModel.showsPrimaryAction)
+        #expect(store.saved.isEmpty)
         #expect(viewModel.snackbar == nil)
         #expect(viewModel.usesQRLayout)
-        #expect(viewModel.savedAddressRows.map(\.badge) == ["Saved", "Saved"])
+        #expect(viewModel.savedAddressRows.first { $0.url.contains("100.64") }?.badge == "Using now")
     }
 
     @Test func submit_pairingCode_bothAuthFailed_redeemsTailscaleOnce() async {
@@ -391,7 +404,7 @@ struct ConnectionSetupViewModelTests {
         let probe = ScriptedHostProbe()
         let redeemer = ScriptedPairingRedeemer(token: "paired-token")
         let viewModel = makePairingSetupViewModel(probe: probe, redeemer: redeemer, store: store)
-        viewModel.applyPairingQR(pairingCodeJSON)
+        await viewModel.applyPairingQR(pairingCodeJSON)
         let saved = await viewModel.submit()
         #expect(saved == true)
         #expect(redeemer.calls.count == 1)
@@ -415,7 +428,7 @@ struct ConnectionSetupViewModelTests {
         let probe = ScriptedHostProbe(transportHosts: ["100.64.0.3"])
         let redeemer = ScriptedPairingRedeemer(token: "paired-token")
         let viewModel = makePairingSetupViewModel(probe: probe, redeemer: redeemer, store: store)
-        viewModel.applyPairingQR(pairingCodeJSON)
+        await viewModel.applyPairingQR(pairingCodeJSON)
         let saved = await viewModel.submit()
         #expect(saved == true)
         #expect(redeemer.calls.count == 1)
@@ -443,12 +456,18 @@ struct ConnectionSetupViewModelTests {
         )
         let redeemer = ScriptedPairingRedeemer()
         let viewModel = makePairingSetupViewModel(probe: probe, redeemer: redeemer, store: store)
-        viewModel.applyPairingQR(pairingCodeJSON)
-        let saved = await viewModel.submit()
-        #expect(saved == false)
+        await viewModel.applyPairingQR(pairingCodeJSON)
         #expect(redeemer.calls.isEmpty)
-        #expect(viewModel.snackbar?.text == "Unable to reach the server")
         #expect(store.saved.isEmpty)
+        #expect(viewModel.usesQRLayout == false)
+        #expect(viewModel.baseURL == "http://100.64.0.3:49374/")
+        #expect(viewModel.password.isEmpty)
+        #expect(viewModel.pairingCode.isEmpty)
+        #expect(viewModel.credentialSegment == .password)
+        #expect(viewModel.showsPrimaryAction)
+        #expect(viewModel.primaryEnabled)
+        #expect(viewModel.snackbar?.text == qrScanFailureMessage)
+        #expect(viewModel.snackbar?.variant == .error)
     }
 
     @Test func submit_pairingCode_redeemExpired_showsSnackbarOnce() async {
@@ -459,12 +478,16 @@ struct ConnectionSetupViewModelTests {
             redeemer: redeemer,
             store: store
         )
-        viewModel.applyPairingQR(pairingCodeJSON)
-        let saved = await viewModel.submit()
-        #expect(saved == false)
+        await viewModel.applyPairingQR(pairingCodeJSON)
         #expect(redeemer.calls.count == 1)
-        #expect(viewModel.snackbar?.text == "This pairing link expired or was already used")
         #expect(store.saved.isEmpty)
+        #expect(viewModel.usesQRLayout == false)
+        #expect(viewModel.baseURL == "http://100.64.0.3:49374/")
+        #expect(viewModel.password.isEmpty)
+        #expect(viewModel.credentialSegment == .password)
+        #expect(viewModel.showsPrimaryAction)
+        #expect(viewModel.snackbar?.text == qrScanFailureMessage)
+        #expect(viewModel.snackbar?.variant == .error)
     }
 
     @Test func submit_pastedConnectLink_redeemsAndSavesOrigin() async {
@@ -489,7 +512,7 @@ struct ConnectionSetupViewModelTests {
         #expect(viewModel.username == "opencode")
     }
 
-    @Test func typedPassword_clearsPendingCodeAndSkipsRedeem() async {
+    @Test func typedPassword_afterScan_savesReplacementWithoutRedeemingAgain() async {
         let store = RecordingConnectionProfileStore()
         let probe = ScriptedHostProbe(
             defaultUnauthenticated: .failure(ServerProbeError.http(statusCode: 401, message: "Unauthorized")),
@@ -497,14 +520,14 @@ struct ConnectionSetupViewModelTests {
         )
         let redeemer = ScriptedPairingRedeemer(token: "paired-token")
         let viewModel = makePairingSetupViewModel(probe: probe, redeemer: redeemer, store: store)
-        viewModel.applyPairingQR(pairingCodeJSON)
+        await viewModel.applyPairingQR(pairingCodeJSON)
+        #expect(redeemer.calls.count == 1)
+        #expect(viewModel.qrPairingReady)
         viewModel.password = "user-secret"
-        viewModel.password = ""
         let saved = await viewModel.submit()
-        #expect(saved == false)
-        #expect(redeemer.calls.isEmpty)
-        #expect(viewModel.snackbar?.text == "Authentication failed")
-        #expect(store.saved.isEmpty)
+        #expect(saved == true)
+        #expect(redeemer.calls.count == 1)
+        #expect(store.saved.last?.password == "user-secret")
     }
 
     @Test func pairingQRCameraUnavailable_showsSnackbar() {
@@ -519,7 +542,104 @@ struct ConnectionSetupViewModelTests {
         viewModel.pairingQRCameraUnavailable()
         #expect(viewModel.snackbar?.text == "Camera isn't available on this device")
     }
+
+    @Test func submit_passwordSegment_emptyPassword_probesAndSavesWithoutRedeem() async {
+        let store = RecordingConnectionProfileStore()
+        let redeemer = ScriptedPairingRedeemer()
+        let probe = RecordingURLProbeService(successProtocol: .v1)
+        let viewModel = makePairingSetupViewModel(probe: probe, redeemer: redeemer, store: store)
+        viewModel.baseURL = "http://10.0.0.1:4096/"
+        viewModel.username = ""
+        viewModel.password = ""
+        viewModel.selectCredentialSegment(.password)
+        let saved = await viewModel.submit()
+        #expect(saved == true)
+        #expect(redeemer.calls.isEmpty)
+        #expect(probe.probed == ["http://10.0.0.1:4096/"])
+        #expect(store.saved.last?.username == "opencode")
+        #expect(store.saved.last?.password.isEmpty == true)
+        #expect(store.saved.last?.serverURLs.isEmpty == true)
+    }
+
+    @Test func submit_pairingCodeSegment_redeemsOnceAndSavesToken() async {
+        let store = RecordingConnectionProfileStore()
+        let redeemer = ScriptedPairingRedeemer(token: "typed-token")
+        let viewModel = makePairingSetupViewModel(
+            probe: ScriptedHostProbe(),
+            redeemer: redeemer,
+            store: store
+        )
+        viewModel.baseURL = "http://10.0.0.8:4096/"
+        viewModel.selectCredentialSegment(.pairingCode)
+        viewModel.pairingCode = "once-code"
+        let saved = await viewModel.submit()
+        #expect(saved == true)
+        #expect(redeemer.calls.count == 1)
+        #expect(redeemer.calls.first?.baseURL == "http://10.0.0.8:4096/")
+        #expect(redeemer.calls.first?.code == "once-code")
+        #expect(store.saved.last?.password == "typed-token")
+        #expect(store.saved.last?.baseURL == "http://10.0.0.8:4096/")
+        #expect(store.saved.last?.serverURLs.isEmpty == true)
+    }
+
+    @Test func submit_pairingCodeSegment_blankCode_showsSnackbarWithoutRedeem() async {
+        let store = RecordingConnectionProfileStore()
+        let redeemer = ScriptedPairingRedeemer()
+        let viewModel = makePairingSetupViewModel(
+            probe: FakeConnectionProbeService(result: .success(.v1)),
+            redeemer: redeemer,
+            store: store
+        )
+        viewModel.baseURL = "http://10.0.0.8:4096/"
+        viewModel.selectCredentialSegment(.pairingCode)
+        viewModel.pairingCode = "   "
+        let saved = await viewModel.submit()
+        #expect(saved == false)
+        #expect(redeemer.calls.isEmpty)
+        #expect(viewModel.snackbar?.text == "Enter a pairing code")
+        #expect(store.saved.isEmpty)
+    }
+
+    @Test func submit_pairingCodeSegment_blankHost_showsEnterHost() async {
+        let store = RecordingConnectionProfileStore()
+        let redeemer = ScriptedPairingRedeemer()
+        let viewModel = makePairingSetupViewModel(
+            probe: FakeConnectionProbeService(result: .success(.v1)),
+            redeemer: redeemer,
+            store: store
+        )
+        viewModel.selectCredentialSegment(.pairingCode)
+        viewModel.pairingCode = "once-code"
+        let saved = await viewModel.submit()
+        #expect(saved == false)
+        #expect(redeemer.calls.isEmpty)
+        #expect(viewModel.snackbar?.text == "Enter a host")
+    }
+
+    @Test func submit_passwordSegment_afterPairingCode_doesNotRedeem() async {
+        let store = RecordingConnectionProfileStore()
+        let redeemer = ScriptedPairingRedeemer()
+        let viewModel = makePairingSetupViewModel(
+            probe: RecordingURLProbeService(successProtocol: .v2),
+            redeemer: redeemer,
+            store: store
+        )
+        viewModel.baseURL = "http://10.0.0.8:4096/"
+        viewModel.password = "secret"
+        viewModel.selectCredentialSegment(.pairingCode)
+        viewModel.pairingCode = "leftover-code"
+        viewModel.selectCredentialSegment(.password)
+        #expect(viewModel.password == "secret")
+        #expect(viewModel.pairingCode == "leftover-code")
+        let saved = await viewModel.submit()
+        #expect(saved == true)
+        #expect(redeemer.calls.isEmpty)
+        #expect(store.saved.last?.password == "secret")
+        #expect(viewModel.pairingCode == "leftover-code")
+    }
 }
+
+private let qrScanFailureMessage = "QR didn't connect. OpenCode 2's pairing API is still changing, so a scan can fail while this app is working. Enter the host and connect. Password is optional. A pairing code works too."
 
 private let pairingCodeJSON = """
 {"code":"abc_DEF-123","urls":["http://192.168.1.2:49374","http://100.64.0.3:49374"]}

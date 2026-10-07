@@ -34,6 +34,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
+private const val qrScanFailureMessage =
+    "QR didn't connect. OpenCode 2's pairing API is still changing, so a scan can fail while this app is working. " +
+        "Enter the host and connect. Password is optional. A pairing code works too."
+
 @OptIn(ExperimentalCoroutinesApi::class)
 class ConnectionSetupViewModelTest {
     private val dispatcher = StandardTestDispatcher()
@@ -52,7 +56,7 @@ class ConnectionSetupViewModelTest {
         val state = viewModel.uiState.value
         assertEquals("", state.baseUrl)
         assertEquals("Connect", state.primaryActionLabel)
-        assertFalse(state.credentialsExpanded)
+        assertEquals(ConnectionCredentialSegment.Password, state.credentialSegment)
         assertTrue(ConnectionSetupViewModel.hostIsBlank(state.baseUrl))
     }
 
@@ -112,7 +116,7 @@ class ConnectionSetupViewModelTest {
             advanceUntilIdle()
             assertFalse(saved)
             val state = viewModel.uiState.value
-            assertTrue(state.credentialsExpanded)
+            assertEquals(ConnectionCredentialSegment.Password, state.credentialSegment)
             assertTrue(state.requestPasswordFocus)
             assertEquals("Authentication failed", state.snackbar?.text)
             assertEquals(OpenCodeSnackbarVariant.Error, state.snackbar?.variant)
@@ -134,7 +138,7 @@ class ConnectionSetupViewModelTest {
             failing.submit { saved = true }
             advanceUntilIdle()
             assertFalse(saved)
-            assertFalse(failing.uiState.value.credentialsExpanded)
+            assertEquals(ConnectionCredentialSegment.Password, failing.uiState.value.credentialSegment)
             assertEquals(
                 "Unable to reach the server",
                 failing.uiState.value.snackbar
@@ -164,6 +168,7 @@ class ConnectionSetupViewModelTest {
                 mode = ConnectionSetupMode.Edit,
             )
             assertEquals("Save", viewModel.uiState.value.primaryActionLabel)
+            assertEquals(ConnectionCredentialSegment.Password, viewModel.uiState.value.credentialSegment)
             assertTrue(viewModel.uiState.value.canSubmitWithoutProbe)
 
             viewModel.onBaseUrlChanged("http://10.0.0.9:4096/")
@@ -199,7 +204,6 @@ class ConnectionSetupViewModelTest {
         assertEquals("secret", state.password)
         assertTrue(state.usesQrLayout)
         assertEquals(listOf("http://192.168.0.160:4096/"), state.serverUrls)
-        assertFalse(state.credentialsExpanded)
         assertEquals(listOf("Saved"), qrAddressRows(state).map { it.badge })
         assertEquals(
             "Both addresses are saved. Nothing to pick. The app uses Tailscale when it answers, " +
@@ -237,6 +241,7 @@ class ConnectionSetupViewModelTest {
             viewModel.applyPairingQR(
                 """{"urls":["http://192.168.0.160:4096","http://100.84.57.15:4096"],"username":"opencode","password":"secret"}""",
             )
+            advanceUntilIdle()
             var saved = false
             viewModel.submit { saved = true }
             advanceUntilIdle()
@@ -278,6 +283,7 @@ class ConnectionSetupViewModelTest {
             viewModel.applyPairingQR(
                 """{"urls":["http://192.168.0.160:4096","http://100.84.57.15:4096"],"username":"opencode","password":"secret"}""",
             )
+            advanceUntilIdle()
             var saved = false
             viewModel.submit { saved = true }
             advanceUntilIdle()
@@ -299,8 +305,10 @@ class ConnectionSetupViewModelTest {
     @Test
     fun submit_pairingQr_authFailure_doesNotSave() =
         runTest(dispatcher) {
+            val store = RecordingConnectionProfileStore()
             val viewModel =
                 viewModel(
+                    store = store,
                     probe =
                         ConnectionProbing {
                             throw ServerProbeError.Http(401, "Unauthorized")
@@ -310,15 +318,19 @@ class ConnectionSetupViewModelTest {
             viewModel.applyPairingQR(
                 """{"urls":["http://192.168.0.160:4096","http://100.84.57.15:4096"],"username":"opencode","password":"wrong"}""",
             )
-            var saved = false
-            viewModel.submit { saved = true }
             advanceUntilIdle()
-            assertFalse(saved)
-            assertEquals(
-                "Authentication failed",
-                viewModel.uiState.value.snackbar
-                    ?.text,
-            )
+            val state = viewModel.uiState.value
+            assertFalse(state.usesQrLayout)
+            assertTrue(state.serverUrls.isEmpty())
+            assertEquals("http://100.84.57.15:4096/", state.baseUrl)
+            assertEquals("wrong", state.password)
+            assertEquals(ConnectionCredentialSegment.Password, state.credentialSegment)
+            assertTrue(state.showsPrimaryAction)
+            assertTrue(state.primaryEnabled)
+            assertEquals("Connect", state.primaryActionLabel)
+            assertEquals(qrScanFailureMessage, state.snackbar?.text)
+            assertEquals(OpenCodeSnackbarVariant.Error, state.snackbar?.variant)
+            assertTrue(store.saved.isEmpty())
         }
 
     @Test
@@ -356,20 +368,32 @@ class ConnectionSetupViewModelTest {
         }
 
     @Test
-    fun applyPairingQR_codeJson_fillsTailscaleAndLeavesPasswordEmpty() {
-        val viewModel = viewModel(probe = neverProbe())
-        viewModel.configure(initialProfile = null, mode = ConnectionSetupMode.Add)
-        viewModel.applyPairingQR(
-            """{"code":"abc_DEF-123","urls":["http://192.168.1.2:49374","http://100.64.0.3:49374"]}""",
-        )
-        val state = viewModel.uiState.value
-        assertEquals("http://100.64.0.3:49374/", state.baseUrl)
-        assertEquals("opencode", state.username)
-        assertEquals("", state.password)
-        assertTrue(state.usesQrLayout)
-        assertEquals(listOf("Saved", "Saved"), qrAddressRows(state).map { it.badge })
-        assertEquals(null, state.snackbar)
-    }
+    fun applyPairingQR_codeJson_pairsAndOffersSave() =
+        runTest(dispatcher) {
+            val store = RecordingConnectionProfileStore()
+            val redeem = RecordingPairingCodeRedeeming(token = "paired-token")
+            val viewModel =
+                viewModel(
+                    store = store,
+                    probe = unauthorizedUntilPassword(),
+                    redeem = redeem,
+                )
+            viewModel.configure(initialProfile = null, mode = ConnectionSetupMode.Add)
+            viewModel.applyPairingQR(
+                """{"code":"abc_DEF-123","urls":["http://192.168.1.2:49374","http://100.64.0.3:49374"]}""",
+            )
+            advanceUntilIdle()
+            val state = viewModel.uiState.value
+            assertEquals("http://100.64.0.3:49374/", state.baseUrl)
+            assertEquals("opencode", state.username)
+            assertEquals("paired-token", state.password)
+            assertTrue(state.qrPairingReady)
+            assertEquals("Save", state.primaryActionLabel)
+            assertTrue(state.showsPrimaryAction)
+            assertTrue(store.saved.isEmpty())
+            assertEquals(null, state.snackbar)
+            assertEquals("Using now", qrAddressRows(state).first { it.title == "Tailscale" }.badge)
+        }
 
     @Test
     fun submit_pairingCode_bothUnauthorized_redeemsTailscaleOnce() =
@@ -386,6 +410,7 @@ class ConnectionSetupViewModelTest {
             viewModel.applyPairingQR(
                 """{"code":"abc_DEF-123","urls":["http://192.168.1.2:49374","http://100.64.0.3:49374"]}""",
             )
+            advanceUntilIdle()
             var saved = false
             viewModel.submit { saved = true }
             advanceUntilIdle()
@@ -398,7 +423,6 @@ class ConnectionSetupViewModelTest {
                 store.saved.last().serverUrls,
             )
             assertTrue(viewModel.uiState.value.usesQrLayout)
-            assertFalse(viewModel.uiState.value.credentialsExpanded)
             val rows = qrAddressRows(viewModel.uiState.value)
             assertEquals("Using now", rows.first { it.title == "Tailscale" }.badge)
             assertEquals("Saved", rows.first { it.title == "Local network" }.badge)
@@ -426,6 +450,7 @@ class ConnectionSetupViewModelTest {
             viewModel.applyPairingQR(
                 """{"code":"abc_DEF-123","urls":["http://192.168.1.2:49374","http://100.64.0.3:49374"]}""",
             )
+            advanceUntilIdle()
             var saved = false
             viewModel.submit { saved = true }
             advanceUntilIdle()
@@ -457,17 +482,19 @@ class ConnectionSetupViewModelTest {
             viewModel.applyPairingQR(
                 """{"code":"abc_DEF-123","urls":["http://192.168.1.2:49374","http://100.64.0.3:49374"]}""",
             )
-            var saved = false
-            viewModel.submit { saved = true }
             advanceUntilIdle()
-            assertFalse(saved)
+            val state = viewModel.uiState.value
             assertTrue(redeem.calls.isEmpty())
             assertTrue(store.saved.isEmpty())
-            assertEquals(
-                "Unable to reach the server",
-                viewModel.uiState.value.snackbar
-                    ?.text,
-            )
+            assertFalse(state.usesQrLayout)
+            assertEquals("http://100.64.0.3:49374/", state.baseUrl)
+            assertEquals("", state.password)
+            assertEquals("", state.pairingCode)
+            assertEquals(ConnectionCredentialSegment.Password, state.credentialSegment)
+            assertTrue(state.showsPrimaryAction)
+            assertTrue(state.primaryEnabled)
+            assertEquals(qrScanFailureMessage, state.snackbar?.text)
+            assertEquals(OpenCodeSnackbarVariant.Error, state.snackbar?.variant)
         }
 
     @Test
@@ -488,17 +515,17 @@ class ConnectionSetupViewModelTest {
             viewModel.applyPairingQR(
                 """{"code":"abc_DEF-123","urls":["http://192.168.1.2:49374","http://100.64.0.3:49374"]}""",
             )
-            var saved = false
-            viewModel.submit { saved = true }
             advanceUntilIdle()
-            assertFalse(saved)
+            val state = viewModel.uiState.value
             assertEquals(1, redeem.calls.size)
             assertTrue(store.saved.isEmpty())
-            assertEquals(
-                "This pairing link expired or was already used",
-                viewModel.uiState.value.snackbar
-                    ?.text,
-            )
+            assertFalse(state.usesQrLayout)
+            assertEquals("http://100.64.0.3:49374/", state.baseUrl)
+            assertEquals("", state.password)
+            assertEquals(ConnectionCredentialSegment.Password, state.credentialSegment)
+            assertTrue(state.showsPrimaryAction)
+            assertEquals(qrScanFailureMessage, state.snackbar?.text)
+            assertEquals(OpenCodeSnackbarVariant.Error, state.snackbar?.variant)
         }
 
     @Test
@@ -529,7 +556,7 @@ class ConnectionSetupViewModelTest {
         }
 
     @Test
-    fun submit_pairingCode_typedPassword_doesNotRedeem() =
+    fun submit_pairingCode_typedPassword_savesReplacementWithoutSecondRedeem() =
         runTest(dispatcher) {
             val store = RecordingConnectionProfileStore()
             val redeem = RecordingPairingCodeRedeeming()
@@ -543,12 +570,13 @@ class ConnectionSetupViewModelTest {
             viewModel.applyPairingQR(
                 """{"code":"abc_DEF-123","urls":["http://192.168.1.2:49374","http://100.64.0.3:49374"]}""",
             )
+            advanceUntilIdle()
             viewModel.onPasswordChanged("user-secret")
             var saved = false
             viewModel.submit { saved = true }
             advanceUntilIdle()
             assertTrue(saved)
-            assertTrue(redeem.calls.isEmpty())
+            assertEquals(1, redeem.calls.size)
             assertEquals("user-secret", store.saved.last().password)
         }
 
@@ -588,6 +616,135 @@ class ConnectionSetupViewModelTest {
                 ?.text,
         )
     }
+
+    @Test
+    fun submit_passwordSegment_emptyPassword_probesAndSavesWithoutRedeem() =
+        runTest(dispatcher) {
+            val store = RecordingConnectionProfileStore()
+            val redeem = RecordingPairingCodeRedeeming()
+            val probed = mutableListOf<String>()
+            val viewModel =
+                viewModel(
+                    store = store,
+                    probe =
+                        ConnectionProbing { connection ->
+                            probed += connection.baseUrl
+                            ServerProtocol.V1
+                        },
+                    redeem = redeem,
+                )
+            viewModel.configure(initialProfile = null, mode = ConnectionSetupMode.Add)
+            viewModel.onBaseUrlChanged("http://10.0.0.1:4096/")
+            viewModel.onUsernameChanged("")
+            viewModel.onPasswordChanged("")
+            viewModel.onCredentialSegmentChanged(ConnectionCredentialSegment.Password)
+            var saved = false
+            viewModel.submit { saved = true }
+            advanceUntilIdle()
+            assertTrue(saved)
+            assertTrue(redeem.calls.isEmpty())
+            assertEquals(listOf("http://10.0.0.1:4096/"), probed)
+            assertEquals("opencode", store.saved.last().username)
+            assertEquals("", store.saved.last().password)
+            assertTrue(store.saved.last().serverUrls.isEmpty())
+        }
+
+    @Test
+    fun submit_pairingCodeSegment_redeemsOnceAndSavesToken() =
+        runTest(dispatcher) {
+            val store = RecordingConnectionProfileStore()
+            val redeem = RecordingPairingCodeRedeeming(token = "typed-token")
+            val viewModel =
+                viewModel(
+                    store = store,
+                    probe = unauthorizedUntilPassword(),
+                    redeem = redeem,
+                )
+            viewModel.configure(initialProfile = null, mode = ConnectionSetupMode.Add)
+            viewModel.onBaseUrlChanged("http://10.0.0.8:4096/")
+            viewModel.onCredentialSegmentChanged(ConnectionCredentialSegment.PairingCode)
+            viewModel.onPairingCodeChanged("once-code")
+            var saved = false
+            viewModel.submit { saved = true }
+            advanceUntilIdle()
+            assertTrue(saved)
+            assertEquals(listOf("http://10.0.0.8:4096/" to "once-code"), redeem.calls)
+            assertEquals("typed-token", store.saved.last().password)
+            assertEquals("http://10.0.0.8:4096/", store.saved.last().baseUrl)
+            assertTrue(store.saved.last().serverUrls.isEmpty())
+        }
+
+    @Test
+    fun submit_pairingCodeSegment_blankCode_showsSnackbarWithoutRedeem() =
+        runTest(dispatcher) {
+            val redeem = RecordingPairingCodeRedeeming()
+            val viewModel =
+                viewModel(
+                    probe = neverProbe(),
+                    redeem = redeem,
+                )
+            viewModel.configure(initialProfile = null, mode = ConnectionSetupMode.Add)
+            viewModel.onBaseUrlChanged("http://10.0.0.8:4096/")
+            viewModel.onCredentialSegmentChanged(ConnectionCredentialSegment.PairingCode)
+            viewModel.onPairingCodeChanged("   ")
+            var saved = false
+            viewModel.submit { saved = true }
+            advanceUntilIdle()
+            assertFalse(saved)
+            assertTrue(redeem.calls.isEmpty())
+            assertEquals(
+                "Enter a pairing code",
+                viewModel.uiState.value.snackbar?.text,
+            )
+        }
+
+    @Test
+    fun submit_pairingCodeSegment_blankHost_showsEnterHost() =
+        runTest(dispatcher) {
+            val redeem = RecordingPairingCodeRedeeming()
+            val viewModel =
+                viewModel(
+                    probe = neverProbe(),
+                    redeem = redeem,
+                )
+            viewModel.configure(initialProfile = null, mode = ConnectionSetupMode.Add)
+            viewModel.onCredentialSegmentChanged(ConnectionCredentialSegment.PairingCode)
+            viewModel.onPairingCodeChanged("once-code")
+            var saved = false
+            viewModel.submit { saved = true }
+            advanceUntilIdle()
+            assertFalse(saved)
+            assertTrue(redeem.calls.isEmpty())
+            assertEquals("Enter a host", viewModel.uiState.value.snackbar?.text)
+        }
+
+    @Test
+    fun submit_passwordSegment_afterPairingCode_doesNotRedeem() =
+        runTest(dispatcher) {
+            val store = RecordingConnectionProfileStore()
+            val redeem = RecordingPairingCodeRedeeming()
+            val viewModel =
+                viewModel(
+                    store = store,
+                    probe = ConnectionProbing { ServerProtocol.V2 },
+                    redeem = redeem,
+                )
+            viewModel.configure(initialProfile = null, mode = ConnectionSetupMode.Add)
+            viewModel.onBaseUrlChanged("http://10.0.0.8:4096/")
+            viewModel.onPasswordChanged("secret")
+            viewModel.onCredentialSegmentChanged(ConnectionCredentialSegment.PairingCode)
+            viewModel.onPairingCodeChanged("leftover-code")
+            viewModel.onCredentialSegmentChanged(ConnectionCredentialSegment.Password)
+            assertEquals("secret", viewModel.uiState.value.password)
+            assertEquals("leftover-code", viewModel.uiState.value.pairingCode)
+            var saved = false
+            viewModel.submit { saved = true }
+            advanceUntilIdle()
+            assertTrue(saved)
+            assertTrue(redeem.calls.isEmpty())
+            assertEquals("secret", store.saved.last().password)
+            assertEquals("leftover-code", viewModel.uiState.value.pairingCode)
+        }
 
     private fun neverProbe(): ConnectionProbing = ConnectionProbing { error("probe should not run") }
 
