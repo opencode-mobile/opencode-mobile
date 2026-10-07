@@ -12,51 +12,39 @@ struct ConnectionProbeServiceTests {
         let detected = try await service.probe(connection: sampleConnection)
 
         #expect(detected == .v1)
-        #expect(requestedPaths.contains("/global/health"))
+        #expect(Set(requestedPaths) == ["/global/health", "/api/info"])
     }
 
-    @Test func probe_detectsV2FromApiHealthPidWhenGlobalMissing() async throws {
+    @Test func probe_detectsV2FromApiInfoPidWhenGlobalMissing() async throws {
         ProtocolHealthURLProtocol.reset(responsesByPath: [
             "/global/health": (404, #"{}"#),
-            "/api/health": (200, #"{"healthy":true,"version":"2.0.0","pid":123}"#),
+            "/api/info": (200, #"{"healthy":true,"version":"2.0.0","pid":123}"#),
         ])
         let service = makeService()
 
         let detected = try await service.probe(connection: sampleConnection)
 
         #expect(detected == .v2)
-        #expect(Set(requestedPaths) == ["/global/health", "/api/health", "/api/info"])
-    }
-
-    @Test func probe_detectsTransitionalV1FromApiHealthWithoutPid() async throws {
-        ProtocolHealthURLProtocol.reset(responsesByPath: [
-            "/global/health": (404, #"{}"#),
-            "/api/health": (200, #"{"healthy":true}"#),
-        ])
-        let service = makeService()
-
-        let detected = try await service.probe(connection: sampleConnection)
-
-        #expect(detected == .v1)
+        #expect(Set(requestedPaths) == ["/global/health", "/api/info"])
     }
 
     @Test func probe_prefersV1WhenBothHealthEndpointsExist() async throws {
         ProtocolHealthURLProtocol.reset(responsesByPath: [
             "/global/health": (200, #"{"healthy":true,"version":"1.18.4"}"#),
-            "/api/health": (200, #"{"healthy":true,"version":"2.0.0","pid":123}"#),
+            "/api/info": (200, #"{"healthy":true,"version":"2.0.0","pid":123}"#),
         ])
         let service = makeService()
 
         let detected = try await service.probe(connection: sampleConnection)
 
         #expect(detected == .v1)
-        #expect(requestedPaths.contains("/global/health"))
+        #expect(Set(requestedPaths) == ["/global/health", "/api/info"])
     }
 
     @Test func probe_failsWhenNeitherHealthEndpointIsUsable() async {
         ProtocolHealthURLProtocol.reset(responsesByPath: [
             "/global/health": (404, #"{}"#),
-            "/api/health": (404, #"{}"#),
+            "/api/info": (404, #"{}"#),
         ])
         let service = makeService()
 
@@ -73,7 +61,7 @@ struct ConnectionProbeServiceTests {
     @Test func probe_prefersAuthFailureOverLaterNotFound() async {
         ProtocolHealthURLProtocol.reset(responsesByPath: [
             "/global/health": (401, #"{"error":"unauthorized"}"#),
-            "/api/health": (404, #"{}"#),
+            "/api/info": (404, #"{}"#),
         ])
         let service = makeService()
 
@@ -94,7 +82,7 @@ struct ConnectionProbeServiceTests {
     @Test func probe_reportsUnhealthyWhenBodiesArePresentButUnusable() async {
         ProtocolHealthURLProtocol.reset(responsesByPath: [
             "/global/health": (200, #"{"healthy":false,"version":"1.0.0"}"#),
-            "/api/health": (404, #"{}"#),
+            "/api/info": (404, #"{}"#),
         ])
         let service = makeService()
 
@@ -115,7 +103,6 @@ struct ConnectionProbeServiceTests {
     @Test func probe_detectsV2FromOpenCode207ApiInfoWhenHealthPathsMiss() async throws {
         ProtocolHealthURLProtocol.reset(responsesByPath: [
             "/global/health": (200, "<!doctype html><html><head><title>OpenCode</title></head><body></body></html>"),
-            "/api/health": (404, #"{}"#),
             "/api/info": (200, #"{"version":"2.0.7","pid":1481731,"urls":["http://192.168.0.160:4096"]}"#),
         ])
         let service = makeService()
@@ -123,13 +110,12 @@ struct ConnectionProbeServiceTests {
         let detected = try await service.probe(connection: sampleConnection)
 
         #expect(detected == .v2)
-        #expect(Set(requestedPaths) == ["/global/health", "/api/health", "/api/info"])
+        #expect(Set(requestedPaths) == ["/global/health", "/api/info"])
     }
 
     @Test func probe_detectsV1FromGlobalHealthEvenIfApiInfoIsHtml() async throws {
         ProtocolHealthURLProtocol.reset(responsesByPath: [
             "/global/health": (200, #"{"healthy":true,"version":"1.18.31"}"#),
-            "/api/health": (404, #"{}"#),
             "/api/info": (200, "<!doctype html><html><body>SPA</body></html>"),
         ])
         let service = makeService()
@@ -142,7 +128,6 @@ struct ConnectionProbeServiceTests {
     @Test func probe_htmlAndNotFoundDoNotSurfaceNotFound() async {
         ProtocolHealthURLProtocol.reset(responsesByPath: [
             "/global/health": (200, "<!doctype html><html><body>SPA</body></html>"),
-            "/api/health": (404, "Not Found"),
             "/api/info": (404, "Not Found"),
         ])
         let service = makeService()
@@ -163,7 +148,6 @@ struct ConnectionProbeServiceTests {
     @Test func probe_authFailureOnHealthPathsIsNotSwallowedByApiInfo() async {
         ProtocolHealthURLProtocol.reset(responsesByPath: [
             "/global/health": (401, #"{"error":"unauthorized"}"#),
-            "/api/health": (401, #"{"error":"unauthorized"}"#),
             "/api/info": (404, #"{}"#),
         ])
         let service = makeService()

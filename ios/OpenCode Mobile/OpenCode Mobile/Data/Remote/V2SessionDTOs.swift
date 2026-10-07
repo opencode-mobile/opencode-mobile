@@ -90,29 +90,25 @@ nonisolated struct V2RenameSessionRequestDTO: Encodable, Sendable {
     let title: String
 }
 
-nonisolated struct V2ForkBoundaryDTO: Encodable, Sendable {
-    let type: String
-    let messageID: String?
+nonisolated struct V2InboxDeliveryRequestDTO: Encodable, Sendable {
+    let delivery: String
+}
 
-    init(type: String, messageID: String? = nil) {
-        self.type = type
-        self.messageID = messageID
+nonisolated struct V2ForkSessionRequestDTO: Encodable, Sendable {
+    let before: String?
+
+    init(before: String? = nil) {
+        self.before = before
     }
 
     private enum CodingKeys: String, CodingKey {
-        case type
-        case messageID
+        case before
     }
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(type, forKey: .type)
-        try container.encodeIfPresent(messageID, forKey: .messageID)
+        try container.encodeIfPresent(before, forKey: .before)
     }
-}
-
-nonisolated struct V2ForkSessionRequestDTO: Encodable, Sendable {
-    let boundary: V2ForkBoundaryDTO
 }
 
 nonisolated struct V2PermissionRequestDTO: Decodable, Sendable {

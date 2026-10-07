@@ -33,7 +33,6 @@ class ServerProtocolProbeErrorsTest {
         val error =
             ServerProtocolProbeErrors.unresolved(
                 globalHealth = HealthDto(healthy = false, version = "9.9.9"),
-                apiHealth = null,
                 fetchError = null,
             )
         assertTrue(error is ServerProbeError.Unhealthy)

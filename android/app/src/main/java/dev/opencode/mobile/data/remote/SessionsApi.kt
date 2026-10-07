@@ -19,10 +19,10 @@ import dev.opencode.mobile.data.remote.dto.TodoDto
 import dev.opencode.mobile.data.remote.dto.UpdateSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.V2CompactSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.V2CreateSessionRequestDto
-import dev.opencode.mobile.data.remote.dto.V2ForkBoundaryDto
 import dev.opencode.mobile.data.remote.dto.V2ForkSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.V2FormInfoDto
 import dev.opencode.mobile.data.remote.dto.V2FormReplyRequestDto
+import dev.opencode.mobile.data.remote.dto.V2InboxDeliveryRequestDto
 import dev.opencode.mobile.data.remote.dto.V2InboxItemDto
 import dev.opencode.mobile.data.remote.dto.V2LocationDto
 import dev.opencode.mobile.data.remote.dto.V2PermissionReplyRequestDto
@@ -218,8 +218,9 @@ class SessionsApi private constructor(
     ): Boolean =
         httpClient
             .get()
-            .post("api/session/$sessionId/inbox/$inboxId/steer")
-            .ensureSuccess()
+            .patch("api/session/$sessionId/inbox/$inboxId") {
+                setJsonBody(json, V2InboxDeliveryRequestDto(delivery = "steer"))
+            }.ensureSuccess()
 
     suspend fun queueInboxV2(
         sessionId: String,
@@ -227,8 +228,9 @@ class SessionsApi private constructor(
     ): Boolean =
         httpClient
             .get()
-            .post("api/session/$sessionId/inbox/$inboxId/queue")
-            .ensureSuccess()
+            .patch("api/session/$sessionId/inbox/$inboxId") {
+                setJsonBody(json, V2InboxDeliveryRequestDto(delivery = "queue"))
+            }.ensureSuccess()
 
     suspend fun shareSession(
         id: String,
@@ -337,7 +339,7 @@ class SessionsApi private constructor(
     ): Boolean =
         httpClient
             .get()
-            .post("session/$sessionId/permissions/$permissionId") {
+            .post("permission/$permissionId/reply") {
                 applyDirectory(directory)
                 setJsonBody(json, body)
             }.bodyOnSuccess()
@@ -382,14 +384,6 @@ class SessionsApi private constructor(
             .post("api/session/$sessionId/permission/$permissionId/reply") {
                 setJsonBody(json, body)
             }.ensureSuccess()
-
-    suspend fun listPendingQuestionsV2(directory: String? = null): List<QuestionRequestDto> =
-        httpClient
-            .get()
-            .get("api/question/request") {
-                applyLocationDirectory(directory)
-            }.bodyOnSuccess<ApiListEnvelope<QuestionRequestDto>>()
-            .data
 
     suspend fun listPendingFormsV2(directory: String? = null): List<V2FormInfoDto> =
         httpClient
@@ -506,13 +500,6 @@ class SessionsApi private constructor(
             }.ensureSuccess()
     }
 
-    suspend fun archiveSessionV2(id: String) {
-        httpClient
-            .get()
-            .post("api/session/$id/archive")
-            .ensureSuccess()
-    }
-
     suspend fun deleteSessionV2(id: String): Boolean =
         httpClient
             .get()
@@ -526,16 +513,12 @@ class SessionsApi private constructor(
         httpClient
             .get()
             .post("api/session/$id/fork") {
-                setJsonBody(
-                    json,
-                    V2ForkSessionRequestDto(
-                        boundary =
-                            V2ForkBoundaryDto(
-                                type = if (messageId.isNullOrBlank()) "through" else "before",
-                                messageId = messageId?.takeIf { it.isNotBlank() },
-                            ),
-                    ),
-                )
+                val before = messageId?.takeIf { it.isNotBlank() }
+                if (before == null) {
+                    setJsonBody(json, JsonObject(emptyMap()))
+                } else {
+                    setJsonBody(json, V2ForkSessionRequestDto(before = before))
+                }
             }.decodeV2Session()
 
     suspend fun compactSessionV2(id: String): Boolean =
