@@ -86,7 +86,12 @@ fun OpenCodeOutgoingMessage(
                                 Modifier
                                     .widthIn(max = maxBubbleWidth)
                                     .clip(OutgoingMessageShape)
-                                    .then(outgoingMessageInteractionModifier(onClick, onLongClick)),
+                                    .then(
+                                        outgoingMessageInteractionModifier(
+                                            onClick = onClick,
+                                            onLongClick = onLongClick,
+                                        ),
+                                    ),
                             shape = OutgoingMessageShape,
                             color = bubbleColor,
                             contentColor = bubbleTextColor,
@@ -168,7 +173,7 @@ private fun outgoingMessageInteractionModifier(
                     onLongClickLabel = "Show message actions",
                     role = Role.Button,
                 ).semantics {
-                    contentDescription = "Outgoing message. Long press to show message actions"
+                    contentDescription = "Outgoing message"
                 }
 
         onClick != null ->

@@ -99,4 +99,5 @@ private fun basicToken(
     password: String,
 ): String = Base64.getEncoder().encodeToString("$username:$password".toByteArray(StandardCharsets.UTF_8))
 
-private fun queryEncode(value: String): String = URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20")
+private fun queryEncode(value: String): String =
+    URLEncoder.encode(value, StandardCharsets.UTF_8.name()).replace("+", "%20")

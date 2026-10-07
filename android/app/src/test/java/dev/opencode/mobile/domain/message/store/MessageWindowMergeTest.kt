@@ -28,6 +28,13 @@ class MessageWindowMergeTest {
     }
 
     @Test
+    fun applyTail_reorderedTailDropsOmittedRowsBetweenOverlapIndexes() {
+        val local = messages("A", "reverted", "C", "sse")
+        val tail = messages("C", "A")
+        assertEquals(listOf("C", "A", "sse"), MessageWindowMerge.applyTail(local, tail).map { it.id })
+    }
+
+    @Test
     fun applyTail_emptyTailKeepsLocal() {
         val local = messages("a", "b")
         assertEquals(listOf("a", "b"), MessageWindowMerge.applyTail(local, emptyList()).map { it.id })

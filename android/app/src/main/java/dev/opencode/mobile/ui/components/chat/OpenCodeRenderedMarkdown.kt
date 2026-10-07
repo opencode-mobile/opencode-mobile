@@ -2,6 +2,8 @@ package dev.opencode.mobile.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,11 +29,15 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
@@ -100,10 +106,18 @@ fun OpenCodeRenderedMarkdown(
     collapsedMaxHeight: Dp? = null,
     expanded: Boolean = true,
     onLinkTap: ((String) -> Unit)? = null,
+    onTextTap: (() -> Unit)? = null,
     onExpandableChange: (Boolean) -> Unit = {},
     onContentHeightChange: (Dp) -> Unit = {},
 ) {
     val density = LocalDensity.current
+    val uriHandler = LocalUriHandler.current
+    val linkTapGate = remember { LinkTapGate() }
+    linkTapGate.onLinkTap = onLinkTap
+    linkTapGate.fallbackOpen = { url -> runCatching { uriHandler.openUri(url) } }
+    val trackLinkTaps = onTextTap != null && variant != OpenCodeRenderedMarkdownVariant.OutgoingMessage
+    linkTapGate.track = trackLinkTaps
+    val linkTap = remember { { url: String -> linkTapGate.onLink(url) } }
     val isExpandable = collapsedMaxHeight != null && document.isLikelyExpandable()
     val visibleModifier =
         if (!expanded && collapsedMaxHeight != null && isExpandable) {
@@ -116,23 +130,34 @@ fun OpenCodeRenderedMarkdown(
         onExpandableChange(isExpandable)
     }
 
-    Column(
-        modifier =
-            visibleModifier.onSizeChanged { size ->
-                val height = with(density) { size.height.toDp() }
-                if (height.value.roundToInt() > 0) {
-                    onContentHeightChange(height)
-                }
-            },
-        verticalArrangement = Arrangement.spacedBy(blockSpacingFor(variant)),
-    ) {
-        document.blocks.forEach { block ->
-            MarkdownBlockView(
-                block = block,
-                variant = variant,
-                isStreaming = isStreaming,
-                onLinkTap = onLinkTap,
-            )
+    val blocks = @Composable {
+        Column(
+            modifier =
+                visibleModifier.onSizeChanged { size ->
+                    val height = with(density) { size.height.toDp() }
+                    if (height.value.roundToInt() > 0) {
+                        onContentHeightChange(height)
+                    }
+                },
+            verticalArrangement = Arrangement.spacedBy(blockSpacingFor(variant)),
+        ) {
+            document.blocks.forEach { block ->
+                MarkdownBlockView(
+                    block = block,
+                    variant = variant,
+                    isStreaming = isStreaming,
+                    onLinkTap = if (trackLinkTaps || onLinkTap != null) linkTap else null,
+                )
+            }
+        }
+    }
+    if (variant == OpenCodeRenderedMarkdownVariant.OutgoingMessage) {
+        blocks()
+    } else {
+        SelectionContainer(
+            modifier = Modifier.opensMessageActionsOnTextTap(onTextTap, linkTapGate),
+        ) {
+            blocks()
         }
     }
 }
@@ -291,14 +316,12 @@ private fun CodeBlockView(
                 .horizontalScroll(scrollState)
                 .padding(horizontal = 12.dp, vertical = 10.dp),
     ) {
-        SelectionContainer {
-            Text(
-                text = annotated,
-                modifier = Modifier.wrapContentWidth(Alignment.Start, unbounded = true),
-                style = CodeTextStyle,
-                softWrap = false,
-            )
-        }
+        Text(
+            text = annotated,
+            modifier = Modifier.wrapContentWidth(Alignment.Start, unbounded = true),
+            style = CodeTextStyle,
+            softWrap = false,
+        )
     }
 }
 
@@ -496,6 +519,81 @@ private fun EqualHeightRow(
     }
 }
 
+private class LinkTapGate {
+    var onLinkTap: ((String) -> Unit)? = null
+    var fallbackOpen: ((String) -> Unit)? = null
+    var track: Boolean = false
+    var handled: Boolean = false
+
+    fun onLink(url: String) {
+        if (track) handled = true
+        val custom = onLinkTap
+        if (custom != null) custom(url) else fallbackOpen?.invoke(url)
+    }
+}
+
+/**
+ * A short tap opens message actions. The pointer is not consumed, so a
+ * long-press still starts text selection and a drag still scrolls. A link
+ * marks [LinkTapGate.handled] before this sees the release.
+ */
+@Composable
+internal fun Modifier.opensMessageActionsOnTextTap(onTextTap: (() -> Unit)?): Modifier =
+    opensMessageActionsOnTextTap(onTextTap, linkTapGate = null)
+
+@Composable
+private fun Modifier.opensMessageActionsOnTextTap(
+    onTextTap: (() -> Unit)?,
+    linkTapGate: LinkTapGate?,
+): Modifier {
+    // Read `.value` inside the gesture. `by` would capture a stale local, and
+    // keying pointerInput on the lambda restarts it whenever streaming recomposes.
+    val onTextTapState = rememberUpdatedState(onTextTap)
+    if (onTextTap == null) return this
+    return pointerInput(Unit) {
+        var selectionActive = false
+        awaitEachGesture {
+            val down = awaitFirstDown(pass = PointerEventPass.Initial, requireUnconsumed = false)
+            val slop = viewConfiguration.touchSlop
+            val slopSquared = slop * slop
+            val timeout = viewConfiguration.longPressTimeoutMillis
+            val start = System.nanoTime()
+            var moved = false
+            var released = false
+            while (true) {
+                val event = awaitPointerEvent(PointerEventPass.Final)
+                if ((System.nanoTime() - start) / 1_000_000 >= timeout) break
+                val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                val dx = change.position.x - down.position.x
+                val dy = change.position.y - down.position.y
+                if (dx * dx + dy * dy > slopSquared) {
+                    moved = true
+                    break
+                }
+                if (!change.pressed) {
+                    released = true
+                    break
+                }
+            }
+            val gate = linkTapGate
+            if (gate != null && gate.handled) {
+                gate.handled = false
+                selectionActive = false
+                return@awaitEachGesture
+            }
+            if (released && !moved) {
+                if (selectionActive) {
+                    selectionActive = false
+                    return@awaitEachGesture
+                }
+                onTextTapState.value?.invoke()
+            } else if (!moved) {
+                selectionActive = true
+            }
+        }
+    }
+}
+
 private enum class EqualHeightRowSlot {
     Probe,
     Final,
@@ -510,8 +608,7 @@ private fun MarkdownInlineText(
     onLinkTap: ((String) -> Unit)?,
 ) {
     val colors = markdownTextColors()
-    // LinkAnnotation keeps link taps without ClickableText's full-text pointer
-    // ownership, so parent combinedClickable long-press (message actions) still fires.
+    // LinkAnnotation keeps link taps inside the document selection scope.
     val annotated = rememberMarkdownAnnotatedString(inlines, colors, onLinkTap)
     Text(
         text = annotated,

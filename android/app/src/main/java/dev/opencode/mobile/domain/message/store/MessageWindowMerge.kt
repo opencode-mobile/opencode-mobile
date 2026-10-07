@@ -12,14 +12,18 @@ object MessageWindowMerge {
         if (tail.isEmpty()) return local
         if (local.isEmpty()) return tail
         val tailIds = tail.map { it.id }.toHashSet()
-        val oldestOverlapIndex = local.indexOfFirst { it.id in tailIds }
-        if (oldestOverlapIndex < 0) return tail
-        val prefix = local.subList(0, oldestOverlapIndex)
-        val tailNewestId = tail.last().id
-        val tailNewestInLocal = local.indexOfLast { it.id == tailNewestId }
+        val earliestOverlap = local.indexOfFirst { it.id in tailIds }
+        if (earliestOverlap < 0) return tail
+        val prefix = local.subList(0, earliestOverlap)
+        // Suffix starts after the latest overlapping local index. A reordered tail
+        // can name an earlier row last; rows between those indexes were omitted
+        // (a revert). When tail.last is absent locally, that window already
+        // consumed everything past the overlap.
+        val latestOverlap = local.indexOfLast { it.id in tailIds }
+        val tailNewestInLocal = local.indexOfLast { it.id == tail.last().id }
         val suffix =
-            if (tailNewestInLocal >= 0 && tailNewestInLocal + 1 < local.size) {
-                local.subList(tailNewestInLocal + 1, local.size).filter { it.id !in tailIds }
+            if (tailNewestInLocal >= 0 && latestOverlap + 1 < local.size) {
+                local.subList(latestOverlap + 1, local.size).filter { it.id !in tailIds }
             } else {
                 emptyList()
             }

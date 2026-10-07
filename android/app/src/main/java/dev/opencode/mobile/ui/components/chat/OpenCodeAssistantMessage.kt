@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -42,6 +43,7 @@ fun OpenCodeAssistantMessage(
     renderedMarkdown: MarkdownDocument? = null,
     isStreaming: Boolean = false,
     presentation: OpenCodeAssistantMessagePresentation = OpenCodeAssistantMessagePresentation.Bubble,
+    onTextTap: (() -> Unit)? = null,
 ) {
     val shape = RoundedCornerShape(AssistantMessageCornerRadius)
     val bubbleModifier =
@@ -66,14 +68,17 @@ fun OpenCodeAssistantMessage(
             variant = OpenCodeRenderedMarkdownVariant.AssistantMessage,
             isStreaming = isStreaming,
             modifier = bubbleModifier,
+            onTextTap = onTextTap,
         )
     } else {
-        Text(
-            text = assistantMessageDisplayText(text),
-            modifier = bubbleModifier,
-            style = MaterialTheme.typography.bodyLarge,
-            color = openCodeColor("text-strong"),
-        )
+        SelectionContainer(modifier = Modifier.opensMessageActionsOnTextTap(onTextTap)) {
+            Text(
+                text = assistantMessageDisplayText(text),
+                modifier = bubbleModifier,
+                style = MaterialTheme.typography.bodyLarge,
+                color = openCodeColor("text-strong"),
+            )
+        }
     }
 }
 

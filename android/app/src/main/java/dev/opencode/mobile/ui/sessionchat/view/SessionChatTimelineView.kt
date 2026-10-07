@@ -15,7 +15,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -61,7 +60,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.hideFromAccessibility
-import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.unit.Dp
@@ -600,15 +598,7 @@ private fun SessionChatMessageRow(
                     metadataLabel = message.metadataLabel,
                     content = message.outgoingContent(),
                     modifier = Modifier.fillMaxWidth(),
-                    onClick =
-                        if (message.renderedMarkdown == null) {
-                            { openMessageActions(showsRevertMessage = true) }
-                        } else {
-                            null
-                        },
-                    // Always long-pressable so plain and markdown bubbles match;
-                    // markdown still uses tap only for links (parent onClick stays null).
-                    onLongClick = { openMessageActions(showsRevertMessage = true) },
+                    onClick = { openMessageActions(showsRevertMessage = true) },
                 )
 
             MessageRole.Assistant ->
@@ -656,28 +646,6 @@ private fun SessionChatMessageItem.outgoingContent(): List<OpenCodeOutgoingMessa
         }
     }
 }
-
-private fun messageActionsModifier(
-    renderedMarkdown: MarkdownDocument?,
-    onOpenMessageActions: () -> Unit,
-    messageDescription: String,
-): Modifier =
-    if (renderedMarkdown != null) {
-        Modifier
-            .combinedClickable(
-                onClick = {},
-                onLongClick = onOpenMessageActions,
-                onLongClickLabel = "Show message actions",
-                role = Role.Button,
-            ).semantics {
-                contentDescription = "$messageDescription. Long press to show message actions"
-            }
-    } else {
-        Modifier.clickable(onClick = onOpenMessageActions).semantics {
-            role = Role.Button
-            contentDescription = "$messageDescription. Shows message actions"
-        }
-    }
 
 @Composable
 private fun AssistantMessageContent(
@@ -745,12 +713,7 @@ private fun AssistantMessageContent(
                             text = block.text,
                             renderedMarkdown = renderedMarkdown,
                             isStreaming = message.isStreaming,
-                            modifier =
-                                messageActionsModifier(
-                                    renderedMarkdown = renderedMarkdown,
-                                    onOpenMessageActions = onOpenMessageActions,
-                                    messageDescription = "Assistant message",
-                                ),
+                            onTextTap = onOpenMessageActions,
                         )
                     }
                     is SessionChatTimelineBlock.Attachment ->
@@ -887,12 +850,7 @@ private fun StepParagraphBlock(
                 text = block.text,
                 renderedMarkdown = renderedMarkdown,
                 isStreaming = isStreaming,
-                modifier =
-                    messageActionsModifier(
-                        renderedMarkdown = renderedMarkdown,
-                        onOpenMessageActions = onOpenMessageActions,
-                        messageDescription = "Assistant message",
-                    ),
+                onTextTap = onOpenMessageActions,
                 presentation = OpenCodeAssistantMessagePresentation.Plain,
             )
         } else {
@@ -978,6 +936,7 @@ private fun AssistantMessageBubble(
     text: String,
     renderedMarkdown: MarkdownDocument?,
     isStreaming: Boolean = false,
+    onTextTap: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     presentation: OpenCodeAssistantMessagePresentation = OpenCodeAssistantMessagePresentation.Bubble,
 ) {
@@ -1018,6 +977,7 @@ private fun AssistantMessageBubble(
         isStreaming = isStreaming,
         modifier = modifier,
         presentation = presentation,
+        onTextTap = onTextTap,
     )
 }
 
