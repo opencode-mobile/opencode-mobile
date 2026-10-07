@@ -28,7 +28,7 @@ firebaseBom = "34.16.0"
 firebaseCrashlyticsPlugin = "3.0.7"
 googleServicesPlugin = "4.5.0"
 camera = "1.4.2"
-mlkitBarcode = "17.3.0"
+zxing = "3.5.4"
 paparazzi = "2.0.0-alpha05"
 
 [libraries]
@@ -77,8 +77,7 @@ androidx-room-compiler = { module = "androidx.room:room-compiler", version.ref =
 androidx-camera-camera2 = { module = "androidx.camera:camera-camera2", version.ref = "camera" }
 androidx-camera-lifecycle = { module = "androidx.camera:camera-lifecycle", version.ref = "camera" }
 androidx-camera-view = { module = "androidx.camera:camera-view", version.ref = "camera" }
-androidx-camera-mlkit-vision = { module = "androidx.camera:camera-mlkit-vision", version.ref = "camera" }
-mlkit-barcode-scanning = { module = "com.google.mlkit:barcode-scanning", version.ref = "mlkitBarcode" }
+zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
 firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebaseBom" }
 firebase-crashlytics = { module = "com.google.firebase:firebase-crashlytics" }
 firebase-analytics = { module = "com.google.firebase:firebase-analytics" }
