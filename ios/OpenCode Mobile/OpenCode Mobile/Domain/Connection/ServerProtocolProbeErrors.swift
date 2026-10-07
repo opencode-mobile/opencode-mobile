@@ -11,15 +11,11 @@ nonisolated enum ServerProtocolProbeErrors {
 
     static func unresolved(
         globalHealth: HealthDTO?,
-        apiHealth: HealthDTO?,
         fetchError: Error?
     ) -> Error {
         var error = fetchError
         if let globalHealth, globalHealth.healthy != true {
             error = prefer(previous: error, next: ServerProbeError.unhealthy(version: globalHealth.version))
-        }
-        if let apiHealth, apiHealth.healthy != true, apiHealth.pid == nil {
-            error = prefer(previous: error, next: ServerProbeError.unhealthy(version: apiHealth.version))
         }
         return error ?? ServerProbeError.transport("No health endpoint")
     }

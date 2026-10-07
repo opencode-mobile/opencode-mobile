@@ -85,7 +85,7 @@ data class RevertSessionRequestDto(
 
 @Serializable
 data class PermissionResponseRequestDto(
-    val response: String,
+    val reply: String,
 )
 
 @Serializable

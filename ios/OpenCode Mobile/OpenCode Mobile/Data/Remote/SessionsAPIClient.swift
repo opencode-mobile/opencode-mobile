@@ -47,14 +47,6 @@ nonisolated struct SessionsAPIClient: Sendable {
         try await get(path: "question", directory: directory)
     }
 
-    func listPendingQuestionsV2(directory: String? = nil) async throws -> [QuestionRequestDTO] {
-        let envelope: APIListEnvelope<QuestionRequestDTO> = try await get(
-            path: "api/question/request",
-            locationDirectory: directory
-        )
-        return envelope.data
-    }
-
     func listPendingFormsV2(directory: String? = nil) async throws -> [V2FormInfoDTO] {
         let envelope: APIListEnvelope<V2FormInfoDTO> = try await get(
             path: "api/form",
@@ -127,11 +119,17 @@ nonisolated struct SessionsAPIClient: Sendable {
     }
 
     func steerInboxV2(sessionID: String, inboxID: String) async throws -> Bool {
-        try await postWithoutBody(path: "api/session/\(sessionID)/inbox/\(inboxID)/steer")
+        try await patchEmpty(
+            path: "api/session/\(sessionID)/inbox/\(inboxID)",
+            body: V2InboxDeliveryRequestDTO(delivery: "steer")
+        )
     }
 
     func queueInboxV2(sessionID: String, inboxID: String) async throws -> Bool {
-        try await postWithoutBody(path: "api/session/\(sessionID)/inbox/\(inboxID)/queue")
+        try await patchEmpty(
+            path: "api/session/\(sessionID)/inbox/\(inboxID)",
+            body: V2InboxDeliveryRequestDTO(delivery: "queue")
+        )
     }
 
     func shareSession(id: String, directory: String? = nil) async throws -> SessionDTO {
@@ -197,12 +195,12 @@ nonisolated struct SessionsAPIClient: Sendable {
     }
 
     func respondToPermission(
-        sessionID: String,
+        sessionID _: String,
         permissionID: String,
         body: PermissionResponseRequestDTO,
         directory: String? = nil
     ) async throws -> Bool {
-        try await postEmpty(path: "session/\(sessionID)/permissions/\(permissionID)", body: body, directory: directory)
+        try await postEmpty(path: "permission/\(permissionID)/reply", body: body, directory: directory)
     }
 
     func replyToQuestion(
@@ -304,23 +302,17 @@ nonisolated struct SessionsAPIClient: Sendable {
         _ = try await patchEmpty(path: "api/session/\(id)", body: V2RenameSessionRequestDTO(title: title))
     }
 
-    func archiveSessionV2(id: String) async throws {
-        _ = try await postWithoutBody(path: "api/session/\(id)/archive")
-    }
-
     func deleteSessionV2(id: String) async throws -> Bool {
         try await delete(path: "api/session/\(id)")
     }
 
     func forkSessionV2(id: String, messageID: String?) async throws -> V2SessionDTO {
+        let before = messageID.flatMap { value in
+            value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : value
+        }
         let envelope: APIDataEnvelope<V2SessionDTO> = try await post(
             path: "api/session/\(id)/fork",
-            body: V2ForkSessionRequestDTO(
-                boundary: V2ForkBoundaryDTO(
-                    type: (messageID?.isEmpty == false) ? "before" : "through",
-                    messageID: messageID.flatMap { $0.isEmpty ? nil : $0 }
-                )
-            )
+            body: V2ForkSessionRequestDTO(before: before)
         )
         return envelope.data
     }

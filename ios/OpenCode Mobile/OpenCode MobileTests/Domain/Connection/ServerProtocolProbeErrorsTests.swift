@@ -18,7 +18,6 @@ struct ServerProtocolProbeErrorsTests {
     @Test func unresolvedUsesUnhealthyBodyWhenFetchesDidNotThrow() {
         let error = ServerProtocolProbeErrors.unresolved(
             globalHealth: HealthDTO(healthy: false, version: "9.9.9", pid: nil),
-            apiHealth: nil,
             fetchError: nil
         )
         guard case let .unhealthy(version) = error as? ServerProbeError else {

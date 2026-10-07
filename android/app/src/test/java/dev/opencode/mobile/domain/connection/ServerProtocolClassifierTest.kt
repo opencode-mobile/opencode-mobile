@@ -11,7 +11,7 @@ class ServerProtocolClassifierTest {
         val protocol =
             ServerProtocolClassifier.classify(
                 globalHealth = HealthDto(healthy = true, version = "1.18.4"),
-                apiHealth = HealthDto(healthy = true, version = "2.0.0", pid = 123),
+                apiInfo = HealthDto(healthy = true, version = "2.0.0", pid = 123),
             )
         assertEquals(ServerProtocol.V1, protocol)
     }
@@ -21,7 +21,7 @@ class ServerProtocolClassifierTest {
         val protocol =
             ServerProtocolClassifier.classify(
                 globalHealth = null,
-                apiHealth = HealthDto(healthy = true, version = "2.0.0", pid = 123),
+                apiInfo = HealthDto(healthy = true, version = "2.0.0", pid = 123),
             )
         assertEquals(ServerProtocol.V2, protocol)
     }
@@ -32,27 +32,9 @@ class ServerProtocolClassifierTest {
             ServerProtocol.V2,
             ServerProtocolClassifier.classify(
                 globalHealth = null,
-                apiHealth = HealthDto(healthy = null, version = "2.0.0", pid = 123),
-            ),
-        )
-        assertEquals(
-            ServerProtocol.V2,
-            ServerProtocolClassifier.classify(
-                globalHealth = null,
-                apiHealth = null,
                 apiInfo = HealthDto(healthy = null, version = "2.0.7", pid = 1481731),
             ),
         )
-    }
-
-    @Test
-    fun recognizesTransitionalV1ApiHealthResponse() {
-        val protocol =
-            ServerProtocolClassifier.classify(
-                globalHealth = null,
-                apiHealth = HealthDto(healthy = true),
-            )
-        assertEquals(ServerProtocol.V1, protocol)
     }
 
     @Test
@@ -60,13 +42,12 @@ class ServerProtocolClassifierTest {
         assertNull(
             ServerProtocolClassifier.classify(
                 globalHealth = null,
-                apiHealth = null,
             ),
         )
         assertNull(
             ServerProtocolClassifier.classify(
                 globalHealth = HealthDto(healthy = false),
-                apiHealth = HealthDto(healthy = false),
+                apiInfo = HealthDto(healthy = false),
             ),
         )
     }

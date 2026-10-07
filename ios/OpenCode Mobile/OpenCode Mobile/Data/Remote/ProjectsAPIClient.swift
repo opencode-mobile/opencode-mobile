@@ -50,10 +50,6 @@ nonisolated struct ProjectsAPIClient: Sendable {
         try await get(path: "global/health")
     }
 
-    func getApiHealth() async throws -> HealthDTO {
-        try await get(path: "api/health")
-    }
-
     func getApiInfo() async throws -> HealthDTO {
         try await get(path: "api/info")
     }
@@ -65,49 +61,36 @@ nonisolated struct ProjectsAPIClient: Sendable {
     /// Dual-probe health endpoints and return the detected protocol.
     func detectProtocol() async throws -> ServerProtocol {
         async let globalFetch = fetchHealth(path: "global/health") { try await getGlobalHealth() }
-        async let apiFetch = fetchHealth(path: "api/health") { try await getApiHealth() }
         async let infoFetch = fetchHealth(path: "api/info") { try await getApiInfo() }
         let globalResult = await globalFetch
-        let apiResult = await apiFetch
         let infoResult = await infoFetch
         let resolvedGlobal = globalResult.health
-        let resolvedApi = apiResult.health
         let resolvedInfo = infoResult.health
         let lastError = ServerProtocolProbeErrors.prefer(
-            previous: ServerProtocolProbeErrors.prefer(
-                previous: globalResult.error,
-                next: apiResult.error
-            ),
+            previous: globalResult.error,
             next: infoResult.error
         )
 
         guard let detected = ServerProtocolClassifier.classify(
             globalHealth: resolvedGlobal,
-            apiHealth: resolvedApi,
             apiInfo: resolvedInfo
         ) else {
             throw adapter.mapProbeError(
                 ServerProtocolProbeErrors.unresolved(
                     globalHealth: resolvedGlobal,
-                    apiHealth: resolvedApi,
                     fetchError: lastError
                 )
             )
         }
 
         switch detected {
-        case .v1 where resolvedGlobal?.healthy == true:
-            try adapter.requireHealthy(resolvedGlobal!)
-        case .v2:
-            if let resolvedApi, resolvedApi.pid != nil, resolvedApi.healthy == false {
-                throw ServerProbeError.unhealthy(version: resolvedApi.version)
+        case .v1:
+            if let resolvedGlobal {
+                try adapter.requireHealthy(resolvedGlobal)
             }
+        case .v2:
             if let resolvedInfo, resolvedInfo.pid != nil, resolvedInfo.healthy == false {
                 throw ServerProbeError.unhealthy(version: resolvedInfo.version)
-            }
-        case .v1:
-            if let resolvedApi, resolvedApi.healthy == true {
-                try adapter.requireHealthy(resolvedApi)
             }
         }
 

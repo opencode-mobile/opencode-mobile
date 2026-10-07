@@ -80,7 +80,7 @@ struct RevertSessionRequestDTO: Codable, Sendable {
 }
 
 struct PermissionResponseRequestDTO: Codable, Sendable {
-    let response: String
+    let reply: String
 }
 
 struct PermissionRequestDTO: Codable, Sendable {

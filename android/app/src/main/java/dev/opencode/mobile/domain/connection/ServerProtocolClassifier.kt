@@ -11,12 +11,9 @@ import dev.opencode.mobile.data.remote.dto.HealthDto
 object ServerProtocolClassifier {
     fun classify(
         globalHealth: HealthDto?,
-        apiHealth: HealthDto?,
         apiInfo: HealthDto? = null,
     ): ServerProtocol? {
         if (globalHealth?.healthy == true) return ServerProtocol.V1
-        if (apiHealth?.pid != null) return ServerProtocol.V2
-        if (apiHealth?.healthy == true) return ServerProtocol.V1
         if (apiInfo?.pid != null) return ServerProtocol.V2
         return null
     }

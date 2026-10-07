@@ -41,14 +41,13 @@ data class V2RenameSessionRequestDto(
 )
 
 @Serializable
-data class V2ForkBoundaryDto(
-    val type: String,
-    @SerialName("messageID") val messageId: String? = null,
+data class V2InboxDeliveryRequestDto(
+    val delivery: String,
 )
 
 @Serializable
 data class V2ForkSessionRequestDto(
-    val boundary: V2ForkBoundaryDto,
+    val before: String? = null,
 )
 
 @Serializable

@@ -19,15 +19,11 @@ object ServerProtocolProbeErrors {
 
     fun unresolved(
         globalHealth: HealthDto?,
-        apiHealth: HealthDto?,
         fetchError: Throwable?,
     ): Throwable {
         var error = fetchError
         if (globalHealth != null && globalHealth.healthy != true) {
             error = prefer(error, ServerProbeError.Unhealthy(globalHealth.version))
-        }
-        if (apiHealth != null && apiHealth.healthy != true && apiHealth.pid == null) {
-            error = prefer(error, ServerProbeError.Unhealthy(apiHealth.version))
         }
         return error ?: ServerProbeError.Transport(IllegalStateException("No health endpoint"))
     }

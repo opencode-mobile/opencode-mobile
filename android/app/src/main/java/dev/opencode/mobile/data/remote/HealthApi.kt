@@ -19,8 +19,6 @@ class HealthApi(
 
     suspend fun getGlobalHealth(): HealthDto = fetchHealth("global/health")
 
-    suspend fun getApiHealth(): HealthDto = fetchHealth("api/health")
-
     suspend fun getApiInfo(): HealthDto = fetchHealth("api/info")
 
     /** @deprecated Use [detectProtocol] for dual-stack probes. */
@@ -34,7 +32,6 @@ class HealthApi(
         try {
             detector.detect(
                 fetchGlobalHealth = ::getGlobalHealth,
-                fetchApiHealth = ::getApiHealth,
                 fetchApiInfo = ::getApiInfo,
             )
         } catch (error: Throwable) {

@@ -195,7 +195,7 @@ class SessionProtocolRepositoryTest {
         }
 
     @Test
-    fun v2Fork_postsBoundaryEnvelope() =
+    fun v2Fork_postsBeforeCursor() =
         runTest {
             var captured: HttpRequestData? = null
             val client =
@@ -218,9 +218,11 @@ class SessionProtocolRepositoryTest {
             assertNull(forked.parentId)
             assertEquals(HttpMethod.Post, captured?.method)
             assertTrue(captured!!.url.encodedPath.endsWith("/api/session/ses_1/fork"))
-            assertTrue(captured.requestBodyText().contains("\"boundary\""))
-            assertTrue(captured.requestBodyText().contains("\"type\":\"before\""))
-            assertTrue(captured.requestBodyText().contains("\"messageID\":\"msg_1\""))
+            val body = captured.requestBodyText()
+            assertTrue(body.contains("\"before\":\"msg_1\""))
+            assertFalse(body.contains("\"boundary\""))
+            assertFalse(body.contains("\"type\""))
+            assertFalse(body.contains("\"messageID\""))
         }
 
     @Test
@@ -493,40 +495,58 @@ class SessionProtocolRepositoryTest {
         }
 
     @Test
-    fun v2ListPendingQuestions_fallsBackToFormsWhenQuestionRoute404HasNoContentType() =
+    fun v1RespondToPermission_postsPermissionReplyPath() =
         runTest {
             val requests = mutableListOf<HttpRequestData>()
             val client =
                 testClient { request ->
                     requests += request
-                    when {
-                        request.url.encodedPath.contains("/api/question/request") ->
-                            respond(
-                                content = "",
-                                status = HttpStatusCode.NotFound,
-                                headers = headersOf(),
-                            )
-                        request.url.encodedPath.endsWith("/api/form") ->
-                            respondJson(
-                                """
-                                {
-                                  "data":[{
-                                    "id":"frm_1",
-                                    "sessionID":"ses_1",
-                                    "title":"Task type",
-                                    "fields":[{
-                                      "key":"q0",
-                                      "title":"Task type",
-                                      "description":"What would you like to work on?",
-                                      "options":[{"value":"Code changes","label":"Code changes"}],
-                                      "custom":true
-                                    }]
-                                  }]
-                                }
-                                """.trimIndent(),
-                            )
-                        else -> respond("", HttpStatusCode.NotFound)
-                    }
+                    respondJson("true")
+                }
+            val repository =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V1),
+                )
+
+            val ok = repository.respondToPermission("ses_1", "per_1", PermissionDecision.AllowOnce, "/repo")
+
+            assertTrue(ok)
+            val request = requests.single()
+            assertEquals(HttpMethod.Post, request.method)
+            assertTrue(request.url.encodedPath.endsWith("/permission/per_1/reply"))
+            assertFalse(request.url.encodedPath.contains("/permissions/"))
+            val body = request.requestBodyText()
+            assertTrue(body.contains("\"reply\":\"once\""))
+            assertFalse(body.contains("\"response\""))
+        }
+
+    @Test
+    fun v2ListPendingQuestions_readsForms() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respondJson(
+                        """
+                        {
+                          "data":[{
+                            "id":"frm_1",
+                            "sessionID":"ses_1",
+                            "title":"Task type",
+                            "fields":[{
+                              "key":"q0",
+                              "title":"Task type",
+                              "description":"What would you like to work on?",
+                              "options":[{"value":"Code changes","label":"Code changes"}],
+                              "custom":true
+                            }]
+                          }]
+                        }
+                        """.trimIndent(),
+                    )
                 }
             val repository =
                 DefaultSessionRepository(
@@ -557,9 +577,9 @@ class SessionProtocolRepositoryTest {
                     .single()
                     .label,
             )
-            assertEquals(2, requests.size)
-            assertTrue(requests[0].url.encodedPath.contains("/api/question/request"))
-            assertTrue(requests[1].url.encodedPath.endsWith("/api/form"))
+            assertEquals(1, requests.size)
+            assertTrue(requests.single().url.encodedPath.endsWith("/api/form"))
+            assertFalse(requests.single().url.encodedPath.contains("/api/question/request"))
         }
 
     @Test

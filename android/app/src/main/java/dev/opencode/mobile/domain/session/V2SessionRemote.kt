@@ -13,16 +13,7 @@ internal class V2SessionRemote(
         api.listPendingPermissionsV2(directory).map(adapter::toPermissionRequest)
 
     override suspend fun listPendingQuestions(directory: String?): List<QuestionRequest> =
-        try {
-            api.listPendingQuestionsV2(directory).map(adapter::toQuestionRequest)
-        } catch (error: Throwable) {
-            val mapped = adapter.mapError(error)
-            if (mapped is SessionError.Http && mapped.statusCode == 404) {
-                api.listPendingFormsV2(directory).map(adapter::toQuestionRequest)
-            } else {
-                throw error
-            }
-        }
+        api.listPendingFormsV2(directory).map(adapter::toQuestionRequest)
 
     override suspend fun listSessions(directory: String?): List<Session> = api.listSessionsV2(directory).map(adapter::toSession)
 

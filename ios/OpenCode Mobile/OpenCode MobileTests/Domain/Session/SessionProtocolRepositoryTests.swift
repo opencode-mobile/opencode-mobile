@@ -119,7 +119,7 @@ struct SessionProtocolRepositoryTests {
         #expect(ProtocolRoutingURLProtocol.requests[1].url?.path.hasSuffix("/api/session/ses_1") == true)
     }
 
-    @Test func v2ForkPostsBoundaryEnvelope() async throws {
+    @Test func v2ForkPostsBeforeCursor() async throws {
         ProtocolRoutingURLProtocol.reset(responses: [
             .json(sessionEnvelope(id: "ses_fork", title: "Fork", forkSourceID: "ses_1"))
         ])
@@ -133,9 +133,10 @@ struct SessionProtocolRepositoryTests {
         #expect(request.httpMethod == "POST")
         #expect(request.url?.path.hasSuffix("/api/session/ses_1/fork") == true)
         let body = try #require(ProtocolRoutingURLProtocol.bodies.first.flatMap { $0 })
-        #expect(body.contains(#""boundary""#))
-        #expect(body.contains(#""type":"before""#))
-        #expect(body.contains(#""messageID":"msg_1""#))
+        #expect(body.contains(#""before":"msg_1""#))
+        #expect(!body.contains(#""boundary""#))
+        #expect(!body.contains(#""type""#))
+        #expect(!body.contains(#""messageID""#))
     }
 
     @Test func v2CreateSessionPostsTitleAndLocation() async throws {
@@ -385,9 +386,30 @@ struct SessionProtocolRepositoryTests {
         #expect(!body.contains(#""reply""#))
     }
 
-    @Test func v2ListPendingQuestionsFallsBackToFormsWhenQuestionRoute404s() async throws {
+    @Test func v1RespondToPermissionPostsPermissionReplyPath() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [.noContent])
+        let repository = makeSessionRepository(serverProtocol: .v1)
+
+        let ok = try await repository.respondToPermission(
+            sessionID: "ses_1",
+            permissionID: "per_1",
+            decision: .allowOnce,
+            directory: "/repo"
+        )
+
+        #expect(ok)
+        let request = try #require(ProtocolRoutingURLProtocol.requests.first)
+        #expect(request.httpMethod == "POST")
+        let path = try #require(request.url?.path)
+        #expect(path.hasSuffix("/permission/per_1/reply"))
+        #expect(!path.contains("/permissions/"))
+        let body = try #require(ProtocolRoutingURLProtocol.bodies.first ?? nil)
+        #expect(body.contains(#""reply":"once""#))
+        #expect(!body.contains(#""response""#))
+    }
+
+    @Test func v2ListPendingQuestionsReadsForms() async throws {
         ProtocolRoutingURLProtocol.reset(responses: [
-            StubResponse(statusCode: 404, body: ""),
             .json(#"""
             {
               "data": [{
@@ -412,9 +434,9 @@ struct SessionProtocolRepositoryTests {
         #expect(questions.map(\.id) == ["frm_1"])
         let question = try #require(questions.first?.questions.first)
         #expect(question.question == "What would you like to work on?")
-        #expect(ProtocolRoutingURLProtocol.requests.count == 2)
-        #expect(ProtocolRoutingURLProtocol.requests[0].url?.path.hasSuffix("/api/question/request") == true)
-        #expect(ProtocolRoutingURLProtocol.requests[1].url?.path.hasSuffix("/api/form") == true)
+        #expect(ProtocolRoutingURLProtocol.requests.count == 1)
+        #expect(ProtocolRoutingURLProtocol.requests[0].url?.path.hasSuffix("/api/form") == true)
+        #expect(ProtocolRoutingURLProtocol.requests[0].url?.path.contains("/api/question/request") != true)
     }
 
     @Test func v2ReplyToQuestionUsesSessionScopedPath() async throws {

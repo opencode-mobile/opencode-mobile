@@ -31,7 +31,6 @@ class ConnectionProbeService(
         try {
             return detector.detect(
                 fetchGlobalHealth = { client.fetchHealth("global/health") },
-                fetchApiHealth = { client.fetchHealth("api/health") },
                 fetchApiInfo = { client.fetchHealth("api/info") },
             )
         } catch (error: Throwable) {

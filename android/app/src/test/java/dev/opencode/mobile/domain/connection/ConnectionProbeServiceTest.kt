@@ -46,11 +46,11 @@ class ConnectionProbeServiceTest {
             val protocol = service.probe(connection)
 
             assertEquals(ServerProtocol.V1, protocol)
-            assertTrue(paths.contains("/global/health"))
+            assertEquals(setOf("/global/health", "/api/info"), paths.toSet())
         }
 
     @Test
-    fun probe_detectsV2FromApiHealthPidWhenGlobalMissing() =
+    fun probe_detectsV2FromApiInfoPidWhenGlobalMissing() =
         runTest {
             val paths = mutableListOf<String>()
             val service =
@@ -63,13 +63,12 @@ class ConnectionProbeServiceTest {
                                 status = HttpStatusCode.NotFound,
                                 headers = headersOf(HttpHeaders.ContentType, "application/json"),
                             )
-                        "/api/health" ->
+                        "/api/info" ->
                             respond(
                                 content = """{"healthy":true,"version":"2.0.0","pid":123}""",
                                 status = HttpStatusCode.OK,
                                 headers = headersOf(HttpHeaders.ContentType, "application/json"),
                             )
-                        "/api/info" -> jsonNotFound()
                         else -> error("unexpected path")
                     }
                 }
@@ -77,35 +76,7 @@ class ConnectionProbeServiceTest {
             val protocol = service.probe(connection)
 
             assertEquals(ServerProtocol.V2, protocol)
-            assertTrue(paths.contains("/global/health"))
-            assertTrue(paths.contains("/api/health"))
-            assertTrue(paths.contains("/api/info"))
-        }
-
-    @Test
-    fun probe_detectsTransitionalV1FromApiHealthWithoutPid() =
-        runTest {
-            val service =
-                service { request ->
-                    when (request.url.encodedPath) {
-                        "/global/health" ->
-                            respond(
-                                content = """{}""",
-                                status = HttpStatusCode.NotFound,
-                                headers = headersOf(HttpHeaders.ContentType, "application/json"),
-                            )
-                        "/api/health" ->
-                            respond(
-                                content = """{"healthy":true}""",
-                                status = HttpStatusCode.OK,
-                                headers = headersOf(HttpHeaders.ContentType, "application/json"),
-                            )
-                        "/api/info" -> jsonNotFound()
-                        else -> error("unexpected path")
-                    }
-                }
-
-            assertEquals(ServerProtocol.V1, service.probe(connection))
+            assertEquals(setOf("/global/health", "/api/info"), paths.toSet())
         }
 
     @Test
@@ -122,19 +93,18 @@ class ConnectionProbeServiceTest {
                                 status = HttpStatusCode.OK,
                                 headers = headersOf(HttpHeaders.ContentType, "application/json"),
                             )
-                        "/api/health" ->
+                        "/api/info" ->
                             respond(
                                 content = """{"healthy":true,"version":"2.0.0","pid":123}""",
                                 status = HttpStatusCode.OK,
                                 headers = headersOf(HttpHeaders.ContentType, "application/json"),
                             )
-                        "/api/info" -> jsonNotFound()
                         else -> error("unexpected path")
                     }
                 }
 
             assertEquals(ServerProtocol.V1, service.probe(connection))
-            assertTrue(paths.contains("/global/health"))
+            assertEquals(setOf("/global/health", "/api/info"), paths.toSet())
         }
 
     @Test
@@ -189,12 +159,6 @@ class ConnectionProbeServiceTest {
                                 status = HttpStatusCode.Unauthorized,
                                 headers = headersOf(HttpHeaders.ContentType, "application/json"),
                             )
-                        "/api/health" ->
-                            respond(
-                                content = """{}""",
-                                status = HttpStatusCode.NotFound,
-                                headers = headersOf(HttpHeaders.ContentType, "application/json"),
-                            )
                         "/api/info" -> jsonNotFound()
                         else -> error("unexpected path")
                     }
@@ -220,12 +184,6 @@ class ConnectionProbeServiceTest {
                                 status = HttpStatusCode.OK,
                                 headers = headersOf(HttpHeaders.ContentType, "application/json"),
                             )
-                        "/api/health" ->
-                            respond(
-                                content = """{}""",
-                                status = HttpStatusCode.NotFound,
-                                headers = headersOf(HttpHeaders.ContentType, "application/json"),
-                            )
                         "/api/info" -> jsonNotFound()
                         else -> error("unexpected path")
                     }
@@ -248,7 +206,6 @@ class ConnectionProbeServiceTest {
                     paths += request.url.encodedPath
                     when (request.url.encodedPath) {
                         "/global/health" -> spaHtml()
-                        "/api/health" -> jsonNotFound()
                         "/api/info" ->
                             jsonOk(
                                 """{"version":"2.0.7","pid":1481731,"urls":["http://192.168.0.160:4096"]}""",
@@ -258,9 +215,7 @@ class ConnectionProbeServiceTest {
                 }
 
             assertEquals(ServerProtocol.V2, service.probe(connection))
-            assertTrue(paths.contains("/global/health"))
-            assertTrue(paths.contains("/api/health"))
-            assertTrue(paths.contains("/api/info"))
+            assertEquals(setOf("/global/health", "/api/info"), paths.toSet())
         }
 
     @Test
@@ -271,7 +226,6 @@ class ConnectionProbeServiceTest {
                     when (request.url.encodedPath) {
                         "/global/health" ->
                             jsonOk("""{"healthy":true,"version":"1.18.31"}""")
-                        "/api/health" -> jsonNotFound()
                         "/api/info" -> spaHtml()
                         else -> error("unexpected path")
                     }
@@ -287,7 +241,6 @@ class ConnectionProbeServiceTest {
                 service { request ->
                     when (request.url.encodedPath) {
                         "/global/health" -> spaHtml()
-                        "/api/health" -> jsonNotFound()
                         "/api/info" -> jsonNotFound()
                         else -> error("unexpected path")
                     }
@@ -308,7 +261,7 @@ class ConnectionProbeServiceTest {
             val service =
                 service { request ->
                     when (request.url.encodedPath) {
-                        "/global/health", "/api/health" ->
+                        "/global/health" ->
                             respond(
                                 content = """{"error":"unauthorized"}""",
                                 status = HttpStatusCode.Unauthorized,

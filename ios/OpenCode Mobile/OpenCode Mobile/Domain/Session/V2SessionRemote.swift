@@ -14,14 +14,7 @@ struct V2SessionRemote: SessionRemote, Sendable {
     }
 
     func listPendingQuestions(directory: String?) async throws -> [QuestionRequest] {
-        do {
-            return try await api.listPendingQuestionsV2(directory: directory).map { adapter.questionRequest(from: $0) }
-        } catch {
-            if case .http(statusCode: 404, _) = adapter.mapError(error) {
-                return try await api.listPendingFormsV2(directory: directory).map { adapter.questionRequest(from: $0) }
-            }
-            throw error
-        }
+        try await api.listPendingFormsV2(directory: directory).map { adapter.questionRequest(from: $0) }
     }
 
     func listSessions(directory: String?) async throws -> [Session] {
