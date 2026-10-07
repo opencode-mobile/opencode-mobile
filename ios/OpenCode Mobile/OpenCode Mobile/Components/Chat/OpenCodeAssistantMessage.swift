@@ -12,6 +12,7 @@ struct OpenCodeAssistantMessage: View {
     var renderedMarkdown: NativeMarkdownDocument? = nil
     var isStreaming: Bool = false
     var presentation: OpenCodeAssistantMessagePresentation = .bubble
+    var onTextTap: (() -> Void)? = nil
 
     var body: some View {
         Group {
@@ -19,7 +20,8 @@ struct OpenCodeAssistantMessage: View {
                 OpenCodeRenderedMarkdown(
                     document: renderedMarkdown,
                     variant: .assistantMessage,
-                    isStreaming: isStreaming
+                    isStreaming: isStreaming,
+                    onTextTap: onTextTap
                 )
             } else {
                 Text(Self.displayText(text))

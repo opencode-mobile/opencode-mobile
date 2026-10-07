@@ -42,6 +42,7 @@ fun OpenCodeAssistantMessage(
     renderedMarkdown: MarkdownDocument? = null,
     isStreaming: Boolean = false,
     presentation: OpenCodeAssistantMessagePresentation = OpenCodeAssistantMessagePresentation.Bubble,
+    onTextTap: (() -> Unit)? = null,
 ) {
     val shape = RoundedCornerShape(AssistantMessageCornerRadius)
     val bubbleModifier =
@@ -66,6 +67,7 @@ fun OpenCodeAssistantMessage(
             variant = OpenCodeRenderedMarkdownVariant.AssistantMessage,
             isStreaming = isStreaming,
             modifier = bubbleModifier,
+            onTextTap = onTextTap,
         )
     } else {
         Text(

@@ -593,16 +593,7 @@ private struct SessionChatMessageRow: View {
                     content: message.outgoingContent,
                     renderedMarkdown: message.renderedMarkdown,
                     metadataLabel: message.metadataLabel,
-                    onTap: {
-                        if message.renderedMarkdown == nil {
-                            return { openMessageActions(showsRevertMessage: true) }
-                        }
-                        return nil
-                    }(),
-                    onMessageActions: {
-                        guard message.renderedMarkdown != nil else { return nil }
-                        return { openMessageActions(showsRevertMessage: true) }
-                    }()
+                    onTap: { openMessageActions(showsRevertMessage: true) }
                 )
                 .frame(maxWidth: .infinity, alignment: .trailing)
             case .assistant:
@@ -664,18 +655,6 @@ private struct SessionChatMessageActionsGestureModifier: ViewModifier {
     }
 }
 
-private struct SessionChatMessageActionsButton: View {
-    let action: () -> Void
-
-    var body: some View {
-        OpenCodeButton(
-            variant: .iconCircle(.moreVert, accessibilityLabel: "Message actions"),
-            contrast: .low,
-            action: action
-        )
-    }
-}
-
 private struct AssistantMessageContent: View {
     let message: SessionChatRow
     let onOpenMessageActions: () -> Void
@@ -714,27 +693,8 @@ private struct AssistantMessageContent: View {
         )
     }
 
-    /// One actions button for the message when it has prose. Tool-only rows
-    /// never opened the sheet from a text gesture, so they stay without one.
-    private var showsMessageActionsButton: Bool {
-        blocks.contains { block in
-            switch block {
-            case .text:
-                return true
-            case .stepParagraph(_, let paragraph):
-                return paragraph.text != nil
-            case .attachment, .toolCard, .toolGroup, .childSessionRow, .reasoning, .stopNote:
-                return false
-            }
-        }
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if showsMessageActionsButton {
-                SessionChatMessageActionsButton(action: onOpenMessageActions)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-            }
             // A step paragraph's block id grows with every tool; identify it by
             // its stable paragraph id so a new chip updates the row in place.
             ForEach(blocks, id: \.rowIdentity) { block in
@@ -744,7 +704,8 @@ private struct AssistantMessageContent: View {
                     AssistantMessageBubble(
                         text: text,
                         renderedMarkdown: markdown,
-                        isStreaming: message.isStreaming
+                        isStreaming: message.isStreaming,
+                        onTextTap: onOpenMessageActions
                     )
                     .modifier(
                         SessionChatMessageActionsGestureModifier(
@@ -950,7 +911,8 @@ private struct StepParagraphBlock: View {
                     text: text,
                     renderedMarkdown: renderedMarkdown,
                     isStreaming: isStreaming,
-                    presentation: .plain
+                    presentation: .plain,
+                    onTextTap: onOpenMessageActions
                 )
                 .modifier(
                     SessionChatMessageActionsGestureModifier(
@@ -1044,6 +1006,7 @@ private struct AssistantMessageBubble: View {
     let renderedMarkdown: NativeMarkdownDocument?
     var isStreaming: Bool = false
     var presentation: OpenCodeAssistantMessagePresentation = .bubble
+    var onTextTap: (() -> Void)? = nil
 
     @State private var paintMarkdown: Bool
 
@@ -1051,12 +1014,14 @@ private struct AssistantMessageBubble: View {
         text: String,
         renderedMarkdown: NativeMarkdownDocument?,
         isStreaming: Bool = false,
-        presentation: OpenCodeAssistantMessagePresentation = .bubble
+        presentation: OpenCodeAssistantMessagePresentation = .bubble,
+        onTextTap: (() -> Void)? = nil
     ) {
         self.text = text
         self.renderedMarkdown = renderedMarkdown
         self.isStreaming = isStreaming
         self.presentation = presentation
+        self.onTextTap = onTextTap
         // If the pipeline already prepared markdown (including hold-ready open),
         // paint it immediately. Defer only applies when a doc arrives later on an
         // already-visible plain bubble (enrich / stream) — see .task below.
@@ -1068,7 +1033,8 @@ private struct AssistantMessageBubble: View {
             text: text,
             renderedMarkdown: paintMarkdown ? renderedMarkdown : nil,
             isStreaming: isStreaming,
-            presentation: presentation
+            presentation: presentation,
+            onTextTap: onTextTap
         )
         .task(id: paintTaskID) {
             guard renderedMarkdown != nil, !paintMarkdown else { return }

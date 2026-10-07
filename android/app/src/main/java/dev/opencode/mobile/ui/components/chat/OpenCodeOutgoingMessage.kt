@@ -31,7 +31,6 @@ import dev.opencode.mobile.domain.command.commandTokenHighlightRange
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
-import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 private const val OUTGOING_MESSAGE_MAX_WIDTH_FRACTION = 0.80f
 private val OutgoingMessageShape = RoundedCornerShape(8.dp)
@@ -60,7 +59,6 @@ fun OpenCodeOutgoingMessage(
     content: List<OpenCodeOutgoingMessageContent>? = null,
     onClick: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
-    onMessageActions: (() -> Unit)? = null,
 ) {
     BoxWithConstraints(
         modifier = modifier.fillMaxWidth(),
@@ -74,14 +72,13 @@ fun OpenCodeOutgoingMessage(
             }
         val bubbleColor = openCodeColor("surface-interactive-weak")
         val bubbleTextColor = openCodeColor("text-strong")
-        val actionsIndex = messageActionsContentIndex(resolvedContent, onMessageActions)
 
         Column(
             modifier = Modifier.widthIn(max = maxBubbleWidth),
             horizontalAlignment = Alignment.End,
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            resolvedContent.forEachIndexed { index, part ->
+            resolvedContent.forEach { part ->
                 when (part) {
                     is OpenCodeOutgoingMessageContent.Text ->
                         Surface(
@@ -91,8 +88,8 @@ fun OpenCodeOutgoingMessage(
                                     .clip(OutgoingMessageShape)
                                     .then(
                                         outgoingMessageInteractionModifier(
-                                            onClick = if (index == actionsIndex) null else onClick,
-                                            onLongClick = if (index == actionsIndex) null else onLongClick,
+                                            onClick = onClick,
+                                            onLongClick = onLongClick,
                                         ),
                                     ),
                             shape = OutgoingMessageShape,
@@ -107,18 +104,6 @@ fun OpenCodeOutgoingMessage(
                                     ),
                                 horizontalAlignment = Alignment.End,
                             ) {
-                                if (index == actionsIndex && onMessageActions != null) {
-                                    OpenCodeButton(
-                                        variant =
-                                            OpenCodeButtonVariant.IconCircle(
-                                                OpenCodeIcons.MoreVert,
-                                                "Message actions",
-                                            ),
-                                        contrast = OpenCodeButtonContrast.Low,
-                                        size = OpenCodeButtonSize.Medium,
-                                        onClick = onMessageActions,
-                                    )
-                                }
                                 if (part.renderedMarkdown != null) {
                                     OpenCodeRenderedMarkdown(
                                         document = part.renderedMarkdown,
@@ -173,19 +158,6 @@ fun OpenCodeOutgoingMessage(
             )
         }
     }
-}
-
-private fun messageActionsContentIndex(
-    content: List<OpenCodeOutgoingMessageContent>,
-    onMessageActions: (() -> Unit)?,
-): Int {
-    if (onMessageActions == null) return -1
-    val markdownIndex =
-        content.indexOfFirst { part ->
-            part is OpenCodeOutgoingMessageContent.Text && part.renderedMarkdown != null
-        }
-    if (markdownIndex >= 0) return markdownIndex
-    return content.indexOfFirst { it is OpenCodeOutgoingMessageContent.Text }
 }
 
 private fun outgoingMessageInteractionModifier(

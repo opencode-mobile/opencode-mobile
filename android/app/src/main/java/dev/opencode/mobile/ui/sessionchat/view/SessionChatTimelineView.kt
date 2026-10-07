@@ -75,10 +75,6 @@ import dev.opencode.mobile.ui.components.OpenCodeActionPill
 import dev.opencode.mobile.ui.components.OpenCodeActionPillVariant
 import dev.opencode.mobile.ui.components.OpenCodeAssistantMessage
 import dev.opencode.mobile.ui.components.OpenCodeAssistantMessagePresentation
-import dev.opencode.mobile.ui.components.OpenCodeButton
-import dev.opencode.mobile.ui.components.OpenCodeButtonContrast
-import dev.opencode.mobile.ui.components.OpenCodeButtonSize
-import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeMessageAttachment
 import dev.opencode.mobile.ui.components.OpenCodeMessageNote
 import dev.opencode.mobile.ui.components.OpenCodeMessageNoteVariant
@@ -603,18 +599,7 @@ private fun SessionChatMessageRow(
                     metadataLabel = message.metadataLabel,
                     content = message.outgoingContent(),
                     modifier = Modifier.fillMaxWidth(),
-                    onClick =
-                        if (message.renderedMarkdown == null) {
-                            { openMessageActions(showsRevertMessage = true) }
-                        } else {
-                            null
-                        },
-                    onMessageActions =
-                        if (message.renderedMarkdown != null) {
-                            { openMessageActions(showsRevertMessage = true) }
-                        } else {
-                            null
-                        },
+                    onClick = { openMessageActions(showsRevertMessage = true) },
                 )
 
             MessageRole.Assistant ->
@@ -678,16 +663,6 @@ private fun messageActionsModifier(
     }
 
 @Composable
-private fun SessionChatMessageActionsButton(onClick: () -> Unit) {
-    OpenCodeButton(
-        variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.MoreVert, "Message actions"),
-        contrast = OpenCodeButtonContrast.Low,
-        size = OpenCodeButtonSize.Medium,
-        onClick = onClick,
-    )
-}
-
-@Composable
 private fun AssistantMessageContent(
     message: SessionChatMessageItem,
     onOpenMessageActions: () -> Unit,
@@ -708,14 +683,6 @@ private fun AssistantMessageContent(
     // A sole narration carrier (text block or step paragraph with text) takes
     // the message-scoped markdown, as before the chip timeline.
     val textBlockCount = blocks.count { it.markdownText != null }
-    val showsMessageActionsButton =
-        blocks.any { block ->
-            when (block) {
-                is SessionChatTimelineBlock.Text -> true
-                is SessionChatTimelineBlock.StepParagraph -> block.text != null
-                else -> false
-            }
-        }
 
     fun toolCardAction(block: SessionChatTimelineBlock.ToolCard): (() -> Unit)? =
         when {
@@ -747,11 +714,6 @@ private fun AssistantMessageContent(
         verticalArrangement = Arrangement.spacedBy(8.dp),
         horizontalAlignment = Alignment.Start,
     ) {
-        if (showsMessageActionsButton) {
-            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.TopEnd) {
-                SessionChatMessageActionsButton(onClick = onOpenMessageActions)
-            }
-        }
         blocks.forEach { block ->
             // A step paragraph's block id grows with every tool; key on its
             // stable expansion id so a new chip updates the row in place.
@@ -766,6 +728,7 @@ private fun AssistantMessageContent(
                             text = block.text,
                             renderedMarkdown = renderedMarkdown,
                             isStreaming = message.isStreaming,
+                            onTextTap = onOpenMessageActions,
                             modifier =
                                 messageActionsModifier(
                                     renderedMarkdown = renderedMarkdown,
@@ -908,6 +871,7 @@ private fun StepParagraphBlock(
                 text = block.text,
                 renderedMarkdown = renderedMarkdown,
                 isStreaming = isStreaming,
+                onTextTap = onOpenMessageActions,
                 modifier =
                     messageActionsModifier(
                         renderedMarkdown = renderedMarkdown,
@@ -999,6 +963,7 @@ private fun AssistantMessageBubble(
     text: String,
     renderedMarkdown: MarkdownDocument?,
     isStreaming: Boolean = false,
+    onTextTap: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     presentation: OpenCodeAssistantMessagePresentation = OpenCodeAssistantMessagePresentation.Bubble,
 ) {
@@ -1039,6 +1004,7 @@ private fun AssistantMessageBubble(
         isStreaming = isStreaming,
         modifier = modifier,
         presentation = presentation,
+        onTextTap = onTextTap,
     )
 }
 

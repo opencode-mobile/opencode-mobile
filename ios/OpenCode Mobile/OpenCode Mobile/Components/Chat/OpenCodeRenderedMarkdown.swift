@@ -22,8 +22,10 @@ struct OpenCodeRenderedMarkdown: View {
     let measuresHeight: Bool
     let onHeightChange: (CGFloat) -> Void
     let onLinkTap: (URL) -> Void
+    let onTextTap: (() -> Void)?
 
     @State private var measuredHeight: CGFloat
+    @State private var linkHandledTap = false
 
     init(
         document: NativeMarkdownDocument,
@@ -32,7 +34,8 @@ struct OpenCodeRenderedMarkdown: View {
         initialHeight: CGFloat = 1,
         measuresHeight: Bool = false,
         onHeightChange: @escaping (CGFloat) -> Void = { _ in },
-        onLinkTap: @escaping (URL) -> Void = { url in UIApplication.shared.open(url) }
+        onLinkTap: @escaping (URL) -> Void = { url in UIApplication.shared.open(url) },
+        onTextTap: (() -> Void)? = nil
     ) {
         self.document = document
         self.variant = variant
@@ -41,6 +44,7 @@ struct OpenCodeRenderedMarkdown: View {
         self.measuresHeight = measuresHeight
         self.onHeightChange = onHeightChange
         self.onLinkTap = onLinkTap
+        self.onTextTap = onTextTap
         _measuredHeight = State(initialValue: max(1, initialHeight))
     }
 
@@ -52,6 +56,7 @@ struct OpenCodeRenderedMarkdown: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .environment(\.markdownAllowsTextSelection, variant != .outgoingMessage)
         .modifier(RenderedMarkdownHeightReporter(isEnabled: measuresHeight) { size in
             let nextHeight = max(1, size.height)
             guard abs(measuredHeight - nextHeight) > 1 else { return }
@@ -62,9 +67,11 @@ struct OpenCodeRenderedMarkdown: View {
             guard url.scheme == "http" || url.scheme == "https" else {
                 return .discarded
             }
+            linkHandledTap = true
             onLinkTap(url)
             return .handled
         })
+        .modifier(MessageTextTapGesture(onTextTap: onTextTap, linkHandledTap: $linkHandledTap))
         // Keep link chrome on markdown-link tokens instead of the system accent tint.
         .tint(OpenCodeColors.markdownLinkText)
     }
@@ -692,6 +699,154 @@ private struct MarkdownTableLayout<Content: View>: View {
     }
 }
 
+private struct MarkdownAllowsTextSelectionKey: EnvironmentKey {
+    static let defaultValue = true
+}
+
+private extension EnvironmentValues {
+    var markdownAllowsTextSelection: Bool {
+        get { self[MarkdownAllowsTextSelectionKey.self] }
+        set { self[MarkdownAllowsTextSelectionKey.self] = newValue }
+    }
+}
+
+private struct MarkdownTextSelectionModifier: ViewModifier {
+    @Environment(\.markdownAllowsTextSelection) private var allowsTextSelection
+
+    func body(content: Content) -> some View {
+        content.textSelection(allowsTextSelection ? .enabled : .disabled)
+    }
+}
+
+/// Quick tap opens message actions without taking the touch away from a link.
+/// A long-press arms selection; the next tap only clears that selection.
+private struct MessageTextTapGesture: ViewModifier {
+    let onTextTap: (() -> Void)?
+    @Binding var linkHandledTap: Bool
+
+    func body(content: Content) -> some View {
+        if let onTextTap {
+            content.background {
+                MessageTextTapInstaller(onTextTap: onTextTap, linkHandledTap: $linkHandledTap)
+            }
+        } else {
+            content
+        }
+    }
+}
+
+private struct MessageTextTapInstaller: UIViewRepresentable {
+    var onTextTap: () -> Void
+    @Binding var linkHandledTap: Bool
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onTextTap: onTextTap, linkHandledTap: $linkHandledTap)
+    }
+
+    func makeUIView(context: Context) -> MessageTextTapView {
+        let view = MessageTextTapView()
+        view.coordinator = context.coordinator
+        return view
+    }
+
+    func updateUIView(_ uiView: MessageTextTapView, context: Context) {
+        context.coordinator.onTextTap = onTextTap
+        context.coordinator.linkHandledTap = $linkHandledTap
+        context.coordinator.boundsView = uiView
+        uiView.coordinator = context.coordinator
+        uiView.installIfNeeded()
+    }
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        var onTextTap: () -> Void
+        var linkHandledTap: Binding<Bool>
+        weak var boundsView: UIView?
+        var selectionArmed = false
+
+        init(onTextTap: @escaping () -> Void, linkHandledTap: Binding<Bool>) {
+            self.onTextTap = onTextTap
+            self.linkHandledTap = linkHandledTap
+        }
+
+        @objc func tapped(_ gesture: UITapGestureRecognizer) {
+            guard contains(gesture) else { return }
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                if self.linkHandledTap.wrappedValue {
+                    self.linkHandledTap.wrappedValue = false
+                    self.selectionArmed = false
+                    return
+                }
+                if self.selectionArmed {
+                    self.selectionArmed = false
+                    return
+                }
+                self.onTextTap()
+            }
+        }
+
+        @objc func longPressed(_ gesture: UILongPressGestureRecognizer) {
+            guard gesture.state == .began, contains(gesture) else { return }
+            selectionArmed = true
+        }
+
+        private func contains(_ gesture: UIGestureRecognizer) -> Bool {
+            guard let boundsView else { return false }
+            return boundsView.bounds.contains(gesture.location(in: boundsView))
+        }
+
+        func gestureRecognizer(
+            _ gestureRecognizer: UIGestureRecognizer,
+            shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+        ) -> Bool {
+            true
+        }
+    }
+}
+
+private final class MessageTextTapView: UIView {
+    weak var coordinator: MessageTextTapInstaller.Coordinator?
+    private var installed = false
+    private var recognizers: [UIGestureRecognizer] = []
+
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        nil
+    }
+
+    override func didMoveToSuperview() {
+        super.didMoveToSuperview()
+        installIfNeeded()
+    }
+
+    override func willMove(toSuperview newSuperview: UIView?) {
+        if newSuperview == nil {
+            recognizers.forEach { $0.view?.removeGestureRecognizer($0) }
+            recognizers.removeAll()
+            installed = false
+        }
+        super.willMove(toSuperview: newSuperview)
+    }
+
+    func installIfNeeded() {
+        guard let superview, let coordinator, !installed else { return }
+        installed = true
+        coordinator.boundsView = self
+        let tap = UITapGestureRecognizer(target: coordinator, action: #selector(MessageTextTapInstaller.Coordinator.tapped(_:)))
+        let longPress = UILongPressGestureRecognizer(
+            target: coordinator,
+            action: #selector(MessageTextTapInstaller.Coordinator.longPressed(_:))
+        )
+        for gesture in [tap, longPress] {
+            gesture.cancelsTouchesInView = false
+            gesture.delaysTouchesBegan = false
+            gesture.delaysTouchesEnded = false
+            gesture.delegate = coordinator
+            superview.addGestureRecognizer(gesture)
+            recognizers.append(gesture)
+        }
+    }
+}
+
 private struct InlineMarkdownText: View {
     let inlines: [NativeMarkdownInline]
     let font: Font
@@ -702,7 +857,7 @@ private struct InlineMarkdownText: View {
         Text(NativeMarkdownAttributedString.inline(inlines, font: font, color: color))
             .lineSpacing(lineSpacing)
             .fixedSize(horizontal: false, vertical: true)
-            .textSelection(.enabled)
+            .modifier(MarkdownTextSelectionModifier())
     }
 }
 
@@ -719,11 +874,11 @@ private struct DeferredHighlightedCodeText: View {
             Text(code)
                 .font(OpenCodeTypography.code)
                 .foregroundStyle(OpenCodeColors.textStrong)
-                .textSelection(.enabled)
+                .modifier(MarkdownTextSelectionModifier())
         } else {
             Text(NativeMarkdownAttributedString.code(code, spans: spans))
                 .font(OpenCodeTypography.code)
-                .textSelection(.enabled)
+                .modifier(MarkdownTextSelectionModifier())
         }
     }
 }
@@ -744,7 +899,7 @@ private struct DeferredHighlightedDiffBlock: View {
                 let line = lines[index]
                 Text(NativeMarkdownAttributedString.code(line.text, spans: line.spans))
                     .font(OpenCodeTypography.code)
-                    .textSelection(.enabled)
+                    .modifier(MarkdownTextSelectionModifier())
                     .fixedSize(horizontal: true, vertical: false)
                     .frame(minWidth: 320, alignment: .leading)
                     .padding(.horizontal, 12)
