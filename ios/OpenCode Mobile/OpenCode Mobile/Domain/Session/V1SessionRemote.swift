@@ -116,7 +116,7 @@ struct V1SessionRemote: SessionRemote, Sendable {
         try await api.respondToPermission(
             sessionID: sessionID,
             permissionID: permissionID,
-            body: PermissionResponseRequestDTO(response: adapter.permissionResponse(decision)),
+            body: PermissionResponseRequestDTO(reply: adapter.permissionResponse(decision)),
             directory: directory
         )
     }

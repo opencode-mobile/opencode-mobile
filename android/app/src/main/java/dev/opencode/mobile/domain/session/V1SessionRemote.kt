@@ -158,7 +158,7 @@ internal class V1SessionRemote(
         api.respondToPermission(
             sessionId,
             permissionId,
-            PermissionResponseRequestDto(response = adapter.toPermissionResponse(decision)),
+            PermissionResponseRequestDto(reply = adapter.toPermissionResponse(decision)),
             directory,
         )
 

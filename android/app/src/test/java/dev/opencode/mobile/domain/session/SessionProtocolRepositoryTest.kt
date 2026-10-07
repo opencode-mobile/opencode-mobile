@@ -517,6 +517,9 @@ class SessionProtocolRepositoryTest {
             assertEquals(HttpMethod.Post, request.method)
             assertTrue(request.url.encodedPath.endsWith("/permission/per_1/reply"))
             assertFalse(request.url.encodedPath.contains("/permissions/"))
+            val body = request.requestBodyText()
+            assertTrue(body.contains("\"reply\":\"once\""))
+            assertFalse(body.contains("\"response\""))
         }
 
     @Test

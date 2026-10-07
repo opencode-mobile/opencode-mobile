@@ -403,6 +403,9 @@ struct SessionProtocolRepositoryTests {
         let path = try #require(request.url?.path)
         #expect(path.hasSuffix("/permission/per_1/reply"))
         #expect(!path.contains("/permissions/"))
+        let body = try #require(ProtocolRoutingURLProtocol.bodies.first ?? nil)
+        #expect(body.contains(#""reply":"once""#))
+        #expect(!body.contains(#""response""#))
     }
 
     @Test func v2ListPendingQuestionsReadsForms() async throws {
