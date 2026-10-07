@@ -13,13 +13,39 @@ enum ConnectionSetupMode: Equatable {
     case edit
 }
 
+struct ConnectionSetupAddressRow: Identifiable, Equatable {
+    var url: String
+    var title: String
+    var subtitle: String
+    var badge: String
+    var dimmed: Bool
+    var isCurrent: Bool
+
+    var id: String { url }
+}
+
 @MainActor
 @Observable
 final class ConnectionSetupViewModel {
+    static let qrSavedAddressesHint = "Both addresses are saved. Nothing to pick. The app uses Tailscale when it answers, and the local address when it does not. No password."
+
     var name = ""
-    var baseURL = ""
+    var baseURL = "" {
+        didSet {
+            guard baseURL != oldValue, !suppressServerURLClear else { return }
+            systemBaseURL = nil
+            leaveQRMode()
+        }
+    }
+    private(set) var serverURLs: [String] = []
     var username = ConnectionProfile.formDefaults.username
-    var password = ConnectionProfile.formDefaults.password
+    var password = ConnectionProfile.formDefaults.password {
+        didSet {
+            if !password.isEmpty {
+                pendingPairingCode = nil
+            }
+        }
+    }
     private(set) var state: ConnectionSetupState = .idle
     private(set) var mode: ConnectionSetupMode = .first
     private(set) var profileId = ""
@@ -29,37 +55,69 @@ final class ConnectionSetupViewModel {
 
     private let connectionProbeService: ConnectionProbing
     private let connectionSessionCoordinator: ConnectionSessionCoordinator
+    private let pairingCodeRedeemer: any PairingCodeRedeeming
     private var detectedProtocol: ServerProtocol?
     private var savedBaseURL = ""
     private var savedUsername = ""
     private var savedPassword = ""
     private var savedProtocol: ServerProtocol?
     private var isEditingExistingProfile = false
-    private var pairingCandidateURLs: [String] = []
+    private var pendingPairingCode: String?
+    private var addressProbeFinished = false
+    private var unreachableAddresses = Set<String>()
+    private var suppressServerURLClear = false
+    /// Base URL written by QR apply, profile load, or address choice. The view
+    /// change handler must not treat that write as the user editing the host.
+    private var systemBaseURL: String?
 
     init(
         connectionProbeService: ConnectionProbing,
         connectionSessionCoordinator: ConnectionSessionCoordinator,
+        pairingCodeRedeemer: any PairingCodeRedeeming = PairingCodeRedeemer(),
         initialProfile: ConnectionProfile? = nil,
         mode: ConnectionSetupMode = .first
     ) {
         self.connectionProbeService = connectionProbeService
         self.connectionSessionCoordinator = connectionSessionCoordinator
+        self.pairingCodeRedeemer = pairingCodeRedeemer
         configure(initialProfile: initialProfile, mode: mode)
+    }
+
+    var usesQRLayout: Bool { !serverURLs.isEmpty }
+
+    var savedAddressRows: [ConnectionSetupAddressRow] {
+        let chosen = ConnectionProfileIdentity.normalizeBaseURL(baseURL)
+        return serverURLs.map { url in
+            let normalized = ConnectionProfileIdentity.normalizeBaseURL(url)
+            let unreachable = addressProbeFinished && unreachableAddresses.contains(normalized)
+            let isCurrent = addressProbeFinished && normalized == chosen && !unreachable
+            let label = ConnectionProfileIdentity.hostLabel(normalized)
+            return ConnectionSetupAddressRow(
+                url: normalized,
+                title: PairingQRPayload.isTailscaleURL(normalized) ? "Tailscale" : "Local network",
+                subtitle: unreachable ? "\(label) · not reachable" : label,
+                badge: isCurrent ? "Using now" : "Saved",
+                dimmed: unreachable,
+                isCurrent: isCurrent
+            )
+        }
     }
 
     func configure(initialProfile: ConnectionProfile?, mode: ConnectionSetupMode = .first) {
         self.mode = mode
         isEditingExistingProfile = initialProfile != nil && mode == .edit
-        pairingCandidateURLs = []
+        pendingPairingCode = nil
         detectedProtocol = nil
         state = .idle
         credentialsExpanded = false
         requestPasswordFocus = false
         snackbar = nil
+        addressProbeFinished = false
+        unreachableAddresses = []
         if let initialProfile, mode == .edit {
             name = initialProfile.name
-            baseURL = initialProfile.baseURL
+            setBaseURLFromSystem(initialProfile.baseURL)
+            serverURLs = ConnectionProfileIdentity.normalizedAddressList(initialProfile.serverURLs)
             username = initialProfile.username
             password = initialProfile.password
             profileId = initialProfile.id
@@ -70,7 +128,8 @@ final class ConnectionSetupViewModel {
             savedProtocol = initialProfile.serverProtocol
         } else {
             name = ""
-            baseURL = ConnectionProfile.formDefaults.baseURL
+            setBaseURLFromSystem(ConnectionProfile.formDefaults.baseURL)
+            serverURLs = []
             username = ConnectionProfile.formDefaults.username
             password = ConnectionProfile.formDefaults.password
             profileId = ""
@@ -129,6 +188,18 @@ final class ConnectionSetupViewModel {
         detectedProtocol = connectionUnchanged ? savedProtocol : nil
     }
 
+    /// View hook for host edits. System writes set `systemBaseURL` so they keep `serverURLs`.
+    func onBaseURLChanged() {
+        if systemBaseURL == baseURL {
+            systemBaseURL = nil
+            onFieldChanged()
+            return
+        }
+        systemBaseURL = nil
+        leaveQRMode()
+        onFieldChanged()
+    }
+
     func setCredentialsExpanded(_ expanded: Bool) {
         credentialsExpanded = expanded
     }
@@ -144,13 +215,7 @@ final class ConnectionSetupViewModel {
     func applyPairingQR(_ raw: String) {
         switch PairingQRPayload.parse(raw) {
         case let .success(credentials):
-            pairingCandidateURLs = credentials.urls
-            baseURL = credentials.baseURL
-            username = credentials.username
-            password = credentials.password
-            credentialsExpanded = true
-            snackbar = nil
-            onFieldChanged()
+            apply(credentials)
             logConnectionAction(
                 ProductAnalytics.Action.connectionPairingQRScan,
                 outcome: ProductAnalytics.Outcome.success
@@ -194,9 +259,13 @@ final class ConnectionSetupViewModel {
     @discardableResult
     func submit() async -> Bool {
         guard !isBusy else { return false }
+        adoptPastedConnectLink()
         if Self.hostIsBlank(baseURL) {
             snackbar = OpenCodeSnackbarMessage(text: "Enter a host", variant: .error)
             return false
+        }
+        if let code = pendingPairingCode, !code.isEmpty, password.isEmpty {
+            return await redeemThenSave(code: code)
         }
         if canSubmitWithoutProbe {
             return await persist()
@@ -207,43 +276,24 @@ final class ConnectionSetupViewModel {
     private func probeThenSave() async -> Bool {
         state = .connecting
         snackbar = nil
-        let fieldURL = baseURL
-        let probing = connectionProbeService
-        let connections = urlsToProbe().map { url in
-            (url, draftConnection(baseURL: url))
-        }
-        let outcomes: [(String, Result<ServerProtocol, Error>)] = await withTaskGroup(
-            of: (String, Result<ServerProtocol, Error>).self
-        ) { group in
-            for (url, connection) in connections {
-                group.addTask {
-                    do {
-                        let detected = try await probing.probe(connection: connection)
-                        return (url, .success(detected))
-                    } catch {
-                        return (url, .failure(error))
-                    }
-                }
-            }
-            var collected: [(String, Result<ServerProtocol, Error>)] = []
-            for await outcome in group {
-                collected.append(outcome)
-            }
-            return collected
-        }
+        let candidates = urlsToProbe()
+        let outcomes = await probeOrigins(candidates)
+        noteAddressProbe(outcomes)
         let reachable = outcomes.compactMap { url, result -> (String, ServerProtocol)? in
             guard case let .success(detected) = result else { return nil }
             return (url, detected)
         }
-        if let winnerURL = PairingQRPayload.pickReachableURL(
-            fieldURL: fieldURL,
-            reachable: reachable.map(\.0)
-        ), let winner = reachable.first(where: { $0.0 == winnerURL }) {
+        if let winnerURL = PairingQRPayload.chooseAnsweredURL(
+            candidates: candidates,
+            answered: reachable.map(\.0)
+        ), let winner = reachable.first(where: {
+            ConnectionProfileIdentity.normalizeBaseURL($0.0) == winnerURL
+        }) {
             detectedProtocol = winner.1
             if ConnectionProfileIdentity.normalizeBaseURL(winner.0) !=
                 ConnectionProfileIdentity.normalizeBaseURL(baseURL)
             {
-                baseURL = winner.0
+                setBaseURLFromSystem(winner.0)
             }
             logConnectionAction(
                 ProductAnalytics.Action.connectionTest,
@@ -268,12 +318,167 @@ final class ConnectionSetupViewModel {
         return false
     }
 
+    /// Unauthenticated reachability, then one redeem against the host that answered.
+    private func redeemThenSave(code: String) async -> Bool {
+        state = .connecting
+        snackbar = nil
+        let candidates = urlsToProbe()
+        let outcomes = await probeOrigins(candidates)
+        noteAddressProbe(outcomes)
+        let answered = outcomes.compactMap { url, result -> String? in
+            ServerAddressProbe.hostAnswered(result) ? url : nil
+        }
+        guard let winner = PairingQRPayload.chooseAnsweredURL(candidates: candidates, answered: answered) else {
+            detectedProtocol = nil
+            let probeErrors = outcomes.compactMap { _, result -> ServerProbeError? in
+                guard case let .failure(error) = result else { return nil }
+                return error as? ServerProbeError
+            }
+            handleProbeFailure(probeErrors.last ?? .transport("Unable to reach the server"))
+            logConnectionAction(
+                ProductAnalytics.Action.connectionTest,
+                outcome: ProductAnalytics.Outcome.failure
+            )
+            return false
+        }
+        if ConnectionProfileIdentity.normalizeBaseURL(winner) !=
+            ConnectionProfileIdentity.normalizeBaseURL(baseURL)
+        {
+            setBaseURLFromSystem(winner)
+        }
+        let token: String
+        do {
+            token = try await pairingCodeRedeemer.redeem(baseURL: winner, code: code)
+        } catch let error as PairingCodeRedeemError {
+            detectedProtocol = nil
+            switch error {
+            case .expired:
+                pendingPairingCode = nil
+                state = .idle
+                snackbar = OpenCodeSnackbarMessage(
+                    text: "This pairing link expired or was already used",
+                    variant: .error
+                )
+            case .unreachable:
+                handleProbeFailure(.transport("Unable to reach the server"))
+            }
+            logConnectionAction(
+                ProductAnalytics.Action.connectionTest,
+                outcome: ProductAnalytics.Outcome.failure
+            )
+            return false
+        } catch {
+            detectedProtocol = nil
+            handleProbeFailure(.transport("Unable to reach the server"))
+            logConnectionAction(
+                ProductAnalytics.Action.connectionTest,
+                outcome: ProductAnalytics.Outcome.failure
+            )
+            return false
+        }
+        password = token
+        do {
+            let detected = try await connectionProbeService.probe(connection: draftConnection(baseURL: winner))
+            detectedProtocol = detected
+            logConnectionAction(
+                ProductAnalytics.Action.connectionTest,
+                outcome: ProductAnalytics.Outcome.success
+            )
+            return await persist()
+        } catch let error as ServerProbeError {
+            detectedProtocol = nil
+            handleProbeFailure(error)
+            logConnectionAction(
+                ProductAnalytics.Action.connectionTest,
+                outcome: ProductAnalytics.Outcome.failure
+            )
+            return false
+        } catch {
+            detectedProtocol = nil
+            handleProbeFailure(.transport("Unable to reach the server"))
+            logConnectionAction(
+                ProductAnalytics.Action.connectionTest,
+                outcome: ProductAnalytics.Outcome.failure
+            )
+            return false
+        }
+    }
+
+    private func adoptPastedConnectLink() {
+        let trimmed = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !trimmed.hasPrefix("{") else { return }
+        guard case let .success(credentials) = PairingQRPayload.parse(trimmed),
+              let code = credentials.code,
+              !code.isEmpty
+        else { return }
+        apply(credentials)
+    }
+
+    private func apply(_ credentials: PairingQRCredentials) {
+        setBaseURLFromSystem(credentials.baseURL)
+        serverURLs = ConnectionProfileIdentity.normalizedAddressList(credentials.urls)
+        addressProbeFinished = false
+        unreachableAddresses = []
+        username = credentials.username
+        password = credentials.password
+        if let code = credentials.code, !code.isEmpty {
+            pendingPairingCode = code
+        } else {
+            pendingPairingCode = nil
+        }
+        credentialsExpanded = true
+        snackbar = nil
+        onFieldChanged()
+    }
+
+    private func probeOrigins(
+        _ urls: [String]
+    ) async -> [(String, Result<ServerProtocol, Error>)] {
+        await ServerAddressProbe.probe(
+            urls: urls,
+            username: username,
+            password: password,
+            probing: connectionProbeService
+        )
+    }
+
+    private func noteAddressProbe(_ outcomes: [(String, Result<ServerProtocol, Error>)]) {
+        unreachableAddresses = Set(outcomes.compactMap { url, result in
+            ServerAddressProbe.hostAnswered(result)
+                ? nil
+                : ConnectionProfileIdentity.normalizeBaseURL(url)
+        })
+        addressProbeFinished = true
+    }
+
     private func urlsToProbe() -> [String] {
+        let saved = ConnectionProfileIdentity.normalizedAddressList(serverURLs)
         let current = ConnectionProfileIdentity.normalizeBaseURL(baseURL)
-        guard !pairingCandidateURLs.isEmpty else { return [current] }
-        let candidates = pairingCandidateURLs.map(ConnectionProfileIdentity.normalizeBaseURL)
-        guard candidates.contains(current) else { return [current] }
-        return [current] + candidates.filter { $0 != current }
+        if saved.isEmpty {
+            return current.isEmpty ? [] : [current]
+        }
+        if current.isEmpty || saved.contains(current) {
+            return saved
+        }
+        return ConnectionProfileIdentity.normalizedAddressList([current] + saved)
+    }
+
+    private func setBaseURLFromSystem(_ url: String) {
+        systemBaseURL = url
+        guard baseURL != url else { return }
+        suppressServerURLClear = true
+        baseURL = url
+        suppressServerURLClear = false
+    }
+
+    private func leaveQRMode() {
+        guard !serverURLs.isEmpty else { return }
+        serverURLs = []
+        unreachableAddresses = []
+        addressProbeFinished = false
+        pendingPairingCode = nil
+        password = ""
+        credentialsExpanded = false
     }
 
     private func handleProbeFailure(_ error: ServerProbeError) {
@@ -341,6 +546,7 @@ final class ConnectionSetupViewModel {
     private func draftProfile() -> ConnectionProfile {
         ConnectionProfile(
             baseURL: baseURL,
+            serverURLs: serverURLs,
             username: username,
             password: password,
             serverProtocol: detectedProtocol ?? (connectionUnchanged ? savedProtocol : nil),

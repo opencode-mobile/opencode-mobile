@@ -49,6 +49,8 @@ struct ConnectionSetupViewModelTests {
         #expect(saved == true)
         #expect(store.saved.count == 1)
         #expect(store.saved.last?.serverProtocol == .v2)
+        #expect(store.saved.last?.serverURLs.isEmpty == true)
+        #expect(viewModel.usesQRLayout == false)
     }
 
     @Test func submit_authFailure_expandsCredentialsAndSnackbars() async {
@@ -223,6 +225,11 @@ struct ConnectionSetupViewModelTests {
         ]))
         #expect(store.saved.last?.baseURL == "http://100.84.57.15:4096/")
         #expect(viewModel.baseURL == "http://100.84.57.15:4096/")
+        #expect(Set(store.saved.last?.serverURLs ?? []) == Set([
+            "http://192.168.0.160:4096/",
+            "http://100.84.57.15:4096/",
+        ]))
+        #expect(viewModel.usesQRLayout)
     }
 
     @Test func submit_pairingQR_tailscaleDown_savesLan() async {
@@ -248,12 +255,17 @@ struct ConnectionSetupViewModelTests {
         #expect(saved == true)
         #expect(store.saved.last?.baseURL == "http://192.168.0.160:4096/")
         #expect(viewModel.baseURL == "http://192.168.0.160:4096/")
+        #expect(Set(store.saved.last?.serverURLs ?? []) == Set([
+            "http://192.168.0.160:4096/",
+            "http://100.84.57.15:4096/",
+        ]))
     }
 
-    @Test func submit_pairingQR_userChoseLan_savesLanWhenReachable() async {
+    @Test func editingHost_whileServerURLsSet_clearsThemAndLeavesQRLayout() async {
+        let probe = RecordingURLProbeService(successProtocol: .v2)
         let store = RecordingConnectionProfileStore()
         let viewModel = ConnectionSetupViewModel(
-            connectionProbeService: RecordingURLProbeService(successProtocol: .v2),
+            connectionProbeService: probe,
             connectionSessionCoordinator: ConnectionSessionCoordinator(
                 activeConnectionManager: ActiveConnectionManager(),
                 connectionProfileStore: store
@@ -265,11 +277,21 @@ struct ConnectionSetupViewModelTests {
             {"urls":["http://192.168.0.160:4096","http://100.84.57.15:4096"],"username":"opencode","password":"secret"}
             """
         )
-        viewModel.baseURL = "http://192.168.0.160:4096/"
-        viewModel.onFieldChanged()
+        viewModel.name = "Studio"
+        #expect(viewModel.serverURLs.count == 2)
+        #expect(viewModel.usesQRLayout)
+
+        viewModel.baseURL = "http://10.0.0.9:4096/"
+        viewModel.onBaseURLChanged()
+        #expect(viewModel.serverURLs.isEmpty)
+        #expect(viewModel.usesQRLayout == false)
+        #expect(viewModel.password.isEmpty)
+
         let saved = await viewModel.submit()
         #expect(saved == true)
-        #expect(store.saved.last?.baseURL == "http://192.168.0.160:4096/")
+        #expect(probe.probed == ["http://10.0.0.9:4096/"])
+        #expect(store.saved.last?.baseURL == "http://10.0.0.9:4096/")
+        #expect(store.saved.last?.serverURLs.isEmpty == true)
     }
 
     @Test func submit_pairingQR_authFailure_doesNotSave() async {
@@ -341,6 +363,150 @@ struct ConnectionSetupViewModelTests {
         #expect(viewModel.snackbar?.text == "Allow camera access to scan the pairing QR")
     }
 
+    @Test func applyPairingQR_codeJSON_fillsTailscaleAndLeavesPasswordEmpty() {
+        let viewModel = ConnectionSetupViewModel(
+            connectionProbeService: FakeConnectionProbeService(result: .success(.v1)),
+            connectionSessionCoordinator: ConnectionSessionCoordinator(
+                activeConnectionManager: ActiveConnectionManager(),
+                connectionProfileStore: FakeSetupConnectionProfileStore()
+            ),
+            mode: .add
+        )
+        viewModel.applyPairingQR(
+            """
+            {"code":"abc_DEF-123","urls":["http://192.168.1.2:49374","http://100.64.0.3:49374"]}
+            """
+        )
+        #expect(viewModel.baseURL == "http://100.64.0.3:49374/")
+        #expect(viewModel.username == "opencode")
+        #expect(viewModel.password.isEmpty)
+        #expect(viewModel.credentialsExpanded == true)
+        #expect(viewModel.snackbar == nil)
+        #expect(viewModel.usesQRLayout)
+        #expect(viewModel.savedAddressRows.map(\.badge) == ["Saved", "Saved"])
+    }
+
+    @Test func submit_pairingCode_bothAuthFailed_redeemsTailscaleOnce() async {
+        let store = RecordingConnectionProfileStore()
+        let probe = ScriptedHostProbe()
+        let redeemer = ScriptedPairingRedeemer(token: "paired-token")
+        let viewModel = makePairingSetupViewModel(probe: probe, redeemer: redeemer, store: store)
+        viewModel.applyPairingQR(pairingCodeJSON)
+        let saved = await viewModel.submit()
+        #expect(saved == true)
+        #expect(redeemer.calls.count == 1)
+        #expect(redeemer.calls.first?.baseURL == "http://100.64.0.3:49374/")
+        #expect(redeemer.calls.first?.code == "abc_DEF-123")
+        #expect(store.saved.last?.password == "paired-token")
+        #expect(store.saved.last?.baseURL == "http://100.64.0.3:49374/")
+        #expect(Set(store.saved.last?.serverURLs ?? []) == Set([
+            "http://192.168.1.2:49374/",
+            "http://100.64.0.3:49374/",
+        ]))
+        #expect(viewModel.usesQRLayout)
+        #expect(viewModel.savedAddressRows.first { $0.url.contains("100.64") }?.badge == "Using now")
+        #expect(viewModel.savedAddressRows.first { $0.url.contains("192.168") }?.badge == "Saved")
+        #expect(viewModel.savedAddressRows.allSatisfy { !$0.dimmed })
+        #expect(viewModel.snackbar == nil)
+    }
+
+    @Test func submit_pairingCode_tailscaleTransport_redeemsLan() async {
+        let store = RecordingConnectionProfileStore()
+        let probe = ScriptedHostProbe(transportHosts: ["100.64.0.3"])
+        let redeemer = ScriptedPairingRedeemer(token: "paired-token")
+        let viewModel = makePairingSetupViewModel(probe: probe, redeemer: redeemer, store: store)
+        viewModel.applyPairingQR(pairingCodeJSON)
+        let saved = await viewModel.submit()
+        #expect(saved == true)
+        #expect(redeemer.calls.count == 1)
+        #expect(redeemer.calls.first?.baseURL == "http://192.168.1.2:49374/")
+        #expect(redeemer.calls.first?.code == "abc_DEF-123")
+        #expect(store.saved.last?.baseURL == "http://192.168.1.2:49374/")
+        #expect(store.saved.last?.password == "paired-token")
+        #expect(Set(store.saved.last?.serverURLs ?? []) == Set([
+            "http://192.168.1.2:49374/",
+            "http://100.64.0.3:49374/",
+        ]))
+        let tailscale = viewModel.savedAddressRows.first { $0.url.contains("100.64") }
+        let lan = viewModel.savedAddressRows.first { $0.url.contains("192.168") }
+        #expect(tailscale?.dimmed == true)
+        #expect(tailscale?.badge == "Saved")
+        #expect(tailscale?.subtitle.contains("not reachable") == true)
+        #expect(lan?.badge == "Using now")
+        #expect(lan?.dimmed == false)
+    }
+
+    @Test func submit_pairingCode_allTransport_doesNotRedeem() async {
+        let store = RecordingConnectionProfileStore()
+        let probe = ScriptedHostProbe(
+            defaultUnauthenticated: .failure(ServerProbeError.transport("down"))
+        )
+        let redeemer = ScriptedPairingRedeemer()
+        let viewModel = makePairingSetupViewModel(probe: probe, redeemer: redeemer, store: store)
+        viewModel.applyPairingQR(pairingCodeJSON)
+        let saved = await viewModel.submit()
+        #expect(saved == false)
+        #expect(redeemer.calls.isEmpty)
+        #expect(viewModel.snackbar?.text == "Unable to reach the server")
+        #expect(store.saved.isEmpty)
+    }
+
+    @Test func submit_pairingCode_redeemExpired_showsSnackbarOnce() async {
+        let store = RecordingConnectionProfileStore()
+        let redeemer = ScriptedPairingRedeemer(error: PairingCodeRedeemError.expired)
+        let viewModel = makePairingSetupViewModel(
+            probe: ScriptedHostProbe(),
+            redeemer: redeemer,
+            store: store
+        )
+        viewModel.applyPairingQR(pairingCodeJSON)
+        let saved = await viewModel.submit()
+        #expect(saved == false)
+        #expect(redeemer.calls.count == 1)
+        #expect(viewModel.snackbar?.text == "This pairing link expired or was already used")
+        #expect(store.saved.isEmpty)
+    }
+
+    @Test func submit_pastedConnectLink_redeemsAndSavesOrigin() async {
+        let store = RecordingConnectionProfileStore()
+        let redeemer = ScriptedPairingRedeemer(token: "paired-token")
+        let viewModel = makePairingSetupViewModel(
+            probe: ScriptedHostProbe(),
+            redeemer: redeemer,
+            store: store
+        )
+        viewModel.baseURL = "http://192.168.0.183:4096/auth/connect/XJdLmg9llko9nmn3jN2XLw"
+        let saved = await viewModel.submit()
+        #expect(saved == true)
+        #expect(redeemer.calls.count == 1)
+        #expect(redeemer.calls.first?.baseURL == "http://192.168.0.183:4096/")
+        #expect(redeemer.calls.first?.code == "XJdLmg9llko9nmn3jN2XLw")
+        #expect(store.saved.last?.password == "paired-token")
+        #expect(store.saved.last?.baseURL == "http://192.168.0.183:4096/")
+        #expect(store.saved.last?.serverURLs == ["http://192.168.0.183:4096/"])
+        #expect(viewModel.usesQRLayout)
+        #expect(viewModel.savedAddressRows.count == 1)
+        #expect(viewModel.username == "opencode")
+    }
+
+    @Test func typedPassword_clearsPendingCodeAndSkipsRedeem() async {
+        let store = RecordingConnectionProfileStore()
+        let probe = ScriptedHostProbe(
+            defaultUnauthenticated: .failure(ServerProbeError.http(statusCode: 401, message: "Unauthorized")),
+            authenticated: .success(.v2)
+        )
+        let redeemer = ScriptedPairingRedeemer(token: "paired-token")
+        let viewModel = makePairingSetupViewModel(probe: probe, redeemer: redeemer, store: store)
+        viewModel.applyPairingQR(pairingCodeJSON)
+        viewModel.password = "user-secret"
+        viewModel.password = ""
+        let saved = await viewModel.submit()
+        #expect(saved == false)
+        #expect(redeemer.calls.isEmpty)
+        #expect(viewModel.snackbar?.text == "Authentication failed")
+        #expect(store.saved.isEmpty)
+    }
+
     @Test func pairingQRCameraUnavailable_showsSnackbar() {
         let viewModel = ConnectionSetupViewModel(
             connectionProbeService: FakeConnectionProbeService(result: .success(.v1)),
@@ -353,6 +519,27 @@ struct ConnectionSetupViewModelTests {
         viewModel.pairingQRCameraUnavailable()
         #expect(viewModel.snackbar?.text == "Camera isn't available on this device")
     }
+}
+
+private let pairingCodeJSON = """
+{"code":"abc_DEF-123","urls":["http://192.168.1.2:49374","http://100.64.0.3:49374"]}
+"""
+
+@MainActor
+private func makePairingSetupViewModel(
+    probe: ConnectionProbing,
+    redeemer: PairingCodeRedeeming,
+    store: RecordingConnectionProfileStore
+) -> ConnectionSetupViewModel {
+    ConnectionSetupViewModel(
+        connectionProbeService: probe,
+        connectionSessionCoordinator: ConnectionSessionCoordinator(
+            activeConnectionManager: ActiveConnectionManager(),
+            connectionProfileStore: store
+        ),
+        pairingCodeRedeemer: redeemer,
+        mode: .add
+    )
 }
 
 private struct FakeConnectionProbeService: ConnectionProbing {
@@ -398,6 +585,66 @@ private final class RecordingURLProbeService: ConnectionProbing, @unchecked Send
 
     private func record(_ url: String) {
         lock.withLock { probedURLs.append(url) }
+    }
+}
+
+private final class ScriptedHostProbe: ConnectionProbing, @unchecked Sendable {
+    private let lock = NSLock()
+    private var recorded: [String] = []
+    var probed: [String] {
+        lock.withLock { recorded }
+    }
+
+    private let transportHosts: Set<String>
+    private let defaultUnauthenticated: Result<ServerProtocol, Error>
+    private let authenticated: Result<ServerProtocol, Error>
+
+    init(
+        transportHosts: Set<String> = [],
+        defaultUnauthenticated: Result<ServerProtocol, Error> = .failure(
+            ServerProbeError.http(statusCode: 401, message: "Unauthorized")
+        ),
+        authenticated: Result<ServerProtocol, Error> = .success(.v2)
+    ) {
+        self.transportHosts = transportHosts
+        self.defaultUnauthenticated = defaultUnauthenticated
+        self.authenticated = authenticated
+    }
+
+    func probe(connection: ServerConnection) async throws -> ServerProtocol {
+        let url = connection.baseURL.absoluteString
+        lock.withLock { recorded.append(url) }
+        if !(connection.password ?? "").isEmpty {
+            return try authenticated.get()
+        }
+        if transportHosts.contains(where: { url.contains($0) }) {
+            throw ServerProbeError.transport("down")
+        }
+        return try defaultUnauthenticated.get()
+    }
+}
+
+private final class ScriptedPairingRedeemer: PairingCodeRedeeming, @unchecked Sendable {
+    private let lock = NSLock()
+    private var recorded: [(baseURL: String, code: String)] = []
+    var calls: [(baseURL: String, code: String)] {
+        lock.withLock { recorded }
+    }
+
+    private let token: String
+    private let error: Error?
+
+    init(token: String = "paired-token", error: Error? = nil) {
+        self.token = token
+        self.error = error
+    }
+
+    func redeem(baseURL: String, code: String) async throws -> String {
+        lock.withLock { recorded.append((baseURL, code)) }
+        if let error {
+            throw error
+        }
+        return token
     }
 }
 

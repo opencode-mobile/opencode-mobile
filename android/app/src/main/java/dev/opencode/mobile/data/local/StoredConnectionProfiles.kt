@@ -15,4 +15,5 @@ data class StoredConnectionProfile(
     val baseUrl: String,
     val username: String,
     val serverProtocol: String? = null,
+    val serverUrls: List<String> = emptyList(),
 )

@@ -7,6 +7,8 @@ nonisolated struct ServerConnection: Sendable {
     let username: String
     let password: String?
     let serverProtocol: ServerProtocol?
+    let profileID: String
+    let serverURLs: [String]
 
     var apiBaseURL: URL { baseURL }
 
@@ -21,18 +23,24 @@ nonisolated struct ServerConnection: Sendable {
         self.username = trimmedUsername.isEmpty ? Self.defaultUsername : trimmedUsername
         self.password = profile.password.isEmpty ? nil : profile.password
         self.serverProtocol = serverProtocol ?? profile.serverProtocol
+        self.profileID = profile.id
+        self.serverURLs = profile.serverURLs
     }
 
     init(
         baseURL: URL,
         username: String = Self.defaultUsername,
         password: String?,
-        serverProtocol: ServerProtocol? = nil
+        serverProtocol: ServerProtocol? = nil,
+        profileID: String = "",
+        serverURLs: [String] = []
     ) {
         self.baseURL = baseURL
         self.username = username
         self.password = password
         self.serverProtocol = serverProtocol
+        self.profileID = profileID
+        self.serverURLs = serverURLs
     }
 
     func hasSameIdentity(as other: ServerConnection) -> Bool {
@@ -42,7 +50,11 @@ nonisolated struct ServerConnection: Sendable {
             leftPassword: password ?? "",
             rightURL: other.baseURL.absoluteString,
             rightUsername: other.username,
-            rightPassword: other.password ?? ""
+            rightPassword: other.password ?? "",
+            leftProfileID: profileID,
+            rightProfileID: other.profileID,
+            leftServerURLs: serverURLs,
+            rightServerURLs: other.serverURLs
         )
     }
 
@@ -51,7 +63,9 @@ nonisolated struct ServerConnection: Sendable {
             baseURL: baseURL,
             username: username,
             password: password,
-            serverProtocol: serverProtocol
+            serverProtocol: serverProtocol,
+            profileID: profileID,
+            serverURLs: serverURLs
         )
     }
 

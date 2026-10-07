@@ -45,25 +45,33 @@ struct ConnectionSetupView: View {
                                 .contentShape(Rectangle())
                                 .onTapGesture(perform: dismissKeyboard)
                             VStack(alignment: .leading, spacing: 12) {
-                        OpenCodeServerAddressInput(
-                            value: $viewModel.baseURL,
-                            hint: "macbook.local:4096",
-                            accessibilityLabel: "Host",
-                            enabled: !viewModel.isBusy,
-                            submitAction: .next,
-                            isFocused: $urlFocused,
-                            onSubmit: {
-                                if viewModel.credentialsExpanded {
-                                    usernameFocused = true
-                                } else {
-                                    nameFocused = true
+                        if viewModel.usesQRLayout {
+                            Text(ConnectionSetupViewModel.qrSavedAddressesHint)
+                                .font(OpenCodeTypography.bodySecondary)
+                                .foregroundStyle(OpenCodeColors.textBase)
+                                .padding(.leading, 2)
+                            ConnectionSetupSavedAddressRows(rows: viewModel.savedAddressRows)
+                        } else {
+                            OpenCodeServerAddressInput(
+                                value: $viewModel.baseURL,
+                                hint: "macbook.local:4096",
+                                accessibilityLabel: "Host",
+                                enabled: !viewModel.isBusy,
+                                submitAction: .next,
+                                isFocused: $urlFocused,
+                                onSubmit: {
+                                    if viewModel.credentialsExpanded {
+                                        usernameFocused = true
+                                    } else {
+                                        nameFocused = true
+                                    }
                                 }
-                            }
-                        )
-                        Text("LAN, Tailscale MagicDNS, or tunnel — not localhost on a phone.")
-                            .font(OpenCodeTypography.bodySecondary)
-                            .foregroundStyle(OpenCodeColors.textBase)
-                            .padding(.leading, 2)
+                            )
+                            Text("LAN, Tailscale MagicDNS, or tunnel — not localhost on a phone.")
+                                .font(OpenCodeTypography.bodySecondary)
+                                .foregroundStyle(OpenCodeColors.textBase)
+                                .padding(.leading, 2)
+                        }
 
                         OpenCodeTextInput(
                             text: $viewModel.name,
@@ -73,7 +81,7 @@ struct ConnectionSetupView: View {
                             submitAction: .next,
                             isFocused: $nameFocused,
                             onSubmit: {
-                                if viewModel.credentialsExpanded {
+                                if !viewModel.usesQRLayout, viewModel.credentialsExpanded {
                                     usernameFocused = true
                                 } else {
                                     nameFocused = false
@@ -81,53 +89,55 @@ struct ConnectionSetupView: View {
                             }
                         )
 
-                        Button {
-                            viewModel.setCredentialsExpanded(!viewModel.credentialsExpanded)
-                        } label: {
-                            HStack {
-                                Text("Username & password")
-                                    .font(OpenCodeTypography.body)
+                        if !viewModel.usesQRLayout {
+                            Button {
+                                viewModel.setCredentialsExpanded(!viewModel.credentialsExpanded)
+                            } label: {
+                                HStack {
+                                    Text("Username & password")
+                                        .font(OpenCodeTypography.body)
+                                        .foregroundStyle(OpenCodeColors.textBase)
+                                    Spacer()
+                                    OpenCodeIconImage(
+                                        icon: viewModel.credentialsExpanded ? .collapseContent : .expandContent,
+                                        size: 20
+                                    )
                                     .foregroundStyle(OpenCodeColors.textBase)
-                                Spacer()
-                                OpenCodeIconImage(
-                                    icon: viewModel.credentialsExpanded ? .collapseContent : .expandContent,
-                                    size: 20
-                                )
-                                .foregroundStyle(OpenCodeColors.textBase)
+                                }
+                                .contentShape(Rectangle())
+                                .padding(.vertical, 10)
                             }
-                            .contentShape(Rectangle())
-                            .padding(.vertical, 10)
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(viewModel.isBusy)
-                        .accessibilityLabel(
-                            viewModel.credentialsExpanded
-                                ? "Collapse username and password"
-                                : "Expand username and password"
-                        )
+                            .buttonStyle(.plain)
+                            .disabled(viewModel.isBusy)
+                            .accessibilityLabel(
+                                viewModel.credentialsExpanded
+                                    ? "Collapse username and password"
+                                    : "Expand username and password"
+                            )
 
-                        if viewModel.credentialsExpanded {
-                            OpenCodeTextInput(
-                                text: $viewModel.username,
-                                hint: "Username",
-                                kind: .username,
-                                enabled: !viewModel.isBusy,
-                                submitAction: .next,
-                                isFocused: $usernameFocused,
-                                onSubmit: { passwordFocused = true }
-                            )
-                            OpenCodeTextInput(
-                                text: $viewModel.password,
-                                hint: "Password",
-                                kind: .password,
-                                enabled: !viewModel.isBusy,
-                                isFocused: $passwordFocused,
-                                onSubmit: { passwordFocused = false }
-                            )
-                            Text("Default user is opencode. Password from OPENCODE_SERVER_PASSWORD.")
-                                .font(OpenCodeTypography.bodySecondary)
-                                .foregroundStyle(OpenCodeColors.textBase)
-                                .padding(.leading, 2)
+                            if viewModel.credentialsExpanded {
+                                OpenCodeTextInput(
+                                    text: $viewModel.username,
+                                    hint: "Username",
+                                    kind: .username,
+                                    enabled: !viewModel.isBusy,
+                                    submitAction: .next,
+                                    isFocused: $usernameFocused,
+                                    onSubmit: { passwordFocused = true }
+                                )
+                                OpenCodeTextInput(
+                                    text: $viewModel.password,
+                                    hint: "Password",
+                                    kind: .password,
+                                    enabled: !viewModel.isBusy,
+                                    isFocused: $passwordFocused,
+                                    onSubmit: { passwordFocused = false }
+                                )
+                                Text("Default user is opencode. Password from OPENCODE_SERVER_PASSWORD.")
+                                    .font(OpenCodeTypography.bodySecondary)
+                                    .foregroundStyle(OpenCodeColors.textBase)
+                                    .padding(.leading, 2)
+                            }
                         }
                     }
                     .padding(.horizontal, 20)
@@ -178,7 +188,7 @@ struct ConnectionSetupView: View {
         }
         .onChange(of: viewModel.baseURL) { _, _ in
             logFieldEditOnce(&loggedBaseURLEdit, ProductAnalytics.Action.connectionEditBaseUrl)
-            viewModel.onFieldChanged()
+            viewModel.onBaseURLChanged()
         }
         .onChange(of: viewModel.username) { _, _ in
             logFieldEditOnce(&loggedUsernameEdit, ProductAnalytics.Action.connectionEditUsername)
@@ -320,6 +330,59 @@ struct ConnectionSetupView: View {
                 action: { showRemoveConfirm = true }
             ),
         ]
+    }
+
+    private struct ConnectionSetupSavedAddressRows: View {
+        let rows: [ConnectionSetupAddressRow]
+
+        var body: some View {
+            VStack(spacing: 0) {
+                ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+                    if index > 0 {
+                        Rectangle()
+                            .fill(OpenCodeColors.borderWeakerBase)
+                            .frame(height: 1)
+                    }
+                    ConnectionSetupSavedAddressRow(row: row)
+                }
+            }
+            .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: 8))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(OpenCodeColors.borderWeakerBase, lineWidth: 1)
+            )
+        }
+    }
+
+    private struct ConnectionSetupSavedAddressRow: View {
+        let row: ConnectionSetupAddressRow
+
+        var body: some View {
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(row.title)
+                        .font(OpenCodeTypography.heading)
+                        .foregroundStyle(OpenCodeColors.textStrong)
+                    Text(row.subtitle)
+                        .font(OpenCodeTypography.bodySecondary)
+                        .foregroundStyle(OpenCodeColors.textBase)
+                }
+                Spacer(minLength: 8)
+                Text(row.badge)
+                    .font(OpenCodeTypography.caption)
+                    .foregroundStyle(row.isCurrent ? OpenCodeColors.textStrong : OpenCodeColors.textBase)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(
+                        row.isCurrent ? OpenCodeColors.surfaceBase : OpenCodeColors.surfaceInteractiveWeak,
+                        in: Capsule()
+                    )
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .opacity(row.dimmed ? 0.55 : 1)
+            .accessibilityElement(children: .combine)
+        }
     }
 
     private func logFieldEditOnce(_ alreadyLogged: inout Bool, _ actionId: String) {

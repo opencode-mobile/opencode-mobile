@@ -10,6 +10,9 @@ import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileIdentity
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.connection.DuplicateConnectionProfileException
+import dev.opencode.mobile.domain.connection.PairingCodeRedeemException
+import dev.opencode.mobile.domain.connection.PairingCodeRedeeming
+import dev.opencode.mobile.domain.connection.PairingQRCredentials
 import dev.opencode.mobile.domain.connection.PairingQRError
 import dev.opencode.mobile.domain.connection.PairingQRParseResult
 import dev.opencode.mobile.domain.connection.PairingQRPayload
@@ -54,7 +57,14 @@ data class ConnectionSetupUiState(
     val credentialsExpanded: Boolean = false,
     val requestPasswordFocus: Boolean = false,
     val snackbar: OpenCodeSnackbarMessage? = null,
+    val serverUrls: List<String> = emptyList(),
+    val addressProbeFinished: Boolean = false,
+    val unreachableUrls: Set<String> = emptySet(),
+    val chosenUrl: String? = null,
 ) {
+    val usesQrLayout: Boolean
+        get() = serverUrls.isNotEmpty()
+
     val screenTitle: String
         get() =
             when (mode) {
@@ -93,6 +103,7 @@ class ConnectionSetupViewModel
     constructor(
         private val connectionProbeService: ConnectionProbing,
         private val connectionSessionCoordinator: ConnectionSessionCoordinator,
+        private val pairingCodeRedeeming: PairingCodeRedeeming,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(ConnectionSetupUiState())
         val uiState: StateFlow<ConnectionSetupUiState> = _uiState.asStateFlow()
@@ -106,14 +117,16 @@ class ConnectionSetupViewModel
         private var savedUsername = ""
         private var savedPassword = ""
         private var savedProtocol: ServerProtocol? = null
-        private var pairingCandidateUrls: List<String> = emptyList()
+        private var pendingPairingCode: String? = null
+        private var addressProbeGeneration = 0
 
         fun configure(
             initialProfile: ConnectionProfile?,
             mode: ConnectionSetupMode = if (initialProfile == null) ConnectionSetupMode.First else ConnectionSetupMode.Edit,
         ) {
             reportedFieldEdits.clear()
-            pairingCandidateUrls = emptyList()
+            pendingPairingCode = null
+            addressProbeGeneration += 1
             isEditingExistingProfile = initialProfile != null && mode == ConnectionSetupMode.Edit
             detectedProtocol = initialProfile?.serverProtocol
             if (initialProfile == null || mode != ConnectionSetupMode.Edit) {
@@ -136,7 +149,11 @@ class ConnectionSetupViewModel
                         mode = ConnectionSetupMode.Edit,
                         profileId = initialProfile.id,
                         connectionUnchanged = true,
+                        serverUrls = initialProfile.serverUrls,
                     )
+            }
+            if (_uiState.value.serverUrls.isNotEmpty()) {
+                startAddressProbe()
             }
         }
 
@@ -151,6 +168,17 @@ class ConnectionSetupViewModel
 
         fun onBaseUrlChanged(value: String) {
             reportFieldEdit(ProductAnalytics.Action.CONNECTION_EDIT_BASE_URL)
+            if (_uiState.value.serverUrls.isNotEmpty()) {
+                addressProbeGeneration += 1
+                pendingPairingCode = null
+                _uiState.value =
+                    _uiState.value.copy(
+                        serverUrls = emptyList(),
+                        addressProbeFinished = false,
+                        unreachableUrls = emptySet(),
+                        chosenUrl = null,
+                    )
+            }
             updateFields(baseUrl = value)
         }
 
@@ -161,6 +189,9 @@ class ConnectionSetupViewModel
 
         fun onPasswordChanged(value: String) {
             reportFieldEdit(ProductAnalytics.Action.CONNECTION_EDIT_PASSWORD)
+            if (value.isNotEmpty()) {
+                pendingPairingCode = null
+            }
             updateFields(password = value)
         }
 
@@ -183,34 +214,18 @@ class ConnectionSetupViewModel
         fun applyPairingQR(raw: String) {
             when (val result = PairingQRPayload.parse(raw)) {
                 is PairingQRParseResult.Ready -> {
-                    val credentials = result.credentials
                     logAction(
                         ProductAnalytics.Action.CONNECTION_PAIRING_QR_SCAN,
                         mapOf(ProductAnalytics.Param.OUTCOME to ProductAnalytics.Outcome.SUCCESS),
                     )
-                    pairingCandidateUrls = credentials.urls
-                    updateFields(
-                        baseUrl = credentials.baseUrl,
-                        username = credentials.username,
-                        password = credentials.password,
-                    )
-                    _uiState.value =
-                        _uiState.value.copy(
-                            credentialsExpanded = true,
-                            snackbar = null,
-                        )
+                    applyPairingCredentials(result.credentials)
                 }
                 is PairingQRParseResult.Failed -> {
                     logAction(
                         ProductAnalytics.Action.CONNECTION_PAIRING_QR_SCAN,
                         mapOf(ProductAnalytics.Param.OUTCOME to ProductAnalytics.Outcome.FAILURE),
                     )
-                    val text =
-                        when (result.error) {
-                            PairingQRError.InvalidPayload -> "This isn't an OpenCode 2 pairing QR"
-                            PairingQRError.NoReachableUrl -> "That QR only has a localhost address"
-                        }
-                    showError(text)
+                    showError(pairingErrorText(result.error))
                 }
             }
         }
@@ -246,15 +261,7 @@ class ConnectionSetupViewModel
             password: String = _uiState.value.password,
         ) {
             val current = _uiState.value
-            val unchanged =
-                isEditingExistingProfile &&
-                    ConnectionProfileIdentity.sameConnectionIdentity(
-                        baseUrl,
-                        username,
-                        savedBaseUrl,
-                        savedUsername,
-                    ) &&
-                    password == savedPassword
+            val unchanged = isConnectionUnchanged(baseUrl, username, password)
             if (current.state == ConnectionSetupState.Idle || current.state == ConnectionSetupState.Connecting) {
                 detectedProtocol = if (unchanged) savedProtocol else null
             }
@@ -278,7 +285,11 @@ class ConnectionSetupViewModel
                 showError("Enter a host")
                 return
             }
-            if (_uiState.value.canSubmitWithoutProbe) {
+            if (PairingQRPayload.isConnectLink(_uiState.value.baseUrl)) {
+                if (!applySubmittedConnectLink()) return
+            }
+            val redeeming = pendingPairingCode != null && _uiState.value.password.isEmpty()
+            if (_uiState.value.canSubmitWithoutProbe && !redeeming) {
                 persist(onSaved)
                 return
             }
@@ -287,48 +298,153 @@ class ConnectionSetupViewModel
 
         private fun probeThenSave(onSaved: () -> Unit) {
             logAction(ProductAnalytics.Action.CONNECTION_TEST)
+            val generation = ++addressProbeGeneration
             viewModelScope.launch {
+                if (generation != addressProbeGeneration) return@launch
                 _uiState.value =
                     _uiState.value.copy(
                         state = ConnectionSetupState.Connecting,
                         snackbar = null,
+                        addressProbeFinished = false,
+                        unreachableUrls = emptySet(),
+                        chosenUrl = null,
                     )
-                val fieldUrl = _uiState.value.baseUrl
-                val outcomes =
-                    coroutineScope {
-                        urlsToProbe()
-                            .map { url -> async { probeOutcome(url) } }
-                            .awaitAll()
-                    }
-                val reachable =
-                    outcomes.mapNotNull { outcome ->
-                        (outcome as? ProbeOutcome.Reachable)?.let { it.url to it.protocol }
-                    }
-                val winnerUrl = PairingQRPayload.pickReachableUrl(fieldUrl, reachable.map { it.first })
-                val winner = reachable.firstOrNull { it.first == winnerUrl }
-                if (winner != null) {
-                    detectedProtocol = winner.second
-                    if (ConnectionProfileIdentity.normalizeBaseUrl(winner.first) !=
-                        ConnectionProfileIdentity.normalizeBaseUrl(_uiState.value.baseUrl)
-                    ) {
-                        _uiState.value = _uiState.value.copy(baseUrl = winner.first)
-                    }
+                val pendingCode = pendingPairingCode
+                if (pendingCode != null && _uiState.value.password.isEmpty()) {
+                    redeemAnsweredHost(pendingCode, generation, onSaved)
+                    return@launch
+                }
+                val summary = probeAddresses(urlsToProbe())
+                if (generation != addressProbeGeneration) return@launch
+                publishAddressProbe(summary)
+                val winner = summary.winner
+                val winnerOutcome = winner?.let { summary.outcomeFor(it) }
+                if (winnerOutcome is ProbeOutcome.Reachable) {
+                    detectedProtocol = winnerOutcome.protocol
                     persistAfterProbe(onSaved)
                     return@launch
                 }
                 detectedProtocol = null
-                val failed = outcomes.mapNotNull { (it as? ProbeOutcome.Failed)?.error }
-                val authError = failed.firstOrNull { it.toProbeStatus() == ProbeStatus.AuthFailed }
-                if (authError != null) {
-                    handleProbeFailure(authError)
+                if (winnerOutcome is ProbeOutcome.Failed) {
+                    handleProbeFailure(winnerOutcome.error)
                     return@launch
                 }
+                val failed = summary.outcomes.mapNotNull { (it as? ProbeOutcome.Failed)?.error }
+                val authError = failed.firstOrNull { it.toProbeStatus() == ProbeStatus.AuthFailed }
                 handleProbeFailure(
-                    failed.lastOrNull()
+                    authError
+                        ?: failed.lastOrNull()
                         ?: ServerProbeError.Transport(IllegalStateException("Unable to reach the server")),
                 )
             }
         }
+
+        private fun applyPairingCredentials(credentials: PairingQRCredentials) {
+            pendingPairingCode = credentials.code
+            updateFields(
+                baseUrl = credentials.baseUrl,
+                username = credentials.username,
+                password = credentials.password,
+            )
+            _uiState.value =
+                _uiState.value.copy(
+                    serverUrls = ConnectionProfileIdentity.normalizeServerUrls(credentials.urls),
+                    credentialsExpanded = false,
+                    snackbar = null,
+                    addressProbeFinished = false,
+                    unreachableUrls = emptySet(),
+                    chosenUrl = null,
+                )
+            startAddressProbe()
+        }
+
+        private fun applySubmittedConnectLink(): Boolean {
+            when (val result = PairingQRPayload.parse(_uiState.value.baseUrl.trim())) {
+                is PairingQRParseResult.Ready -> {
+                    applyPairingCredentials(result.credentials)
+                    return true
+                }
+                is PairingQRParseResult.Failed -> {
+                    showError(pairingErrorText(result.error))
+                    return false
+                }
+            }
+        }
+
+        private fun pairingErrorText(error: PairingQRError): String =
+            when (error) {
+                PairingQRError.InvalidPayload -> "This isn't an OpenCode 2 pairing QR"
+                PairingQRError.NoReachableUrl -> "That QR only has a localhost address"
+            }
+
+        private suspend fun redeemAnsweredHost(
+            code: String,
+            generation: Int,
+            onSaved: () -> Unit,
+        ) {
+            val summary = probeAddresses(urlsToProbe())
+            if (generation != addressProbeGeneration) return
+            publishAddressProbe(summary)
+            val winner = summary.winner
+            if (winner == null) {
+                detectedProtocol = null
+                handleProbeFailure(
+                    ServerProbeError.Transport(IllegalStateException("Unable to reach the server")),
+                )
+                return
+            }
+            val token =
+                try {
+                    pairingCodeRedeeming.redeem(winner, code)
+                } catch (error: PairingCodeRedeemException) {
+                    detectedProtocol = null
+                    when (error) {
+                        is PairingCodeRedeemException.Expired -> {
+                            _uiState.value =
+                                _uiState.value.copy(
+                                    state = ConnectionSetupState.Idle,
+                                    snackbar =
+                                        OpenCodeSnackbarMessage(
+                                            text = "This pairing link expired or was already used",
+                                            variant = OpenCodeSnackbarVariant.Error,
+                                        ),
+                                )
+                        }
+                        is PairingCodeRedeemException.Unreachable ->
+                            handleProbeFailure(
+                                ServerProbeError.Transport(
+                                    error.cause ?: IllegalStateException("Unable to reach the server"),
+                                ),
+                            )
+                    }
+                    return
+                }
+            if (generation != addressProbeGeneration) return
+            _uiState.value = _uiState.value.copy(password = token, baseUrl = winner)
+            when (val authed = probeOutcome(winner)) {
+                is ProbeOutcome.Reachable -> {
+                    detectedProtocol = authed.protocol
+                    persistAfterProbe(onSaved)
+                }
+                is ProbeOutcome.Failed -> {
+                    detectedProtocol = null
+                    handleProbeFailure(authed.error)
+                }
+            }
+        }
+
+        private fun answeredHost(outcome: ProbeOutcome): String? =
+            when (outcome) {
+                is ProbeOutcome.Reachable -> outcome.url
+                is ProbeOutcome.Failed -> {
+                    val http = outcome.error as? ServerProbeError.Http
+                    if (http != null && (http.statusCode == 401 || http.statusCode == 403)) {
+                        outcome.url
+                    } else {
+                        null
+                    }
+                }
+            }
 
         private suspend fun probeOutcome(url: String): ProbeOutcome =
             try {
@@ -340,24 +456,116 @@ class ConnectionSetupViewModel
             }
 
         private sealed interface ProbeOutcome {
+            val url: String
+
             data class Reachable(
-                val url: String,
+                override val url: String,
                 val protocol: ServerProtocol,
             ) : ProbeOutcome
 
             data class Failed(
-                val url: String,
+                override val url: String,
                 val error: ServerProbeError,
             ) : ProbeOutcome
         }
 
-        private fun urlsToProbe(): List<String> {
-            val current = ConnectionProfileIdentity.normalizeBaseUrl(_uiState.value.baseUrl)
-            if (pairingCandidateUrls.isEmpty()) return listOf(current)
-            val candidates = pairingCandidateUrls.map(ConnectionProfileIdentity::normalizeBaseUrl)
-            if (current !in candidates) return listOf(current)
-            return listOf(current) + candidates.filter { it != current }
+        private data class AddressProbeSummary(
+            val outcomes: List<ProbeOutcome>,
+            val answered: List<String>,
+            val winner: String?,
+        ) {
+            val unreachable: Set<String>
+                get() {
+                    val answeredSet = answered.map(ConnectionProfileIdentity::normalizeBaseUrl).toSet()
+                    return outcomes
+                        .map { ConnectionProfileIdentity.normalizeBaseUrl(it.url) }
+                        .filter { it !in answeredSet }
+                        .toSet()
+                }
+
+            fun outcomeFor(url: String): ProbeOutcome? {
+                val normalized = ConnectionProfileIdentity.normalizeBaseUrl(url)
+                return outcomes.firstOrNull { ConnectionProfileIdentity.normalizeBaseUrl(it.url) == normalized }
+            }
         }
+
+        private fun urlsToProbe(): List<String> {
+            val saved = ConnectionProfileIdentity.normalizeServerUrls(_uiState.value.serverUrls)
+            if (saved.isNotEmpty()) return saved
+            return listOf(ConnectionProfileIdentity.normalizeBaseUrl(_uiState.value.baseUrl))
+        }
+
+        private fun startAddressProbe() {
+            val urls = ConnectionProfileIdentity.normalizeServerUrls(_uiState.value.serverUrls)
+            if (urls.isEmpty()) return
+            val generation = ++addressProbeGeneration
+            _uiState.value =
+                _uiState.value.copy(
+                    addressProbeFinished = false,
+                    unreachableUrls = emptySet(),
+                    chosenUrl = null,
+                )
+            viewModelScope.launch {
+                if (generation != addressProbeGeneration) return@launch
+                val summary = probeAddresses(urls)
+                if (generation != addressProbeGeneration) return@launch
+                if (_uiState.value.serverUrls.isEmpty()) return@launch
+                publishAddressProbe(summary)
+            }
+        }
+
+        private suspend fun probeAddresses(urls: List<String>): AddressProbeSummary {
+            val outcomes =
+                coroutineScope {
+                    urls
+                        .map { url -> async { probeOutcome(url) } }
+                        .awaitAll()
+                }
+            val answered = outcomes.mapNotNull(::answeredHost)
+            return AddressProbeSummary(
+                outcomes = outcomes,
+                answered = answered,
+                winner = PairingQRPayload.pickReachableUrl(answered),
+            )
+        }
+
+        private fun publishAddressProbe(summary: AddressProbeSummary) {
+            val current = _uiState.value
+            val winner = summary.winner?.let(ConnectionProfileIdentity::normalizeBaseUrl)
+            if (current.serverUrls.isEmpty()) {
+                if (winner != null && winner != ConnectionProfileIdentity.normalizeBaseUrl(current.baseUrl)) {
+                    _uiState.value =
+                        current.copy(
+                            baseUrl = winner,
+                            connectionUnchanged = isConnectionUnchanged(winner, current.username, current.password),
+                        )
+                }
+                return
+            }
+            val baseUrl = winner ?: current.baseUrl
+            _uiState.value =
+                current.copy(
+                    baseUrl = baseUrl,
+                    addressProbeFinished = true,
+                    unreachableUrls = summary.unreachable,
+                    chosenUrl = winner,
+                    connectionUnchanged = isConnectionUnchanged(baseUrl, current.username, current.password),
+                )
+        }
+
+        private fun isConnectionUnchanged(
+            baseUrl: String,
+            username: String,
+            password: String,
+        ): Boolean =
+            isEditingExistingProfile &&
+                ConnectionProfileIdentity.sameConnectionIdentity(
+                    baseUrl,
+                    username,
+                    savedBaseUrl,
+                    savedUsername,
+                ) &&
+                password == savedPassword
 
         private fun handleProbeFailure(error: ServerProbeError) {
             val authFailed = error.toProbeStatus() == ProbeStatus.AuthFailed
@@ -452,6 +660,7 @@ class ConnectionSetupViewModel
                         ?: savedProtocol.takeIf { _uiState.value.connectionUnchanged },
                 id = _uiState.value.profileId,
                 name = _uiState.value.name,
+                serverUrls = ConnectionProfileIdentity.normalizeServerUrls(_uiState.value.serverUrls),
             )
 
         private fun draftConnection(baseUrl: String = _uiState.value.baseUrl): ServerConnection =

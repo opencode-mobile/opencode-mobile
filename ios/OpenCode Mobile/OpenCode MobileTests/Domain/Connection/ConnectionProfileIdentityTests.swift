@@ -41,6 +41,62 @@ struct ConnectionProfileIdentityTests {
         )
     }
 
+    @Test func hasSameIdentity_matchesWhenBaseURLMovesWithinServerURLs() {
+        let lan = "http://192.168.1.2:49374/"
+        let tailscale = "http://100.64.0.3:49374/"
+        let urls = [lan, tailscale]
+        let original = ServerConnection(
+            profile: ConnectionProfile(
+                baseURL: lan,
+                serverURLs: urls,
+                username: "opencode",
+                password: "token",
+                id: "profile-1"
+            )
+        )
+        let moved = ServerConnection(
+            profile: ConnectionProfile(
+                baseURL: tailscale,
+                serverURLs: urls,
+                username: "opencode",
+                password: "token",
+                id: "profile-1"
+            )
+        )
+        #expect(original.hasSameIdentity(as: moved))
+
+        let otherPassword = ServerConnection(
+            profile: ConnectionProfile(
+                baseURL: tailscale,
+                serverURLs: urls,
+                username: "opencode",
+                password: "other",
+                id: "profile-1"
+            )
+        )
+        #expect(!original.hasSameIdentity(as: otherPassword))
+    }
+
+    @Test func hasSameIdentity_manualProfileStillRequiresMatchingBaseURL() {
+        let left = ServerConnection(
+            profile: ConnectionProfile(
+                baseURL: "http://10.0.0.1:4096/",
+                username: "opencode",
+                password: "token",
+                id: "profile-1"
+            )
+        )
+        let right = ServerConnection(
+            profile: ConnectionProfile(
+                baseURL: "http://10.0.0.2:4096/",
+                username: "opencode",
+                password: "token",
+                id: "profile-1"
+            )
+        )
+        #expect(!left.hasSameIdentity(as: right))
+    }
+
     @Test func sameConnectionIdentity_ignoresPassword() {
         #expect(
             ConnectionProfileIdentity.sameConnectionIdentity(

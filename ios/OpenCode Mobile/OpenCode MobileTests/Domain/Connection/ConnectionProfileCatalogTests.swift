@@ -36,6 +36,43 @@ struct ConnectionProfileCatalogTests {
         }
     }
 
+    @Test func saveRejectsSecondProfileOnTheOtherStoredAddress() throws {
+        let lan = "http://192.168.1.2:49374/"
+        let tailscale = "http://100.64.0.3:49374/"
+        let catalog = try ConnectionProfileCatalog().save(
+            ConnectionProfile(
+                baseURL: tailscale,
+                serverURLs: [lan, tailscale],
+                username: "opencode",
+                password: "secret",
+                id: "qr"
+            )
+        )
+        #expect(throws: DuplicateConnectionProfileException.self) {
+            try catalog.save(
+                ConnectionProfile(
+                    baseURL: lan,
+                    username: "opencode",
+                    password: "secret",
+                    id: "other"
+                )
+            )
+        }
+        let moved = try catalog.save(
+            ConnectionProfile(
+                baseURL: lan,
+                serverURLs: [lan, tailscale],
+                username: "opencode",
+                password: "secret",
+                id: "qr"
+            )
+        )
+        #expect(moved.profiles.count == 1)
+        #expect(moved.profiles[0].id == "qr")
+        #expect(moved.profiles[0].baseURL == lan)
+        #expect(moved.profiles[0].serverURLs == [lan, tailscale])
+    }
+
     @Test func saveAllowsSameUrlDifferentUsername() throws {
         let catalog = try ConnectionProfileCatalog()
             .save(profile(baseURL: "http://10.0.0.1:4096/", username: "opencode"))

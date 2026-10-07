@@ -2,6 +2,10 @@ package dev.opencode.mobile.domain.connection
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.decodeFromJsonElement
 import java.net.URI
 
 data class PairingQRCredentials(
@@ -9,6 +13,7 @@ data class PairingQRCredentials(
     val urls: List<String>,
     val username: String,
     val password: String,
+    val code: String? = null,
 )
 
 enum class PairingQRError {
@@ -28,6 +33,8 @@ sealed interface PairingQRParseResult {
 
 object PairingQRPayload {
     private val json = Json { ignoreUnknownKeys = true }
+    private val pairingCode = Regex("^[A-Za-z0-9_-]+$")
+    private val connectPath = Regex("^/auth/connect/([^/]+)$")
 
     @Serializable
     private data class Wire(
@@ -37,9 +44,77 @@ object PairingQRPayload {
     )
 
     fun parse(raw: String): PairingQRParseResult {
+        val trimmed = raw.trim()
+        if (trimmed.startsWith("{")) return parseJson(trimmed)
+        return parseConnectLink(trimmed)
+    }
+
+    fun isConnectLink(raw: String): Boolean {
+        val trimmed = raw.trim()
+        if (trimmed.isEmpty() || trimmed.startsWith("{")) return false
+        val uri = runCatching { URI(trimmed) }.getOrNull() ?: return false
+        val scheme = uri.scheme?.lowercase() ?: return false
+        if (scheme != "http" && scheme != "https") return false
+        val path = uri.rawPath ?: return false
+        return path == "/auth/connect" || path.startsWith("/auth/connect/")
+    }
+
+    fun preferredDisplayUrl(urls: List<String>): String = urls.firstOrNull(::isTailscaleUrl) ?: urls.first()
+
+    /** Tailscale wins when it answered. Otherwise the first other address that answered. */
+    fun pickReachableUrl(reachable: List<String>): String? {
+        if (reachable.isEmpty()) return null
+        return reachable.firstOrNull(::isTailscaleUrl) ?: reachable.first()
+    }
+
+    fun isTailscaleUrl(raw: String): Boolean {
+        val host = hostOf(raw) ?: return false
+        if (host == "ts.net" || host.endsWith(".ts.net")) return true
+        if (isCgnatIpv4(host)) return true
+        return isTailscaleIpv6(host)
+    }
+
+    private fun parseJson(raw: String): PairingQRParseResult {
+        val element =
+            runCatching { json.parseToJsonElement(raw) }.getOrNull() as? JsonObject
+                ?: return invalid()
+        if (element.containsKey("code")) return parseCodedJson(element)
+        return parseLegacyJson(element)
+    }
+
+    private fun parseCodedJson(element: JsonObject): PairingQRParseResult {
+        val codeElement = element["code"] as? JsonPrimitive ?: return invalid()
+        if (!codeElement.isString) return invalid()
+        val code = codeElement.content
+        if (!pairingCode.matches(code)) return invalid()
+        val urlsElement = element["urls"] as? JsonArray ?: return invalid()
+        if (urlsElement.isEmpty()) return invalid()
+        val parsed = ArrayList<String>(urlsElement.size)
+        for (item in urlsElement) {
+            val urlElement = item as? JsonPrimitive ?: return invalid()
+            if (!urlElement.isString) return invalid()
+            val origin = strictHttpOrigin(urlElement.content) ?: return invalid()
+            parsed += origin
+        }
+        val urls = parsed.filterNot(::isLoopback).distinct()
+        if (urls.isEmpty()) {
+            return PairingQRParseResult.Failed(PairingQRError.NoReachableUrl)
+        }
+        return PairingQRParseResult.Ready(
+            PairingQRCredentials(
+                baseUrl = preferredDisplayUrl(urls),
+                urls = urls,
+                username = ConnectionProfileIdentity.normalizeUsername(""),
+                password = "",
+                code = code,
+            ),
+        )
+    }
+
+    private fun parseLegacyJson(element: JsonObject): PairingQRParseResult {
         val wire =
-            runCatching { json.decodeFromString<Wire>(raw) }.getOrNull()
-                ?: return PairingQRParseResult.Failed(PairingQRError.InvalidPayload)
+            runCatching { json.decodeFromJsonElement<Wire>(element) }.getOrNull()
+                ?: return invalid()
         val urls =
             wire.urls
                 .filterNot(::isLoopback)
@@ -58,27 +133,53 @@ object PairingQRPayload {
         )
     }
 
-    fun preferredDisplayUrl(urls: List<String>): String = urls.firstOrNull(::isTailscaleUrl) ?: urls.first()
-
-    fun pickReachableUrl(
-        fieldUrl: String,
-        reachable: List<String>,
-    ): String? {
-        if (reachable.isEmpty()) return null
-        val field = ConnectionProfileIdentity.normalizeBaseUrl(fieldUrl)
-        reachable
-            .firstOrNull { ConnectionProfileIdentity.normalizeBaseUrl(it) == field }
-            ?.let { return it }
-        reachable.firstOrNull(::isTailscaleUrl)?.let { return it }
-        return reachable.first()
+    private fun parseConnectLink(raw: String): PairingQRParseResult {
+        val uri = runCatching { URI(raw) }.getOrNull() ?: return invalid()
+        val scheme = uri.scheme?.lowercase()
+        if (scheme != "http" && scheme != "https") return invalid()
+        if (!uri.userInfo.isNullOrEmpty()) return invalid()
+        if (uri.rawQuery != null || uri.rawFragment != null) return invalid()
+        val code = connectPath.matchEntire(uri.rawPath ?: return invalid())?.groupValues?.get(1)
+        if (code == null || !pairingCode.matches(code)) return invalid()
+        val origin = originOf(uri) ?: return invalid()
+        return PairingQRParseResult.Ready(
+            PairingQRCredentials(
+                baseUrl = origin,
+                urls = listOf(origin),
+                username = ConnectionProfileIdentity.normalizeUsername(""),
+                password = "",
+                code = code,
+            ),
+        )
     }
 
-    fun isTailscaleUrl(raw: String): Boolean {
-        val host = hostOf(raw) ?: return false
-        if (host == "ts.net" || host.endsWith(".ts.net")) return true
-        if (isCgnatIpv4(host)) return true
-        return isTailscaleIpv6(host)
+    private fun strictHttpOrigin(raw: String): String? {
+        val trimmed = raw.trim()
+        if (trimmed.isEmpty()) return null
+        if (
+            !trimmed.startsWith("http://", ignoreCase = true) &&
+            !trimmed.startsWith("https://", ignoreCase = true)
+        ) {
+            return null
+        }
+        val uri = runCatching { URI(trimmed) }.getOrNull() ?: return null
+        if (!uri.userInfo.isNullOrEmpty()) return null
+        if (uri.rawQuery != null || uri.rawFragment != null) return null
+        val path = uri.rawPath.orEmpty()
+        if (path.isNotEmpty() && path != "/") return null
+        return originOf(uri)
     }
+
+    private fun originOf(uri: URI): String? {
+        val scheme = uri.scheme?.lowercase() ?: return null
+        if (scheme != "http" && scheme != "https") return null
+        val host = uri.host?.takeIf { it.isNotBlank() } ?: return null
+        val formattedHost = if (host.contains(':')) "[$host]" else host
+        val hostPort = if (uri.port >= 0) "$formattedHost:${uri.port}" else formattedHost
+        return ConnectionProfileIdentity.normalizeBaseUrl("$scheme://$hostPort")
+    }
+
+    private fun invalid(): PairingQRParseResult = PairingQRParseResult.Failed(PairingQRError.InvalidPayload)
 
     private fun normalizedBaseUrl(raw: String): String? {
         val trimmed = raw.trim()

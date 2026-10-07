@@ -663,6 +663,7 @@ extension Container {
         ConnectionSetupViewModel(
             connectionProbeService: shared.connectionProbing(),
             connectionSessionCoordinator: shared.connectionSessionCoordinator(),
+            pairingCodeRedeemer: PairingCodeRedeemer(),
             initialProfile: initialProfile,
             mode: mode
         )

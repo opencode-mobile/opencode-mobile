@@ -141,6 +141,37 @@ struct ActiveConnectionManagerProtocolTests {
         #expect(probing.calls == 2)
     }
 
+    @Test func ensureLoaded_rechoosesTailscaleAndKeepsProfile() async throws {
+        let lan = "http://192.168.1.2:49374/"
+        let tailscale = "http://100.64.0.3:49374/"
+        let defaults = UserDefaults(suiteName: "ActiveConnectionManagerProtocolTests.\(UUID().uuidString)")!
+        let store = UserDefaultsConnectionProfileStore(
+            defaults: defaults,
+            secureCredentialStore: InMemoryAddressProbeCredentialStore()
+        )
+        try await store.saveProfile(
+            ConnectionProfile(
+                baseURL: lan,
+                serverURLs: [lan, tailscale],
+                username: "opencode",
+                password: "token",
+                id: "profile-1",
+                name: "Mac"
+            )
+        )
+        let probing = DelayedTailscaleProbe()
+        let manager = ActiveConnectionManager(connectionProbing: probing, profileStore: store)
+
+        await manager.ensureLoaded(from: store)
+
+        #expect(Set(probing.probed) == Set([lan, tailscale]))
+        #expect(manager.connection?.baseURL.absoluteString == tailscale)
+        let loaded = await store.activeProfile()
+        #expect(loaded?.id == "profile-1")
+        #expect(loaded?.baseURL == tailscale)
+        #expect(loaded?.serverURLs == [lan, tailscale])
+    }
+
     @Test func currentProtocolOrProbe_doesNotStampProtocolAfterDisconnect() async {
         let probing = GatedProbe(result: .v2)
         let manager = ActiveConnectionManager(connectionProbing: probing)
@@ -283,5 +314,47 @@ private final class GatedProbe: ConnectionProbing, @unchecked Sendable {
             }
         }
         return result
+    }
+}
+
+private final class DelayedTailscaleProbe: ConnectionProbing, @unchecked Sendable {
+    private let lock = NSLock()
+    private var urls: [String] = []
+
+    var probed: [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        return urls
+    }
+
+    func probe(connection: ServerConnection) async throws -> ServerProtocol {
+        let url = connection.baseURL.absoluteString
+        lock.lock()
+        urls.append(url)
+        lock.unlock()
+        if url.contains("100.64") {
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+        return .v2
+    }
+}
+
+private final class InMemoryAddressProbeCredentialStore: SecureCredentialStore, @unchecked Sendable {
+    private var passwords: [String: String] = [:]
+
+    func readPassword(serverBaseURL: String) -> String? {
+        passwords[serverBaseURL]
+    }
+
+    func writePassword(serverBaseURL: String, password: String) {
+        passwords[serverBaseURL] = password
+    }
+
+    func deletePassword(serverBaseURL: String) {
+        passwords.removeValue(forKey: serverBaseURL)
+    }
+
+    func clearAll() {
+        passwords.removeAll()
     }
 }

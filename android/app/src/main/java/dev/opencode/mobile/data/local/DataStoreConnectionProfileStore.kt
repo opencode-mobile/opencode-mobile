@@ -187,6 +187,7 @@ class DataStoreConnectionProfileStore
                                 record.serverProtocol?.let { wire ->
                                     ServerProtocol.entries.firstOrNull { it.wireValue == wire }
                                 },
+                            serverUrls = record.serverUrls,
                         )
                     },
             )
@@ -208,6 +209,7 @@ class DataStoreConnectionProfileStore
                                     baseUrl = profile.baseUrl,
                                     username = profile.username,
                                     serverProtocol = profile.serverProtocol?.wireValue,
+                                    serverUrls = profile.serverUrls,
                                 )
                             },
                     ),
@@ -235,11 +237,11 @@ class DataStoreConnectionProfileStore
         ): ConnectionProfile? {
             val normalized = ConnectionProfileIdentity.normalizeBaseUrl(serverBaseUrl)
             val active = catalog.activeProfile()
-            if (active != null && ConnectionProfileIdentity.normalizeBaseUrl(active.baseUrl) == normalized) {
+            if (active != null && normalized in ConnectionProfileIdentity.addressesOf(active)) {
                 return active
             }
             return catalog.profiles.firstOrNull {
-                ConnectionProfileIdentity.normalizeBaseUrl(it.baseUrl) == normalized
+                normalized in ConnectionProfileIdentity.addressesOf(it)
             }
         }
 

@@ -10,6 +10,8 @@ import dev.opencode.mobile.data.local.EncryptedSecureCredentialStore
 import dev.opencode.mobile.domain.connection.ConnectionProbeService
 import dev.opencode.mobile.domain.connection.ConnectionProbing
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
+import dev.opencode.mobile.domain.connection.PairingCodeRedeemService
+import dev.opencode.mobile.domain.connection.PairingCodeRedeeming
 import dev.opencode.mobile.domain.connection.SecureCredentialStore
 import dev.opencode.mobile.domain.project.ProjectDomainAdapter
 import dev.opencode.mobile.network.ActiveConnectionManager
@@ -33,6 +35,10 @@ abstract class ConnectionModule {
             json: kotlinx.serialization.json.Json,
             adapter: ProjectDomainAdapter,
         ): ConnectionProbing = ConnectionProbeService(json, adapter)
+
+        @Provides
+        @Singleton
+        fun providePairingCodeRedeeming(json: kotlinx.serialization.json.Json): PairingCodeRedeeming = PairingCodeRedeemService(json)
 
         @Provides
         @Singleton

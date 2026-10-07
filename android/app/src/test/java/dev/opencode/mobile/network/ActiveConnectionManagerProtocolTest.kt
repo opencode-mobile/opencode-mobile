@@ -4,6 +4,7 @@ import dev.opencode.mobile.domain.connection.ConnectionProbing
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.ServerProtocol
+import dev.opencode.mobile.domain.project.ServerProbeError
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitCancellation
@@ -238,6 +239,93 @@ class ActiveConnectionManagerProtocolTest {
             assertNull(manager.current())
             assertNull(manager.currentProtocol())
         }
+
+    @Test
+    fun applyProfile_reselectsTailscaleAndKeepsServerUrls() =
+        runTest {
+            val lan = "http://192.168.0.160:4096/"
+            val tailscale = "http://100.84.57.15:4096/"
+            val store = FakeProfileStore()
+            val manager =
+                ActiveConnectionManager(
+                    store,
+                    ConnectionProbing { ServerProtocol.V2 },
+                )
+            manager.applyProfile(
+                ConnectionProfile(
+                    id = "profile-1",
+                    baseUrl = lan,
+                    username = "opencode",
+                    password = "token",
+                    serverUrls = listOf(lan, tailscale),
+                ),
+            )
+
+            assertEquals(tailscale, manager.current()?.baseUrl)
+            val current = manager.currentProfile()
+            assertEquals("profile-1", current?.id)
+            assertEquals(listOf(lan, tailscale), current?.serverUrls)
+            assertEquals("token", current?.password)
+            assertEquals(tailscale, store.lastSaved?.baseUrl)
+            assertEquals("profile-1", store.lastSaved?.id)
+        }
+
+    @Test
+    fun ensureLoaded_reselectsTailscaleWhenStoredBaseUrlIsLan() =
+        runTest {
+            val lan = "http://192.168.0.160:4096/"
+            val tailscale = "http://100.84.57.15:4096/"
+            val store = FakeProfileStore()
+            store.saveProfile(
+                ConnectionProfile(
+                    id = "profile-1",
+                    baseUrl = lan,
+                    username = "opencode",
+                    password = "token",
+                    serverUrls = listOf(lan, tailscale),
+                ),
+            )
+            val manager =
+                ActiveConnectionManager(
+                    store,
+                    ConnectionProbing { ServerProtocol.V2 },
+                )
+
+            manager.ensureLoaded()
+
+            assertEquals(tailscale, manager.current()?.baseUrl)
+            val current = manager.currentProfile()
+            assertEquals("profile-1", current?.id)
+            assertEquals(listOf(lan, tailscale), current?.serverUrls)
+        }
+
+    @Test
+    fun applyProfile_whenNoAddressAnswers_keepsStoredBaseUrl() =
+        runTest {
+            val lan = "http://192.168.0.160:4096/"
+            val tailscale = "http://100.84.57.15:4096/"
+            val manager =
+                ActiveConnectionManager(
+                    FakeProfileStore(),
+                    ConnectionProbing {
+                        throw ServerProbeError.Transport(IllegalStateException("down"))
+                    },
+                )
+
+            manager.applyProfile(
+                ConnectionProfile(
+                    id = "profile-1",
+                    baseUrl = lan,
+                    username = "opencode",
+                    password = "token",
+                    serverUrls = listOf(lan, tailscale),
+                ),
+            )
+
+            assertEquals(lan, manager.current()?.baseUrl)
+            assertEquals(listOf(lan, tailscale), manager.currentProfile()?.serverUrls)
+            assertEquals("profile-1", manager.currentProfile()?.id)
+        }
 }
 
 private val sampleProfile =
@@ -245,10 +333,13 @@ private val sampleProfile =
 
 private class FakeProfileStore : ConnectionProfileStore {
     private var profile: ConnectionProfile? = null
+    var lastSaved: ConnectionProfile? = null
+        private set
 
     override suspend fun activeProfile(): ConnectionProfile? = profile
 
     override suspend fun saveProfile(profile: ConnectionProfile) {
+        lastSaved = profile
         this.profile = profile
     }
 

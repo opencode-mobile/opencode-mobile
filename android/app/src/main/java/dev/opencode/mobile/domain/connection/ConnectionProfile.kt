@@ -7,6 +7,7 @@ data class ConnectionProfile(
     val serverProtocol: ServerProtocol? = null,
     val id: String = "",
     val name: String = "",
+    val serverUrls: List<String> = emptyList(),
 ) {
     val displayName: String
         get() = name.trim().ifBlank { ConnectionProfileIdentity.hostLabel(baseUrl) }

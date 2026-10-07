@@ -40,6 +40,52 @@ private struct StoredConnectionProfile: Codable {
     var baseURL: String
     var username: String
     var serverProtocol: String?
+    var serverURLs: [String]
+
+    init(
+        id: String,
+        name: String,
+        baseURL: String,
+        username: String,
+        serverProtocol: String?,
+        serverURLs: [String]
+    ) {
+        self.id = id
+        self.name = name
+        self.baseURL = baseURL
+        self.username = username
+        self.serverProtocol = serverProtocol
+        self.serverURLs = serverURLs
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case baseURL
+        case username
+        case serverProtocol
+        case serverURLs
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        baseURL = try container.decode(String.self, forKey: .baseURL)
+        username = try container.decode(String.self, forKey: .username)
+        serverProtocol = try container.decodeIfPresent(String.self, forKey: .serverProtocol)
+        serverURLs = try container.decodeIfPresent([String].self, forKey: .serverURLs) ?? []
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(baseURL, forKey: .baseURL)
+        try container.encode(username, forKey: .username)
+        try container.encodeIfPresent(serverProtocol, forKey: .serverProtocol)
+        try container.encode(serverURLs, forKey: .serverURLs)
+    }
 }
 
 struct UserDefaultsConnectionProfileStore: ConnectionProfileStore, @unchecked Sendable {
@@ -86,12 +132,7 @@ struct UserDefaultsConnectionProfileStore: ConnectionProfileStore, @unchecked Se
         writeCatalog(next)
         copyLegacyWorktrees(from: previous, to: next)
         if let saved = next.profiles.first(where: { stored in
-            stored.id == profile.id || ConnectionProfileIdentity.sameConnectionIdentity(
-                leftURL: stored.baseURL,
-                leftUsername: stored.username,
-                rightURL: profile.baseURL,
-                rightUsername: profile.username
-            )
+            stored.id == profile.id || ConnectionProfileIdentity.sameSavedServer(stored, profile)
         }) {
             writePassword(saved, password: profile.password)
         }
@@ -229,6 +270,7 @@ struct UserDefaultsConnectionProfileStore: ConnectionProfileStore, @unchecked Se
             profiles: stored.profiles.map { record in
                 ConnectionProfile(
                     baseURL: record.baseURL,
+                    serverURLs: record.serverURLs,
                     username: record.username,
                     password: "",
                     serverProtocol: record.serverProtocol.flatMap(ServerProtocol.init(rawValue:)),
@@ -249,7 +291,8 @@ struct UserDefaultsConnectionProfileStore: ConnectionProfileStore, @unchecked Se
                     name: profile.name,
                     baseURL: profile.baseURL,
                     username: profile.username,
-                    serverProtocol: profile.serverProtocol?.rawValue
+                    serverProtocol: profile.serverProtocol?.rawValue,
+                    serverURLs: ConnectionProfileIdentity.normalizedAddressList(profile.serverURLs)
                 )
             }
         )
@@ -272,14 +315,18 @@ struct UserDefaultsConnectionProfileStore: ConnectionProfileStore, @unchecked Se
 
     private func resolveProfile(catalog: ConnectionProfileCatalog, serverBaseURL: String) -> ConnectionProfile? {
         let normalized = ConnectionProfileIdentity.normalizeBaseURL(serverBaseURL)
-        if let active = catalog.activeProfile(),
-           ConnectionProfileIdentity.normalizeBaseURL(active.baseURL) == normalized
-        {
+        func matches(_ profile: ConnectionProfile) -> Bool {
+            if ConnectionProfileIdentity.normalizeBaseURL(profile.baseURL) == normalized {
+                return true
+            }
+            return profile.serverURLs.contains {
+                ConnectionProfileIdentity.normalizeBaseURL($0) == normalized
+            }
+        }
+        if let active = catalog.activeProfile(), matches(active) {
             return active
         }
-        return catalog.profiles.first {
-            ConnectionProfileIdentity.normalizeBaseURL($0.baseURL) == normalized
-        }
+        return catalog.profiles.first(where: matches)
     }
 
     private func writePassword(_ profile: ConnectionProfile, password: String) {

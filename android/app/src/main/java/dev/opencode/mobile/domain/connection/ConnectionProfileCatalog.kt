@@ -22,16 +22,11 @@ data class ConnectionProfileCatalog(
                 baseUrl = normalizedUrl,
                 username = username,
                 name = profile.name.trim(),
+                serverUrls = ConnectionProfileIdentity.normalizeServerUrls(profile.serverUrls),
             )
         val conflict =
             profiles.firstOrNull { existing ->
-                existing.id != id &&
-                    ConnectionProfileIdentity.sameConnectionIdentity(
-                        existing.baseUrl,
-                        existing.username,
-                        stored.baseUrl,
-                        stored.username,
-                    )
+                existing.id != id && ConnectionProfileIdentity.overlapsConnection(existing, stored)
             }
         if (conflict != null) {
             throw DuplicateConnectionProfileException(conflict.id)
