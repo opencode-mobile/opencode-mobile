@@ -818,11 +818,6 @@ where Item.ID == String {
         collectionView.contentInsetAdjustmentBehavior = .automatic
         collectionView.delegate = self
         collectionView.keyboardDismissMode = .onDrag
-        // SwiftUI text selection starts on long-press. The default delay holds
-        // that press until the collection view decides it is not a scroll, so
-        // selection never begins inside a cell.
-        collectionView.delaysContentTouches = false
-        collectionView.panGestureRecognizer.delaysTouchesBegan = false
         // Prefer lighter invalidation: including constraints re-measured tall
         // markdown cells aggressively during open and blocked scrolling.
         collectionView.selfSizingInvalidation = .enabled

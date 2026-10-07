@@ -536,9 +536,12 @@ private class LinkTapGate {
  * long-press still starts text selection and a drag still scrolls. A link
  * marks [LinkTapGate.handled] before this sees the release.
  */
+internal fun Modifier.opensMessageActionsOnTextTap(onTextTap: (() -> Unit)?): Modifier =
+    opensMessageActionsOnTextTap(onTextTap, linkTapGate = null)
+
 private fun Modifier.opensMessageActionsOnTextTap(
     onTextTap: (() -> Unit)?,
-    linkTapGate: LinkTapGate,
+    linkTapGate: LinkTapGate?,
 ): Modifier {
     if (onTextTap == null) return this
     return pointerInput(onTextTap) {
@@ -566,8 +569,9 @@ private fun Modifier.opensMessageActionsOnTextTap(
                     break
                 }
             }
-            if (linkTapGate.handled) {
-                linkTapGate.handled = false
+            val gate = linkTapGate
+            if (gate != null && gate.handled) {
+                gate.handled = false
                 selectionActive = false
                 return@awaitEachGesture
             }

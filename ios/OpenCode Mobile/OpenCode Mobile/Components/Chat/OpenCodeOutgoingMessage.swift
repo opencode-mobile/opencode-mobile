@@ -108,13 +108,13 @@ struct OpenCodeOutgoingMessage: View {
 
     private func textPill(text: String) -> some View {
         pillContent(text: text)
-        .padding(.horizontal, outgoingMessagePaddingHorizontal)
-        .padding(.vertical, outgoingMessagePaddingVertical)
-        .background(
-            OpenCodeColors.surfaceInteractiveWeak,
-            in: RoundedRectangle(cornerRadius: 8)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+            .padding(.horizontal, outgoingMessagePaddingHorizontal)
+            .padding(.vertical, outgoingMessagePaddingVertical)
+            .background(
+                OpenCodeColors.surfaceInteractiveWeak,
+                in: RoundedRectangle(cornerRadius: 8)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
     @ViewBuilder
@@ -130,6 +130,7 @@ struct OpenCodeOutgoingMessage: View {
             textPill(text: text)
                 .onLongPressGesture(perform: onLongPress)
                 .accessibilityLabel("Outgoing message")
+                .accessibilityHint("Long press to show message actions")
         case (let onTap?, nil):
             textPill(text: text)
                 .onTapGesture(perform: onTap)

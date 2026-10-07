@@ -60,7 +60,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.hideFromAccessibility
-import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.unit.Dp
@@ -648,20 +647,6 @@ private fun SessionChatMessageItem.outgoingContent(): List<OpenCodeOutgoingMessa
     }
 }
 
-private fun messageActionsModifier(
-    renderedMarkdown: MarkdownDocument?,
-    onOpenMessageActions: () -> Unit,
-    messageDescription: String,
-): Modifier =
-    if (renderedMarkdown != null) {
-        Modifier
-    } else {
-        Modifier.clickable(onClick = onOpenMessageActions).semantics {
-            role = Role.Button
-            contentDescription = "$messageDescription. Shows message actions"
-        }
-    }
-
 @Composable
 private fun AssistantMessageContent(
     message: SessionChatMessageItem,
@@ -729,12 +714,6 @@ private fun AssistantMessageContent(
                             renderedMarkdown = renderedMarkdown,
                             isStreaming = message.isStreaming,
                             onTextTap = onOpenMessageActions,
-                            modifier =
-                                messageActionsModifier(
-                                    renderedMarkdown = renderedMarkdown,
-                                    onOpenMessageActions = onOpenMessageActions,
-                                    messageDescription = "Assistant message",
-                                ),
                         )
                     }
                     is SessionChatTimelineBlock.Attachment ->
@@ -872,12 +851,6 @@ private fun StepParagraphBlock(
                 renderedMarkdown = renderedMarkdown,
                 isStreaming = isStreaming,
                 onTextTap = onOpenMessageActions,
-                modifier =
-                    messageActionsModifier(
-                        renderedMarkdown = renderedMarkdown,
-                        onOpenMessageActions = onOpenMessageActions,
-                        messageDescription = "Assistant message",
-                    ),
                 presentation = OpenCodeAssistantMessagePresentation.Plain,
             )
         } else {
