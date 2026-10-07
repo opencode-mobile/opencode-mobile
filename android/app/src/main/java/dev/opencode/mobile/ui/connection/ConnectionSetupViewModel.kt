@@ -73,6 +73,8 @@ data class ConnectionSetupUiState(
     val unreachableUrls: Set<String> = emptySet(),
     val chosenUrl: String? = null,
     val qrPairingReady: Boolean = false,
+    /** Camera scan still pairing. A saved address list is not a scan. */
+    val qrScanPending: Boolean = false,
 ) {
     val usesQrLayout: Boolean
         get() = serverUrls.isNotEmpty()
@@ -95,9 +97,9 @@ data class ConnectionSetupUiState(
                 else -> "Connect"
             }
 
-    /** A scanned QR shows Save only after pairing succeeds. A failed scan returns to the manual form, where Connect stays visible. */
+    /** A camera scan hides Save until pairing succeeds. Editing a saved QR profile, and a failed paste, keep the button. */
     val showsPrimaryAction: Boolean
-        get() = !usesQrLayout || isBusy || qrPairingReady
+        get() = !qrScanPending || isBusy || qrPairingReady
 
     val canRemove: Boolean
         get() = mode == ConnectionSetupMode.Edit && profileId.isNotBlank()
@@ -136,6 +138,8 @@ class ConnectionSetupViewModel
         private var pendingPairingCode: String? = null
         private var scannedQrPassword: String = ""
         private var addressProbeGeneration = 0
+        /** Paste applied an address list that this session has not saved yet. */
+        private var pastedConnectLinkUnconfirmed = false
 
         fun configure(
             initialProfile: ConnectionProfile?,
@@ -144,6 +148,7 @@ class ConnectionSetupViewModel
             reportedFieldEdits.clear()
             pendingPairingCode = null
             scannedQrPassword = ""
+            pastedConnectLinkUnconfirmed = false
             addressProbeGeneration += 1
             isEditingExistingProfile = initialProfile != null && mode == ConnectionSetupMode.Edit
             detectedProtocol = initialProfile?.serverProtocol
@@ -189,6 +194,7 @@ class ConnectionSetupViewModel
             if (_uiState.value.serverUrls.isNotEmpty()) {
                 addressProbeGeneration += 1
                 pendingPairingCode = null
+                pastedConnectLinkUnconfirmed = false
                 _uiState.value =
                     _uiState.value.copy(
                         serverUrls = emptyList(),
@@ -196,6 +202,7 @@ class ConnectionSetupViewModel
                         unreachableUrls = emptySet(),
                         chosenUrl = null,
                         qrPairingReady = false,
+                        qrScanPending = false,
                         credentialSegment = ConnectionCredentialSegment.Password,
                     )
             }
@@ -243,6 +250,8 @@ class ConnectionSetupViewModel
                         mapOf(ProductAnalytics.Param.OUTCOME to ProductAnalytics.Outcome.SUCCESS),
                     )
                     applyPairingCredentials(result.credentials, scheduleProbe = false)
+                    pastedConnectLinkUnconfirmed = false
+                    _uiState.value = _uiState.value.copy(qrScanPending = true)
                     pairScannedQr()
                 }
                 is PairingQRParseResult.Failed -> {
@@ -305,7 +314,7 @@ class ConnectionSetupViewModel
          */
         fun submit(onSaved: () -> Unit) {
             if (_uiState.value.isBusy) return
-            if (_uiState.value.usesQrLayout && !_uiState.value.qrPairingReady) return
+            if (_uiState.value.qrScanPending && !_uiState.value.qrPairingReady) return
             if (_uiState.value.qrPairingReady) {
                 persist(onSaved)
                 return
@@ -471,6 +480,7 @@ class ConnectionSetupViewModel
                         _uiState.value.copy(
                             state = ConnectionSetupState.Idle,
                             qrPairingReady = true,
+                            qrScanPending = false,
                         )
                     return@launch
                 }
@@ -494,6 +504,7 @@ class ConnectionSetupViewModel
             when (val result = PairingQRPayload.parse(_uiState.value.baseUrl.trim())) {
                 is PairingQRParseResult.Ready -> {
                     applyPairingCredentials(result.credentials)
+                    pastedConnectLinkUnconfirmed = true
                     return true
                 }
                 is PairingQRParseResult.Failed -> {
@@ -538,6 +549,7 @@ class ConnectionSetupViewModel
                             if (origin == ConnectFailureOrigin.ScannedQr) {
                                 presentScannedQrFailure()
                             } else {
+                                dropUnconfirmedPastedLayout()
                                 _uiState.value =
                                     _uiState.value.copy(
                                         state = ConnectionSetupState.Idle,
@@ -571,6 +583,7 @@ class ConnectionSetupViewModel
                             _uiState.value.copy(
                                 state = ConnectionSetupState.Idle,
                                 qrPairingReady = true,
+                                qrScanPending = false,
                             )
                     }
                 }
@@ -715,6 +728,21 @@ class ConnectionSetupViewModel
                 ) &&
                 password == savedPassword
 
+        private fun dropUnconfirmedPastedLayout() {
+            if (!pastedConnectLinkUnconfirmed) return
+            pastedConnectLinkUnconfirmed = false
+            pendingPairingCode = null
+            _uiState.value =
+                _uiState.value.copy(
+                    serverUrls = emptyList(),
+                    addressProbeFinished = false,
+                    unreachableUrls = emptySet(),
+                    chosenUrl = null,
+                    qrPairingReady = false,
+                    qrScanPending = false,
+                )
+        }
+
         private fun handleProbeFailure(
             error: ServerProbeError,
             origin: ConnectFailureOrigin = ConnectFailureOrigin.Manual,
@@ -723,6 +751,7 @@ class ConnectionSetupViewModel
                 presentScannedQrFailure()
                 return
             }
+            dropUnconfirmedPastedLayout()
             val authFailed = error.toProbeStatus() == ProbeStatus.AuthFailed
             val focusPassword =
                 authFailed &&
@@ -742,6 +771,7 @@ class ConnectionSetupViewModel
 
         private fun presentScannedQrFailure() {
             pendingPairingCode = null
+            pastedConnectLinkUnconfirmed = false
             val current = _uiState.value
             val password = scannedQrPassword
             _uiState.value =
@@ -753,6 +783,7 @@ class ConnectionSetupViewModel
                     unreachableUrls = emptySet(),
                     chosenUrl = null,
                     qrPairingReady = false,
+                    qrScanPending = false,
                     credentialSegment = ConnectionCredentialSegment.Password,
                     requestPasswordFocus = false,
                     connectionUnchanged = isConnectionUnchanged(current.baseUrl, current.username, password),
@@ -765,6 +796,7 @@ class ConnectionSetupViewModel
         }
 
         private fun persist(onSaved: () -> Unit) {
+            pastedConnectLinkUnconfirmed = false
             logAction(
                 actionId = ProductAnalytics.Action.CONNECTION_SAVE,
                 parameters = mapOf(ProductAnalytics.Param.IS_EDIT to isEditingExistingProfile.toString()),
@@ -790,6 +822,7 @@ class ConnectionSetupViewModel
         }
 
         private suspend fun persistAfterProbe(onSaved: () -> Unit) {
+            pastedConnectLinkUnconfirmed = false
             logAction(
                 actionId = ProductAnalytics.Action.CONNECTION_SAVE,
                 parameters = mapOf(ProductAnalytics.Param.IS_EDIT to isEditingExistingProfile.toString()),

@@ -79,6 +79,10 @@ final class ConnectionSetupViewModel {
     /// Set after a scanned QR has been probed and, when it carries a code, redeemed.
     /// Save then stores the profile without spending the code again.
     private(set) var qrPairingReady = false
+    /// Camera scan still pairing. A saved address list is not a scan.
+    private var qrScanPending = false
+    /// Paste applied an address list that this session has not saved yet.
+    private var pastedConnectLinkUnconfirmed = false
     private var pairedProtocol: ServerProtocol?
     private var addressProbeFinished = false
     private var unreachableAddresses = Set<String>()
@@ -128,6 +132,8 @@ final class ConnectionSetupViewModel {
         pairingCode = ""
         credentialSegment = .password
         qrPairingReady = false
+        qrScanPending = false
+        pastedConnectLinkUnconfirmed = false
         pairedProtocol = nil
         detectedProtocol = nil
         state = .idle
@@ -180,9 +186,9 @@ final class ConnectionSetupViewModel {
         }
     }
 
-    /// A scanned QR shows Save only after pairing succeeds. A failed scan returns to the manual form, where Connect stays visible.
+    /// A camera scan hides Save until pairing succeeds. Editing a saved QR profile, and a failed paste, keep the button.
     var showsPrimaryAction: Bool {
-        if usesQRLayout, !isBusy, !qrPairingReady { return false }
+        if qrScanPending, !isBusy, !qrPairingReady { return false }
         return true
     }
 
@@ -244,6 +250,8 @@ final class ConnectionSetupViewModel {
         switch PairingQRPayload.parse(raw) {
         case let .success(credentials):
             apply(credentials)
+            pastedConnectLinkUnconfirmed = false
+            qrScanPending = true
             logConnectionAction(
                 ProductAnalytics.Action.connectionPairingQRScan,
                 outcome: ProductAnalytics.Outcome.success
@@ -288,7 +296,7 @@ final class ConnectionSetupViewModel {
     @discardableResult
     func submit() async -> Bool {
         guard !isBusy else { return false }
-        if usesQRLayout, !qrPairingReady {
+        if qrScanPending, !qrPairingReady {
             return false
         }
         if qrPairingReady {
@@ -418,6 +426,7 @@ final class ConnectionSetupViewModel {
                 if origin == .scannedQr {
                     presentScannedQrFailure()
                 } else {
+                    discardUnconfirmedPastedLayout()
                     pendingPairingCode = nil
                     state = .idle
                     snackbar = OpenCodeSnackbarMessage(
@@ -482,6 +491,7 @@ final class ConnectionSetupViewModel {
               !code.isEmpty
         else { return false }
         apply(credentials)
+        pastedConnectLinkUnconfirmed = true
         return true
     }
 
@@ -551,6 +561,8 @@ final class ConnectionSetupViewModel {
         addressProbeFinished = false
         pendingPairingCode = nil
         qrPairingReady = false
+        qrScanPending = false
+        pastedConnectLinkUnconfirmed = false
         pairedProtocol = nil
         password = ""
         credentialSegment = .password
@@ -570,7 +582,20 @@ final class ConnectionSetupViewModel {
         detectedProtocol = detected
         pendingPairingCode = nil
         qrPairingReady = true
+        qrScanPending = false
         state = .idle
+    }
+
+    private func discardUnconfirmedPastedLayout() {
+        guard pastedConnectLinkUnconfirmed else { return }
+        pastedConnectLinkUnconfirmed = false
+        pendingPairingCode = nil
+        serverURLs = []
+        unreachableAddresses = []
+        addressProbeFinished = false
+        qrPairingReady = false
+        qrScanPending = false
+        pairedProtocol = nil
     }
 
     private func handleProbeFailure(_ error: ServerProbeError, origin: ConnectFailureOrigin = .manual) {
@@ -578,6 +603,7 @@ final class ConnectionSetupViewModel {
             presentScannedQrFailure()
             return
         }
+        discardUnconfirmedPastedLayout()
         let authFailed = error.probeStatus == .authFailed
         state = .idle
         if authFailed, credentialSegment == .password, !usesQRLayout {
@@ -588,10 +614,12 @@ final class ConnectionSetupViewModel {
 
     private func presentScannedQrFailure() {
         let keptPassword = scannedQrPassword
+        pastedConnectLinkUnconfirmed = false
         serverURLs = []
         unreachableAddresses = []
         addressProbeFinished = false
         qrPairingReady = false
+        qrScanPending = false
         pairedProtocol = nil
         credentialSegment = .password
         requestPasswordFocus = false
@@ -604,6 +632,7 @@ final class ConnectionSetupViewModel {
     }
 
     private func persist() async -> Bool {
+        pastedConnectLinkUnconfirmed = false
         state = .saving
         snackbar = nil
         do {

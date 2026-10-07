@@ -184,6 +184,47 @@ class ConnectionSetupViewModelTest {
         }
 
     @Test
+    fun edit_savedQrProfile_renameShowsSaveAndPersistsAddresses() =
+        runTest(dispatcher) {
+            val store = RecordingConnectionProfileStore()
+            val viewModel =
+                viewModel(
+                    store = store,
+                    probe = neverProbe(),
+                )
+            val serverUrls = listOf("http://192.168.0.160:4096/", "http://100.84.57.15:4096/")
+            viewModel.configure(
+                initialProfile =
+                    ConnectionProfile(
+                        baseUrl = "http://100.84.57.15:4096/",
+                        username = "opencode",
+                        password = "secret",
+                        serverProtocol = ServerProtocol.V2,
+                        id = "home",
+                        name = "Home",
+                        serverUrls = serverUrls,
+                    ),
+                mode = ConnectionSetupMode.Edit,
+            )
+            val before = viewModel.uiState.value
+            assertTrue(before.showsPrimaryAction)
+            assertEquals("Save", before.primaryActionLabel)
+            assertTrue(before.usesQrLayout)
+            assertTrue(before.canSubmitWithoutProbe)
+
+            viewModel.onNameChanged("Studio")
+            var saved = false
+            viewModel.submit { saved = true }
+            advanceUntilIdle()
+
+            assertTrue(saved)
+            assertEquals("Studio", store.saved.last().name)
+            assertEquals(serverUrls, store.saved.last().serverUrls)
+            assertEquals(ServerProtocol.V2, store.saved.last().serverProtocol)
+            assertEquals("secret", store.saved.last().password)
+        }
+
+    @Test
     fun hostIsBlank_detectsSchemeOnly() {
         assertTrue(ConnectionSetupViewModel.hostIsBlank(""))
         assertTrue(ConnectionSetupViewModel.hostIsBlank("http://"))
@@ -553,6 +594,52 @@ class ConnectionSetupViewModelTest {
             assertEquals("http://192.168.0.183:4096/", store.saved.last().baseUrl)
             assertEquals(listOf("http://192.168.0.183:4096/"), store.saved.last().serverUrls)
             assertTrue(viewModel.uiState.value.usesQrLayout)
+        }
+
+    @Test
+    fun submit_pastedConnectLink_transportFailure_restoresConnect() =
+        runTest(dispatcher) {
+            val store = RecordingConnectionProfileStore()
+            val redeem = RecordingPairingCodeRedeeming()
+            val viewModel =
+                viewModel(
+                    store = store,
+                    probe =
+                        ConnectionProbing {
+                            throw ServerProbeError.Transport(IllegalStateException("down"))
+                        },
+                    redeem = redeem,
+                )
+            viewModel.configure(initialProfile = null, mode = ConnectionSetupMode.Add)
+            viewModel.onBaseUrlChanged("http://192.168.0.183:4096/auth/connect/XJdLmg9llko9nmn3jN2XLw")
+            var saved = false
+            viewModel.submit { saved = true }
+            advanceUntilIdle()
+            assertFalse(saved)
+            assertTrue(redeem.calls.isEmpty())
+            assertTrue(store.saved.isEmpty())
+            val state = viewModel.uiState.value
+            assertFalse(state.usesQrLayout)
+            assertTrue(state.serverUrls.isEmpty())
+            assertTrue(state.showsPrimaryAction)
+            assertTrue(state.primaryEnabled)
+            assertEquals("Connect", state.primaryActionLabel)
+            assertEquals("http://192.168.0.183:4096/", state.baseUrl)
+            assertEquals("opencode", state.username)
+            assertEquals("Unable to reach the server", state.snackbar?.text)
+            assertEquals(OpenCodeSnackbarVariant.Error, state.snackbar?.variant)
+
+            viewModel.consumeSnackbar()
+            viewModel.submit { saved = true }
+            advanceUntilIdle()
+            assertFalse(saved)
+            assertTrue(store.saved.isEmpty())
+            assertTrue(viewModel.uiState.value.showsPrimaryAction)
+            assertEquals("Connect", viewModel.uiState.value.primaryActionLabel)
+            assertEquals(
+                "Unable to reach the server",
+                viewModel.uiState.value.snackbar?.text,
+            )
         }
 
     @Test

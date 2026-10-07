@@ -157,6 +157,43 @@ struct ConnectionSetupViewModelTests {
         #expect(store.saved.last?.serverProtocol == .v2)
     }
 
+    @Test func edit_savedQrProfile_renameShowsSaveAndPersistsAddresses() async {
+        let store = RecordingConnectionProfileStore()
+        let viewModel = ConnectionSetupViewModel(
+            connectionProbeService: FakeConnectionProbeService(
+                result: .failure(ServerProbeError.transport("down"))
+            ),
+            connectionSessionCoordinator: ConnectionSessionCoordinator(
+                activeConnectionManager: ActiveConnectionManager(),
+                connectionProfileStore: store
+            )
+        )
+        let serverURLs = ["http://192.168.0.160:4096/", "http://100.84.57.15:4096/"]
+        viewModel.configure(
+            initialProfile: ConnectionProfile(
+                baseURL: "http://100.84.57.15:4096/",
+                serverURLs: serverURLs,
+                username: "opencode",
+                password: "secret",
+                serverProtocol: .v2,
+                id: "home",
+                name: "Home"
+            ),
+            mode: .edit
+        )
+        #expect(viewModel.showsPrimaryAction)
+        #expect(viewModel.primaryActionLabel == "Save")
+        #expect(viewModel.usesQRLayout)
+        #expect(viewModel.canSubmitWithoutProbe)
+        viewModel.name = "Studio"
+        let saved = await viewModel.submit()
+        #expect(saved == true)
+        #expect(store.saved.last?.name == "Studio")
+        #expect(store.saved.last?.serverURLs == serverURLs)
+        #expect(store.saved.last?.serverProtocol == .v2)
+        #expect(store.saved.last?.password == "secret")
+    }
+
     @Test func hostIsBlank_detectsSchemeOnly() {
         #expect(ConnectionSetupViewModel.hostIsBlank(""))
         #expect(ConnectionSetupViewModel.hostIsBlank("http://"))
@@ -510,6 +547,39 @@ struct ConnectionSetupViewModelTests {
         #expect(viewModel.usesQRLayout)
         #expect(viewModel.savedAddressRows.count == 1)
         #expect(viewModel.username == "opencode")
+    }
+
+    @Test func submit_pastedConnectLink_transportFailure_restoresConnect() async {
+        let store = RecordingConnectionProfileStore()
+        let redeemer = ScriptedPairingRedeemer()
+        let viewModel = makePairingSetupViewModel(
+            probe: ScriptedHostProbe(
+                defaultUnauthenticated: .failure(ServerProbeError.transport("down"))
+            ),
+            redeemer: redeemer,
+            store: store
+        )
+        viewModel.baseURL = "http://192.168.0.183:4096/auth/connect/XJdLmg9llko9nmn3jN2XLw"
+        let saved = await viewModel.submit()
+        #expect(saved == false)
+        #expect(redeemer.calls.isEmpty)
+        #expect(store.saved.isEmpty)
+        #expect(viewModel.usesQRLayout == false)
+        #expect(viewModel.serverURLs.isEmpty)
+        #expect(viewModel.showsPrimaryAction)
+        #expect(viewModel.primaryEnabled)
+        #expect(viewModel.primaryActionLabel == "Connect")
+        #expect(viewModel.baseURL == "http://192.168.0.183:4096/")
+        #expect(viewModel.username == "opencode")
+        #expect(viewModel.snackbar?.text == "Unable to reach the server")
+        #expect(viewModel.snackbar?.variant == .error)
+        viewModel.consumeSnackbar()
+        let retried = await viewModel.submit()
+        #expect(retried == false)
+        #expect(store.saved.isEmpty)
+        #expect(viewModel.showsPrimaryAction)
+        #expect(viewModel.primaryActionLabel == "Connect")
+        #expect(viewModel.snackbar?.text == "Unable to reach the server")
     }
 
     @Test func typedPassword_afterScan_savesReplacementWithoutRedeemingAgain() async {
