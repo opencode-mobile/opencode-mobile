@@ -29,6 +29,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -536,15 +537,20 @@ private class LinkTapGate {
  * long-press still starts text selection and a drag still scrolls. A link
  * marks [LinkTapGate.handled] before this sees the release.
  */
+@Composable
 internal fun Modifier.opensMessageActionsOnTextTap(onTextTap: (() -> Unit)?): Modifier =
     opensMessageActionsOnTextTap(onTextTap, linkTapGate = null)
 
+@Composable
 private fun Modifier.opensMessageActionsOnTextTap(
     onTextTap: (() -> Unit)?,
     linkTapGate: LinkTapGate?,
 ): Modifier {
+    // Read `.value` inside the gesture. `by` would capture a stale local, and
+    // keying pointerInput on the lambda restarts it whenever streaming recomposes.
+    val onTextTapState = rememberUpdatedState(onTextTap)
     if (onTextTap == null) return this
-    return pointerInput(onTextTap) {
+    return pointerInput(Unit) {
         var selectionActive = false
         awaitEachGesture {
             val down = awaitFirstDown(pass = PointerEventPass.Initial, requireUnconsumed = false)
@@ -580,7 +586,7 @@ private fun Modifier.opensMessageActionsOnTextTap(
                     selectionActive = false
                     return@awaitEachGesture
                 }
-                onTextTap()
+                onTextTapState.value?.invoke()
             } else if (!moved) {
                 selectionActive = true
             }

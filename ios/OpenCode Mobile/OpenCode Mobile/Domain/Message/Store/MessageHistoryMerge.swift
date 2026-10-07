@@ -12,18 +12,23 @@ nonisolated enum MessageHistoryMerge {
 
     static func applyTail(local: [Message], tail: [Message]) -> [Message] {
         if tail.isEmpty { return local }
-        guard let firstOverlap = oldestOverlapIndex(local: local, tail: tail) else {
+        let tailIDs = Set(tail.map(\.id))
+        let overlapIndexes = local.indices.filter { tailIDs.contains(local[$0].id) }
+        // Prefix is everything before the earliest local id the tail contains.
+        // A suffix survives only when `tail.last` is already local, and only past
+        // the latest overlapping local index. Rows inside that span were omitted
+        // by the tail (a revert), including when the tail arrives out of order.
+        guard let earliestOverlap = overlapIndexes.min(), let latestOverlap = overlapIndexes.max() else {
             return tail
         }
-        let olderPrefix = Array(local.prefix(firstOverlap))
-        // Only rows newer than the tail's newest message survive (live arrivals the
-        // snapshot predates). When that message is not local, every local row past
-        // the overlap sits inside the tail's window, so the tail disproves it (a
-        // committed revert removed it on the server).
-        let tailIDs = Set(tail.map(\.id))
-        var newerSuffix: [Message] = []
-        if let newestID = tail.last?.id, let newestLocal = local.lastIndex(where: { $0.id == newestID }) {
-            newerSuffix = local.suffix(from: newestLocal + 1).filter { !tailIDs.contains($0.id) }
+        let olderPrefix = Array(local.prefix(earliestOverlap))
+        let newerSuffix: [Message]
+        if let newestID = tail.last?.id,
+           local.contains(where: { $0.id == newestID }),
+           latestOverlap + 1 < local.count {
+            newerSuffix = Array(local.suffix(from: latestOverlap + 1)).filter { !tailIDs.contains($0.id) }
+        } else {
+            newerSuffix = []
         }
         return olderPrefix + tail + newerSuffix
     }

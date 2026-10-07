@@ -128,6 +128,21 @@ struct MessageHistoryMergeTests {
         #expect(MessageHistoryMerge.shouldAcceptTail(remote: tail, local: local))
     }
 
+    @Test func reorderedTailDropsOmittedRowsBetweenOverlapIndexes() {
+        let local = [
+            message("A", role: .user),
+            message("reverted", role: .assistant),
+            message("C", role: .user),
+            message("sse", role: .assistant),
+        ]
+        let tail = [
+            message("C", role: .user),
+            message("A", role: .user),
+        ]
+
+        #expect(MessageHistoryMerge.applyTail(local: local, tail: tail).map(\.id) == ["C", "A", "sse"])
+    }
+
     @Test func tailWhoseNewTurnReplacedACachedRevertedTurnDropsIt() {
         let local = [
             message("u1", role: .user, text: "First prompt"),
