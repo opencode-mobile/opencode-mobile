@@ -205,8 +205,9 @@ dependencies {
     implementation(libs.androidx.camera.camera2)
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.view)
-    implementation(libs.androidx.camera.mlkit.vision)
-    implementation(libs.mlkit.barcode.scanning)
+    // QR pairing only. ZXing's QR reader stays in dex; bundled ML Kit barcode
+    // scanning would ship a multi-megabyte native model this screen never uses.
+    implementation(libs.zxing.core)
 
     releaseImplementation(platform(libs.firebase.bom))
     releaseImplementation(libs.firebase.crashlytics)
