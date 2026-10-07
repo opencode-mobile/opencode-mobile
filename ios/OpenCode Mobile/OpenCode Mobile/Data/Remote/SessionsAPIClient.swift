@@ -226,21 +226,6 @@ nonisolated struct SessionsAPIClient: Sendable {
         )
     }
 
-    func replyToQuestionV2(
-        sessionID: String,
-        questionID: String,
-        body: QuestionReplyRequestDTO
-    ) async throws -> Bool {
-        try await postEmpty(
-            path: "api/session/\(sessionID)/question/\(questionID)/reply",
-            body: body
-        )
-    }
-
-    func rejectQuestionV2(sessionID: String, questionID: String) async throws -> Bool {
-        try await postWithoutBody(path: "api/session/\(sessionID)/question/\(questionID)/reject")
-    }
-
     func replyToFormV2(sessionID: String, formID: String, body: V2FormReplyRequestDTO) async throws -> Bool {
         try await postEmpty(path: "api/session/\(sessionID)/form/\(formID)/reply", body: body)
     }

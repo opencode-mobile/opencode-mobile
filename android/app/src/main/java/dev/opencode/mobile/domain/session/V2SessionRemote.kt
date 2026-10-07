@@ -1,7 +1,6 @@
 package dev.opencode.mobile.domain.session
 
 import dev.opencode.mobile.data.remote.SessionsApi
-import dev.opencode.mobile.data.remote.dto.QuestionReplyRequestDto
 import dev.opencode.mobile.data.remote.dto.V2FormReplyRequestDto
 import dev.opencode.mobile.data.remote.dto.V2PermissionReplyRequestDto
 
@@ -175,15 +174,11 @@ internal class V2SessionRemote(
         questions: List<QuestionInfo>,
         directory: String?,
     ): Boolean =
-        if (requestId.startsWith("frm_")) {
-            api.replyToFormV2(
-                sessionId,
-                requestId,
-                V2FormReplyRequestDto(answer = adapter.formAnswer(questions, answers)),
-            )
-        } else {
-            api.replyToQuestionV2(sessionId, requestId, QuestionReplyRequestDto(answers = answers))
-        }
+        api.replyToFormV2(
+            sessionId,
+            requestId,
+            V2FormReplyRequestDto(answer = adapter.formAnswer(questions, answers)),
+        )
 
     override suspend fun rejectQuestion(
         requestId: String,
@@ -194,12 +189,7 @@ internal class V2SessionRemote(
         sessionId: String,
         requestId: String,
         directory: String?,
-    ): Boolean =
-        if (requestId.startsWith("frm_")) {
-            api.cancelFormV2(sessionId, requestId)
-        } else {
-            api.rejectQuestionV2(sessionId, requestId)
-        }
+    ): Boolean = api.cancelFormV2(sessionId, requestId)
 
     override suspend fun cancelPendingPrompt(
         sessionId: String,

@@ -652,6 +652,28 @@ struct ConnectionSetupViewModelTests {
         #expect(store.saved.last?.serverURLs.isEmpty == true)
     }
 
+    @Test func submit_pairingCodeSegment_customUsername_savesAndProbesAsOpencode() async {
+        let store = RecordingConnectionProfileStore()
+        let redeemer = ScriptedPairingRedeemer(token: "typed-token")
+        let probe = ScriptedHostProbe()
+        let viewModel = makePairingSetupViewModel(
+            probe: probe,
+            redeemer: redeemer,
+            store: store
+        )
+        viewModel.username = "alice"
+        viewModel.selectCredentialSegment(.pairingCode)
+        viewModel.baseURL = "http://10.0.0.8:4096/"
+        viewModel.pairingCode = "once-code"
+        let saved = await viewModel.submit()
+        #expect(saved == true)
+        #expect(redeemer.calls.count == 1)
+        #expect(store.saved.last?.username == "opencode")
+        let authenticated = probe.connections.filter { !($0.password ?? "").isEmpty }
+        #expect(authenticated.count == 1)
+        #expect(probe.connections.allSatisfy { $0.username == "opencode" })
+    }
+
     @Test func submit_pairingCodeSegment_blankCode_showsSnackbarWithoutRedeem() async {
         let store = RecordingConnectionProfileStore()
         let redeemer = ScriptedPairingRedeemer()
@@ -785,6 +807,11 @@ private final class ScriptedHostProbe: ConnectionProbing, @unchecked Sendable {
         lock.withLock { recorded }
     }
 
+    private var recordedConnections: [ServerConnection] = []
+    var connections: [ServerConnection] {
+        lock.withLock { recordedConnections }
+    }
+
     private let transportHosts: Set<String>
     private let defaultUnauthenticated: Result<ServerProtocol, Error>
     private let authenticated: Result<ServerProtocol, Error>
@@ -803,7 +830,10 @@ private final class ScriptedHostProbe: ConnectionProbing, @unchecked Sendable {
 
     func probe(connection: ServerConnection) async throws -> ServerProtocol {
         let url = connection.baseURL.absoluteString
-        lock.withLock { recorded.append(url) }
+        lock.withLock {
+            recorded.append(url)
+            recordedConnections.append(connection)
+        }
         if !(connection.password ?? "").isEmpty {
             return try authenticated.get()
         }

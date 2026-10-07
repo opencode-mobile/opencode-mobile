@@ -327,6 +327,8 @@ final class ConnectionSetupViewModel {
                 snackbar = OpenCodeSnackbarMessage(text: "Enter a pairing code", variant: .error)
                 return false
             }
+            // Typed codes redeem for user opencode. The username field is hidden here.
+            username = ConnectionProfile.formDefaults.username
             return await redeemThenSave(code: code)
         }
     }
