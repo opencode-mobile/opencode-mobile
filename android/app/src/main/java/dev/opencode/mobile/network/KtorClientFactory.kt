@@ -34,9 +34,11 @@ object KtorClientFactory {
          */
         sse: Boolean = false,
         probe: Boolean = false,
+        allowRedirects: Boolean = true,
     ): HttpClient {
         HttpEngineShutdownGuard.install()
         return HttpClient(OkHttp) {
+            followRedirects = allowRedirects
             engine {
                 config {
                     // Keep connect fail-fast. Read/call stay open so Ktor HttpTimeout (and

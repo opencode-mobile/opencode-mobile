@@ -2,11 +2,19 @@ package dev.opencode.mobile.network
 
 import dev.opencode.mobile.domain.connection.ConnectionProbing
 import dev.opencode.mobile.domain.connection.ConnectionProfile
+import dev.opencode.mobile.domain.connection.ConnectionProfileIdentity
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
+import dev.opencode.mobile.domain.connection.PairingQRPayload
+import dev.opencode.mobile.domain.connection.ProbeStatus
 import dev.opencode.mobile.domain.connection.ServerCapabilities
 import dev.opencode.mobile.domain.connection.ServerProtocol
+import dev.opencode.mobile.domain.connection.toProbeStatus
+import dev.opencode.mobile.domain.project.ServerProbeError
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import javax.inject.Singleton
@@ -23,15 +31,24 @@ class ActiveConnectionManager(
     private var probeFailed = false
 
     suspend fun ensureLoaded() {
-        mutex.withLock {
-            if (connection == null) {
-                bindLocked(connectionProfileStore.activeProfile())
+        val loaded =
+            mutex.withLock {
+                if (connection != null) return
+                connectionProfileStore.activeProfile()
             }
+        val resolved = loaded?.let { selectReachableAddress(it) }
+        mutex.withLock {
+            if (connection != null) return
+            persistAddressChange(loaded, resolved)
+            bindLocked(connectionProfileStore.activeProfile() ?: resolved)
         }
     }
 
     suspend fun reloadFromStore() {
+        val loaded = mutex.withLock { connectionProfileStore.activeProfile() }
+        val resolved = loaded?.let { selectReachableAddress(it) }
         mutex.withLock {
+            persistAddressChange(loaded, resolved)
             bindLocked(connectionProfileStore.activeProfile())
         }
     }
@@ -107,6 +124,7 @@ class ActiveConnectionManager(
         existing?.let { return it.await() }
 
         val current = connection
+        val probedProfile = profile
         val probing = connectionProbing
         if (current == null || probing == null) {
             val fallback = Result.success(ServerProtocol.V1)
@@ -118,7 +136,7 @@ class ActiveConnectionManager(
                 val detected = probing.probe(current)
                 mutex.withLock {
                     val active = connection
-                    if (active != null && active.hasSameIdentity(current)) {
+                    if (active != null && sameProfileDuringProbe(probedProfile, profile, active, current)) {
                         connection = active.withProtocol(detected)
                         persistLocked()
                         Result.success(detected)
@@ -152,11 +170,81 @@ class ActiveConnectionManager(
         profile: ConnectionProfile,
         serverProtocol: ServerProtocol? = null,
     ) {
+        val stamped = profile.copy(serverProtocol = serverProtocol ?: profile.serverProtocol)
+        val resolved = selectReachableAddress(stamped)
         mutex.withLock {
-            val stamped = profile.copy(serverProtocol = serverProtocol ?: profile.serverProtocol)
-            connectionProfileStore.saveProfile(stamped)
-            bindLocked(connectionProfileStore.activeProfile() ?: stamped)
+            connectionProfileStore.saveProfile(resolved)
+            bindLocked(connectionProfileStore.activeProfile() ?: resolved)
         }
+    }
+
+    /**
+     * Probe every saved address and keep the winner on the same profile id.
+     * Empty [ConnectionProfile.serverUrls] skips this and uses the stored baseUrl.
+     * If none answer, the stored baseUrl stays and the later single-URL probe fails as usual.
+     */
+    private suspend fun selectReachableAddress(profile: ConnectionProfile): ConnectionProfile {
+        if (profile.serverUrls.isEmpty() || connectionProbing == null) return profile
+        val urls = ConnectionProfileIdentity.normalizeServerUrls(profile.serverUrls)
+        if (urls.isEmpty()) return profile
+        val answered =
+            coroutineScope {
+                urls
+                    .map { url ->
+                        async {
+                            url to addressAnswered(profile, url)
+                        }
+                    }.awaitAll()
+                    .mapNotNull { (url, ok) -> url.takeIf { ok } }
+            }
+        val winner = PairingQRPayload.pickReachableUrl(answered) ?: return profile
+        val normalizedWinner = ConnectionProfileIdentity.normalizeBaseUrl(winner)
+        if (normalizedWinner == ConnectionProfileIdentity.normalizeBaseUrl(profile.baseUrl)) return profile
+        return profile.copy(baseUrl = normalizedWinner)
+    }
+
+    private suspend fun addressAnswered(
+        profile: ConnectionProfile,
+        url: String,
+    ): Boolean {
+        val probing = connectionProbing ?: return false
+        val connection = ServerConnection.fromProfile(profile.copy(baseUrl = url))
+        return try {
+            probing.probe(connection)
+            true
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: ServerProbeError) {
+            error.toProbeStatus() == ProbeStatus.AuthFailed
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
+    private suspend fun persistAddressChange(
+        loaded: ConnectionProfile?,
+        resolved: ConnectionProfile?,
+    ) {
+        if (loaded == null || resolved == null) return
+        if (
+            ConnectionProfileIdentity.normalizeBaseUrl(loaded.baseUrl) ==
+            ConnectionProfileIdentity.normalizeBaseUrl(resolved.baseUrl)
+        ) {
+            return
+        }
+        connectionProfileStore.saveProfile(resolved)
+    }
+
+    private fun sameProfileDuringProbe(
+        probed: ConnectionProfile?,
+        activeProfile: ConnectionProfile?,
+        active: ServerConnection,
+        probedConnection: ServerConnection,
+    ): Boolean {
+        if (probed != null && activeProfile != null) {
+            return probed.hasSameIdentity(activeProfile)
+        }
+        return active.hasSameIdentity(probedConnection)
     }
 
     private fun bindLocked(loaded: ConnectionProfile?) {

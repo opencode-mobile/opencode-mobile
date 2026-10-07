@@ -42,6 +42,20 @@ class ConnectionProfileCatalogTest {
         catalog.save(profile(baseUrl = "http://10.0.0.1:4096", username = "opencode"))
     }
 
+    @Test(expected = DuplicateConnectionProfileException::class)
+    fun saveRejectsSecondProfileUsingAnotherStoredAddress() {
+        val catalog =
+            ConnectionProfileCatalog().save(
+                profile(
+                    id = "home",
+                    baseUrl = "http://100.84.57.15:4096/",
+                    username = "opencode",
+                    serverUrls = listOf("http://192.168.0.160:4096/", "http://100.84.57.15:4096/"),
+                ),
+            )
+        catalog.save(profile(baseUrl = "http://192.168.0.160:4096/", username = "opencode"))
+    }
+
     @Test
     fun saveAllowsSameUrlDifferentUsername() {
         val catalog =
@@ -97,6 +111,7 @@ class ConnectionProfileCatalogTest {
         username: String = "opencode",
         name: String = "",
         id: String = "",
+        serverUrls: List<String> = emptyList(),
     ): ConnectionProfile =
         ConnectionProfile(
             baseUrl = baseUrl,
@@ -104,5 +119,6 @@ class ConnectionProfileCatalogTest {
             password = "secret",
             id = id,
             name = name,
+            serverUrls = serverUrls,
         )
 }

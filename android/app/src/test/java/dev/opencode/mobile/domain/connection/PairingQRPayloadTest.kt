@@ -1,6 +1,7 @@
 package dev.opencode.mobile.domain.connection
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -16,6 +17,7 @@ class PairingQRPayloadTest {
         assertEquals(listOf("http://192.168.0.160:4096/"), credentials.urls)
         assertEquals("opencode", credentials.username)
         assertEquals("secret", credentials.password)
+        assertNull(credentials.code)
     }
 
     @Test
@@ -41,25 +43,22 @@ class PairingQRPayloadTest {
     }
 
     @Test
-    fun pickReachableUrl_prefersFieldWhenReachable() {
+    fun pickReachableUrl_prefersTailscaleWhenItAnswered() {
         val picked =
             PairingQRPayload.pickReachableUrl(
-                fieldUrl = "http://192.168.0.160:4096/",
-                reachable =
-                    listOf(
-                        "http://192.168.0.160:4096/",
-                        "http://100.84.57.15:4096/",
-                    ),
+                listOf(
+                    "http://192.168.0.160:4096/",
+                    "http://100.84.57.15:4096/",
+                ),
             )
-        assertEquals("http://192.168.0.160:4096/", picked)
+        assertEquals("http://100.84.57.15:4096/", picked)
     }
 
     @Test
-    fun pickReachableUrl_fallsBackToTailscaleThenLan() {
+    fun pickReachableUrl_usesAnotherAddressWhenTailscaleDidNotAnswer() {
         val picked =
             PairingQRPayload.pickReachableUrl(
-                fieldUrl = "http://100.84.57.15:4096/",
-                reachable = listOf("http://192.168.0.160:4096/"),
+                listOf("http://192.168.0.160:4096/"),
             )
         assertEquals("http://192.168.0.160:4096/", picked)
     }
@@ -85,6 +84,79 @@ class PairingQRPayloadTest {
     fun parse_garbage_isInvalid() {
         val result = PairingQRPayload.parse("not-json")
         assertEquals(PairingQRParseResult.Failed(PairingQRError.InvalidPayload), result)
+    }
+
+    @Test
+    fun parse_connectLink_extractsOriginAndCode() {
+        val result = PairingQRPayload.parse(" http://192.168.1.2:49374/auth/connect/abc_DEF-123 ")
+        assertTrue(result is PairingQRParseResult.Ready)
+        val credentials = (result as PairingQRParseResult.Ready).credentials
+        assertEquals("http://192.168.1.2:49374/", credentials.baseUrl)
+        assertEquals(listOf("http://192.168.1.2:49374/"), credentials.urls)
+        assertEquals("abc_DEF-123", credentials.code)
+        assertEquals("opencode", credentials.username)
+        assertEquals("", credentials.password)
+    }
+
+    @Test
+    fun parse_codeJson_prefersTailscaleAndKeepsBothUrls() {
+        val raw =
+            """{"code":"abc_DEF-123","urls":["http://192.168.1.2:49374","http://100.64.0.3:49374"]}"""
+        val result = PairingQRPayload.parse(raw)
+        val credentials = (result as PairingQRParseResult.Ready).credentials
+        assertEquals("http://100.64.0.3:49374/", credentials.baseUrl)
+        assertEquals(
+            listOf("http://192.168.1.2:49374/", "http://100.64.0.3:49374/"),
+            credentials.urls,
+        )
+        assertEquals("abc_DEF-123", credentials.code)
+        assertEquals("opencode", credentials.username)
+        assertEquals("", credentials.password)
+    }
+
+    @Test
+    fun parse_codeJson_ignoresEmbeddedPassword() {
+        val raw =
+            """{"code":"abc_DEF-123","urls":["http://10.0.0.1:4096/"],"username":"other","password":"secret"}"""
+        val credentials = (PairingQRPayload.parse(raw) as PairingQRParseResult.Ready).credentials
+        assertEquals("opencode", credentials.username)
+        assertEquals("", credentials.password)
+        assertEquals("abc_DEF-123", credentials.code)
+    }
+
+    @Test
+    fun parse_codeJson_onlyLoopback_isUnreachable() {
+        val raw =
+            """{"code":"abc","urls":["http://127.0.0.1:4096","http://localhost:4096"]}"""
+        val result = PairingQRPayload.parse(raw)
+        assertEquals(PairingQRParseResult.Failed(PairingQRError.NoReachableUrl), result)
+    }
+
+    @Test
+    fun parse_newFormat_rejectsInvalidPayloads() {
+        val samples =
+            listOf(
+                "http://192.168.1.2:49374/auth/connect/",
+                "http://192.168.1.2:49374/auth/connect/abc/extra",
+                "http://192.168.1.2:49374/connect#abc",
+                "opencode-ios://auth/connect/abc",
+                "192.168.1.2:49374",
+                "http://user:pass@192.168.1.2:49374/auth/connect/abc_DEF-123",
+                "http://192.168.1.2:49374/auth/connect/abc_DEF-123?x=1",
+                "http://192.168.1.2:49374/auth/connect/abc_DEF-123#frag",
+                """{"code":"abc","urls":[]}""",
+                """{"code":"a/b","urls":["http://192.168.1.2:49374"]}""",
+                """{"code":"abc","urls":["opencode-ios://host"]}""",
+                """{"code":"abc","urls":["ftp://192.168.1.2:49374"]}""",
+                "{not json",
+            )
+        for (sample in samples) {
+            assertEquals(
+                sample,
+                PairingQRParseResult.Failed(PairingQRError.InvalidPayload),
+                PairingQRPayload.parse(sample),
+            )
+        }
     }
 
     @Test

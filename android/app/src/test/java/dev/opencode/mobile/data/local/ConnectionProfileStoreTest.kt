@@ -6,6 +6,8 @@ import dev.opencode.mobile.domain.connection.ConnectionProfileIdentity
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.SecureCredentialStore
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -139,6 +141,62 @@ class ConnectionProfileStoreTest {
             assertEquals(listOf("/home-repo"), store.addedWorktrees("http://10.0.0.1:4096/"))
             assertEquals(listOf("/work-repo"), store.addedWorktrees("http://10.0.0.2:4096/"))
         }
+
+    @Test
+    fun save_roundTripsServerUrls_andBaseUrlUpdateKeepsId() =
+        runTest {
+            val store = InMemoryConnectionProfileStore()
+            val lan = "http://192.168.0.160:4096/"
+            val tailscale = "http://100.84.57.15:4096/"
+            store.saveProfile(
+                ConnectionProfile(
+                    id = "home",
+                    baseUrl = lan,
+                    username = "opencode",
+                    password = "token",
+                    serverUrls = listOf("http://192.168.0.160:4096", tailscale),
+                ),
+            )
+            val saved = store.activeProfile()
+            assertEquals(listOf(lan, tailscale), saved?.serverUrls)
+            assertEquals("token", saved?.password)
+            store.saveProfile(saved!!.copy(baseUrl = tailscale))
+            val updated = store.activeProfile()
+            assertEquals("home", updated?.id)
+            assertEquals(tailscale, updated?.baseUrl)
+            assertEquals(listOf(lan, tailscale), updated?.serverUrls)
+            assertEquals("token", updated?.password)
+        }
+
+    @Test
+    fun storedCatalog_decodesMissingServerUrlsAsEmpty() {
+        val json = Json { ignoreUnknownKeys = true }
+        val decoded =
+            json.decodeFromString<StoredConnectionProfiles>(
+                """{"activeId":"home","profiles":[{"id":"home","baseUrl":"http://10.0.0.1:4096/","username":"opencode"}]}""",
+            )
+        assertEquals(emptyList<String>(), decoded.profiles.single().serverUrls)
+    }
+
+    @Test
+    fun storedCatalog_roundTripsServerUrls() {
+        val json = Json { ignoreUnknownKeys = true }
+        val original =
+            StoredConnectionProfiles(
+                activeId = "home",
+                profiles =
+                    listOf(
+                        StoredConnectionProfile(
+                            id = "home",
+                            baseUrl = "http://192.168.0.160:4096/",
+                            username = "opencode",
+                            serverUrls = listOf("http://192.168.0.160:4096/", "http://100.84.57.15:4096/"),
+                        ),
+                    ),
+            )
+        val decoded = json.decodeFromString<StoredConnectionProfiles>(json.encodeToString(original))
+        assertEquals(original.profiles.single().serverUrls, decoded.profiles.single().serverUrls)
+    }
 }
 
 /** Test double mirroring store semantics without DataStore. */
@@ -230,11 +288,11 @@ private class InMemoryConnectionProfileStore(
     private fun resolveProfile(serverBaseUrl: String): ConnectionProfile? {
         val normalized = ConnectionProfileIdentity.normalizeBaseUrl(serverBaseUrl)
         val active = catalog.activeProfile()
-        if (active != null && ConnectionProfileIdentity.normalizeBaseUrl(active.baseUrl) == normalized) {
+        if (active != null && normalized in ConnectionProfileIdentity.addressesOf(active)) {
             return active
         }
         return catalog.profiles.firstOrNull {
-            ConnectionProfileIdentity.normalizeBaseUrl(it.baseUrl) == normalized
+            normalized in ConnectionProfileIdentity.addressesOf(it)
         }
     }
 

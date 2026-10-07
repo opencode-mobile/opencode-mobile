@@ -5,6 +5,8 @@ struct PairingQRCredentials: Equatable, Sendable {
     var urls: [String]
     var username: String
     var password: String
+    /// One-time OpenCode v2 pairing code. Absent for password-bearing QR payloads.
+    var code: String? = nil
 }
 
 enum PairingQRError: Equatable, Sendable, Error {
@@ -17,16 +19,63 @@ enum PairingQRPayload {
         var urls: [String]
         var username: String?
         var password: String?
+        var code: String?
     }
 
+    private static let connectPathPrefix = "/auth/connect/"
+    private static let pairingCodeCharacters = CharacterSet(
+        charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-"
+    )
+
     static func parse(_ raw: String) -> Result<PairingQRCredentials, PairingQRError> {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.hasPrefix("{") {
+            return parseJSON(trimmed)
+        }
+        return parseConnectLink(trimmed)
+    }
+
+    static func preferredDisplayURL(_ urls: [String]) -> String {
+        urls.first { isTailscaleURL($0) } ?? urls[0]
+    }
+
+    /// Tailscale wins when it answered. Otherwise the first other answered address, in candidate order.
+    static func chooseAnsweredURL(candidates: [String], answered: [String]) -> String? {
+        let answeredSet = Set(answered.map { ConnectionProfileIdentity.normalizeBaseURL($0) })
+        let ordered = ConnectionProfileIdentity.normalizedAddressList(candidates)
+            .filter { answeredSet.contains($0) }
+        if let tailscale = ordered.first(where: { isTailscaleURL($0) }) {
+            return tailscale
+        }
+        return ordered.first
+    }
+
+    static func isTailscaleURL(_ raw: String) -> Bool {
+        guard let host = host(of: raw) else { return false }
+        if host == "ts.net" || host.hasSuffix(".ts.net") { return true }
+        if isCgnatIPv4(host) { return true }
+        return isTailscaleIPv6(host)
+    }
+
+    private static func parseJSON(_ raw: String) -> Result<PairingQRCredentials, PairingQRError> {
         guard let data = raw.data(using: .utf8),
               let wire = try? JSONDecoder().decode(Wire.self, from: data)
         else {
             return .failure(.invalidPayload)
         }
+        if let code = wire.code {
+            return parseCodePayload(code: code, urls: wire.urls)
+        }
+        return parseLegacy(urls: wire.urls, username: wire.username, password: wire.password)
+    }
+
+    private static func parseLegacy(
+        urls rawURLs: [String],
+        username: String?,
+        password: String?
+    ) -> Result<PairingQRCredentials, PairingQRError> {
         var seen = Set<String>()
-        let urls = wire.urls.compactMap { raw -> String? in
+        let urls = rawURLs.compactMap { raw -> String? in
             guard !isLoopback(raw), let url = normalizedBaseURL(raw) else { return nil }
             return seen.insert(url).inserted ? url : nil
         }
@@ -37,33 +86,112 @@ enum PairingQRPayload {
             PairingQRCredentials(
                 baseURL: preferredDisplayURL(urls),
                 urls: urls,
-                username: ConnectionProfileIdentity.normalizeUsername(wire.username ?? ""),
-                password: wire.password ?? ""
+                username: ConnectionProfileIdentity.normalizeUsername(username ?? ""),
+                password: password ?? "",
+                code: nil
             )
         )
     }
 
-    static func preferredDisplayURL(_ urls: [String]) -> String {
-        urls.first { isTailscaleURL($0) } ?? urls[0]
+    /// New CLI QR: a pairing `code` plus origin list. Any embedded password is ignored.
+    private static func parseCodePayload(
+        code: String,
+        urls rawURLs: [String]
+    ) -> Result<PairingQRCredentials, PairingQRError> {
+        guard isPairingCode(code) else {
+            return .failure(.invalidPayload)
+        }
+        guard !rawURLs.isEmpty else {
+            return .failure(.invalidPayload)
+        }
+        var seen = Set<String>()
+        var urls: [String] = []
+        for raw in rawURLs {
+            guard let origin = strictOrigin(raw) else {
+                return .failure(.invalidPayload)
+            }
+            if isLoopback(raw) { continue }
+            if seen.insert(origin).inserted {
+                urls.append(origin)
+            }
+        }
+        guard !urls.isEmpty else {
+            return .failure(.noReachableURL)
+        }
+        return .success(
+            PairingQRCredentials(
+                baseURL: preferredDisplayURL(urls),
+                urls: urls,
+                username: ConnectionProfileIdentity.normalizeUsername(""),
+                password: "",
+                code: code
+            )
+        )
     }
 
-    static func pickReachableURL(fieldURL: String, reachable: [String]) -> String? {
-        guard !reachable.isEmpty else { return nil }
-        let field = ConnectionProfileIdentity.normalizeBaseURL(fieldURL)
-        if let match = reachable.first(where: { ConnectionProfileIdentity.normalizeBaseURL($0) == field }) {
-            return match
+    private static func parseConnectLink(_ raw: String) -> Result<PairingQRCredentials, PairingQRError> {
+        guard let components = URLComponents(string: raw),
+              let scheme = components.scheme?.lowercased(),
+              scheme == "http" || scheme == "https",
+              components.user == nil,
+              components.password == nil,
+              components.query == nil,
+              components.fragment == nil,
+              let host = components.host,
+              !host.isEmpty,
+              let code = pairingCode(in: components.path),
+              let baseURL = origin(scheme: scheme, host: host, port: components.port)
+        else {
+            return .failure(.invalidPayload)
         }
-        if let tailscale = reachable.first(where: { isTailscaleURL($0) }) {
-            return tailscale
-        }
-        return reachable[0]
+        return .success(
+            PairingQRCredentials(
+                baseURL: baseURL,
+                urls: [baseURL],
+                username: ConnectionProfileIdentity.normalizeUsername(""),
+                password: "",
+                code: code
+            )
+        )
     }
 
-    static func isTailscaleURL(_ raw: String) -> Bool {
-        guard let host = host(of: raw) else { return false }
-        if host == "ts.net" || host.hasSuffix(".ts.net") { return true }
-        if isCgnatIPv4(host) { return true }
-        return isTailscaleIPv6(host)
+    private static func pairingCode(in path: String) -> String? {
+        guard path.hasPrefix(connectPathPrefix) else { return nil }
+        let code = String(path.dropFirst(connectPathPrefix.count))
+        guard isPairingCode(code) else { return nil }
+        return code
+    }
+
+    private static func isPairingCode(_ code: String) -> Bool {
+        !code.isEmpty && code.unicodeScalars.allSatisfy(pairingCodeCharacters.contains)
+    }
+
+    /// http(s) origin with no userinfo, query, fragment, or extra path.
+    private static func strictOrigin(_ raw: String) -> String? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let components = URLComponents(string: trimmed),
+              let scheme = components.scheme?.lowercased(),
+              scheme == "http" || scheme == "https",
+              components.user == nil,
+              components.password == nil,
+              components.query == nil,
+              components.fragment == nil,
+              components.path.isEmpty || components.path == "/",
+              let host = components.host,
+              !host.isEmpty
+        else {
+            return nil
+        }
+        return origin(scheme: scheme, host: host, port: components.port)
+    }
+
+    private static func origin(scheme: String, host: String, port: Int?) -> String? {
+        var components = URLComponents()
+        components.scheme = scheme
+        components.host = host
+        components.port = port
+        guard let value = components.string else { return nil }
+        return ConnectionProfileIdentity.normalizeBaseURL(value)
     }
 
     private static func normalizedBaseURL(_ raw: String) -> String? {

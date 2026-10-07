@@ -43,4 +43,52 @@ class ConnectionProfileIdentityTest {
         )
         assertFalse(original.hasSameIdentity(rotated))
     }
+
+    @Test
+    fun hasSameIdentity_trueWhenBaseUrlMovesWithinServerUrls() {
+        val lan = "http://192.168.0.160:4096/"
+        val tailscale = "http://100.84.57.15:4096/"
+        val original =
+            ConnectionProfile(
+                id = "profile-1",
+                baseUrl = lan,
+                username = "opencode",
+                password = "token",
+                serverUrls = listOf(lan, tailscale),
+            )
+        val moved = original.copy(baseUrl = tailscale)
+        assertTrue(original.hasSameIdentity(moved))
+    }
+
+    @Test
+    fun hasSameIdentity_falseWhenMovedBaseUrlChangesPassword() {
+        val lan = "http://192.168.0.160:4096/"
+        val tailscale = "http://100.84.57.15:4096/"
+        val original =
+            ConnectionProfile(
+                id = "profile-1",
+                baseUrl = lan,
+                username = "opencode",
+                password = "token",
+                serverUrls = listOf(lan, tailscale),
+            )
+        val moved = original.copy(baseUrl = tailscale, password = "other")
+        assertFalse(original.hasSameIdentity(moved))
+    }
+
+    @Test
+    fun hasSameIdentity_falseWhenBaseUrlIsOutsideServerUrls() {
+        val lan = "http://192.168.0.160:4096/"
+        val tailscale = "http://100.84.57.15:4096/"
+        val original =
+            ConnectionProfile(
+                id = "profile-1",
+                baseUrl = lan,
+                username = "opencode",
+                password = "token",
+                serverUrls = listOf(lan, tailscale),
+            )
+        val moved = original.copy(baseUrl = "http://10.0.0.9:4096/")
+        assertFalse(original.hasSameIdentity(moved))
+    }
 }

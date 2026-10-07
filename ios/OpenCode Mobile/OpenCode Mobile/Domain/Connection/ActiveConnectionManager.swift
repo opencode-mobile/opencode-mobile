@@ -10,6 +10,8 @@ final class ActiveConnectionManager: @unchecked Sendable {
     private var inFlightProbe: Task<Result<ServerProtocol, Error>, Never>?
     private var probeGeneration = 0
     private var probeFailed = false
+    private var addressResolution: Task<Void, Never>?
+    private var addressResolutionGeneration = 0
 
     init(
         connectionProbing: (any ConnectionProbing)? = nil,
@@ -40,7 +42,9 @@ final class ActiveConnectionManager: @unchecked Sendable {
         guard needsLoad else { return }
 
         if let profile = await store.activeProfile() {
-            apply(profile)
+            install(profile)
+            scheduleAddressResolution(for: profile, store: store)
+            await addressResolution?.value
         }
     }
 
@@ -48,12 +52,20 @@ final class ActiveConnectionManager: @unchecked Sendable {
         guard let store = profileStore else { return }
         if let profile = await store.activeProfile() {
             apply(profile)
+            await addressResolution?.value
         } else {
             disconnect()
         }
     }
 
     func apply(_ profile: ConnectionProfile, serverProtocol: ServerProtocol? = nil) {
+        install(profile, serverProtocol: serverProtocol)
+        if let store = profileStore {
+            scheduleAddressResolution(for: profile, store: store)
+        }
+    }
+
+    private func install(_ profile: ConnectionProfile, serverProtocol: ServerProtocol? = nil) {
         var stamped = profile
         stamped.serverProtocol = serverProtocol ?? profile.serverProtocol
         let connection = ServerConnection(profile: stamped, serverProtocol: stamped.serverProtocol)
@@ -63,6 +75,58 @@ final class ActiveConnectionManager: @unchecked Sendable {
         probeFailed = false
         lock.unlock()
         invalidateInFlightProbe()
+    }
+
+    /// Probes every saved address, then keeps the winner on the same profile id.
+    private func scheduleAddressResolution(for profile: ConnectionProfile, store: ConnectionProfileStore) {
+        lock.lock()
+        addressResolutionGeneration += 1
+        let generation = addressResolutionGeneration
+        lock.unlock()
+        let urls = ConnectionProfileIdentity.normalizedAddressList(profile.serverURLs)
+        guard !urls.isEmpty, let probing = connectionProbing else {
+            addressResolution = nil
+            return
+        }
+        addressResolution = Task { [self] in
+            await self.resolveSavedAddresses(
+                profile,
+                urls: urls,
+                probing: probing,
+                store: store,
+                generation: generation
+            )
+        }
+    }
+
+    private func resolveSavedAddresses(
+        _ profile: ConnectionProfile,
+        urls: [String],
+        probing: any ConnectionProbing,
+        store: ConnectionProfileStore,
+        generation: Int
+    ) async {
+        let outcomes = await ServerAddressProbe.probe(
+            urls: urls,
+            username: profile.username,
+            password: profile.password,
+            probing: probing
+        )
+        let answered = outcomes.compactMap { url, result in
+            ServerAddressProbe.hostAnswered(result) ? url : nil
+        }
+        let winner = PairingQRPayload.chooseAnsweredURL(candidates: urls, answered: answered)
+        lock.lock()
+        let current = addressResolutionGeneration == generation
+        lock.unlock()
+        guard current, let winner else { return }
+        guard ConnectionProfileIdentity.normalizeBaseURL(winner)
+            != ConnectionProfileIdentity.normalizeBaseURL(profile.baseURL)
+        else { return }
+        var updated = profile
+        updated.baseURL = winner
+        install(updated, serverProtocol: updated.serverProtocol)
+        try? await store.saveProfile(updated)
     }
 
     func applyConnection(_ connection: ServerConnection) {
@@ -221,10 +285,12 @@ final class ActiveConnectionManager: @unchecked Sendable {
 
     func disconnect() {
         lock.lock()
+        addressResolutionGeneration += 1
         _connection = nil
         _profile = nil
         probeFailed = false
         lock.unlock()
+        addressResolution = nil
         invalidateInFlightProbe()
     }
 

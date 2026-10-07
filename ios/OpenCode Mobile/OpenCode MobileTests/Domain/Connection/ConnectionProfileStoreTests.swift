@@ -60,6 +60,55 @@ struct ConnectionProfileStoreTests {
         #expect(await store.addedWorktrees(serverBaseURL: server) == ["/a", "/c"])
     }
 
+    @Test func save_roundTripsServerURLs_andKeepsIdWhenBaseURLChanges() async throws {
+        let defaults = isolatedDefaults()
+        let store = UserDefaultsConnectionProfileStore(
+            defaults: defaults,
+            secureCredentialStore: InMemorySecureCredentialStore()
+        )
+        let lan = "http://192.168.1.2:49374/"
+        let tailscale = "http://100.64.0.3:49374"
+        try await store.saveProfile(
+            ConnectionProfile(
+                baseURL: lan,
+                serverURLs: [lan, tailscale],
+                username: "opencode",
+                password: "token",
+                id: "profile-1",
+                name: "Mac"
+            )
+        )
+        let loaded = await store.activeProfile()
+        #expect(loaded?.id == "profile-1")
+        #expect(loaded?.serverURLs == [lan, "http://100.64.0.3:49374/"])
+        #expect(loaded?.password == "token")
+
+        var updated = try #require(loaded)
+        updated.baseURL = tailscale
+        try await store.saveProfile(updated)
+        let again = await store.activeProfile()
+        #expect(again?.id == "profile-1")
+        #expect(again?.baseURL == "http://100.64.0.3:49374/")
+        #expect(again?.serverURLs == [lan, "http://100.64.0.3:49374/"])
+        #expect(await store.listProfiles().count == 1)
+    }
+
+    @Test func load_missingServerURLs_decodesAsEmpty() async {
+        let defaults = isolatedDefaults()
+        let json = """
+        {"activeId":"p","profiles":[{"id":"p","name":"Home","baseURL":"http://10.0.0.1:4096/","username":"opencode"}]}
+        """
+        defaults.set(Data(json.utf8), forKey: "connection_profiles_v2")
+        let store = UserDefaultsConnectionProfileStore(
+            defaults: defaults,
+            secureCredentialStore: InMemorySecureCredentialStore()
+        )
+        let loaded = await store.activeProfile()
+        #expect(loaded?.id == "p")
+        #expect(loaded?.baseURL == "http://10.0.0.1:4096/")
+        #expect(loaded?.serverURLs.isEmpty == true)
+    }
+
     @Test func removeWorktree_dropsLegacyUrlKeyedPathsAfterProfileExists() async throws {
         let defaults = isolatedDefaults()
         let store = UserDefaultsConnectionProfileStore(

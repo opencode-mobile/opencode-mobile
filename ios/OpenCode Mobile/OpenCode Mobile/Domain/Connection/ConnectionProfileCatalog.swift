@@ -19,16 +19,11 @@ struct ConnectionProfileCatalog: Equatable, Sendable {
         var stored = profile
         stored.id = id
         stored.baseURL = normalizedURL
+        stored.serverURLs = ConnectionProfileIdentity.normalizedAddressList(profile.serverURLs)
         stored.username = username
         stored.name = profile.name.trimmingCharacters(in: .whitespacesAndNewlines)
         if let conflict = profiles.first(where: { existing in
-            existing.id != id
-                && ConnectionProfileIdentity.sameConnectionIdentity(
-                    leftURL: existing.baseURL,
-                    leftUsername: existing.username,
-                    rightURL: stored.baseURL,
-                    rightUsername: stored.username
-                )
+            existing.id != id && ConnectionProfileIdentity.sameSavedServer(existing, stored)
         }) {
             throw DuplicateConnectionProfileException(conflictingId: conflict.id)
         }

@@ -2,6 +2,8 @@ import Foundation
 
 nonisolated struct ConnectionProfile: Equatable, Sendable {
     var baseURL: String
+    /// Every non-loopback address from a QR. Empty for a typed connection.
+    var serverURLs: [String] = []
     var username: String
     var password: String
     var serverProtocol: ServerProtocol?
