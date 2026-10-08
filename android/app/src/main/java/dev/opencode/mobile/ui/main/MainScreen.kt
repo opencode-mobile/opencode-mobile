@@ -1021,14 +1021,16 @@ internal fun List<ProjectSectionUi>.toCrossProjectSessionListSessions(): List<Se
         }
 }
 
-private fun List<ProjectSectionUi>.toHomeChromeProjects(): List<SessionListHomeChrome.Project> =
-    map { section ->
+internal fun List<ProjectSectionUi>.toHomeChromeProjects(): List<SessionListHomeChrome.Project> {
+    val counts = toCrossProjectSessionListSessions().groupingBy { it.worktree }.eachCount()
+    return map { section ->
         SessionListHomeChrome.Project(
             worktree = section.worktree,
             title = section.displayName,
-            sessionCount = section.allSessions.size,
+            sessionCount = counts[section.worktree] ?: 0,
         )
     }
+}
 
 @Suppress("UNUSED_PARAMETER")
 private fun SessionSummary.toSessionListStatus(hasPendingPermission: Boolean = false): SessionListStatus =

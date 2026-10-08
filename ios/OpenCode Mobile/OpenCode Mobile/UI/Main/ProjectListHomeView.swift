@@ -890,15 +890,14 @@ extension Array where Element == ProjectSectionItem {
             )
         }
     }
-}
 
-private extension Array where Element == ProjectSectionItem {
     func homeChromeProjects() -> [SessionListHomeChrome.Project] {
-        map { section in
+        let counts = Dictionary(grouping: crossProjectSessionListSessions(), by: \.worktree).mapValues(\.count)
+        return map { section in
             SessionListHomeChrome.Project(
                 worktree: section.worktree,
                 title: section.displayName,
-                sessionCount: section.allSessions.count
+                sessionCount: counts[section.worktree] ?? 0
             )
         }
     }

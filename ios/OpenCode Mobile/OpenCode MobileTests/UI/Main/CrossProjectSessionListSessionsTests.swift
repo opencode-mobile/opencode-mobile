@@ -80,6 +80,25 @@ struct CrossProjectSessionListSessionsTests {
         #expect(newerFirst.first?.updatedAtEpochMs == 30)
     }
 
+    @Test func projectCounts_followTheWinningWorktree() {
+        let sections = [
+            section(
+                worktree: "/earlier",
+                session(id: "shared", title: "older", updatedAtEpochMs: 10),
+                session(id: "local", title: "stays", updatedAtEpochMs: 5)
+            ),
+            section(worktree: "/later", session(id: "shared", title: "newer", updatedAtEpochMs: 20)),
+            section(worktree: "/empty-after-dedupe", session(id: "shared", title: "oldest", updatedAtEpochMs: 1)),
+        ]
+        let counts = Dictionary(
+            uniqueKeysWithValues: sections.homeChromeProjects().map { ($0.worktree, $0.sessionCount) }
+        )
+
+        #expect(counts["/earlier"] == 1)
+        #expect(counts["/later"] == 1)
+        #expect(counts["/empty-after-dedupe"] == 0)
+    }
+
     private func section(worktree: String, _ sessions: SessionListItem...) -> ProjectSectionItem {
         ProjectSectionItem(
             id: worktree,

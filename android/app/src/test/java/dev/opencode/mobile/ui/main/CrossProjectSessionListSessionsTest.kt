@@ -96,6 +96,25 @@ class CrossProjectSessionListSessionsTest {
         assertEquals(30L, newerFirst.single().updatedAtEpochMs)
     }
 
+    @Test
+    fun projectCounts_followTheWinningWorktree() {
+        val sections =
+            listOf(
+                section(
+                    worktree = "/earlier",
+                    session(id = "shared", title = "older", updatedAtEpochMs = 10L),
+                    session(id = "local", title = "stays", updatedAtEpochMs = 5L),
+                ),
+                section(worktree = "/later", session(id = "shared", title = "newer", updatedAtEpochMs = 20L)),
+                section(worktree = "/empty-after-dedupe", session(id = "shared", title = "oldest", updatedAtEpochMs = 1L)),
+            )
+        val counts = sections.toHomeChromeProjects().associate { it.worktree to it.sessionCount }
+
+        assertEquals(1, counts["/earlier"])
+        assertEquals(1, counts["/later"])
+        assertEquals(0, counts["/empty-after-dedupe"])
+    }
+
     private fun section(
         worktree: String,
         vararg sessions: SessionSummary,
