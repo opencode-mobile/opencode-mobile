@@ -983,13 +983,28 @@ private fun HomeProjectsContent(
     }
 }
 
-private fun List<ProjectSectionUi>.toCrossProjectSessionListSessions(): List<SessionListSession> =
-    flatMap { section ->
-        section.allSessions.map { session ->
-            section to session
+internal fun List<ProjectSectionUi>.toCrossProjectSessionListSessions(): List<SessionListSession> {
+    val flattened =
+        flatMap { section ->
+            section.allSessions.map { session -> section to session }
         }
-    }.sortedByDescending { (_, session) -> session.updatedAtEpochMs ?: 0L }
-        .map { (section, session) ->
+    val chosenIndexById = mutableMapOf<String, Int>()
+    flattened.forEachIndexed { index, (_, session) ->
+        val timestamp = session.updatedAtEpochMs ?: 0L
+        val chosenIndex = chosenIndexById[session.id]
+        val chosenTimestamp = chosenIndex?.let { flattened[it].second.updatedAtEpochMs ?: 0L }
+        if (chosenTimestamp == null || timestamp > chosenTimestamp) {
+            chosenIndexById[session.id] = index
+        }
+    }
+    return chosenIndexById.values
+        .sortedWith(
+            compareByDescending<Int> { index ->
+                flattened[index].second.updatedAtEpochMs ?: 0L
+            }.thenBy { index -> index },
+        )
+        .map { index ->
+            val (section, session) = flattened[index]
             SessionListSession(
                 id = session.id,
                 title = session.title,
@@ -1004,6 +1019,7 @@ private fun List<ProjectSectionUi>.toCrossProjectSessionListSessions(): List<Ses
                 statusStale = session.statusStale,
             )
         }
+}
 
 private fun List<ProjectSectionUi>.toHomeChromeProjects(): List<SessionListHomeChrome.Project> =
     map { section ->
