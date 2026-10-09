@@ -180,15 +180,9 @@ nonisolated struct EventDomainAdapter: Sendable {
              "session.execution.interrupted":
             [event(type: "session.idle", properties: properties)]
         case "session.next.step.failed", "session.execution.failed":
-            [
-                event(type: "session.error", properties: properties),
-                event(type: "session.idle", properties: properties),
-            ]
+            failedStepEvents(properties, idle: true)
         case "session.step.failed":
-            [
-                event(type: "session.error", properties: properties),
-                assistantMessageUpdated(properties, finish: failedStepFinish(properties)),
-            ].compactMap { $0 }
+            failedStepEvents(properties, idle: false)
         case "session.next.retried", "session.retry.scheduled":
             [statusEvent(properties, statusType: "retry")]
         case "session.next.tool.input.started", "session.tool.input.started",
@@ -217,9 +211,11 @@ nonisolated struct EventDomainAdapter: Sendable {
             compactionUpdated(properties, envelopeID: envelopeID, phase: .ended)
         case "session.next.compaction.failed", "session.compaction.failed":
             compactionUpdated(properties, envelopeID: envelopeID, phase: .failed) + [
-                event(type: "session.error", properties: properties),
+                structuredErrorInfo(properties) == nil
+                    ? event(type: "session.error", properties: properties)
+                    : nil,
                 event(type: "session.idle", properties: properties),
-            ]
+            ].compactMap { $0 }
         case "session.revert.committed":
             [revertCommitted(properties)].compactMap { $0 }
         case "session.next.reasoning.started", "session.reasoning.started":
@@ -479,11 +475,46 @@ nonisolated struct EventDomainAdapter: Sendable {
         return ToolInterruption.isAbortedType(type) ? "aborted" : "error"
     }
 
+    private func failedStepEvents(_ properties: [String: Any], idle: Bool) -> [OpencodeEvent] {
+        let error = structuredErrorInfo(properties)
+        let updated = assistantMessageUpdated(properties, finish: failedStepFinish(properties), error: error)
+        return [
+            updated,
+            (updated == nil || error == nil) ? event(type: "session.error", properties: properties) : nil,
+            idle ? event(type: "session.idle", properties: properties) : nil,
+        ].compactMap { $0 }
+    }
+
+    /// v2 structured error translated into the v1 `{name, data}` shape the message store already decodes.
+    private func structuredErrorInfo(_ properties: [String: Any]) -> [String: Any]? {
+        guard let error = properties["error"] as? [String: Any] else { return nil }
+        let type = string(in: error, key: "type")
+        if SessionFailure.isSilent(type: type) { return nil }
+        let message = SessionFailure.unwrap(string(in: error, key: "message"))
+        let body = (error["response"] as? [String: Any]).flatMap { string(in: $0, key: "body") }
+        let status = int64(in: error, key: "status").map { Int($0) }
+        if message.isEmpty && status == nil && (body?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+            && (type?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+        {
+            return nil
+        }
+        var data: [String: Any] = [:]
+        if !message.isEmpty { data["message"] = message }
+        if let status { data["statusCode"] = status }
+        if let body, !body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            data["responseBody"] = body
+        }
+        var info: [String: Any] = ["data": data]
+        if let type { info["name"] = type }
+        return info
+    }
+
     private func assistantMessageUpdated(
         _ properties: [String: Any],
         stampCreated: Bool = false,
         finish: String? = nil,
-        withAgentAndModel: Bool = false
+        withAgentAndModel: Bool = false,
+        error: [String: Any]? = nil
     ) -> OpencodeEvent? {
         guard let assistantID = string(in: properties, key: "assistantMessageID") ?? string(in: properties, key: "messageID") else {
             return nil
@@ -507,6 +538,12 @@ nonisolated struct EventDomainAdapter: Sendable {
                 if let providerID = string(in: model, key: "providerID") { info["providerID"] = providerID }
                 if let variant = string(in: model, key: "variant") { info["variant"] = variant }
             }
+        }
+        if let error {
+            info["error"] = error
+        } else if let finish, finish.lowercased() != "error" {
+            // A later successful or aborted step must drop a failure kept from a partial info.
+            info["error"] = NSNull()
         }
         return event(type: "message.updated", properties: ["info": info])
     }
@@ -533,8 +570,13 @@ nonisolated struct EventDomainAdapter: Sendable {
             }
         }
         let errorObject = properties["error"] as? [String: Any]
-        let error = errorObject?["message"] as? String
+        let unwrapped = SessionFailure.unwrap(errorObject?["message"] as? String)
+        let error = unwrapped.isEmpty ? nil : unwrapped
         let interrupted = status == "error" && ToolInterruption.isAbortedType(errorObject?["type"] as? String)
+        let malformed = SessionFailure.isMalformedTool(
+            type: errorObject?["type"] as? String,
+            executed: boolValue(properties["executed"])
+        )
         let metadata = toolMetadata(properties)
         // v2 `tool.progress` carries the live title in metadata (v1: state.title).
         let title = (metadata?["title"] as? String).flatMap { $0.isEmpty ? nil : $0 }
@@ -550,7 +592,8 @@ nonisolated struct EventDomainAdapter: Sendable {
             error: error,
             metadata: metadata,
             title: title,
-            interrupted: interrupted
+            interrupted: interrupted,
+            malformed: malformed
         )
     }
 
@@ -637,6 +680,9 @@ nonisolated struct EventDomainAdapter: Sendable {
             info["sessionID"] = sessionID
             part["sessionID"] = sessionID
         }
+        if phase == .failed, let error = structuredErrorInfo(properties) {
+            info["error"] = error
+        }
         if phase == .started, let created = int64(in: properties, key: "created") {
             info["time"] = ["created": created]
         }
@@ -677,10 +723,12 @@ nonisolated struct EventDomainAdapter: Sendable {
         error: String? = nil,
         metadata: [String: Any]? = nil,
         title: String? = nil,
-        interrupted: Bool = false
+        interrupted: Bool = false,
+        malformed: Bool = false
     ) -> OpencodeEvent {
         var state: [String: Any] = ["status": status]
         if interrupted { state["interrupted"] = true }
+        if malformed { state["malformed"] = true }
         if let title { state["title"] = title }
         if let input { state["input"] = input }
         if let output { state["output"] = output }
@@ -816,19 +864,26 @@ nonisolated struct EventDomainAdapter: Sendable {
         {
             status["attempt"] = attempt
         }
-        if let nextAt = int64(in: properties, key: "nextAtMs")
-            ?? int64(in: properties, key: "nextAt")
-            ?? int64(in: properties, key: "next")
-            ?? nested.flatMap({ int64(in: $0, key: "nextAtMs") })
-            ?? nested.flatMap({ int64(in: $0, key: "nextAt") })
+        if let nextAt = nested.flatMap({ int64(in: $0, key: "at") })
             ?? nested.flatMap({ int64(in: $0, key: "next") })
+            ?? nested.flatMap({ int64(in: $0, key: "nextAt") })
+            ?? nested.flatMap({ int64(in: $0, key: "nextAtMs") })
+            ?? int64(in: properties, key: "at")
+            ?? int64(in: properties, key: "next")
+            ?? int64(in: properties, key: "nextAt")
+            ?? int64(in: properties, key: "nextAtMs")
         {
             status["nextAtMs"] = nextAt
         }
-        if let message = string(in: properties, key: "message")
-            ?? nested.flatMap({ string(in: $0, key: "message") })
+        let nestedError = (properties["error"] as? [String: Any]).flatMap { string(in: $0, key: "message") }
+            ?? nested.flatMap { ($0["error"] as? [String: Any]).flatMap { string(in: $0, key: "message") } }
+        if let message = nested.flatMap({ string(in: $0, key: "message") })
+            ?? string(in: properties, key: "message")
         {
             status["message"] = message
+        } else if let nestedError {
+            let unwrapped = SessionFailure.unwrap(nestedError)
+            if !unwrapped.isEmpty { status["message"] = unwrapped }
         }
         var projected: [String: Any] = ["status": status]
         if let sessionID = sessionID(from: properties) {
@@ -918,6 +973,17 @@ nonisolated struct EventDomainAdapter: Sendable {
             value.stringValue
         case let value as Int:
             String(value)
+        default:
+            nil
+        }
+    }
+
+    private func boolValue(_ value: Any?) -> Bool? {
+        switch value {
+        case let value as Bool:
+            value
+        case let value as NSNumber:
+            value.boolValue
         default:
             nil
         }

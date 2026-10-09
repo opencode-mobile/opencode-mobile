@@ -276,7 +276,7 @@ final class SessionInfo {
                     "live status session=\(state.sessionID) seeded=\(snapshot.seeded)"
                 )
                 state.applyStatus(
-                    authoritative: snapshot.statusLabel(for: state.sessionID),
+                    authoritative: snapshot.chatStatusLabel(for: state.sessionID),
                     hasResolved: snapshot.seeded
                 )
                 notifyChange()

@@ -649,6 +649,7 @@ private fun SessionChatMessageItem.outgoingContent(): List<OpenCodeOutgoingMessa
             is SessionChatTimelineBlock.Reasoning,
             is SessionChatTimelineBlock.StepParagraph,
             is SessionChatTimelineBlock.StopNote,
+            is SessionChatTimelineBlock.FailureLine,
             -> null
         }
     }
@@ -790,6 +791,8 @@ private fun AssistantMessageContent(
                                     MessageStopReason.Interrupted -> OpenCodeMessageNoteVariant.Interrupted
                                 },
                         )
+                    is SessionChatTimelineBlock.FailureLine ->
+                        FailureLineBlock(block = block, onToolDetailTap = onToolDetailTap)
                     is SessionChatTimelineBlock.StepParagraph ->
                         StepParagraphBlock(
                             block = block,
@@ -823,6 +826,36 @@ private fun AssistantMessageContent(
             }
         }
     }
+}
+
+@Composable
+private fun FailureLineBlock(
+    block: SessionChatTimelineBlock.FailureLine,
+    onToolDetailTap: (SessionChatToolDetailTarget) -> Unit,
+) {
+    val body = block.providerBody
+    Text(
+        text = block.text,
+        style = MaterialTheme.typography.bodySmall,
+        color = openCodeColor(if (block.isNeutral) "text-weak" else "error"),
+        modifier =
+            Modifier
+                .padding(horizontal = 4.dp)
+                .then(
+                    if (body.isNullOrBlank()) {
+                        Modifier
+                    } else {
+                        Modifier.clickable {
+                            onToolDetailTap(
+                                SessionChatToolDetailTarget(
+                                    title = "Provider response",
+                                    body = body,
+                                ),
+                            )
+                        }
+                    },
+                ),
+    )
 }
 
 private const val STEP_PARAGRAPH_PLACEHOLDER = "Worked without commentary"

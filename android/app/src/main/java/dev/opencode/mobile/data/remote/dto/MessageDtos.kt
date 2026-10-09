@@ -120,6 +120,8 @@ data class MessageToolStateDto(
     val metadata: JsonObject? = null,
     /** Set by the v2 live projection when `tool.failed` reports `error.type: "aborted"`. */
     val interrupted: Boolean? = null,
+    /** Set when the server closed the call without running it (`executed: false`). */
+    val malformed: Boolean? = null,
 )
 
 @Serializable

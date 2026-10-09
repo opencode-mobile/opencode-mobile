@@ -73,6 +73,17 @@ enum SessionActivity: Sendable, Equatable {
         }
     }
 
+    /// In-chat label. The home list keeps `statusLabel` ("Retrying · N") because
+    /// it parses the attempt off that exact prefix.
+    var chatStatusLabel: String? {
+        guard case let .retrying(_, _, message) = self else { return statusLabel }
+        let base = statusLabel
+        guard let reason = message?.trimmingCharacters(in: .whitespacesAndNewlines), !reason.isEmpty else {
+            return base
+        }
+        return "\(base ?? "Retrying") · \(reason.prefix(80))"
+    }
+
     init(raw: [String: String]) {
         switch raw["type"]?.lowercased() {
         case "busy", "running":
@@ -120,6 +131,12 @@ struct SessionActivitySnapshot: Sendable, Equatable {
         guard let entry = entries[sessionID] else { return nil }
         guard seeded || entry.source == .cached else { return nil }
         return entry.activity.statusLabel
+    }
+
+    func chatStatusLabel(for sessionID: String) -> String? {
+        guard let entry = entries[sessionID] else { return nil }
+        guard seeded || entry.source == .cached else { return nil }
+        return entry.activity.chatStatusLabel
     }
 
     func isBusy(for sessionID: String) -> Bool {

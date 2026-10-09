@@ -24,6 +24,27 @@ struct ServerErrorMessageTests {
         #expect(ServerErrorMessage.fromBody(#"{"message":""}"#) == nil)
     }
 
+    @Test func knownTags_useFixedCopy() {
+        #expect(
+            ServerErrorMessage.userFacing(#"{"_tag":"UnauthorizedError","message":"nope"}"#)
+                == "Pairing expired, pair again"
+        )
+        #expect(
+            ServerErrorMessage.userFacing(#"{"_tag":"LocationNotFoundError","location":"/repo"}"#)
+                == "Folder or file not found · /repo"
+        )
+        #expect(
+            ServerErrorMessage.userFacing(#"{"_tag":"SessionBusyError","sessionID":"ses-1"}"#)
+                == "Session is busy"
+        )
+        #expect(
+            ServerErrorMessage.userFacing(
+                #"{"_tag":"UnknownError","message":"Something went wrong","ref":"ref-9"}"#
+            ) == "Something went wrong (ref-9)"
+        )
+        #expect(ServerErrorMessage.userFacing(#"{"_tag":"InvalidRequestError","message":"Missing key"}"#) == nil)
+    }
+
     @Test func interactionReplyError_copy() {
         let form = SessionError.http(
             statusCode: 400,

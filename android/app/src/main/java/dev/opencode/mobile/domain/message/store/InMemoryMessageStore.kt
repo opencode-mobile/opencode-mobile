@@ -1057,6 +1057,7 @@ class InMemoryMessageStore
                             metadata = mergeJson(existing.metadata, incoming.metadata),
                             timeStartEpochMs = incoming.timeStartEpochMs ?: existing.timeStartEpochMs,
                             isInterrupted = incoming.isInterrupted,
+                            isMalformed = incoming.isMalformed || existing.isMalformed,
                         )
                     }
                     existing is MessagePart.Text && incoming is MessagePart.Text -> {
@@ -1209,7 +1210,7 @@ class InMemoryMessageStore
                 json.decodeFromJsonElement<MessageInfoDto>(jsonObject)
             }.getOrNull()
 
-        private fun Message.hasRenderableContent(): Boolean = text.isNotBlank() || parts.isNotEmpty()
+        private fun Message.hasRenderableContent(): Boolean = text.isNotBlank() || parts.isNotEmpty() || failure != null
 
         companion object {
             private val AGENT_KEYS = listOf("agent", "mode")

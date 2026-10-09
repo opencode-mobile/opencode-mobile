@@ -65,6 +65,17 @@ sealed class SessionActivity {
             Running -> "Working"
             is Retrying -> if (attempt != null) "Retrying · $attempt" else "Retrying"
         }
+
+    /**
+     * In-chat label. The home list keeps [statusLabel] ("Retrying · N") because
+     * it parses the attempt off that exact prefix.
+     */
+    fun chatStatusLabel(): String? {
+        val base = statusLabel()
+        if (this !is Retrying) return base
+        val reason = message?.trim()?.take(80)?.takeIf { it.isNotEmpty() } ?: return base
+        return "${base ?: "Retrying"} · $reason"
+    }
 }
 
 enum class SessionActivitySource {

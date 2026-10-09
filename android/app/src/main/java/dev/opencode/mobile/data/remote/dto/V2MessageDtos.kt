@@ -18,6 +18,8 @@ data class V2SessionMessageDto(
     val cost: Double? = null,
     val tokens: MessageTokensDto? = null,
     val error: V2UnknownErrorDto? = null,
+    val outcome: String? = null,
+    val retry: V2RetryDto? = null,
     val finish: String? = null,
     val time: V2MessageTimeDto? = null,
     val reason: String? = null,
@@ -47,6 +49,21 @@ data class V2ModelRefDto(
 data class V2UnknownErrorDto(
     val type: String? = null,
     val message: String? = null,
+    val status: Int? = null,
+    val response: V2ErrorResponseDto? = null,
+)
+
+@Serializable
+data class V2ErrorResponseDto(
+    val body: String? = null,
+)
+
+/** In-progress retry on an assistant message. The working label reads the live event, not this field. */
+@Serializable
+data class V2RetryDto(
+    val attempt: Int? = null,
+    val at: Long? = null,
+    val error: V2UnknownErrorDto? = null,
 )
 
 @Serializable
@@ -99,6 +116,7 @@ data class V2ToolStateDto(
     val input: JsonElement? = null,
     val content: List<V2ToolContentDto> = emptyList(),
     val error: V2UnknownErrorDto? = null,
+    val executed: Boolean? = null,
     val structured: JsonObject? = null,
     val metadata: JsonObject? = null,
 )

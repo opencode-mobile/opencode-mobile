@@ -15,7 +15,39 @@ object ServerErrorMessage {
     private const val MAX_LENGTH = 200
     private val json = Json { ignoreUnknownKeys = true }
 
-    fun from(error: Throwable): String? = (error as? SessionError.Http)?.body?.let(::fromBody)
+    fun from(error: Throwable): String? = (error as? SessionError.Http)?.body?.let(::userFacing)
+
+    /**
+     * Copy for a non-2xx JSON body. Known tags get a fixed sentence. Schema
+     * failures stay hidden. Other tags use [fromBody].
+     */
+    fun userFacing(body: String?): String? {
+        val trimmed = body?.trim().orEmpty()
+        if (!trimmed.startsWith("{")) return null
+        val root = runCatching { json.parseToJsonElement(trimmed) as? JsonObject }.getOrNull() ?: return null
+        val tag = root.string("_tag") ?: root.string("name")
+        val data = root["data"] as? JsonObject
+        return when (tag) {
+            "InvalidRequestError" -> null
+            "UnauthorizedError" -> "Pairing expired, pair again"
+            "LocationNotFoundError", "FileNotFoundError" -> {
+                val path = root.string("path") ?: root.string("location") ?: data?.string("path") ?: data?.string("location")
+                if (path.isNullOrBlank()) "Folder or file not found" else "Folder or file not found · $path"
+            }
+            "SessionBusyError", "BusyError" -> "Session is busy"
+            "UnknownError" -> {
+                val ref = root.string("ref") ?: data?.string("ref")
+                val message = fromBody(trimmed)
+                when {
+                    message != null && !ref.isNullOrBlank() -> "$message ($ref)"
+                    message != null -> message
+                    !ref.isNullOrBlank() -> ref
+                    else -> null
+                }
+            }
+            else -> fromBody(trimmed)
+        }
+    }
 
     fun fromBody(body: String?): String? {
         val trimmed = body?.trim().orEmpty()

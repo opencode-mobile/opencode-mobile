@@ -1232,6 +1232,36 @@ class EventDomainAdapterTest {
             SessionActivity.Retrying(attempt = 2, nextAtMs = 1234L, message = "backoff"),
             parsed?.activity,
         )
+        assertEquals("Retrying · 2", parsed?.activity?.statusLabel())
+        assertEquals("Retrying · 2 · backoff", parsed?.activity?.chatStatusLabel())
+    }
+
+    @Test
+    fun sessionActivityFromEvent_readsV2RetryAtAndErrorMessage() {
+        val events =
+            adapter.parseEvents(
+                """{"type":"session.retry.scheduled","data":{"sessionID":"ses-1","attempt":3,"at":9000,"error":{"type":"provider.rate-limit","message":"{\"type\":\"message\",\"message\":\"Slow down\"}"}}}""",
+            )
+        assertEquals(
+            SessionActivity.Retrying(attempt = 3, nextAtMs = 9000L, message = "Slow down"),
+            adapter.sessionActivityFromEvent(events.single())?.activity,
+        )
+    }
+
+    @Test
+    fun stepFailed_withAssistantId_putsTheErrorOnTheMessageAndSkipsTheSnackbarEvent() {
+        val events =
+            adapter.parseEvents(
+                """{"type":"session.step.failed","data":{"sessionID":"ses-1","assistantMessageID":"a1","error":{"type":"provider.auth","message":"Sign in","status":401,"response":{"body":"denied"}}}}""",
+            )
+        assertEquals(listOf("message.updated"), events.map { it.type })
+        val info = events.single().rawProperties?.get("info") as kotlinx.serialization.json.JsonObject
+        val data = info["error"] as kotlinx.serialization.json.JsonObject
+        val payload = data["data"] as kotlinx.serialization.json.JsonObject
+        assertEquals("provider.auth", (data["name"] as kotlinx.serialization.json.JsonPrimitive).content)
+        assertEquals("Sign in", (payload["message"] as kotlinx.serialization.json.JsonPrimitive).content)
+        assertEquals("401", (payload["statusCode"] as kotlinx.serialization.json.JsonPrimitive).content)
+        assertEquals("denied", (payload["responseBody"] as kotlinx.serialization.json.JsonPrimitive).content)
     }
 
     @Test

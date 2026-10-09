@@ -960,7 +960,7 @@ class SessionChatTimeline(
                         commands = serverCommands,
                     ),
             )
-        if (resolvedBlocks.isEmpty()) return null
+        if (resolvedBlocks.isEmpty() && message.failure == null) return null
 
         val sessionKey = boundSessionId ?: message.id
         val isStreaming = display.isStreaming

@@ -310,7 +310,7 @@ class SessionInfo(
                             val entry = snapshot.entries[sessionId]
                             val label =
                                 if (snapshot.seeded) {
-                                    entry?.activity?.statusLabel()
+                                    entry?.activity?.chatStatusLabel()
                                 } else {
                                     null
                                 }

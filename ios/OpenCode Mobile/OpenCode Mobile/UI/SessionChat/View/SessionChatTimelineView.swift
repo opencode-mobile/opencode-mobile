@@ -560,7 +560,7 @@ private extension SessionChatRow {
                 .text(id: blockID, text: text)
             case .attachment(_, let file):
                 .attachment(file.attachmentPresentation)
-            case .toolCard, .toolGroup, .childSessionRow, .reasoning, .stepParagraph, .stopNote:
+            case .toolCard, .toolGroup, .childSessionRow, .reasoning, .stepParagraph, .stopNote, .failureLine:
                 nil
             }
         }
@@ -705,6 +705,13 @@ private struct AssistantMessageContent: View {
                     )
                 case .stopNote(_, let reason):
                     OpenCodeMessageNote(variant: reason == .length ? .truncated : .interrupted)
+                case .failureLine(_, let text, let providerBody, let isNeutral):
+                    FailureLineBlock(
+                        text: text,
+                        providerBody: providerBody,
+                        isNeutral: isNeutral,
+                        onToolDetailTap: onToolDetailTap
+                    )
                 case .stepParagraph(_, let paragraph):
                     StepParagraphBlock(
                         paragraph: paragraph,
@@ -992,6 +999,33 @@ private extension ToolStatus {
         case .running: .running
         case .completed: .completed
         case .error: interrupted ? .interrupted : .error
+        }
+    }
+}
+
+/// Red caption under a failed reply. A provider body opens the existing detail sheet.
+private struct FailureLineBlock: View {
+    let text: String
+    let providerBody: String?
+    let isNeutral: Bool
+    let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
+
+    var body: some View {
+        let color = isNeutral ? OpenCodeColors.textWeak : OpenCodeColors.error
+        let label = Text(text)
+            .font(OpenCodeTypography.caption)
+            .foregroundStyle(color)
+            .lineLimit(3)
+            .padding(.horizontal, 4)
+        if let provider = providerBody?.trimmingCharacters(in: .whitespacesAndNewlines), !provider.isEmpty {
+            Button {
+                onToolDetailTap(SessionChatToolDetailTarget(title: "Provider response", body: provider))
+            } label: {
+                label.frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+        } else {
+            label.frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }

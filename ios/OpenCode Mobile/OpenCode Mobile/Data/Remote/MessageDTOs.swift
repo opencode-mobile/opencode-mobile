@@ -101,6 +101,8 @@ nonisolated struct MessageToolStateDTO: Codable, Sendable {
     let metadata: [String: AnyCodable]?
     /// Set by the v2 live projection when `tool.failed` reports `error.type: "aborted"`.
     var interrupted: Bool? = nil
+    /// Set when the server closed the call without running it (`executed: false`).
+    var malformed: Bool? = nil
 }
 
 nonisolated struct MessageToolTimeDTO: Codable, Sendable {

@@ -20,6 +20,8 @@ nonisolated struct Message: Equatable, Sendable, Identifiable {
     let isWaitingForPickup: Bool
     /// Why an assistant reply ended early; nil for a complete (or still running) reply.
     var stopReason: MessageStopReason?
+    /// A run failure to show under the reply. Nil when the run did not fail, or the user stopped it.
+    var failure: SessionFailure?
 
     init(
         id: String,
@@ -39,7 +41,8 @@ nonisolated struct Message: Equatable, Sendable, Identifiable {
         contextEstimate: MessageContextEstimate = MessageContextEstimate(),
         followUpDelivery: FollowUpDelivery? = nil,
         isWaitingForPickup: Bool = false,
-        stopReason: MessageStopReason? = nil
+        stopReason: MessageStopReason? = nil,
+        failure: SessionFailure? = nil
     ) {
         self.id = id
         self.role = role
@@ -59,6 +62,7 @@ nonisolated struct Message: Equatable, Sendable, Identifiable {
         self.followUpDelivery = followUpDelivery
         self.isWaitingForPickup = isWaitingForPickup
         self.stopReason = stopReason
+        self.failure = failure
     }
 
     /// Fills agent, model and variant this copy lacks from `base` (v2 live infos are partial).
@@ -86,7 +90,8 @@ nonisolated struct Message: Equatable, Sendable, Identifiable {
             contextEstimate: contextEstimate,
             followUpDelivery: followUpDelivery,
             isWaitingForPickup: isWaitingForPickup,
-            stopReason: copy.stopReason
+            stopReason: copy.stopReason,
+            failure: failure
         )
     }
 
@@ -112,7 +117,118 @@ nonisolated struct Message: Equatable, Sendable, Identifiable {
             contextEstimate: contextEstimate,
             followUpDelivery: followUpDelivery,
             isWaitingForPickup: isWaitingForPickup,
-            stopReason: stopReason
+            stopReason: stopReason,
+            failure: failure
+        )
+    }
+}
+
+/// A failed run, shared by v1 `{name, data}` and v2 `{type, message, status, response}`.
+/// Abort and interrupt types are not failures: the timeline shows them as an interrupted note.
+nonisolated struct SessionFailure: Equatable, Sendable {
+    let type: String?
+    let message: String
+    let status: Int?
+    let providerBody: String?
+
+    var isNeutral: Bool {
+        type?.caseInsensitiveCompare("permission.rejected") == .orderedSame
+    }
+
+    /// Caption under the reply. The provider body stays behind the existing detail sheet.
+    func line() -> String {
+        let shown = message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? "Session work failed"
+            : message
+        if let status { return "HTTP \(status) · \(shown)" }
+        return shown
+    }
+
+    static func isSilent(type: String?) -> Bool {
+        let value = type?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return value.caseInsensitiveCompare("aborted") == .orderedSame
+            || value.range(of: "interrupt", options: .caseInsensitive) != nil
+            || value == "MessageAbortedError"
+    }
+
+    /// A tool call the server refused to execute, as opposed to a tool that ran and failed.
+    static func isMalformedTool(type: String?, executed: Bool?) -> Bool {
+        executed == false || type == "tool.input-json" || type == "tool.input-incomplete"
+    }
+
+    /// Upstream `unwrapErrorMessage`: a JSON envelope `{type: "message", message}` is the text inside it.
+    static func unwrap(_ raw: String?) -> String {
+        let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard trimmed.hasPrefix("{"),
+              let data = trimmed.data(using: .utf8),
+              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              (root["type"] as? String) == "message",
+              let nested = (root["message"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !nested.isEmpty
+        else { return trimmed }
+        return unwrap(nested)
+    }
+
+    static func fromV1(
+        name: String?,
+        message: String?,
+        statusCode: Int?,
+        responseBody: String?
+    ) -> SessionFailure? {
+        if isSilent(type: name) { return nil }
+        return build(
+            type: name,
+            message: message,
+            status: statusCode,
+            providerBody: responseBody,
+            emptyFallback: name == "ContextOverflowError" ? "Context overflow" : ""
+        )
+    }
+
+    static func fromV2(
+        type: String?,
+        message: String?,
+        status: Int?,
+        providerBody: String?,
+        outcome: String? = nil
+    ) -> SessionFailure? {
+        if outcome?.caseInsensitiveCompare("succeeded") == .orderedSame
+            || outcome?.caseInsensitiveCompare("interrupted") == .orderedSame
+        {
+            return nil
+        }
+        if isSilent(type: type) { return nil }
+        return build(type: type, message: message, status: status, providerBody: providerBody, emptyFallback: "")
+    }
+
+    private static let maxBody = 4_000
+
+    private static func build(
+        type: String?,
+        message: String?,
+        status: Int?,
+        providerBody: String?,
+        emptyFallback: String
+    ) -> SessionFailure? {
+        let trimmedBody = providerBody?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let body = trimmedBody.isEmpty ? nil : String(trimmedBody.prefix(maxBody))
+        var text = unwrap(message)
+        if text.isEmpty { text = emptyFallback }
+        if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            let first = body?.split(whereSeparator: \.isNewline).first.map(String.init) ?? ""
+            text = String(first.trimmingCharacters(in: .whitespacesAndNewlines).prefix(200))
+        }
+        let trimmedType = type?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let shown = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? trimmedType : text
+        let http = status.flatMap { (100...599).contains($0) ? $0 : nil }
+        if shown.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && body == nil && http == nil {
+            return nil
+        }
+        return SessionFailure(
+            type: trimmedType.isEmpty ? nil : trimmedType,
+            message: shown,
+            status: http,
+            providerBody: body
         )
     }
 }
@@ -283,6 +399,8 @@ nonisolated struct ToolPart: Equatable, Sendable {
     let timeStartEpochMs: Int64?
     /// Failed because the user stopped the run or declined the call, not a real failure.
     let isInterrupted: Bool
+    /// The model emitted a tool call the server could not run (`executed: false`).
+    let isMalformed: Bool
 
     init(
         id: String? = nil,
@@ -295,7 +413,8 @@ nonisolated struct ToolPart: Equatable, Sendable {
         output: String? = nil,
         metadata: [String: AnyCodable]? = nil,
         timeStartEpochMs: Int64? = nil,
-        isInterrupted: Bool = false
+        isInterrupted: Bool = false,
+        isMalformed: Bool = false
     ) {
         self.id = id
         self.toolName = toolName
@@ -308,6 +427,7 @@ nonisolated struct ToolPart: Equatable, Sendable {
         self.metadata = metadata
         self.timeStartEpochMs = timeStartEpochMs
         self.isInterrupted = isInterrupted
+        self.isMalformed = isMalformed
     }
 
     func withTimeStart(_ timeStartEpochMs: Int64?) -> ToolPart {
@@ -322,7 +442,8 @@ nonisolated struct ToolPart: Equatable, Sendable {
             output: output,
             metadata: metadata,
             timeStartEpochMs: timeStartEpochMs,
-            isInterrupted: isInterrupted
+            isInterrupted: isInterrupted,
+            isMalformed: isMalformed
         )
     }
 }

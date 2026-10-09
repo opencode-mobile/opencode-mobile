@@ -790,6 +790,36 @@ struct EventDomainAdapterTests {
             Issue.record("expected retrying")
         }
         #expect(adapter.statusLabel(from: adapter.sessionStatus(from: event!)!) == "Retrying · 3")
+        #expect(parsed?.activity.chatStatusLabel == "Retrying · 3 · rate limited")
+    }
+
+    @Test func sessionActivity_readsV2RetryAtAndErrorMessage() {
+        let adapter = EventDomainAdapter()
+        let event = adapter.parseEvent(
+            dataLine: #"{"type":"session.retry.scheduled","data":{"sessionID":"ses-1","attempt":3,"at":9000,"error":{"type":"provider.rate-limit","message":"{\"type\":\"message\",\"message\":\"Slow down\"}"}}}"#
+        )
+        if case let .retrying(attempt, nextAtMs, message) = adapter.sessionActivity(from: event!)?.activity {
+            #expect(attempt == 3)
+            #expect(nextAtMs == 9_000)
+            #expect(message == "Slow down")
+        } else {
+            Issue.record("expected retrying")
+        }
+    }
+
+    @Test func stepFailed_withAssistantId_putsTheErrorOnTheMessageAndSkipsTheSnackbarEvent() {
+        let adapter = EventDomainAdapter()
+        let events = adapter.parseEvents(
+            dataLine: #"{"type":"session.step.failed","data":{"sessionID":"ses-1","assistantMessageID":"a1","error":{"type":"provider.auth","message":"Sign in","status":401,"response":{"body":"denied"}}}}"#
+        )
+        #expect(events.map(\.type) == ["message.updated"])
+        let info = events[0].rawProperties?["info"]?.dictionaryValue
+        let error = info?["error"]?.dictionaryValue
+        let data = error?["data"]?.dictionaryValue
+        #expect(error?["name"]?.stringValue == "provider.auth")
+        #expect(data?["message"]?.stringValue == "Sign in")
+        #expect(data?["statusCode"]?.int64Value == 401)
+        #expect(data?["responseBody"]?.stringValue == "denied")
     }
 
     @Test func sessionTitleUpdate_readsInfoTitle() {

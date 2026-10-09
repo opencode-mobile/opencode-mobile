@@ -1,7 +1,10 @@
 package dev.opencode.mobile.domain.message
 
 import dev.opencode.mobile.domain.agent.AgentMention
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 
 data class Message(
     val id: String,
@@ -23,6 +26,8 @@ data class Message(
     val isWaitingForPickup: Boolean = false,
     /** Why an assistant reply ended early; null for a complete (or still running) reply. */
     val stopReason: MessageStopReason? = null,
+    /** A run failure to show under the reply. Null when the run did not fail, or the user stopped it. */
+    val failure: SessionFailure? = null,
 )
 
 /** An assistant reply that ended before the model finished its answer. */
@@ -123,6 +128,8 @@ sealed class MessagePart {
         val timeStartEpochMs: Long? = null,
         /** Failed because the user stopped the run or declined the call, not a real failure. */
         val isInterrupted: Boolean = false,
+        /** The model emitted a tool call the server could not run (`executed: false`). */
+        val isMalformed: Boolean = false,
     ) : MessagePart()
 
     data class File(
@@ -175,6 +182,107 @@ enum class MessageRole {
     Command,
     Tool,
     Unknown,
+}
+
+/**
+ * A failed run, shared by v1 `{name, data}` and v2 `{type, message, status, response}`.
+ * Abort and interrupt types are not failures: the timeline shows them as an interrupted note.
+ */
+data class SessionFailure(
+    val type: String?,
+    val message: String,
+    val status: Int? = null,
+    val providerBody: String? = null,
+) {
+    val isNeutral: Boolean
+        get() = type.equals("permission.rejected", ignoreCase = true)
+
+    /** Caption under the reply. The provider body stays behind the existing detail sheet. */
+    fun line(): String {
+        val shown = message.ifBlank { "Session work failed" }
+        return if (status != null) "HTTP $status · $shown" else shown
+    }
+
+    companion object {
+        private const val MAX_BODY = 4_000
+        private val json = Json { ignoreUnknownKeys = true }
+
+        fun isSilent(type: String?): Boolean {
+            val value = type?.trim().orEmpty()
+            return value.equals("aborted", ignoreCase = true) ||
+                value.contains("interrupt", ignoreCase = true) ||
+                value == "MessageAbortedError"
+        }
+
+        /** A tool call the server refused to execute, as opposed to a tool that ran and failed. */
+        fun isMalformedTool(
+            type: String?,
+            executed: Boolean?,
+        ): Boolean = executed == false || type == "tool.input-json" || type == "tool.input-incomplete"
+
+        /** Upstream `unwrapErrorMessage`: a JSON envelope `{type: "message", message}` is the text inside it. */
+        fun unwrap(raw: String?): String {
+            val trimmed = raw?.trim().orEmpty()
+            if (!trimmed.startsWith("{")) return trimmed
+            val root = runCatching { json.parseToJsonElement(trimmed) as? JsonObject }.getOrNull() ?: return trimmed
+            val nestedType = (root["type"] as? JsonPrimitive)?.contentOrNull
+            val nested = (root["message"] as? JsonPrimitive)?.contentOrNull?.trim().orEmpty()
+            return if (nestedType == "message" && nested.isNotEmpty()) unwrap(nested) else trimmed
+        }
+
+        fun fromV1(
+            name: String?,
+            message: String?,
+            statusCode: Int?,
+            responseBody: String?,
+        ): SessionFailure? {
+            if (isSilent(name)) return null
+            return build(
+                type = name,
+                message = message,
+                status = statusCode,
+                providerBody = responseBody,
+                emptyFallback = if (name == "ContextOverflowError") "Context overflow" else "",
+            )
+        }
+
+        fun fromV2(
+            type: String?,
+            message: String?,
+            status: Int?,
+            providerBody: String?,
+            outcome: String? = null,
+        ): SessionFailure? {
+            if (outcome.equals("succeeded", ignoreCase = true) || outcome.equals("interrupted", ignoreCase = true)) {
+                return null
+            }
+            if (isSilent(type)) return null
+            return build(type = type, message = message, status = status, providerBody = providerBody, emptyFallback = "")
+        }
+
+        private fun build(
+            type: String?,
+            message: String?,
+            status: Int?,
+            providerBody: String?,
+            emptyFallback: String,
+        ): SessionFailure? {
+            val body = providerBody?.trim()?.takeIf { it.isNotEmpty() }?.take(MAX_BODY)
+            val text =
+                unwrap(message).ifBlank { emptyFallback }.ifBlank {
+                    body?.lineSequence()?.firstOrNull()?.trim()?.take(200).orEmpty()
+                }
+            val shown = text.ifBlank { type?.trim().orEmpty() }
+            val http = status?.takeIf { it in 100..599 }
+            if (shown.isBlank() && body == null && http == null) return null
+            return SessionFailure(
+                type = type?.trim()?.takeIf { it.isNotEmpty() },
+                message = shown,
+                status = http,
+                providerBody = body,
+            )
+        }
+    }
 }
 
 sealed class MessageError : Exception() {

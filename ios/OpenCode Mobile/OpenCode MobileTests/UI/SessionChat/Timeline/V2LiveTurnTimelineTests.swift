@@ -343,6 +343,30 @@ struct V2LiveTurnTimelineTests {
         )
         #expect(rest.first?.stopReason == .interrupted)
         #expect(rest.first?.text == "")
+        #expect(rest.first?.failure == nil)
+    }
+
+    @Test func providerFailure_keepsAFailureLineBesideTheReply() throws {
+        apply(prompt("u1", "Explain", at: 1_000))
+        apply(step("a1", at: 1_100))
+        apply(text("a1", "Partial", at: 1_110))
+        apply([
+            envelope(
+                "session.step.failed",
+                1_200,
+                #""assistantMessageID":"a1","error":{"type":"provider.auth","message":"Sign in","status":401,"response":{"body":"denied"}}"#
+            ),
+        ])
+        let message = try #require(store.messages(sessionID: Self.session).first { $0.id == "a1" })
+        #expect(message.text == "Partial")
+        #expect(message.failure?.line() == "HTTP 401 · Sign in")
+        let frame = chipFrame(store.messages(sessionID: Self.session))
+        #expect(frame.messages[1].blocks.contains { block in
+            if case .failureLine(_, let text, let body, let neutral) = block {
+                return text == "HTTP 401 · Sign in" && body == "denied" && neutral == false
+            }
+            return false
+        })
     }
 
     @Test func completeReply_hasNoStopNote() {

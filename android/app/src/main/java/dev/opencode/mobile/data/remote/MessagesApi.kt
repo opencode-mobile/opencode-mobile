@@ -18,10 +18,10 @@ import dev.opencode.mobile.network.setJsonBody
 import dev.opencode.mobile.network.setJsonFileBody
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
-import io.ktor.client.plugins.ResponseException
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
 import io.ktor.client.request.post
+import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
 import kotlinx.serialization.json.Json
@@ -137,7 +137,7 @@ class MessagesApi private constructor(
                 file?.delete()
             }
         if (!response.status.isSuccess()) {
-            throw ResponseException(response, "prompt_async failed with status ${response.status.value}")
+            response.fail("prompt_async")
         }
         // Release the 204 response body so OkHttp can reuse the connection.
         response.bodyAsText()
@@ -189,9 +189,14 @@ class MessagesApi private constructor(
                 file?.delete()
             }
         if (!response.status.isSuccess()) {
-            throw ResponseException(response, "$path failed with status ${response.status.value}")
+            response.fail(path)
         }
         response.bodyAsText()
+    }
+
+    private suspend fun HttpResponse.fail(path: String): Nothing {
+        val text = runCatching { bodyAsText() }.getOrDefault("")
+        throw HttpBodyResponseException(this, text.ifBlank { "$path failed with status ${status.value}" })
     }
 
     private fun promptFile(

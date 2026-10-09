@@ -20,8 +20,11 @@ import dev.opencode.mobile.data.remote.dto.V2PromptRequestDto
 import dev.opencode.mobile.data.remote.dto.V2PromptSourceDto
 import dev.opencode.mobile.data.remote.dto.V2SessionMessageDto
 import dev.opencode.mobile.data.remote.dto.V2SwitchModelRequestDto
+import dev.opencode.mobile.data.remote.HttpBodyResponseException
 import dev.opencode.mobile.data.remote.dto.V2ToolStateDto
+import dev.opencode.mobile.data.remote.dto.V2UnknownErrorDto
 import dev.opencode.mobile.domain.agent.ComposerMentionRouting
+import dev.opencode.mobile.domain.session.ServerErrorMessage
 import io.ktor.client.plugins.ResponseException
 import io.ktor.serialization.JsonConvertException
 import kotlinx.serialization.json.Json
@@ -40,10 +43,11 @@ class MessageDomainAdapter {
         val info = dto.info
         val domainParts = parseParts(dto.parts)
         val flatText = displayText(domainParts)
+        val stopReason = stopReason(info)
         return Message(
             id = info.id,
             role = toRole(info.role),
-            text = flatText.ifBlank { errorText(info.error, stopReason(info)) },
+            text = flatText,
             parts = domainParts,
             cost = info.cost,
             tokens = toTokenUsage(info.tokens),
@@ -58,7 +62,8 @@ class MessageDomainAdapter {
             contextEstimate = toContextEstimate(info.role, dto.parts),
             followUpDelivery = FollowUpDelivery.fromWire(info.delivery),
             isWaitingForPickup = info.waiting == true,
-            stopReason = stopReason(info),
+            stopReason = stopReason,
+            failure = sessionFailure(info.error, stopReason),
         )
     }
 
@@ -67,10 +72,11 @@ class MessageDomainAdapter {
         domainParts: List<MessagePart>,
     ): Message {
         val flatText = displayText(domainParts)
+        val stopReason = stopReason(info)
         return Message(
             id = info.id,
             role = toRole(info.role),
-            text = flatText.ifBlank { errorText(info.error, stopReason(info)) },
+            text = flatText,
             parts = domainParts,
             cost = info.cost,
             tokens = toTokenUsage(info.tokens),
@@ -85,7 +91,8 @@ class MessageDomainAdapter {
             contextEstimate = MessageContextEstimate(),
             followUpDelivery = FollowUpDelivery.fromWire(info.delivery),
             isWaitingForPickup = info.waiting == true,
-            stopReason = stopReason(info),
+            stopReason = stopReason,
+            failure = sessionFailure(info.error, stopReason),
         )
     }
 
@@ -152,6 +159,7 @@ class MessageDomainAdapter {
             isInterrupted =
                 status == ToolStatus.Error &&
                     (state?.interrupted == true || ToolInterruption.isUserInterruption(state?.error)),
+            isMalformed = state?.malformed == true,
         )
     }
 
@@ -267,10 +275,15 @@ class MessageDomainAdapter {
     fun mapError(throwable: Throwable): MessageError =
         when (throwable) {
             is MessageError -> throwable
+            is HttpBodyResponseException ->
+                MessageError.Http(
+                    statusCode = throwable.response.status.value,
+                    message = httpMessage(throwable.bodyText),
+                )
             is ResponseException ->
                 MessageError.Http(
                     statusCode = throwable.response.status.value,
-                    message = throwable.message,
+                    message = httpMessage(throwable.message),
                 )
             is JsonConvertException -> MessageError.Decoding(throwable)
             else -> MessageError.Transport(throwable)
@@ -304,6 +317,7 @@ class MessageDomainAdapter {
                     messages += projectV2Assistant(dto, agent, model)
                 }
                 "compaction" -> messages += projectV2Compaction(dto)
+                "idle" -> projectV2Idle(dto, messages)
                 else -> Unit
             }
         }
@@ -507,19 +521,17 @@ class MessageDomainAdapter {
                 toV2AssistantPart(content, fallbackId = fallbackId)
             }
         val stopReason = MessageStopReason.from(finish = dto.finish, errorKind = dto.error?.type)
-        val errorText =
-            dto.error
-                ?.message
-                ?.trim()
-                .orEmpty()
-                .takeUnless { stopReason == MessageStopReason.Interrupted }
-                .orEmpty()
+        val failure =
+            structuredFailure(dto.error, outcome = null)
+                ?: dto.retry?.error?.let { structuredFailure(it, outcome = null) }?.takeIf {
+                    dto.finish.equals("error", ignoreCase = true)
+                }
         return messageFromV2(
             id = dto.id,
             role = MessageRole.Assistant,
             parts = parts,
-            fallbackText = errorText,
             stopReason = stopReason,
+            failure = failure,
             cost = dto.cost,
             tokens = toTokenUsage(dto.tokens),
             mode = dto.agent ?: agent.ifBlank { null },
@@ -552,7 +564,26 @@ class MessageDomainAdapter {
             sentAtEpochMs = dto.time?.created,
             completedAtEpochMs = dto.time?.completed,
             contextEstimate = MessageContextEstimate(assistantCharacters = summary.length),
+            failure = structuredFailure(dto.error, outcome = null),
         )
+    }
+
+    /** A failed idle item is its own row when the assistant message did not already carry the same failure. */
+    private fun projectV2Idle(
+        dto: V2SessionMessageDto,
+        messages: MutableList<Message>,
+    ) {
+        val failure = structuredFailure(dto.error, outcome = dto.outcome) ?: return
+        if (messages.lastOrNull()?.failure?.line() == failure.line()) return
+        messages +=
+            messageFromV2(
+                id = dto.id,
+                role = MessageRole.Assistant,
+                parts = emptyList(),
+                failure = failure,
+                sentAtEpochMs = dto.time?.created,
+                completedAtEpochMs = dto.time?.completed,
+            )
     }
 
     private fun messageFromV2(
@@ -569,12 +600,14 @@ class MessageDomainAdapter {
         contextInputTokens: Long? = null,
         contextEstimate: MessageContextEstimate = MessageContextEstimate(),
         stopReason: MessageStopReason? = null,
+        failure: SessionFailure? = null,
     ): Message {
         val flatText = displayText(parts)
         return Message(
             id = id,
             role = role,
             stopReason = stopReason,
+            failure = failure,
             text = flatText.ifBlank { fallbackText },
             parts = parts,
             cost = cost,
@@ -619,7 +652,7 @@ class MessageDomainAdapter {
                     status = status,
                     // v2 tools report their progress title in metadata (v1: state.title).
                     title = (metadata?.get("title") as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotEmpty() },
-                    error = state?.error?.message?.takeIf { it.isNotEmpty() },
+                    error = state?.error?.message?.let(SessionFailure::unwrap)?.takeIf { it.isNotEmpty() },
                     callId = content.id,
                     input = jsonObjectFromInput(state?.input),
                     output = toolOutput(state),
@@ -627,6 +660,11 @@ class MessageDomainAdapter {
                     id = content.id ?: fallbackId,
                     timeStartEpochMs = content.time?.created,
                     isInterrupted = status == ToolStatus.Error && ToolInterruption.isAbortedType(state?.error?.type),
+                    isMalformed =
+                        SessionFailure.isMalformedTool(
+                            type = state?.error?.type,
+                            executed = state?.executed,
+                        ),
                 )
             }
             else -> null
@@ -736,23 +774,37 @@ class MessageDomainAdapter {
             null
         }
 
-    /** A stopped reply gets a "Interrupted" note, not the abort error as reply text. */
-    private fun errorText(
+    private fun sessionFailure(
         error: MessageErrorInfoDto?,
-        stopReason: MessageStopReason? = null,
-    ): String {
-        error ?: return ""
-        if (stopReason == MessageStopReason.Interrupted) return ""
-        return error.data
-            ?.message
-            ?.trim()
-            ?.takeIf { it.isNotEmpty() }
-            ?: error.data
-                ?.responseBody
-                ?.trim()
-                ?.takeIf { it.isNotEmpty() }
-            ?: error.name?.trim()?.takeIf { it.isNotEmpty() }
-            ?: ""
+        stopReason: MessageStopReason?,
+    ): SessionFailure? {
+        if (stopReason == MessageStopReason.Interrupted) return null
+        return SessionFailure.fromV1(
+            name = error?.name,
+            message = error?.data?.message,
+            statusCode = error?.data?.statusCode,
+            responseBody = error?.data?.responseBody,
+        )
+    }
+
+    private fun structuredFailure(
+        error: V2UnknownErrorDto?,
+        outcome: String?,
+    ): SessionFailure? =
+        SessionFailure.fromV2(
+            type = error?.type,
+            message = error?.message,
+            status = error?.status,
+            providerBody = error?.response?.body,
+            outcome = outcome,
+        )
+
+    private fun httpMessage(body: String?): String {
+        val friendly = ServerErrorMessage.userFacing(body)
+        if (friendly != null) return friendly
+        val plain = body?.trim().orEmpty()
+        if (plain.isEmpty() || plain.startsWith("{") || plain.length > 200) return "Request failed"
+        return plain
     }
 
     private fun displayText(parts: List<MessagePart>): String {

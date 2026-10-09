@@ -9,7 +9,45 @@ nonisolated enum ServerErrorMessage {
 
     static func from(_ error: Error) -> String? {
         guard case let .http(_, body)? = error as? SessionError else { return nil }
-        return fromBody(body)
+        return userFacing(body)
+    }
+
+    /// Copy for a non-2xx JSON body. Known tags get a fixed sentence. Schema
+    /// failures stay hidden. Other tags use `fromBody`.
+    static func userFacing(_ body: String?) -> String? {
+        let trimmed = body?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard trimmed.hasPrefix("{"),
+              let data = trimmed.data(using: .utf8),
+              let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        else { return nil }
+        let tag = (root["_tag"] as? String) ?? (root["name"] as? String)
+        let nested = root["data"] as? [String: Any]
+        switch tag {
+        case "InvalidRequestError":
+            return nil
+        case "UnauthorizedError":
+            return "Pairing expired, pair again"
+        case "LocationNotFoundError", "FileNotFoundError":
+            let path = (root["path"] as? String)
+                ?? (root["location"] as? String)
+                ?? (nested?["path"] as? String)
+                ?? (nested?["location"] as? String)
+            if let path, !path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return "Folder or file not found · \(path)"
+            }
+            return "Folder or file not found"
+        case "SessionBusyError", "BusyError":
+            return "Session is busy"
+        case "UnknownError":
+            let ref = (root["ref"] as? String) ?? (nested?["ref"] as? String)
+            let message = fromBody(trimmed)
+            if let message, let ref, !ref.isEmpty { return "\(message) (\(ref))" }
+            if let message { return message }
+            if let ref, !ref.isEmpty { return ref }
+            return nil
+        default:
+            return fromBody(trimmed)
+        }
     }
 
     static func fromBody(_ body: String?) -> String? {

@@ -110,7 +110,10 @@ class MessageDomainAdapterTest {
         val message = adapter.toMessage(dto)
 
         assertEquals(MessageRole.Assistant, message.role)
-        assertEquals("Forbidden: unauthorized: not licensed to use Copilot", message.text)
+        assertEquals("", message.text)
+        assertEquals("APIError", message.failure?.type)
+        assertEquals("HTTP 403 · Forbidden: unauthorized: not licensed to use Copilot", message.failure?.line())
+        assertNull(message.failure?.providerBody)
     }
 
     @Test
@@ -1361,6 +1364,81 @@ class MessageDomainAdapterTest {
             )
 
         assertEquals(messages, merged)
+    }
+
+    @Test
+    fun projectV2_keepsAssistantErrorBesideReplyText() {
+        val dtos =
+            json.decodeFromString<List<dev.opencode.mobile.data.remote.dto.V2SessionMessageDto>>(
+                """
+                [{
+                  "id":"a1","type":"assistant","finish":"error",
+                  "content":[{"type":"text","text":"Partial answer"}],
+                  "error":{"type":"provider.rate-limit","message":"{\"type\":\"message\",\"message\":\"Slow down\"}","status":429,
+                    "response":{"body":"{\"error\":\"overloaded\"}"}}
+                }]
+                """.trimIndent(),
+            )
+        val message = adapter.projectV2(dtos).single()
+        assertEquals("Partial answer", message.text)
+        assertEquals("provider.rate-limit", message.failure?.type)
+        assertEquals("HTTP 429 · Slow down", message.failure?.line())
+        assertEquals("{\"error\":\"overloaded\"}", message.failure?.providerBody)
+        assertEquals(false, message.failure?.isNeutral)
+    }
+
+    @Test
+    fun projectV2_hidesAbortAndProjectsFailedIdleAndCompaction() {
+        val dtos =
+            json.decodeFromString<List<dev.opencode.mobile.data.remote.dto.V2SessionMessageDto>>(
+                """
+                [
+                  {"id":"a1","type":"assistant","error":{"type":"aborted","message":"stopped"},"content":[{"type":"text","text":"Hi"}]},
+                  {"id":"c1","type":"compaction","summary":"Earlier","error":{"type":"compaction.failed","message":"Could not compact"}},
+                  {"id":"i1","type":"idle","outcome":"failed","error":{"type":"provider.auth","message":"Sign in again"}},
+                  {"id":"i2","type":"idle","outcome":"interrupted","error":{"type":"compaction.interrupted","message":"nope"}}
+                ]
+                """.trimIndent(),
+            )
+        val messages = adapter.projectV2(dtos)
+        assertEquals(3, messages.size)
+        assertNull(messages[0].failure)
+        assertEquals("Could not compact", messages[1].failure?.message)
+        assertEquals("Sign in again", messages[2].failure?.message)
+        assertEquals(true, messages[2].failure?.type == "provider.auth")
+    }
+
+    @Test
+    fun projectV2_malformedToolCallIsDistinctFromAFailedRun() {
+        val dtos =
+            json.decodeFromString<List<dev.opencode.mobile.data.remote.dto.V2SessionMessageDto>>(
+                """
+                [{
+                  "id":"a1","type":"assistant",
+                  "content":[{"type":"tool","id":"t1","name":"read","state":{
+                    "status":"error","executed":false,
+                    "error":{"type":"tool.input-json","message":"bad json"}
+                  }}]
+                }]
+                """.trimIndent(),
+            )
+        val tool = adapter.projectV2(dtos).single().parts.filterIsInstance<MessagePart.Tool>().single()
+        assertTrue(tool.isMalformed)
+        assertEquals("bad json", tool.error)
+    }
+
+    @Test
+    fun projectV2_idleFailureIsSkippedWhenTheAssistantAlreadyShowsIt() {
+        val dtos =
+            json.decodeFromString<List<dev.opencode.mobile.data.remote.dto.V2SessionMessageDto>>(
+                """
+                [
+                  {"id":"a1","type":"assistant","content":[],"error":{"type":"unknown","message":"boom"}},
+                  {"id":"i1","type":"idle","outcome":"failed","error":{"type":"unknown","message":"boom"}}
+                ]
+                """.trimIndent(),
+            )
+        assertEquals(1, adapter.projectV2(dtos).size)
     }
 
     @Test

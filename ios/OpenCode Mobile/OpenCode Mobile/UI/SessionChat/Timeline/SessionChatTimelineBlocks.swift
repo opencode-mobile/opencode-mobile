@@ -14,6 +14,8 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
     case stepParagraph(blockID: String, paragraph: SessionChatStepParagraphBlock)
     /// Persistent note that the reply ended early (cut off or interrupted).
     case stopNote(blockID: String, reason: MessageStopReason)
+    /// A failed run under the reply. A provider body opens the existing detail sheet.
+    case failureLine(blockID: String, text: String, providerBody: String?, isNeutral: Bool)
 
     var blockID: String {
         switch self {
@@ -32,6 +34,8 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
         case .stepParagraph(let blockID, _):
             blockID
         case .stopNote(let blockID, _):
+            blockID
+        case .failureLine(let blockID, _, _, _):
             blockID
         }
     }
@@ -52,7 +56,7 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
         case .stepParagraph(_, let paragraph):
             guard let textBlockID = paragraph.textBlockID, let text = paragraph.text else { return nil }
             return (textBlockID, text, paragraph.renderedMarkdown)
-        case .attachment, .toolCard, .toolGroup, .childSessionRow, .reasoning, .stopNote:
+        case .attachment, .toolCard, .toolGroup, .childSessionRow, .reasoning, .stopNote, .failureLine:
             return nil
         }
     }
@@ -64,7 +68,7 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
             return .text(blockID: blockID, text: text, renderedMarkdown: document)
         case .stepParagraph(let blockID, let paragraph):
             return .stepParagraph(blockID: blockID, paragraph: paragraph.withRenderedMarkdown(document))
-        case .attachment, .toolCard, .toolGroup, .childSessionRow, .reasoning, .stopNote:
+        case .attachment, .toolCard, .toolGroup, .childSessionRow, .reasoning, .stopNote, .failureLine:
             return self
         }
     }
@@ -97,6 +101,11 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
             lID == rID && lParagraph == rParagraph
         case let (.stopNote(lID, lReason), .stopNote(rID, rReason)):
             lID == rID && lReason == rReason
+        case let (
+            .failureLine(lID, lText, lBody, lNeutral),
+            .failureLine(rID, rText, rBody, rNeutral)
+        ):
+            lID == rID && lText == rText && lBody == rBody && lNeutral == rNeutral
         default:
             false
         }
@@ -122,6 +131,8 @@ nonisolated struct SessionChatToolCardBlock: Equatable, Sendable {
     let changesInitialFilePath: String?
     /// `status` is `.error` because the user stopped or declined it; render neutral.
     let isInterrupted: Bool
+    /// The server closed the call without running it.
+    let isMalformed: Bool
 
     init(
         toolName: String,
@@ -136,7 +147,8 @@ nonisolated struct SessionChatToolCardBlock: Equatable, Sendable {
         childSessionId: String? = nil,
         opensChangesReview: Bool = false,
         changesInitialFilePath: String? = nil,
-        isInterrupted: Bool = false
+        isInterrupted: Bool = false,
+        isMalformed: Bool = false
     ) {
         self.toolName = toolName
         self.status = status
@@ -151,6 +163,7 @@ nonisolated struct SessionChatToolCardBlock: Equatable, Sendable {
         self.opensChangesReview = opensChangesReview
         self.changesInitialFilePath = changesInitialFilePath
         self.isInterrupted = isInterrupted
+        self.isMalformed = isMalformed
     }
 }
 
@@ -622,16 +635,32 @@ nonisolated enum SessionChatTimelineBlocks {
             .map(withStopNote)
     }
 
-    /// An assistant reply that ended early keeps a note under its last block.
+    /// An assistant reply that ended early keeps a note under its last block, then any failure caption.
     private static func withStopNote(_ body: DisplayMessageBody) -> DisplayMessageBody {
-        guard let reason = body.message.stopReason, body.message.role == .assistant else { return body }
-        if body.blocks.contains(where: { if case .stopNote = $0 { return true } else { return false } }) {
-            return body
+        var blocks = body.blocks
+        if let reason = body.message.stopReason,
+           body.message.role == .assistant,
+           !blocks.contains(where: { if case .stopNote = $0 { return true } else { return false } })
+        {
+            blocks.append(.stopNote(blockID: "\(body.message.id):stop-note", reason: reason))
         }
+        if let failure = body.message.failure,
+           !blocks.contains(where: { if case .failureLine = $0 { return true } else { return false } })
+        {
+            blocks.append(
+                .failureLine(
+                    blockID: "\(body.message.id):failure",
+                    text: failure.line(),
+                    providerBody: failure.providerBody,
+                    isNeutral: failure.isNeutral
+                )
+            )
+        }
+        guard blocks.count != body.blocks.count else { return body }
         return DisplayMessageBody(
             message: body.message,
             isStreaming: body.isStreaming,
-            blocks: body.blocks + [.stopNote(blockID: "\(body.message.id):stop-note", reason: reason)],
+            blocks: blocks,
             renderedMarkdown: body.renderedMarkdown
         )
     }
@@ -685,6 +714,7 @@ nonisolated enum SessionChatTimelineBlocks {
             }
             var message = first.message
             message.stopReason = run.last?.message.stopReason
+            message.failure = run.reversed().compactMap(\.message.failure).first
             merged.append(
                 DisplayMessageBody(
                     message: message,
@@ -756,7 +786,7 @@ nonisolated enum SessionChatTimelineBlocks {
             true
         case .toolCard(_, let card):
             !Self.isChildSessionTool(card.toolName)
-        case .text, .attachment, .childSessionRow, .reasoning, .stepParagraph, .stopNote:
+        case .text, .attachment, .childSessionRow, .reasoning, .stepParagraph, .stopNote, .failureLine:
             false
         }
     }
@@ -810,6 +840,7 @@ nonisolated enum SessionChatTimelineBlocks {
             let firstPartId = textIds.first ?? toolIds[0]
             let errorLines = chips.compactMap { chip -> String? in
                 guard chip.status == .error, !chip.card.isInterrupted else { return nil }
+                if chip.card.isMalformed { return "Not run: malformed tool call" }
                 return "\(chip.label): \(chip.card.errorText ?? "Failed")"
             }
             pendingText.removeAll()
@@ -1563,7 +1594,8 @@ nonisolated enum SessionChatTimelineBlocks {
                 childSessionId: chrome.childSessionId,
                 opensChangesReview: chrome.opensChangesReview,
                 changesInitialFilePath: chrome.changesInitialFilePath,
-                isInterrupted: interrupted
+                isInterrupted: interrupted,
+                isMalformed: tool.isMalformed
             )
         )
     }
@@ -1925,9 +1957,13 @@ nonisolated enum SessionChatTimelineBlocks {
     private static func settledDetail(_ tool: ToolPart) -> String? {
         switch tool.status {
         case .completed, .error:
-            nonEmpty(tool.output) ?? nonEmpty(tool.error)
+            let parts = [
+                tool.status == .error ? nonEmpty(tool.error) : nil,
+                nonEmpty(tool.output),
+            ].compactMap { $0 }
+            return parts.isEmpty ? nil : parts.joined(separator: "\n\n")
         case .pending, .running:
-            nil
+            return nil
         }
     }
 
