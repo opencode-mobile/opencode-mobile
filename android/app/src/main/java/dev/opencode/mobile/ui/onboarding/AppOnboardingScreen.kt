@@ -45,6 +45,7 @@ import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductRouteScreenViewEffect
 import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
+import dev.opencode.mobile.ui.components.OpenCodeCodeSnippet
 import dev.opencode.mobile.ui.components.OpenCodePageIndicator
 import dev.opencode.mobile.ui.components.OpenCodeListGroup
 import dev.opencode.mobile.ui.components.OpenCodeListItem
@@ -430,17 +431,7 @@ private fun SetupStep(
         )
         if (code != null) {
             Spacer(modifier = Modifier.height(8.dp))
-            Surface(
-                shape = RoundedCornerShape(10.dp),
-                color = MaterialTheme.colorScheme.inverseSurface,
-            ) {
-                Text(
-                    text = code,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.inverseOnSurface,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                )
-            }
+            OpenCodeCodeSnippet(code = code)
         }
         if (showDivider) {
             Spacer(modifier = Modifier.height(14.dp))

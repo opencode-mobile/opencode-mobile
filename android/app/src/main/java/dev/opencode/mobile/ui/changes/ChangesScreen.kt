@@ -3,7 +3,6 @@ package dev.opencode.mobile.ui.changes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -44,14 +43,16 @@ import dev.opencode.mobile.ProductRouteScreenViewEffect
 import dev.opencode.mobile.backwardRouteTransition
 import dev.opencode.mobile.domain.session.FileDiff
 import dev.opencode.mobile.forwardRouteTransition
-import dev.opencode.mobile.theme.openCodeColor
-import dev.opencode.mobile.ui.components.OpenCodeButton
-import dev.opencode.mobile.ui.components.OpenCodeButtonContrast
-import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
+import dev.opencode.mobile.ui.components.OpenCodeDiffStat
+import dev.opencode.mobile.ui.components.OpenCodeDiffStatSeparator
+import dev.opencode.mobile.ui.components.OpenCodeDiffStatStyle
 import dev.opencode.mobile.ui.components.OpenCodeHunkNavigationPill
 import dev.opencode.mobile.ui.components.OpenCodeListGroup
 import dev.opencode.mobile.ui.components.OpenCodeEmptyState
 import dev.opencode.mobile.ui.components.OpenCodeEmptyStateAction
+import dev.opencode.mobile.ui.components.OpenCodeInlineNotice
+import dev.opencode.mobile.ui.components.OpenCodeInlineNoticeAction
+import dev.opencode.mobile.ui.components.openCodeDiffStatAnnotatedString
 import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeListItemAccessory
 import dev.opencode.mobile.ui.components.OpenCodeStatusStack
@@ -287,9 +288,13 @@ private fun ChangedFilesContent(
                             withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurfaceVariant)) {
                                 append("${changeSet.summary}  ")
                             }
-                            withStyle(SpanStyle(color = openCodeColor("diff-add"))) { append("+${changeSet.additions}") }
-                            append("  ")
-                            withStyle(SpanStyle(color = openCodeColor("diff-delete"))) { append("−${changeSet.deletions}") }
+                            append(
+                                openCodeDiffStatAnnotatedString(
+                                    additions = changeSet.additions,
+                                    deletions = changeSet.deletions,
+                                    separator = OpenCodeDiffStatSeparator.Wide,
+                                ),
+                            )
                         },
                     modifier = Modifier.semantics { contentDescription = changeSet.aggregateAccessibilityLabel },
                     style = MaterialTheme.typography.labelLarge,
@@ -297,26 +302,14 @@ private fun ChangedFilesContent(
             }
             state.refreshError?.let { error ->
                 item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = "Refresh failed: $error",
-                            modifier = Modifier.weight(1f),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        OpenCodeButton(
-                            OpenCodeButtonVariant.CompactText("Retry"),
-                            onClick = {
+                    OpenCodeInlineNotice(
+                        message = "Refresh failed: $error",
+                        action =
+                            OpenCodeInlineNoticeAction(title = "Retry") {
                                 logChangesAction(ProductAnalytics.Action.CHANGES_RETRY)
                                 viewModel.refresh()
                             },
-                            contrast = OpenCodeButtonContrast.Low,
-                        )
-                    }
+                    )
                 }
             }
             item {
@@ -376,10 +369,12 @@ private fun FileRow(
         modifier = Modifier.semantics { contentDescription = changeSet.fileAccessibilityLabel(file) },
         accessory = OpenCodeListItemAccessory.Disclosure,
         trailing = {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("+${file.additions}", style = MaterialTheme.typography.labelMedium, color = openCodeColor("diff-add"))
-                Text("−${file.deletions}", style = MaterialTheme.typography.labelMedium, color = openCodeColor("diff-delete"))
-            }
+            OpenCodeDiffStat(
+                additions = file.additions,
+                deletions = file.deletions,
+                style = OpenCodeDiffStatStyle.Label,
+                separator = OpenCodeDiffStatSeparator.Split,
+            )
         },
     )
 }

@@ -49,6 +49,9 @@ enum ComponentGalleryEntryID: String, Hashable {
     case serverAddressInput
     case emptyState
     case statusStack
+    case diffStat
+    case inlineNotice
+    case codeSnippet
     case sessionList
     case sessionListDock
     case sessionStatusBar
@@ -155,6 +158,24 @@ let componentGalleryEntries = [
         id: .statusStack,
         title: "Status Stack",
         description: "Centered mid-well indeterminate status for first content load.",
+        category: .controls
+    ),
+    ComponentGalleryEntry(
+        id: .diffStat,
+        title: "Diff Stat",
+        description: "Addition and deletion counts for changed files.",
+        category: .diffs
+    ),
+    ComponentGalleryEntry(
+        id: .inlineNotice,
+        title: "Inline Notice",
+        description: "Tonal inline message with an optional trailing action.",
+        category: .controls
+    ),
+    ComponentGalleryEntry(
+        id: .codeSnippet,
+        title: "Code Snippet",
+        description: "Monospace command block.",
         category: .controls
     ),
     ComponentGalleryEntry(

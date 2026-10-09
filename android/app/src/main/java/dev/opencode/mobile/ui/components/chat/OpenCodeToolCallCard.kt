@@ -24,10 +24,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.theme.OpenCodeTheme
@@ -153,30 +150,9 @@ fun OpenCodeToolCallCard(
                         }
 
                         if (hasDiffCounts) {
-                            Text(
-                                text =
-                                    buildAnnotatedString {
-                                        if (additionCount > 0) {
-                                            withStyle(SpanStyle(color = openCodeColor("diff-add"))) {
-                                                append("+$additionCount")
-                                            }
-                                        }
-                                        if (deletionCount > 0) {
-                                            if (additionCount > 0) {
-                                                withStyle(
-                                                    SpanStyle(color = MaterialTheme.colorScheme.onSurfaceVariant),
-                                                ) {
-                                                    append(" ")
-                                                }
-                                            }
-                                            withStyle(SpanStyle(color = openCodeColor("diff-delete"))) {
-                                                append("−$deletionCount")
-                                            }
-                                        }
-                                    },
-                                style = MaterialTheme.typography.bodySmall,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
+                            OpenCodeDiffStat(
+                                additions = additionCount.takeIf { it > 0 },
+                                deletions = deletionCount.takeIf { it > 0 },
                             )
                         }
                     }

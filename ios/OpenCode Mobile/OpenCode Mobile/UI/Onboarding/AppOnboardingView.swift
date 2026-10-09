@@ -276,13 +276,7 @@ private struct AppOnboardingSetupGuideView: View {
                 .font(OpenCodeTypography.caption)
                 .foregroundStyle(OpenCodeColors.textBase)
             if let code {
-                Text(code)
-                    .font(OpenCodeTypography.code)
-                    .foregroundStyle(Color.white)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color(white: 0.12), in: RoundedRectangle(cornerRadius: 10))
+                OpenCodeCodeSnippet(code)
                     .padding(.top, 2)
             }
             if showDivider {

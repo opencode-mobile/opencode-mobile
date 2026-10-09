@@ -215,12 +215,7 @@ private struct TextMateLogbookStoreHealthView: View {
     let storageError: String?
 
     var body: some View {
-        Text(message)
-            .font(OpenCodeTypography.caption)
-            .foregroundStyle(OpenCodeColors.error)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(12)
-            .background(OpenCodeColors.error.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
+        OpenCodeInlineNotice(message: message, tone: .error, variant: .banner)
     }
 
     private var message: String {

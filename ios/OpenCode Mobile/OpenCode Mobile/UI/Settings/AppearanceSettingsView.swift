@@ -275,11 +275,7 @@ private struct SyntaxPreviewCard: View {
                             .foregroundStyle(OpenCodeColors.interactive)
                     }
                 }
-                Text(syntaxSnippet(tokens))
-                    .font(OpenCodeTypography.code)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(10)
-                    .background(OpenCodeColors.surfaceBase, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                OpenCodeCodeSnippet(syntaxSnippet(tokens), surface: .base)
             }
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)

@@ -60,12 +60,15 @@ import dev.opencode.mobile.ui.componentgallery.components.BottomSheetGalleryScre
 import dev.opencode.mobile.ui.componentgallery.components.ButtonGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ChildSessionRowGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ChoiceBadgeGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.CodeSnippetGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ComposerSuggestionOverlayGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.DialogGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.DiffStatGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.EmptyStateGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.FilterTabsGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.HunkNavigationPillGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.IconsGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.InlineNoticeGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ListGroupGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ListItemGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.MessageListGalleryDetailScreen
@@ -565,6 +568,11 @@ fun MainNavigation() {
                                                             EmptyStateGalleryScreen()
                                                         ComponentGalleryEntryId.StatusStack ->
                                                             StatusStackGalleryScreen()
+                                                        ComponentGalleryEntryId.DiffStat -> DiffStatGalleryScreen()
+                                                        ComponentGalleryEntryId.InlineNotice ->
+                                                            InlineNoticeGalleryScreen()
+                                                        ComponentGalleryEntryId.CodeSnippet ->
+                                                            CodeSnippetGalleryScreen()
                                                         ComponentGalleryEntryId.SessionList ->
                                                             SessionListGalleryScreen()
                                                         ComponentGalleryEntryId.SessionListDock ->

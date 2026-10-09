@@ -177,10 +177,7 @@ struct SettingsView: View {
                     .padding(.horizontal, 16)
 
                     if let loadError = themeManager.loadError {
-                        Text(loadError)
-                            .font(OpenCodeTypography.caption)
-                            .foregroundStyle(OpenCodeColors.error)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                        OpenCodeInlineNotice(message: loadError, tone: .error)
                             .padding(.horizontal, 16)
                             .padding(.top, 4)
                     }

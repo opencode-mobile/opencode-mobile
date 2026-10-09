@@ -62,10 +62,7 @@ struct SessionContextView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 28) {
                     if let refreshErrorMessage = viewModel.refreshErrorMessage {
-                        Text(refreshErrorMessage)
-                            .font(OpenCodeTypography.caption)
-                            .foregroundStyle(OpenCodeColors.textBase)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                        OpenCodeInlineNotice(message: refreshErrorMessage, tone: .neutral)
                     }
                     statsGrid(displayState.stats)
                     if !displayState.breakdown.isEmpty {

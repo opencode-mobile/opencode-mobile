@@ -155,10 +155,7 @@ struct DiagnosticLogsView: View {
                             )
                         }
                         if let shareError = model.shareError {
-                            Text(shareError)
-                                .font(OpenCodeTypography.caption)
-                                .foregroundStyle(OpenCodeColors.error)
-                                .frame(maxWidth: .infinity, alignment: .leading)
+                            OpenCodeInlineNotice(message: shareError, tone: .error)
                                 .padding(.top, 4)
                         }
                     }

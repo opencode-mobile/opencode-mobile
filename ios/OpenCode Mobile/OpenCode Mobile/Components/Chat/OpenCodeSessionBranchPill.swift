@@ -64,16 +64,12 @@ struct OpenCodeSessionBranchPill: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
                     .frame(minWidth: 0, alignment: .leading)
-                if let additionLabel = Self.additionLabel(additions: additions) {
-                    Text(additionLabel)
-                        .font(OpenCodeTypography.button)
-                        .foregroundStyle(enabled ? OpenCodeColors.diffAdd : OpenCodeColors.textBase)
+                if Self.additionLabel(additions: additions) != nil {
+                    OpenCodeDiffStat(additions: additions, enabled: enabled, style: .button)
                         .fixedSize(horizontal: true, vertical: false)
                 }
-                if let deletionLabel = Self.deletionLabel(deletions: deletions) {
-                    Text(deletionLabel)
-                        .font(OpenCodeTypography.button)
-                        .foregroundStyle(enabled ? OpenCodeColors.diffDelete : OpenCodeColors.textBase)
+                if Self.deletionLabel(deletions: deletions) != nil {
+                    OpenCodeDiffStat(deletions: deletions, enabled: enabled, style: .button)
                         .fixedSize(horizontal: true, vertical: false)
                 }
             }

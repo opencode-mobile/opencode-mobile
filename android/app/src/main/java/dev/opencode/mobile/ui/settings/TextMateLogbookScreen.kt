@@ -37,6 +37,9 @@ import dev.opencode.mobile.ui.components.OpenCodeStatusStackStyle
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeDialog
 import dev.opencode.mobile.ui.components.OpenCodeDialogOption
+import dev.opencode.mobile.ui.components.OpenCodeInlineNotice
+import dev.opencode.mobile.ui.components.OpenCodeInlineNoticeTone
+import dev.opencode.mobile.ui.components.OpenCodeInlineNoticeVariant
 import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeListItemStatus
 import dev.opencode.mobile.ui.components.OpenCodeListItemStatusTone
@@ -170,22 +173,17 @@ private fun TextMateStoreHealth(
     droppedEntries: Long,
     storageError: String?,
 ) {
-    Surface(
-        color = MaterialTheme.colorScheme.errorContainer,
-        shape = MaterialTheme.shapes.small,
-    ) {
-        Text(
-            text =
-                buildString {
-                    if (droppedEntries > 0) append("$droppedEntries entries dropped under writer pressure.")
-                    if (droppedEntries > 0 && storageError != null) append(' ')
-                    storageError?.let { append("Storage error: $it.") }
-                },
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onErrorContainer,
-            modifier = Modifier.padding(12.dp),
-        )
-    }
+    val message =
+        buildString {
+            if (droppedEntries > 0) append("$droppedEntries entries dropped under writer pressure.")
+            if (droppedEntries > 0 && storageError != null) append(' ')
+            storageError?.let { append("Storage error: $it.") }
+        }
+    OpenCodeInlineNotice(
+        message = message,
+        tone = OpenCodeInlineNoticeTone.Error,
+        variant = OpenCodeInlineNoticeVariant.Banner,
+    )
 }
 
 @Composable

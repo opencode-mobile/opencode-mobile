@@ -207,27 +207,24 @@ struct ChangesView: View {
         (
             Text(changeSet.summary + "  ")
                 .foregroundColor(OpenCodeColors.textBase)
-                + Text("+\(changeSet.additions)")
-                .foregroundColor(OpenCodeColors.diffAdd)
-                + Text("  ")
-                + Text("−\(changeSet.deletions)")
-                .foregroundColor(OpenCodeColors.diffDelete)
+                + OpenCodeDiffStat.text(
+                    additions: changeSet.additions,
+                    deletions: changeSet.deletions,
+                    separator: .wide
+                )
         )
         .font(OpenCodeTypography.caption)
         .accessibilityLabel(changeSet.aggregateAccessibilityLabel)
     }
 
     private func refreshFailure(_ detail: String) -> some View {
-        HStack(spacing: 12) {
-            Text("Refresh failed: \(detail)")
-                .font(OpenCodeTypography.bodySecondary)
-                .foregroundStyle(OpenCodeColors.textBase)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            OpenCodeButton(variant: .compactText(title: "Retry"), contrast: .low) {
+        OpenCodeInlineNotice(
+            message: "Refresh failed: \(detail)",
+            action: OpenCodeInlineNoticeAction(title: "Retry") {
                 logAction(ProductAnalytics.Action.changesRetry)
                 Task { await viewModel.refresh() }
             }
-        }
+        )
         .accessibilityElement(children: .combine)
     }
 
@@ -235,15 +232,13 @@ struct ChangesView: View {
         OpenCodeListItem(title: changedFileName(file.path), accessory: .disclosure, action: {
             logAction(ProductAnalytics.Action.changesOpenFile)
             selectedPath = file.path
-        }, trailing: {
-            HStack(spacing: 12) {
-                Text("+\(file.additions)")
-                    .font(OpenCodeTypography.caption)
-                    .foregroundStyle(OpenCodeColors.diffAdd)
-                Text("−\(file.deletions)")
-                    .font(OpenCodeTypography.caption)
-                    .foregroundStyle(OpenCodeColors.diffDelete)
-            }
+        },         trailing: {
+            OpenCodeDiffStat(
+                additions: file.additions,
+                deletions: file.deletions,
+                style: .label,
+                separator: .split
+            )
         })
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(changeSet.fileAccessibilityLabel(file))

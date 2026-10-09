@@ -144,10 +144,7 @@ struct SessionChatView: View {
             }
 
             if let notice = viewModel.uiState.composer.modelNotice {
-                Text(notice)
-                    .font(OpenCodeTypography.caption)
-                    .foregroundStyle(OpenCodeColors.textBase)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                OpenCodeInlineNotice(message: notice)
                     .padding(.horizontal, 16)
                     .padding(.bottom, 8)
                     .openCodeReadableColumn()

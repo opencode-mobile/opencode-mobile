@@ -36,6 +36,7 @@ import dev.opencode.mobile.domain.sessioncontext.SessionContextBreakdownKind
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.OpenCodeEmptyState
 import dev.opencode.mobile.ui.components.OpenCodeEmptyStateAction
+import dev.opencode.mobile.ui.components.OpenCodeInlineNotice
 import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
 import dev.opencode.mobile.ui.components.OpenCodeStatusStack
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
@@ -130,11 +131,7 @@ private fun SessionContextContent(
         verticalArrangement = Arrangement.spacedBy(28.dp),
     ) {
         if (errorMessage != null) {
-            Text(
-                text = errorMessage,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            OpenCodeInlineNotice(message = errorMessage)
         }
         StatGrid(display.stats)
         if (display.breakdown.isNotEmpty()) {

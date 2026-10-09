@@ -110,13 +110,14 @@ struct OpenCodeReviewChangesPill: View {
         let disabledColor = OpenCodeColors.textBase
         var text = Text(summary.fileLabel)
             .foregroundColor(enabled ? OpenCodeColors.textStrong : disabledColor)
-        if let additionLabel = summary.additionLabel {
-            text = text + Text("  ") + Text(additionLabel)
-                .foregroundColor(enabled ? OpenCodeColors.diffAdd : disabledColor)
-        }
-        if let deletionLabel = summary.deletionLabel {
-            text = text + Text("  ") + Text(deletionLabel)
-                .foregroundColor(enabled ? OpenCodeColors.diffDelete : disabledColor)
+        let counts = OpenCodeDiffStat.text(
+            additions: additions > 0 ? additions : nil,
+            deletions: deletions > 0 ? deletions : nil,
+            enabled: enabled,
+            separator: .wide
+        )
+        if summary.additionLabel != nil || summary.deletionLabel != nil {
+            text = text + Text("  ") + counts
         }
         return text
     }

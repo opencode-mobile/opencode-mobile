@@ -44,6 +44,8 @@ import dev.opencode.mobile.ui.components.OpenCodeButtonSize
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeDialog
 import dev.opencode.mobile.ui.components.OpenCodeDialogOption
+import dev.opencode.mobile.ui.components.OpenCodeInlineNotice
+import dev.opencode.mobile.ui.components.OpenCodeInlineNoticeTone
 import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeListItemStyle
 import dev.opencode.mobile.ui.components.OpenCodeStatusStack
@@ -323,10 +325,9 @@ fun DiagnosticLogsScreen(
                                 )
                             }
                             state.shareError?.let { error ->
-                                Text(
-                                    text = error,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.error,
+                                OpenCodeInlineNotice(
+                                    message = error,
+                                    tone = OpenCodeInlineNoticeTone.Error,
                                     modifier = Modifier.padding(top = 4.dp),
                                 )
                             }

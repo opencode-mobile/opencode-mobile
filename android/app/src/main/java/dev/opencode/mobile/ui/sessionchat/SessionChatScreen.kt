@@ -64,6 +64,7 @@ import dev.opencode.mobile.ui.components.OpenCodeComposerSuggestionOverlay
 import dev.opencode.mobile.ui.components.OpenCodeDialog
 import dev.opencode.mobile.ui.components.OpenCodeDialogOption
 import dev.opencode.mobile.ui.components.OpenCodeDialogTextField
+import dev.opencode.mobile.ui.components.OpenCodeInlineNotice
 import dev.opencode.mobile.ui.components.OpenCodeLayout
 import dev.opencode.mobile.ui.components.OpenCodeOverflowMenuEntry
 import dev.opencode.mobile.ui.components.OpenCodePendingPromptsStrip
@@ -462,17 +463,14 @@ fun SessionChatScreen(
                 )
             }
             uiState.composer.modelNotice?.let { notice ->
-                Text(
-                    text = notice,
+                OpenCodeInlineNotice(
+                    message = notice,
                     modifier =
                         Modifier
                             .align(Alignment.CenterHorizontally)
                             .widthIn(max = OpenCodeLayout.ContentMaxWidth)
-                            .fillMaxWidth()
                             .padding(horizontal = 16.dp)
                             .padding(bottom = 8.dp),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
 

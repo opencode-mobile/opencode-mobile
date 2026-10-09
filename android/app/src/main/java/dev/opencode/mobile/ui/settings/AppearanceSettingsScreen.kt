@@ -22,7 +22,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -34,6 +33,8 @@ import dev.opencode.mobile.theme.ThemeManager
 import dev.opencode.mobile.theme.ThemePreset
 import dev.opencode.mobile.theme.ThemeResolver
 import dev.opencode.mobile.theme.openCodeColor
+import dev.opencode.mobile.ui.components.OpenCodeCodeSnippet
+import dev.opencode.mobile.ui.components.OpenCodeCodeSnippetSurface
 import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeListItemAccessory
 import dev.opencode.mobile.ui.components.OpenCodeListItemStyle
@@ -329,18 +330,10 @@ private fun SyntaxPreviewCard(
                 )
             }
         }
-        Text(
-            text = syntaxSnippet(tokens),
-            modifier =
-                Modifier
-                    .padding(top = 10.dp)
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(openCodeColor("surface-base"))
-                    .padding(10.dp),
-            fontFamily = FontFamily.Monospace,
-            fontSize = 12.sp,
-            lineHeight = 18.sp,
+        OpenCodeCodeSnippet(
+            code = syntaxSnippet(tokens),
+            modifier = Modifier.padding(top = 10.dp),
+            surface = OpenCodeCodeSnippetSurface.Base,
         )
     }
 }

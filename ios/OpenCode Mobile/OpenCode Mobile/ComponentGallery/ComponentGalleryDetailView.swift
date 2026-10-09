@@ -154,6 +154,12 @@ struct ComponentGalleryDetailView: View {
             EmptyStateGalleryView()
         case .statusStack:
             StatusStackGalleryView()
+        case .diffStat:
+            DiffStatGalleryView()
+        case .inlineNotice:
+            InlineNoticeGalleryView()
+        case .codeSnippet:
+            CodeSnippetGalleryView()
         case .sessionList:
             SessionListGalleryView()
         case .sessionListDock:
