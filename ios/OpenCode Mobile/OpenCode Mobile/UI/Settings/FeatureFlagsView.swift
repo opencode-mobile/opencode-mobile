@@ -66,17 +66,13 @@ struct FeatureFlagsView: View {
             subtitle: Self.subtitle(for: flag, resolution: resolution),
             style: .card,
             startDecorator: .icon(.settings, accessibilityLabel: flag.title),
-            trailing: {
-                Toggle(
-                    flag.title,
-                    isOn: Binding(
-                        get: { featureFlags.resolution(flag).value },
-                        set: { featureFlags.setOverride(flag, $0) }
-                    )
-                )
-                .labelsHidden()
-                .tint(OpenCodeColors.interactive)
-            }
+            accessory: .toggle(
+                isOn: Binding(
+                    get: { featureFlags.resolution(flag).value },
+                    set: { featureFlags.setOverride(flag, $0) }
+                ),
+                accessibilityLabel: flag.title
+            )
         )
         .padding(.horizontal, 16)
     }

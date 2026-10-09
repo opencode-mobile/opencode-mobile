@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -24,6 +23,7 @@ import dev.opencode.mobile.domain.featureflags.FeatureFlags
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.OpenCodeListItem
+import dev.opencode.mobile.ui.components.OpenCodeListItemAccessory
 import dev.opencode.mobile.ui.components.OpenCodeListItemStyle
 import dev.opencode.mobile.ui.components.OpenCodeOverflowMenuEntry
 import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
@@ -123,12 +123,11 @@ fun FeatureFlagsScreen(
                         subtitle = row.subtitle,
                         style = OpenCodeListItemStyle.Card,
                         startDecorator = StartDecorator.Icon(OpenCodeIcons.Settings, row.flag.title),
-                        trailing = {
-                            Switch(
+                        accessory =
+                            OpenCodeListItemAccessory.Toggle(
                                 checked = row.resolution.value,
                                 onCheckedChange = { onOverrideChange(row.flag, it) },
-                            )
-                        },
+                            ),
                         modifier = Modifier.padding(horizontal = 16.dp),
                     )
                 }

@@ -35,6 +35,7 @@ import dev.opencode.mobile.theme.ThemePreset
 import dev.opencode.mobile.theme.ThemeResolver
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.OpenCodeListItem
+import dev.opencode.mobile.ui.components.OpenCodeListItemAccessory
 import dev.opencode.mobile.ui.components.OpenCodeListItemStyle
 import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
@@ -71,19 +72,13 @@ fun AppearanceSettingsScreen(
                     subtitle = "${theme.name} · ${themeBlurb(theme.id)}",
                     style = OpenCodeListItemStyle.Card,
                     startDecorator = StartDecorator.Icon(OpenCodeIcons.Widgets, "Theme"),
+                    accessory = OpenCodeListItemAccessory.Disclosure,
                     onClick = {
                         ProductAnalytics.logUserAction(
                             screenId = ProductAnalytics.Screen.SETTINGS_APPEARANCE,
                             actionId = ProductAnalytics.Action.SETTINGS_OPEN_THEME_PICKER,
                         )
                         onThemeClick()
-                    },
-                    trailing = {
-                        Icon(
-                            imageVector = OpenCodeIcons.ChevronRight,
-                            contentDescription = null,
-                            tint = openCodeColor("text-base"),
-                        )
                     },
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
@@ -92,19 +87,13 @@ fun AppearanceSettingsScreen(
                     subtitle = "${syntax.name} · ${syntax.blurb}",
                     style = OpenCodeListItemStyle.Card,
                     startDecorator = StartDecorator.Icon(OpenCodeIcons.Description, "Code highlight"),
+                    accessory = OpenCodeListItemAccessory.Disclosure,
                     onClick = {
                         ProductAnalytics.logUserAction(
                             screenId = ProductAnalytics.Screen.SETTINGS_APPEARANCE,
                             actionId = ProductAnalytics.Action.SETTINGS_OPEN_SYNTAX_PICKER,
                         )
                         onSyntaxClick()
-                    },
-                    trailing = {
-                        Icon(
-                            imageVector = OpenCodeIcons.ChevronRight,
-                            contentDescription = null,
-                            tint = openCodeColor("text-base"),
-                        )
                     },
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )

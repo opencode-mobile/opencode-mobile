@@ -28,6 +28,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
@@ -106,6 +107,18 @@ data class OpenCodeListItemStatus(
     val tone: OpenCodeListItemStatusTone,
 )
 
+/** Built-in trailing control. Custom trailing composables stay available for anything else. */
+sealed class OpenCodeListItemAccessory {
+    /** Navigation chevron. The row click owns the tap. */
+    data object Disclosure : OpenCodeListItemAccessory()
+
+    /** Switch. The row should not also take a click. */
+    data class Toggle(
+        val checked: Boolean,
+        val onCheckedChange: (Boolean) -> Unit,
+    ) : OpenCodeListItemAccessory()
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun OpenCodeListItem(
@@ -118,6 +131,7 @@ fun OpenCodeListItem(
     enabled: Boolean = true,
     style: OpenCodeListItemStyle = OpenCodeListItemStyle.Plain,
     startDecorator: StartDecorator = StartDecorator.None,
+    accessory: OpenCodeListItemAccessory? = null,
     onClick: (() -> Unit)? = null,
     onLongPress: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
@@ -294,6 +308,25 @@ fun OpenCodeListItem(
 
                 if (trailing != null) {
                     Box(contentAlignment = Alignment.Center) { trailing() }
+                }
+
+                when (val itemAccessory = accessory) {
+                    null -> Unit
+                    OpenCodeListItemAccessory.Disclosure -> {
+                        Icon(
+                            imageVector = OpenCodeIcons.ChevronRight,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                            tint = if (enabled) openCodeColor("text-base") else openCodeColor("text-weaker"),
+                        )
+                    }
+                    is OpenCodeListItemAccessory.Toggle -> {
+                        Switch(
+                            checked = itemAccessory.checked,
+                            onCheckedChange = itemAccessory.onCheckedChange,
+                            enabled = enabled,
+                        )
+                    }
                 }
             }
         }

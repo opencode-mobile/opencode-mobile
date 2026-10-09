@@ -20,16 +20,13 @@ struct AppearanceSettingsView: View {
                         subtitle: "\(themeManager.currentTheme.name) · \(themeBlurb(themeManager.currentTheme.id))",
                         style: .card,
                         startDecorator: .icon(.widgets, accessibilityLabel: "Theme"),
+                        accessory: .disclosure,
                         action: {
                             ProductAnalytics.logUserAction(
                                 screenId: ProductAnalytics.Screen.settingsAppearance,
                                 actionId: ProductAnalytics.Action.settingsOpenThemePicker
                             )
                             showThemePicker = true
-                        },
-                        trailing: {
-                            OpenCodeIconImage(icon: .chevronRight, size: 18)
-                                .foregroundStyle(OpenCodeColors.textBase)
                         }
                     )
                     .padding(.horizontal, 16)
@@ -39,16 +36,13 @@ struct AppearanceSettingsView: View {
                         subtitle: "\(themeManager.currentSyntaxPreset.name) · \(themeManager.currentSyntaxPreset.blurb)",
                         style: .card,
                         startDecorator: .icon(.description, accessibilityLabel: "Code highlight"),
+                        accessory: .disclosure,
                         action: {
                             ProductAnalytics.logUserAction(
                                 screenId: ProductAnalytics.Screen.settingsAppearance,
                                 actionId: ProductAnalytics.Action.settingsOpenSyntaxPicker
                             )
                             showSyntaxPicker = true
-                        },
-                        trailing: {
-                            OpenCodeIconImage(icon: .chevronRight, size: 18)
-                                .foregroundStyle(OpenCodeColors.textBase)
                         }
                     )
                     .padding(.horizontal, 16)

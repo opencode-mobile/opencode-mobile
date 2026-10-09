@@ -231,7 +231,7 @@ struct ChangesView: View {
     }
 
     private func fileRow(_ file: FileDiff, changeSet: ChangesContentState) -> some View {
-        OpenCodeListItem(title: changedFileName(file.path), action: {
+        OpenCodeListItem(title: changedFileName(file.path), accessory: .disclosure, action: {
             logAction(ProductAnalytics.Action.changesOpenFile)
             selectedPath = file.path
         }, trailing: {
@@ -242,7 +242,6 @@ struct ChangesView: View {
                 Text("−\(file.deletions)")
                     .font(OpenCodeTypography.caption)
                     .foregroundStyle(OpenCodeColors.diffDelete)
-                OpenCodeIconImage(icon: .chevronRight, size: 20)
             }
         })
         .accessibilityElement(children: .ignore)

@@ -91,22 +91,18 @@ struct TextMateLanguagesView: View {
             subtitle: enabled ? "Default on" : "Opted out",
             style: .card,
             startDecorator: .icon(.architecture, accessibilityLabel: language),
-            trailing: {
-                Toggle(
-                    language,
-                    isOn: Binding(
-                        get: { preferences.isLanguageEnabled(language) },
-                        set: { enabled in
-                            preferences.setLanguageEnabled(language, enabled: enabled)
-                            MessageContentPreparer.shared.clearDocumentCache()
-                            BlockDecorationCache.shared.clear()
-                            refreshToken += 1
-                        }
-                    )
-                )
-                .labelsHidden()
-                .tint(OpenCodeColors.interactive)
-            }
+            accessory: .toggle(
+                isOn: Binding(
+                    get: { preferences.isLanguageEnabled(language) },
+                    set: { enabled in
+                        preferences.setLanguageEnabled(language, enabled: enabled)
+                        MessageContentPreparer.shared.clearDocumentCache()
+                        BlockDecorationCache.shared.clear()
+                        refreshToken += 1
+                    }
+                ),
+                accessibilityLabel: language
+            )
         )
         .padding(.horizontal, 16)
     }

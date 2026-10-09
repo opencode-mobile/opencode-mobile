@@ -11,7 +11,6 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
-import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 @Composable
 fun OpenCodeListGroup(
@@ -45,7 +44,7 @@ private fun OpenCodeListGroupPreview() {
         OpenCodeListGroup(itemCount = files.size) { index ->
             OpenCodeListItem(
                 title = files[index],
-                trailing = { androidx.compose.material3.Icon(OpenCodeIcons.ChevronRight, contentDescription = null) },
+                accessory = OpenCodeListItemAccessory.Disclosure,
             )
         }
     }

@@ -55,16 +55,13 @@ struct SettingsView: View {
                         subtitle: serversSubtitleState,
                         style: .card,
                         startDecorator: .letter(serversLetter, serversLetterAccent),
+                        accessory: .disclosure,
                         action: {
                             ProductAnalytics.logUserAction(
                                 screenId: ProductAnalytics.Screen.settings,
                                 actionId: ProductAnalytics.Action.settingsOpenConnection
                             )
                             showServers = true
-                        },
-                        trailing: {
-                            OpenCodeIconImage(icon: .chevronRight, size: 18)
-                                .foregroundStyle(OpenCodeColors.textBase)
                         }
                     )
                     .padding(.horizontal, 16)
@@ -76,13 +73,10 @@ struct SettingsView: View {
                         subtitle: "\(themeManager.currentTheme.name) · \(themeManager.currentSyntaxPreset.name)",
                         style: .card,
                         startDecorator: .icon(.widgets, accessibilityLabel: "Appearance"),
+                        accessory: .disclosure,
                         action: {
                             logSettingsAction(ProductAnalytics.Action.settingsOpenAppearance)
                             showAppearance = true
-                        },
-                        trailing: {
-                            OpenCodeIconImage(icon: .chevronRight, size: 18)
-                                .foregroundStyle(OpenCodeColors.textBase)
                         }
                     )
                     .padding(.horizontal, 16)
@@ -92,22 +86,18 @@ struct SettingsView: View {
                         subtitle: "Show ~/Projects/… instead of /Users/you/Projects/…",
                         style: .card,
                         startDecorator: .icon(.folder, accessibilityLabel: "Hide User Directory"),
-                        trailing: {
-                            Toggle(
-                                "Hide User Directory",
-                                isOn: Binding(
-                                    get: { homeDisplayPreferences.hideUserDirectoryPrefix },
-                                    set: { newValue in
-                                        logSettingsAction(
-                                            ProductAnalytics.Action.settingsToggleHideUserDirectory
-                                        )
-                                        homeDisplayPreferences.setHideUserDirectoryPrefix(newValue)
-                                    }
-                                )
-                            )
-                            .labelsHidden()
-                            .tint(OpenCodeColors.interactive)
-                        }
+                        accessory: .toggle(
+                            isOn: Binding(
+                                get: { homeDisplayPreferences.hideUserDirectoryPrefix },
+                                set: { newValue in
+                                    logSettingsAction(
+                                        ProductAnalytics.Action.settingsToggleHideUserDirectory
+                                    )
+                                    homeDisplayPreferences.setHideUserDirectoryPrefix(newValue)
+                                }
+                            ),
+                            accessibilityLabel: "Hide User Directory"
+                        )
                     )
                     .padding(.horizontal, 16)
 
@@ -135,22 +125,18 @@ struct SettingsView: View {
                         subtitle: "Group back-to-back tools into one summary card",
                         style: .card,
                         startDecorator: .icon(.collapseContent, accessibilityLabel: "Collapse Consecutive Tool Calls"),
-                        trailing: {
-                            Toggle(
-                                "Collapse Consecutive Tool Calls",
-                                isOn: Binding(
-                                    get: { sessionChatDisplayPreferences.collapseConsecutiveToolCalls },
-                                    set: { newValue in
-                                        logSettingsAction(
-                                            ProductAnalytics.Action.settingsToggleCollapseConsecutiveToolCalls
-                                        )
-                                        sessionChatDisplayPreferences.setCollapseConsecutiveToolCalls(newValue)
-                                    }
-                                )
-                            )
-                            .labelsHidden()
-                            .tint(OpenCodeColors.interactive)
-                        }
+                        accessory: .toggle(
+                            isOn: Binding(
+                                get: { sessionChatDisplayPreferences.collapseConsecutiveToolCalls },
+                                set: { newValue in
+                                    logSettingsAction(
+                                        ProductAnalytics.Action.settingsToggleCollapseConsecutiveToolCalls
+                                    )
+                                    sessionChatDisplayPreferences.setCollapseConsecutiveToolCalls(newValue)
+                                }
+                            ),
+                            accessibilityLabel: "Collapse Consecutive Tool Calls"
+                        )
                     )
                     .padding(.horizontal, 16)
 
@@ -160,22 +146,18 @@ struct SettingsView: View {
                             subtitle: "Show the tools an agent used as chips under its narration",
                             style: .card,
                             startDecorator: .icon(.widgets, accessibilityLabel: "Chip Timeline"),
-                            trailing: {
-                                Toggle(
-                                    "Chip Timeline",
-                                    isOn: Binding(
-                                        get: { sessionChatDisplayPreferences.chipTimeline },
-                                        set: { newValue in
-                                            logSettingsAction(
-                                                ProductAnalytics.Action.settingsToggleChipTimeline
-                                            )
-                                            sessionChatDisplayPreferences.setChipTimeline(newValue)
-                                        }
-                                    )
-                                )
-                                .labelsHidden()
-                                .tint(OpenCodeColors.interactive)
-                            }
+                            accessory: .toggle(
+                                isOn: Binding(
+                                    get: { sessionChatDisplayPreferences.chipTimeline },
+                                    set: { newValue in
+                                        logSettingsAction(
+                                            ProductAnalytics.Action.settingsToggleChipTimeline
+                                        )
+                                        sessionChatDisplayPreferences.setChipTimeline(newValue)
+                                    }
+                                ),
+                                accessibilityLabel: "Chip Timeline"
+                            )
                         )
                         .padding(.horizontal, 16)
                     }
@@ -189,6 +171,7 @@ struct SettingsView: View {
                             followUpIcon,
                             accessibilityLabel: "Follow-up send"
                         ),
+                        accessory: supportsFollowUpDelivery ? .disclosure : nil,
                         action: supportsFollowUpDelivery ? { showFollowUpPicker = true } : nil
                     )
                     .padding(.horizontal, 16)
@@ -236,13 +219,10 @@ struct SettingsView: View {
                         subtitle: "How the apps handle data",
                         style: .card,
                         startDecorator: .icon(.description, accessibilityLabel: "Privacy Policy"),
+                        accessory: .disclosure,
                         action: {
                             logSettingsAction(ProductAnalytics.Action.settingsOpenPrivacyPolicy)
                             openURL(PrivacyPolicy.url)
-                        },
-                        trailing: {
-                            OpenCodeIconImage(icon: .chevronRight, size: 18)
-                                .foregroundStyle(OpenCodeColors.textBase)
                         }
                     )
                     .padding(.horizontal, 16)
@@ -252,25 +232,21 @@ struct SettingsView: View {
                         subtitle: "Allow optional product usage events. Crash reporting is unchanged.",
                         style: .card,
                         startDecorator: .icon(.description, accessibilityLabel: "Product Analytics"),
-                        trailing: {
-                            Toggle(
-                                "Product Analytics",
-                                isOn: Binding(
-                                    get: { analyticsConsentPreferences.productAnalyticsConsented },
-                                    set: { newValue in
-                                        // Log after applying consent: opting out is
-                                        // dropped by the gate rather than reported.
-                                        analyticsConsentPreferences
-                                            .setProductAnalyticsConsented(newValue)
-                                        logSettingsAction(
-                                            ProductAnalytics.Action.settingsToggleProductAnalytics
-                                        )
-                                    }
-                                )
-                            )
-                            .labelsHidden()
-                            .tint(OpenCodeColors.interactive)
-                        }
+                        accessory: .toggle(
+                            isOn: Binding(
+                                get: { analyticsConsentPreferences.productAnalyticsConsented },
+                                set: { newValue in
+                                    // Log after applying consent: opting out is
+                                    // dropped by the gate rather than reported.
+                                    analyticsConsentPreferences
+                                        .setProductAnalyticsConsented(newValue)
+                                    logSettingsAction(
+                                        ProductAnalytics.Action.settingsToggleProductAnalytics
+                                    )
+                                }
+                            ),
+                            accessibilityLabel: "Product Analytics"
+                        )
                     )
                     .padding(.horizontal, 16)
 
@@ -337,21 +313,17 @@ struct SettingsView: View {
                             subtitle: "On by default for all packaged languages; semantic fallback otherwise (can disable)",
                             style: .card,
                             startDecorator: .icon(.description, accessibilityLabel: "TextMate Highlighting"),
-                            trailing: {
-                                Toggle(
-                                    "TextMate Highlighting",
-                                    isOn: Binding(
-                                        get: { markdownHighlightPreferences.textMateEnabled },
-                                        set: { newValue in
-                                            markdownHighlightPreferences.setTextMateEnabled(newValue)
-                                            MessageContentPreparer.shared.clearDocumentCache()
-                                            BlockDecorationCache.shared.clear()
-                                        }
-                                    )
-                                )
-                                .labelsHidden()
-                                .tint(OpenCodeColors.interactive)
-                            }
+                            accessory: .toggle(
+                                isOn: Binding(
+                                    get: { markdownHighlightPreferences.textMateEnabled },
+                                    set: { newValue in
+                                        markdownHighlightPreferences.setTextMateEnabled(newValue)
+                                        MessageContentPreparer.shared.clearDocumentCache()
+                                        BlockDecorationCache.shared.clear()
+                                    }
+                                ),
+                                accessibilityLabel: "TextMate Highlighting"
+                            )
                         )
                         .padding(.horizontal, 16)
 

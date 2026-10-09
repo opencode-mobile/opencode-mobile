@@ -10,13 +10,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -55,6 +53,7 @@ import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeHunkNavigationPill
 import dev.opencode.mobile.ui.components.OpenCodeListGroup
 import dev.opencode.mobile.ui.components.OpenCodeListItem
+import dev.opencode.mobile.ui.components.OpenCodeListItemAccessory
 import dev.opencode.mobile.ui.components.OpenCodeOverflowMenuEntry
 import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
 import dev.opencode.mobile.ui.components.OpenCodeSectionHeader
@@ -374,11 +373,11 @@ private fun FileRow(
             onOpenFile(file.path)
         },
         modifier = Modifier.semantics { contentDescription = changeSet.fileAccessibilityLabel(file) },
+        accessory = OpenCodeListItemAccessory.Disclosure,
         trailing = {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("+${file.additions}", style = MaterialTheme.typography.labelMedium, color = openCodeColor("diff-add"))
                 Text("−${file.deletions}", style = MaterialTheme.typography.labelMedium, color = openCodeColor("diff-delete"))
-                Icon(OpenCodeIcons.ChevronRight, contentDescription = null, modifier = Modifier.size(20.dp))
             }
         },
     )
