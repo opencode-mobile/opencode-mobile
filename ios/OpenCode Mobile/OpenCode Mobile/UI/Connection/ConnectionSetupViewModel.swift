@@ -18,6 +18,25 @@ enum ConnectionCredentialSegment: Equatable {
     case pairingCode
 }
 
+enum ConnectionSetupEntry: Equatable {
+    case instructions
+    case manual
+}
+
+enum ConnectionAddressRecovery: Equatable {
+    case unreachable
+    case unauthorized
+
+    var message: String {
+        switch self {
+        case .unreachable:
+            "Can't reach the saved address. Pair again."
+        case .unauthorized:
+            "This server rejected the saved sign-in. Pair again. A new password logs every device out."
+        }
+    }
+}
+
 private enum ConnectFailureOrigin {
     case manual
     case scannedQr
@@ -37,8 +56,41 @@ struct ConnectionSetupAddressRow: Identifiable, Equatable {
 @MainActor
 @Observable
 final class ConnectionSetupViewModel {
-    static let qrSavedAddressesHint = "Both addresses are saved. Nothing to pick. The app uses Tailscale when it answers, and the local address when it does not. No password."
     static let qrScanFailureMessage = "QR didn't connect. OpenCode 2's pairing API is still changing, so a scan can fail while this app is working. Enter the host and connect. Password is optional. A pairing code works too."
+
+    static func savedAddressesHint(for urls: [String]) -> String {
+        let kinds = urls.map { savedAddressKind(for: $0) }
+        if !kinds.isEmpty, kinds.allSatisfy({ $0 == .tunnel }) {
+            return "Remote tunnel saved. Nothing else to pick. It stays until you turn remote access off."
+        }
+        if kinds.contains(.tailscale), kinds.contains(.local), !kinds.contains(.tunnel) {
+            return "Tailscale is used when it answers. Local network is the fallback."
+        }
+        return "Saved addresses are tried until one answers. Tailscale is preferred when it answers."
+    }
+
+    static func savedAddressTitle(for url: String) -> String {
+        switch savedAddressKind(for: url) {
+        case .tailscale:
+            "Tailscale"
+        case .tunnel:
+            "Remote tunnel"
+        case .local:
+            "Local network"
+        }
+    }
+
+    private enum SavedAddressKind {
+        case tailscale
+        case tunnel
+        case local
+    }
+
+    private static func savedAddressKind(for url: String) -> SavedAddressKind {
+        if PairingQRPayload.isTailscaleURL(url) { return .tailscale }
+        if PairingQRPayload.isOpenTunnelURL(url) { return .tunnel }
+        return .local
+    }
 
     var name = ""
     var baseURL = "" {
@@ -64,6 +116,8 @@ final class ConnectionSetupViewModel {
     private(set) var profileId = ""
     private(set) var requestPasswordFocus = false
     private(set) var snackbar: OpenCodeSnackbarMessage?
+    private(set) var entry: ConnectionSetupEntry = .instructions
+    private(set) var addressRecovery: ConnectionAddressRecovery?
 
     private let connectionProbeService: ConnectionProbing
     private let connectionSessionCoordinator: ConnectionSessionCoordinator
@@ -106,6 +160,10 @@ final class ConnectionSetupViewModel {
 
     var usesQRLayout: Bool { !serverURLs.isEmpty }
 
+    var showsInstructionEssay: Bool { entry == .instructions && !usesQRLayout }
+
+    var showsManualForm: Bool { entry == .manual && !usesQRLayout }
+
     var savedAddressRows: [ConnectionSetupAddressRow] {
         let chosen = ConnectionProfileIdentity.normalizeBaseURL(baseURL)
         return serverURLs.map { url in
@@ -115,7 +173,7 @@ final class ConnectionSetupViewModel {
             let label = ConnectionProfileIdentity.hostLabel(normalized)
             return ConnectionSetupAddressRow(
                 url: normalized,
-                title: PairingQRPayload.isTailscaleURL(normalized) ? "Tailscale" : "Local network",
+                title: Self.savedAddressTitle(for: normalized),
                 subtitle: unreachable ? "\(label) · not reachable" : label,
                 badge: isCurrent ? "Using now" : "Saved",
                 dimmed: unreachable,
@@ -139,8 +197,10 @@ final class ConnectionSetupViewModel {
         state = .idle
         requestPasswordFocus = false
         snackbar = nil
+        addressRecovery = nil
         addressProbeFinished = false
         unreachableAddresses = []
+        entry = isEditingExistingProfile ? .manual : .instructions
         if let initialProfile, mode == .edit {
             name = initialProfile.name
             setBaseURLFromSystem(initialProfile.baseURL)
@@ -176,13 +236,26 @@ final class ConnectionSetupViewModel {
     }
 
     var primaryActionLabel: String {
+        if addressRecovery != nil {
+            switch state {
+            case .connecting:
+                return mode == .edit ? "Saving…" : "Connecting…"
+            case .saving:
+                return "Saving…"
+            case .idle:
+                return "Scan a new QR"
+            }
+        }
+        if showsInstructionEssay {
+            return "Scan QR"
+        }
         switch state {
         case .connecting:
-            mode == .edit ? "Saving…" : "Connecting…"
+            return mode == .edit ? "Saving…" : "Connecting…"
         case .saving:
-            "Saving…"
+            return "Saving…"
         case .idle:
-            if mode == .edit || qrPairingReady { "Save" } else { "Connect" }
+            return mode == .edit || qrPairingReady ? "Save" : "Connect"
         }
     }
 
@@ -236,6 +309,21 @@ final class ConnectionSetupViewModel {
 
     func selectCredentialSegment(_ segment: ConnectionCredentialSegment) {
         credentialSegment = segment
+    }
+
+    func showPairingCodeForm() {
+        entry = .manual
+        selectCredentialSegment(.pairingCode)
+    }
+
+    func showHostPasswordForm() {
+        entry = .manual
+        selectCredentialSegment(.password)
+    }
+
+    func showScanInstructions() {
+        guard !usesQRLayout else { return }
+        entry = .instructions
     }
 
     func consumePasswordFocusRequest() {
@@ -352,6 +440,7 @@ final class ConnectionSetupViewModel {
         ), let winner = reachable.first(where: {
             ConnectionProfileIdentity.normalizeBaseURL($0.0) == winnerURL
         }) {
+            addressRecovery = nil
             detectedProtocol = winner.1
             if ConnectionProfileIdentity.normalizeBaseURL(winner.0) !=
                 ConnectionProfileIdentity.normalizeBaseURL(baseURL)
@@ -377,7 +466,8 @@ final class ConnectionSetupViewModel {
             probeErrors.first(where: { $0.probeStatus == .authFailed })
                 ?? probeErrors.last
                 ?? .transport("Unable to reach the server"),
-            origin: origin
+            origin: origin,
+            outcomes: outcomes
         )
         logConnectionAction(
             ProductAnalytics.Action.connectionTest,
@@ -406,7 +496,11 @@ final class ConnectionSetupViewModel {
                 guard case let .failure(error) = result else { return nil }
                 return error as? ServerProbeError
             }
-            handleProbeFailure(probeErrors.last ?? .transport("Unable to reach the server"), origin: origin)
+            handleProbeFailure(
+                probeErrors.last ?? .transport("Unable to reach the server"),
+                origin: origin,
+                outcomes: outcomes
+            )
             logConnectionAction(
                 ProductAnalytics.Action.connectionTest,
                 outcome: ProductAnalytics.Outcome.failure
@@ -430,6 +524,7 @@ final class ConnectionSetupViewModel {
                 } else {
                     discardUnconfirmedPastedLayout()
                     pendingPairingCode = nil
+                    addressRecovery = nil
                     state = .idle
                     snackbar = OpenCodeSnackbarMessage(
                         text: "This pairing link expired or was already used",
@@ -456,6 +551,7 @@ final class ConnectionSetupViewModel {
         password = token
         do {
             let detected = try await connectionProbeService.probe(connection: draftConnection(baseURL: winner))
+            addressRecovery = nil
             detectedProtocol = detected
             logConnectionAction(
                 ProductAnalytics.Action.connectionTest,
@@ -502,6 +598,7 @@ final class ConnectionSetupViewModel {
         serverURLs = ConnectionProfileIdentity.normalizedAddressList(credentials.urls)
         addressProbeFinished = false
         unreachableAddresses = []
+        addressRecovery = nil
         qrPairingReady = false
         pairedProtocol = nil
         scannedQrPassword = credentials.password
@@ -561,6 +658,7 @@ final class ConnectionSetupViewModel {
         serverURLs = []
         unreachableAddresses = []
         addressProbeFinished = false
+        addressRecovery = nil
         pendingPairingCode = nil
         qrPairingReady = false
         qrScanPending = false
@@ -568,6 +666,7 @@ final class ConnectionSetupViewModel {
         pairedProtocol = nil
         password = ""
         credentialSegment = .password
+        entry = .manual
     }
 
     /// Probe every saved address and redeem a pairing code. Does not store the profile.
@@ -598,20 +697,76 @@ final class ConnectionSetupViewModel {
         qrPairingReady = false
         qrScanPending = false
         pairedProtocol = nil
+        entry = .manual
     }
 
-    private func handleProbeFailure(_ error: ServerProbeError, origin: ConnectFailureOrigin = .manual) {
+    private func handleProbeFailure(
+        _ error: ServerProbeError,
+        origin: ConnectFailureOrigin = .manual,
+        outcomes: [(String, Result<ServerProtocol, Error>)]? = nil
+    ) {
         if origin == .scannedQr {
             presentScannedQrFailure()
             return
         }
+        let recovery: ConnectionAddressRecovery?
+        if let outcomes {
+            recovery = savedAddressRecovery(from: outcomes)
+        } else {
+            recovery = authRecovery(for: error)
+        }
         discardUnconfirmedPastedLayout()
+        if let recovery, !serverURLs.isEmpty {
+            addressRecovery = recovery
+            requestPasswordFocus = false
+            state = .idle
+            snackbar = nil
+            return
+        }
+        addressRecovery = nil
         let authFailed = error.probeStatus == .authFailed
         state = .idle
         if authFailed, credentialSegment == .password, !usesQRLayout {
             requestPasswordFocus = true
         }
         snackbar = OpenCodeSnackbarMessage(text: error.probeUserMessage, variant: .error)
+    }
+
+    /// Pair again only for a saved address list. A pasted link is not saved yet.
+    private func savedAddressRecovery(
+        from outcomes: [(String, Result<ServerProtocol, Error>)]
+    ) -> ConnectionAddressRecovery? {
+        guard !serverURLs.isEmpty, !pastedConnectLinkUnconfirmed, !outcomes.isEmpty else { return nil }
+        if outcomes.contains(where: { if case .success = $0.1 { true } else { false } }) {
+            return nil
+        }
+        let errors: [ServerProbeError?] = outcomes.map { _, result in
+            guard case let .failure(error as ServerProbeError) = result else { return nil }
+            return error
+        }
+        if errors.contains(where: { isUnauthorized($0) }) {
+            return .unauthorized
+        }
+        let everyFailureIsUnreachable = errors.allSatisfy { error in
+            guard let error else { return false }
+            switch error {
+            case .transport, .unhealthy:
+                return true
+            case .http:
+                return false
+            }
+        }
+        return everyFailureIsUnreachable ? .unreachable : nil
+    }
+
+    private func authRecovery(for error: ServerProbeError) -> ConnectionAddressRecovery? {
+        guard !serverURLs.isEmpty, !pastedConnectLinkUnconfirmed, isUnauthorized(error) else { return nil }
+        return .unauthorized
+    }
+
+    private func isUnauthorized(_ error: ServerProbeError?) -> Bool {
+        guard case let .http(statusCode, _)? = error else { return false }
+        return statusCode == 401 || statusCode == 403
     }
 
     private func presentScannedQrFailure() {
@@ -625,6 +780,8 @@ final class ConnectionSetupViewModel {
         pairedProtocol = nil
         credentialSegment = .password
         requestPasswordFocus = false
+        addressRecovery = nil
+        entry = .manual
         if password != keptPassword {
             password = keptPassword
         }

@@ -44,13 +44,13 @@ struct PairingQRScannerView: View {
 
     private var instructionCard: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("OpenCode 2 pairing QR")
+            Text("OpenCode pairing QR")
                 .font(OpenCodeTypography.heading)
                 .foregroundStyle(OpenCodeColors.textStrong)
-            Text("From opencode2 pair on a v2 server. Classic serve has no QR — enter the host instead.")
+            Text("From opencode pair --remote. Plain pair shows a QR only when the server is reachable beyond localhost.")
                 .font(OpenCodeTypography.bodySecondary)
                 .foregroundStyle(OpenCodeColors.textBase)
-            OpenCodeCodeSnippet("opencode2 pair")
+            OpenCodeCodeSnippet("opencode pair --remote")
                 .padding(.top, 4)
         }
         .padding(16)

@@ -57,6 +57,12 @@ enum PairingQRPayload {
         return isTailscaleIPv6(host)
     }
 
+    /// OpenTunnel remote route. Tailscale is a separate check; a host is not both.
+    static func isOpenTunnelURL(_ raw: String) -> Bool {
+        guard let host = host(of: raw) else { return false }
+        return host.hasSuffix(".opentunnel.xyz")
+    }
+
     private static func parseJSON(_ raw: String) -> Result<PairingQRCredentials, PairingQRError> {
         guard let data = raw.data(using: .utf8),
               let wire = try? JSONDecoder().decode(Wire.self, from: data)

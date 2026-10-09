@@ -225,6 +225,101 @@ class ConnectionSetupViewModelTest {
         }
 
     @Test
+    fun qrAddressRows_opentunnelHost_isRemoteTunnel() {
+        val rows =
+            qrAddressRows(
+                ConnectionSetupUiState(
+                    baseUrl = "https://Box.OpenTunnel.XYZ/",
+                    serverUrls = listOf("https://Box.OpenTunnel.XYZ/"),
+                ),
+            )
+        assertEquals("Remote tunnel", rows.single().title)
+    }
+
+    @Test
+    fun qrAddressHint_tunnelOnly() {
+        assertEquals(
+            "Remote tunnel saved. Nothing else to pick. It stays until you turn remote access off.",
+            qrAddressHint(listOf("https://a.opentunnel.xyz/", "https://b.opentunnel.xyz/")),
+        )
+    }
+
+    @Test
+    fun qrAddressHint_tailscalePlusLocalNetwork() {
+        assertEquals(
+            "Tailscale is used when it answers. Local network is the fallback.",
+            qrAddressHint(listOf("http://192.168.0.160:4096/", "http://100.84.57.15:4096/")),
+        )
+    }
+
+    @Test
+    fun savedAddresses_allUnreachable_offersPairAgainWithoutPasswordFocus() =
+        runTest(dispatcher) {
+            val viewModel =
+                viewModel(
+                    probe =
+                        ConnectionProbing {
+                            throw ServerProbeError.Transport(IllegalStateException("down"))
+                        },
+                )
+            viewModel.configure(
+                initialProfile =
+                    ConnectionProfile(
+                        baseUrl = "http://192.168.0.160:4096/",
+                        username = "opencode",
+                        password = "secret",
+                        id = "home",
+                        serverUrls =
+                            listOf(
+                                "http://192.168.0.160:4096/",
+                                "http://100.84.57.15:4096/",
+                            ),
+                    ),
+                mode = ConnectionSetupMode.Edit,
+            )
+            advanceUntilIdle()
+            val state = viewModel.uiState.value
+            assertTrue(state.usesQrLayout)
+            assertFalse(state.requestPasswordFocus)
+            assertEquals(SavedAddressRecovery.Unreachable, state.addressRecovery)
+            assertEquals("Can't reach the saved address. Pair again.", state.pairAgainMessage)
+            assertEquals(null, state.snackbar)
+        }
+
+    @Test
+    fun savedAddress_unauthorized_offersPairAgainWithoutPasswordFocus() =
+        runTest(dispatcher) {
+            val viewModel =
+                viewModel(
+                    probe =
+                        ConnectionProbing {
+                            throw ServerProbeError.Http(401, "Unauthorized")
+                        },
+                )
+            viewModel.configure(
+                initialProfile =
+                    ConnectionProfile(
+                        baseUrl = "http://192.168.0.160:4096/",
+                        username = "opencode",
+                        password = "secret",
+                        id = "home",
+                        serverUrls = listOf("http://192.168.0.160:4096/"),
+                    ),
+                mode = ConnectionSetupMode.Edit,
+            )
+            advanceUntilIdle()
+            val state = viewModel.uiState.value
+            assertTrue(state.usesQrLayout)
+            assertFalse(state.requestPasswordFocus)
+            assertEquals(SavedAddressRecovery.Unauthorized, state.addressRecovery)
+            assertEquals(
+                "This server rejected the saved sign-in. Pair again. A new password logs every device out.",
+                state.pairAgainMessage,
+            )
+            assertEquals(null, state.snackbar)
+        }
+
+    @Test
     fun hostIsBlank_detectsSchemeOnly() {
         assertTrue(ConnectionSetupViewModel.hostIsBlank(""))
         assertTrue(ConnectionSetupViewModel.hostIsBlank("http://"))
@@ -246,10 +341,10 @@ class ConnectionSetupViewModelTest {
         assertTrue(state.usesQrLayout)
         assertEquals(listOf("http://192.168.0.160:4096/"), state.serverUrls)
         assertEquals(listOf("Saved"), qrAddressRows(state).map { it.badge })
+        assertEquals("Local network", qrAddressRows(state).single().title)
         assertEquals(
-            "Both addresses are saved. Nothing to pick. The app uses Tailscale when it answers, " +
-                "and the local address when it does not. No password.",
-            QrAddressHint,
+            "Saved addresses are tried until one answers. Tailscale is preferred when it answers.",
+            qrAddressHint(state.serverUrls),
         )
         assertEquals(null, state.snackbar)
     }

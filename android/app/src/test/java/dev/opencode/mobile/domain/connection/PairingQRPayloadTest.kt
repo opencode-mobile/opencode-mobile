@@ -1,6 +1,7 @@
 package dev.opencode.mobile.domain.connection
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -48,6 +49,28 @@ class PairingQRPayloadTest {
             PairingQRPayload.pickReachableUrl(
                 listOf(
                     "http://192.168.0.160:4096/",
+                    "http://100.84.57.15:4096/",
+                ),
+            )
+        assertEquals("http://100.84.57.15:4096/", picked)
+    }
+
+    @Test
+    fun isRemoteTunnelUrl_matchesOpentunnelHostIgnoringCase() {
+        assertTrue(PairingQRPayload.isRemoteTunnelUrl("https://Box.OpenTunnel.XYZ/"))
+        assertTrue(PairingQRPayload.isRemoteTunnelUrl("http://box.opentunnel.xyz:443"))
+        assertFalse(PairingQRPayload.isRemoteTunnelUrl("https://opentunnel.xyz/"))
+        assertFalse(PairingQRPayload.isRemoteTunnelUrl("http://192.168.0.160:4096/"))
+        assertFalse(PairingQRPayload.isRemoteTunnelUrl("http://mybox.tailxyz.ts.net:4096/"))
+        assertFalse(PairingQRPayload.isRemoteTunnelUrl("http://100.84.57.15:4096/"))
+    }
+
+    @Test
+    fun pickReachableUrl_prefersTailscaleOverRemoteTunnel() {
+        val picked =
+            PairingQRPayload.pickReachableUrl(
+                listOf(
+                    "https://box.opentunnel.xyz/",
                     "http://100.84.57.15:4096/",
                 ),
             )

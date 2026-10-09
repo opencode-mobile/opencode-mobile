@@ -48,92 +48,14 @@ struct ConnectionSetupView: View {
                                 .onTapGesture(perform: dismissKeyboard)
                             VStack(alignment: .leading, spacing: 12) {
                         if viewModel.usesQRLayout {
-                            Text(ConnectionSetupViewModel.qrSavedAddressesHint)
-                                .font(OpenCodeTypography.bodySecondary)
-                                .foregroundStyle(OpenCodeColors.textBase)
-                                .padding(.leading, 2)
-                            ConnectionSetupSavedAddressRows(rows: viewModel.savedAddressRows)
+                            savedAddressContent
+                            connectionNameField
+                        } else if viewModel.showsInstructionEssay {
+                            instructionEssay
                         } else {
-                            OpenCodeServerAddressInput(
-                                value: $viewModel.baseURL,
-                                hint: "macbook.local:4096",
-                                accessibilityLabel: "Host",
-                                enabled: !viewModel.isBusy,
-                                submitAction: .next,
-                                isFocused: $urlFocused,
-                                onSubmit: {
-                                    switch viewModel.credentialSegment {
-                                    case .password:
-                                        usernameFocused = true
-                                    case .pairingCode:
-                                        pairingCodeFocused = true
-                                    }
-                                }
-                            )
-                            Text("LAN, Tailscale MagicDNS, or tunnel — not localhost on a phone.")
-                                .font(OpenCodeTypography.bodySecondary)
-                                .foregroundStyle(OpenCodeColors.textBase)
-                                .padding(.leading, 2)
-                        }
-
-                        OpenCodeTextInput(
-                            text: $viewModel.name,
-                            hint: "Optional name",
-                            kind: .text,
-                            enabled: !viewModel.isBusy,
-                            submitAction: .next,
-                            isFocused: $nameFocused,
-                            onSubmit: {
-                                if viewModel.usesQRLayout {
-                                    nameFocused = false
-                                } else {
-                                    switch viewModel.credentialSegment {
-                                    case .password:
-                                        usernameFocused = true
-                                    case .pairingCode:
-                                        pairingCodeFocused = true
-                                    }
-                                }
-                            }
-                        )
-
-                        if !viewModel.usesQRLayout {
-                            credentialSegmentControl
-                            switch viewModel.credentialSegment {
-                            case .password:
-                                OpenCodeTextInput(
-                                    text: $viewModel.username,
-                                    hint: "Username",
-                                    kind: .username,
-                                    enabled: !viewModel.isBusy,
-                                    submitAction: .next,
-                                    isFocused: $usernameFocused,
-                                    onSubmit: { passwordFocused = true }
-                                )
-                                OpenCodeTextInput(
-                                    text: $viewModel.password,
-                                    hint: "Password, optional",
-                                    kind: .password,
-                                    enabled: !viewModel.isBusy,
-                                    isFocused: $passwordFocused,
-                                    onSubmit: { passwordFocused = false }
-                                )
-                                Text("Default user is opencode. Password is optional.")
-                                    .font(OpenCodeTypography.bodySecondary)
-                                    .foregroundStyle(OpenCodeColors.textBase)
-                                    .padding(.leading, 2)
-                            case .pairingCode:
-                                ConnectionPairingCodeField(
-                                    text: $viewModel.pairingCode,
-                                    enabled: !viewModel.isBusy,
-                                    isFocused: $pairingCodeFocused,
-                                    onSubmit: { pairingCodeFocused = false }
-                                )
-                                Text("From the pair link. Works once and expires in 5 minutes.")
-                                    .font(OpenCodeTypography.bodySecondary)
-                                    .foregroundStyle(OpenCodeColors.textBase)
-                                    .padding(.leading, 2)
-                            }
+                            manualHostField
+                            connectionNameField
+                            manualCredentials
                         }
                     }
                     .padding(.horizontal, 20)
@@ -145,23 +67,7 @@ struct ConnectionSetupView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                VStack(spacing: 20) {
-                    if !isKeyboardVisible {
-                        pairingQREntry
-                    }
-                    if viewModel.showsPrimaryAction {
-                        OpenCodeButton(
-                            variant: .fullWidthText(title: viewModel.primaryActionLabel),
-                            enabled: viewModel.primaryEnabled
-                        ) {
-                            Task {
-                                if await viewModel.submit() {
-                                    onDismiss()
-                                }
-                            }
-                        }
-                    }
-                }
+                connectionSetupActions
                 .padding(.horizontal, 20)
                 .padding(.bottom, 24)
                 }
@@ -254,6 +160,190 @@ struct ConnectionSetupView: View {
         }
     }
 
+    private var savedAddressContent: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if let recovery = viewModel.addressRecovery {
+                Text(recovery.message)
+                    .font(OpenCodeTypography.body)
+                    .foregroundStyle(OpenCodeColors.textStrong)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text(ConnectionSetupViewModel.savedAddressesHint(for: viewModel.serverURLs))
+                    .font(OpenCodeTypography.bodySecondary)
+                    .foregroundStyle(OpenCodeColors.textBase)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.leading, 2)
+                ConnectionSetupSavedAddressRows(rows: viewModel.savedAddressRows)
+            }
+        }
+    }
+
+    private var instructionEssay: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("On your computer, run this, then scan the QR.")
+                .font(OpenCodeTypography.body)
+                .foregroundStyle(OpenCodeColors.textStrong)
+                .fixedSize(horizontal: false, vertical: true)
+            OpenCodeCodeSnippet("opencode pair --remote")
+            Text("First run takes about a minute. Needs OpenCode 2.0.25 or later. The service starts if it is not already running.")
+                .font(OpenCodeTypography.bodySecondary)
+                .foregroundStyle(OpenCodeColors.textBase)
+                .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Same Wi-Fi instead")
+                    .font(OpenCodeTypography.body)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(OpenCodeColors.textStrong)
+                    .padding(.top, 8)
+                Text("Plain pair shows a QR only after the server is reachable beyond localhost.")
+                    .font(OpenCodeTypography.bodySecondary)
+                    .foregroundStyle(OpenCodeColors.textBase)
+                    .fixedSize(horizontal: false, vertical: true)
+                OpenCodeCodeSnippet("opencode service set hostname 0.0.0.0")
+                OpenCodeCodeSnippet("opencode pair")
+            }
+        }
+    }
+
+    private var manualHostField: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            OpenCodeServerAddressInput(
+                value: $viewModel.baseURL,
+                hint: "macbook.local:4096",
+                accessibilityLabel: "Host",
+                enabled: !viewModel.isBusy,
+                submitAction: .next,
+                isFocused: $urlFocused,
+                onSubmit: {
+                    switch viewModel.credentialSegment {
+                    case .password:
+                        usernameFocused = true
+                    case .pairingCode:
+                        pairingCodeFocused = true
+                    }
+                }
+            )
+            Text("LAN, Tailscale MagicDNS, or tunnel — not localhost on a phone.")
+                .font(OpenCodeTypography.bodySecondary)
+                .foregroundStyle(OpenCodeColors.textBase)
+                .padding(.leading, 2)
+        }
+    }
+
+    private var connectionNameField: some View {
+        OpenCodeTextInput(
+            text: $viewModel.name,
+            hint: "Optional name",
+            kind: .text,
+            enabled: !viewModel.isBusy,
+            submitAction: .next,
+            isFocused: $nameFocused,
+            onSubmit: {
+                if viewModel.usesQRLayout {
+                    nameFocused = false
+                } else {
+                    switch viewModel.credentialSegment {
+                    case .password:
+                        usernameFocused = true
+                    case .pairingCode:
+                        pairingCodeFocused = true
+                    }
+                }
+            }
+        )
+    }
+
+    private var manualCredentials: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            credentialSegmentControl
+            switch viewModel.credentialSegment {
+            case .password:
+                OpenCodeTextInput(
+                    text: $viewModel.username,
+                    hint: "Username",
+                    kind: .username,
+                    enabled: !viewModel.isBusy,
+                    submitAction: .next,
+                    isFocused: $usernameFocused,
+                    onSubmit: { passwordFocused = true }
+                )
+                OpenCodeTextInput(
+                    text: $viewModel.password,
+                    hint: "Password, optional",
+                    kind: .password,
+                    enabled: !viewModel.isBusy,
+                    isFocused: $passwordFocused,
+                    onSubmit: { passwordFocused = false }
+                )
+                Text("Default user is opencode. Password is optional.")
+                    .font(OpenCodeTypography.bodySecondary)
+                    .foregroundStyle(OpenCodeColors.textBase)
+                    .padding(.leading, 2)
+            case .pairingCode:
+                ConnectionPairingCodeField(
+                    text: $viewModel.pairingCode,
+                    enabled: !viewModel.isBusy,
+                    isFocused: $pairingCodeFocused,
+                    onSubmit: { pairingCodeFocused = false }
+                )
+                Text("From the pair link. Works once and expires in 5 minutes.")
+                    .font(OpenCodeTypography.bodySecondary)
+                    .foregroundStyle(OpenCodeColors.textBase)
+                    .padding(.leading, 2)
+            }
+        }
+    }
+
+    private var connectionSetupActions: some View {
+        VStack(spacing: 12) {
+            if viewModel.addressRecovery != nil {
+                OpenCodeCodeSnippet("opencode pair --remote")
+                OpenCodeButton(
+                    variant: .fullWidthText(title: viewModel.primaryActionLabel),
+                    enabled: !viewModel.isBusy,
+                    action: openPairingScanner
+                )
+            } else if viewModel.showsInstructionEssay {
+                OpenCodeButton(
+                    variant: .fullWidthText(title: "Scan QR"),
+                    enabled: !viewModel.isBusy,
+                    action: openPairingScanner
+                )
+                OpenCodeButton(
+                    variant: .fullWidthText(title: "Enter a pairing code"),
+                    enabled: !viewModel.isBusy,
+                    contrast: .low,
+                    action: { viewModel.showPairingCodeForm() }
+                )
+                OpenCodeButton(
+                    variant: .link(title: "Use a host and password"),
+                    enabled: !viewModel.isBusy,
+                    action: { viewModel.showHostPasswordForm() }
+                )
+            } else {
+                if !isKeyboardVisible, viewModel.showsManualForm {
+                    OpenCodeButton(
+                        variant: .link(title: "Scan a QR instead"),
+                        enabled: !viewModel.isBusy,
+                        action: { viewModel.showScanInstructions() }
+                    )
+                }
+                if viewModel.showsPrimaryAction {
+                    OpenCodeButton(
+                        variant: .fullWidthText(title: viewModel.primaryActionLabel),
+                        enabled: viewModel.primaryEnabled
+                    ) {
+                        Task {
+                            if await viewModel.submit() {
+                                onDismiss()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     private var credentialSegmentControl: some View {
         HStack(spacing: 2) {
             credentialSegmentButton(.password, title: "Password")
@@ -291,26 +381,6 @@ struct ConnectionSetupView: View {
 
     private var segmentSelectedText: Color {
         colorScheme == .dark ? OpenCodeColors.backgroundBase : OpenCodeColors.textStrong
-    }
-
-    private var pairingQREntry: some View {
-        Button(action: openPairingScanner) {
-            VStack(spacing: 3) {
-                Text("Running opencode2?")
-                    .font(OpenCodeTypography.bodySecondary)
-                    .foregroundStyle(OpenCodeColors.textBase)
-                Text("Connect with a QR code")
-                    .font(OpenCodeTypography.body)
-                    .underline()
-                    .foregroundStyle(OpenCodeColors.textStrong)
-            }
-            .frame(maxWidth: .infinity)
-            .contentShape(Rectangle())
-            .padding(.vertical, 8)
-        }
-        .buttonStyle(.plain)
-        .disabled(viewModel.isBusy)
-        .accessibilityLabel("Running opencode2? Connect with a QR code")
     }
 
     private func dismissKeyboard() {

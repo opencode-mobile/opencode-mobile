@@ -50,6 +50,19 @@ enum class ConnectionCredentialSegment {
     PairingCode,
 }
 
+/** A saved QR address list failed its probe. The screen asks the user to pair again. */
+enum class SavedAddressRecovery {
+    Unreachable,
+    Unauthorized,
+}
+
+internal fun savedAddressPairAgainMessage(recovery: SavedAddressRecovery): String =
+    when (recovery) {
+        SavedAddressRecovery.Unreachable -> "Can't reach the saved address. Pair again."
+        SavedAddressRecovery.Unauthorized ->
+            "This server rejected the saved sign-in. Pair again. A new password logs every device out."
+    }
+
 private enum class ConnectFailureOrigin {
     Manual,
     ScannedQr,
@@ -75,9 +88,13 @@ data class ConnectionSetupUiState(
     val qrPairingReady: Boolean = false,
     /** Camera scan still pairing. A saved address list is not a scan. */
     val qrScanPending: Boolean = false,
+    val addressRecovery: SavedAddressRecovery? = null,
 ) {
     val usesQrLayout: Boolean
         get() = serverUrls.isNotEmpty()
+
+    val pairAgainMessage: String?
+        get() = addressRecovery?.let(::savedAddressPairAgainMessage)
 
     val screenTitle: String
         get() =
@@ -203,6 +220,7 @@ class ConnectionSetupViewModel
                         chosenUrl = null,
                         qrPairingReady = false,
                         qrScanPending = false,
+                        addressRecovery = null,
                         credentialSegment = ConnectionCredentialSegment.Password,
                     )
             }
@@ -379,6 +397,7 @@ class ConnectionSetupViewModel
                 val summary = probeAddresses(urlsToProbe())
                 if (generation != addressProbeGeneration) return@launch
                 publishAddressProbe(summary)
+                if (stopForSavedAddressRecovery()) return@launch
                 val winner = summary.winner
                 val winnerOutcome = winner?.let { summary.outcomeFor(it) }
                 if (winnerOutcome is ProbeOutcome.Reachable) {
@@ -447,6 +466,7 @@ class ConnectionSetupViewModel
                     unreachableUrls = emptySet(),
                     chosenUrl = null,
                     qrPairingReady = false,
+                    addressRecovery = null,
                 )
             if (scheduleProbe) startAddressProbe()
         }
@@ -475,6 +495,7 @@ class ConnectionSetupViewModel
                 val summary = probeAddresses(urlsToProbe())
                 if (generation != addressProbeGeneration) return@launch
                 publishAddressProbe(summary)
+                if (stopForSavedAddressRecovery()) return@launch
                 val winnerOutcome = summary.winner?.let { summary.outcomeFor(it) }
                 if (winnerOutcome is ProbeOutcome.Reachable) {
                     detectedProtocol = winnerOutcome.protocol
@@ -532,6 +553,7 @@ class ConnectionSetupViewModel
             val summary = probeAddresses(urlsToProbe())
             if (generation != addressProbeGeneration) return
             publishAddressProbe(summary)
+            if (stopForSavedAddressRecovery()) return
             val winner = summary.winner
             if (winner == null) {
                 detectedProtocol = null
@@ -696,24 +718,70 @@ class ConnectionSetupViewModel
             val current = _uiState.value
             val winner = summary.winner?.let(ConnectionProfileIdentity::normalizeBaseUrl)
             if (current.serverUrls.isEmpty()) {
-                if (winner != null && winner != ConnectionProfileIdentity.normalizeBaseUrl(current.baseUrl)) {
+                val nextBase =
+                    if (winner != null && winner != ConnectionProfileIdentity.normalizeBaseUrl(current.baseUrl)) {
+                        winner
+                    } else {
+                        current.baseUrl
+                    }
+                if (nextBase != current.baseUrl || current.addressRecovery != null) {
                     _uiState.value =
                         current.copy(
-                            baseUrl = winner,
-                            connectionUnchanged = isConnectionUnchanged(winner, current.username, current.password),
+                            baseUrl = nextBase,
+                            addressRecovery = null,
+                            connectionUnchanged = isConnectionUnchanged(nextBase, current.username, current.password),
                         )
                 }
                 return
             }
             val baseUrl = winner ?: current.baseUrl
+            val recovery = if (isSavedAddressList()) savedAddressRecovery(summary.outcomes) else null
             _uiState.value =
                 current.copy(
                     baseUrl = baseUrl,
                     addressProbeFinished = true,
                     unreachableUrls = summary.unreachable,
                     chosenUrl = winner,
+                    addressRecovery = recovery,
+                    requestPasswordFocus = if (recovery != null) false else current.requestPasswordFocus,
                     connectionUnchanged = isConnectionUnchanged(baseUrl, current.username, current.password),
                 )
+        }
+
+        /** Pair-again applies to a stored address list, not a scan or an unconfirmed paste. */
+        private fun isSavedAddressList(): Boolean =
+            _uiState.value.serverUrls.isNotEmpty() &&
+                !_uiState.value.qrScanPending &&
+                !pastedConnectLinkUnconfirmed
+
+        private fun savedAddressRecovery(outcomes: List<ProbeOutcome>): SavedAddressRecovery? {
+            if (outcomes.isEmpty() || outcomes.any { it is ProbeOutcome.Reachable }) return null
+            val failures = outcomes.mapNotNull { it as? ProbeOutcome.Failed }
+            if (failures.size != outcomes.size) return null
+            if (failures.any { it.error.isAuthRejection() }) return SavedAddressRecovery.Unauthorized
+            val allUnreachable =
+                failures.all { failure ->
+                    failure.error is ServerProbeError.Transport || failure.error is ServerProbeError.Unhealthy
+                }
+            if (allUnreachable) return SavedAddressRecovery.Unreachable
+            return null
+        }
+
+        private fun ServerProbeError.isAuthRejection(): Boolean {
+            val http = this as? ServerProbeError.Http ?: return false
+            return http.statusCode == 401 || http.statusCode == 403
+        }
+
+        /** Saved-list auth and transport failures stay on pair-again. They do not open the password field. */
+        private fun stopForSavedAddressRecovery(): Boolean {
+            val current = _uiState.value
+            if (current.addressRecovery == null || current.serverUrls.isEmpty()) return false
+            _uiState.value =
+                current.copy(
+                    state = ConnectionSetupState.Idle,
+                    requestPasswordFocus = false,
+                )
+            return true
         }
 
         private fun isConnectionUnchanged(
@@ -742,6 +810,7 @@ class ConnectionSetupViewModel
                     chosenUrl = null,
                     qrPairingReady = false,
                     qrScanPending = false,
+                    addressRecovery = null,
                 )
         }
 
@@ -786,6 +855,7 @@ class ConnectionSetupViewModel
                     chosenUrl = null,
                     qrPairingReady = false,
                     qrScanPending = false,
+                    addressRecovery = null,
                     credentialSegment = ConnectionCredentialSegment.Password,
                     requestPasswordFocus = false,
                     connectionUnchanged = isConnectionUnchanged(current.baseUrl, current.username, password),
