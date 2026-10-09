@@ -850,51 +850,40 @@ private fun FailureLineBlock(
 ) {
     val body = block.providerBody
     val clipboard = LocalClipboardManager.current
-    Column {
-        Text(
-            text = block.text,
-            style = MaterialTheme.typography.bodySmall,
-            color = openCodeColor(if (block.isNeutral) "text-weak" else "error"),
-            modifier =
-                Modifier
-                    .padding(horizontal = 4.dp)
-                    .then(
-                        if (body.isNullOrBlank()) {
-                            Modifier
-                        } else {
-                            Modifier.clickable {
-                                onToolDetailTap(
-                                    SessionChatToolDetailTarget(
-                                        title = "Provider response",
-                                        body = body,
-                                        monospace = true,
-                                    ),
-                                )
-                            }
-                        },
-                    ),
-        )
-        val action = block.action
-        val actionLabel = block.actionLabel
-        if (action != null && !actionLabel.isNullOrBlank()) {
-            Text(
-                text = actionLabel,
-                style = MaterialTheme.typography.labelLarge,
-                color = openCodeColor("text-strong"),
-                modifier =
-                    Modifier
-                        .padding(horizontal = 4.dp, vertical = 2.dp)
-                        .clickable {
-                            if (action == FailureAction.Copy) {
-                                val copied = body?.takeIf { it.isNotBlank() } ?: block.text
-                                clipboard.setText(AnnotatedString(copied))
-                            } else {
-                                onFailureAction(action)
-                            }
-                        },
-            )
-        }
-    }
+    val action = block.action
+    val actionLabel = block.actionLabel
+    SessionFailureCaption(
+        text = block.text,
+        isNeutral = block.isNeutral,
+        actionLabel = if (action != null) actionLabel else null,
+        onCaptionClick =
+            if (body.isNullOrBlank()) {
+                null
+            } else {
+                {
+                    onToolDetailTap(
+                        SessionChatToolDetailTarget(
+                            title = "Provider response",
+                            body = body,
+                            monospace = true,
+                        ),
+                    )
+                }
+            },
+        onActionClick =
+            if (action == null || actionLabel.isNullOrBlank()) {
+                null
+            } else {
+                {
+                    if (action == FailureAction.Copy) {
+                        val copied = body?.takeIf { it.isNotBlank() } ?: block.text
+                        clipboard.setText(AnnotatedString(copied))
+                    } else {
+                        onFailureAction(action)
+                    }
+                }
+            },
+    )
 }
 
 private const val STEP_PARAGRAPH_PLACEHOLDER = "Worked without commentary"

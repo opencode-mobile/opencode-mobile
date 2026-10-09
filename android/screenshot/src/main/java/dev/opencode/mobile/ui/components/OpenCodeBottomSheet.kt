@@ -1,1 +1,1 @@
-../../../../../../../../../app/src/main/java/dev/opencode/mobile/ui/components/OpenCodeBottomSheet.kt
+../../../../../../../../../app/src/main/java/dev/opencode/mobile/ui/components/chrome/OpenCodeBottomSheet.kt

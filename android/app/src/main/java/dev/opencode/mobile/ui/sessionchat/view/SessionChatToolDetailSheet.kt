@@ -1,18 +1,15 @@
 package dev.opencode.mobile.ui.sessionchat.view
 
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
@@ -82,21 +79,20 @@ internal fun SessionChatToolDetailSheet(
                 variant = OpenCodeRenderedMarkdownVariant.Standalone,
                 modifier = bodyModifier,
             )
+        } else if (target?.monospace == true) {
+            val clipboard = LocalClipboardManager.current
+            SessionProviderResponseBody(
+                body = body,
+                onCopy = { clipboard.setText(AnnotatedString(body)) },
+                modifier = bodyModifier,
+            )
         } else {
-            Column(modifier = bodyModifier) {
-                if (target?.monospace == true) {
-                    val clipboard = LocalClipboardManager.current
-                    TextButton(onClick = { clipboard.setText(AnnotatedString(body)) }) {
-                        Text("Copy")
-                    }
-                }
-                Text(
-                    text = body,
-                    fontFamily = if (target?.monospace == true) FontFamily.Monospace else null,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-            }
+            Text(
+                text = body,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = bodyModifier,
+            )
         }
     }
 }

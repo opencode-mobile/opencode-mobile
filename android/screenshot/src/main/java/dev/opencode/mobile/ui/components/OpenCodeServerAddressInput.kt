@@ -1,1 +1,1 @@
-../../../../../../../../../app/src/main/java/dev/opencode/mobile/ui/components/OpenCodeServerAddressInput.kt
+../../../../../../../../../app/src/main/java/dev/opencode/mobile/ui/components/input/OpenCodeServerAddressInput.kt

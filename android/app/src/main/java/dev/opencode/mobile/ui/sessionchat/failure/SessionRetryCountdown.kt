@@ -24,11 +24,12 @@ fun SessionRetryCountdown(
     card: SessionRetryCard,
     onOpenLink: (String) -> Unit,
     modifier: Modifier = Modifier,
+    clock: () -> Long = { System.currentTimeMillis() },
 ) {
-    var nowMs by remember(card.nextAtMs) { mutableLongStateOf(System.currentTimeMillis()) }
+    var nowMs by remember(card.nextAtMs) { mutableLongStateOf(clock()) }
     LaunchedEffect(card.nextAtMs) {
         while (isActive) {
-            nowMs = System.currentTimeMillis()
+            nowMs = clock()
             delay(1_000)
         }
     }

@@ -132,15 +132,6 @@ fun SessionStatus.toSessionActivity(): SessionActivity =
         else -> SessionActivity.Idle
     }
 
-/** Countdown shown while the server is waiting to retry a rate limit or quota error. */
-data class SessionRetryCard(
-    val message: String,
-    val attempt: Int?,
-    val nextAtMs: Long,
-    val actionLabel: String?,
-    val actionLink: String?,
-)
-
 enum class SessionTodoStatus {
     Pending,
     InProgress,
