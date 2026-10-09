@@ -24,6 +24,8 @@ enum ComponentGalleryEntryID: String, Hashable {
     case toolChip
     case messageNote
     case childSessionRow
+    case workingIndicator
+    case reasoningRow
     case topBar
     case overflowMenu
     case bottomSheet
@@ -303,6 +305,18 @@ let componentGalleryEntries = [
         id: .childSessionRow,
         title: "Child Session Row",
         description: "Quiet person/thread row for a child session in Session Chat.",
+        category: .chat
+    ),
+    ComponentGalleryEntry(
+        id: .workingIndicator,
+        title: "Working Indicator",
+        description: "Pulsing status row for a turn that is working, idle, or collapsed.",
+        category: .chat
+    ),
+    ComponentGalleryEntry(
+        id: .reasoningRow,
+        title: "Reasoning Row",
+        description: "Thinking and Thought rows for a reasoning block.",
         category: .chat
     ),
     ComponentGalleryEntry(

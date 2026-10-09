@@ -104,6 +104,10 @@ struct ComponentGalleryDetailView: View {
             MessageNoteGalleryView()
         case .childSessionRow:
             ChildSessionRowGalleryView()
+        case .workingIndicator:
+            WorkingIndicatorGalleryView()
+        case .reasoningRow:
+            ReasoningRowGalleryView()
         case .topBar:
             TopBarGalleryView()
         case .overflowMenu:

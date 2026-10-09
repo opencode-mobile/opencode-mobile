@@ -29,6 +29,8 @@ enum class ComponentGalleryEntryId {
     ToolChip,
     MessageNote,
     ChildSessionRow,
+    WorkingIndicator,
+    ReasoningRow,
     TopBar,
     OverflowMenu,
     BottomSheet,
@@ -315,6 +317,18 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.ChildSessionRow,
             title = "Child Session Row",
             description = "Quiet person/thread row for a child session in Session Chat.",
+            category = ComponentGalleryCategory.Chat,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.WorkingIndicator,
+            title = "Working Indicator",
+            description = "Pulsing status row for a turn that is working, idle, or collapsed.",
+            category = ComponentGalleryCategory.Chat,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.ReasoningRow,
+            title = "Reasoning Row",
+            description = "Thinking and Thought rows for a reasoning block.",
             category = ComponentGalleryCategory.Chat,
         ),
         ComponentGalleryEntry(

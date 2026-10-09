@@ -77,6 +77,7 @@ import dev.opencode.mobile.ui.componentgallery.components.OutgoingMessageGallery
 import dev.opencode.mobile.ui.componentgallery.components.OverflowMenuGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.PendingPromptsStripGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.RenderedMarkdownGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.ReasoningRowGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ReorderableListGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ReviewChangesPillGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SectionHeaderGalleryScreen
@@ -100,6 +101,7 @@ import dev.opencode.mobile.ui.componentgallery.components.ToolCallCardGalleryScr
 import dev.opencode.mobile.ui.componentgallery.components.ToolChipGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.TopBarGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.UnifiedDiffGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.WorkingIndicatorGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.foundation.ColorGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.foundation.TypographyGalleryScreen
 import dev.opencode.mobile.ui.components.OpenCodeStatusStack
@@ -537,6 +539,9 @@ fun MainNavigation() {
                                                         ComponentGalleryEntryId.ToolChip -> ToolChipGalleryScreen()
                                                         ComponentGalleryEntryId.MessageNote -> MessageNoteGalleryScreen()
                                                         ComponentGalleryEntryId.ChildSessionRow -> ChildSessionRowGalleryScreen()
+                                                        ComponentGalleryEntryId.WorkingIndicator ->
+                                                            WorkingIndicatorGalleryScreen()
+                                                        ComponentGalleryEntryId.ReasoningRow -> ReasoningRowGalleryScreen()
                                                         ComponentGalleryEntryId.TopBar -> TopBarGalleryScreen()
                                                         ComponentGalleryEntryId.OverflowMenu -> OverflowMenuGalleryScreen()
                                                         ComponentGalleryEntryId.BottomSheet -> BottomSheetGalleryScreen()
