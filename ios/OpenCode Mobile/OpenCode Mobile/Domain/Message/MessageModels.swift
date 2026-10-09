@@ -132,7 +132,6 @@ enum FailureSource: Equatable, Sendable {
 }
 
 enum FailureAction: Equatable, Sendable {
-    case reconnectProvider
     case pickModel
     case compact
     case copy
@@ -153,7 +152,6 @@ nonisolated struct SessionFailure: Equatable, Sendable {
     /// A button under the caption. Rate-limit and quota use the retry card instead.
     func action() -> FailureAction? {
         let kind = type?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
-        if kind == "provider.auth" { return .reconnectProvider }
         if kind == "provider.no-route" { return .pickModel }
         if kind == "provider.content-filter" { return nil }
         if isContextOverflow() { return .compact }
@@ -163,7 +161,6 @@ nonisolated struct SessionFailure: Equatable, Sendable {
 
     func actionLabel() -> String? {
         switch action() {
-        case .reconnectProvider: "Reconnect provider"
         case .pickModel: "Pick a model"
         case .compact: "Compact"
         case .copy: "Copy"

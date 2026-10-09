@@ -197,7 +197,6 @@ enum class FailureSource {
 }
 
 enum class FailureAction {
-    ReconnectProvider,
     PickModel,
     Compact,
     Copy,
@@ -226,7 +225,6 @@ data class SessionFailure(
     fun action(): FailureAction? {
         val kind = type?.trim()?.lowercase().orEmpty()
         return when {
-            kind == "provider.auth" -> FailureAction.ReconnectProvider
             kind == "provider.no-route" -> FailureAction.PickModel
             kind == "provider.content-filter" -> null
             isContextOverflow() -> FailureAction.Compact
@@ -237,7 +235,6 @@ data class SessionFailure(
 
     fun actionLabel(): String? =
         when (action()) {
-            FailureAction.ReconnectProvider -> "Reconnect provider"
             FailureAction.PickModel -> "Pick a model"
             FailureAction.Compact -> "Compact"
             FailureAction.Copy -> "Copy"

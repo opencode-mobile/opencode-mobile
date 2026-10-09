@@ -8,8 +8,8 @@ import org.junit.Test
 class SessionFailureTest {
     @Test
     fun actionsFollowTheErrorType() {
-        assertEquals(FailureAction.ReconnectProvider, failure("provider.auth").action())
-        assertEquals("Reconnect provider", failure("provider.auth").actionLabel())
+        assertNull(failure("provider.auth").action())
+        assertNull(failure("provider.auth").actionLabel())
         assertEquals(FailureAction.PickModel, failure("provider.no-route").action())
         assertEquals(FailureAction.Copy, failure("unknown").action())
         assertEquals(FailureAction.Copy, failure("provider.unknown").action())

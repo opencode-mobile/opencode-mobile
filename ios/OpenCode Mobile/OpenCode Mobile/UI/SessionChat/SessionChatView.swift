@@ -226,7 +226,7 @@ struct SessionChatView: View {
                         },
                         onFailureAction: { action in
                             switch action {
-                            case .reconnectProvider, .pickModel:
+                            case .pickModel:
                                 activePicker = .model
                             case .compact:
                                 viewModel.compactCurrentSession()

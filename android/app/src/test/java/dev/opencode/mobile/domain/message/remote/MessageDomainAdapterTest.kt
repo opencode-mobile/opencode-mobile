@@ -1408,7 +1408,7 @@ class MessageDomainAdapterTest {
         assertNull(messages[1].failure?.action())
         assertEquals("Sign in again", messages[2].failure?.message)
         assertEquals(FailureSource.Execution, messages[2].failure?.source)
-        assertEquals(FailureAction.ReconnectProvider, messages[2].failure?.action())
+        assertNull(messages[2].failure?.action())
     }
 
     @Test

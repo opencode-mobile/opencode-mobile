@@ -544,7 +544,7 @@ fun SessionChatScreen(
                             },
                             onFailureAction = { action ->
                                 when (action) {
-                                    FailureAction.ReconnectProvider, FailureAction.PickModel ->
+                                    FailureAction.PickModel ->
                                         activePicker = ComposerPickerKind.Model
                                     FailureAction.Compact -> viewModel.compactCurrentSession()
                                     FailureAction.Copy -> Unit

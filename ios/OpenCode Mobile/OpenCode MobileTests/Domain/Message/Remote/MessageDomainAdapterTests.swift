@@ -1209,7 +1209,7 @@ struct MessageDomainAdapterTests {
         #expect(messages[1].failure?.action() == nil)
         #expect(messages[2].failure?.message == "Sign in again")
         #expect(messages[2].failure?.source == .execution)
-        #expect(messages[2].failure?.action() == .reconnectProvider)
+        #expect(messages[2].failure?.action() == nil)
     }
 
     @Test func projectV2MalformedToolCallIsDistinctFromAFailedRun() throws {

@@ -4,8 +4,8 @@ import Testing
 
 struct SessionFailureTests {
     @Test func actionsFollowTheErrorType() {
-        #expect(failure("provider.auth").action() == .reconnectProvider)
-        #expect(failure("provider.auth").actionLabel() == "Reconnect provider")
+        #expect(failure("provider.auth").action() == nil)
+        #expect(failure("provider.auth").actionLabel() == nil)
         #expect(failure("provider.no-route").action() == .pickModel)
         #expect(failure("unknown").action() == .copy)
         #expect(failure("provider.unknown").action() == .copy)
