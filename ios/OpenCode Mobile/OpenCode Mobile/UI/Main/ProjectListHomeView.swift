@@ -847,37 +847,57 @@ private extension SessionListItem {
     }
 }
 
-private extension Array where Element == ProjectSectionItem {
+extension Array where Element == ProjectSectionItem {
     func crossProjectSessionListSessions() -> [SessionListSession] {
-        flatMap { section in
+        let flattened = flatMap { section in
             section.allSessions.map { session in
-                (
-                    session.updatedAtEpochMs ?? 0,
-                    SessionListSession(
-                        id: session.id,
-                        title: session.title,
-                        worktree: section.worktree,
-                        letter: section.letter,
-                        letterAccent: section.letterAccent,
-                        subtitle: section.pathSubtitle,
-                        status: session.sessionListStatus(),
-                        statusIsStale: session.statusIsStale,
-                        caption: session.updatedAtEpochMs.map { RelativeTimeFormatting.format(epochMs: $0) } ?? "",
-                        updatedAtEpochMs: session.updatedAtEpochMs
-                    )
-                )
+                (section: section, session: session)
             }
         }
-        .sorted { $0.0 > $1.0 }
-        .map(\.1)
+        var chosenIndexById: [String: Int] = [:]
+        for (index, row) in flattened.enumerated() {
+            let timestamp = row.session.updatedAtEpochMs ?? 0
+            if let chosenIndex = chosenIndexById[row.session.id] {
+                let chosenTimestamp = flattened[chosenIndex].session.updatedAtEpochMs ?? 0
+                if timestamp > chosenTimestamp {
+                    chosenIndexById[row.session.id] = index
+                }
+            } else {
+                chosenIndexById[row.session.id] = index
+            }
+        }
+        return chosenIndexById.values.sorted { lhs, rhs in
+            let leftTimestamp = flattened[lhs].session.updatedAtEpochMs ?? 0
+            let rightTimestamp = flattened[rhs].session.updatedAtEpochMs ?? 0
+            if leftTimestamp != rightTimestamp {
+                return leftTimestamp > rightTimestamp
+            }
+            return lhs < rhs
+        }.map { index in
+            let section = flattened[index].section
+            let session = flattened[index].session
+            return SessionListSession(
+                id: session.id,
+                title: session.title,
+                worktree: section.worktree,
+                letter: section.letter,
+                letterAccent: section.letterAccent,
+                subtitle: section.pathSubtitle,
+                status: session.sessionListStatus(),
+                statusIsStale: session.statusIsStale,
+                caption: session.updatedAtEpochMs.map { RelativeTimeFormatting.format(epochMs: $0) } ?? "",
+                updatedAtEpochMs: session.updatedAtEpochMs
+            )
+        }
     }
 
     func homeChromeProjects() -> [SessionListHomeChrome.Project] {
-        map { section in
+        let counts = Dictionary(grouping: crossProjectSessionListSessions(), by: \.worktree).mapValues(\.count)
+        return map { section in
             SessionListHomeChrome.Project(
                 worktree: section.worktree,
                 title: section.displayName,
-                sessionCount: section.allSessions.count
+                sessionCount: counts[section.worktree] ?? 0
             )
         }
     }
