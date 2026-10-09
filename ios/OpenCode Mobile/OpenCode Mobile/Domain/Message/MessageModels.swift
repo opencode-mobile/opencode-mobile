@@ -149,7 +149,13 @@ nonisolated struct SessionFailure: Equatable, Sendable {
     var retries: Int? = nil
     var source: FailureSource = .step
 
-    /// A button under the caption. Rate-limit and quota use the retry card instead.
+    /// The composer retry status already shows this failure, so the transcript mark waits.
+    func coversLiveRetry() -> Bool {
+        let kind = type?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
+        return kind == "provider.rate-limit" || kind == "provider.quota"
+    }
+
+    /// An action in the provider sheet. Rate-limit and quota use the composer status instead.
     func action() -> FailureAction? {
         let kind = type?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
         if kind == "provider.no-route" { return .pickModel }

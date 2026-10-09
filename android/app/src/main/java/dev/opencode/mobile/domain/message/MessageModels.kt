@@ -215,13 +215,19 @@ data class SessionFailure(
     val isNeutral: Boolean
         get() = type.equals("permission.rejected", ignoreCase = true)
 
+    /** The composer retry status already shows this failure, so the transcript mark waits. */
+    fun coversLiveRetry(): Boolean {
+        val kind = type?.trim()?.lowercase().orEmpty()
+        return kind == "provider.rate-limit" || kind == "provider.quota"
+    }
+
     /** Caption under the reply. The provider body stays behind the existing detail sheet. */
     fun line(): String {
         val shown = message.ifBlank { "Session work failed" }
         return if (status != null) "HTTP $status · $shown" else shown
     }
 
-    /** A button under the caption. Rate-limit and quota use the retry card instead. */
+    /** An action in the provider sheet. Rate-limit and quota use the composer status instead. */
     fun action(): FailureAction? {
         val kind = type?.trim()?.lowercase().orEmpty()
         return when {

@@ -15,6 +15,14 @@ struct SessionFailureTests {
         #expect(failure("compaction.failed").action() == nil)
     }
 
+    @Test func rateLimitAndQuotaAreCoveredByTheLiveRetry() {
+        #expect(failure("provider.rate-limit").coversLiveRetry())
+        #expect(failure(" Provider.Quota ").coversLiveRetry())
+        #expect(!failure("provider.auth").coversLiveRetry())
+        #expect(!failure("provider.content-filter").coversLiveRetry())
+        #expect(!failure("provider.no-route").coversLiveRetry())
+    }
+
     @Test func contextOverflowOffersCompact() {
         #expect(failure("ContextOverflowError", message: "Context overflow").action() == .compact)
         #expect(

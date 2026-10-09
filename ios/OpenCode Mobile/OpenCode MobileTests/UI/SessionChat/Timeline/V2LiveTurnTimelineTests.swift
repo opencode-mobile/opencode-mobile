@@ -362,7 +362,7 @@ struct V2LiveTurnTimelineTests {
         #expect(message.failure?.line() == "HTTP 401 · Sign in")
         let frame = chipFrame(store.messages(sessionID: Self.session))
         #expect(frame.messages[1].blocks.contains { block in
-            if case .failureLine(_, let text, let body, let neutral, _, _) = block {
+            if case .failureLine(_, let text, let body, let neutral, _, _, _) = block {
                 return text == "HTTP 401 · Sign in" && body == "denied" && neutral == false
             }
             return false

@@ -14,14 +14,16 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
     case stepParagraph(blockID: String, paragraph: SessionChatStepParagraphBlock)
     /// Persistent note that the reply ended early (cut off or interrupted).
     case stopNote(blockID: String, reason: MessageStopReason)
-    /// A failed run under the reply. A provider body opens the existing detail sheet.
+    /// A failed run under the reply. A provider body or an action opens the detail sheet.
+    /// `coveredByLiveRetry` is a rate-limit or quota the composer status already shows.
     case failureLine(
         blockID: String,
         text: String,
         providerBody: String?,
         isNeutral: Bool,
         action: FailureAction?,
-        actionLabel: String?
+        actionLabel: String?,
+        coveredByLiveRetry: Bool
     )
 
     var blockID: String {
@@ -42,7 +44,7 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
             blockID
         case .stopNote(let blockID, _):
             blockID
-        case .failureLine(let blockID, _, _, _, _, _):
+        case .failureLine(let blockID, _, _, _, _, _, _):
             blockID
         }
     }
@@ -109,11 +111,11 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
         case let (.stopNote(lID, lReason), .stopNote(rID, rReason)):
             lID == rID && lReason == rReason
         case let (
-            .failureLine(lID, lText, lBody, lNeutral, lAction, lLabel),
-            .failureLine(rID, rText, rBody, rNeutral, rAction, rLabel)
+            .failureLine(lID, lText, lBody, lNeutral, lAction, lLabel, lCovered),
+            .failureLine(rID, rText, rBody, rNeutral, rAction, rLabel, rCovered)
         ):
             lID == rID && lText == rText && lBody == rBody && lNeutral == rNeutral
-                && lAction == rAction && lLabel == rLabel
+                && lAction == rAction && lLabel == rLabel && lCovered == rCovered
         default:
             false
         }
@@ -629,6 +631,22 @@ nonisolated enum SessionChatTimelineBlocks {
         ]
     }
 
+    /// Newest rate-limit or quota body, for the composer status to open.
+    static func newestLiveRetryProviderBody(in rows: [SessionChatRow]) -> String? {
+        for row in rows.reversed() {
+            for block in row.blocks {
+                if case .failureLine(_, _, let body, _, _, _, let covered) = block,
+                   covered,
+                   let body = body?.trimmingCharacters(in: .whitespacesAndNewlines),
+                   !body.isEmpty
+                {
+                    return body
+                }
+            }
+        }
+        return nil
+    }
+
     /// Rows never render empty: drop blocks the timeline paints as nothing
     /// (live thought is footer chrome) and fall back to the live placeholder.
     static func paintedBlocks(for message: SessionChatRow) -> [SessionChatTimelineBlock] {
@@ -696,7 +714,8 @@ nonisolated enum SessionChatTimelineBlocks {
                     providerBody: failure.providerBody,
                     isNeutral: failure.isNeutral,
                     action: failure.action(),
-                    actionLabel: failure.actionLabel()
+                    actionLabel: failure.actionLabel(),
+                    coveredByLiveRetry: failure.coversLiveRetry()
                 )
             )
         }

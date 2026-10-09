@@ -2,7 +2,9 @@ package dev.opencode.mobile.domain.message
 
 import dev.opencode.mobile.domain.session.SessionActivity
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SessionFailureTest {
@@ -17,6 +19,15 @@ class SessionFailureTest {
         assertNull(failure("provider.rate-limit").action())
         assertNull(failure("permission.rejected").action())
         assertNull(failure("compaction.failed").action())
+    }
+
+    @Test
+    fun rateLimitAndQuotaAreCoveredByTheLiveRetry() {
+        assertTrue(failure("provider.rate-limit").coversLiveRetry())
+        assertTrue(failure(" Provider.Quota ").coversLiveRetry())
+        assertFalse(failure("provider.auth").coversLiveRetry())
+        assertFalse(failure("provider.content-filter").coversLiveRetry())
+        assertFalse(failure("provider.no-route").coversLiveRetry())
     }
 
     @Test

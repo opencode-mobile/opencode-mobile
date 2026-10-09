@@ -90,6 +90,7 @@ import dev.opencode.mobile.ui.components.copySessionIdToClipboard
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.sessionchat.view.ComposerPickerKind
 import dev.opencode.mobile.ui.sessionchat.view.SessionRetryCountdown
+import dev.opencode.mobile.ui.sessionchat.view.sessionFailureDetailTarget
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatMcpServersSheetContent
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatMessageActionsSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatMessageActionsTarget
@@ -466,25 +467,6 @@ fun SessionChatScreen(
                     },
                 )
             }
-            val retryCard = uiState.retryCard
-            if (retryCard != null) {
-                val linkContext = LocalContext.current
-                SessionRetryCountdown(
-                    card = retryCard,
-                    onOpenLink = { link ->
-                        runCatching { Uri.parse(link) }.getOrNull()?.let { uri ->
-                            runCatching { linkContext.startActivity(Intent(Intent.ACTION_VIEW, uri)) }
-                        }
-                    },
-                    modifier =
-                        Modifier
-                            .align(Alignment.CenterHorizontally)
-                            .widthIn(max = OpenCodeLayout.ContentMaxWidth)
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp)
-                            .padding(bottom = 8.dp),
-                )
-            }
             uiState.composer.modelNotice?.let { notice ->
                 OpenCodeInlineNotice(
                     message = notice,
@@ -518,6 +500,7 @@ fun SessionChatScreen(
                             sessionTodoTotalCount = uiState.sessionTodoTotalCount,
                             sessionTodoActivePreview = uiState.sessionTodoActivePreview?.content,
                             hideFloatStack = showSessionTodosSheet,
+                            hideLiveRetryFailures = uiState.retryCard != null,
                             // Composer + 16 end-pin gap; Scroll to end uses this as-is
                             // (no extra scrollToEndPillBottomPadding).
                             bottomOverlayInset = timelineBottomInset,
@@ -541,14 +524,6 @@ fun SessionChatScreen(
                             onToolDetailTap = {
                                 logChatAction(ProductAnalytics.Action.CHAT_OPEN_TOOL_DETAIL)
                                 toolDetailTarget = it
-                            },
-                            onFailureAction = { action ->
-                                when (action) {
-                                    FailureAction.PickModel ->
-                                        activePicker = ComposerPickerKind.Model
-                                    FailureAction.Compact -> viewModel.compactCurrentSession()
-                                    FailureAction.Copy -> Unit
-                                }
                             },
                             onSkillsTap = {
                                 logChatAction(ProductAnalytics.Action.CHAT_OPEN_SKILLS)
@@ -891,6 +866,31 @@ fun SessionChatScreen(
                                     }
                                 }
                             },
+                            status = uiState.retryCard?.let { card ->
+                                {
+                                    val linkContext = LocalContext.current
+                                    val liveBody =
+                                        SessionChatTimelineBlocks.newestLiveRetryProviderBody(uiState.messages)
+                                    SessionRetryCountdown(
+                                        card = card,
+                                        onOpenLink = { openSessionExternalLink(linkContext, it) },
+                                        onOpenBody =
+                                            liveBody?.let { body ->
+                                                {
+                                                    toolDetailTarget =
+                                                        sessionFailureDetailTarget(
+                                                            text = card.message,
+                                                            providerBody = body,
+                                                            action = null,
+                                                            actionLabel = null,
+                                                            linkLabel = card.actionLabel,
+                                                            link = card.actionLink,
+                                                        )
+                                                }
+                                            },
+                                    )
+                                }
+                            },
                         )
                     }
                 }
@@ -913,9 +913,19 @@ fun SessionChatScreen(
             onClearAll = viewModel::clearPendingPrompts,
         )
 
+        val sheetContext = LocalContext.current
         SessionChatToolDetailSheet(
             target = toolDetailTarget,
             onDismiss = { toolDetailTarget = null },
+            onFailureAction = { action ->
+                when (action) {
+                    FailureAction.PickModel ->
+                        activePicker = ComposerPickerKind.Model
+                    FailureAction.Compact -> viewModel.compactCurrentSession()
+                    FailureAction.Copy -> Unit
+                }
+            },
+            onOpenLink = { openSessionExternalLink(sheetContext, it) },
         )
 
         SessionChatSkillsSheet(
@@ -1130,6 +1140,14 @@ fun SessionChatScreen(
             onDismissRequest = viewModel::chooseForkStay,
         )
     }
+}
+
+private fun openSessionExternalLink(
+    context: android.content.Context,
+    link: String,
+) {
+    val uri = runCatching { Uri.parse(link) }.getOrNull() ?: return
+    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, uri)) }
 }
 
 @Composable

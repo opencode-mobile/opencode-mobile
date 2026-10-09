@@ -67,8 +67,9 @@ sealed class SessionChatTimelineBlock {
     ) : SessionChatTimelineBlock()
 
     /**
-     * A failed run under the reply. [providerBody] opens the existing tool
-     * detail sheet. [isNeutral] is a permission rejection, drawn in the muted note color.
+     * A failed run under the reply. A provider body or an action opens the
+     * detail sheet. [isNeutral] is a permission rejection. [coveredByLiveRetry]
+     * is a rate-limit or quota the composer status already shows.
      */
     data class FailureLine(
         override val blockID: String,
@@ -77,6 +78,7 @@ sealed class SessionChatTimelineBlock {
         val isNeutral: Boolean = false,
         val action: FailureAction? = null,
         val actionLabel: String? = null,
+        val coveredByLiveRetry: Boolean = false,
     ) : SessionChatTimelineBlock()
 
     data class ToolGroup(
@@ -765,6 +767,18 @@ object SessionChatTimelineBlocks {
         )
     }
 
+    /** Newest rate-limit or quota body, for the composer status to open. */
+    fun newestLiveRetryProviderBody(messages: List<SessionChatMessageItem>): String? =
+        messages.asReversed().firstNotNullOfOrNull { message ->
+            message.blocks.firstNotNullOfOrNull { block ->
+                (block as? SessionChatTimelineBlock.FailureLine)
+                    ?.takeIf { it.coveredByLiveRetry }
+                    ?.providerBody
+                    ?.trim()
+                    ?.takeIf { it.isNotEmpty() }
+            }
+        }
+
     /**
      * Rows never render empty: drop blocks the timeline paints as nothing
      * (live thought is footer chrome) and fall back to the live placeholder.
@@ -839,6 +853,7 @@ object SessionChatTimelineBlocks {
                     isNeutral = failure.isNeutral,
                     action = failure.action(),
                     actionLabel = failure.actionLabel(),
+                    coveredByLiveRetry = failure.coversLiveRetry(),
                 )
         }
         return if (blocks === body.blocks) body else body.copy(blocks = blocks)

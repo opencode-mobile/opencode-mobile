@@ -219,22 +219,41 @@ enum OpenCodeSessionComposerAction {
 struct OpenCodeSessionComposer: View {
     let state: OpenCodeSessionComposerState
     let onAction: (OpenCodeSessionComposerAction) -> Void
+    private let status: AnyView?
+
+    init(
+        state: OpenCodeSessionComposerState,
+        onAction: @escaping (OpenCodeSessionComposerAction) -> Void,
+        status: AnyView? = nil
+    ) {
+        self.state = state
+        self.onAction = onAction
+        self.status = status
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            switch state {
-            case let .permission(permission):
-                permissionApprovalContent(permission)
-            case let .question(question):
-                questionRequestContent(question)
-            case let .childLockout(lockout):
-                childLockoutContent(lockout)
-            case let .prompt(prompt):
-                promptEntryContent(prompt)
+        VStack(alignment: .leading, spacing: 0) {
+            if let status {
+                status
+                Rectangle()
+                    .fill(OpenCodeColors.borderWeakBase)
+                    .frame(height: 1)
             }
+            VStack(alignment: .leading, spacing: 10) {
+                switch state {
+                case let .permission(permission):
+                    permissionApprovalContent(permission)
+                case let .question(question):
+                    questionRequestContent(question)
+                case let .childLockout(lockout):
+                    childLockoutContent(lockout)
+                case let .prompt(prompt):
+                    promptEntryContent(prompt)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 12)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 12)
         .clipShape(RoundedRectangle(cornerRadius: Self.shellCornerRadius, style: .continuous))
         .openCodeFloatingChrome(cornerRadius: Self.shellCornerRadius)
         .overlay {

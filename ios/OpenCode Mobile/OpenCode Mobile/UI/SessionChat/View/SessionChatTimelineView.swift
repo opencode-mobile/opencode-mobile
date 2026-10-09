@@ -19,6 +19,8 @@ struct SessionChatTimelineViewProps {
     let sessionTodoTotalCount: Int
     let sessionTodoActivePreview: String?
     let hideFloatStack: Bool
+    /// Hide rate-limit and quota marks while the composer retry status is showing.
+    let hideLiveRetryFailures: Bool
     /// Extra bottom inset so the timeline can scroll under a floating composer.
     let bottomOverlayInset: CGFloat
     let onRefresh: () async -> Void
@@ -28,7 +30,6 @@ struct SessionChatTimelineViewProps {
     let onSessionTodosTap: () -> Void
     let onMessageActionsTap: (SessionChatMessageActionsTarget) -> Void
     let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
-    let onFailureAction: (FailureAction) -> Void
     let onToolGroupTap: (SessionChatToolGroupTarget) -> Void
     let onSkillsTap: (SessionChatSkillsTarget) -> Void
     let onChildSessionTap: (String, String) -> Void
@@ -58,6 +59,7 @@ struct SessionChatTimelineViewProps {
         sessionTodoTotalCount: Int = 0,
         sessionTodoActivePreview: String? = nil,
         hideFloatStack: Bool = false,
+        hideLiveRetryFailures: Bool = false,
         bottomOverlayInset: CGFloat = 0,
         onRefresh: @escaping () async -> Void,
         onRetry: @escaping () async -> Void = {},
@@ -66,7 +68,6 @@ struct SessionChatTimelineViewProps {
         onSessionTodosTap: @escaping () -> Void = {},
         onMessageActionsTap: @escaping (SessionChatMessageActionsTarget) -> Void,
         onToolDetailTap: @escaping (SessionChatToolDetailTarget) -> Void = { _ in },
-        onFailureAction: @escaping (FailureAction) -> Void = { _ in },
         onToolGroupTap: @escaping (SessionChatToolGroupTarget) -> Void = { _ in },
         onSkillsTap: @escaping (SessionChatSkillsTarget) -> Void = { _ in },
         onChildSessionTap: @escaping (String, String) -> Void = { _, _ in },
@@ -93,6 +94,7 @@ struct SessionChatTimelineViewProps {
         self.sessionTodoTotalCount = sessionTodoTotalCount
         self.sessionTodoActivePreview = sessionTodoActivePreview
         self.hideFloatStack = hideFloatStack
+        self.hideLiveRetryFailures = hideLiveRetryFailures
         self.bottomOverlayInset = bottomOverlayInset
         self.onRefresh = onRefresh
         self.onRetry = onRetry
@@ -101,7 +103,6 @@ struct SessionChatTimelineViewProps {
         self.onSessionTodosTap = onSessionTodosTap
         self.onMessageActionsTap = onMessageActionsTap
         self.onToolDetailTap = onToolDetailTap
-        self.onFailureAction = onFailureAction
         self.onToolGroupTap = onToolGroupTap
         self.onSkillsTap = onSkillsTap
         self.onChildSessionTap = onChildSessionTap
@@ -155,6 +156,18 @@ struct SessionChatTimelineView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.bottom, props.timeline == .ready ? 0 : props.bottomOverlayInset)
+        .environment(\.hideLiveRetryFailures, props.hideLiveRetryFailures)
+    }
+}
+
+private struct HideLiveRetryFailuresKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+private extension EnvironmentValues {
+    var hideLiveRetryFailures: Bool {
+        get { self[HideLiveRetryFailuresKey.self] }
+        set { self[HideLiveRetryFailuresKey.self] = newValue }
     }
 }
 
@@ -250,7 +263,6 @@ private struct SessionChatTimelineReadyView: View {
                     workingIndicatorFading: props.workingIndicatorFading,
                     onMessageActionsTap: props.onMessageActionsTap,
                     onToolDetailTap: props.onToolDetailTap,
-                    onFailureAction: props.onFailureAction,
                     onToolGroupTap: props.onToolGroupTap,
                     onSkillsTap: props.onSkillsTap,
                     onChildSessionTap: props.onChildSessionTap,
@@ -438,7 +450,6 @@ private struct SessionChatTimelineHostRow: View {
     var workingIndicatorFading: Bool = false
     let onMessageActionsTap: (SessionChatMessageActionsTarget) -> Void
     let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
-    let onFailureAction: (FailureAction) -> Void
     let onToolGroupTap: (SessionChatToolGroupTarget) -> Void
     let onSkillsTap: (SessionChatSkillsTarget) -> Void
     let onChildSessionTap: (String, String) -> Void
@@ -463,7 +474,6 @@ private struct SessionChatTimelineHostRow: View {
                         message: message,
                         onMessageActionsTap: onMessageActionsTap,
                         onToolDetailTap: onToolDetailTap,
-                        onFailureAction: onFailureAction,
                         onToolGroupTap: onToolGroupTap,
                         onSkillsTap: onSkillsTap,
                         onChildSessionTap: onChildSessionTap,
@@ -479,7 +489,6 @@ private struct SessionChatTimelineHostRow: View {
                         message: message,
                         onMessageActionsTap: onMessageActionsTap,
                         onToolDetailTap: onToolDetailTap,
-                        onFailureAction: onFailureAction,
                         onToolGroupTap: onToolGroupTap,
                         onSkillsTap: onSkillsTap,
                         onChildSessionTap: onChildSessionTap,
@@ -498,7 +507,6 @@ private struct SessionChatMessageRow: View {
     let message: SessionChatRow
     let onMessageActionsTap: (SessionChatMessageActionsTarget) -> Void
     let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
-    let onFailureAction: (FailureAction) -> Void
     let onToolGroupTap: (SessionChatToolGroupTarget) -> Void
     let onSkillsTap: (SessionChatSkillsTarget) -> Void
     let onChildSessionTap: (String, String) -> Void
@@ -542,7 +550,6 @@ private struct SessionChatMessageRow: View {
                     message: message,
                     onOpenMessageActions: { openMessageActions(showsRevertMessage: false) },
                     onToolDetailTap: onToolDetailTap,
-                    onFailureAction: onFailureAction,
                     onToolGroupTap: onToolGroupTap,
                     onSkillsTap: onSkillsTap,
                     onChildSessionTap: onChildSessionTap,
@@ -604,7 +611,7 @@ private struct AssistantMessageContent: View {
     let message: SessionChatRow
     let onOpenMessageActions: () -> Void
     let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
-    let onFailureAction: (FailureAction) -> Void
+    @Environment(\.hideLiveRetryFailures) private var hideLiveRetryFailures
     let onToolGroupTap: (SessionChatToolGroupTarget) -> Void
     let onSkillsTap: (SessionChatSkillsTarget) -> Void
     let onChildSessionTap: (String, String) -> Void
@@ -716,16 +723,17 @@ private struct AssistantMessageContent: View {
                     )
                 case .stopNote(_, let reason):
                     OpenCodeMessageNote(variant: reason == .length ? .truncated : .interrupted)
-                case .failureLine(_, let text, let providerBody, let isNeutral, let action, let actionLabel):
-                    FailureLineBlock(
-                        text: text,
-                        providerBody: providerBody,
-                        isNeutral: isNeutral,
-                        action: action,
-                        actionLabel: actionLabel,
-                        onToolDetailTap: onToolDetailTap,
-                        onFailureAction: onFailureAction
-                    )
+                case .failureLine(_, let text, let providerBody, let isNeutral, let action, let actionLabel, let covered):
+                    if !(hideLiveRetryFailures && covered) {
+                        FailureLineBlock(
+                            text: text,
+                            providerBody: providerBody,
+                            isNeutral: isNeutral,
+                            action: action,
+                            actionLabel: actionLabel,
+                            onToolDetailTap: onToolDetailTap
+                        )
+                    }
                 case .stepParagraph(_, let paragraph):
                     StepParagraphBlock(
                         paragraph: paragraph,
@@ -1017,7 +1025,7 @@ private extension ToolStatus {
     }
 }
 
-/// Red caption under a failed reply. A provider body opens the existing detail sheet.
+/// Quiet mark under a failed reply. A body or an action opens the detail sheet.
 private struct FailureLineBlock: View {
     let text: String
     let providerBody: String?
@@ -1025,42 +1033,41 @@ private struct FailureLineBlock: View {
     let action: FailureAction?
     let actionLabel: String?
     let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
-    let onFailureAction: (FailureAction) -> Void
 
     var body: some View {
-        let color = isNeutral ? OpenCodeColors.textWeak : OpenCodeColors.error
-        VStack(alignment: .leading, spacing: 2) {
-            let label = Text(text)
+        let target = SessionChatToolDetailTarget.failure(
+            text: text,
+            providerBody: providerBody,
+            action: action,
+            actionLabel: actionLabel
+        )
+        HStack(alignment: .center, spacing: 8) {
+            Circle()
+                .fill(isNeutral ? OpenCodeColors.textWeak : OpenCodeColors.error)
+                .frame(width: 6, height: 6)
+            Text(text)
                 .font(OpenCodeTypography.caption)
-                .foregroundStyle(color)
+                .foregroundStyle(OpenCodeColors.textWeak)
                 .lineLimit(3)
-                .padding(.horizontal, 4)
-            if let provider = providerBody?.trimmingCharacters(in: .whitespacesAndNewlines), !provider.isEmpty {
-                Button {
-                    onToolDetailTap(
-                        SessionChatToolDetailTarget(title: "Provider response", body: provider, monospace: true)
-                    )
-                } label: {
-                    label.frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .buttonStyle(.plain)
-            } else {
-                label.frame(maxWidth: .infinity, alignment: .leading)
-            }
-            if let action, let actionLabel, !actionLabel.isEmpty {
-                Button(actionLabel) {
-                    if action == .copy {
-                        let copied = providerBody?.trimmingCharacters(in: .whitespacesAndNewlines)
-                        UIPasteboard.general.string = (copied?.isEmpty == false ? copied : nil) ?? text
-                    } else {
-                        onFailureAction(action)
-                    }
-                }
-                .buttonStyle(.plain)
-                .font(OpenCodeTypography.body)
-                .foregroundStyle(OpenCodeColors.textStrong)
-                .padding(.horizontal, 4)
-            }
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, 4)
+        .contentShape(Rectangle())
+        .modifier(FailureMarkTap(target: target, onToolDetailTap: onToolDetailTap))
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(target == nil ? [] : .isButton)
+    }
+}
+
+private struct FailureMarkTap: ViewModifier {
+    let target: SessionChatToolDetailTarget?
+    let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
+
+    func body(content: Content) -> some View {
+        if let target {
+            content.onTapGesture { onToolDetailTap(target) }
+        } else {
+            content
         }
     }
 }

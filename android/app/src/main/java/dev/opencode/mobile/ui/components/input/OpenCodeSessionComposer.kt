@@ -28,6 +28,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -246,6 +247,7 @@ fun OpenCodeSessionComposer(
     state: OpenCodeSessionComposerState,
     onAction: (OpenCodeSessionComposerAction) -> Unit,
     modifier: Modifier = Modifier,
+    status: (@Composable () -> Unit)? = null,
 ) {
     val outline =
         when (state) {
@@ -276,6 +278,11 @@ fun OpenCodeSessionComposer(
             // Opaque: at 95% the timeline rows behind show through as faint rectangles.
             opaque = true,
         ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                if (status != null) {
+                    status()
+                    HorizontalDivider(color = openCodeColor("border-weak-base"))
+                }
             Column(
                 modifier =
                     Modifier
@@ -337,6 +344,7 @@ fun OpenCodeSessionComposer(
                         }
                     }
                 }
+            }
             }
         }
     }
