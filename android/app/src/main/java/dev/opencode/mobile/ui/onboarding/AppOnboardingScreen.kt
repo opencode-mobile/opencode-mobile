@@ -45,6 +45,7 @@ import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductRouteScreenViewEffect
 import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
+import dev.opencode.mobile.ui.components.OpenCodeTag
 import dev.opencode.mobile.ui.components.OpenCodeCodeSnippet
 import dev.opencode.mobile.ui.components.OpenCodePageIndicator
 import dev.opencode.mobile.ui.components.OpenCodeListGroup
@@ -238,16 +239,7 @@ private fun AppOnboardingPageContent(
         )
         Spacer(modifier = Modifier.height(16.dp))
         page.badge?.let { badge ->
-            Surface(
-                shape = RoundedCornerShape(999.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant,
-            ) {
-                Text(
-                    text = badge,
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                )
-            }
+            OpenCodeTag(title = badge)
             Spacer(modifier = Modifier.height(10.dp))
         }
         Text(
@@ -267,11 +259,9 @@ private fun AppOnboardingPageContent(
             }
             page.setupLink?.let { link ->
                 Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = link,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                    textDecoration = TextDecoration.Underline,
-                    modifier = Modifier.clickable(onClick = onNeedServerFirst),
+                OpenCodeButton(
+                    variant = OpenCodeButtonVariant.Link(link),
+                    onClick = onNeedServerFirst,
                 )
             }
         }

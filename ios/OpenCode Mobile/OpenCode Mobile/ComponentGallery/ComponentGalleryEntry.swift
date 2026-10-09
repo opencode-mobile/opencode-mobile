@@ -16,6 +16,9 @@ enum ComponentGalleryEntryID: String, Hashable {
     case icons
     case skeletonIllustration
     case pageIndicator
+    case bottomFade
+    case tag
+    case keyValueRow
     case attachment
     case outgoingMessage
     case pendingPromptsStrip
@@ -96,6 +99,24 @@ let componentGalleryEntries = [
         title: "Page Indicator",
         description: "Pager position dots under onboarding and promo carousels.",
         category: .navigation
+    ),
+    ComponentGalleryEntry(
+        id: .bottomFade,
+        title: "Bottom Fade",
+        description: "Gradient that fades list content into the background under a dock.",
+        category: .navigation
+    ),
+    ComponentGalleryEntry(
+        id: .tag,
+        title: "Tag",
+        description: "Static capsule label.",
+        category: .controls
+    ),
+    ComponentGalleryEntry(
+        id: .keyValueRow,
+        title: "Key Value Row",
+        description: "Label and value for detail lines and stat cells.",
+        category: .lists
     ),
     ComponentGalleryEntry(
         id: .typography,

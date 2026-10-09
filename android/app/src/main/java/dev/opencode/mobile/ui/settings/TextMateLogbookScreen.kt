@@ -40,6 +40,7 @@ import dev.opencode.mobile.ui.components.OpenCodeDialogOption
 import dev.opencode.mobile.ui.components.OpenCodeInlineNotice
 import dev.opencode.mobile.ui.components.OpenCodeInlineNoticeTone
 import dev.opencode.mobile.ui.components.OpenCodeInlineNoticeVariant
+import dev.opencode.mobile.ui.components.OpenCodeKeyValueRow
 import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeListItemStatus
 import dev.opencode.mobile.ui.components.OpenCodeListItemStatusTone
@@ -232,18 +233,7 @@ private fun DetailLine(
     label: String,
     value: String,
 ) {
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodySmall,
-            color = openCodeColor("text-base"),
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodySmall,
-            color = openCodeColor("text-strong"),
-        )
-    }
+    OpenCodeKeyValueRow(label = label, value = value)
 }
 
 private fun TextMateParseObservation.displayLanguage(): String = canonicalLanguage ?: requestedLanguage ?: "Unspecified language"

@@ -59,6 +59,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.opencode.mobile.theme.LetterAccent
+import dev.opencode.mobile.theme.OpenCodePillShape
+import dev.opencode.mobile.theme.OpenCodeRadius
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.badgeColors
 import dev.opencode.mobile.theme.openCodeColor
@@ -69,11 +71,11 @@ private val ListItemLetterGlyphSize = 14.sp
 private val ListItemLetterStatusDotSize = 10.dp
 private val ListItemIconDecoratorSize = 24.dp
 private val ListItemIconCircleGlyphSize = 16.dp
-private val ListItemCornerRadius = 8.dp
+private val ListItemCornerRadius = OpenCodeRadius.small
 private val ListItemVerticalPadding = 12.dp
 private val ListItemTitleSubtitleSpacing = 2.dp
 private val ListItemMetaSpacing = 4.dp
-private val StatusChipShape = RoundedCornerShape(999.dp)
+private val StatusChipShape = OpenCodePillShape
 private const val ListItemPressedScale = 0.965f
 private const val ListItemPopPeakScale = 1.035f
 

@@ -27,6 +27,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.theme.OpenCodeSmallShape
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
@@ -155,4 +156,4 @@ private fun AttachmentLabels(
     }
 }
 
-private val AttachmentShape = RoundedCornerShape(8.dp)
+private val AttachmentShape = OpenCodeSmallShape

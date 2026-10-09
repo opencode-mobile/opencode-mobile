@@ -3,6 +3,7 @@ import SwiftUI
 enum OpenCodeButtonVariant {
     case fullWidthText(title: String)
     case compactText(title: String)
+    case link(title: String)
     case iconSquare(OpenCodeIcon, accessibilityLabel: String?)
     case iconCircle(OpenCodeIcon, accessibilityLabel: String?)
     case iconCircleText(String, accessibilityLabel: String?)
@@ -45,6 +46,22 @@ struct OpenCodeButton: View {
     }
 
     var body: some View {
+        if case let .link(title) = variant {
+            Button(action: action) {
+                Text(title)
+                    .font(OpenCodeTypography.body)
+                    .fontWeight(.semibold)
+                    .underline()
+                    .foregroundStyle(enabled ? OpenCodeColors.textStrong : OpenCodeColors.textBase)
+            }
+            .buttonStyle(.plain)
+            .disabled(!enabled)
+        } else {
+            filledButton
+        }
+    }
+
+    private var filledButton: some View {
         let button = Button(action: longPress == nil ? action : {}) {
             label
         }
@@ -101,6 +118,11 @@ struct OpenCodeButton: View {
                 .font(.system(size: 18, weight: .semibold))
                 .accessibilityLabel(accessibilityLabel ?? "")
                 .accessibilityHidden(accessibilityLabel == nil)
+        case let .link(title):
+            Text(title)
+                .font(OpenCodeTypography.body)
+                .fontWeight(.semibold)
+                .underline()
         }
     }
 }

@@ -25,6 +25,7 @@ private enum class GalleryButtonVariant {
     CompactText,
     IconSquare,
     IconCircle,
+    Link,
 }
 
 @Composable
@@ -47,6 +48,7 @@ fun ButtonGalleryScreen(modifier: Modifier = Modifier) {
             GalleryButtonVariant.CompactText -> OpenCodeButtonVariant.CompactText("Build")
             GalleryButtonVariant.IconSquare -> OpenCodeButtonVariant.IconSquare(OpenCodeIcons.ArrowUpward, "Send")
             GalleryButtonVariant.IconCircle -> OpenCodeButtonVariant.IconCircle(OpenCodeIcons.ArrowUpward, "Send")
+            GalleryButtonVariant.Link -> OpenCodeButtonVariant.Link("Need the server first?")
         }
     val contrastSelection =
         try {
@@ -74,6 +76,7 @@ fun ButtonGalleryScreen(modifier: Modifier = Modifier) {
                                 GalleryButtonVariant.CompactText -> "Compact"
                                 GalleryButtonVariant.IconSquare -> "Icon"
                                 GalleryButtonVariant.IconCircle -> "Circle"
+                                GalleryButtonVariant.Link -> "Link"
                             },
                         selected = option == variantSelection,
                         onClick = { variantName = option.name },

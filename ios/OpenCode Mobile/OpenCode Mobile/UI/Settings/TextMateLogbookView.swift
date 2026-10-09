@@ -196,17 +196,7 @@ private struct TextMateLogbookDetailLine: View {
     let value: String
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Text(label)
-                .font(OpenCodeTypography.caption)
-                .foregroundStyle(OpenCodeColors.textBase)
-            Spacer(minLength: 8)
-            Text(value)
-                .font(OpenCodeTypography.caption)
-                .foregroundStyle(OpenCodeColors.textStrong)
-                .multilineTextAlignment(.trailing)
-        }
-        .accessibilityElement(children: .combine)
+        OpenCodeKeyValueRow(label: label, value: value)
     }
 }
 

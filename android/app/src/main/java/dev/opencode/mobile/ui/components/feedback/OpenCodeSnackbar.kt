@@ -19,9 +19,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.theme.OpenCodeRadius
 import dev.opencode.mobile.theme.OpenCodeTheme
 
-private val OpenCodeSnackbarCornerRadius = 8.dp
+private val OpenCodeSnackbarCornerRadius = OpenCodeRadius.small
 private val OpenCodeSnackbarScreenMarginHorizontal = 16.dp
 private val OpenCodeSnackbarScreenMarginBottom = 16.dp
 

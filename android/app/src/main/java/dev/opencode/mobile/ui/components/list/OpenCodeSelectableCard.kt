@@ -22,11 +22,10 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.theme.OpenCodeMediumShape
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
-
-private val SelectableCardCornerRadius = 12.dp
 
 /** Raised card with a title, blurb, selected check, and a preview slot. */
 @Composable
@@ -39,7 +38,7 @@ fun OpenCodeSelectableCard(
     preview: @Composable () -> Unit,
 ) {
     require(title.isNotBlank()) { "Selectable Card requires a non-blank title" }
-    val shape = RoundedCornerShape(SelectableCardCornerRadius)
+    val shape = OpenCodeMediumShape
     Column(
         modifier =
             modifier

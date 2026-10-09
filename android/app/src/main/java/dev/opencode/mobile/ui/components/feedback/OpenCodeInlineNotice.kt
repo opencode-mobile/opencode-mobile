@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -16,6 +15,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.theme.OpenCodeTheme
+import dev.opencode.mobile.theme.OpenCodeSmallShape
 import dev.opencode.mobile.theme.openCodeColor
 
 enum class OpenCodeInlineNoticeTone {
@@ -49,7 +49,7 @@ fun OpenCodeInlineNotice(
     action?.let { require(it.title.isNotBlank()) { "Inline Notice action requires a non-blank title" } }
 
     val foreground = tone.foreground()
-    val shape = RoundedCornerShape(8.dp)
+    val shape = OpenCodeSmallShape
     Row(
         modifier =
             modifier

@@ -2,13 +2,13 @@ package dev.opencode.mobile.ui.components
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.theme.OpenCodeMediumShape
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 
@@ -21,7 +21,7 @@ fun OpenCodeListGroup(
     if (itemCount <= 0) return
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(12.dp),
+        shape = OpenCodeMediumShape,
         color = openCodeColor("surface-base"),
         border = BorderStroke(1.dp, openCodeColor("border-weak-base")),
     ) {

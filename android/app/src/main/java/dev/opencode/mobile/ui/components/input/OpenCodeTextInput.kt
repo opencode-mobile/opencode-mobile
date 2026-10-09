@@ -39,10 +39,11 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.theme.OpenCodeRadius
 import dev.opencode.mobile.theme.openCodeColor
 
 internal val OpenCodeTextInputMinHeight = 48.dp
-internal val OpenCodeTextInputCornerRadius = 8.dp
+internal val OpenCodeTextInputCornerRadius = OpenCodeRadius.small
 internal val OpenCodeTextInputPaddingHorizontal = 12.dp
 
 enum class OpenCodeTextInputKind {

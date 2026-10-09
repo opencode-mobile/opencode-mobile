@@ -56,6 +56,7 @@ import dev.opencode.mobile.ui.componentgallery.components.ActionPillGalleryScree
 import dev.opencode.mobile.ui.componentgallery.components.ActionTileGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.AssistantMessageGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.AttachmentGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.BottomFadeGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.BottomSheetGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ButtonGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ChildSessionRowGalleryScreen
@@ -68,6 +69,7 @@ import dev.opencode.mobile.ui.componentgallery.components.EmptyStateGalleryScree
 import dev.opencode.mobile.ui.componentgallery.components.FilterTabsGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.HunkNavigationPillGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.IconsGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.KeyValueRowGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.InlineNoticeGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ListGroupGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ListItemGalleryScreen
@@ -96,6 +98,7 @@ import dev.opencode.mobile.ui.componentgallery.components.SkeletonIllustrationGa
 import dev.opencode.mobile.ui.componentgallery.components.SnackbarGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.StatusStackGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SyncingPillGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.TagGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.TextInputGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ToolCallCardGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ToolChipGalleryScreen
@@ -530,6 +533,9 @@ fun MainNavigation() {
                                                         ComponentGalleryEntryId.SkeletonIllustration ->
                                                             SkeletonIllustrationGalleryScreen()
                                                         ComponentGalleryEntryId.PageIndicator -> PageIndicatorGalleryScreen()
+                                                        ComponentGalleryEntryId.BottomFade -> BottomFadeGalleryScreen()
+                                                        ComponentGalleryEntryId.Tag -> TagGalleryScreen()
+                                                        ComponentGalleryEntryId.KeyValueRow -> KeyValueRowGalleryScreen()
                                                         ComponentGalleryEntryId.Attachment -> AttachmentGalleryScreen()
                                                         ComponentGalleryEntryId.OutgoingMessage -> OutgoingMessageGalleryScreen()
                                                         ComponentGalleryEntryId.PendingPromptsStrip ->

@@ -29,11 +29,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.opencode.mobile.theme.OpenCodeRadius
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
-private val ChildSessionRowCornerRadius = 8.dp
+private val ChildSessionRowCornerRadius = OpenCodeRadius.small
 private val ChildSessionRowPaddingHorizontal = 12.dp
 private val ChildSessionRowPaddingVertical = 10.dp
 private val ChildSessionRowAvatarSize = 32.dp

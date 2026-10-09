@@ -14,7 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import dev.opencode.mobile.theme.OpenCodeSmallShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -33,6 +33,8 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -40,7 +42,7 @@ import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
-private val OpenCodeButtonCornerRadius = RoundedCornerShape(8.dp)
+private val OpenCodeButtonCornerRadius = OpenCodeSmallShape
 private val OpenCodeButtonBorderWidth = 1.dp
 private val OpenCodeButtonTextHorizontalPadding = 14.dp
 private val OpenCodeButtonTextVerticalPadding = 10.dp
@@ -56,6 +58,10 @@ sealed interface OpenCodeButtonVariant {
     ) : OpenCodeButtonVariant
 
     data class CompactText(
+        val title: String,
+    ) : OpenCodeButtonVariant
+
+    data class Link(
         val title: String,
     ) : OpenCodeButtonVariant
 
@@ -98,6 +104,19 @@ fun OpenCodeButton(
     size: OpenCodeButtonSize = OpenCodeButtonSize.Medium,
     onLongClick: (() -> Unit)? = null,
 ) {
+    if (variant is OpenCodeButtonVariant.Link) {
+        Text(
+            text = variant.title,
+            modifier = modifier.clickable(enabled = enabled, role = Role.Button, onClick = onClick),
+            style =
+                MaterialTheme.typography.bodyMedium.copy(
+                    fontWeight = FontWeight.SemiBold,
+                    textDecoration = TextDecoration.Underline,
+                ),
+            color = if (enabled) openCodeColor("text-strong") else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        return
+    }
     val targetContainer =
         when {
             !enabled && contrast == OpenCodeButtonContrast.Accent ->
@@ -178,6 +197,7 @@ fun OpenCodeButton(
             is OpenCodeButtonVariant.IconSquare -> Modifier.size(iconSize)
             is OpenCodeButtonVariant.IconCircle -> Modifier.size(iconSize)
             is OpenCodeButtonVariant.IconCircleText -> Modifier.size(iconSize)
+            is OpenCodeButtonVariant.Link -> Modifier
         }
     val shape =
         when (variant) {
@@ -280,6 +300,7 @@ fun OpenCodeButton(
                         color = contentColor,
                     )
                 }
+            is OpenCodeButtonVariant.Link -> Unit
         }
     }
 }

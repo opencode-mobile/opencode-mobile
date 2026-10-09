@@ -87,16 +87,7 @@ struct SessionContextView: View {
     private func statsGrid(_ stats: [SessionContextStatItem]) -> some View {
         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], alignment: .leading, spacing: 20) {
             ForEach(stats) { stat in
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(stat.label)
-                        .font(OpenCodeTypography.caption)
-                        .foregroundStyle(OpenCodeColors.textBase)
-                    Text(stat.value)
-                        .font(OpenCodeTypography.body)
-                        .foregroundStyle(OpenCodeColors.textStrong)
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.85)
-                }
+                OpenCodeKeyValueRow(label: stat.label, value: stat.value, style: .stacked)
             }
         }
     }

@@ -37,6 +37,8 @@ import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.OpenCodeEmptyState
 import dev.opencode.mobile.ui.components.OpenCodeEmptyStateAction
 import dev.opencode.mobile.ui.components.OpenCodeInlineNotice
+import dev.opencode.mobile.ui.components.OpenCodeKeyValueRow
+import dev.opencode.mobile.ui.components.OpenCodeKeyValueStyle
 import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
 import dev.opencode.mobile.ui.components.OpenCodeStatusStack
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
@@ -150,25 +152,12 @@ private fun StatGrid(stats: List<SessionContextStatItem>) {
         maxItemsInEachRow = 2,
     ) {
         stats.forEach { stat ->
-            Column(
+            OpenCodeKeyValueRow(
+                label = stat.label,
+                value = stat.value,
+                style = OpenCodeKeyValueStyle.Stacked,
                 modifier = Modifier.weight(1f).fillMaxWidth(0.5f),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Text(
-                    text = stat.label,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = stat.value,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
+            )
         }
     }
 }

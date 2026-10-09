@@ -27,10 +27,11 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.theme.OpenCodeRadius
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 
-private val ToolCallCardCornerRadius = 8.dp
+private val ToolCallCardCornerRadius = OpenCodeRadius.small
 private val ToolCallCardPaddingHorizontal = 12.dp
 private val ToolCallCardPaddingVertical = 10.dp
 private val ToolCallCardStatusDotSize = 6.dp

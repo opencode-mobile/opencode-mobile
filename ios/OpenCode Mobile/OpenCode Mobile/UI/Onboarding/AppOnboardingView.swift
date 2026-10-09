@@ -132,12 +132,7 @@ private struct AppOnboardingPageView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 20))
 
                 if let badge = page.badge {
-                    Text(badge)
-                        .font(OpenCodeTypography.caption)
-                        .fontWeight(.bold)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(OpenCodeColors.surfaceRaisedBase, in: Capsule())
+                    OpenCodeTag(badge)
                 }
 
                 Text(page.title)
@@ -152,14 +147,7 @@ private struct AppOnboardingPageView: View {
                             .foregroundStyle(OpenCodeColors.textBase)
                     }
                     if let setupLink = page.setupLink {
-                        Button(action: onNeedServerFirst) {
-                            Text(setupLink)
-                                .font(OpenCodeTypography.body)
-                                .fontWeight(.semibold)
-                                .underline()
-                                .foregroundStyle(OpenCodeColors.textStrong)
-                        }
-                        .buttonStyle(.plain)
+                        OpenCodeButton(variant: .link(title: setupLink), action: onNeedServerFirst)
                     }
                 } else {
                     OpenCodeListGroup(page.features, id: \.id) { row in

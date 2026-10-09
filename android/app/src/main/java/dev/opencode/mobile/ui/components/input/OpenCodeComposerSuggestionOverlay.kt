@@ -23,6 +23,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.theme.OpenCodeMediumShape
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 
@@ -52,7 +53,7 @@ fun OpenCodeComposerSuggestionOverlay(
     modifier: Modifier = Modifier,
     emptyMessage: String? = null,
 ) {
-    val shape = RoundedCornerShape(12.dp)
+    val shape = OpenCodeMediumShape
     OpenCodeFloatingChrome(
         modifier = modifier.fillMaxWidth(),
         shape = shape,
