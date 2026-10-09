@@ -61,6 +61,7 @@ struct OpenCodeButton: View {
         }
     }
 
+    @ViewBuilder
     private var filledButton: some View {
         let button = Button(action: longPress == nil ? action : {}) {
             label

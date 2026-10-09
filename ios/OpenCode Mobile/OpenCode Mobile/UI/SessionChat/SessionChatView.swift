@@ -180,6 +180,7 @@ struct SessionChatView: View {
                             + composerHomeIndicatorLift
                             + keyboardOverlap,
                         onRefresh: { await viewModel.refreshMessages() },
+                        onRetry: { await viewModel.retryFailedTimeline() },
                         onLoadOlder: { Task { await viewModel.loadOlderMessages() } },
                         onSessionBranchTap: {
                             logChatAction(ProductAnalytics.Action.chatOpenChanges)

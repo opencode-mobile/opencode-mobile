@@ -113,7 +113,7 @@ struct ChangesView: View {
         case let .error(error):
             OpenCodeEmptyState(
                 title: "Unable to load changes",
-                message: error,
+                message: openCodeNonBlank(error, fallback: "The changes didn't load."),
                 primaryAction: OpenCodeEmptyStateAction(title: "Retry") {
                     logAction(ProductAnalytics.Action.changesRetry)
                     Task { await viewModel.retry() }

@@ -145,7 +145,8 @@ struct ProjectListHomeView: View {
                 } else if let errorMessage = navigator.errorMessage {
                     OpenCodeEmptyState(
                         title: "Unable to list this folder",
-                        message: errorMessage,
+                        message: openCodeNonBlank(errorMessage, fallback: "This folder couldn't be listed."),
+                        fillsAvailableSpace: false,
                         primaryAction: OpenCodeEmptyStateAction(title: "Retry") {
                             Task { await viewModel.retryAddProjectNavigator() }
                         }
@@ -672,7 +673,7 @@ struct ProjectListHomeView: View {
     private func probeFailed(_ message: String) -> some View {
         OpenCodeEmptyState(
             title: "Unable to connect",
-            message: message,
+            message: openCodeNonBlank(message, fallback: "Unable to connect."),
             primaryAction: OpenCodeEmptyStateAction(title: "Retry") {
                 Task { await viewModel.retryProbe() }
             },

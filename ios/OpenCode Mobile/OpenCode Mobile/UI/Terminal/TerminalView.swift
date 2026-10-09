@@ -103,7 +103,7 @@ struct TerminalView: View {
     private func errorContent(title: String, message: String) -> some View {
         OpenCodeEmptyState(
             title: title,
-            message: message,
+            message: openCodeNonBlank(message, fallback: "The terminal didn't open."),
             primaryAction: OpenCodeEmptyStateAction(title: "Retry") {
                 Task { await viewModel.retry() }
             }

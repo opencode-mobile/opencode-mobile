@@ -238,7 +238,7 @@ private fun ChangedFilesScreen(
                 is ChangesPhase.Error ->
                     OpenCodeEmptyState(
                         title = "Unable to load changes",
-                        message = phase.message,
+                        message = phase.message.ifBlank { "The changes didn't load." },
                         primaryAction =
                             OpenCodeEmptyStateAction(title = "Retry") {
                                 logChangesAction(ProductAnalytics.Action.CHANGES_RETRY)

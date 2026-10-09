@@ -560,7 +560,7 @@ internal fun MainScreen(
                 navigator.errorMessage != null -> {
                     OpenCodeEmptyState(
                         title = "Unable to list this folder",
-                        message = navigator.errorMessage,
+                        message = navigator.errorMessage.ifBlank { "This folder couldn't be listed." },
                         primaryAction = OpenCodeEmptyStateAction(title = "Retry", onClick = onRetryAddProjectNavigator),
                         modifier = Modifier.padding(20.dp),
                     )
@@ -789,7 +789,7 @@ private fun ProbeFailedContent(
 ) {
     OpenCodeEmptyState(
         title = "Unable to connect",
-        message = message,
+        message = message.ifBlank { "Unable to connect." },
         primaryAction = OpenCodeEmptyStateAction(title = "Retry", onClick = onRetry),
         secondaryAction = OpenCodeEmptyStateAction(title = "Edit connection", onClick = onEditConnection),
         modifier = modifier,

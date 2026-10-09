@@ -52,7 +52,7 @@ struct SessionContextView: View {
         case let .error(message):
             OpenCodeEmptyState(
                 title: "Unable to load session context",
-                message: message,
+                message: openCodeNonBlank(message, fallback: "The context didn't load."),
                 primaryAction: OpenCodeEmptyStateAction(title: "Retry") {
                     logAction(ProductAnalytics.Action.sessionContextRetry)
                     Task { await viewModel.load() }

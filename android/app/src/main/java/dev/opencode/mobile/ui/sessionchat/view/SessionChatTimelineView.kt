@@ -141,6 +141,7 @@ internal data class SessionChatTimelineViewProps(
     /** Extra bottom inset so the timeline can scroll under a floating composer. */
     val bottomOverlayInset: Dp = 0.dp,
     val onRefresh: () -> Unit,
+    val onRetry: () -> Unit = {},
     val onLoadOlder: () -> Unit = {},
     val onSessionBranchClick: () -> Unit = {},
     val onSessionTodosClick: () -> Unit = {},
@@ -185,10 +186,10 @@ internal fun SessionChatTimelineView(
         SessionChatTimelineState.Error ->
             OpenCodeEmptyState(
                 title = "Unable to load messages",
-                message = props.errorMessage ?: "The timeline didn't load.",
+                message = props.errorMessage?.takeIf { it.isNotBlank() } ?: "The timeline didn't load.",
                 primaryAction =
                     OpenCodeEmptyStateAction(title = "Retry") {
-                        props.onRefresh()
+                        props.onRetry()
                     },
                 modifier = modifier.fillMaxSize(),
             )

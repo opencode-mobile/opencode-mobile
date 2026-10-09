@@ -21,6 +21,7 @@ struct SessionChatTimelineViewProps {
     /// Extra bottom inset so the timeline can scroll under a floating composer.
     let bottomOverlayInset: CGFloat
     let onRefresh: () async -> Void
+    let onRetry: () async -> Void
     let onLoadOlder: () -> Void
     let onSessionBranchTap: () -> Void
     let onSessionTodosTap: () -> Void
@@ -57,6 +58,7 @@ struct SessionChatTimelineViewProps {
         hideFloatStack: Bool = false,
         bottomOverlayInset: CGFloat = 0,
         onRefresh: @escaping () async -> Void,
+        onRetry: @escaping () async -> Void = {},
         onLoadOlder: @escaping () -> Void = {},
         onSessionBranchTap: @escaping () -> Void = {},
         onSessionTodosTap: @escaping () -> Void = {},
@@ -90,6 +92,7 @@ struct SessionChatTimelineViewProps {
         self.hideFloatStack = hideFloatStack
         self.bottomOverlayInset = bottomOverlayInset
         self.onRefresh = onRefresh
+        self.onRetry = onRetry
         self.onLoadOlder = onLoadOlder
         self.onSessionBranchTap = onSessionBranchTap
         self.onSessionTodosTap = onSessionTodosTap
@@ -136,9 +139,9 @@ struct SessionChatTimelineView: View {
             case .error:
                 OpenCodeEmptyState(
                     title: "Unable to load messages",
-                    message: props.errorMessage ?? "The timeline didn't load.",
+                    message: openCodeNonBlank(props.errorMessage, fallback: "The timeline didn't load."),
                     primaryAction: OpenCodeEmptyStateAction(title: "Retry") {
-                        Task { await props.onRefresh() }
+                        Task { await props.onRetry() }
                     }
                 )
             case .ready:

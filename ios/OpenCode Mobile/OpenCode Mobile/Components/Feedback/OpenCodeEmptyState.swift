@@ -1,5 +1,11 @@
 import SwiftUI
 
+func openCodeNonBlank(_ message: String?, fallback: String) -> String {
+    let trimmed = message?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    if trimmed.isEmpty { return fallback }
+    return message ?? fallback
+}
+
 struct OpenCodeEmptyStateAction {
     let title: String
     let action: () -> Void
@@ -11,11 +17,14 @@ struct OpenCodeEmptyState: View {
     var icon: OpenCodeIcon?
     var primaryAction: OpenCodeEmptyStateAction?
     var secondaryAction: OpenCodeEmptyStateAction?
+    /// Full-page hosts center in the available height. Sheets pass false so the block stays with the content.
+    var fillsAvailableSpace: Bool
 
     init(
         title: String,
         message: String,
         icon: OpenCodeIcon? = nil,
+        fillsAvailableSpace: Bool = true,
         primaryAction: OpenCodeEmptyStateAction? = nil,
         secondaryAction: OpenCodeEmptyStateAction? = nil
     ) {
@@ -24,6 +33,7 @@ struct OpenCodeEmptyState: View {
         self.title = title
         self.message = message
         self.icon = icon
+        self.fillsAvailableSpace = fillsAvailableSpace
         self.primaryAction = primaryAction
         self.secondaryAction = secondaryAction
     }
@@ -56,7 +66,7 @@ struct OpenCodeEmptyState: View {
             }
         }
         .padding(.horizontal, 24)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: fillsAvailableSpace ? .infinity : nil)
     }
 }
 

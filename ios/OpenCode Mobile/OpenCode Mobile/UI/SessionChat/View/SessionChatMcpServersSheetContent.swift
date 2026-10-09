@@ -18,7 +18,7 @@ struct SessionChatMcpServersSheetContent: View {
         } else if let errorMessage, servers.isEmpty {
             OpenCodeEmptyState(
                 title: "Couldn't load MCP servers",
-                message: errorMessage,
+                message: openCodeNonBlank(errorMessage, fallback: "The MCP server list didn't load."),
                 icon: .plug
             )
         } else if servers.isEmpty {

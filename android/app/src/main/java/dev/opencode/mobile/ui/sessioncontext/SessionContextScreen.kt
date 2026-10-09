@@ -82,7 +82,7 @@ fun SessionContextScreen(
                     SessionContextTimelineState.Error ->
                         OpenCodeEmptyState(
                             title = "Unable to load session context",
-                            message = uiState.errorMessage ?: "The context didn't load.",
+                            message = uiState.errorMessage?.takeIf { it.isNotBlank() } ?: "The context didn't load.",
                             primaryAction =
                                 OpenCodeEmptyStateAction(title = "Retry") {
                                     // load() also runs on bind, so the retry tap is logged here.

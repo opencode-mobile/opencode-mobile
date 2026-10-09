@@ -460,6 +460,18 @@ class SessionChatViewModel
             timeline.loadMessages()
         }
 
+        /** Error-state Retry. Create failures start the session again. Load failures refetch the timeline. */
+        fun retryFailedTimeline() {
+            val sessionId = boundSessionId
+            if (sessionId == null || OptimisticSessionCreate.isPlaceholder(sessionId)) {
+                val worktree = boundWorktree ?: return
+                boundSessionId = null
+                bindOptimisticCreate(boundSessionTitle.orEmpty(), worktree)
+                return
+            }
+            loadMessages()
+        }
+
         /**
          * Shows the [chipCount] chips a chip-timeline paragraph had when its
          * `+N more` was tapped; chips that arrive later still collapse.

@@ -43,7 +43,7 @@ fun SessionChatMcpServersSheetContent(
         errorMessage != null && servers.isEmpty() ->
             OpenCodeEmptyState(
                 title = "Couldn't load MCP servers",
-                message = errorMessage,
+                message = errorMessage.ifBlank { "The MCP server list didn't load." },
                 icon = OpenCodeIcons.Plug,
                 modifier = modifier,
             )

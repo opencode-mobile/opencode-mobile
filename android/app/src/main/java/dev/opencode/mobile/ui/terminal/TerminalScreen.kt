@@ -129,7 +129,7 @@ private fun TerminalErrorContent(
     ) {
         OpenCodeEmptyState(
             title = title,
-            message = message,
+            message = message.ifBlank { "The terminal didn't open." },
             primaryAction = OpenCodeEmptyStateAction(title = "Retry", onClick = onRetry),
         )
     }

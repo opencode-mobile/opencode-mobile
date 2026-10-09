@@ -499,6 +499,7 @@ fun SessionChatScreen(
                             // (no extra scrollToEndPillBottomPadding).
                             bottomOverlayInset = timelineBottomInset,
                             onRefresh = viewModel::refreshMessages,
+                            onRetry = viewModel::retryFailedTimeline,
                             onLoadOlder = viewModel::loadOlderMessages,
                             onSessionBranchClick = {
                                 logChatAction(ProductAnalytics.Action.CHAT_OPEN_CHANGES)

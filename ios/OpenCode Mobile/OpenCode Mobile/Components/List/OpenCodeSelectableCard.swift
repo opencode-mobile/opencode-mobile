@@ -47,18 +47,18 @@ struct OpenCodeSelectableCard<Preview: View>: View {
             }
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
+            .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: selectableCardCornerRadius, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
+                RoundedRectangle(cornerRadius: selectableCardCornerRadius, style: .continuous)
                     .strokeBorder(selected ? OpenCodeColors.interactive : .clear, lineWidth: 2)
             }
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
-
-    private static let cornerRadius: CGFloat = 12
 }
+
+private let selectableCardCornerRadius: CGFloat = 12
 
 #Preview("Selectable Card") {
     VStack(spacing: 12) {
