@@ -564,7 +564,7 @@ class MessageDomainAdapter {
             sentAtEpochMs = dto.time?.created,
             completedAtEpochMs = dto.time?.completed,
             contextEstimate = MessageContextEstimate(assistantCharacters = summary.length),
-            failure = structuredFailure(dto.error, outcome = null),
+            failure = structuredFailure(dto.error, outcome = null, source = FailureSource.Compaction),
         )
     }
 
@@ -573,7 +573,7 @@ class MessageDomainAdapter {
         dto: V2SessionMessageDto,
         messages: MutableList<Message>,
     ) {
-        val failure = structuredFailure(dto.error, outcome = dto.outcome) ?: return
+        val failure = structuredFailure(dto.error, outcome = dto.outcome, source = FailureSource.Execution) ?: return
         if (messages.lastOrNull()?.failure?.line() == failure.line()) return
         messages +=
             messageFromV2(
@@ -784,12 +784,16 @@ class MessageDomainAdapter {
             message = error?.data?.message,
             statusCode = error?.data?.statusCode,
             responseBody = error?.data?.responseBody,
+            isRetryable = error?.data?.isRetryable,
+            providerId = error?.data?.providerID,
+            retries = error?.data?.retries,
         )
     }
 
     private fun structuredFailure(
         error: V2UnknownErrorDto?,
         outcome: String?,
+        source: FailureSource = FailureSource.Step,
     ): SessionFailure? =
         SessionFailure.fromV2(
             type = error?.type,
@@ -797,6 +801,7 @@ class MessageDomainAdapter {
             status = error?.status,
             providerBody = error?.response?.body,
             outcome = outcome,
+            source = source,
         )
 
     private fun httpMessage(body: String?): String {

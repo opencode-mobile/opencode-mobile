@@ -45,6 +45,9 @@ nonisolated struct MessageErrorDataDTO: Codable, Sendable {
     let message: String?
     let statusCode: Int?
     let responseBody: String?
+    var isRetryable: Bool? = nil
+    var providerID: String? = nil
+    var retries: Int? = nil
 }
 
 nonisolated struct MessageModelRefDTO: Codable, Sendable {

@@ -275,9 +275,11 @@ final class SessionInfo {
                     .session,
                     "live status session=\(state.sessionID) seeded=\(snapshot.seeded)"
                 )
+                let card = snapshot.seeded ? activity?.retryCard : nil
                 state.applyStatus(
                     authoritative: snapshot.chatStatusLabel(for: state.sessionID),
-                    hasResolved: snapshot.seeded
+                    hasResolved: snapshot.seeded,
+                    retryCard: card
                 )
                 notifyChange()
             }

@@ -885,11 +885,41 @@ nonisolated struct EventDomainAdapter: Sendable {
             let unwrapped = SessionFailure.unwrap(nestedError)
             if !unwrapped.isEmpty { status["message"] = unwrapped }
         }
+        if statusType == "retry" {
+            if let errorType = retryErrorType(properties) { status["errorType"] = errorType }
+            if let label = retryActionLabel(properties) { status["actionLabel"] = label }
+            if let link = retryActionLink(properties) { status["actionLink"] = link }
+        }
         var projected: [String: Any] = ["status": status]
         if let sessionID = sessionID(from: properties) {
             projected["sessionID"] = sessionID
         }
         return event(type: "session.status", properties: projected)
+    }
+
+    private func retryErrorType(_ properties: [String: Any]) -> String? {
+        let status = properties["status"] as? [String: Any]
+        let error = (properties["error"] as? [String: Any]) ?? (status?["error"] as? [String: Any])
+        return string(in: error, key: "type")
+            ?? string(in: status, key: "errorType")
+            ?? string(in: properties, key: "errorType")
+    }
+
+    private func retryActionObject(_ properties: [String: Any]) -> [String: Any]? {
+        let status = properties["status"] as? [String: Any]
+        return (status?["action"] as? [String: Any]) ?? (properties["action"] as? [String: Any])
+    }
+
+    private func retryActionLabel(_ properties: [String: Any]) -> String? {
+        let label = string(in: retryActionObject(properties), key: "label")?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return label?.isEmpty == false ? label : nil
+    }
+
+    private func retryActionLink(_ properties: [String: Any]) -> String? {
+        let link = string(in: retryActionObject(properties), key: "link")?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return link?.isEmpty == false ? link : nil
     }
 
     private func sessionID(from properties: [String: Any]?) -> String? {

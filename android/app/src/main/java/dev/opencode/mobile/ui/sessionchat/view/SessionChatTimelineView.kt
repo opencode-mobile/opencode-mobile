@@ -56,7 +56,9 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.hideFromAccessibility
@@ -67,6 +69,7 @@ import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.MessageStopReason
+import dev.opencode.mobile.domain.message.FailureAction
 import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.theme.openCodeColor
@@ -147,6 +150,7 @@ internal data class SessionChatTimelineViewProps(
     val onSessionTodosClick: () -> Unit = {},
     val onMessageActionsTap: (SessionChatMessageActionsTarget) -> Unit,
     val onToolDetailTap: (SessionChatToolDetailTarget) -> Unit = {},
+    val onFailureAction: (FailureAction) -> Unit = {},
     val onToolGroupTap: (SessionChatToolGroupTarget) -> Unit = {},
     val onSkillsTap: (SessionChatSkillsTarget) -> Unit = {},
     val onChildSessionTap: (sessionId: String, sessionTitle: String) -> Unit = { _, _ -> },
@@ -233,6 +237,7 @@ internal fun SessionChatTimelineView(
                 onSessionTodosClick = props.onSessionTodosClick,
                 onMessageActionsTap = props.onMessageActionsTap,
                 onToolDetailTap = props.onToolDetailTap,
+                onFailureAction = props.onFailureAction,
                 onToolGroupTap = props.onToolGroupTap,
                 onSkillsTap = props.onSkillsTap,
                 onChildSessionTap = props.onChildSessionTap,
@@ -271,6 +276,7 @@ private fun SessionChatTimelineReadyView(
     onSessionTodosClick: () -> Unit,
     onMessageActionsTap: (SessionChatMessageActionsTarget) -> Unit,
     onToolDetailTap: (SessionChatToolDetailTarget) -> Unit,
+    onFailureAction: (FailureAction) -> Unit,
     onToolGroupTap: (SessionChatToolGroupTarget) -> Unit,
     onSkillsTap: (SessionChatSkillsTarget) -> Unit,
     onChildSessionTap: (sessionId: String, sessionTitle: String) -> Unit,
@@ -456,6 +462,7 @@ private fun SessionChatTimelineReadyView(
                     message = message,
                     onMessageActionsTap = onMessageActionsTap,
                     onToolDetailTap = onToolDetailTap,
+                    onFailureAction = onFailureAction,
                     onToolGroupTap = onToolGroupTap,
                     onSkillsTap = onSkillsTap,
                     onChildSessionTap = onChildSessionTap,
@@ -561,6 +568,7 @@ private fun SessionChatMessageRow(
     message: SessionChatMessageItem,
     onMessageActionsTap: (SessionChatMessageActionsTarget) -> Unit,
     onToolDetailTap: (SessionChatToolDetailTarget) -> Unit,
+    onFailureAction: (FailureAction) -> Unit,
     onToolGroupTap: (SessionChatToolGroupTarget) -> Unit,
     onSkillsTap: (SessionChatSkillsTarget) -> Unit,
     onChildSessionTap: (sessionId: String, sessionTitle: String) -> Unit,
@@ -613,6 +621,7 @@ private fun SessionChatMessageRow(
                     message = message,
                     onOpenMessageActions = { openMessageActions(showsRevertMessage = false) },
                     onToolDetailTap = onToolDetailTap,
+                    onFailureAction = onFailureAction,
                     onToolGroupTap = onToolGroupTap,
                     onSkillsTap = onSkillsTap,
                     onChildSessionTap = onChildSessionTap,
@@ -660,6 +669,7 @@ private fun AssistantMessageContent(
     message: SessionChatMessageItem,
     onOpenMessageActions: () -> Unit,
     onToolDetailTap: (SessionChatToolDetailTarget) -> Unit,
+    onFailureAction: (FailureAction) -> Unit,
     onToolGroupTap: (SessionChatToolGroupTarget) -> Unit,
     onSkillsTap: (SessionChatSkillsTarget) -> Unit,
     onChildSessionTap: (sessionId: String, sessionTitle: String) -> Unit,
@@ -792,7 +802,11 @@ private fun AssistantMessageContent(
                                 },
                         )
                     is SessionChatTimelineBlock.FailureLine ->
-                        FailureLineBlock(block = block, onToolDetailTap = onToolDetailTap)
+                        FailureLineBlock(
+                            block = block,
+                            onToolDetailTap = onToolDetailTap,
+                            onFailureAction = onFailureAction,
+                        )
                     is SessionChatTimelineBlock.StepParagraph ->
                         StepParagraphBlock(
                             block = block,
@@ -832,30 +846,55 @@ private fun AssistantMessageContent(
 private fun FailureLineBlock(
     block: SessionChatTimelineBlock.FailureLine,
     onToolDetailTap: (SessionChatToolDetailTarget) -> Unit,
+    onFailureAction: (FailureAction) -> Unit,
 ) {
     val body = block.providerBody
-    Text(
-        text = block.text,
-        style = MaterialTheme.typography.bodySmall,
-        color = openCodeColor(if (block.isNeutral) "text-weak" else "error"),
-        modifier =
-            Modifier
-                .padding(horizontal = 4.dp)
-                .then(
-                    if (body.isNullOrBlank()) {
-                        Modifier
-                    } else {
-                        Modifier.clickable {
-                            onToolDetailTap(
-                                SessionChatToolDetailTarget(
-                                    title = "Provider response",
-                                    body = body,
-                                ),
-                            )
-                        }
-                    },
-                ),
-    )
+    val clipboard = LocalClipboardManager.current
+    Column {
+        Text(
+            text = block.text,
+            style = MaterialTheme.typography.bodySmall,
+            color = openCodeColor(if (block.isNeutral) "text-weak" else "error"),
+            modifier =
+                Modifier
+                    .padding(horizontal = 4.dp)
+                    .then(
+                        if (body.isNullOrBlank()) {
+                            Modifier
+                        } else {
+                            Modifier.clickable {
+                                onToolDetailTap(
+                                    SessionChatToolDetailTarget(
+                                        title = "Provider response",
+                                        body = body,
+                                        monospace = true,
+                                    ),
+                                )
+                            }
+                        },
+                    ),
+        )
+        val action = block.action
+        val actionLabel = block.actionLabel
+        if (action != null && !actionLabel.isNullOrBlank()) {
+            Text(
+                text = actionLabel,
+                style = MaterialTheme.typography.labelLarge,
+                color = openCodeColor("text-strong"),
+                modifier =
+                    Modifier
+                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                        .clickable {
+                            if (action == FailureAction.Copy) {
+                                val copied = body?.takeIf { it.isNotBlank() } ?: block.text
+                                clipboard.setText(AnnotatedString(copied))
+                            } else {
+                                onFailureAction(action)
+                            }
+                        },
+            )
+        }
+    }
 }
 
 private const val STEP_PARAGRAPH_PLACEHOLDER = "Worked without commentary"

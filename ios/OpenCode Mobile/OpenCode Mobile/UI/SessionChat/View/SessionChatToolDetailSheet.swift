@@ -1,10 +1,13 @@
 import SwiftUI
+import UIKit
 
 struct SessionChatToolDetailTarget: Equatable {
     let title: String
     let body: String
     /// Render `body` as markdown (a compaction summary) instead of plain tool output.
     var bodyIsMarkdown: Bool = false
+    /// Provider response: monospace, with a copy button.
+    var monospace: Bool = false
 }
 
 struct SessionChatToolDetailSheetModifier: ViewModifier {
@@ -18,7 +21,8 @@ struct SessionChatToolDetailSheetModifier: ViewModifier {
                 content: {
                     SessionChatToolDetailBody(
                         text: target?.body ?? "",
-                        isMarkdown: target?.bodyIsMarkdown ?? false
+                        isMarkdown: target?.bodyIsMarkdown ?? false,
+                        monospace: target?.monospace ?? false
                     )
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 20)
@@ -48,6 +52,7 @@ struct SessionChatToolDetailSheetModifier: ViewModifier {
 private struct SessionChatToolDetailBody: View {
     let text: String
     let isMarkdown: Bool
+    var monospace: Bool = false
 
     @State private var document: NativeMarkdownDocument?
 
@@ -55,6 +60,18 @@ private struct SessionChatToolDetailBody: View {
         Group {
             if isMarkdown, let document {
                 OpenCodeRenderedMarkdown(document: document, variant: .standalone)
+            } else if monospace {
+                VStack(alignment: .leading, spacing: 8) {
+                    Button("Copy") {
+                        UIPasteboard.general.string = text
+                    }
+                    .buttonStyle(.plain)
+                    .font(OpenCodeTypography.body)
+                    .foregroundStyle(OpenCodeColors.textStrong)
+                    Text(text)
+                        .font(.system(.body, design: .monospaced))
+                        .foregroundStyle(OpenCodeColors.textStrong)
+                }
             } else {
                 Text(text)
                     .font(OpenCodeTypography.body)

@@ -470,13 +470,13 @@ nonisolated struct MessageDomainAdapter: Sendable {
             sentAtEpochMs: dto.time?.created,
             completedAtEpochMs: dto.time?.completed,
             contextEstimate: MessageContextEstimate(assistantCharacters: summary.count),
-            failure: structuredFailure(dto.error, outcome: nil)
+            failure: structuredFailure(dto.error, outcome: nil, source: .compaction)
         )
     }
 
     /// A failed idle item is its own row when the assistant message did not already carry the same failure.
     private func projectV2Idle(_ dto: V2SessionMessageDTO, messages: inout [Message]) {
-        guard let failure = structuredFailure(dto.error, outcome: dto.outcome) else { return }
+        guard let failure = structuredFailure(dto.error, outcome: dto.outcome, source: .execution) else { return }
         if messages.last?.failure?.line() == failure.line() { return }
         messages.append(
             messageFromV2(
@@ -708,17 +708,25 @@ nonisolated struct MessageDomainAdapter: Sendable {
             name: error?.name,
             message: error?.data?.message,
             statusCode: error?.data?.statusCode,
-            responseBody: error?.data?.responseBody
+            responseBody: error?.data?.responseBody,
+            isRetryable: error?.data?.isRetryable,
+            providerID: error?.data?.providerID,
+            retries: error?.data?.retries
         )
     }
 
-    private func structuredFailure(_ error: V2UnknownErrorDTO?, outcome: String?) -> SessionFailure? {
+    private func structuredFailure(
+        _ error: V2UnknownErrorDTO?,
+        outcome: String?,
+        source: FailureSource = .step
+    ) -> SessionFailure? {
         SessionFailure.fromV2(
             type: error?.type,
             message: error?.message,
             status: error?.status,
             providerBody: error?.response?.body,
-            outcome: outcome
+            outcome: outcome,
+            source: source
         )
     }
 

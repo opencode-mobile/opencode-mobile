@@ -18,6 +18,7 @@ import dev.opencode.mobile.data.remote.dto.V2VcsInfoDto
 import dev.opencode.mobile.data.remote.dto.VcsFileStatusDto
 import dev.opencode.mobile.data.remote.dto.VcsInfoDto
 import dev.opencode.mobile.domain.message.MessageTokenUsage
+import dev.opencode.mobile.domain.message.SessionFailure
 import io.ktor.client.plugins.ResponseException
 import io.ktor.serialization.JsonConvertException
 import kotlinx.serialization.json.JsonArray
@@ -77,7 +78,21 @@ class SessionDomainAdapter {
                     "running" -> "busy"
                     else -> wireType ?: "busy"
                 }
-            SessionStatus(sessionId = sessionId, raw = mapOf("type" to uiType))
+            SessionStatus(
+                sessionId = sessionId,
+                raw =
+                    buildMap {
+                        put("type", uiType)
+                        if (uiType == "retry") {
+                            active.attempt?.let { put("attempt", it.toString()) }
+                            active.next?.let { put("next", it.toString()) }
+                            active.message?.trim()?.takeIf { it.isNotEmpty() }?.let { put("message", it) }
+                            active.error?.type?.trim()?.takeIf { it.isNotEmpty() }?.let { put("errorType", it) }
+                            active.action?.label?.trim()?.takeIf { it.isNotEmpty() }?.let { put("actionLabel", it) }
+                            active.action?.link?.trim()?.takeIf { it.isNotEmpty() }?.let { put("actionLink", it) }
+                        }
+                    },
+            )
         }
 
     private fun toSessionRevert(dto: SessionRevertDto): SessionRevert =
@@ -110,7 +125,16 @@ class SessionDomainAdapter {
     ): SessionStatus =
         SessionStatus(
             sessionId = sessionId,
-            raw = dto.mapValues { (_, value) -> value.jsonPrimitive.content },
+            raw =
+                buildMap {
+                    dto.forEach { (key, value) ->
+                        when (value) {
+                            is JsonPrimitive -> value.contentOrNull?.let { put(key, it) }
+                            is JsonObject -> flattenStatusObject(key, value, this)
+                            else -> Unit
+                        }
+                    }
+                },
         )
 
     fun toTodo(
@@ -308,7 +332,7 @@ class SessionDomainAdapter {
             is HttpBodyResponseException ->
                 SessionError.Http(
                     statusCode = throwable.response.status.value,
-                    message = throwable.message,
+                    message = ServerErrorMessage.userFacing(throwable.bodyText) ?: throwable.message,
                     body = throwable.bodyText,
                 )
             is ResponseException ->
@@ -365,3 +389,25 @@ private fun JsonElement.jsonArrayOrNull(): JsonArray? = runCatching { jsonArray 
 private fun JsonElement.jsonObjectOrNull(): JsonObject? = runCatching { jsonObject }.getOrNull()
 
 private fun JsonObject.stringOrNull(key: String): String? = this[key]?.jsonPrimitive?.contentOrNull
+
+/** Nested `action` and `error` objects are not strings. Flatten the fields the retry card reads. */
+private fun flattenStatusObject(
+    key: String,
+    value: JsonObject,
+    into: MutableMap<String, String>,
+) {
+    when (key) {
+        "action" -> {
+            value.stringOrNull("label")?.trim()?.takeIf { it.isNotEmpty() }?.let { into["actionLabel"] = it }
+            value.stringOrNull("link")?.trim()?.takeIf { it.isNotEmpty() }?.let { into["actionLink"] = it }
+        }
+        "error" -> {
+            value.stringOrNull("type")?.trim()?.takeIf { it.isNotEmpty() }?.let { into["errorType"] = it }
+            if (into["message"].isNullOrBlank()) {
+                value.stringOrNull("message")?.let(SessionFailure::unwrap)?.takeIf { it.isNotEmpty() }?.let {
+                    into["message"] = it
+                }
+            }
+        }
+    }
+}

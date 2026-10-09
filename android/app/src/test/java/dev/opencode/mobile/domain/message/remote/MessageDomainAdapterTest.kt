@@ -1404,8 +1404,11 @@ class MessageDomainAdapterTest {
         assertEquals(3, messages.size)
         assertNull(messages[0].failure)
         assertEquals("Could not compact", messages[1].failure?.message)
+        assertEquals(FailureSource.Compaction, messages[1].failure?.source)
+        assertNull(messages[1].failure?.action())
         assertEquals("Sign in again", messages[2].failure?.message)
-        assertEquals(true, messages[2].failure?.type == "provider.auth")
+        assertEquals(FailureSource.Execution, messages[2].failure?.source)
+        assertEquals(FailureAction.ReconnectProvider, messages[2].failure?.action())
     }
 
     @Test

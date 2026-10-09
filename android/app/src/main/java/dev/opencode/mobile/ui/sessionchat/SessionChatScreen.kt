@@ -1,5 +1,7 @@
 package dev.opencode.mobile.ui.sessionchat
 
+import android.content.Intent
+import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -38,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.opencode.mobile.ProductAnalytics
+import dev.opencode.mobile.domain.message.FailureAction
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
 import dev.opencode.mobile.SessionToolGroup
 import dev.opencode.mobile.domain.command.ClientSlashAction
@@ -86,6 +89,7 @@ import dev.opencode.mobile.ui.components.OpenCodeTopBarSubtitleLeading
 import dev.opencode.mobile.ui.components.copySessionIdToClipboard
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.sessionchat.view.ComposerPickerKind
+import dev.opencode.mobile.ui.sessionchat.view.SessionRetryCountdown
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatMcpServersSheetContent
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatMessageActionsSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatMessageActionsTarget
@@ -462,6 +466,25 @@ fun SessionChatScreen(
                     },
                 )
             }
+            val retryCard = uiState.retryCard
+            if (retryCard != null) {
+                val linkContext = LocalContext.current
+                SessionRetryCountdown(
+                    card = retryCard,
+                    onOpenLink = { link ->
+                        runCatching { Uri.parse(link) }.getOrNull()?.let { uri ->
+                            runCatching { linkContext.startActivity(Intent(Intent.ACTION_VIEW, uri)) }
+                        }
+                    },
+                    modifier =
+                        Modifier
+                            .align(Alignment.CenterHorizontally)
+                            .widthIn(max = OpenCodeLayout.ContentMaxWidth)
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                            .padding(bottom = 8.dp),
+                )
+            }
             uiState.composer.modelNotice?.let { notice ->
                 OpenCodeInlineNotice(
                     message = notice,
@@ -518,6 +541,14 @@ fun SessionChatScreen(
                             onToolDetailTap = {
                                 logChatAction(ProductAnalytics.Action.CHAT_OPEN_TOOL_DETAIL)
                                 toolDetailTarget = it
+                            },
+                            onFailureAction = { action ->
+                                when (action) {
+                                    FailureAction.ReconnectProvider, FailureAction.PickModel ->
+                                        activePicker = ComposerPickerKind.Model
+                                    FailureAction.Compact -> viewModel.compactCurrentSession()
+                                    FailureAction.Copy -> Unit
+                                }
                             },
                             onSkillsTap = {
                                 logChatAction(ProductAnalytics.Action.CHAT_OPEN_SKILLS)

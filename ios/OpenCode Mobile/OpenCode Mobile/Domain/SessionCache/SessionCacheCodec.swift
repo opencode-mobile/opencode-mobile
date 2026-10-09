@@ -473,7 +473,7 @@ private extension SessionActivityCacheEntry {
         case .running:
             type = "running"
             attempt = nil
-        case let .retrying(value, _, _):
+        case let .retrying(value, _, _, _, _, _):
             type = "retry"
             attempt = value
         }
@@ -493,7 +493,14 @@ private extension CachedActivityEntryPayload {
         case "busy", "running":
             activity = .running
         case "retry":
-            activity = .retrying(attempt: attempt, nextAtMs: nil, message: nil)
+            activity = .retrying(
+                attempt: attempt,
+                nextAtMs: nil,
+                message: nil,
+                errorType: nil,
+                actionLabel: nil,
+                actionLink: nil
+            )
         default:
             activity = .idle
         }

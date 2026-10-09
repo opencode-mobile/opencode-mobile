@@ -348,7 +348,7 @@ object TimelineProjector {
                 "s:${block.blockID}:${block.renderedMarkdown != null}:${stepParagraphChipFingerprint(block)}"
             is SessionChatTimelineBlock.StopNote -> "x:${block.blockID}:${block.reason}"
             is SessionChatTimelineBlock.FailureLine ->
-                "f:${block.blockID}:${block.providerBody != null}:${block.isNeutral}"
+                "f:${block.blockID}:${block.providerBody != null}:${block.isNeutral}:${block.action != null}"
         }
 
     /** Chip status / counts change chip width and error captions, so they are layout. */

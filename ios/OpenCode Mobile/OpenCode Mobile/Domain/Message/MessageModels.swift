@@ -123,6 +123,21 @@ nonisolated struct Message: Equatable, Sendable, Identifiable {
     }
 }
 
+enum FailureSource: Equatable, Sendable {
+    case step
+    case execution
+    case compaction
+    case tool
+    case http
+}
+
+enum FailureAction: Equatable, Sendable {
+    case reconnectProvider
+    case pickModel
+    case compact
+    case copy
+}
+
 /// A failed run, shared by v1 `{name, data}` and v2 `{type, message, status, response}`.
 /// Abort and interrupt types are not failures: the timeline shows them as an interrupted note.
 nonisolated struct SessionFailure: Equatable, Sendable {
@@ -130,6 +145,40 @@ nonisolated struct SessionFailure: Equatable, Sendable {
     let message: String
     let status: Int?
     let providerBody: String?
+    var isRetryable: Bool? = nil
+    var providerID: String? = nil
+    var retries: Int? = nil
+    var source: FailureSource = .step
+
+    /// A button under the caption. Rate-limit and quota use the retry card instead.
+    func action() -> FailureAction? {
+        let kind = type?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
+        if kind == "provider.auth" { return .reconnectProvider }
+        if kind == "provider.no-route" { return .pickModel }
+        if kind == "provider.content-filter" { return nil }
+        if isContextOverflow() { return .compact }
+        if kind == "unknown" || kind == "provider.unknown" { return .copy }
+        return nil
+    }
+
+    func actionLabel() -> String? {
+        switch action() {
+        case .reconnectProvider: "Reconnect provider"
+        case .pickModel: "Pick a model"
+        case .compact: "Compact"
+        case .copy: "Copy"
+        case nil: nil
+        }
+    }
+
+    /// v1 `ContextOverflowError`, or a provider request the body says overflowed the context.
+    func isContextOverflow() -> Bool {
+        if type?.caseInsensitiveCompare("ContextOverflowError") == .orderedSame { return true }
+        guard type?.caseInsensitiveCompare("provider.invalid-request") == .orderedSame else { return false }
+        let haystack = "\(message) \(providerBody ?? "")".lowercased()
+        return haystack.contains("context")
+            && (haystack.contains("overflow") || haystack.contains("too long") || haystack.contains("length"))
+    }
 
     var isNeutral: Bool {
         type?.caseInsensitiveCompare("permission.rejected") == .orderedSame
@@ -173,7 +222,11 @@ nonisolated struct SessionFailure: Equatable, Sendable {
         name: String?,
         message: String?,
         statusCode: Int?,
-        responseBody: String?
+        responseBody: String?,
+        isRetryable: Bool? = nil,
+        providerID: String? = nil,
+        retries: Int? = nil,
+        source: FailureSource = .step
     ) -> SessionFailure? {
         if isSilent(type: name) { return nil }
         return build(
@@ -181,7 +234,11 @@ nonisolated struct SessionFailure: Equatable, Sendable {
             message: message,
             status: statusCode,
             providerBody: responseBody,
-            emptyFallback: name == "ContextOverflowError" ? "Context overflow" : ""
+            emptyFallback: name == "ContextOverflowError" ? "Context overflow" : "",
+            isRetryable: isRetryable,
+            providerID: providerID,
+            retries: retries,
+            source: source
         )
     }
 
@@ -190,7 +247,8 @@ nonisolated struct SessionFailure: Equatable, Sendable {
         message: String?,
         status: Int?,
         providerBody: String?,
-        outcome: String? = nil
+        outcome: String? = nil,
+        source: FailureSource = .step
     ) -> SessionFailure? {
         if outcome?.caseInsensitiveCompare("succeeded") == .orderedSame
             || outcome?.caseInsensitiveCompare("interrupted") == .orderedSame
@@ -198,7 +256,14 @@ nonisolated struct SessionFailure: Equatable, Sendable {
             return nil
         }
         if isSilent(type: type) { return nil }
-        return build(type: type, message: message, status: status, providerBody: providerBody, emptyFallback: "")
+        return build(
+            type: type,
+            message: message,
+            status: status,
+            providerBody: providerBody,
+            emptyFallback: "",
+            source: source
+        )
     }
 
     private static let maxBody = 4_000
@@ -208,7 +273,11 @@ nonisolated struct SessionFailure: Equatable, Sendable {
         message: String?,
         status: Int?,
         providerBody: String?,
-        emptyFallback: String
+        emptyFallback: String,
+        isRetryable: Bool? = nil,
+        providerID: String? = nil,
+        retries: Int? = nil,
+        source: FailureSource = .step
     ) -> SessionFailure? {
         let trimmedBody = providerBody?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let body = trimmedBody.isEmpty ? nil : String(trimmedBody.prefix(maxBody))
@@ -228,7 +297,11 @@ nonisolated struct SessionFailure: Equatable, Sendable {
             type: trimmedType.isEmpty ? nil : trimmedType,
             message: shown,
             status: http,
-            providerBody: body
+            providerBody: body,
+            isRetryable: isRetryable,
+            providerID: providerID,
+            retries: retries,
+            source: source
         )
     }
 }

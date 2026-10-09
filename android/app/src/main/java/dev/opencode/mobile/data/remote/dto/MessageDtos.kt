@@ -55,6 +55,9 @@ data class MessageErrorDataDto(
     val message: String? = null,
     val statusCode: Int? = null,
     val responseBody: String? = null,
+    val isRetryable: Boolean? = null,
+    val providerID: String? = null,
+    val retries: Int? = null,
 )
 
 @Serializable

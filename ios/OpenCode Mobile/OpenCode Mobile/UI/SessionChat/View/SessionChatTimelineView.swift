@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct SessionChatTimelineViewProps {
     let timeline: SessionChatTimelineState
@@ -27,6 +28,7 @@ struct SessionChatTimelineViewProps {
     let onSessionTodosTap: () -> Void
     let onMessageActionsTap: (SessionChatMessageActionsTarget) -> Void
     let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
+    let onFailureAction: (FailureAction) -> Void
     let onToolGroupTap: (SessionChatToolGroupTarget) -> Void
     let onSkillsTap: (SessionChatSkillsTarget) -> Void
     let onChildSessionTap: (String, String) -> Void
@@ -64,6 +66,7 @@ struct SessionChatTimelineViewProps {
         onSessionTodosTap: @escaping () -> Void = {},
         onMessageActionsTap: @escaping (SessionChatMessageActionsTarget) -> Void,
         onToolDetailTap: @escaping (SessionChatToolDetailTarget) -> Void = { _ in },
+        onFailureAction: @escaping (FailureAction) -> Void = { _ in },
         onToolGroupTap: @escaping (SessionChatToolGroupTarget) -> Void = { _ in },
         onSkillsTap: @escaping (SessionChatSkillsTarget) -> Void = { _ in },
         onChildSessionTap: @escaping (String, String) -> Void = { _, _ in },
@@ -98,6 +101,7 @@ struct SessionChatTimelineViewProps {
         self.onSessionTodosTap = onSessionTodosTap
         self.onMessageActionsTap = onMessageActionsTap
         self.onToolDetailTap = onToolDetailTap
+        self.onFailureAction = onFailureAction
         self.onToolGroupTap = onToolGroupTap
         self.onSkillsTap = onSkillsTap
         self.onChildSessionTap = onChildSessionTap
@@ -246,6 +250,7 @@ private struct SessionChatTimelineReadyView: View {
                     workingIndicatorFading: props.workingIndicatorFading,
                     onMessageActionsTap: props.onMessageActionsTap,
                     onToolDetailTap: props.onToolDetailTap,
+                    onFailureAction: props.onFailureAction,
                     onToolGroupTap: props.onToolGroupTap,
                     onSkillsTap: props.onSkillsTap,
                     onChildSessionTap: props.onChildSessionTap,
@@ -433,6 +438,7 @@ private struct SessionChatTimelineHostRow: View {
     var workingIndicatorFading: Bool = false
     let onMessageActionsTap: (SessionChatMessageActionsTarget) -> Void
     let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
+    let onFailureAction: (FailureAction) -> Void
     let onToolGroupTap: (SessionChatToolGroupTarget) -> Void
     let onSkillsTap: (SessionChatSkillsTarget) -> Void
     let onChildSessionTap: (String, String) -> Void
@@ -457,6 +463,7 @@ private struct SessionChatTimelineHostRow: View {
                         message: message,
                         onMessageActionsTap: onMessageActionsTap,
                         onToolDetailTap: onToolDetailTap,
+                        onFailureAction: onFailureAction,
                         onToolGroupTap: onToolGroupTap,
                         onSkillsTap: onSkillsTap,
                         onChildSessionTap: onChildSessionTap,
@@ -472,6 +479,7 @@ private struct SessionChatTimelineHostRow: View {
                         message: message,
                         onMessageActionsTap: onMessageActionsTap,
                         onToolDetailTap: onToolDetailTap,
+                        onFailureAction: onFailureAction,
                         onToolGroupTap: onToolGroupTap,
                         onSkillsTap: onSkillsTap,
                         onChildSessionTap: onChildSessionTap,
@@ -490,6 +498,7 @@ private struct SessionChatMessageRow: View {
     let message: SessionChatRow
     let onMessageActionsTap: (SessionChatMessageActionsTarget) -> Void
     let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
+    let onFailureAction: (FailureAction) -> Void
     let onToolGroupTap: (SessionChatToolGroupTarget) -> Void
     let onSkillsTap: (SessionChatSkillsTarget) -> Void
     let onChildSessionTap: (String, String) -> Void
@@ -533,6 +542,7 @@ private struct SessionChatMessageRow: View {
                     message: message,
                     onOpenMessageActions: { openMessageActions(showsRevertMessage: false) },
                     onToolDetailTap: onToolDetailTap,
+                    onFailureAction: onFailureAction,
                     onToolGroupTap: onToolGroupTap,
                     onSkillsTap: onSkillsTap,
                     onChildSessionTap: onChildSessionTap,
@@ -594,6 +604,7 @@ private struct AssistantMessageContent: View {
     let message: SessionChatRow
     let onOpenMessageActions: () -> Void
     let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
+    let onFailureAction: (FailureAction) -> Void
     let onToolGroupTap: (SessionChatToolGroupTarget) -> Void
     let onSkillsTap: (SessionChatSkillsTarget) -> Void
     let onChildSessionTap: (String, String) -> Void
@@ -705,12 +716,15 @@ private struct AssistantMessageContent: View {
                     )
                 case .stopNote(_, let reason):
                     OpenCodeMessageNote(variant: reason == .length ? .truncated : .interrupted)
-                case .failureLine(_, let text, let providerBody, let isNeutral):
+                case .failureLine(_, let text, let providerBody, let isNeutral, let action, let actionLabel):
                     FailureLineBlock(
                         text: text,
                         providerBody: providerBody,
                         isNeutral: isNeutral,
-                        onToolDetailTap: onToolDetailTap
+                        action: action,
+                        actionLabel: actionLabel,
+                        onToolDetailTap: onToolDetailTap,
+                        onFailureAction: onFailureAction
                     )
                 case .stepParagraph(_, let paragraph):
                     StepParagraphBlock(
@@ -1008,24 +1022,45 @@ private struct FailureLineBlock: View {
     let text: String
     let providerBody: String?
     let isNeutral: Bool
+    let action: FailureAction?
+    let actionLabel: String?
     let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
+    let onFailureAction: (FailureAction) -> Void
 
     var body: some View {
         let color = isNeutral ? OpenCodeColors.textWeak : OpenCodeColors.error
-        let label = Text(text)
-            .font(OpenCodeTypography.caption)
-            .foregroundStyle(color)
-            .lineLimit(3)
-            .padding(.horizontal, 4)
-        if let provider = providerBody?.trimmingCharacters(in: .whitespacesAndNewlines), !provider.isEmpty {
-            Button {
-                onToolDetailTap(SessionChatToolDetailTarget(title: "Provider response", body: provider))
-            } label: {
+        VStack(alignment: .leading, spacing: 2) {
+            let label = Text(text)
+                .font(OpenCodeTypography.caption)
+                .foregroundStyle(color)
+                .lineLimit(3)
+                .padding(.horizontal, 4)
+            if let provider = providerBody?.trimmingCharacters(in: .whitespacesAndNewlines), !provider.isEmpty {
+                Button {
+                    onToolDetailTap(
+                        SessionChatToolDetailTarget(title: "Provider response", body: provider, monospace: true)
+                    )
+                } label: {
+                    label.frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(.plain)
+            } else {
                 label.frame(maxWidth: .infinity, alignment: .leading)
             }
-            .buttonStyle(.plain)
-        } else {
-            label.frame(maxWidth: .infinity, alignment: .leading)
+            if let action, let actionLabel, !actionLabel.isEmpty {
+                Button(actionLabel) {
+                    if action == .copy {
+                        let copied = providerBody?.trimmingCharacters(in: .whitespacesAndNewlines)
+                        UIPasteboard.general.string = (copied?.isEmpty == false ? copied : nil) ?? text
+                    } else {
+                        onFailureAction(action)
+                    }
+                }
+                .buttonStyle(.plain)
+                .font(OpenCodeTypography.body)
+                .foregroundStyle(OpenCodeColors.textStrong)
+                .padding(.horizontal, 4)
+            }
         }
     }
 }

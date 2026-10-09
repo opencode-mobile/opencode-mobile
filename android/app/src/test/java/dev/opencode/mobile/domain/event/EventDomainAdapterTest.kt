@@ -1243,8 +1243,24 @@ class EventDomainAdapterTest {
                 """{"type":"session.retry.scheduled","data":{"sessionID":"ses-1","attempt":3,"at":9000,"error":{"type":"provider.rate-limit","message":"{\"type\":\"message\",\"message\":\"Slow down\"}"}}}""",
             )
         assertEquals(
-            SessionActivity.Retrying(attempt = 3, nextAtMs = 9000L, message = "Slow down"),
+            SessionActivity.Retrying(attempt = 3, nextAtMs = 9000L, message = "Slow down", errorType = "provider.rate-limit"),
             adapter.sessionActivityFromEvent(events.single())?.activity,
+        )
+    }
+
+    @Test
+    fun sessionActivityFromEvent_readsRetryAction() {
+        val events =
+            adapter.parseEvents(
+                """{"type":"session.retry.scheduled","data":{"sessionID":"ses-1","attempt":1,"at":4000,"error":{"type":"provider.quota","message":"Out of quota"},"action":{"label":"Upgrade","link":"https://example.com"}}}""",
+            )
+        val activity = adapter.sessionActivityFromEvent(events.single())?.activity as SessionActivity.Retrying
+        assertEquals("provider.quota", activity.errorType)
+        assertEquals("Upgrade", activity.actionLabel)
+        assertEquals("https://example.com", activity.actionLink)
+        assertEquals("Upgrade", activity.retryCard()?.actionLabel)
+        assertNull(
+            SessionActivity.Retrying(errorType = "provider.content-filter", nextAtMs = 1L).retryCard(),
         )
     }
 

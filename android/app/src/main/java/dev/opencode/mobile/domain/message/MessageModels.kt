@@ -188,11 +188,30 @@ enum class MessageRole {
  * A failed run, shared by v1 `{name, data}` and v2 `{type, message, status, response}`.
  * Abort and interrupt types are not failures: the timeline shows them as an interrupted note.
  */
+enum class FailureSource {
+    Step,
+    Execution,
+    Compaction,
+    Tool,
+    Http,
+}
+
+enum class FailureAction {
+    ReconnectProvider,
+    PickModel,
+    Compact,
+    Copy,
+}
+
 data class SessionFailure(
     val type: String?,
     val message: String,
     val status: Int? = null,
     val providerBody: String? = null,
+    val isRetryable: Boolean? = null,
+    val providerId: String? = null,
+    val retries: Int? = null,
+    val source: FailureSource = FailureSource.Step,
 ) {
     val isNeutral: Boolean
         get() = type.equals("permission.rejected", ignoreCase = true)
@@ -201,6 +220,37 @@ data class SessionFailure(
     fun line(): String {
         val shown = message.ifBlank { "Session work failed" }
         return if (status != null) "HTTP $status · $shown" else shown
+    }
+
+    /** A button under the caption. Rate-limit and quota use the retry card instead. */
+    fun action(): FailureAction? {
+        val kind = type?.trim()?.lowercase().orEmpty()
+        return when {
+            kind == "provider.auth" -> FailureAction.ReconnectProvider
+            kind == "provider.no-route" -> FailureAction.PickModel
+            kind == "provider.content-filter" -> null
+            isContextOverflow() -> FailureAction.Compact
+            kind == "unknown" || kind == "provider.unknown" -> FailureAction.Copy
+            else -> null
+        }
+    }
+
+    fun actionLabel(): String? =
+        when (action()) {
+            FailureAction.ReconnectProvider -> "Reconnect provider"
+            FailureAction.PickModel -> "Pick a model"
+            FailureAction.Compact -> "Compact"
+            FailureAction.Copy -> "Copy"
+            null -> null
+        }
+
+    /** v1 `ContextOverflowError`, or a provider request the body says overflowed the context. */
+    fun isContextOverflow(): Boolean {
+        if (type.equals("ContextOverflowError", ignoreCase = true)) return true
+        if (!type.equals("provider.invalid-request", ignoreCase = true)) return false
+        val haystack = "$message ${providerBody.orEmpty()}".lowercase()
+        return haystack.contains("context") &&
+            (haystack.contains("overflow") || haystack.contains("too long") || haystack.contains("length"))
     }
 
     companion object {
@@ -235,6 +285,10 @@ data class SessionFailure(
             message: String?,
             statusCode: Int?,
             responseBody: String?,
+            isRetryable: Boolean? = null,
+            providerId: String? = null,
+            retries: Int? = null,
+            source: FailureSource = FailureSource.Step,
         ): SessionFailure? {
             if (isSilent(name)) return null
             return build(
@@ -243,6 +297,10 @@ data class SessionFailure(
                 status = statusCode,
                 providerBody = responseBody,
                 emptyFallback = if (name == "ContextOverflowError") "Context overflow" else "",
+                isRetryable = isRetryable,
+                providerId = providerId,
+                retries = retries,
+                source = source,
             )
         }
 
@@ -252,12 +310,20 @@ data class SessionFailure(
             status: Int?,
             providerBody: String?,
             outcome: String? = null,
+            source: FailureSource = FailureSource.Step,
         ): SessionFailure? {
             if (outcome.equals("succeeded", ignoreCase = true) || outcome.equals("interrupted", ignoreCase = true)) {
                 return null
             }
             if (isSilent(type)) return null
-            return build(type = type, message = message, status = status, providerBody = providerBody, emptyFallback = "")
+            return build(
+                type = type,
+                message = message,
+                status = status,
+                providerBody = providerBody,
+                emptyFallback = "",
+                source = source,
+            )
         }
 
         private fun build(
@@ -266,6 +332,10 @@ data class SessionFailure(
             status: Int?,
             providerBody: String?,
             emptyFallback: String,
+            isRetryable: Boolean? = null,
+            providerId: String? = null,
+            retries: Int? = null,
+            source: FailureSource = FailureSource.Step,
         ): SessionFailure? {
             val body = providerBody?.trim()?.takeIf { it.isNotEmpty() }?.take(MAX_BODY)
             val text =
@@ -280,6 +350,10 @@ data class SessionFailure(
                 message = shown,
                 status = http,
                 providerBody = body,
+                isRetryable = isRetryable,
+                providerId = providerId?.trim()?.takeIf { it.isNotEmpty() },
+                retries = retries,
+                source = source,
             )
         }
     }

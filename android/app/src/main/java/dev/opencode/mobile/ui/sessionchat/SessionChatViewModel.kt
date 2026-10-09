@@ -655,23 +655,26 @@ class SessionChatViewModel
                         projectTitle = _uiState.value.projectLabel ?: sessionInfo.state.value.sessionTitle,
                     )
                 ClientSlashAction.Mcp -> commands.openMcpServers()
-                ClientSlashAction.Compact -> {
-                    val model = composer.state.value.composer.selectedModel ?: return
-                    val beforeFraction = _uiState.value.contextUsageFraction
-                    commands.runCompact(
-                        providerId = model.option.providerId,
-                        modelId = model.option.modelId,
-                        beforeContextFraction = beforeFraction,
-                        awaitAfterContextFraction = {
-                            sessionInfo.contextUsageFraction(
-                                messages = timeline.state.value.messages,
-                                modelOptions = composer.state.value.composer.modelOptions,
-                                selectedModel = composer.state.value.composer.selectedModel,
-                            )
-                        },
-                    )
-                }
+                ClientSlashAction.Compact -> compactCurrentSession()
             }
+        }
+
+        fun compactCurrentSession() {
+            if (!hasCreatedSession()) return
+            val model = composer.state.value.composer.selectedModel ?: return
+            val beforeFraction = _uiState.value.contextUsageFraction
+            commands.runCompact(
+                providerId = model.option.providerId,
+                modelId = model.option.modelId,
+                beforeContextFraction = beforeFraction,
+                awaitAfterContextFraction = {
+                    sessionInfo.contextUsageFraction(
+                        messages = timeline.state.value.messages,
+                        modelOptions = composer.state.value.composer.modelOptions,
+                        selectedModel = composer.state.value.composer.selectedModel,
+                    )
+                },
+            )
         }
 
         fun updateForkDraft(text: String) {
@@ -1367,6 +1370,7 @@ class SessionChatViewModel
                 isAborting = composerState.isAborting,
                 sessionStatusLabel = sessionStatusLabel,
                 workingIndicatorLabel = workingIndicatorLabel,
+                retryCard = infoState.retryCard,
                 workingIndicatorCollapsed = workingIndicatorCollapsed,
                 workingIndicatorFading = workingIndicatorFading,
                 syncingIndicatorLabel = syncingIndicatorLabel,

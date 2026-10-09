@@ -18,6 +18,7 @@ import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.session.FileDiff
 import dev.opencode.mobile.domain.session.PermissionRequest
 import dev.opencode.mobile.domain.session.QuestionRequest
+import dev.opencode.mobile.domain.session.SessionRetryCard
 import dev.opencode.mobile.domain.session.SessionTodo
 import dev.opencode.mobile.domain.session.VcsFileStatus
 import dev.opencode.mobile.domain.text.TitleCaseIdentifier
@@ -126,6 +127,8 @@ data class SessionChatUiState(
     val sessionStatusLabel: String? = null,
     /** In-chat Working/Thinking/Retrying label for an active turn. */
     val workingIndicatorLabel: String? = null,
+    /** Live rate-limit countdown. Hidden for content-filter retries. */
+    val retryCard: SessionRetryCard? = null,
     /** True after the Idle hold when the reserved footer has collapsed. */
     val workingIndicatorCollapsed: Boolean = false,
     /** True while the reserved Working lamp/label is fading through the idle hold. */
@@ -510,6 +513,7 @@ data class SessionInfoRegionState(
     val sessionId: String = "",
     val sessionTitle: String = "",
     val sessionStatusLabel: String? = null,
+    val retryCard: SessionRetryCard? = null,
     val hasResolvedSessionStatus: Boolean = false,
     val connectionStatus: SessionConnectionStatus = SessionConnectionStatus.Offline,
     val canMutate: Boolean = false,
@@ -524,10 +528,12 @@ data class SessionInfoRegionState(
 fun SessionInfoRegionState.withStatus(
     authoritative: String?,
     hasResolved: Boolean = true,
+    retryCard: SessionRetryCard? = null,
 ): SessionInfoRegionState =
     copy(
         sessionStatusLabel = authoritative,
         hasResolvedSessionStatus = hasResolved,
+        retryCard = retryCard,
     )
 
 data class SessionChatReviewChangesRegionState(

@@ -782,7 +782,7 @@ struct EventDomainAdapterTests {
         #expect(event?.type == "session.status")
         let parsed = adapter.sessionActivity(from: event!)
         #expect(parsed?.sessionID == "ses-1")
-        if case let .retrying(attempt, nextAtMs, message) = parsed?.activity {
+        if case let .retrying(attempt, nextAtMs, message, _, _, _) = parsed?.activity {
             #expect(attempt == 3)
             #expect(nextAtMs == 5_000)
             #expect(message == "rate limited")
@@ -798,13 +798,28 @@ struct EventDomainAdapterTests {
         let event = adapter.parseEvent(
             dataLine: #"{"type":"session.retry.scheduled","data":{"sessionID":"ses-1","attempt":3,"at":9000,"error":{"type":"provider.rate-limit","message":"{\"type\":\"message\",\"message\":\"Slow down\"}"}}}"#
         )
-        if case let .retrying(attempt, nextAtMs, message) = adapter.sessionActivity(from: event!)?.activity {
+        if case let .retrying(attempt, nextAtMs, message, errorType, _, _) = adapter.sessionActivity(from: event!)?.activity {
             #expect(attempt == 3)
             #expect(nextAtMs == 9_000)
             #expect(message == "Slow down")
+            #expect(errorType == "provider.rate-limit")
         } else {
             Issue.record("expected retrying")
         }
+    }
+
+    @Test func sessionActivity_readsRetryAction() {
+        let adapter = EventDomainAdapter()
+        let event = adapter.parseEvent(
+            dataLine: #"{"type":"session.retry.scheduled","data":{"sessionID":"ses-1","attempt":1,"at":4000,"error":{"type":"provider.quota","message":"Out of quota"},"action":{"label":"Upgrade","link":"https://example.com"}}}"#
+        )
+        guard case let .retrying(_, _, _, errorType, actionLabel, actionLink) = adapter.sessionActivity(from: event!)?.activity else {
+            Issue.record("expected retrying")
+            return
+        }
+        #expect(errorType == "provider.quota")
+        #expect(actionLabel == "Upgrade")
+        #expect(actionLink == "https://example.com")
     }
 
     @Test func stepFailed_withAssistantId_putsTheErrorOnTheMessageAndSkipsTheSnackbarEvent() {

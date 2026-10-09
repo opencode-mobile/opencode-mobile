@@ -2,6 +2,7 @@ package dev.opencode.mobile.ui.sessionchat
 
 import dev.opencode.mobile.domain.command.CommandInvocationCollapser
 import dev.opencode.mobile.domain.command.ServerCommand
+import dev.opencode.mobile.domain.message.FailureAction
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRole
@@ -74,6 +75,8 @@ sealed class SessionChatTimelineBlock {
         val text: String,
         val providerBody: String? = null,
         val isNeutral: Boolean = false,
+        val action: FailureAction? = null,
+        val actionLabel: String? = null,
     ) : SessionChatTimelineBlock()
 
     data class ToolGroup(
@@ -808,7 +811,25 @@ object SessionChatTimelineBlocks {
                 )
         }
         val failure = body.message.failure
-        if (failure != null && blocks.none { it is SessionChatTimelineBlock.FailureLine }) {
+        if (failure != null && failure.type?.startsWith("compaction.") == true) {
+            blocks =
+                blocks.map { block ->
+                    if (block is SessionChatTimelineBlock.ToolCard &&
+                        block.toolName == SessionCompactChrome.MARKER_TOOL_NAME
+                    ) {
+                        block.copy(status = ToolStatus.Error, errorText = failure.line())
+                    } else {
+                        block
+                    }
+                }
+        }
+        val compactionInline =
+            failure?.type?.startsWith("compaction.") == true &&
+                blocks.any {
+                    it is SessionChatTimelineBlock.ToolCard &&
+                        it.toolName == SessionCompactChrome.MARKER_TOOL_NAME
+                }
+        if (failure != null && !compactionInline && blocks.none { it is SessionChatTimelineBlock.FailureLine }) {
             blocks =
                 blocks +
                 SessionChatTimelineBlock.FailureLine(
@@ -816,6 +837,8 @@ object SessionChatTimelineBlocks {
                     text = failure.line(),
                     providerBody = failure.providerBody,
                     isNeutral = failure.isNeutral,
+                    action = failure.action(),
+                    actionLabel = failure.actionLabel(),
                 )
         }
         return if (blocks === body.blocks) body else body.copy(blocks = blocks)

@@ -15,7 +15,14 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
     /// Persistent note that the reply ended early (cut off or interrupted).
     case stopNote(blockID: String, reason: MessageStopReason)
     /// A failed run under the reply. A provider body opens the existing detail sheet.
-    case failureLine(blockID: String, text: String, providerBody: String?, isNeutral: Bool)
+    case failureLine(
+        blockID: String,
+        text: String,
+        providerBody: String?,
+        isNeutral: Bool,
+        action: FailureAction?,
+        actionLabel: String?
+    )
 
     var blockID: String {
         switch self {
@@ -35,7 +42,7 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
             blockID
         case .stopNote(let blockID, _):
             blockID
-        case .failureLine(let blockID, _, _, _):
+        case .failureLine(let blockID, _, _, _, _, _):
             blockID
         }
     }
@@ -102,10 +109,11 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
         case let (.stopNote(lID, lReason), .stopNote(rID, rReason)):
             lID == rID && lReason == rReason
         case let (
-            .failureLine(lID, lText, lBody, lNeutral),
-            .failureLine(rID, rText, rBody, rNeutral)
+            .failureLine(lID, lText, lBody, lNeutral, lAction, lLabel),
+            .failureLine(rID, rText, rBody, rNeutral, rAction, rLabel)
         ):
             lID == rID && lText == rText && lBody == rBody && lNeutral == rNeutral
+                && lAction == rAction && lLabel == rLabel
         default:
             false
         }
@@ -164,6 +172,25 @@ nonisolated struct SessionChatToolCardBlock: Equatable, Sendable {
         self.changesInitialFilePath = changesInitialFilePath
         self.isInterrupted = isInterrupted
         self.isMalformed = isMalformed
+    }
+
+    func markingFailed(_ errorText: String) -> SessionChatToolCardBlock {
+        SessionChatToolCardBlock(
+            toolName: toolName,
+            status: .error,
+            title: title,
+            subtitle: subtitle,
+            errorText: errorText,
+            additions: additions,
+            deletions: deletions,
+            detailText: detailText,
+            detailIsMarkdown: detailIsMarkdown,
+            childSessionId: childSessionId,
+            opensChangesReview: opensChangesReview,
+            changesInitialFilePath: changesInitialFilePath,
+            isInterrupted: isInterrupted,
+            isMalformed: isMalformed
+        )
     }
 }
 
@@ -644,7 +671,22 @@ nonisolated enum SessionChatTimelineBlocks {
         {
             blocks.append(.stopNote(blockID: "\(body.message.id):stop-note", reason: reason))
         }
-        if let failure = body.message.failure,
+        if let failure = body.message.failure, failure.type?.hasPrefix("compaction.") == true {
+            blocks = blocks.map { block in
+                guard case let .toolCard(id, card) = block, card.toolName == SessionCompactChrome.markerToolName else {
+                    return block
+                }
+                return .toolCard(blockID: id, card: card.markingFailed(failure.line()))
+            }
+        }
+        let compactionInline = body.message.failure?.type?.hasPrefix("compaction.") == true
+            && blocks.contains { block in
+                if case let .toolCard(_, card) = block {
+                    return card.toolName == SessionCompactChrome.markerToolName
+                }
+                return false
+            }
+        if let failure = body.message.failure, !compactionInline,
            !blocks.contains(where: { if case .failureLine = $0 { return true } else { return false } })
         {
             blocks.append(
@@ -652,11 +694,13 @@ nonisolated enum SessionChatTimelineBlocks {
                     blockID: "\(body.message.id):failure",
                     text: failure.line(),
                     providerBody: failure.providerBody,
-                    isNeutral: failure.isNeutral
+                    isNeutral: failure.isNeutral,
+                    action: failure.action(),
+                    actionLabel: failure.actionLabel()
                 )
             )
         }
-        guard blocks.count != body.blocks.count else { return body }
+        guard blocks != body.blocks else { return body }
         return DisplayMessageBody(
             message: body.message,
             isStreaming: body.isStreaming,

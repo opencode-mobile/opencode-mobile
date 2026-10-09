@@ -211,6 +211,8 @@ struct SessionChatUiState: Equatable {
     var sessionStatusLabel: String?
     /// In-chat Working/Thinking/Retrying label for an active turn.
     var workingIndicatorLabel: String? = nil
+    /// Live rate-limit countdown. Hidden for content-filter retries.
+    var retryCard: SessionRetryCard? = nil
     /// True after the Idle hold when the reserved footer has collapsed.
     var workingIndicatorCollapsed: Bool = false
     /// True while the reserved Working lamp/label is fading through the idle hold.
@@ -630,6 +632,7 @@ struct SessionInfoRegionState: Equatable {
     var sessionID: String = ""
     var sessionTitle: String = ""
     var sessionStatusLabel: String?
+    var retryCard: SessionRetryCard?
     var hasResolvedSessionStatus = false
     var connectionStatus: SessionConnectionStatus = .offline
     var canMutate = false
@@ -640,9 +643,14 @@ struct SessionInfoRegionState: Equatable {
     var shouldLeaveSession = false
     var errorMessage: String?
 
-    mutating func applyStatus(authoritative: String?, hasResolved: Bool = true) {
+    mutating func applyStatus(
+        authoritative: String?,
+        hasResolved: Bool = true,
+        retryCard: SessionRetryCard? = nil
+    ) {
         sessionStatusLabel = authoritative
         hasResolvedSessionStatus = hasResolved
+        self.retryCard = retryCard
     }
 }
 

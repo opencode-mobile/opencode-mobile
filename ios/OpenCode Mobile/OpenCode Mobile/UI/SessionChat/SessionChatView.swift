@@ -1,3 +1,4 @@
+import Combine
 import Factory
 import PhotosUI
 import SwiftUI
@@ -143,6 +144,15 @@ struct SessionChatView: View {
                 )
             }
 
+            if let card = viewModel.uiState.retryCard {
+                SessionRetryCountdownCard(card: card) { url in
+                    UIApplication.shared.open(url)
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 8)
+                .openCodeReadableColumn()
+            }
+
             if let notice = viewModel.uiState.composer.modelNotice {
                 OpenCodeInlineNotice(message: notice)
                     .padding(.horizontal, 16)
@@ -213,6 +223,16 @@ struct SessionChatView: View {
                                 trigger: ProductAnalytics.Trigger.present
                             )
                             toolDetailTarget = target
+                        },
+                        onFailureAction: { action in
+                            switch action {
+                            case .reconnectProvider, .pickModel:
+                                activePicker = .model
+                            case .compact:
+                                viewModel.compactCurrentSession()
+                            case .copy:
+                                break
+                            }
                         },
                         onToolGroupTap: { target in
                             logChatAction(ProductAnalytics.Action.chatOpenToolGroup)
@@ -1168,6 +1188,40 @@ private extension SessionChatSnackbar {
 private extension Optional where Wrapped == SessionChatSnackbar {
     func mapToOpenCodeSnackbarMessage() -> OpenCodeSnackbarMessage? {
         self?.mapToOpenCodeSnackbarMessage()
+    }
+}
+
+/// Live "attempt N, retrying in Xs" card. Sits above the timeline, not in the working lamp.
+private struct SessionRetryCountdownCard: View {
+    let card: SessionRetryCard
+    let onOpenLink: (URL) -> Void
+    @State private var now = Date()
+
+    var body: some View {
+        let seconds = max(0, Int((Double(card.nextAtMs) / 1000.0) - now.timeIntervalSince1970))
+        let attempt = card.attempt.map { "attempt \($0), " } ?? ""
+        VStack(alignment: .leading, spacing: 2) {
+            Text(card.message)
+                .font(OpenCodeTypography.caption)
+                .foregroundStyle(OpenCodeColors.error)
+            Text("\(attempt)retrying in \(seconds)s")
+                .font(OpenCodeTypography.caption)
+                .foregroundStyle(OpenCodeColors.textWeak)
+            if let label = card.actionLabel, !label.isEmpty {
+                if let link = card.actionLink, let url = URL(string: link) {
+                    Button(label) { onOpenLink(url) }
+                        .buttonStyle(.plain)
+                        .font(OpenCodeTypography.body)
+                        .foregroundStyle(OpenCodeColors.textStrong)
+                } else {
+                    Text(label)
+                        .font(OpenCodeTypography.body)
+                        .foregroundStyle(OpenCodeColors.textStrong)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { now = $0 }
     }
 }
 

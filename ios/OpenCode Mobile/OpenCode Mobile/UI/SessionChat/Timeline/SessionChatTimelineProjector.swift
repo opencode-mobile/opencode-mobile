@@ -573,8 +573,8 @@ nonisolated enum SessionChatTimelineProjector {
                     }.joined(separator: ",")
             case .stopNote(let id, let reason):
                 "x:\(id):\(reason.rawValue)"
-            case .failureLine(let id, _, let body, let neutral):
-                "f:\(id):\(body != nil):\(neutral)"
+            case .failureLine(let id, _, let body, let neutral, let action, _):
+                "f:\(id):\(body != nil):\(neutral):\(action != nil)"
             }
         }.joined(separator: "|")
         return "\(row.isStreaming):\(markdownPresent):\(row.blocks.count):\(row.metadataLabel.isEmpty ? "0" : "1"):\(row.pendingDelivery == nil ? "0" : "1"):\(blockKey)"
@@ -611,7 +611,7 @@ nonisolated enum SessionChatTimelineProjector {
                 "s:\(id):\(paragraph.chips.count)"
             case .stopNote(let id, let reason):
                 "x:\(id):\(reason.rawValue)"
-            case .failureLine(let id, _, let body, _):
+            case .failureLine(let id, _, let body, _, _, _):
                 "f:\(id):\(body != nil)"
             }
         }.joined(separator: "|")

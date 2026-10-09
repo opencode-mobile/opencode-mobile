@@ -824,22 +824,36 @@ final class SessionChatComposer {
                         directory: worktree
                     )
                 case let .prompt(text):
-                    try await messageRepository.sendPromptAsync(
-                        sessionID: sessionID,
-                        options: PromptSendOptions(
-                            text: text,
-                            attachments: submittedAttachments,
-                            model: PromptModelSelection(
-                                providerID: selectedModel.option.providerID,
-                                modelID: selectedModel.option.modelID
+                    func send(delivery: FollowUpDelivery) async throws {
+                        try await messageRepository.sendPromptAsync(
+                            sessionID: sessionID,
+                            options: PromptSendOptions(
+                                text: text,
+                                attachments: submittedAttachments,
+                                model: PromptModelSelection(
+                                    providerID: selectedModel.option.providerID,
+                                    modelID: selectedModel.option.modelID
+                                ),
+                                variant: composer.selectedVariant,
+                                mode: composer.selectedMode,
+                                agentMentions: mentionsForSend,
+                                delivery: delivery
                             ),
-                            variant: composer.selectedVariant,
-                            mode: composer.selectedMode,
-                            agentMentions: mentionsForSend,
-                            delivery: composer.followUpDelivery
-                        ),
-                        directory: worktree
-                    )
+                            directory: worktree
+                        )
+                    }
+                    do {
+                        try await send(delivery: composer.followUpDelivery)
+                    } catch {
+                        if supportsFollowUp,
+                           composer.followUpDelivery != .queue,
+                           errorMessage(error) == "Session is busy"
+                        {
+                            try await send(delivery: .queue)
+                        } else {
+                            throw error
+                        }
+                    }
                     if !mentionsForSend.isEmpty {
                         OpenCodeLog.sessionChat.info("prompt send agentParts=\(mentionsForSend.count)")
                     }

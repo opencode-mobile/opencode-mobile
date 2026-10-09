@@ -53,6 +53,20 @@ nonisolated struct APIActiveSessionsEnvelope: Decodable, Sendable {
 
 nonisolated struct APISessionActiveDTO: Decodable, Sendable {
     let type: String?
+    var attempt: Int? = nil
+    var message: String? = nil
+    var next: Int64? = nil
+    var error: APISessionRetryErrorDTO? = nil
+    var action: APISessionRetryActionDTO? = nil
+}
+
+nonisolated struct APISessionRetryErrorDTO: Decodable, Sendable {
+    let type: String?
+}
+
+nonisolated struct APISessionRetryActionDTO: Decodable, Sendable {
+    let label: String?
+    let link: String?
 }
 
 nonisolated struct APILocatedEnvelope<T: Decodable & Sendable>: Decodable, Sendable {

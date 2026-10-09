@@ -190,7 +190,14 @@ import Testing
             SessionActivityCacheEntry(sessionId: "ses-1", activity: .running, observedAtMs: 1_000),
             SessionActivityCacheEntry(
                 sessionId: "ses-2",
-                activity: .retrying(attempt: 2, nextAtMs: nil, message: nil),
+                activity: .retrying(
+                    attempt: 2,
+                    nextAtMs: nil,
+                    message: nil,
+                    errorType: nil,
+                    actionLabel: nil,
+                    actionLink: nil
+                ),
                 observedAtMs: 1_000
             ),
         ]

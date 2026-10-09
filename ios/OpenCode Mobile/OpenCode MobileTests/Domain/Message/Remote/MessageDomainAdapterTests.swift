@@ -1205,8 +1205,11 @@ struct MessageDomainAdapterTests {
         #expect(messages.count == 3)
         #expect(messages[0].failure == nil)
         #expect(messages[1].failure?.message == "Could not compact")
+        #expect(messages[1].failure?.source == .compaction)
+        #expect(messages[1].failure?.action() == nil)
         #expect(messages[2].failure?.message == "Sign in again")
-        #expect(messages[2].failure?.type == "provider.auth")
+        #expect(messages[2].failure?.source == .execution)
+        #expect(messages[2].failure?.action() == .reconnectProvider)
     }
 
     @Test func projectV2MalformedToolCallIsDistinctFromAFailedRun() throws {

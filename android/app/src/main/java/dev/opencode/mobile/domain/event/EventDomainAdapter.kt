@@ -908,6 +908,9 @@ class EventDomainAdapter(
                             retryAttempt(properties)?.let { put("attempt", it) }
                             retryNextAt(properties)?.let { put("next", it) }
                             retryMessage(properties)?.let { put("message", it) }
+                            retryErrorType(properties)?.let { put("errorType", it) }
+                            retryActionLabel(properties)?.let { put("actionLabel", it) }
+                            retryActionLink(properties)?.let { put("actionLink", it) }
                         }
                     },
                 )
@@ -1005,6 +1008,23 @@ class EventDomainAdapter(
             ?: nested?.let(SessionFailure::unwrap)?.takeIf { it.isNotEmpty() }
     }
 
+    private fun retryErrorType(properties: JsonObject): String? {
+        val status = properties["status"] as? JsonObject
+        val error = (properties["error"] as? JsonObject) ?: (status?.get("error") as? JsonObject)
+        return error?.string("type") ?: status?.string("errorType") ?: properties.string("errorType")
+    }
+
+    private fun retryActionObject(properties: JsonObject): JsonObject? {
+        val status = properties["status"] as? JsonObject
+        return (status?.get("action") as? JsonObject) ?: (properties["action"] as? JsonObject)
+    }
+
+    private fun retryActionLabel(properties: JsonObject): String? =
+        retryActionObject(properties)?.string("label")?.trim()?.takeIf { it.isNotEmpty() }
+
+    private fun retryActionLink(properties: JsonObject): String? =
+        retryActionObject(properties)?.string("link")?.trim()?.takeIf { it.isNotEmpty() }
+
     private fun JsonObject.boolean(key: String): Boolean? = (this[key] as? JsonPrimitive)?.booleanOrNull
 
     private fun stringIn(
@@ -1032,6 +1052,9 @@ class EventDomainAdapter(
                         activity.attempt?.let { put("attempt", it.toString()) }
                         activity.nextAtMs?.let { put("next", it.toString()) }
                         activity.message?.let { put("message", it) }
+                        activity.errorType?.let { put("errorType", it) }
+                        activity.actionLabel?.let { put("actionLabel", it) }
+                        activity.actionLink?.let { put("actionLink", it) }
                     }
             }
         return SessionStatus(sessionId = parsed.sessionId, raw = raw)
@@ -1064,6 +1087,9 @@ class EventDomainAdapter(
                                 ?: properties.long("nextAt")
                                 ?: properties.long("nextAtMs"),
                         message = status?.string("message") ?: properties.string("message"),
+                        errorType = status?.string("errorType") ?: properties.string("errorType"),
+                        actionLabel = status?.string("actionLabel") ?: properties.string("actionLabel"),
+                        actionLink = status?.string("actionLink") ?: properties.string("actionLink"),
                     )
                 else -> return null
             }

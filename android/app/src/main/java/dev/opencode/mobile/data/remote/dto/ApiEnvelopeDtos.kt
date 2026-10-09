@@ -37,6 +37,22 @@ data class ApiActiveSessionsEnvelope(
 @Serializable
 data class ApiSessionActiveDto(
     val type: String? = null,
+    val attempt: Int? = null,
+    val message: String? = null,
+    val next: Long? = null,
+    val error: ApiSessionRetryErrorDto? = null,
+    val action: ApiSessionRetryActionDto? = null,
+)
+
+@Serializable
+data class ApiSessionRetryErrorDto(
+    val type: String? = null,
+)
+
+@Serializable
+data class ApiSessionRetryActionDto(
+    val label: String? = null,
+    val link: String? = null,
 )
 
 @Serializable

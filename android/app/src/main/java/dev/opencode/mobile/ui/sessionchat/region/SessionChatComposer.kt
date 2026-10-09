@@ -890,24 +890,41 @@ class SessionChatComposer(
                                 directory = worktree,
                             )
                         is ComposerSubmitIntent.Prompt -> {
-                            messageRepository.sendPromptAsync(
-                                sessionId = sessionId,
-                                options =
-                                    PromptSendOptions(
-                                        text = intent.text,
-                                        attachments = attachments,
-                                        model =
-                                            PromptModelSelection(
-                                                selectedModel.option.providerId,
-                                                selectedModel.option.modelId,
-                                            ),
-                                        variant = composer.selectedVariant,
-                                        mode = composer.selectedMode,
-                                        agentMentions = mentionsForSend,
-                                        delivery = composer.followUpDelivery,
-                                    ),
-                                directory = worktree,
-                            )
+                            suspend fun send(delivery: FollowUpDelivery) {
+                                messageRepository.sendPromptAsync(
+                                    sessionId = sessionId,
+                                    options =
+                                        PromptSendOptions(
+                                            text = intent.text,
+                                            attachments = attachments,
+                                            model =
+                                                PromptModelSelection(
+                                                    selectedModel.option.providerId,
+                                                    selectedModel.option.modelId,
+                                                ),
+                                            variant = composer.selectedVariant,
+                                            mode = composer.selectedMode,
+                                            agentMentions = mentionsForSend,
+                                            delivery = delivery,
+                                        ),
+                                    directory = worktree,
+                                )
+                            }
+                            try {
+                                send(composer.followUpDelivery)
+                            } catch (busy: CancellationException) {
+                                throw busy
+                            } catch (busy: Throwable) {
+                                if (
+                                    supportsFollowUp &&
+                                    composer.followUpDelivery != FollowUpDelivery.Queue &&
+                                    errorMessage(busy) == "Session is busy"
+                                ) {
+                                    send(FollowUpDelivery.Queue)
+                                } else {
+                                    throw busy
+                                }
+                            }
                             if (mentionsForSend.isNotEmpty()) {
                                 logI("prompt send agentParts=${mentionsForSend.size}")
                             }
