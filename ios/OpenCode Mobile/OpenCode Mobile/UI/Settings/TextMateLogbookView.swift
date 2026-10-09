@@ -75,8 +75,7 @@ struct TextMateLogbookView: View {
                     }
 
                     if model.isLoading {
-                        ProgressView()
-                            .tint(OpenCodeColors.interactive)
+                        OpenCodeStatusStack(spinner: "Loading TextMate logbook")
                             .padding(24)
                     } else if model.entries.isEmpty {
                         Text("No TextMate parsing entries yet.")

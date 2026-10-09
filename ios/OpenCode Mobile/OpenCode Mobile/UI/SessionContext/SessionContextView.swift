@@ -45,22 +45,19 @@ struct SessionContextView: View {
     private var content: some View {
         switch viewModel.state {
         case .loading:
-            Spacer()
-            ProgressView()
-            Spacer()
+            OpenCodeStatusStack(
+                title: "Loading session context",
+                subtitle: "Fetching context…"
+            )
         case let .error(message):
-            VStack(spacing: 12) {
-                Text(message)
-                    .font(OpenCodeTypography.body)
-                    .foregroundStyle(OpenCodeColors.textBase)
-                    .multilineTextAlignment(.center)
-                OpenCodeButton(variant: .fullWidthText(title: "Retry")) {
+            OpenCodeEmptyState(
+                title: "Unable to load session context",
+                message: message,
+                primaryAction: OpenCodeEmptyStateAction(title: "Retry") {
                     logAction(ProductAnalytics.Action.sessionContextRetry)
                     Task { await viewModel.load() }
                 }
-            }
-            .padding(24)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            )
         case let .loaded(displayState):
             ScrollView {
                 VStack(alignment: .leading, spacing: 28) {
@@ -84,7 +81,7 @@ struct SessionContextView: View {
             }
             .overlay {
                 if viewModel.isRefreshing {
-                    ProgressView()
+                    OpenCodeStatusStack(spinner: "Refreshing session context")
                 }
             }
         }

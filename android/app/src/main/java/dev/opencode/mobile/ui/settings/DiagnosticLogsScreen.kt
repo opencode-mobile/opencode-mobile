@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -47,6 +46,8 @@ import dev.opencode.mobile.ui.components.OpenCodeDialog
 import dev.opencode.mobile.ui.components.OpenCodeDialogOption
 import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeListItemStyle
+import dev.opencode.mobile.ui.components.OpenCodeStatusStack
+import dev.opencode.mobile.ui.components.OpenCodeStatusStackStyle
 import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
@@ -246,13 +247,10 @@ fun DiagnosticLogsScreen(
             Column(modifier = Modifier.fillMaxSize()) {
                 when {
                     state.loading ->
-                        CircularProgressIndicator(
-                            modifier =
-                                Modifier
-                                    .align(Alignment.CenterHorizontally)
-                                    .padding(24.dp)
-                                    .weight(1f),
-                            color = openCodeColor("interactive"),
+                        OpenCodeStatusStack(
+                            title = "Loading diagnostic logs",
+                            style = OpenCodeStatusStackStyle.Spinner,
+                            modifier = Modifier.weight(1f).fillMaxWidth(),
                         )
                     else ->
                         Column(

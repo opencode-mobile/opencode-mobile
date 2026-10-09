@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -39,8 +38,6 @@ import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetContentMode
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
-import dev.opencode.mobile.ui.components.OpenCodeButton
-import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeDialog
 import dev.opencode.mobile.ui.components.OpenCodeDialogOption
 import dev.opencode.mobile.ui.components.OpenCodeDialogTextField
@@ -50,7 +47,10 @@ import dev.opencode.mobile.ui.components.OpenCodeSectionHeader
 import dev.opencode.mobile.ui.components.OpenCodeSessionConnectionStatus
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarHost
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarMessage
+import dev.opencode.mobile.ui.components.OpenCodeEmptyState
+import dev.opencode.mobile.ui.components.OpenCodeEmptyStateAction
 import dev.opencode.mobile.ui.components.OpenCodeStatusStack
+import dev.opencode.mobile.ui.components.OpenCodeStatusStackStyle
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarAction
 import dev.opencode.mobile.ui.components.OpenCodeTopBarSubtitleAccessory
@@ -551,32 +551,19 @@ internal fun MainScreen(
         ) {
             when {
                 navigator.isLoading || navigator.isValidating -> {
-                    Box(
-                        modifier =
-                            Modifier
-                                .fillMaxSize()
-                                .padding(24.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        CircularProgressIndicator()
-                    }
+                    OpenCodeStatusStack(
+                        title = "Loading folders",
+                        style = OpenCodeStatusStackStyle.Spinner,
+                        modifier = Modifier.fillMaxSize().padding(24.dp),
+                    )
                 }
                 navigator.errorMessage != null -> {
-                    Column(
+                    OpenCodeEmptyState(
+                        title = "Unable to list this folder",
+                        message = navigator.errorMessage,
+                        primaryAction = OpenCodeEmptyStateAction(title = "Retry", onClick = onRetryAddProjectNavigator),
                         modifier = Modifier.padding(20.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        Text(
-                            text = navigator.errorMessage,
-                            style = MaterialTheme.typography.bodyMedium,
-                            textAlign = TextAlign.Center,
-                        )
-                        OpenCodeButton(
-                            variant = OpenCodeButtonVariant.FullWidthText("Retry"),
-                            onClick = onRetryAddProjectNavigator,
-                        )
-                    }
+                    )
                 }
                 navigator.entries.isEmpty() -> {
                     OpenCodeBottomSheetEntry(title = "No subdirectories", enabled = false, onClick = {})
@@ -800,27 +787,13 @@ private fun ProbeFailedContent(
     onEditConnection: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier = modifier.padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(text = "Unable to connect", style = MaterialTheme.typography.titleMedium)
-        Text(
-            text = message,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
-        OpenCodeButton(
-            variant = OpenCodeButtonVariant.FullWidthText("Retry"),
-            onClick = onRetry,
-        )
-        OpenCodeButton(
-            variant = OpenCodeButtonVariant.FullWidthText("Edit connection"),
-            onClick = onEditConnection,
-        )
-    }
+    OpenCodeEmptyState(
+        title = "Unable to connect",
+        message = message,
+        primaryAction = OpenCodeEmptyStateAction(title = "Retry", onClick = onRetry),
+        secondaryAction = OpenCodeEmptyStateAction(title = "Edit connection", onClick = onEditConnection),
+        modifier = modifier,
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

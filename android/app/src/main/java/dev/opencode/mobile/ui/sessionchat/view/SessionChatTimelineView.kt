@@ -72,6 +72,8 @@ import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.OpenCodeActionPill
 import dev.opencode.mobile.ui.components.OpenCodeActionPillVariant
+import dev.opencode.mobile.ui.components.OpenCodeEmptyState
+import dev.opencode.mobile.ui.components.OpenCodeEmptyStateAction
 import dev.opencode.mobile.ui.components.OpenCodeAssistantMessage
 import dev.opencode.mobile.ui.components.OpenCodeAssistantMessagePresentation
 import dev.opencode.mobile.ui.components.OpenCodeMessageAttachment
@@ -178,19 +180,15 @@ internal fun SessionChatTimelineView(
             )
 
         SessionChatTimelineState.Error ->
-            Box(
-                modifier =
-                    modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = props.errorMessage ?: "Unable to load messages",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-            }
+            OpenCodeEmptyState(
+                title = "Unable to load messages",
+                message = props.errorMessage ?: "The timeline didn't load.",
+                primaryAction =
+                    OpenCodeEmptyStateAction(title = "Retry") {
+                        props.onRefresh()
+                    },
+                modifier = modifier.fillMaxSize(),
+            )
 
         SessionChatTimelineState.Empty ->
             Box(

@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -35,9 +34,10 @@ import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.domain.sessioncontext.SessionContextBreakdownItem
 import dev.opencode.mobile.domain.sessioncontext.SessionContextBreakdownKind
 import dev.opencode.mobile.theme.openCodeColor
-import dev.opencode.mobile.ui.components.OpenCodeButton
-import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
+import dev.opencode.mobile.ui.components.OpenCodeEmptyState
+import dev.opencode.mobile.ui.components.OpenCodeEmptyStateAction
 import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
+import dev.opencode.mobile.ui.components.OpenCodeStatusStack
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
 
@@ -71,29 +71,23 @@ fun SessionContextScreen(
             Column(modifier = Modifier.fillMaxSize()) {
                 when (uiState.timeline) {
                     SessionContextTimelineState.Loading ->
-                        Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator()
-                        }
+                        OpenCodeStatusStack(
+                            title = "Loading session context",
+                            subtitle = "Fetching context…",
+                            modifier = Modifier.weight(1f).fillMaxWidth(),
+                        )
                     SessionContextTimelineState.Error ->
-                        Column(
-                            modifier = Modifier.weight(1f).fillMaxWidth().padding(24.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                        ) {
-                            Text(
-                                text = uiState.errorMessage ?: "Unable to load session context",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            OpenCodeButton(
-                                variant = OpenCodeButtonVariant.FullWidthText("Retry"),
-                                // load() also runs on bind, so the retry tap is logged here.
-                                onClick = {
+                        OpenCodeEmptyState(
+                            title = "Unable to load session context",
+                            message = uiState.errorMessage ?: "The context didn't load.",
+                            primaryAction =
+                                OpenCodeEmptyStateAction(title = "Retry") {
+                                    // load() also runs on bind, so the retry tap is logged here.
                                     logSessionContextAction(ProductAnalytics.Action.SESSION_CONTEXT_RETRY)
                                     viewModel.load()
                                 },
-                            )
-                        }
+                            modifier = Modifier.weight(1f).fillMaxWidth(),
+                        )
                     SessionContextTimelineState.Ready ->
                         PullToRefreshBox(
                             isRefreshing = uiState.isRefreshing,

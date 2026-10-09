@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -32,7 +31,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -52,8 +50,11 @@ import dev.opencode.mobile.ui.components.OpenCodeButtonContrast
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeHunkNavigationPill
 import dev.opencode.mobile.ui.components.OpenCodeListGroup
+import dev.opencode.mobile.ui.components.OpenCodeEmptyState
+import dev.opencode.mobile.ui.components.OpenCodeEmptyStateAction
 import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeListItemAccessory
+import dev.opencode.mobile.ui.components.OpenCodeStatusStack
 import dev.opencode.mobile.ui.components.OpenCodeOverflowMenuEntry
 import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
 import dev.opencode.mobile.ui.components.OpenCodeSectionHeader
@@ -206,7 +207,12 @@ private fun ChangedFilesScreen(
         }
         OpenCodeReadableColumn(modifier = Modifier.weight(1f)) {
             when (val phase = state.phase) {
-                ChangesPhase.Loading -> Centered { CircularProgressIndicator() }
+                ChangesPhase.Loading ->
+                    OpenCodeStatusStack(
+                        title = "Loading changes",
+                        subtitle = "Fetching the diff…",
+                        modifier = Modifier.fillMaxSize(),
+                    )
                 ChangesPhase.NoTurn ->
                     RefreshableMessage(
                         state.isRefreshing,
@@ -229,19 +235,16 @@ private fun ChangedFilesScreen(
                     )
                 is ChangesPhase.Content -> ChangedFilesContent(phase.changeSet, state, listResetToken, viewModel, onOpenFile)
                 is ChangesPhase.Error ->
-                    Centered {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            EmptyMessage("Unable to load changes", phase.message)
-                            OpenCodeButton(
-                                OpenCodeButtonVariant.CompactText("Retry"),
-                                onClick = {
-                                    logChangesAction(ProductAnalytics.Action.CHANGES_RETRY)
-                                    viewModel.retry()
-                                },
-                                contrast = OpenCodeButtonContrast.Low,
-                            )
-                        }
-                    }
+                    OpenCodeEmptyState(
+                        title = "Unable to load changes",
+                        message = phase.message,
+                        primaryAction =
+                            OpenCodeEmptyStateAction(title = "Retry") {
+                                logChangesAction(ProductAnalytics.Action.CHANGES_RETRY)
+                                viewModel.retry()
+                            },
+                        modifier = Modifier.fillMaxSize(),
+                    )
             }
         }
     }
@@ -326,18 +329,16 @@ private fun ChangedFilesContent(
             }
             if (changeSet.filteredFiles.isEmpty()) {
                 item {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        EmptyMessage("No matching files", "Try another path or clear the filter.")
-                        OpenCodeButton(
-                            OpenCodeButtonVariant.CompactText("Clear filter"),
-                            // clearFilter() also runs when leaving Changes, so log the tap here.
-                            onClick = {
+                    OpenCodeEmptyState(
+                        title = "No matching files",
+                        message = "Try another path or clear the filter.",
+                        primaryAction =
+                            OpenCodeEmptyStateAction(title = "Clear filter") {
+                                // clearFilter() also runs when leaving Changes, so log the tap here.
                                 logChangesAction(ProductAnalytics.Action.CHANGES_CLEAR_FILTER)
                                 viewModel.clearFilter()
                             },
-                            contrast = OpenCodeButtonContrast.Low,
-                        )
-                    }
+                    )
                 }
             } else {
                 changeSet.fileGroups.forEach { group ->
@@ -411,7 +412,12 @@ private fun FileViewerScreen(
         )
         OpenCodeReadableColumn(modifier = Modifier.weight(1f)) {
             if (!viewer.hasPreview) {
-                Centered { EmptyMessage("Preview unavailable", "A text preview is unavailable for this file.") }
+                Centered {
+                    OpenCodeEmptyState(
+                        title = "Preview unavailable",
+                        message = "A text preview is unavailable for this file.",
+                    )
+                }
             } else {
                 BoxWithConstraints(Modifier.fillMaxSize()) {
                     val trailingScrollSpace = maxOf(84.dp, maxHeight - 20.dp)
@@ -471,7 +477,9 @@ private fun RefreshableMessage(
     detail: String,
 ) {
     PullToRefreshBox(isRefreshing = refreshing, onRefresh = onRefresh, modifier = Modifier.fillMaxSize()) {
-        Centered { EmptyMessage(title, detail) }
+        Centered {
+            OpenCodeEmptyState(title = title, message = detail)
+        }
     }
 }
 
@@ -483,22 +491,3 @@ private fun Centered(content: @Composable () -> Unit) =
         verticalArrangement = Arrangement.Center,
     ) { content() }
 
-@Composable
-private fun EmptyMessage(
-    title: String,
-    detail: String,
-) {
-    Column(
-        Modifier.fillMaxWidth().padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Text(title, textAlign = TextAlign.Center, style = MaterialTheme.typography.titleMedium)
-        Text(
-            detail,
-            textAlign = TextAlign.Center,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}

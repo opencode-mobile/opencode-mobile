@@ -139,20 +139,17 @@ struct ProjectListHomeView: View {
             ) {
                 let navigator = viewModel.addProjectNavigator
                 if navigator.isLoading || navigator.isValidating {
-                    ProgressView()
+                    OpenCodeStatusStack(spinner: "Loading folders")
                         .frame(maxWidth: .infinity)
                         .padding(24)
                 } else if let errorMessage = navigator.errorMessage {
-                    VStack(spacing: 12) {
-                        Text(errorMessage)
-                            .font(OpenCodeTypography.body)
-                            .foregroundStyle(OpenCodeColors.textBase)
-                            .multilineTextAlignment(.center)
-                        OpenCodeButton(
-                            variant: .fullWidthText(title: "Retry"),
-                            action: { Task { await viewModel.retryAddProjectNavigator() } }
-                        )
-                    }
+                    OpenCodeEmptyState(
+                        title: "Unable to list this folder",
+                        message: errorMessage,
+                        primaryAction: OpenCodeEmptyStateAction(title: "Retry") {
+                            Task { await viewModel.retryAddProjectNavigator() }
+                        }
+                    )
                     .padding(20)
                 } else if navigator.entries.isEmpty {
                     OpenCodeBottomSheetEntry(title: "No subdirectories", enabled: false, action: {})
@@ -673,26 +670,20 @@ struct ProjectListHomeView: View {
     }
 
     private func probeFailed(_ message: String) -> some View {
-        VStack(spacing: 12) {
-            Text("Unable to connect")
-                .font(OpenCodeTypography.heading)
-            Text(message)
-                .font(OpenCodeTypography.bodySecondary)
-                .foregroundStyle(OpenCodeColors.textBase)
-                .multilineTextAlignment(.center)
-            OpenCodeButton(variant: .fullWidthText(title: "Retry")) {
+        OpenCodeEmptyState(
+            title: "Unable to connect",
+            message: message,
+            primaryAction: OpenCodeEmptyStateAction(title: "Retry") {
                 Task { await viewModel.retryProbe() }
-            }
-            OpenCodeButton(variant: .fullWidthText(title: "Edit connection")) {
+            },
+            secondaryAction: OpenCodeEmptyStateAction(title: "Edit connection") {
                 ProductAnalytics.logUserAction(
                     screenId: ProductAnalytics.Screen.homeProbeFailed,
                     actionId: ProductAnalytics.Action.homeEditConnection
                 )
                 presentConnectionSetup(mode: .edit)
             }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .padding(24)
+        )
         .onAppear {
             ProductAnalytics.logScreenView(
                 screenId: ProductAnalytics.Screen.homeProbeFailed,

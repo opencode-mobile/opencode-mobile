@@ -105,8 +105,7 @@ struct DiagnosticLogsView: View {
             ScrollView {
                 LazyVStack(spacing: 8) {
                     if model.isLoading {
-                        ProgressView()
-                            .tint(OpenCodeColors.interactive)
+                        OpenCodeStatusStack(spinner: "Loading diagnostic logs")
                             .padding(24)
                     } else {
                         OpenCodeListItem(

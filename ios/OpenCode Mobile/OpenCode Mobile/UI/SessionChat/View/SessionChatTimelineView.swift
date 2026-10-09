@@ -134,14 +134,13 @@ struct SessionChatTimelineView: View {
                     Spacer()
                 }
             case .error:
-                VStack {
-                    Spacer()
-                    Text(props.errorMessage ?? "Unable to load messages")
-                        .font(OpenCodeTypography.body)
-                        .foregroundStyle(OpenCodeColors.textBase)
-                        .padding(.horizontal, 16)
-                    Spacer()
-                }
+                OpenCodeEmptyState(
+                    title: "Unable to load messages",
+                    message: props.errorMessage ?? "The timeline didn't load.",
+                    primaryAction: OpenCodeEmptyStateAction(title: "Retry") {
+                        Task { await props.onRefresh() }
+                    }
+                )
             case .ready:
                 SessionChatTimelineReadyView(props: props)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -258,7 +257,7 @@ private struct SessionChatTimelineReadyView: View {
             .transaction { $0.animation = nil }
             .overlay {
                 if props.isRefreshing {
-                    ProgressView()
+                    OpenCodeStatusStack(spinner: "Refreshing messages")
                 }
             }
             .overlay(alignment: .top) {

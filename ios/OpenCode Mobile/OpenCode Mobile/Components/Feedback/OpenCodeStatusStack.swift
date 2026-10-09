@@ -1,9 +1,17 @@
 import SwiftUI
 
-/// Centered mid-well indeterminate status: neutral ring + title + subtitle.
+enum OpenCodeStatusStackStyle {
+    /// Neutral ring with a title and subtitle.
+    case labeled
+    /// Ring only, for inline and overlay loading.
+    case spinner
+}
+
+/// Centered mid-well indeterminate status: neutral ring + title + subtitle, or a ring alone.
 struct OpenCodeStatusStack: View {
     var title: String
     var subtitle: String
+    var style: OpenCodeStatusStackStyle
     var accessibilityIdentifier: String?
 
     init(title: String, subtitle: String, accessibilityIdentifier: String? = nil) {
@@ -11,6 +19,15 @@ struct OpenCodeStatusStack: View {
         precondition(!subtitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         self.title = title
         self.subtitle = subtitle
+        self.style = .labeled
+        self.accessibilityIdentifier = accessibilityIdentifier
+    }
+
+    init(spinner accessibilityLabel: String = "Loading", accessibilityIdentifier: String? = nil) {
+        precondition(!accessibilityLabel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        self.title = accessibilityLabel
+        self.subtitle = ""
+        self.style = .spinner
         self.accessibilityIdentifier = accessibilityIdentifier
     }
 
@@ -21,23 +38,34 @@ struct OpenCodeStatusStack: View {
                 .tint(OpenCodeColors.textBase)
                 .scaleEffect(32.0 / 20.0)
                 .frame(width: 32, height: 32)
-                .accessibilityLabel("\(title). \(subtitle)")
+                .accessibilityLabel(accessibilityLabel)
                 .modifier(OptionalAccessibilityIdentifier(accessibilityIdentifier))
 
-            Text(title)
-                .font(OpenCodeTypography.body)
-                .foregroundStyle(OpenCodeColors.textBase)
-                .multilineTextAlignment(.center)
-                .accessibilityHidden(true)
+            if style == .labeled {
+                Text(title)
+                    .font(OpenCodeTypography.body)
+                    .foregroundStyle(OpenCodeColors.textBase)
+                    .multilineTextAlignment(.center)
+                    .accessibilityHidden(true)
 
-            Text(subtitle)
-                .font(OpenCodeTypography.caption)
-                .foregroundStyle(OpenCodeColors.textWeaker)
-                .multilineTextAlignment(.center)
-                .accessibilityHidden(true)
+                Text(subtitle)
+                    .font(OpenCodeTypography.caption)
+                    .foregroundStyle(OpenCodeColors.textWeaker)
+                    .multilineTextAlignment(.center)
+                    .accessibilityHidden(true)
+            }
         }
         .padding(.horizontal, 24)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: style == .spinner ? nil : .infinity)
+    }
+
+    private var accessibilityLabel: String {
+        switch style {
+        case .labeled:
+            "\(title). \(subtitle)"
+        case .spinner:
+            title
+        }
     }
 }
 

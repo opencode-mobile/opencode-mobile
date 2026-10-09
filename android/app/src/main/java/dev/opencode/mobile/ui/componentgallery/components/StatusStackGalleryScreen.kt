@@ -17,6 +17,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
 import dev.opencode.mobile.ui.components.OpenCodeStatusStack
+import dev.opencode.mobile.ui.components.OpenCodeStatusStackStyle
 
 @Composable
 fun StatusStackGalleryScreen(modifier: Modifier = Modifier) {
@@ -37,6 +38,11 @@ fun StatusStackGalleryScreen(modifier: Modifier = Modifier) {
                     .height(280.dp)
                     .clip(RoundedCornerShape(12.dp))
                     .background(MaterialTheme.colorScheme.background),
+        )
+        OpenCodeStatusStack(
+            title = "Loading",
+            style = OpenCodeStatusStackStyle.Spinner,
+            modifier = Modifier.fillMaxWidth().height(120.dp),
         )
     }
 }

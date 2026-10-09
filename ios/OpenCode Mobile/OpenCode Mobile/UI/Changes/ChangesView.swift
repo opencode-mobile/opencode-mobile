@@ -103,7 +103,7 @@ struct ChangesView: View {
     @ViewBuilder private var content: some View {
         switch viewModel.state.phase {
         case .loading:
-            ProgressView("Loading changes…")
+            OpenCodeStatusStack(title: "Loading changes", subtitle: "Fetching the diff…")
         case .noTurn:
             refreshableMessage("No completed turn", detail: "Send a prompt and wait for it to complete, then try again.")
         case .noChanges:
@@ -111,13 +111,14 @@ struct ChangesView: View {
         case let .content(changeSet):
             changedFiles(changeSet)
         case let .error(error):
-            VStack(spacing: 12) {
-                message("Unable to load changes", detail: error)
-                OpenCodeButton(variant: .compactText(title: "Retry"), contrast: .low) {
+            OpenCodeEmptyState(
+                title: "Unable to load changes",
+                message: error,
+                primaryAction: OpenCodeEmptyStateAction(title: "Retry") {
                     logAction(ProductAnalytics.Action.changesRetry)
                     Task { await viewModel.retry() }
                 }
-            }
+            )
         }
     }
 
@@ -250,15 +251,7 @@ struct ChangesView: View {
     }
 
     private func message(_ title: String, detail: String) -> some View {
-        VStack(spacing: 8) {
-            Text(title).font(OpenCodeTypography.heading)
-            Text(detail)
-                .font(OpenCodeTypography.bodySecondary)
-                .foregroundStyle(OpenCodeColors.textBase)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(24)
+        OpenCodeEmptyState(title: title, message: detail)
     }
 
     private func refreshableMessage(_ title: String, detail: String) -> some View {

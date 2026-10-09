@@ -61,7 +61,7 @@ struct SessionChatView: View {
             if viewModelStorage != nil {
                 sessionChatBody
             } else {
-                ProgressView()
+                OpenCodeStatusStack(spinner: "Loading session")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(OpenCodeColors.backgroundBase)
             }

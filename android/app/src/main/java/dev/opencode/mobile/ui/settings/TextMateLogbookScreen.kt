@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -33,6 +32,8 @@ import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonContrast
+import dev.opencode.mobile.ui.components.OpenCodeStatusStack
+import dev.opencode.mobile.ui.components.OpenCodeStatusStackStyle
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeDialog
 import dev.opencode.mobile.ui.components.OpenCodeDialogOption
@@ -86,9 +87,10 @@ fun TextMateLogbookScreen(
 
                 when {
                     state.loading ->
-                        CircularProgressIndicator(
-                            modifier = Modifier.align(Alignment.CenterHorizontally).padding(24.dp),
-                            color = openCodeColor("interactive"),
+                        OpenCodeStatusStack(
+                            title = "Loading TextMate logbook",
+                            style = OpenCodeStatusStackStyle.Spinner,
+                            modifier = Modifier.fillMaxWidth().padding(24.dp),
                         )
                     state.entries.isEmpty() ->
                         Text(
