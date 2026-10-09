@@ -5,6 +5,8 @@ enum OpenCodeTextInputKind: CaseIterable {
     case url
     case username
     case password
+    /// Filter field: no sentence capitalization or autocorrect.
+    case filter
 }
 
 enum OpenCodeTextInputSubmitAction {
@@ -116,7 +118,7 @@ struct OpenCodeTextInput: View {
         switch kind {
         case .url: .URL
         case .username: .username
-        case .text, .password: nil
+        case .text, .password, .filter: nil
         }
     }
 

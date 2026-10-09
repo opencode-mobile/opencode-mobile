@@ -31,6 +31,7 @@ enum ComponentGalleryEntryID: String, Hashable {
     case modal
     case snackbar
     case listItem
+    case selectableCard
     case listGroup
     case sectionHeader
     case reorderableList
@@ -139,7 +140,7 @@ let componentGalleryEntries = [
     ComponentGalleryEntry(
         id: .textInput,
         title: "Text Input",
-        description: "Single-line entry with in-field hint for text, URLs, usernames, and passwords.",
+        description: "Single-line entry with in-field hint for text, URLs, usernames, passwords, and filters.",
         category: .controls
     ),
     ComponentGalleryEntry(
@@ -188,6 +189,12 @@ let componentGalleryEntries = [
         id: .listItem,
         title: "List Item",
         description: "Reusable project and session row treatment.",
+        category: .lists
+    ),
+    ComponentGalleryEntry(
+        id: .selectableCard,
+        title: "Selectable Card",
+        description: "Title, blurb, and preview slot that can be selected.",
         category: .lists
     ),
     ComponentGalleryEntry(

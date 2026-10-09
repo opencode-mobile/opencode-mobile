@@ -118,6 +118,8 @@ struct ComponentGalleryDetailView: View {
             SnackbarGalleryView()
         case .listItem:
             ListItemGalleryView()
+        case .selectableCard:
+            SelectableCardGalleryView()
         case .listGroup:
             ListGroupGalleryView()
         case .sectionHeader:

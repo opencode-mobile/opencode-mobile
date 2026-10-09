@@ -36,6 +36,7 @@ enum class ComponentGalleryEntryId {
     Modal,
     Snackbar,
     ListItem,
+    SelectableCard,
     ListGroup,
     SectionHeader,
     ReorderableList,
@@ -151,7 +152,7 @@ val ComponentGalleryEntries =
         ComponentGalleryEntry(
             id = ComponentGalleryEntryId.TextInput,
             title = "Text Input",
-            description = "Single-line entry with in-field hint for text, URLs, usernames, and passwords.",
+            description = "Single-line entry with in-field hint for text, URLs, usernames, passwords, and filters.",
             category = ComponentGalleryCategory.Controls,
         ),
         ComponentGalleryEntry(
@@ -200,6 +201,12 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.ListItem,
             title = "List Item",
             description = "Reusable project and session row treatment.",
+            category = ComponentGalleryCategory.Lists,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.SelectableCard,
+            title = "Selectable Card",
+            description = "Title, blurb, and preview slot that can be selected.",
             category = ComponentGalleryCategory.Lists,
         ),
         ComponentGalleryEntry(

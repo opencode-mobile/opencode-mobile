@@ -1,9 +1,11 @@
 package dev.opencode.mobile.ui.componentgallery.components
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -25,7 +27,10 @@ fun TextInputGalleryScreen(modifier: Modifier = Modifier) {
     val kind = OpenCodeTextInputKind.valueOf(kindName)
 
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
             OpenCodeTextInputKind.entries.forEach { option ->
                 OpenCodeChoiceBadge(
                     label = option.name,
@@ -67,6 +72,7 @@ private val OpenCodeTextInputKind.fieldHint: String
             OpenCodeTextInputKind.Url -> "Server URL"
             OpenCodeTextInputKind.Username -> "Username"
             OpenCodeTextInputKind.Password -> "Password"
+            OpenCodeTextInputKind.Filter -> "Filter models"
         }
 
 private val OpenCodeTextInputKind.sampleValue: String
@@ -76,4 +82,5 @@ private val OpenCodeTextInputKind.sampleValue: String
             OpenCodeTextInputKind.Url -> "http://127.0.0.1:4096/"
             OpenCodeTextInputKind.Username -> "opencode"
             OpenCodeTextInputKind.Password -> "correct horse battery staple"
+            OpenCodeTextInputKind.Filter -> "claude"
         }

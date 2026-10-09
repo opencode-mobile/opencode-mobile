@@ -9,11 +9,13 @@ struct TextInputGalleryView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack(spacing: 8) {
-                ForEach(OpenCodeTextInputKind.allCases, id: \.self) { option in
-                    OpenCodeChoiceBadge(label: label(option), selected: kind == option) {
-                        kind = option
-                        text = isEmpty ? "" : sampleValue(option)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(OpenCodeTextInputKind.allCases, id: \.self) { option in
+                        OpenCodeChoiceBadge(label: label(option), selected: kind == option) {
+                            kind = option
+                            text = isEmpty ? "" : sampleValue(option)
+                        }
                     }
                 }
             }
@@ -41,6 +43,7 @@ struct TextInputGalleryView: View {
         case .url: "URL"
         case .username: "Username"
         case .password: "Password"
+        case .filter: "Filter"
         }
     }
 
@@ -50,6 +53,7 @@ struct TextInputGalleryView: View {
         case .url: "Server URL"
         case .username: "Username"
         case .password: "Password"
+        case .filter: "Filter models"
         }
     }
 
@@ -61,6 +65,7 @@ struct TextInputGalleryView: View {
         case .url: "http://127.0.0.1:4096/"
         case .username: "opencode"
         case .password: "correct horse battery staple"
+        case .filter: "claude"
         }
     }
 }

@@ -1,20 +1,12 @@
 package dev.opencode.mobile.ui.sessionchat.view
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
@@ -29,6 +21,8 @@ import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetContentMode
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetHeaderAction
+import dev.opencode.mobile.ui.components.OpenCodeTextInput
+import dev.opencode.mobile.ui.components.OpenCodeTextInputKind
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.sessionchat.SessionChatViewModel
 
@@ -264,29 +258,14 @@ private fun ModelPickerFilterField(
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    BasicTextField(
+    OpenCodeTextInput(
         value = value,
         onValueChange = onValueChange,
-        textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
-        cursorBrush = SolidColor(MaterialTheme.colorScheme.onSurface),
+        hint = "Filter models...",
+        kind = OpenCodeTextInputKind.Filter,
         modifier =
             modifier
-                .fillMaxWidth()
                 .padding(horizontal = 20.dp)
-                .padding(bottom = 8.dp)
-                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp))
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-        decorationBox = { innerTextField ->
-            Box {
-                if (value.isBlank()) {
-                    Text(
-                        text = "Filter models...",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                innerTextField()
-            }
-        },
+                .padding(bottom = 8.dp),
     )
 }
