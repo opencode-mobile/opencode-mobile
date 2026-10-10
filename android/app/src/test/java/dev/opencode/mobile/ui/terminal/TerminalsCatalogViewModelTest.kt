@@ -9,8 +9,10 @@ import dev.opencode.mobile.domain.terminal.TerminalRepository
 import dev.opencode.mobile.domain.terminal.TerminalSession
 import dev.opencode.mobile.domain.terminal.TerminalSessionStatus
 import dev.opencode.mobile.network.ActiveConnectionManager
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -240,6 +242,165 @@ class TerminalsCatalogViewModelTest {
             )
         }
 
+    @Test
+    fun appear_exposesProjectsFromAddedWorktrees() =
+        runTest(testDispatcher) {
+            val viewModel =
+                viewModel(
+                    repository = FakeCatalogTerminalRepository(running = emptyList()),
+                    worktrees =
+                        listOf(
+                            "/Users/ivan/Projects/opencode-mobile",
+                            "/Users/ivan/Projects/playground",
+                        ),
+                )
+
+            viewModel.appear()
+            advanceUntilIdle()
+
+            assertEquals(
+                listOf(
+                    TerminalCatalogProject(
+                        worktree = "/Users/ivan/Projects/opencode-mobile",
+                        title = "opencode-mobile",
+                    ),
+                    TerminalCatalogProject(
+                        worktree = "/Users/ivan/Projects/playground",
+                        title = "playground",
+                    ),
+                ),
+                viewModel.uiState.value.projects,
+            )
+        }
+
+    @Test
+    fun showProjectPicker_setsVisible_dismissClearsVisibleAndCreateError() =
+        runTest(testDispatcher) {
+            val repository =
+                FakeCatalogTerminalRepository(
+                    running = emptyList(),
+                    createFailure = IllegalStateException("nope"),
+                )
+            val viewModel = viewModel(repository = repository, worktrees = listOf("/repo"))
+
+            viewModel.appear()
+            advanceUntilIdle()
+            viewModel.showProjectPicker()
+
+            assertEquals(true, viewModel.uiState.value.isProjectPickerVisible)
+
+            viewModel.createShell("/repo")
+            viewModel.dismissProjectPicker()
+
+            assertEquals(false, viewModel.uiState.value.isProjectPickerVisible)
+            assertEquals(null, viewModel.uiState.value.createError)
+        }
+
+    @Test
+    fun createShell_prependsRowAndClearsPicker() =
+        runTest(testDispatcher) {
+            val createdSession = session("pty_new", "zsh")
+            val repository =
+                FakeCatalogTerminalRepository(
+                    running = listOf(RunningTerminal("/repo", session("pty_1", "term"))),
+                    createSession = createdSession,
+                )
+            val viewModel = viewModel(repository = repository, worktrees = listOf("/repo"))
+
+            viewModel.appear()
+            advanceUntilIdle()
+            viewModel.showProjectPicker()
+            val row = viewModel.createShell("/repo")
+
+            assertEquals(listOf("/repo" to "/repo"), repository.created)
+            assertTrue(repository.ensureRunningCalls.isEmpty())
+            assertEquals(
+                TerminalCatalogRow(
+                    id = "pty_new",
+                    title = "zsh",
+                    projectTitle = "repo",
+                    worktree = "/repo",
+                ),
+                row,
+            )
+            assertEquals(
+                listOf("pty_new", "pty_1"),
+                viewModel.uiState.value.rows
+                    .map { it.id },
+            )
+            assertEquals(false, viewModel.uiState.value.isProjectPickerVisible)
+            assertEquals(null, viewModel.uiState.value.createError)
+        }
+
+    @Test
+    fun createShell_failureLeavesRowsAndPickerAndSetsError() =
+        runTest(testDispatcher) {
+            val repository =
+                FakeCatalogTerminalRepository(
+                    running = listOf(RunningTerminal("/repo", session("pty_1", "term"))),
+                    createFailure = IllegalStateException("nope"),
+                )
+            val viewModel = viewModel(repository = repository, worktrees = listOf("/repo"))
+
+            viewModel.appear()
+            advanceUntilIdle()
+            viewModel.showProjectPicker()
+            val existingRows = viewModel.uiState.value.rows
+            val row = viewModel.createShell("/repo")
+
+            assertEquals(null, row)
+            assertEquals(existingRows, viewModel.uiState.value.rows)
+            assertEquals(true, viewModel.uiState.value.isProjectPickerVisible)
+            assertEquals("Could not start a shell.", viewModel.uiState.value.createError)
+        }
+
+    @Test
+    fun createShell_whileInFlight_doesNotCallCreateAgain() =
+        runTest(testDispatcher) {
+            val gate = CompletableDeferred<Unit>()
+            val repository =
+                FakeCatalogTerminalRepository(
+                    running = emptyList(),
+                    createSession = session("pty_new", "zsh"),
+                    createGate = gate,
+                )
+            val viewModel = viewModel(repository = repository, worktrees = listOf("/repo"))
+
+            viewModel.appear()
+            advanceUntilIdle()
+            val first = launch { viewModel.createShell("/repo") }
+            advanceUntilIdle()
+
+            assertEquals(listOf("/repo" to "/repo"), repository.created)
+
+            val second = viewModel.createShell("/repo")
+            assertEquals(null, second)
+            assertEquals(listOf("/repo" to "/repo"), repository.created)
+
+            gate.complete(Unit)
+            first.join()
+        }
+
+    @Test
+    fun createShell_unknownWorktree_doesNotCallCreate() =
+        runTest(testDispatcher) {
+            val repository =
+                FakeCatalogTerminalRepository(
+                    running = emptyList(),
+                    createSession = session("pty_new", "zsh"),
+                )
+            val viewModel = viewModel(repository = repository, worktrees = listOf("/repo"))
+
+            viewModel.appear()
+            advanceUntilIdle()
+            viewModel.showProjectPicker()
+            val row = viewModel.createShell("/unknown")
+
+            assertEquals(null, row)
+            assertTrue(repository.created.isEmpty())
+            assertEquals(true, viewModel.uiState.value.isProjectPickerVisible)
+        }
+
     private suspend fun viewModel(
         repository: FakeCatalogTerminalRepository,
         worktrees: List<String>,
@@ -276,16 +437,26 @@ class TerminalsCatalogViewModelTest {
 
 private class FakeCatalogTerminalRepository(
     private val running: List<RunningTerminal>,
+    private val createSession: TerminalSession? = null,
+    private val createFailure: Throwable? = null,
+    private val createGate: CompletableDeferred<Unit>? = null,
 ) : TerminalRepository {
     val listedDirectories = mutableListOf<List<String>>()
     val removed = mutableListOf<Pair<String, String>>()
+    val created = mutableListOf<Pair<String, String>>()
+    val ensureRunningCalls = mutableListOf<String>()
 
     override suspend fun list(directory: String): List<TerminalSession> = error("unused")
 
     override suspend fun create(
         directory: String,
         cwd: String,
-    ): TerminalSession = error("unused")
+    ): TerminalSession {
+        created += directory to cwd
+        createGate?.await()
+        createFailure?.let { throw it }
+        return createSession ?: error("unused")
+    }
 
     override suspend fun get(
         id: String,
@@ -299,7 +470,10 @@ private class FakeCatalogTerminalRepository(
         rows: Int,
     ): TerminalSession = error("unused")
 
-    override suspend fun ensureRunning(directory: String): TerminalSession = error("unused")
+    override suspend fun ensureRunning(directory: String): TerminalSession {
+        ensureRunningCalls += directory
+        error("unused")
+    }
 
     override suspend fun remove(
         id: String,

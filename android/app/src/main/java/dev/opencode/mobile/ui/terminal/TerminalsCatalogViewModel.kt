@@ -23,10 +23,19 @@ data class TerminalCatalogRow(
     val worktree: String,
 )
 
+data class TerminalCatalogProject(
+    val worktree: String,
+    val title: String,
+)
+
 data class TerminalsCatalogUiState(
     val rows: List<TerminalCatalogRow> = emptyList(),
     val isLoading: Boolean = true,
     val pendingClose: TerminalCatalogRow? = null,
+    val projects: List<TerminalCatalogProject> = emptyList(),
+    val isProjectPickerVisible: Boolean = false,
+    val isCreating: Boolean = false,
+    val createError: String? = null,
 )
 
 @HiltViewModel
@@ -44,15 +53,69 @@ class TerminalsCatalogViewModel
             viewModelScope.launch {
                 val connection = activeConnectionManager.current()
                 if (connection == null) {
-                    _uiState.update { it.copy(isLoading = false) }
+                    _uiState.update { it.copy(isLoading = false, projects = emptyList()) }
                     return@launch
                 }
                 val worktrees = connectionProfileStore.addedWorktrees(connection.baseUrl)
                 val running =
                     runCatching { terminalRepository.listRunning(worktrees) }
                         .getOrDefault(emptyList())
-                _uiState.update { it.copy(rows = running.map { it.toRow() }, isLoading = false) }
+                val projects =
+                    worktrees.map { worktree ->
+                        TerminalCatalogProject(
+                            worktree = worktree,
+                            title = ProjectDomainAdapter.displayNameFromWorktree(worktree),
+                        )
+                    }
+                _uiState.update {
+                    it.copy(
+                        rows = running.map { running -> running.toRow() },
+                        projects = projects,
+                        isLoading = false,
+                    )
+                }
             }
+        }
+
+        fun showProjectPicker() {
+            _uiState.update { it.copy(isProjectPickerVisible = true) }
+        }
+
+        fun dismissProjectPicker() {
+            _uiState.update { it.copy(isProjectPickerVisible = false, createError = null) }
+        }
+
+        suspend fun createShell(worktree: String): TerminalCatalogRow? {
+            val state = _uiState.value
+            if (state.isCreating) return null
+            val project = state.projects.firstOrNull { it.worktree == worktree } ?: return null
+            _uiState.update { it.copy(isCreating = true, createError = null) }
+            return runCatching {
+                terminalRepository.create(directory = worktree, cwd = worktree)
+            }.fold(
+                onSuccess = { session ->
+                    val row =
+                        TerminalCatalogRow(
+                            id = session.id,
+                            title = catalogTitle(session),
+                            projectTitle = project.title,
+                            worktree = worktree,
+                        )
+                    _uiState.update { current ->
+                        current.copy(
+                            rows = listOf(row) + current.rows,
+                            isProjectPickerVisible = false,
+                            isCreating = false,
+                            createError = null,
+                        )
+                    }
+                    row
+                },
+                onFailure = {
+                    _uiState.update { it.copy(isCreating = false, createError = "Could not start a shell.") }
+                    null
+                },
+            )
         }
 
         fun requestClose(row: TerminalCatalogRow) {

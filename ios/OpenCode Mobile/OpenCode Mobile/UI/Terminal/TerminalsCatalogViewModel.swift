@@ -10,12 +10,21 @@ struct TerminalCatalogRow: Equatable {
     var worktreeAndId: String { "\(worktree):\(id)" }
 }
 
+struct TerminalCatalogProject: Equatable {
+    let worktree: String
+    let title: String
+}
+
 @MainActor
 @Observable
 final class TerminalsCatalogViewModel {
     private(set) var rows: [TerminalCatalogRow] = []
     private(set) var isLoading = true
     private(set) var pendingClose: TerminalCatalogRow?
+    private(set) var projects: [TerminalCatalogProject] = []
+    private(set) var isProjectPickerVisible = false
+    private(set) var isCreating = false
+    private(set) var createError: String?
 
     private let repository: any TerminalRepository
     private let activeConnectionManager: ActiveConnectionManager
@@ -33,10 +42,17 @@ final class TerminalsCatalogViewModel {
 
     func appear() async {
         guard let connection = activeConnectionManager.connection else {
+            projects = []
             isLoading = false
             return
         }
         let worktrees = await connectionProfileStore.addedWorktrees(serverBaseURL: connection.baseURL.absoluteString)
+        projects = worktrees.map { worktree in
+            TerminalCatalogProject(
+                worktree: worktree,
+                title: ProjectDomainAdapter.displayName(from: worktree)
+            )
+        }
         let running = (try? await repository.listRunning(directories: worktrees)) ?? []
         rows = running.map { item in
             TerminalCatalogRow(
@@ -47,6 +63,40 @@ final class TerminalsCatalogViewModel {
             )
         }
         isLoading = false
+    }
+
+    func showProjectPicker() {
+        isProjectPickerVisible = true
+    }
+
+    func dismissProjectPicker() {
+        isProjectPickerVisible = false
+        createError = nil
+    }
+
+    func createShell(worktree: String) async -> TerminalCatalogRow? {
+        if isCreating { return nil }
+        guard let project = projects.first(where: { $0.worktree == worktree }) else {
+            return nil
+        }
+        isCreating = true
+        defer { isCreating = false }
+        do {
+            let session = try await repository.create(directory: worktree, cwd: worktree)
+            let row = TerminalCatalogRow(
+                id: session.id,
+                title: catalogTitle(session),
+                projectTitle: project.title,
+                worktree: worktree
+            )
+            rows.insert(row, at: 0)
+            isProjectPickerVisible = false
+            createError = nil
+            return row
+        } catch {
+            createError = "Could not start a shell."
+            return nil
+        }
     }
 
     func requestClose(_ row: TerminalCatalogRow) {
