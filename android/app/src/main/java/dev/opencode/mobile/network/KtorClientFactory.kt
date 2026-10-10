@@ -4,6 +4,8 @@ import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
+import io.ktor.client.plugins.HttpRequestRetry
+import io.ktor.client.plugins.HttpRequestRetryEvent
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.HttpTimeoutConfig
 import io.ktor.client.plugins.auth.Auth
@@ -37,55 +39,90 @@ object KtorClientFactory {
         allowRedirects: Boolean = true,
     ): HttpClient {
         HttpEngineShutdownGuard.install()
-        return HttpClient(OkHttp) {
-            followRedirects = allowRedirects
-            engine {
-                config {
-                    // Keep connect fail-fast. Read/call stay open so Ktor HttpTimeout (and
-                    // per-request overrides) can bound normal calls without OkHttp's 10s default
-                    // cutting long ops like POST …/summarize mid-compaction.
-                    connectTimeout(if (probe) 3 else if (sse) 5 else 10, TimeUnit.SECONDS)
-                    readTimeout(0, TimeUnit.MILLISECONDS)
-                    writeTimeout(if (probe) 60 else 0, TimeUnit.SECONDS)
-                    callTimeout(0, TimeUnit.MILLISECONDS)
-                    dispatcher(nonAbortingDispatcher())
+        val connectSeconds =
+            when {
+                probe -> 3L
+                sse -> 5L
+                else -> 10L
+            }
+        val writeSeconds = if (probe) 60L else 0L
+        val connectMillis =
+            when {
+                probe -> 3_000L
+                sse -> 5_000L
+                else -> 10_000L
+            }
+        val client =
+            HttpClient(OkHttp) {
+                followRedirects = allowRedirects
+                engine {
+                    config {
+                        // Keep connect fail-fast. Read/call stay open so Ktor HttpTimeout (and
+                        // per-request overrides) can bound normal calls without OkHttp's 10s default
+                        // cutting long ops like POST …/summarize mid-compaction.
+                        connectTimeout(connectSeconds, TimeUnit.SECONDS)
+                        readTimeout(0, TimeUnit.MILLISECONDS)
+                        writeTimeout(writeSeconds, TimeUnit.SECONDS)
+                        callTimeout(0, TimeUnit.MILLISECONDS)
+                        dispatcher(nonAbortingDispatcher())
+                    }
                 }
-            }
-            install(HttpTimeout) {
-                connectTimeoutMillis = if (probe) 3_000 else if (sse) 5_000 else 10_000
-                if (sse) {
-                    requestTimeoutMillis = HttpTimeoutConfig.INFINITE_TIMEOUT_MS
-                    socketTimeoutMillis = HttpTimeoutConfig.INFINITE_TIMEOUT_MS
-                } else if (probe) {
-                    requestTimeoutMillis = 5_000
-                    socketTimeoutMillis = 5_000
-                } else {
-                    // Default REST ceiling; long endpoints override per request.
-                    requestTimeoutMillis = 60_000
-                    socketTimeoutMillis = 60_000
-                }
-            }
-            if (contentNegotiation) {
-                install(ContentNegotiation) { json(json) }
-            }
-            install(Logging) {
-                logger = AndroidApiLogger
-                level = LogLevel.INFO
-                sanitizeHeader { header -> header == HttpHeaders.Authorization }
-            }
-            defaultRequest { url(connection.apiBaseUrl) }
-            val password = connection.password
-            if (!password.isNullOrEmpty()) {
-                install(Auth) {
-                    basic {
-                        credentials {
-                            BasicAuthCredentials(username = connection.username, password = password)
+                if (!sse) {
+                    install(HttpRequestRetry) {
+                        // Default policy retries 5xx. A prompt POST that reached the server must not
+                        // be sent again. Only the zero-byte status-line EOF is replayed.
+                        noRetry()
+                        retryOnExceptionIf(maxRetries = StalePooledConnection.MAX_RETRIES) { _, cause ->
+                            StalePooledConnection.isRetryable(cause)
                         }
-                        sendWithoutRequest { true }
+                        delayMillis(respectRetryAfterHeader = false) { 0L }
+                    }
+                }
+                install(HttpTimeout) {
+                    connectTimeoutMillis = connectMillis
+                    if (sse) {
+                        requestTimeoutMillis = HttpTimeoutConfig.INFINITE_TIMEOUT_MS
+                        socketTimeoutMillis = HttpTimeoutConfig.INFINITE_TIMEOUT_MS
+                    } else if (probe) {
+                        requestTimeoutMillis = 5_000
+                        socketTimeoutMillis = 5_000
+                    } else {
+                        // Default REST ceiling; long endpoints override per request.
+                        requestTimeoutMillis = 60_000
+                        socketTimeoutMillis = 60_000
+                    }
+                }
+                if (contentNegotiation) {
+                    install(ContentNegotiation) { json(json) }
+                }
+                install(Logging) {
+                    logger = AndroidApiLogger
+                    level = LogLevel.INFO
+                    sanitizeHeader { header -> header == HttpHeaders.Authorization }
+                }
+                defaultRequest { url(connection.apiBaseUrl) }
+                val password = connection.password
+                if (!password.isNullOrEmpty()) {
+                    install(Auth) {
+                        basic {
+                            credentials {
+                                BasicAuthCredentials(username = connection.username, password = password)
+                            }
+                            sendWithoutRequest { true }
+                        }
                     }
                 }
             }
+        if (!sse) {
+            client.monitor.subscribe(HttpRequestRetryEvent) { event ->
+                DiagnosticLog.warning(
+                    DiagnosticLogArea.Connection,
+                    "stale connection retry attempt=${event.retryCount}",
+                    event.cause,
+                )
+            }
         }
+        return client
     }
 
     /**
