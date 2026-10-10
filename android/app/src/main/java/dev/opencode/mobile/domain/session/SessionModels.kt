@@ -55,7 +55,25 @@ sealed class SessionActivity {
         val attempt: Int? = null,
         val nextAtMs: Long? = null,
         val message: String? = null,
-    ) : SessionActivity()
+        val errorType: String? = null,
+        val actionLabel: String? = null,
+        val actionLink: String? = null,
+    ) : SessionActivity() {
+
+        /** Live countdown card. Content-filter retries stay a caption only. */
+        fun retryCard(): SessionRetryCard? {
+            if (errorType.equals("provider.content-filter", ignoreCase = true)) return null
+            val at = nextAtMs ?: return null
+            val text = message?.trim()?.take(80)?.takeIf { it.isNotEmpty() } ?: "Retrying"
+            return SessionRetryCard(
+                message = text,
+                attempt = attempt,
+                nextAtMs = at,
+                actionLabel = actionLabel?.trim()?.takeIf { it.isNotEmpty() },
+                actionLink = actionLink?.trim()?.takeIf { it.isNotEmpty() },
+            )
+        }
+    }
 
     fun isBusy(): Boolean = this is Running || this is Retrying
 
@@ -65,6 +83,17 @@ sealed class SessionActivity {
             Running -> "Working"
             is Retrying -> if (attempt != null) "Retrying · $attempt" else "Retrying"
         }
+
+    /**
+     * In-chat label. The home list keeps [statusLabel] ("Retrying · N") because
+     * it parses the attempt off that exact prefix.
+     */
+    fun chatStatusLabel(): String? {
+        val base = statusLabel()
+        if (this !is Retrying) return base
+        val reason = message?.trim()?.take(80)?.takeIf { it.isNotEmpty() } ?: return base
+        return "${base ?: "Retrying"} · $reason"
+    }
 }
 
 enum class SessionActivitySource {
@@ -96,6 +125,9 @@ fun SessionStatus.toSessionActivity(): SessionActivity =
                         ?: raw["nextAt"]?.toLongOrNull()
                         ?: raw["nextAtMs"]?.toLongOrNull(),
                 message = raw["message"],
+                errorType = raw["errorType"],
+                actionLabel = raw["actionLabel"],
+                actionLink = raw["actionLink"],
             )
         else -> SessionActivity.Idle
     }

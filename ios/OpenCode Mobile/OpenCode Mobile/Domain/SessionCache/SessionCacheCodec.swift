@@ -185,6 +185,10 @@ nonisolated private struct CachedMessagePayload: Codable, Sendable {
     let contextInputTokens: Int64?
     let contextEstimate: CachedMessageContextEstimatePayload
     let stopReason: String?
+    let failureType: String?
+    let failureMessage: String?
+    let failureStatus: Int?
+    let failureBody: String?
 
     init(
         id: String,
@@ -202,7 +206,11 @@ nonisolated private struct CachedMessagePayload: Codable, Sendable {
         completedAtEpochMs: Int64? = nil,
         contextInputTokens: Int64? = nil,
         contextEstimate: CachedMessageContextEstimatePayload = CachedMessageContextEstimatePayload(),
-        stopReason: String? = nil
+        stopReason: String? = nil,
+        failureType: String? = nil,
+        failureMessage: String? = nil,
+        failureStatus: Int? = nil,
+        failureBody: String? = nil
     ) {
         self.id = id
         self.role = role
@@ -220,6 +228,10 @@ nonisolated private struct CachedMessagePayload: Codable, Sendable {
         self.contextInputTokens = contextInputTokens
         self.contextEstimate = contextEstimate
         self.stopReason = stopReason
+        self.failureType = failureType
+        self.failureMessage = failureMessage
+        self.failureStatus = failureStatus
+        self.failureBody = failureBody
     }
 
     init(from decoder: Decoder) throws {
@@ -243,6 +255,10 @@ nonisolated private struct CachedMessagePayload: Codable, Sendable {
             forKey: .contextEstimate
         ) ?? CachedMessageContextEstimatePayload()
         stopReason = try container.decodeIfPresent(String.self, forKey: .stopReason)
+        failureType = try container.decodeIfPresent(String.self, forKey: .failureType)
+        failureMessage = try container.decodeIfPresent(String.self, forKey: .failureMessage)
+        failureStatus = try container.decodeIfPresent(Int.self, forKey: .failureStatus)
+        failureBody = try container.decodeIfPresent(String.self, forKey: .failureBody)
     }
 }
 
@@ -269,6 +285,7 @@ nonisolated private struct CachedMessagePartPayload: Codable, Sendable {
     let timeEndEpochMs: Int64?
     let auto: Bool?
     let isInterrupted: Bool
+    let isMalformed: Bool
 
     init(
         kind: String,
@@ -292,7 +309,8 @@ nonisolated private struct CachedMessagePartPayload: Codable, Sendable {
         timeStartEpochMs: Int64? = nil,
         timeEndEpochMs: Int64? = nil,
         auto: Bool? = nil,
-        isInterrupted: Bool = false
+        isInterrupted: Bool = false,
+        isMalformed: Bool = false
     ) {
         self.kind = kind
         self.id = id
@@ -316,6 +334,7 @@ nonisolated private struct CachedMessagePartPayload: Codable, Sendable {
         self.timeEndEpochMs = timeEndEpochMs
         self.auto = auto
         self.isInterrupted = isInterrupted
+        self.isMalformed = isMalformed
     }
 
     init(from decoder: Decoder) throws {
@@ -342,6 +361,7 @@ nonisolated private struct CachedMessagePartPayload: Codable, Sendable {
         timeEndEpochMs = try container.decodeIfPresent(Int64.self, forKey: .timeEndEpochMs)
         auto = try container.decodeIfPresent(Bool.self, forKey: .auto)
         isInterrupted = try container.decodeIfPresent(Bool.self, forKey: .isInterrupted) ?? false
+        isMalformed = try container.decodeIfPresent(Bool.self, forKey: .isMalformed) ?? false
     }
 }
 
@@ -453,7 +473,7 @@ private extension SessionActivityCacheEntry {
         case .running:
             type = "running"
             attempt = nil
-        case let .retrying(value, _, _):
+        case let .retrying(value, _, _, _, _, _):
             type = "retry"
             attempt = value
         }
@@ -473,7 +493,14 @@ private extension CachedActivityEntryPayload {
         case "busy", "running":
             activity = .running
         case "retry":
-            activity = .retrying(attempt: attempt, nextAtMs: nil, message: nil)
+            activity = .retrying(
+                attempt: attempt,
+                nextAtMs: nil,
+                message: nil,
+                errorType: nil,
+                actionLabel: nil,
+                actionLink: nil
+            )
         default:
             activity = .idle
         }
@@ -503,7 +530,11 @@ private extension Message {
             completedAtEpochMs: completedAtEpochMs,
             contextInputTokens: contextInputTokens,
             contextEstimate: contextEstimate.toCachePayload(),
-            stopReason: stopReason?.rawValue
+            stopReason: stopReason?.rawValue,
+            failureType: failure?.type,
+            failureMessage: failure?.message,
+            failureStatus: failure?.status,
+            failureBody: failure?.providerBody
         )
     }
 }
@@ -526,7 +557,15 @@ private extension CachedMessagePayload {
             completedAtEpochMs: completedAtEpochMs,
             contextInputTokens: contextInputTokens,
             contextEstimate: contextEstimate.toDomain(),
-            stopReason: stopReason.flatMap(MessageStopReason.init(rawValue:))
+            stopReason: stopReason.flatMap(MessageStopReason.init(rawValue:)),
+            failure: (failureMessage != nil || failureType != nil || failureBody != nil || failureStatus != nil)
+                ? SessionFailure(
+                    type: failureType,
+                    message: failureMessage ?? "",
+                    status: failureStatus,
+                    providerBody: failureBody
+                )
+                : nil
         )
     }
 }
@@ -602,7 +641,8 @@ private extension MessagePart {
                 output: part.output,
                 metadata: part.metadata,
                 timeStartEpochMs: part.timeStartEpochMs,
-                isInterrupted: part.isInterrupted
+                isInterrupted: part.isInterrupted,
+                isMalformed: part.isMalformed
             )
         case let .file(part):
             return CachedMessagePartPayload(
@@ -660,7 +700,8 @@ private extension CachedMessagePartPayload {
                     output: output,
                     metadata: metadata,
                     timeStartEpochMs: timeStartEpochMs,
-                    isInterrupted: isInterrupted
+                    isInterrupted: isInterrupted,
+                    isMalformed: isMalformed
                 )
             )
         case "file":

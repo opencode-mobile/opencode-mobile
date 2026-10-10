@@ -1,1 +1,1 @@
-../../../../../../../../../app/src/main/java/dev/opencode/mobile/ui/components/OpenCodeTopBar.kt
+../../../../../../../../../app/src/main/java/dev/opencode/mobile/ui/components/chrome/OpenCodeTopBar.kt

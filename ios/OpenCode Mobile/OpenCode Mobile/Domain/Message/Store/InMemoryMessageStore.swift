@@ -126,14 +126,16 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
             let live = adapter.message(info: info, domainParts: sortedParts)
             let message: Message
             // A delivered REST copy is the authority; a waiting inbox copy only guessed.
+            // An omitted error is partial. An explicit null is a clear and must win.
+            let failureOmitted = infoDict["error"] == nil
             if let stamp = contextStamps[sessionID]?[messageID] {
                 if let base, !base.isWaitingForPickup {
-                    message = stamp.stamp(live.withMetadata(from: base))
+                    message = stamp.stamp(live.withMetadata(from: base, failureOmitted: failureOmitted))
                 } else {
-                    message = stamp.stamp(live).withMetadata(from: base)
+                    message = stamp.stamp(live).withMetadata(from: base, failureOmitted: failureOmitted)
                 }
             } else {
-                message = live.withMetadata(from: base)
+                message = live.withMetadata(from: base, failureOmitted: failureOmitted)
             }
             return hasRenderableContent(message) ? message : baseByID[messageID]
         }
@@ -164,7 +166,8 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
             contextEstimate: baseMessage.contextEstimate,
             followUpDelivery: baseMessage.followUpDelivery,
             isWaitingForPickup: baseMessage.isWaitingForPickup,
-            stopReason: baseMessage.stopReason
+            stopReason: baseMessage.stopReason,
+            failure: baseMessage.failure
         )
     }
 
@@ -596,7 +599,8 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
                     output: tool.output,
                     metadata: tool.metadata,
                     timeStartEpochMs: tool.timeStartEpochMs,
-                    isInterrupted: tool.isInterrupted
+                    isInterrupted: tool.isInterrupted,
+                    isMalformed: tool.isMalformed
                 )
             )
             return SessionChangeSet(
@@ -978,7 +982,9 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
     }
 
     private func hasRenderableContent(_ message: Message) -> Bool {
-        !message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !message.parts.isEmpty
+        !message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !message.parts.isEmpty
+            || message.failure != nil
     }
 
     private func anySendableToJSON(_ value: AnySendable) -> Any {
@@ -1153,7 +1159,8 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
                         output: tool.output,
                         metadata: tool.metadata,
                         timeStartEpochMs: tool.timeStartEpochMs,
-                        isInterrupted: tool.isInterrupted
+                        isInterrupted: tool.isInterrupted,
+                        isMalformed: tool.isMalformed
                     )
                 )
             }
@@ -1179,7 +1186,8 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
                     output: nonEmpty(next.output) ?? prior.output,
                     metadata: mergeDict(prior.metadata, next.metadata),
                     timeStartEpochMs: next.timeStartEpochMs ?? prior.timeStartEpochMs,
-                    isInterrupted: next.isInterrupted
+                    isInterrupted: next.isInterrupted,
+                    isMalformed: next.isMalformed || prior.isMalformed
                 )
             )
         case (.text(let prior), .text(let next)):

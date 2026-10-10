@@ -8,6 +8,7 @@ import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessageContextEstimate
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.message.SessionFailure
 import dev.opencode.mobile.domain.message.MessageStopReason
 import dev.opencode.mobile.domain.message.MessageTokenUsage
 import dev.opencode.mobile.domain.message.ToolStatus
@@ -183,6 +184,10 @@ internal data class CachedMessagePayload(
     val contextInputTokens: Long? = null,
     val contextEstimate: CachedMessageContextEstimatePayload = CachedMessageContextEstimatePayload(),
     val stopReason: String? = null,
+    val failureType: String? = null,
+    val failureMessage: String? = null,
+    val failureStatus: Int? = null,
+    val failureBody: String? = null,
 )
 
 @Serializable
@@ -209,6 +214,7 @@ internal data class CachedMessagePartPayload(
     val timeEndEpochMs: Long? = null,
     val auto: Boolean = false,
     val isInterrupted: Boolean = false,
+    val isMalformed: Boolean = false,
 )
 
 @Serializable
@@ -324,6 +330,10 @@ private fun Message.toCachePayload(): CachedMessagePayload =
         contextInputTokens = contextInputTokens,
         contextEstimate = contextEstimate.toCachePayload(),
         stopReason = stopReason?.name?.lowercase(),
+        failureType = failure?.type,
+        failureMessage = failure?.message,
+        failureStatus = failure?.status,
+        failureBody = failure?.providerBody,
     )
 
 private fun CachedMessagePayload.toDomain(): Message =
@@ -344,6 +354,17 @@ private fun CachedMessagePayload.toDomain(): Message =
         contextInputTokens = contextInputTokens,
         contextEstimate = contextEstimate.toDomain(),
         stopReason = MessageStopReason.entries.firstOrNull { it.name.equals(stopReason, ignoreCase = true) },
+        failure =
+            if (failureMessage != null || failureType != null || failureBody != null || failureStatus != null) {
+                SessionFailure(
+                    type = failureType,
+                    message = failureMessage.orEmpty(),
+                    status = failureStatus,
+                    providerBody = failureBody,
+                )
+            } else {
+                null
+            },
     )
 
 private fun MessageTokenUsage.toCachePayload(): CachedMessageTokenUsagePayload =
@@ -405,6 +426,7 @@ private fun MessagePart.toCachePayload(): CachedMessagePartPayload? =
                 metadata = metadata,
                 timeStartEpochMs = timeStartEpochMs,
                 isInterrupted = isInterrupted,
+                isMalformed = isMalformed,
             )
         is MessagePart.File ->
             CachedMessagePartPayload(
@@ -459,6 +481,7 @@ private fun CachedMessagePartPayload.toDomain(): MessagePart? =
                 id = id,
                 timeStartEpochMs = timeStartEpochMs,
                 isInterrupted = isInterrupted,
+                isMalformed = isMalformed,
             )
         "file" -> {
             val fileId = id ?: return null

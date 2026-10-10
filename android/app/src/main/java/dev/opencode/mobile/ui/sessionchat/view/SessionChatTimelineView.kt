@@ -37,6 +37,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -48,6 +49,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,6 +58,7 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.onGloballyPositioned
+
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -67,6 +70,7 @@ import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.MessageStopReason
+
 import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.theme.openCodeColor
@@ -120,6 +124,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.yield
 
+private val LocalHideLiveRetryFailures = staticCompositionLocalOf { false }
+
 internal data class SessionChatTimelineViewProps(
     val timeline: SessionChatTimelineState,
     val messages: List<SessionChatMessageItem>,
@@ -138,6 +144,8 @@ internal data class SessionChatTimelineViewProps(
     val sessionTodoTotalCount: Int = 0,
     val sessionTodoActivePreview: String? = null,
     val hideFloatStack: Boolean = false,
+    /** Hide rate-limit and quota marks while the composer retry status is showing. */
+    val hideLiveRetryFailures: Boolean = false,
     /** Extra bottom inset so the timeline can scroll under a floating composer. */
     val bottomOverlayInset: Dp = 0.dp,
     val onRefresh: () -> Unit,
@@ -210,6 +218,7 @@ internal fun SessionChatTimelineView(
             }
 
         SessionChatTimelineState.Ready -> {
+            CompositionLocalProvider(LocalHideLiveRetryFailures provides props.hideLiveRetryFailures) {
             SessionChatTimelineReadyView(
                 messages = props.messages,
                 timelineFrame = props.timelineFrame,
@@ -242,6 +251,7 @@ internal fun SessionChatTimelineView(
                 onExpandStepParagraph = props.onExpandStepParagraph,
                 modifier = modifier,
             )
+            }
         }
     }
 }
@@ -649,6 +659,7 @@ private fun SessionChatMessageItem.outgoingContent(): List<OpenCodeOutgoingMessa
             is SessionChatTimelineBlock.Reasoning,
             is SessionChatTimelineBlock.StepParagraph,
             is SessionChatTimelineBlock.StopNote,
+            is SessionChatTimelineBlock.FailureLine,
             -> null
         }
     }
@@ -790,6 +801,14 @@ private fun AssistantMessageContent(
                                     MessageStopReason.Interrupted -> OpenCodeMessageNoteVariant.Interrupted
                                 },
                         )
+                    is SessionChatTimelineBlock.FailureLine -> {
+                        if (!LocalHideLiveRetryFailures.current || !block.coveredByLiveRetry) {
+                            FailureLineBlock(
+                                block = block,
+                                onToolDetailTap = onToolDetailTap,
+                            )
+                        }
+                    }
                     is SessionChatTimelineBlock.StepParagraph ->
                         StepParagraphBlock(
                             block = block,
@@ -823,6 +842,25 @@ private fun AssistantMessageContent(
             }
         }
     }
+}
+
+@Composable
+private fun FailureLineBlock(
+    block: SessionChatTimelineBlock.FailureLine,
+    onToolDetailTap: (SessionChatToolDetailTarget) -> Unit,
+) {
+    val target =
+        sessionFailureDetailTarget(
+            text = block.text,
+            providerBody = block.providerBody,
+            action = block.action,
+            actionLabel = block.actionLabel,
+        )
+    SessionFailureCaption(
+        text = block.text,
+        isNeutral = block.isNeutral,
+        onOpen = target?.let { detail -> { onToolDetailTap(detail) } },
+    )
 }
 
 private const val STEP_PARAGRAPH_PLACEHOLDER = "Worked without commentary"

@@ -3,6 +3,7 @@ package dev.opencode.mobile.domain.event
 import dev.opencode.mobile.domain.session.SessionActivity
 import dev.opencode.mobile.domain.session.SessionStatus
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.intOrNull
@@ -951,6 +952,57 @@ class EventDomainAdapterTest {
     }
 
     @Test
+    fun parseEvents_toastsStructuredCompactionFailureWhenNoRowCanBeBuilt() {
+        val events =
+            adapter.parseEvents(
+                """{"type":"session.compaction.failed","data":{"sessionID":"ses-1",""" +
+                    """"error":{"type":"compaction.failed","message":"Could not compact"}}}""",
+            )
+
+        assertEquals(listOf("session.error", "session.idle"), events.map { it.type })
+    }
+
+    @Test
+    fun parseEvents_skipsCompactionToastWhenTheRowCarriesTheError() {
+        val events =
+            adapter.parseEvents(
+                """{"type":"session.compaction.failed","data":{"sessionID":"ses-1","messageID":"msg-c",""" +
+                    """"error":{"type":"compaction.failed","message":"Could not compact"}}}""",
+            )
+
+        assertEquals(listOf("message.updated", "message.part.updated", "session.idle"), events.map { it.type })
+        assertEquals(
+            "Could not compact",
+            events[0]
+                .rawProperties
+                ?.get("info")
+                ?.jsonObject
+                ?.get("error")
+                ?.jsonObject
+                ?.get("data")
+                ?.jsonObject
+                ?.get("message")
+                ?.jsonPrimitive
+                ?.content,
+        )
+    }
+
+    @Test
+    fun parseEvents_clearsCompactionErrorWhenTheRetryEnds() {
+        val error =
+            adapter
+                .parseEvents(
+                    """{"type":"session.compaction.ended","data":{"sessionID":"ses-1","messageID":"msg-c"}}""",
+                ).single { it.type == "message.updated" }
+                .rawProperties
+                ?.get("info")
+                ?.jsonObject
+                ?.get("error")
+
+        assertEquals(JsonNull, error)
+    }
+
+    @Test
     fun parseEvents_projectsLiveCompactionFailedIntoPartErrorAndIdle() {
         val events =
             adapter.parseEvents(
@@ -1232,6 +1284,52 @@ class EventDomainAdapterTest {
             SessionActivity.Retrying(attempt = 2, nextAtMs = 1234L, message = "backoff"),
             parsed?.activity,
         )
+        assertEquals("Retrying · 2", parsed?.activity?.statusLabel())
+        assertEquals("Retrying · 2 · backoff", parsed?.activity?.chatStatusLabel())
+    }
+
+    @Test
+    fun sessionActivityFromEvent_readsV2RetryAtAndErrorMessage() {
+        val events =
+            adapter.parseEvents(
+                """{"type":"session.retry.scheduled","data":{"sessionID":"ses-1","attempt":3,"at":9000,"error":{"type":"provider.rate-limit","message":"{\"type\":\"message\",\"message\":\"Slow down\"}"}}}""",
+            )
+        assertEquals(
+            SessionActivity.Retrying(attempt = 3, nextAtMs = 9000L, message = "Slow down", errorType = "provider.rate-limit"),
+            adapter.sessionActivityFromEvent(events.single())?.activity,
+        )
+    }
+
+    @Test
+    fun sessionActivityFromEvent_readsRetryAction() {
+        val events =
+            adapter.parseEvents(
+                """{"type":"session.retry.scheduled","data":{"sessionID":"ses-1","attempt":1,"at":4000,"error":{"type":"provider.quota","message":"Out of quota"},"action":{"label":"Upgrade","link":"https://example.com"}}}""",
+            )
+        val activity = adapter.sessionActivityFromEvent(events.single())?.activity as SessionActivity.Retrying
+        assertEquals("provider.quota", activity.errorType)
+        assertEquals("Upgrade", activity.actionLabel)
+        assertEquals("https://example.com", activity.actionLink)
+        assertEquals("Upgrade", activity.retryCard()?.actionLabel)
+        assertNull(
+            SessionActivity.Retrying(errorType = "provider.content-filter", nextAtMs = 1L).retryCard(),
+        )
+    }
+
+    @Test
+    fun stepFailed_withAssistantId_putsTheErrorOnTheMessageAndSkipsTheSnackbarEvent() {
+        val events =
+            adapter.parseEvents(
+                """{"type":"session.step.failed","data":{"sessionID":"ses-1","assistantMessageID":"a1","error":{"type":"provider.auth","message":"Sign in","status":401,"response":{"body":"denied"}}}}""",
+            )
+        assertEquals(listOf("message.updated"), events.map { it.type })
+        val info = events.single().rawProperties?.get("info") as kotlinx.serialization.json.JsonObject
+        val data = info["error"] as kotlinx.serialization.json.JsonObject
+        val payload = data["data"] as kotlinx.serialization.json.JsonObject
+        assertEquals("provider.auth", (data["name"] as kotlinx.serialization.json.JsonPrimitive).content)
+        assertEquals("Sign in", (payload["message"] as kotlinx.serialization.json.JsonPrimitive).content)
+        assertEquals("401", (payload["statusCode"] as kotlinx.serialization.json.JsonPrimitive).content)
+        assertEquals("denied", (payload["responseBody"] as kotlinx.serialization.json.JsonPrimitive).content)
     }
 
     @Test

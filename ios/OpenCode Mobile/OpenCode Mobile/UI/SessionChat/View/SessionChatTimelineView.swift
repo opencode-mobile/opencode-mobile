@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct SessionChatTimelineViewProps {
     let timeline: SessionChatTimelineState
@@ -18,6 +19,8 @@ struct SessionChatTimelineViewProps {
     let sessionTodoTotalCount: Int
     let sessionTodoActivePreview: String?
     let hideFloatStack: Bool
+    /// Hide rate-limit and quota marks while the composer retry status is showing.
+    let hideLiveRetryFailures: Bool
     /// Extra bottom inset so the timeline can scroll under a floating composer.
     let bottomOverlayInset: CGFloat
     let onRefresh: () async -> Void
@@ -56,6 +59,7 @@ struct SessionChatTimelineViewProps {
         sessionTodoTotalCount: Int = 0,
         sessionTodoActivePreview: String? = nil,
         hideFloatStack: Bool = false,
+        hideLiveRetryFailures: Bool = false,
         bottomOverlayInset: CGFloat = 0,
         onRefresh: @escaping () async -> Void,
         onRetry: @escaping () async -> Void = {},
@@ -90,6 +94,7 @@ struct SessionChatTimelineViewProps {
         self.sessionTodoTotalCount = sessionTodoTotalCount
         self.sessionTodoActivePreview = sessionTodoActivePreview
         self.hideFloatStack = hideFloatStack
+        self.hideLiveRetryFailures = hideLiveRetryFailures
         self.bottomOverlayInset = bottomOverlayInset
         self.onRefresh = onRefresh
         self.onRetry = onRetry
@@ -151,6 +156,18 @@ struct SessionChatTimelineView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.bottom, props.timeline == .ready ? 0 : props.bottomOverlayInset)
+        .environment(\.hideLiveRetryFailures, props.hideLiveRetryFailures)
+    }
+}
+
+private struct HideLiveRetryFailuresKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+private extension EnvironmentValues {
+    var hideLiveRetryFailures: Bool {
+        get { self[HideLiveRetryFailuresKey.self] }
+        set { self[HideLiveRetryFailuresKey.self] = newValue }
     }
 }
 
@@ -560,7 +577,7 @@ private extension SessionChatRow {
                 .text(id: blockID, text: text)
             case .attachment(_, let file):
                 .attachment(file.attachmentPresentation)
-            case .toolCard, .toolGroup, .childSessionRow, .reasoning, .stepParagraph, .stopNote:
+            case .toolCard, .toolGroup, .childSessionRow, .reasoning, .stepParagraph, .stopNote, .failureLine:
                 nil
             }
         }
@@ -594,6 +611,7 @@ private struct AssistantMessageContent: View {
     let message: SessionChatRow
     let onOpenMessageActions: () -> Void
     let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
+    @Environment(\.hideLiveRetryFailures) private var hideLiveRetryFailures
     let onToolGroupTap: (SessionChatToolGroupTarget) -> Void
     let onSkillsTap: (SessionChatSkillsTarget) -> Void
     let onChildSessionTap: (String, String) -> Void
@@ -705,6 +723,17 @@ private struct AssistantMessageContent: View {
                     )
                 case .stopNote(_, let reason):
                     OpenCodeMessageNote(variant: reason == .length ? .truncated : .interrupted)
+                case .failureLine(_, let text, let providerBody, let isNeutral, let action, let actionLabel, let covered):
+                    if !(hideLiveRetryFailures && covered) {
+                        FailureLineBlock(
+                            text: text,
+                            providerBody: providerBody,
+                            isNeutral: isNeutral,
+                            action: action,
+                            actionLabel: actionLabel,
+                            onToolDetailTap: onToolDetailTap
+                        )
+                    }
                 case .stepParagraph(_, let paragraph):
                     StepParagraphBlock(
                         paragraph: paragraph,
@@ -992,6 +1021,53 @@ private extension ToolStatus {
         case .running: .running
         case .completed: .completed
         case .error: interrupted ? .interrupted : .error
+        }
+    }
+}
+
+/// Quiet mark under a failed reply. A body or an action opens the detail sheet.
+private struct FailureLineBlock: View {
+    let text: String
+    let providerBody: String?
+    let isNeutral: Bool
+    let action: FailureAction?
+    let actionLabel: String?
+    let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
+
+    var body: some View {
+        let target = SessionChatToolDetailTarget.failure(
+            text: text,
+            providerBody: providerBody,
+            action: action,
+            actionLabel: actionLabel
+        )
+        HStack(alignment: .center, spacing: 8) {
+            Circle()
+                .fill(isNeutral ? OpenCodeColors.textWeak : OpenCodeColors.error)
+                .frame(width: 6, height: 6)
+            Text(text)
+                .font(OpenCodeTypography.caption)
+                .foregroundStyle(OpenCodeColors.textWeak)
+                .lineLimit(3)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, 4)
+        .contentShape(Rectangle())
+        .modifier(FailureMarkTap(target: target, onToolDetailTap: onToolDetailTap))
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(target == nil ? [] : .isButton)
+    }
+}
+
+private struct FailureMarkTap: ViewModifier {
+    let target: SessionChatToolDetailTarget?
+    let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
+
+    func body(content: Content) -> some View {
+        if let target {
+            content.onTapGesture { onToolDetailTap(target) }
+        } else {
+            content
         }
     }
 }

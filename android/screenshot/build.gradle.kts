@@ -26,6 +26,8 @@ android {
         getByName("main") {
             java.srcDir("../app/src/main/java/dev/opencode/mobile/theme")
             java.srcDir("../app/src/main/java/dev/opencode/mobile/ui/icons")
+            java.srcDir("../app/src/main/java/dev/opencode/mobile/ui/sessionchat/failure")
+            java.srcDir("../app/src/main/java/dev/opencode/mobile/ui/components/layout")
             assets.srcDir("../app/src/main/assets")
             res.srcDir("../app/src/main/res")
         }
@@ -56,6 +58,7 @@ dependencies {
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.core.ktx)
     implementation(libs.kotlinx.serialization.json)
     testImplementation(libs.junit)

@@ -2,6 +2,7 @@ package dev.opencode.mobile.ui.sessionchat
 
 import dev.opencode.mobile.domain.command.CommandInvocationCollapser
 import dev.opencode.mobile.domain.command.ServerCommand
+import dev.opencode.mobile.domain.message.FailureAction
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRole
@@ -56,12 +57,28 @@ sealed class SessionChatTimelineBlock {
         val changesInitialFilePath: String? = null,
         /** [status] is Error because the user stopped or declined it; render neutral. */
         val isInterrupted: Boolean = false,
+        val isMalformed: Boolean = false,
     ) : SessionChatTimelineBlock()
 
     /** Persistent note that the reply ended early (cut off or interrupted). */
     data class StopNote(
         override val blockID: String,
         val reason: MessageStopReason,
+    ) : SessionChatTimelineBlock()
+
+    /**
+     * A failed run under the reply. A provider body or an action opens the
+     * detail sheet. [isNeutral] is a permission rejection. [coveredByLiveRetry]
+     * is a rate-limit or quota the composer status already shows.
+     */
+    data class FailureLine(
+        override val blockID: String,
+        val text: String,
+        val providerBody: String? = null,
+        val isNeutral: Boolean = false,
+        val action: FailureAction? = null,
+        val actionLabel: String? = null,
+        val coveredByLiveRetry: Boolean = false,
     ) : SessionChatTimelineBlock()
 
     data class ToolGroup(
@@ -591,6 +608,7 @@ object SessionChatTimelineBlocks {
 
     private fun chipErrorLine(chip: SessionChatTimelineBlock.ToolChip): String? {
         if (chip.status != ToolStatus.Error || chip.card.isInterrupted) return null
+        if (chip.card.isMalformed) return "Not run: malformed tool call"
         return "${chip.label}: ${chip.card.errorText ?: "Failed"}"
     }
 
@@ -749,6 +767,18 @@ object SessionChatTimelineBlocks {
         )
     }
 
+    /** Newest rate-limit or quota body, for the composer status to open. */
+    fun newestLiveRetryProviderBody(messages: List<SessionChatMessageItem>): String? =
+        messages.asReversed().firstNotNullOfOrNull { message ->
+            message.blocks.firstNotNullOfOrNull { block ->
+                (block as? SessionChatTimelineBlock.FailureLine)
+                    ?.takeIf { it.coveredByLiveRetry }
+                    ?.providerBody
+                    ?.trim()
+                    ?.takeIf { it.isNotEmpty() }
+            }
+        }
+
     /**
      * Rows never render empty: drop blocks the timeline paints as nothing
      * (live thought is footer chrome) and fall back to the live placeholder.
@@ -779,13 +809,54 @@ object SessionChatTimelineBlocks {
         chipTimeline: Boolean = false,
     ): List<DisplayMessageBody> = mergeBodies(bodies, collapseConsecutiveToolCalls, chipTimeline).map(::withStopNote)
 
-    /** An assistant reply that ended early keeps a note under its last block. */
+    /** An assistant reply that ended early keeps a note under its last block, then any failure caption. */
     private fun withStopNote(body: DisplayMessageBody): DisplayMessageBody {
-        val reason = body.message.stopReason ?: return body
-        if (body.message.role != MessageRole.Assistant) return body
-        if (body.blocks.any { it is SessionChatTimelineBlock.StopNote }) return body
-        val note = SessionChatTimelineBlock.StopNote(blockID = "${body.message.id}:stop-note", reason = reason)
-        return body.copy(blocks = body.blocks + note)
+        var blocks = body.blocks
+        val reason = body.message.stopReason
+        if (reason != null &&
+            body.message.role == MessageRole.Assistant &&
+            blocks.none { it is SessionChatTimelineBlock.StopNote }
+        ) {
+            blocks =
+                blocks +
+                SessionChatTimelineBlock.StopNote(
+                    blockID = "${body.message.id}:stop-note",
+                    reason = reason,
+                )
+        }
+        val failure = body.message.failure
+        if (failure != null && failure.type?.startsWith("compaction.") == true) {
+            blocks =
+                blocks.map { block ->
+                    if (block is SessionChatTimelineBlock.ToolCard &&
+                        block.toolName == SessionCompactChrome.MARKER_TOOL_NAME
+                    ) {
+                        block.copy(status = ToolStatus.Error, errorText = failure.line())
+                    } else {
+                        block
+                    }
+                }
+        }
+        val compactionInline =
+            failure?.type?.startsWith("compaction.") == true &&
+                blocks.any {
+                    it is SessionChatTimelineBlock.ToolCard &&
+                        it.toolName == SessionCompactChrome.MARKER_TOOL_NAME
+                }
+        if (failure != null && !compactionInline && blocks.none { it is SessionChatTimelineBlock.FailureLine }) {
+            blocks =
+                blocks +
+                SessionChatTimelineBlock.FailureLine(
+                    blockID = "${body.message.id}:failure",
+                    text = failure.line(),
+                    providerBody = failure.providerBody,
+                    isNeutral = failure.isNeutral,
+                    action = failure.action(),
+                    actionLabel = failure.actionLabel(),
+                    coveredByLiveRetry = failure.coversLiveRetry(),
+                )
+        }
+        return if (blocks === body.blocks) body else body.copy(blocks = blocks)
     }
 
     private fun mergeBodies(
@@ -824,7 +895,14 @@ object SessionChatTimelineBlocks {
                     collapseConsecutiveToolCalls = true,
                 )
             merged +=
-                DisplayMessageBody(message = first.message.copy(stopReason = run.last().message.stopReason), blocks = blocks)
+                DisplayMessageBody(
+                    message =
+                        first.message.copy(
+                            stopReason = run.last().message.stopReason,
+                            failure = run.lastOrNull { it.message.failure != null }?.message?.failure,
+                        ),
+                    blocks = blocks,
+                )
             index = end
         }
         return merged
@@ -877,7 +955,12 @@ object SessionChatTimelineBlocks {
                 is SessionChatTimelineBlocksResult.Ok ->
                     merged +=
                         DisplayMessageBody(
-                            message = first.message.copy(parts = parts, stopReason = run.last().message.stopReason),
+                            message =
+                                first.message.copy(
+                                    parts = parts,
+                                    stopReason = run.last().message.stopReason,
+                                    failure = run.lastOrNull { it.message.failure != null }?.message?.failure,
+                                ),
                             blocks = reattachMarkdown(result.blocks, run),
                         )
                 SessionChatTimelineBlocksResult.MissingPartIds -> merged += run
@@ -933,6 +1016,7 @@ object SessionChatTimelineBlocks {
             is SessionChatTimelineBlock.Reasoning,
             is SessionChatTimelineBlock.StepParagraph,
             is SessionChatTimelineBlock.StopNote,
+            is SessionChatTimelineBlock.FailureLine,
             -> false
         }
 
@@ -1214,6 +1298,7 @@ object SessionChatTimelineBlocks {
             opensChangesReview = chrome.opensChangesReview,
             changesInitialFilePath = chrome.changesInitialFilePath,
             isInterrupted = interrupted,
+            isMalformed = tool.isMalformed,
         )
     }
 
@@ -1536,8 +1621,10 @@ object SessionChatTimelineBlocks {
     private fun settledDetail(tool: MessagePart.Tool): String? =
         when (tool.status) {
             ToolStatus.Completed, ToolStatus.Error ->
-                tool.output?.takeIf { it.isNotEmpty() }
-                    ?: tool.error?.takeIf { it.isNotEmpty() }
+                listOfNotNull(
+                    tool.error?.takeIf { tool.status == ToolStatus.Error && it.isNotEmpty() },
+                    tool.output?.takeIf { it.isNotEmpty() },
+                ).joinToString("\n\n").ifBlank { null }
             ToolStatus.Pending, ToolStatus.Running -> null
         }
 

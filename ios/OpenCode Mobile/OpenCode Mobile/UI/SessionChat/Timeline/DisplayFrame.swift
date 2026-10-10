@@ -75,7 +75,7 @@ nonisolated enum DisplayFrameBuilder {
                 isStreaming: display.isStreaming,
                 blocks: blocks
             )
-            guard !blocks.isEmpty else { continue }
+            guard !blocks.isEmpty || message.failure != nil else { continue }
             blocks = attachCachedBlockMarkdown(
                 blocks,
                 sessionKey: sessionKey,

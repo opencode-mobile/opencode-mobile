@@ -36,6 +36,27 @@ class ServerErrorMessageTest {
     }
 
     @Test
+    fun knownTags_useFixedCopy() {
+        assertEquals(
+            "Pairing expired, pair again",
+            ServerErrorMessage.userFacing("""{"_tag":"UnauthorizedError","message":"nope"}"""),
+        )
+        assertEquals(
+            "Folder or file not found · /repo",
+            ServerErrorMessage.userFacing("""{"_tag":"LocationNotFoundError","location":"/repo"}"""),
+        )
+        assertEquals(
+            "Session is busy",
+            ServerErrorMessage.userFacing("""{"_tag":"SessionBusyError","sessionID":"ses-1"}"""),
+        )
+        assertEquals(
+            "Something went wrong (ref-9)",
+            ServerErrorMessage.userFacing("""{"_tag":"UnknownError","message":"Something went wrong","ref":"ref-9"}"""),
+        )
+        assertNull(ServerErrorMessage.userFacing("""{"_tag":"InvalidRequestError","message":"Missing key"}"""))
+    }
+
+    @Test
     fun fromError_readsTheHttpBody() {
         val error =
             SessionError.Http(

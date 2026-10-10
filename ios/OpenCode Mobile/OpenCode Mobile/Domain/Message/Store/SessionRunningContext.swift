@@ -85,7 +85,8 @@ nonisolated struct SessionRunningContext: Equatable, Sendable {
             contextEstimate: message.contextEstimate,
             followUpDelivery: message.followUpDelivery,
             isWaitingForPickup: message.isWaitingForPickup,
-            stopReason: message.stopReason
+            stopReason: message.stopReason,
+            failure: message.failure
         )
     }
 

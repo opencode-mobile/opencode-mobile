@@ -389,23 +389,27 @@ final class SessionChatViewModel {
         case .mcp:
             commands.openMcpServers()
         case .compact:
-            guard let model = composer.state.composer.selectedModel else { return }
-            let beforeFraction = uiState.contextUsageFraction.map { Float($0) }
-            commands.runCompact(
-                providerID: model.option.providerID,
-                modelID: model.option.modelID,
-                beforeContextFraction: beforeFraction,
-                awaitAfterContextFraction: { [weak self] in
-                    guard let self else { return nil }
-                    guard let after = self.sessionInfo.contextUsageFraction(
-                        messages: self.timeline.state.messages,
-                        modelOptions: self.composer.state.composer.modelOptions,
-                        selectedModel: self.composer.state.composer.selectedModel
-                    ) else { return nil }
-                    return Float(after)
-                }
-            )
+            compactCurrentSession()
         }
+    }
+
+    func compactCurrentSession() {
+        guard hasCreatedSession, let model = composer.state.composer.selectedModel else { return }
+        let beforeFraction = uiState.contextUsageFraction.map { Float($0) }
+        commands.runCompact(
+            providerID: model.option.providerID,
+            modelID: model.option.modelID,
+            beforeContextFraction: beforeFraction,
+            awaitAfterContextFraction: { [weak self] in
+                guard let self else { return nil }
+                guard let after = self.sessionInfo.contextUsageFraction(
+                    messages: self.timeline.state.messages,
+                    modelOptions: self.composer.state.composer.modelOptions,
+                    selectedModel: self.composer.state.composer.selectedModel
+                ) else { return nil }
+                return Float(after)
+            }
+        )
     }
 
     /// Screen-level Analytics helper: only taxonomy ids, never message text.
@@ -1251,6 +1255,7 @@ final class SessionChatViewModel {
             isAborting: composerState.isAborting,
             sessionStatusLabel: sessionStatusLabel,
             workingIndicatorLabel: workingIndicatorLabel,
+            retryCard: infoState.retryCard,
             workingIndicatorCollapsed: workingIndicatorCollapsed,
             workingIndicatorFading: workingIndicatorFading,
             syncingIndicatorLabel: timelineState.isSyncingMessages

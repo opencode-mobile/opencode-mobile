@@ -30,7 +30,11 @@ struct MessageDomainAdapterTests {
             """.data(using: .utf8)!
         let dto = try decoder.decode(MessageDTO.self, from: data)
         let message = adapter.message(from: dto)
-        #expect(message.text == "Forbidden: unauthorized: not licensed to use Copilot")
+        #expect(message.role == .assistant)
+        #expect(message.text == "")
+        #expect(message.failure?.type == "APIError")
+        #expect(message.failure?.line() == "HTTP 403 · Forbidden: unauthorized: not licensed to use Copilot")
+        #expect(message.failure?.providerBody == nil)
     }
 
     @Test func sendRequest_includesModelAndNonDefaultVariant() throws {
@@ -1167,8 +1171,85 @@ struct MessageDomainAdapterTests {
         #expect(adapter.mergeInbox(messages: messages, inbox: []) == messages)
     }
 
+    @Test func projectV2KeepsAssistantErrorBesideReplyText() throws {
+        let dtos = try decodeV2(
+            """
+            [{
+              "id":"a1","type":"assistant","finish":"error",
+              "content":[{"type":"text","text":"Partial answer"}],
+              "error":{"type":"provider.rate-limit","message":"{\\"type\\":\\"message\\",\\"message\\":\\"Slow down\\"}","status":429,
+                "response":{"body":"{\\"error\\":\\"overloaded\\"}"}}
+            }]
+            """
+        )
+        let message = try #require(adapter.messages(fromV2: dtos).first)
+        #expect(message.text == "Partial answer")
+        #expect(message.failure?.type == "provider.rate-limit")
+        #expect(message.failure?.line() == "HTTP 429 · Slow down")
+        #expect(message.failure?.providerBody == #"{"error":"overloaded"}"#)
+        #expect(message.failure?.isNeutral == false)
+    }
+
+    @Test func projectV2HidesAbortAndProjectsFailedIdleAndCompaction() throws {
+        let dtos = try decodeV2(
+            """
+            [
+              {"id":"a1","type":"assistant","error":{"type":"aborted","message":"stopped"},"content":[{"type":"text","text":"Hi"}]},
+              {"id":"c1","type":"compaction","summary":"Earlier","error":{"type":"compaction.failed","message":"Could not compact"}},
+              {"id":"i1","type":"idle","outcome":"failed","error":{"type":"provider.auth","message":"Sign in again"}},
+              {"id":"i2","type":"idle","outcome":"interrupted","error":{"type":"compaction.interrupted","message":"nope"}}
+            ]
+            """
+        )
+        let messages = adapter.messages(fromV2: dtos)
+        #expect(messages.count == 3)
+        #expect(messages[0].failure == nil)
+        #expect(messages[1].failure?.message == "Could not compact")
+        #expect(messages[1].failure?.source == .compaction)
+        #expect(messages[1].failure?.action() == nil)
+        #expect(messages[2].failure?.message == "Sign in again")
+        #expect(messages[2].failure?.source == .execution)
+        #expect(messages[2].failure?.action() == nil)
+    }
+
+    @Test func projectV2MalformedToolCallIsDistinctFromAFailedRun() throws {
+        let dtos = try decodeV2(
+            """
+            [{
+              "id":"a1","type":"assistant",
+              "content":[{"type":"tool","id":"t1","name":"read","state":{
+                "status":"error","executed":false,
+                "error":{"type":"tool.input-json","message":"bad json"}
+              }}]
+            }]
+            """
+        )
+        guard case let .tool(tool) = adapter.messages(fromV2: dtos).first?.parts.first else {
+            Issue.record("expected tool part")
+            return
+        }
+        #expect(tool.isMalformed)
+        #expect(tool.error == "bad json")
+    }
+
+    @Test func projectV2IdleFailureIsSkippedWhenTheAssistantAlreadyShowsIt() throws {
+        let dtos = try decodeV2(
+            """
+            [
+              {"id":"a1","type":"assistant","content":[],"error":{"type":"unknown","message":"boom"}},
+              {"id":"i1","type":"idle","outcome":"failed","error":{"type":"unknown","message":"boom"}}
+            ]
+            """
+        )
+        #expect(adapter.messages(fromV2: dtos).count == 1)
+    }
+
     private func decodeMessage(_ json: String) throws -> MessageDTO {
         try decoder.decode(MessageDTO.self, from: Data(json.utf8))
+    }
+
+    private func decodeV2(_ json: String) throws -> [V2SessionMessageDTO] {
+        try decoder.decode([V2SessionMessageDTO].self, from: Data(json.utf8))
     }
 }
 

@@ -1,5 +1,7 @@
 package dev.opencode.mobile.ui.sessionchat
 
+import android.content.Intent
+import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -38,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.opencode.mobile.ProductAnalytics
+import dev.opencode.mobile.domain.message.FailureAction
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
 import dev.opencode.mobile.SessionToolGroup
 import dev.opencode.mobile.domain.command.ClientSlashAction
@@ -86,6 +89,8 @@ import dev.opencode.mobile.ui.components.OpenCodeTopBarSubtitleLeading
 import dev.opencode.mobile.ui.components.copySessionIdToClipboard
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.sessionchat.view.ComposerPickerKind
+import dev.opencode.mobile.ui.sessionchat.view.SessionRetryCountdown
+import dev.opencode.mobile.ui.sessionchat.view.sessionFailureDetailTarget
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatMcpServersSheetContent
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatMessageActionsSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatMessageActionsTarget
@@ -495,6 +500,7 @@ fun SessionChatScreen(
                             sessionTodoTotalCount = uiState.sessionTodoTotalCount,
                             sessionTodoActivePreview = uiState.sessionTodoActivePreview?.content,
                             hideFloatStack = showSessionTodosSheet,
+                            hideLiveRetryFailures = uiState.retryCard != null,
                             // Composer + 16 end-pin gap; Scroll to end uses this as-is
                             // (no extra scrollToEndPillBottomPadding).
                             bottomOverlayInset = timelineBottomInset,
@@ -860,6 +866,31 @@ fun SessionChatScreen(
                                     }
                                 }
                             },
+                            status = uiState.retryCard?.let { card ->
+                                {
+                                    val linkContext = LocalContext.current
+                                    val liveBody =
+                                        SessionChatTimelineBlocks.newestLiveRetryProviderBody(uiState.messages)
+                                    SessionRetryCountdown(
+                                        card = card,
+                                        onOpenLink = { openSessionExternalLink(linkContext, it) },
+                                        onOpenBody =
+                                            liveBody?.let { body ->
+                                                {
+                                                    toolDetailTarget =
+                                                        sessionFailureDetailTarget(
+                                                            text = card.message,
+                                                            providerBody = body,
+                                                            action = null,
+                                                            actionLabel = null,
+                                                            linkLabel = card.actionLabel,
+                                                            link = card.actionLink,
+                                                        )
+                                                }
+                                            },
+                                    )
+                                }
+                            },
                         )
                     }
                 }
@@ -882,9 +913,19 @@ fun SessionChatScreen(
             onClearAll = viewModel::clearPendingPrompts,
         )
 
+        val sheetContext = LocalContext.current
         SessionChatToolDetailSheet(
             target = toolDetailTarget,
             onDismiss = { toolDetailTarget = null },
+            onFailureAction = { action ->
+                when (action) {
+                    FailureAction.PickModel ->
+                        activePicker = ComposerPickerKind.Model
+                    FailureAction.Compact -> viewModel.compactCurrentSession()
+                    FailureAction.Copy -> Unit
+                }
+            },
+            onOpenLink = { openSessionExternalLink(sheetContext, it) },
         )
 
         SessionChatSkillsSheet(
@@ -1099,6 +1140,14 @@ fun SessionChatScreen(
             onDismissRequest = viewModel::chooseForkStay,
         )
     }
+}
+
+private fun openSessionExternalLink(
+    context: android.content.Context,
+    link: String,
+) {
+    val uri = runCatching { Uri.parse(link) }.getOrNull() ?: return
+    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, uri)) }
 }
 
 @Composable

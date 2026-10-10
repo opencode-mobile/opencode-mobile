@@ -1,6 +1,7 @@
 package dev.opencode.mobile.domain.event
 
 import dev.opencode.mobile.domain.message.AttachmentDataUrl
+import dev.opencode.mobile.domain.message.SessionFailure
 import dev.opencode.mobile.domain.message.ToolInterruption
 import dev.opencode.mobile.domain.message.ToolPartIdentity
 import dev.opencode.mobile.domain.message.V2ContentPartId
@@ -13,6 +14,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
@@ -193,16 +195,8 @@ class EventDomainAdapter(
             -> listOf(event("session.idle", properties))
             "session.next.step.failed",
             "session.execution.failed",
-            ->
-                listOf(
-                    event("session.error", properties),
-                    event("session.idle", properties),
-                )
-            "session.step.failed" ->
-                listOfNotNull(
-                    event("session.error", properties),
-                    assistantMessageUpdated(properties, finish = failedStepFinish(properties)),
-                )
+            -> failedStepEvents(properties, idle = true)
+            "session.step.failed" -> failedStepEvents(properties, idle = false)
             "session.next.retried",
             "session.retry.scheduled",
             -> listOf(statusEvent(properties, "retry"))
@@ -246,12 +240,7 @@ class EventDomainAdapter(
             -> compactionUpdated(properties, envelopeId, phase = CompactionPhase.Ended)
             "session.next.compaction.failed",
             "session.compaction.failed",
-            ->
-                compactionUpdated(properties, envelopeId, phase = CompactionPhase.Failed) +
-                    listOf(
-                        event("session.error", properties),
-                        event("session.idle", properties),
-                    )
+            -> failedCompactionEvents(properties, envelopeId)
             "session.revert.committed" -> listOfNotNull(revertCommitted(properties))
             "session.next.reasoning.started",
             "session.reasoning.started",
@@ -498,11 +487,68 @@ class EventDomainAdapter(
      * stamps `time.created` (the envelope time) so a live reply orders after the
      * prompt it answers; later partial infos omit `time` and the store keeps it.
      */
+    /**
+     * A structured compaction error with no id has no timeline row. Toast it, the same way a
+     * step failure toasts when the assistant row cannot be created.
+     */
+    private fun failedCompactionEvents(
+        properties: JsonObject,
+        envelopeId: String?,
+    ): List<OpencodeEvent> {
+        val updated = compactionUpdated(properties, envelopeId, phase = CompactionPhase.Failed)
+        return updated +
+            listOfNotNull(
+                if (updated.isEmpty() || structuredErrorInfo(properties) == null) {
+                    event("session.error", properties)
+                } else {
+                    null
+                },
+                event("session.idle", properties),
+            )
+    }
+
+    private fun failedStepEvents(
+        properties: JsonObject,
+        idle: Boolean,
+    ): List<OpencodeEvent> {
+        val error = structuredErrorInfo(properties)
+        val updated = assistantMessageUpdated(properties, finish = failedStepFinish(properties), error = error)
+        return listOfNotNull(
+            updated,
+            if (updated == null || error == null) event("session.error", properties) else null,
+            if (idle) event("session.idle", properties) else null,
+        )
+    }
+
+    /** v2 structured error translated into the v1 `{name, data}` shape the message store already decodes. */
+    private fun structuredErrorInfo(properties: JsonObject): JsonObject? {
+        val error = properties["error"] as? JsonObject ?: return null
+        val type = error.string("type")
+        if (SessionFailure.isSilent(type)) return null
+        val message = SessionFailure.unwrap(error.string("message"))
+        val body = (error["response"] as? JsonObject)?.string("body")
+        if (message.isEmpty() && error.int("status") == null && body.isNullOrBlank() && type.isNullOrBlank()) {
+            return null
+        }
+        return buildJsonObject {
+            type?.let { put("name", it) }
+            put(
+                "data",
+                buildJsonObject {
+                    if (message.isNotEmpty()) put("message", message)
+                    error.int("status")?.let { put("statusCode", it) }
+                    body?.takeIf { it.isNotBlank() }?.let { put("responseBody", it) }
+                },
+            )
+        }
+    }
+
     private fun assistantMessageUpdated(
         properties: JsonObject,
         stampCreated: Boolean = false,
         finish: String? = null,
         withAgentAndModel: Boolean = false,
+        error: JsonObject? = null,
     ): OpencodeEvent? {
         val sessionId = sessionIdFromProperties(properties)
         val assistantId = properties.string("assistantMessageID") ?: properties.string("messageID") ?: return null
@@ -529,6 +575,12 @@ class EventDomainAdapter(
                         model.string("variant")?.let { put("variant", it) }
                     }
                 }
+                if (error != null) {
+                    put("error", error)
+                } else if (finish != null && !finish.equals("error", ignoreCase = true)) {
+                    // A later successful or aborted step must drop a failure kept from a partial info.
+                    put("error", JsonNull)
+                }
             }
         return event("message.updated", buildJsonObject { put("info", info) })
     }
@@ -548,8 +600,13 @@ class EventDomainAdapter(
         val callId = properties.string("callID")
         val partId = properties.string("id") ?: callId
         val errorObject = properties["error"] as? JsonObject
-        val error = errorObject?.string("message")
+        val error = errorObject?.string("message")?.let(SessionFailure::unwrap)
         val interrupted = status == "error" && ToolInterruption.isAbortedType(errorObject?.string("type"))
+        val malformed =
+            SessionFailure.isMalformedTool(
+                type = errorObject?.string("type"),
+                executed = properties.boolean("executed"),
+            )
         val output =
             properties.string("output")
                 ?: properties["content"]
@@ -576,6 +633,7 @@ class EventDomainAdapter(
             output = output,
             error = error,
             metadata = metadata,
+            malformed = malformed,
             // v2 `tool.progress` carries the live title in metadata (v1: state.title).
             title = metadata?.string("title")?.takeIf { it.isNotEmpty() },
             interrupted = interrupted,
@@ -659,6 +717,12 @@ class EventDomainAdapter(
                 sessionId?.let { put("sessionID", it) }
                 put("role", "assistant")
                 put("mode", "compaction")
+                if (phase == CompactionPhase.Failed) {
+                    structuredErrorInfo(properties)?.let { put("error", it) }
+                } else if (phase == CompactionPhase.Ended) {
+                    // An omitted error would keep a failed caption when a retry reuses this id.
+                    put("error", JsonNull)
+                }
                 if (phase == CompactionPhase.Started) {
                     properties.long("created")?.let { created ->
                         put("time", buildJsonObject { put("created", created) })
@@ -711,12 +775,14 @@ class EventDomainAdapter(
         metadata: JsonObject? = null,
         title: String? = null,
         interrupted: Boolean = false,
+        malformed: Boolean = false,
     ): OpencodeEvent {
         val sessionId = sessionIdFromProperties(properties)
         val state =
             buildJsonObject {
                 put("status", status)
                 if (interrupted) put("interrupted", true)
+                if (malformed) put("malformed", true)
                 title?.let { put("title", it) }
                 if (input is JsonObject) put("input", input)
                 output?.let { put("output", it) }
@@ -860,6 +926,9 @@ class EventDomainAdapter(
                             retryAttempt(properties)?.let { put("attempt", it) }
                             retryNextAt(properties)?.let { put("next", it) }
                             retryMessage(properties)?.let { put("message", it) }
+                            retryErrorType(properties)?.let { put("errorType", it) }
+                            retryActionLabel(properties)?.let { put("actionLabel", it) }
+                            retryActionLink(properties)?.let { put("actionLink", it) }
                         }
                     },
                 )
@@ -938,9 +1007,11 @@ class EventDomainAdapter(
 
     private fun retryNextAt(properties: JsonObject): Long? {
         val status = properties["status"] as? JsonObject
-        return status?.long("next")
+        return status?.long("at")
+            ?: status?.long("next")
             ?: status?.long("nextAt")
             ?: status?.long("nextAtMs")
+            ?: properties.long("at")
             ?: properties.long("next")
             ?: properties.long("nextAt")
             ?: properties.long("nextAtMs")
@@ -948,8 +1019,31 @@ class EventDomainAdapter(
 
     private fun retryMessage(properties: JsonObject): String? {
         val status = properties["status"] as? JsonObject
-        return status?.string("message") ?: properties.string("message")
+        val nested = (properties["error"] as? JsonObject)?.string("message")
+            ?: (status?.get("error") as? JsonObject)?.string("message")
+        return status?.string("message")
+            ?: properties.string("message")
+            ?: nested?.let(SessionFailure::unwrap)?.takeIf { it.isNotEmpty() }
     }
+
+    private fun retryErrorType(properties: JsonObject): String? {
+        val status = properties["status"] as? JsonObject
+        val error = (properties["error"] as? JsonObject) ?: (status?.get("error") as? JsonObject)
+        return error?.string("type") ?: status?.string("errorType") ?: properties.string("errorType")
+    }
+
+    private fun retryActionObject(properties: JsonObject): JsonObject? {
+        val status = properties["status"] as? JsonObject
+        return (status?.get("action") as? JsonObject) ?: (properties["action"] as? JsonObject)
+    }
+
+    private fun retryActionLabel(properties: JsonObject): String? =
+        retryActionObject(properties)?.string("label")?.trim()?.takeIf { it.isNotEmpty() }
+
+    private fun retryActionLink(properties: JsonObject): String? =
+        retryActionObject(properties)?.string("link")?.trim()?.takeIf { it.isNotEmpty() }
+
+    private fun JsonObject.boolean(key: String): Boolean? = (this[key] as? JsonPrimitive)?.booleanOrNull
 
     private fun stringIn(
         obj: JsonObject?,
@@ -976,6 +1070,9 @@ class EventDomainAdapter(
                         activity.attempt?.let { put("attempt", it.toString()) }
                         activity.nextAtMs?.let { put("next", it.toString()) }
                         activity.message?.let { put("message", it) }
+                        activity.errorType?.let { put("errorType", it) }
+                        activity.actionLabel?.let { put("actionLabel", it) }
+                        activity.actionLink?.let { put("actionLink", it) }
                     }
             }
         return SessionStatus(sessionId = parsed.sessionId, raw = raw)
@@ -1008,6 +1105,9 @@ class EventDomainAdapter(
                                 ?: properties.long("nextAt")
                                 ?: properties.long("nextAtMs"),
                         message = status?.string("message") ?: properties.string("message"),
+                        errorType = status?.string("errorType") ?: properties.string("errorType"),
+                        actionLabel = status?.string("actionLabel") ?: properties.string("actionLabel"),
+                        actionLink = status?.string("actionLink") ?: properties.string("actionLink"),
                     )
                 else -> return null
             }

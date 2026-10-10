@@ -5,10 +5,11 @@ nonisolated struct MessageDomainAdapter: Sendable {
         let info = dto.info
         let domainParts = parseParts(from: dto.parts)
         let flatText = displayText(from: domainParts)
+        let stop = stopReason(info)
         return Message(
             id: info.id,
             role: role(from: info.role),
-            text: flatText.isEmpty ? errorText(from: info.error, stopReason: stopReason(info)) : flatText,
+            text: flatText,
             parts: domainParts,
             cost: info.cost,
             tokens: tokenUsage(from: info.tokens),
@@ -23,7 +24,8 @@ nonisolated struct MessageDomainAdapter: Sendable {
             contextEstimate: contextEstimate(role: info.role, parts: dto.parts),
             followUpDelivery: FollowUpDelivery.fromWire(info.delivery),
             isWaitingForPickup: info.waiting == true,
-            stopReason: stopReason(info)
+            stopReason: stop,
+            failure: sessionFailure(info.error, stopReason: stop)
         )
     }
 
@@ -32,10 +34,11 @@ nonisolated struct MessageDomainAdapter: Sendable {
         domainParts: [MessagePart]
     ) -> Message {
         let flatText = displayText(from: domainParts)
+        let stop = stopReason(info)
         return Message(
             id: info.id,
             role: role(from: info.role),
-            text: flatText.isEmpty ? errorText(from: info.error, stopReason: stopReason(info)) : flatText,
+            text: flatText,
             parts: domainParts,
             cost: info.cost,
             tokens: tokenUsage(from: info.tokens),
@@ -50,7 +53,8 @@ nonisolated struct MessageDomainAdapter: Sendable {
             contextEstimate: MessageContextEstimate(),
             followUpDelivery: FollowUpDelivery.fromWire(info.delivery),
             isWaitingForPickup: info.waiting == true,
-            stopReason: stopReason(info)
+            stopReason: stop,
+            failure: sessionFailure(info.error, stopReason: stop)
         )
     }
 
@@ -115,7 +119,8 @@ nonisolated struct MessageDomainAdapter: Sendable {
             metadata: state?.metadata,
             timeStartEpochMs: state?.time?.start,
             isInterrupted: status == .error
-                && (state?.interrupted == true || ToolInterruption.isUserInterruption(state?.error))
+                && (state?.interrupted == true || ToolInterruption.isUserInterruption(state?.error)),
+            isMalformed: state?.malformed == true
         )
     }
 
@@ -218,7 +223,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
             case .invalidResponse, .noActiveConnection:
                 return .transport("Invalid response")
             case let .httpStatus(code, message):
-                return .http(statusCode: code, message: message)
+                return .http(statusCode: code, message: httpMessage(message))
             }
         }
         if error is DecodingError {
@@ -261,6 +266,8 @@ nonisolated struct MessageDomainAdapter: Sendable {
                 messages.append(projectV2Assistant(dto, agent: agent, model: model))
             case "compaction":
                 messages.append(projectV2Compaction(dto))
+            case "idle":
+                projectV2Idle(dto, messages: &messages)
             default:
                 break
             }
@@ -419,13 +426,14 @@ nonisolated struct MessageDomainAdapter: Sendable {
             return v2AssistantPart(content, fallbackID: fallbackID)
         }
         let stopReason = MessageStopReason.from(finish: dto.finish, errorKind: dto.error?.type)
+        let failure = structuredFailure(dto.error, outcome: nil)
+            ?? dto.retry?.error.flatMap { structuredFailure($0, outcome: nil) }.flatMap { candidate in
+                dto.finish?.caseInsensitiveCompare("error") == .orderedSame ? candidate : nil
+            }
         var message = messageFromV2(
             id: dto.id,
             role: .assistant,
             parts: parts,
-            fallbackText: stopReason == .interrupted
-                ? ""
-                : dto.error?.message?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "",
             cost: dto.cost,
             tokens: tokenUsage(from: dto.tokens),
             mode: dto.agent ?? (agent.isEmpty ? nil : agent),
@@ -433,7 +441,8 @@ nonisolated struct MessageDomainAdapter: Sendable {
             sentAtEpochMs: dto.time?.created,
             completedAtEpochMs: dto.time?.completed,
             contextInputTokens: dto.tokens?.input,
-            contextEstimate: v2AssistantContextEstimate(dto.content)
+            contextEstimate: v2AssistantContextEstimate(dto.content),
+            failure: failure
         )
         message.stopReason = stopReason
         return message
@@ -460,7 +469,24 @@ nonisolated struct MessageDomainAdapter: Sendable {
             mode: "compaction",
             sentAtEpochMs: dto.time?.created,
             completedAtEpochMs: dto.time?.completed,
-            contextEstimate: MessageContextEstimate(assistantCharacters: summary.count)
+            contextEstimate: MessageContextEstimate(assistantCharacters: summary.count),
+            failure: structuredFailure(dto.error, outcome: nil, source: .compaction)
+        )
+    }
+
+    /// A failed idle item is its own row when the assistant message did not already carry the same failure.
+    private func projectV2Idle(_ dto: V2SessionMessageDTO, messages: inout [Message]) {
+        guard let failure = structuredFailure(dto.error, outcome: dto.outcome, source: .execution) else { return }
+        if messages.last?.failure?.line() == failure.line() { return }
+        messages.append(
+            messageFromV2(
+                id: dto.id,
+                role: .assistant,
+                parts: [],
+                sentAtEpochMs: dto.time?.created,
+                completedAtEpochMs: dto.time?.completed,
+                failure: failure
+            )
         )
     }
 
@@ -476,7 +502,8 @@ nonisolated struct MessageDomainAdapter: Sendable {
         sentAtEpochMs: Int64? = nil,
         completedAtEpochMs: Int64? = nil,
         contextInputTokens: Int64? = nil,
-        contextEstimate: MessageContextEstimate = MessageContextEstimate()
+        contextEstimate: MessageContextEstimate = MessageContextEstimate(),
+        failure: SessionFailure? = nil
     ) -> Message {
         let flatText = displayText(from: parts)
         return Message(
@@ -494,7 +521,8 @@ nonisolated struct MessageDomainAdapter: Sendable {
             sentAtEpochMs: sentAtEpochMs,
             completedAtEpochMs: completedAtEpochMs,
             contextInputTokens: contextInputTokens,
-            contextEstimate: contextEstimate
+            contextEstimate: contextEstimate,
+            failure: failure
         )
     }
 
@@ -525,13 +553,17 @@ nonisolated struct MessageDomainAdapter: Sendable {
                     status: status,
                     // v2 tools report their progress title in metadata (v1: state.title).
                     title: metadata?["title"]?.stringValue.flatMap { $0.isEmpty ? nil : $0 },
-                    error: state?.error?.message.flatMap { $0.isEmpty ? nil : $0 },
+                    error: state?.error?.message.flatMap { message in
+                        let unwrapped = SessionFailure.unwrap(message)
+                        return unwrapped.isEmpty ? nil : unwrapped
+                    },
                     callID: content.id,
                     input: dictionaryFromInput(state?.input),
                     output: toolOutput(state),
                     metadata: metadata,
                     timeStartEpochMs: content.time?.created,
-                    isInterrupted: status == .error && ToolInterruption.isAbortedType(state?.error?.type)
+                    isInterrupted: status == .error && ToolInterruption.isAbortedType(state?.error?.type),
+                    isMalformed: SessionFailure.isMalformedTool(type: state?.error?.type, executed: state?.executed)
                 )
             )
         default:
@@ -670,19 +702,39 @@ nonisolated struct MessageDomainAdapter: Sendable {
         return MessageStopReason.from(finish: info.finish, errorKind: info.error?.name)
     }
 
-    /// A stopped reply gets an "Interrupted" note, not the abort error as reply text.
-    private func errorText(from error: MessageErrorInfoDTO?, stopReason: MessageStopReason? = nil) -> String {
-        guard let error, stopReason != .interrupted else { return "" }
-        if let message = error.data?.message?.trimmingCharacters(in: .whitespacesAndNewlines), !message.isEmpty {
-            return message
-        }
-        if let body = error.data?.responseBody?.trimmingCharacters(in: .whitespacesAndNewlines), !body.isEmpty {
-            return body
-        }
-        if let name = error.name?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
-            return name
-        }
-        return ""
+    private func sessionFailure(_ error: MessageErrorInfoDTO?, stopReason: MessageStopReason?) -> SessionFailure? {
+        if stopReason == .interrupted { return nil }
+        return SessionFailure.fromV1(
+            name: error?.name,
+            message: error?.data?.message,
+            statusCode: error?.data?.statusCode,
+            responseBody: error?.data?.responseBody,
+            isRetryable: error?.data?.isRetryable,
+            providerID: error?.data?.providerID,
+            retries: error?.data?.retries
+        )
+    }
+
+    private func structuredFailure(
+        _ error: V2UnknownErrorDTO?,
+        outcome: String?,
+        source: FailureSource = .step
+    ) -> SessionFailure? {
+        SessionFailure.fromV2(
+            type: error?.type,
+            message: error?.message,
+            status: error?.status,
+            providerBody: error?.response?.body,
+            outcome: outcome,
+            source: source
+        )
+    }
+
+    private func httpMessage(_ body: String?) -> String {
+        if let friendly = ServerErrorMessage.userFacing(body) { return friendly }
+        let plain = body?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if plain.isEmpty || plain.hasPrefix("{") || plain.count > 200 { return "Request failed" }
+        return plain
     }
 
     private func displayText(from parts: [MessagePart]) -> String {

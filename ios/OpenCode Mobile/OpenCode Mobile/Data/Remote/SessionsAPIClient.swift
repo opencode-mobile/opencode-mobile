@@ -65,7 +65,24 @@ nonisolated struct SessionsAPIClient: Sendable {
             return [:]
         }
         return json.mapValues { dict in
-            dict.mapValues { String(describing: $0) }
+            var raw: [String: String] = [:]
+            for (key, value) in dict {
+                if let nested = value as? [String: Any] {
+                    if key == "action" {
+                        if let label = nested["label"] as? String, !label.isEmpty { raw["actionLabel"] = label }
+                        if let link = nested["link"] as? String, !link.isEmpty { raw["actionLink"] = link }
+                    } else if key == "error" {
+                        if let type = nested["type"] as? String, !type.isEmpty { raw["errorType"] = type }
+                        if raw["message"] == nil, let message = nested["message"] as? String {
+                            let unwrapped = SessionFailure.unwrap(message)
+                            if !unwrapped.isEmpty { raw["message"] = unwrapped }
+                        }
+                    }
+                } else {
+                    raw[key] = String(describing: value)
+                }
+            }
+            return raw
         }
     }
 

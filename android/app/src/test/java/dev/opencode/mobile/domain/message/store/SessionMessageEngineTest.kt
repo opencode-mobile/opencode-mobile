@@ -1,11 +1,16 @@
 package dev.opencode.mobile.domain.message
 
+import dev.opencode.mobile.domain.event.EventDomainAdapter
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -861,6 +866,89 @@ class SessionMessageEngineTest {
         val messages = engine.messages("ses-1")
         assertEquals(listOf("old", "live"), messages.map { it.id })
         assertEquals("Hello world", messages.last().text)
+    }
+
+    @Test
+    fun infoUpdated_keepsSeededFailureWhenTheLiveInfoOmitsError() {
+        engine.replaceAll(
+            "ses-1",
+            listOf(
+                Message(
+                    id = "msg-1",
+                    role = MessageRole.Assistant,
+                    text = "Partial answer",
+                    model = "gpt",
+                    mode = "build",
+                    failure = SessionFailure(type = "provider.rate-limit", message = "Slow down", status = 429),
+                ),
+            ),
+        )
+        engine.apply(
+            "ses-1",
+            MessagePatch.PartUpdated(
+                buildJsonObject {
+                    put("id", "prt-1")
+                    put("messageID", "msg-1")
+                    put("sessionID", "ses-1")
+                    put("type", "text")
+                    put("text", "Partial answer")
+                },
+                delta = null,
+            ),
+        )
+        engine.apply(
+            "ses-1",
+            MessagePatch.InfoUpdated(
+                buildJsonObject {
+                    put("id", "msg-1")
+                    put("role", "assistant")
+                    put("sessionID", "ses-1")
+                },
+            ),
+        )
+
+        val kept = engine.messages("ses-1").single()
+        assertEquals("Slow down", kept.failure?.message)
+        assertEquals(429, kept.failure?.status)
+
+        engine.apply(
+            "ses-1",
+            MessagePatch.InfoUpdated(
+                buildJsonObject {
+                    put("id", "msg-1")
+                    put("role", "assistant")
+                    put("sessionID", "ses-1")
+                    put("error", JsonNull)
+                },
+            ),
+        )
+        assertNull(engine.messages("ses-1").single().failure)
+    }
+
+    @Test
+    fun compactionEnded_clearsTheFailureARetryReused() {
+        applyProjected(
+            """{"type":"session.compaction.failed","data":{"sessionID":"ses-1","messageID":"msg-c",""" +
+                """"error":{"type":"compaction.failed","message":"Could not compact"}}}""",
+        )
+        assertEquals("Could not compact", engine.messages("ses-1").single().failure?.message)
+
+        applyProjected(
+            """{"type":"session.compaction.ended","data":{"sessionID":"ses-1","messageID":"msg-c","text":"Done"}}""",
+        )
+        assertNull(engine.messages("ses-1").single().failure)
+    }
+
+    private fun applyProjected(line: String) {
+        EventDomainAdapter(Json { ignoreUnknownKeys = true }).parseEvents(line).forEach { event ->
+            val properties = event.rawProperties ?: return@forEach
+            when (event.type) {
+                "message.updated" ->
+                    engine.apply("ses-1", MessagePatch.InfoUpdated(properties["info"]!!.jsonObject))
+                "message.part.updated" ->
+                    engine.apply("ses-1", MessagePatch.PartUpdated(properties["part"]!!.jsonObject, null))
+            }
+        }
     }
 
     private fun seedStreamingAssistant() {

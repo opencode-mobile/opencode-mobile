@@ -308,12 +308,9 @@ class SessionInfo(
                         sessionStatusLiveStore.observeActivity(worktree).collect { snapshot ->
                             if (!isCurrentBinding(sessionId, worktree)) return@collect
                             val entry = snapshot.entries[sessionId]
-                            val label =
-                                if (snapshot.seeded) {
-                                    entry?.activity?.statusLabel()
-                                } else {
-                                    null
-                                }
+                            val activity = if (snapshot.seeded) entry?.activity else null
+                            val label = activity?.chatStatusLabel()
+                            val retryCard = (activity as? SessionActivity.Retrying)?.retryCard()
                             logD(
                                 "live status session=$sessionId activity=${entry?.activity ?: "-"} seeded=${snapshot.seeded}",
                             )
@@ -325,6 +322,7 @@ class SessionInfo(
                                 it.withStatus(
                                     authoritative = label,
                                     hasResolved = snapshot.seeded,
+                                    retryCard = retryCard,
                                 )
                             }
                         }

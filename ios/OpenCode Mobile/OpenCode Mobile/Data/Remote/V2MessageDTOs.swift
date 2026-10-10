@@ -12,6 +12,8 @@ nonisolated struct V2SessionMessageDTO: Decodable, Sendable {
     let cost: Double?
     let tokens: MessageTokensDTO?
     let error: V2UnknownErrorDTO?
+    let outcome: String?
+    let retry: V2RetryDTO?
     let finish: String?
     let time: V2MessageTimeDTO?
     let reason: String?
@@ -24,7 +26,7 @@ nonisolated struct V2SessionMessageDTO: Decodable, Sendable {
     let description: String?
 
     private enum CodingKeys: String, CodingKey {
-        case id, type, text, files, agents, agent, model, content, cost, tokens, error, finish, time
+        case id, type, text, files, agents, agent, model, content, cost, tokens, error, outcome, retry, finish, time
         case reason, summary, status, command, output, callID, name, description
     }
 
@@ -41,6 +43,8 @@ nonisolated struct V2SessionMessageDTO: Decodable, Sendable {
         cost = try container.decodeIfPresent(Double.self, forKey: .cost)
         tokens = try container.decodeIfPresent(MessageTokensDTO.self, forKey: .tokens)
         error = try container.decodeIfPresent(V2UnknownErrorDTO.self, forKey: .error)
+        outcome = try container.decodeIfPresent(String.self, forKey: .outcome)
+        retry = try container.decodeIfPresent(V2RetryDTO.self, forKey: .retry)
         finish = try container.decodeIfPresent(String.self, forKey: .finish)
         time = try container.decodeIfPresent(V2MessageTimeDTO.self, forKey: .time)
         reason = try container.decodeIfPresent(String.self, forKey: .reason)
@@ -79,6 +83,26 @@ nonisolated struct V2ModelRefDTO: Decodable, Sendable {
 nonisolated struct V2UnknownErrorDTO: Decodable, Sendable {
     let type: String?
     let message: String?
+    let status: Int?
+    let response: V2ErrorResponseDTO?
+
+    init(type: String? = nil, message: String? = nil, status: Int? = nil, response: V2ErrorResponseDTO? = nil) {
+        self.type = type
+        self.message = message
+        self.status = status
+        self.response = response
+    }
+}
+
+nonisolated struct V2ErrorResponseDTO: Decodable, Sendable {
+    let body: String?
+}
+
+/// In-progress retry on an assistant message. The working label reads the live event, not this field.
+nonisolated struct V2RetryDTO: Decodable, Sendable {
+    let attempt: Int?
+    let at: Int64?
+    let error: V2UnknownErrorDTO?
 }
 
 nonisolated struct V2FileAttachmentDTO: Decodable, Sendable {
@@ -162,11 +186,12 @@ nonisolated struct V2ToolStateDTO: Decodable, Sendable {
     let input: AnyCodable?
     let content: [V2ToolContentDTO]
     let error: V2UnknownErrorDTO?
+    let executed: Bool?
     let structured: [String: AnyCodable]?
     let metadata: [String: AnyCodable]?
 
     private enum CodingKeys: String, CodingKey {
-        case status, input, content, error, structured, metadata
+        case status, input, content, error, executed, structured, metadata
     }
 
     init(from decoder: Decoder) throws {
@@ -175,6 +200,7 @@ nonisolated struct V2ToolStateDTO: Decodable, Sendable {
         input = try container.decodeIfPresent(AnyCodable.self, forKey: .input)
         content = try container.decodeIfPresent([V2ToolContentDTO].self, forKey: .content) ?? []
         error = try container.decodeIfPresent(V2UnknownErrorDTO.self, forKey: .error)
+        executed = try container.decodeIfPresent(Bool.self, forKey: .executed)
         structured = try container.decodeIfPresent([String: AnyCodable].self, forKey: .structured)
         metadata = try container.decodeIfPresent([String: AnyCodable].self, forKey: .metadata)
     }

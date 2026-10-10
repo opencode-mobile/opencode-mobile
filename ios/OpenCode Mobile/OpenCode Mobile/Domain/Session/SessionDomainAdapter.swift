@@ -44,7 +44,24 @@ nonisolated struct SessionDomainAdapter: Sendable {
         activeByID.map { sessionID, active in
             let wireType = active.type?.lowercased()
             let uiType = wireType == "running" ? "busy" : (wireType ?? "busy")
-            return SessionStatus(sessionID: sessionID, raw: ["type": uiType])
+            var raw = ["type": uiType]
+            if uiType == "retry" {
+                if let attempt = active.attempt { raw["attempt"] = String(attempt) }
+                if let next = active.next { raw["next"] = String(next) }
+                if let message = active.message?.trimmingCharacters(in: .whitespacesAndNewlines), !message.isEmpty {
+                    raw["message"] = message
+                }
+                if let errorType = active.error?.type?.trimmingCharacters(in: .whitespacesAndNewlines), !errorType.isEmpty {
+                    raw["errorType"] = errorType
+                }
+                if let label = active.action?.label?.trimmingCharacters(in: .whitespacesAndNewlines), !label.isEmpty {
+                    raw["actionLabel"] = label
+                }
+                if let link = active.action?.link?.trimmingCharacters(in: .whitespacesAndNewlines), !link.isEmpty {
+                    raw["actionLink"] = link
+                }
+            }
+            return SessionStatus(sessionID: sessionID, raw: raw)
         }
     }
 
@@ -268,7 +285,7 @@ nonisolated struct SessionDomainAdapter: Sendable {
             case .invalidResponse, .noActiveConnection:
                 return .transport("Invalid response")
             case let .httpStatus(code, message):
-                return .http(statusCode: code, message: message)
+                return .http(statusCode: code, message: ServerErrorMessage.userFacing(message) ?? message)
             }
         }
         if error is DecodingError {

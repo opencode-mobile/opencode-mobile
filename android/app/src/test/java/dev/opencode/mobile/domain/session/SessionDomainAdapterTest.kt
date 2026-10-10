@@ -1,9 +1,15 @@
 package dev.opencode.mobile.domain.session
 
+import dev.opencode.mobile.data.remote.dto.ApiSessionActiveDto
+import dev.opencode.mobile.data.remote.dto.ApiSessionRetryActionDto
+import dev.opencode.mobile.data.remote.dto.ApiSessionRetryErrorDto
 import dev.opencode.mobile.data.remote.dto.SessionDto
 import dev.opencode.mobile.data.remote.dto.SessionTimeDto
 import dev.opencode.mobile.data.remote.dto.V2SessionDto
 import dev.opencode.mobile.data.remote.dto.V2SessionForkDto
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -79,5 +85,57 @@ class SessionDomainAdapterTest {
 
         assertEquals("ses_1", child.parentId)
         assertEquals(emptyList<Session>(), listOf(child).rootSessions())
+    }
+
+    @Test
+    fun activeRetryKeepsCountdownAndAction() {
+        val status =
+            adapter.toSessionStatusesFromActive(
+                mapOf(
+                    "ses-1" to
+                        ApiSessionActiveDto(
+                            type = "retry",
+                            attempt = 2,
+                            message = "Slow down",
+                            next = 9_000L,
+                            error = ApiSessionRetryErrorDto(type = "provider.rate-limit"),
+                            action = ApiSessionRetryActionDto(label = "Upgrade", link = "https://example.com"),
+                        ),
+                ),
+            ).single()
+
+        assertEquals("retry", status.raw["type"])
+        assertEquals("2", status.raw["attempt"])
+        assertEquals("9000", status.raw["next"])
+        assertEquals("provider.rate-limit", status.raw["errorType"])
+        assertEquals("Upgrade", status.raw["actionLabel"])
+        val card = status.toSessionActivity().let { (it as SessionActivity.Retrying).retryCard() }
+        assertEquals("Slow down", card?.message)
+        assertEquals(9_000L, card?.nextAtMs)
+        assertEquals("Upgrade", card?.actionLabel)
+    }
+
+    @Test
+    fun statusObjectFlattensNestedActionInsteadOfDroppingIt() {
+        val status =
+            adapter.toSessionStatus(
+                "ses-1",
+                buildJsonObject {
+                    put("type", "retry")
+                    put("attempt", 1)
+                    putJsonObject("action") {
+                        put("label", "Upgrade")
+                        put("link", "https://example.com")
+                    }
+                    putJsonObject("error") {
+                        put("type", "provider.quota")
+                    }
+                },
+            )
+
+        assertEquals("Upgrade", status.raw["actionLabel"])
+        assertEquals("https://example.com", status.raw["actionLink"])
+        assertEquals("provider.quota", status.raw["errorType"])
+        assertEquals("1", status.raw["attempt"])
     }
 }

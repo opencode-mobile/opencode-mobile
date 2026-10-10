@@ -480,7 +480,7 @@ nonisolated enum SessionChatTimelineProjector {
             case .attachment(_, let file):
                 let name = file.filename.trimmingCharacters(in: .whitespacesAndNewlines)
                 return name.isEmpty ? "file:\(file.mime)" : "file:\(name):\(file.mime)"
-            case .toolCard, .toolGroup, .childSessionRow, .reasoning, .stepParagraph, .stopNote:
+            case .toolCard, .toolGroup, .childSessionRow, .reasoning, .stepParagraph, .stopNote, .failureLine:
                 return nil
             }
         }
@@ -573,6 +573,8 @@ nonisolated enum SessionChatTimelineProjector {
                     }.joined(separator: ",")
             case .stopNote(let id, let reason):
                 "x:\(id):\(reason.rawValue)"
+            case .failureLine(let id, _, let body, let neutral, let action, _, _):
+                "f:\(id):\(body != nil):\(neutral):\(action != nil)"
             }
         }.joined(separator: "|")
         return "\(row.isStreaming):\(markdownPresent):\(row.blocks.count):\(row.metadataLabel.isEmpty ? "0" : "1"):\(row.pendingDelivery == nil ? "0" : "1"):\(blockKey)"
@@ -609,6 +611,8 @@ nonisolated enum SessionChatTimelineProjector {
                 "s:\(id):\(paragraph.chips.count)"
             case .stopNote(let id, let reason):
                 "x:\(id):\(reason.rawValue)"
+            case .failureLine(let id, _, let body, _, _, _, _):
+                "f:\(id):\(body != nil)"
             }
         }.joined(separator: "|")
         return "\(row.blocks.count)|\(attachments)|\(blocks)"

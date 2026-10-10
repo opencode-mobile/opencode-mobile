@@ -1,1 +1,1 @@
-../../../../../../../../../app/src/main/java/dev/opencode/mobile/ui/components/OpenCodeConnectionStatusLabel.kt
+../../../../../../../../../app/src/main/java/dev/opencode/mobile/ui/components/chrome/OpenCodeConnectionStatusLabel.kt

@@ -1,3 +1,4 @@
+import Combine
 import Factory
 import PhotosUI
 import SwiftUI
@@ -174,6 +175,7 @@ struct SessionChatView: View {
                         sessionTodoTotalCount: viewModel.uiState.sessionTodoTotalCount,
                         sessionTodoActivePreview: viewModel.uiState.sessionTodoActivePreview?.content,
                         hideFloatStack: showSessionTodosSheet,
+                        hideLiveRetryFailures: viewModel.uiState.retryCard != nil,
                         // Composer + 16 end-pin gap; Scroll to end uses this as-is
                         // (no extra scrollToEndPillBottomPadding).
                         bottomOverlayInset: sessionChatTimelineBottomInset(composerOverlayHeight)
@@ -398,7 +400,20 @@ struct SessionChatView: View {
                 showPendingPromptsSheet = false
             }
         }
-        .sessionChatToolDetailSheet(target: $toolDetailTarget)
+        .sessionChatToolDetailSheet(
+            target: $toolDetailTarget,
+            onFailureAction: { action in
+                switch action {
+                case .pickModel:
+                    activePicker = .model
+                case .compact:
+                    viewModel.compactCurrentSession()
+                case .copy:
+                    break
+                }
+            },
+            onOpenLink: { UIApplication.shared.open($0) }
+        )
         .sessionChatSkillsSheet(target: $skillsTarget)
         // Waits for any view-owned sheet to close so the intro never stacks on one.
         .sessionChatChipTimelineIntro(
@@ -1010,6 +1025,32 @@ struct SessionChatView: View {
             )
         }
 
+        let liveRetry = viewModel.uiState.retryCard
+        let liveBody = SessionChatTimelineBlocks.newestLiveRetryProviderBody(
+            in: viewModel.uiState.messages
+        )
+        let status = liveRetry.map { card in
+            AnyView(
+                SessionRetryCountdownCard(
+                    card: card,
+                    onOpenLink: { UIApplication.shared.open($0) },
+                    onOpenBody: liveBody.map { body in
+                        {
+                            guard let target = SessionChatToolDetailTarget.failure(
+                                text: card.message,
+                                providerBody: body,
+                                action: nil,
+                                actionLabel: nil,
+                                linkLabel: card.actionLabel,
+                                link: card.actionLink
+                            ) else { return }
+                            toolDetailTarget = target
+                        }
+                    }
+                )
+            )
+        }
+
         return OpenCodeSessionComposer(
             state: state,
             onAction: { action in
@@ -1083,7 +1124,8 @@ struct SessionChatView: View {
                     logChatAction(ProductAnalytics.Action.chatBack)
                     leaveSession()
                 }
-            }
+            },
+            status: status
         )
     }
 
@@ -1168,6 +1210,60 @@ private extension SessionChatSnackbar {
 private extension Optional where Wrapped == SessionChatSnackbar {
     func mapToOpenCodeSnackbarMessage() -> OpenCodeSnackbarMessage? {
         self?.mapToOpenCodeSnackbarMessage()
+    }
+}
+
+/// Live retry status fused to the top of the composer. The link is the only button while the sheet is closed.
+private struct SessionRetryCountdownCard: View {
+    let card: SessionRetryCard
+    let onOpenLink: (URL) -> Void
+    let onOpenBody: (() -> Void)?
+    @State private var now = Date()
+
+    var body: some View {
+        let seconds = max(0, Int((Double(card.nextAtMs) / 1000.0) - now.timeIntervalSince1970))
+        let attempt = card.attempt.map { "attempt \($0), " } ?? ""
+        let label = card.actionLabel?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let link = card.actionLink?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let url = link.flatMap(URL.init(string:))
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(card.message)
+                    .font(OpenCodeTypography.body)
+                    .foregroundStyle(OpenCodeColors.textStrong)
+                    .lineLimit(1)
+                Text("\(attempt)retrying in \(seconds)s")
+                    .font(OpenCodeTypography.caption)
+                    .foregroundStyle(OpenCodeColors.textWeak)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .modifier(RetryStatusBodyTap(onOpenBody: onOpenBody))
+            if let label, !label.isEmpty, let url {
+                OpenCodeButton(variant: .compactText(title: label)) {
+                    onOpenLink(url)
+                }
+            }
+        }
+        .padding(.leading, 12)
+        .padding(.trailing, 10)
+        .padding(.vertical, 8)
+        .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { now = $0 }
+    }
+}
+
+private struct RetryStatusBodyTap: ViewModifier {
+    let onOpenBody: (() -> Void)?
+
+    func body(content: Content) -> some View {
+        if let onOpenBody {
+            content
+                .onTapGesture(perform: onOpenBody)
+                .accessibilityAddTraits(.isButton)
+        } else {
+            content
+        }
     }
 }
 

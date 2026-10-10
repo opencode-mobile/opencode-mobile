@@ -45,6 +45,9 @@ nonisolated struct MessageErrorDataDTO: Codable, Sendable {
     let message: String?
     let statusCode: Int?
     let responseBody: String?
+    var isRetryable: Bool? = nil
+    var providerID: String? = nil
+    var retries: Int? = nil
 }
 
 nonisolated struct MessageModelRefDTO: Codable, Sendable {
@@ -101,6 +104,8 @@ nonisolated struct MessageToolStateDTO: Codable, Sendable {
     let metadata: [String: AnyCodable]?
     /// Set by the v2 live projection when `tool.failed` reports `error.type: "aborted"`.
     var interrupted: Bool? = nil
+    /// Set when the server closed the call without running it (`executed: false`).
+    var malformed: Bool? = nil
 }
 
 nonisolated struct MessageToolTimeDTO: Codable, Sendable {

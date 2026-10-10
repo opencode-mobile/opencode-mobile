@@ -252,7 +252,7 @@ struct SessionStatusLiveStoreTests {
 
         #expect(snapshot.entries["ses-old"] == nil)
         #expect(snapshot.entries["ses-keep"]?.source == .server)
-        if case let .retrying(attempt, _, _) = snapshot.entries["ses-keep"]?.activity {
+        if case let .retrying(attempt, _, _, _, _, _) = snapshot.entries["ses-keep"]?.activity {
             #expect(attempt == nil)
         } else {
             Issue.record("expected retrying")
@@ -471,7 +471,7 @@ struct SessionStatusLiveStoreTests {
         }
         collector.cancel()
 
-        if case let .retrying(attempt, nextAtMs, message) = retrying.entries["ses-1"]?.activity {
+        if case let .retrying(attempt, nextAtMs, message, _, _, _) = retrying.entries["ses-1"]?.activity {
             #expect(attempt == 2)
             #expect(nextAtMs == 9_000)
             #expect(message == "model overloaded")
@@ -580,7 +580,7 @@ struct SessionStatusLiveStoreTests {
         collector.cancel()
         #expect(snapshot.entries["ses-gone"] == nil)
         #expect(snapshot.entries["ses-keep"]?.source == .server)
-        if case let .retrying(attempt, _, _) = snapshot.entries["ses-keep"]?.activity {
+        if case let .retrying(attempt, _, _, _, _, _) = snapshot.entries["ses-keep"]?.activity {
             #expect(attempt == 3)
         } else {
             Issue.record("expected retrying")

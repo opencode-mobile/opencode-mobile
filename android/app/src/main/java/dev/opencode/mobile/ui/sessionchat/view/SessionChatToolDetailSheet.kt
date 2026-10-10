@@ -1,5 +1,7 @@
 package dev.opencode.mobile.ui.sessionchat.view
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
@@ -8,30 +10,88 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
+import dev.opencode.mobile.domain.message.FailureAction
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.markdown.OpenCodeMarkdownParser
 import dev.opencode.mobile.markdown.OpenCodeSemanticFallbackHighlighter
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetContentMode
+import dev.opencode.mobile.ui.components.OpenCodeButton
+import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeRenderedMarkdown
 import dev.opencode.mobile.ui.components.OpenCodeRenderedMarkdownVariant
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+
+/** What the failure sheet can do besides showing a provider body. */
+internal enum class SessionFailureSheetAction {
+    PickModel,
+    Compact,
+    CopyCaption,
+}
 
 internal data class SessionChatToolDetailTarget(
     val title: String,
     val body: String,
     /** Render [body] as markdown (a compaction summary) instead of plain tool output. */
     val bodyIsMarkdown: Boolean = false,
+    /** Provider error bodies are monospace and copyable. */
+    val monospace: Boolean = false,
+    val sheetAction: SessionFailureSheetAction? = null,
+    val sheetActionLabel: String? = null,
+    /** Live retry link, shown when this sheet was opened from the composer status. */
+    val sheetLinkLabel: String? = null,
+    val sheetLink: String? = null,
 )
+
+/**
+ * Sheet for a failure mark. Copy of a provider body stays on the monospace body.
+ * Copy with no body, Compact, and Pick a model are the sheet action.
+ */
+internal fun sessionFailureDetailTarget(
+    text: String,
+    providerBody: String?,
+    action: FailureAction?,
+    actionLabel: String?,
+    linkLabel: String? = null,
+    link: String? = null,
+): SessionChatToolDetailTarget? {
+    val body = providerBody?.trim()?.takeIf { it.isNotEmpty() }
+    val label = actionLabel?.trim()?.takeIf { it.isNotEmpty() }
+    val sheetAction =
+        when {
+            action == null || label == null -> null
+            action == FailureAction.Copy && body != null -> null
+            action == FailureAction.Copy -> SessionFailureSheetAction.CopyCaption
+            action == FailureAction.PickModel -> SessionFailureSheetAction.PickModel
+            action == FailureAction.Compact -> SessionFailureSheetAction.Compact
+            else -> null
+        }
+    val resolvedLink = link?.trim()?.takeIf { it.isNotEmpty() }
+    val resolvedLinkLabel = linkLabel?.trim()?.takeIf { it.isNotEmpty() && resolvedLink != null }
+    if (body == null && sheetAction == null && resolvedLinkLabel == null) return null
+    return SessionChatToolDetailTarget(
+        title = if (body != null) "Provider response" else text,
+        body = body.orEmpty(),
+        monospace = body != null,
+        sheetAction = sheetAction,
+        sheetActionLabel = if (sheetAction != null) label else null,
+        sheetLinkLabel = resolvedLinkLabel,
+        sheetLink = if (resolvedLinkLabel != null) resolvedLink else null,
+    )
+}
 
 @Composable
 internal fun SessionChatToolDetailSheet(
     target: SessionChatToolDetailTarget?,
     onDismiss: () -> Unit,
+    onFailureAction: (FailureAction) -> Unit = {},
+    onOpenLink: (String) -> Unit = {},
 ) {
     ProductPresentedScreenViewEffect(
         screenId = ProductAnalytics.Screen.SESSION_TOOL_DETAIL,
@@ -69,19 +129,58 @@ internal fun SessionChatToolDetailSheet(
                 }
         }
         val rendered = document
-        if (rendered != null) {
-            OpenCodeRenderedMarkdown(
-                document = rendered,
-                variant = OpenCodeRenderedMarkdownVariant.Standalone,
-                modifier = bodyModifier,
-            )
-        } else {
-            Text(
-                text = body,
-                modifier = bodyModifier,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
+        val clipboard = LocalClipboardManager.current
+        val action = target?.sheetAction
+        val actionLabel = target?.sheetActionLabel?.takeIf { it.isNotBlank() }
+        val linkLabel = target?.sheetLinkLabel?.takeIf { it.isNotBlank() }
+        val link = target?.sheetLink?.takeIf { it.isNotBlank() }
+        Column(
+            modifier = bodyModifier,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            when {
+                rendered != null ->
+                    OpenCodeRenderedMarkdown(
+                        document = rendered,
+                        variant = OpenCodeRenderedMarkdownVariant.Standalone,
+                    )
+                target?.monospace == true && body.isNotBlank() ->
+                    SessionProviderResponseBody(
+                        body = body,
+                        onCopy = { clipboard.setText(AnnotatedString(body)) },
+                    )
+                body.isNotBlank() ->
+                    Text(
+                        text = body,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+            }
+            if (action != null && actionLabel != null) {
+                OpenCodeButton(
+                    variant = OpenCodeButtonVariant.FullWidthText(actionLabel),
+                    onClick = {
+                        when (action) {
+                            SessionFailureSheetAction.CopyCaption ->
+                                clipboard.setText(AnnotatedString(target?.title.orEmpty()))
+                            SessionFailureSheetAction.PickModel -> {
+                                onDismiss()
+                                onFailureAction(FailureAction.PickModel)
+                            }
+                            SessionFailureSheetAction.Compact -> {
+                                onDismiss()
+                                onFailureAction(FailureAction.Compact)
+                            }
+                        }
+                    },
+                )
+            }
+            if (linkLabel != null && link != null) {
+                OpenCodeButton(
+                    variant = OpenCodeButtonVariant.FullWidthText(linkLabel),
+                    onClick = { onOpenLink(link) },
+                )
+            }
         }
     }
 }

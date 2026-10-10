@@ -49,7 +49,14 @@ struct SessionStatus: Sendable, Equatable {
 enum SessionActivity: Sendable, Equatable {
     case idle
     case running
-    case retrying(attempt: Int?, nextAtMs: Int64?, message: String?)
+    case retrying(
+        attempt: Int?,
+        nextAtMs: Int64?,
+        message: String?,
+        errorType: String?,
+        actionLabel: String?,
+        actionLink: String?
+    )
 
     var isBusy: Bool {
         switch self {
@@ -64,13 +71,42 @@ enum SessionActivity: Sendable, Equatable {
             nil
         case .running:
             "Working"
-        case let .retrying(attempt, _, _):
+        case let .retrying(attempt, _, _, _, _, _):
             if let attempt {
                 "Retrying · \(attempt)"
             } else {
                 "Retrying"
             }
         }
+    }
+
+    /// In-chat label. The home list keeps `statusLabel` ("Retrying · N") because
+    /// it parses the attempt off that exact prefix.
+    var chatStatusLabel: String? {
+        guard case let .retrying(_, _, message, _, _, _) = self else { return statusLabel }
+        let base = statusLabel
+        guard let reason = message?.trimmingCharacters(in: .whitespacesAndNewlines), !reason.isEmpty else {
+            return base
+        }
+        return "\(base ?? "Retrying") · \(reason.prefix(80))"
+    }
+
+    /// Live countdown card. Content-filter retries stay a caption only.
+    var retryCard: SessionRetryCard? {
+        guard case let .retrying(attempt, nextAtMs, message, errorType, actionLabel, actionLink) = self else {
+            return nil
+        }
+        if errorType?.caseInsensitiveCompare("provider.content-filter") == .orderedSame { return nil }
+        guard let nextAtMs else { return nil }
+        let trimmed = message?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let text = trimmed.isEmpty ? "Retrying" : String(trimmed.prefix(80))
+        return SessionRetryCard(
+            message: text,
+            attempt: attempt,
+            nextAtMs: nextAtMs,
+            actionLabel: trimmedNonEmpty(actionLabel),
+            actionLink: trimmedNonEmpty(actionLink)
+        )
     }
 
     init(raw: [String: String]) {
@@ -83,12 +119,29 @@ enum SessionActivity: Sendable, Equatable {
                 nextAtMs: raw["nextAtMs"].flatMap(Int64.init)
                     ?? raw["nextAt"].flatMap(Int64.init)
                     ?? raw["next"].flatMap(Int64.init),
-                message: raw["message"]
+                message: raw["message"],
+                errorType: raw["errorType"],
+                actionLabel: raw["actionLabel"],
+                actionLink: raw["actionLink"]
             )
         default:
             self = .idle
         }
     }
+}
+
+/// Countdown shown while the server is waiting to retry a rate limit or quota error.
+struct SessionRetryCard: Equatable, Sendable {
+    let message: String
+    let attempt: Int?
+    let nextAtMs: Int64
+    let actionLabel: String?
+    let actionLink: String?
+}
+
+private func trimmedNonEmpty(_ value: String?) -> String? {
+    let text = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    return text.isEmpty ? nil : text
 }
 
 enum SessionActivitySource: Sendable, Equatable {
@@ -120,6 +173,12 @@ struct SessionActivitySnapshot: Sendable, Equatable {
         guard let entry = entries[sessionID] else { return nil }
         guard seeded || entry.source == .cached else { return nil }
         return entry.activity.statusLabel
+    }
+
+    func chatStatusLabel(for sessionID: String) -> String? {
+        guard let entry = entries[sessionID] else { return nil }
+        guard seeded || entry.source == .cached else { return nil }
+        return entry.activity.chatStatusLabel
     }
 
     func isBusy(for sessionID: String) -> Bool {

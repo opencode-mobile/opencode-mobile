@@ -1,1 +1,1 @@
-../../../../../../../../../app/src/main/java/dev/opencode/mobile/ui/components/OpenCodeTextInput.kt
+../../../../../../../../../app/src/main/java/dev/opencode/mobile/ui/components/input/OpenCodeTextInput.kt

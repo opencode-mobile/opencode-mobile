@@ -14,6 +14,17 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
     case stepParagraph(blockID: String, paragraph: SessionChatStepParagraphBlock)
     /// Persistent note that the reply ended early (cut off or interrupted).
     case stopNote(blockID: String, reason: MessageStopReason)
+    /// A failed run under the reply. A provider body or an action opens the detail sheet.
+    /// `coveredByLiveRetry` is a rate-limit or quota the composer status already shows.
+    case failureLine(
+        blockID: String,
+        text: String,
+        providerBody: String?,
+        isNeutral: Bool,
+        action: FailureAction?,
+        actionLabel: String?,
+        coveredByLiveRetry: Bool
+    )
 
     var blockID: String {
         switch self {
@@ -32,6 +43,8 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
         case .stepParagraph(let blockID, _):
             blockID
         case .stopNote(let blockID, _):
+            blockID
+        case .failureLine(let blockID, _, _, _, _, _, _):
             blockID
         }
     }
@@ -52,7 +65,7 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
         case .stepParagraph(_, let paragraph):
             guard let textBlockID = paragraph.textBlockID, let text = paragraph.text else { return nil }
             return (textBlockID, text, paragraph.renderedMarkdown)
-        case .attachment, .toolCard, .toolGroup, .childSessionRow, .reasoning, .stopNote:
+        case .attachment, .toolCard, .toolGroup, .childSessionRow, .reasoning, .stopNote, .failureLine:
             return nil
         }
     }
@@ -64,7 +77,7 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
             return .text(blockID: blockID, text: text, renderedMarkdown: document)
         case .stepParagraph(let blockID, let paragraph):
             return .stepParagraph(blockID: blockID, paragraph: paragraph.withRenderedMarkdown(document))
-        case .attachment, .toolCard, .toolGroup, .childSessionRow, .reasoning, .stopNote:
+        case .attachment, .toolCard, .toolGroup, .childSessionRow, .reasoning, .stopNote, .failureLine:
             return self
         }
     }
@@ -97,6 +110,12 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
             lID == rID && lParagraph == rParagraph
         case let (.stopNote(lID, lReason), .stopNote(rID, rReason)):
             lID == rID && lReason == rReason
+        case let (
+            .failureLine(lID, lText, lBody, lNeutral, lAction, lLabel, lCovered),
+            .failureLine(rID, rText, rBody, rNeutral, rAction, rLabel, rCovered)
+        ):
+            lID == rID && lText == rText && lBody == rBody && lNeutral == rNeutral
+                && lAction == rAction && lLabel == rLabel && lCovered == rCovered
         default:
             false
         }
@@ -122,6 +141,8 @@ nonisolated struct SessionChatToolCardBlock: Equatable, Sendable {
     let changesInitialFilePath: String?
     /// `status` is `.error` because the user stopped or declined it; render neutral.
     let isInterrupted: Bool
+    /// The server closed the call without running it.
+    let isMalformed: Bool
 
     init(
         toolName: String,
@@ -136,7 +157,8 @@ nonisolated struct SessionChatToolCardBlock: Equatable, Sendable {
         childSessionId: String? = nil,
         opensChangesReview: Bool = false,
         changesInitialFilePath: String? = nil,
-        isInterrupted: Bool = false
+        isInterrupted: Bool = false,
+        isMalformed: Bool = false
     ) {
         self.toolName = toolName
         self.status = status
@@ -151,6 +173,26 @@ nonisolated struct SessionChatToolCardBlock: Equatable, Sendable {
         self.opensChangesReview = opensChangesReview
         self.changesInitialFilePath = changesInitialFilePath
         self.isInterrupted = isInterrupted
+        self.isMalformed = isMalformed
+    }
+
+    func markingFailed(_ errorText: String) -> SessionChatToolCardBlock {
+        SessionChatToolCardBlock(
+            toolName: toolName,
+            status: .error,
+            title: title,
+            subtitle: subtitle,
+            errorText: errorText,
+            additions: additions,
+            deletions: deletions,
+            detailText: detailText,
+            detailIsMarkdown: detailIsMarkdown,
+            childSessionId: childSessionId,
+            opensChangesReview: opensChangesReview,
+            changesInitialFilePath: changesInitialFilePath,
+            isInterrupted: isInterrupted,
+            isMalformed: isMalformed
+        )
     }
 }
 
@@ -589,6 +631,22 @@ nonisolated enum SessionChatTimelineBlocks {
         ]
     }
 
+    /// Newest rate-limit or quota body, for the composer status to open.
+    static func newestLiveRetryProviderBody(in rows: [SessionChatRow]) -> String? {
+        for row in rows.reversed() {
+            for block in row.blocks {
+                if case .failureLine(_, _, let body, _, _, _, let covered) = block,
+                   covered,
+                   let body = body?.trimmingCharacters(in: .whitespacesAndNewlines),
+                   !body.isEmpty
+                {
+                    return body
+                }
+            }
+        }
+        return nil
+    }
+
     /// Rows never render empty: drop blocks the timeline paints as nothing
     /// (live thought is footer chrome) and fall back to the live placeholder.
     static func paintedBlocks(for message: SessionChatRow) -> [SessionChatTimelineBlock] {
@@ -622,16 +680,50 @@ nonisolated enum SessionChatTimelineBlocks {
             .map(withStopNote)
     }
 
-    /// An assistant reply that ended early keeps a note under its last block.
+    /// An assistant reply that ended early keeps a note under its last block, then any failure caption.
     private static func withStopNote(_ body: DisplayMessageBody) -> DisplayMessageBody {
-        guard let reason = body.message.stopReason, body.message.role == .assistant else { return body }
-        if body.blocks.contains(where: { if case .stopNote = $0 { return true } else { return false } }) {
-            return body
+        var blocks = body.blocks
+        if let reason = body.message.stopReason,
+           body.message.role == .assistant,
+           !blocks.contains(where: { if case .stopNote = $0 { return true } else { return false } })
+        {
+            blocks.append(.stopNote(blockID: "\(body.message.id):stop-note", reason: reason))
         }
+        if let failure = body.message.failure, failure.type?.hasPrefix("compaction.") == true {
+            blocks = blocks.map { block in
+                guard case let .toolCard(id, card) = block, card.toolName == SessionCompactChrome.markerToolName else {
+                    return block
+                }
+                return .toolCard(blockID: id, card: card.markingFailed(failure.line()))
+            }
+        }
+        let compactionInline = body.message.failure?.type?.hasPrefix("compaction.") == true
+            && blocks.contains { block in
+                if case let .toolCard(_, card) = block {
+                    return card.toolName == SessionCompactChrome.markerToolName
+                }
+                return false
+            }
+        if let failure = body.message.failure, !compactionInline,
+           !blocks.contains(where: { if case .failureLine = $0 { return true } else { return false } })
+        {
+            blocks.append(
+                .failureLine(
+                    blockID: "\(body.message.id):failure",
+                    text: failure.line(),
+                    providerBody: failure.providerBody,
+                    isNeutral: failure.isNeutral,
+                    action: failure.action(),
+                    actionLabel: failure.actionLabel(),
+                    coveredByLiveRetry: failure.coversLiveRetry()
+                )
+            )
+        }
+        guard blocks != body.blocks else { return body }
         return DisplayMessageBody(
             message: body.message,
             isStreaming: body.isStreaming,
-            blocks: body.blocks + [.stopNote(blockID: "\(body.message.id):stop-note", reason: reason)],
+            blocks: blocks,
             renderedMarkdown: body.renderedMarkdown
         )
     }
@@ -685,6 +777,7 @@ nonisolated enum SessionChatTimelineBlocks {
             }
             var message = first.message
             message.stopReason = run.last?.message.stopReason
+            message.failure = run.reversed().compactMap(\.message.failure).first
             merged.append(
                 DisplayMessageBody(
                     message: message,
@@ -756,7 +849,7 @@ nonisolated enum SessionChatTimelineBlocks {
             true
         case .toolCard(_, let card):
             !Self.isChildSessionTool(card.toolName)
-        case .text, .attachment, .childSessionRow, .reasoning, .stepParagraph, .stopNote:
+        case .text, .attachment, .childSessionRow, .reasoning, .stepParagraph, .stopNote, .failureLine:
             false
         }
     }
@@ -810,6 +903,7 @@ nonisolated enum SessionChatTimelineBlocks {
             let firstPartId = textIds.first ?? toolIds[0]
             let errorLines = chips.compactMap { chip -> String? in
                 guard chip.status == .error, !chip.card.isInterrupted else { return nil }
+                if chip.card.isMalformed { return "Not run: malformed tool call" }
                 return "\(chip.label): \(chip.card.errorText ?? "Failed")"
             }
             pendingText.removeAll()
@@ -1563,7 +1657,8 @@ nonisolated enum SessionChatTimelineBlocks {
                 childSessionId: chrome.childSessionId,
                 opensChangesReview: chrome.opensChangesReview,
                 changesInitialFilePath: chrome.changesInitialFilePath,
-                isInterrupted: interrupted
+                isInterrupted: interrupted,
+                isMalformed: tool.isMalformed
             )
         )
     }
@@ -1925,9 +2020,13 @@ nonisolated enum SessionChatTimelineBlocks {
     private static func settledDetail(_ tool: ToolPart) -> String? {
         switch tool.status {
         case .completed, .error:
-            nonEmpty(tool.output) ?? nonEmpty(tool.error)
+            let parts = [
+                tool.status == .error ? nonEmpty(tool.error) : nil,
+                nonEmpty(tool.output),
+            ].compactMap { $0 }
+            return parts.isEmpty ? nil : parts.joined(separator: "\n\n")
         case .pending, .running:
-            nil
+            return nil
         }
     }
 

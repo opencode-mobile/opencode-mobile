@@ -982,6 +982,91 @@ import Testing
         #expect(message.followUpDelivery == nil)
     }
 
+    @Test func infoUpdated_keepsSeededFailureWhenTheLiveInfoOmitsError() {
+        let engine = makeEngine()
+        engine.replaceAll(
+            sessionID: "ses-1",
+            messages: [
+                Message(
+                    id: "msg-1",
+                    role: .assistant,
+                    text: "Partial answer",
+                    model: "gpt",
+                    mode: "build",
+                    sentAtEpochMs: nil,
+                    failure: SessionFailure(type: "provider.rate-limit", message: "Slow down", status: 429, providerBody: nil)
+                ),
+            ]
+        )
+        _ = engine.apply(
+            sessionID: "ses-1",
+            patch: .partUpdated(
+                part: [
+                    "id": .string("prt-1"),
+                    "messageID": .string("msg-1"),
+                    "sessionID": .string("ses-1"),
+                    "type": .string("text"),
+                    "text": .string("Partial answer"),
+                ],
+                delta: nil
+            )
+        )
+        _ = engine.apply(
+            sessionID: "ses-1",
+            patch: .infoUpdated([
+                "id": .string("msg-1"),
+                "role": .string("assistant"),
+                "sessionID": .string("ses-1"),
+            ])
+        )
+
+        let kept = engine.messages(sessionID: "ses-1").first
+        #expect(kept?.failure?.message == "Slow down")
+        #expect(kept?.failure?.status == 429)
+
+        _ = engine.apply(
+            sessionID: "ses-1",
+            patch: .infoUpdated([
+                "id": .string("msg-1"),
+                "role": .string("assistant"),
+                "sessionID": .string("ses-1"),
+                "error": .null,
+            ])
+        )
+        #expect(engine.messages(sessionID: "ses-1").first?.failure == nil)
+    }
+
+    @Test func compactionEnded_clearsTheFailureARetryReused() {
+        let engine = makeEngine()
+        applyProjected(
+            #"{"type":"session.compaction.failed","data":{"sessionID":"ses-1","messageID":"msg-c","error":{"type":"compaction.failed","message":"Could not compact"}}}"#,
+            engine: engine
+        )
+        #expect(engine.messages(sessionID: "ses-1").first?.failure?.message == "Could not compact")
+
+        applyProjected(
+            #"{"type":"session.compaction.ended","data":{"sessionID":"ses-1","messageID":"msg-c","text":"Done"}}"#,
+            engine: engine
+        )
+        #expect(engine.messages(sessionID: "ses-1").first?.failure == nil)
+    }
+
+    private func applyProjected(_ line: String, engine: SessionMessageEngine) {
+        for event in EventDomainAdapter().parseEvents(dataLine: line) {
+            guard let properties = event.rawProperties else { continue }
+            switch event.type {
+            case "message.updated":
+                guard let info = properties["info"]?.dictionaryValue else { continue }
+                _ = engine.apply(sessionID: "ses-1", patch: .infoUpdated(info))
+            case "message.part.updated":
+                guard let part = properties["part"]?.dictionaryValue else { continue }
+                _ = engine.apply(sessionID: "ses-1", patch: .partUpdated(part: part, delta: nil))
+            default:
+                break
+            }
+        }
+    }
+
     private func makeEngine() -> SessionMessageEngine {
         SessionMessageEngine(store: InMemoryMessageStore())
     }
