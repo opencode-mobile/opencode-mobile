@@ -3,6 +3,7 @@ package dev.opencode.mobile.domain.event
 import dev.opencode.mobile.domain.session.SessionActivity
 import dev.opencode.mobile.domain.session.SessionStatus
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.intOrNull
@@ -948,6 +949,57 @@ class EventDomainAdapterTest {
                 ?.jsonPrimitive
                 ?.content,
         )
+    }
+
+    @Test
+    fun parseEvents_toastsStructuredCompactionFailureWhenNoRowCanBeBuilt() {
+        val events =
+            adapter.parseEvents(
+                """{"type":"session.compaction.failed","data":{"sessionID":"ses-1",""" +
+                    """"error":{"type":"compaction.failed","message":"Could not compact"}}}""",
+            )
+
+        assertEquals(listOf("session.error", "session.idle"), events.map { it.type })
+    }
+
+    @Test
+    fun parseEvents_skipsCompactionToastWhenTheRowCarriesTheError() {
+        val events =
+            adapter.parseEvents(
+                """{"type":"session.compaction.failed","data":{"sessionID":"ses-1","messageID":"msg-c",""" +
+                    """"error":{"type":"compaction.failed","message":"Could not compact"}}}""",
+            )
+
+        assertEquals(listOf("message.updated", "message.part.updated", "session.idle"), events.map { it.type })
+        assertEquals(
+            "Could not compact",
+            events[0]
+                .rawProperties
+                ?.get("info")
+                ?.jsonObject
+                ?.get("error")
+                ?.jsonObject
+                ?.get("data")
+                ?.jsonObject
+                ?.get("message")
+                ?.jsonPrimitive
+                ?.content,
+        )
+    }
+
+    @Test
+    fun parseEvents_clearsCompactionErrorWhenTheRetryEnds() {
+        val error =
+            adapter
+                .parseEvents(
+                    """{"type":"session.compaction.ended","data":{"sessionID":"ses-1","messageID":"msg-c"}}""",
+                ).single { it.type == "message.updated" }
+                .rawProperties
+                ?.get("info")
+                ?.jsonObject
+                ?.get("error")
+
+        assertEquals(JsonNull, error)
     }
 
     @Test

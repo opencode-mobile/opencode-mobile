@@ -468,6 +468,30 @@ struct EventDomainAdapterTests {
         #expect(events.first?.rawProperties?["messageID"]?.stringValue == "msg_00cf91b85001")
     }
 
+    @Test func parseEvents_toastsStructuredCompactionFailureWhenNoRowCanBeBuilt() {
+        let events = EventDomainAdapter().parseEvents(
+            dataLine: #"{"type":"session.compaction.failed","data":{"sessionID":"ses-1","error":{"type":"compaction.failed","message":"Could not compact"}}}"#
+        )
+        #expect(events.map(\.type) == ["session.error", "session.idle"])
+    }
+
+    @Test func parseEvents_skipsCompactionToastWhenTheRowCarriesTheError() {
+        let events = EventDomainAdapter().parseEvents(
+            dataLine: #"{"type":"session.compaction.failed","data":{"sessionID":"ses-1","messageID":"msg-c","error":{"type":"compaction.failed","message":"Could not compact"}}}"#
+        )
+        #expect(events.map(\.type) == ["message.updated", "message.part.updated", "session.idle"])
+        let data = events[0].rawProperties?["info"]?.dictionaryValue?["error"]?.dictionaryValue?["data"]?.dictionaryValue
+        #expect(data?["message"]?.stringValue == "Could not compact")
+    }
+
+    @Test func parseEvents_clearsCompactionErrorWhenTheRetryEnds() {
+        let events = EventDomainAdapter().parseEvents(
+            dataLine: #"{"type":"session.compaction.ended","data":{"sessionID":"ses-1","messageID":"msg-c"}}"#
+        )
+        let updated = events.first { $0.type == "message.updated" }
+        #expect(updated?.rawProperties?["info"]?.dictionaryValue?["error"] == .null)
+    }
+
     @Test func parseEvents_projectsLiveCompactionFailedIntoPartErrorAndIdle() {
         let adapter = EventDomainAdapter()
         let events = adapter.parseEvents(

@@ -240,12 +240,7 @@ class EventDomainAdapter(
             -> compactionUpdated(properties, envelopeId, phase = CompactionPhase.Ended)
             "session.next.compaction.failed",
             "session.compaction.failed",
-            ->
-                compactionUpdated(properties, envelopeId, phase = CompactionPhase.Failed) +
-                    listOfNotNull(
-                        if (structuredErrorInfo(properties) == null) event("session.error", properties) else null,
-                        event("session.idle", properties),
-                    )
+            -> failedCompactionEvents(properties, envelopeId)
             "session.revert.committed" -> listOfNotNull(revertCommitted(properties))
             "session.next.reasoning.started",
             "session.reasoning.started",
@@ -492,6 +487,26 @@ class EventDomainAdapter(
      * stamps `time.created` (the envelope time) so a live reply orders after the
      * prompt it answers; later partial infos omit `time` and the store keeps it.
      */
+    /**
+     * A structured compaction error with no id has no timeline row. Toast it, the same way a
+     * step failure toasts when the assistant row cannot be created.
+     */
+    private fun failedCompactionEvents(
+        properties: JsonObject,
+        envelopeId: String?,
+    ): List<OpencodeEvent> {
+        val updated = compactionUpdated(properties, envelopeId, phase = CompactionPhase.Failed)
+        return updated +
+            listOfNotNull(
+                if (updated.isEmpty() || structuredErrorInfo(properties) == null) {
+                    event("session.error", properties)
+                } else {
+                    null
+                },
+                event("session.idle", properties),
+            )
+    }
+
     private fun failedStepEvents(
         properties: JsonObject,
         idle: Boolean,
@@ -704,6 +719,9 @@ class EventDomainAdapter(
                 put("mode", "compaction")
                 if (phase == CompactionPhase.Failed) {
                     structuredErrorInfo(properties)?.let { put("error", it) }
+                } else if (phase == CompactionPhase.Ended) {
+                    // An omitted error would keep a failed caption when a retry reuses this id.
+                    put("error", JsonNull)
                 }
                 if (phase == CompactionPhase.Started) {
                     properties.long("created")?.let { created ->

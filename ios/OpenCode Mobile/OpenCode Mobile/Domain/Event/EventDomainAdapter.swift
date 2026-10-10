@@ -210,12 +210,7 @@ nonisolated struct EventDomainAdapter: Sendable {
         case "session.next.compaction.ended", "session.compaction.ended":
             compactionUpdated(properties, envelopeID: envelopeID, phase: .ended)
         case "session.next.compaction.failed", "session.compaction.failed":
-            compactionUpdated(properties, envelopeID: envelopeID, phase: .failed) + [
-                structuredErrorInfo(properties) == nil
-                    ? event(type: "session.error", properties: properties)
-                    : nil,
-                event(type: "session.idle", properties: properties),
-            ].compactMap { $0 }
+            failedCompactionEvents(properties, envelopeID: envelopeID)
         case "session.revert.committed":
             [revertCommitted(properties)].compactMap { $0 }
         case "session.next.reasoning.started", "session.reasoning.started":
@@ -475,6 +470,16 @@ nonisolated struct EventDomainAdapter: Sendable {
         return ToolInterruption.isAbortedType(type) ? "aborted" : "error"
     }
 
+    /// A structured compaction error with no id has no timeline row. Toast it, the same way a
+    /// step failure toasts when the assistant row cannot be created.
+    private func failedCompactionEvents(_ properties: [String: Any], envelopeID: String?) -> [OpencodeEvent] {
+        let updated = compactionUpdated(properties, envelopeID: envelopeID, phase: .failed)
+        let toast = updated.isEmpty || structuredErrorInfo(properties) == nil
+            ? event(type: "session.error", properties: properties)
+            : nil
+        return updated + [toast, event(type: "session.idle", properties: properties)].compactMap { $0 }
+    }
+
     private func failedStepEvents(_ properties: [String: Any], idle: Bool) -> [OpencodeEvent] {
         let error = structuredErrorInfo(properties)
         let updated = assistantMessageUpdated(properties, finish: failedStepFinish(properties), error: error)
@@ -682,6 +687,9 @@ nonisolated struct EventDomainAdapter: Sendable {
         }
         if phase == .failed, let error = structuredErrorInfo(properties) {
             info["error"] = error
+        } else if phase == .ended {
+            // An omitted error would keep a failed caption when a retry reuses this id.
+            info["error"] = NSNull()
         }
         if phase == .started, let created = int64(in: properties, key: "created") {
             info["time"] = ["created": created]

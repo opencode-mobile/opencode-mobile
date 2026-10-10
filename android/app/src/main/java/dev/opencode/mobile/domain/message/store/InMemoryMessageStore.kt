@@ -139,11 +139,14 @@ class InMemoryMessageStore
                 val stamp = contextStamps[sessionId]?.get(messageId)
                 val live = adapter.toMessage(info, messageParts)
                 // A delivered REST copy is the authority; a waiting inbox copy only guessed.
+                // An omitted error is partial. An explicit null is a clear and must win.
+                val failureOmitted = !infoJson.containsKey("error")
                 val message =
                     when {
-                        stamp == null -> live.withMetadataFrom(base)
-                        base != null && !base.isWaitingForPickup -> stamp.stamp(live.withMetadataFrom(base))
-                        else -> stamp.stamp(live).withMetadataFrom(base)
+                        stamp == null -> live.withMetadataFrom(base, failureOmitted = failureOmitted)
+                        base != null && !base.isWaitingForPickup ->
+                            stamp.stamp(live.withMetadataFrom(base, failureOmitted = failureOmitted))
+                        else -> stamp.stamp(live).withMetadataFrom(base, failureOmitted = failureOmitted)
                     }
                 return when {
                     message.hasRenderableContent() -> message
@@ -371,17 +374,29 @@ class InMemoryMessageStore
         /**
          * v2 live infos are partial (a delivered prompt has no agent or model); keep the
          * REST/inbox copy's agent, model and variant so the bubble keeps its meta line.
+         * An omitted failure is the same kind of partial: the first live info after a reload
+         * has no error key, and the caption would otherwise disappear.
          */
-        private fun Message.withMetadataFrom(base: Message?): Message {
+        private fun Message.withMetadataFrom(
+            base: Message?,
+            failureOmitted: Boolean,
+        ): Message {
             if (base == null) return this
-            val withStop = if (stopReason == null && base.stopReason != null) copy(stopReason = base.stopReason) else this
-            if (mode != null && model != null) return withStop
+            val withFailure =
+                if (failure == null && failureOmitted && base.failure != null) copy(failure = base.failure) else this
+            val withStop =
+                if (withFailure.stopReason == null && base.stopReason != null) {
+                    withFailure.copy(stopReason = base.stopReason)
+                } else {
+                    withFailure
+                }
+            if (withStop.mode != null && withStop.model != null) return withStop
             return withStop.copy(
-                mode = mode ?: base.mode,
-                model = model ?: base.model,
-                modelProviderId = if (model == null) base.modelProviderId else modelProviderId,
-                modelId = if (model == null) base.modelId else modelId,
-                variant = if (model == null) base.variant else variant,
+                mode = withStop.mode ?: base.mode,
+                model = withStop.model ?: base.model,
+                modelProviderId = if (withStop.model == null) base.modelProviderId else withStop.modelProviderId,
+                modelId = if (withStop.model == null) base.modelId else withStop.modelId,
+                variant = if (withStop.model == null) base.variant else withStop.variant,
             )
         }
 

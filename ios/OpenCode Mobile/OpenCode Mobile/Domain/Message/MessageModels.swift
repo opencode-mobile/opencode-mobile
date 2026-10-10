@@ -65,11 +65,13 @@ nonisolated struct Message: Equatable, Sendable, Identifiable {
         self.failure = failure
     }
 
-    /// Fills agent, model and variant this copy lacks from `base` (v2 live infos are partial).
-    func withMetadata(from base: Message?) -> Message {
+    /// Fills agent, model, variant, and an omitted failure this copy lacks from `base`.
+    /// v2 live infos are partial. An explicit null error is a clear and must not be restored.
+    func withMetadata(from base: Message?, failureOmitted: Bool) -> Message {
         guard let base else { return self }
         var copy = self
         if copy.stopReason == nil { copy.stopReason = base.stopReason }
+        if copy.failure == nil, failureOmitted { copy.failure = base.failure }
         guard mode == nil || model == nil else { return copy }
         let takeModel = model == nil
         return Message(
@@ -91,7 +93,7 @@ nonisolated struct Message: Equatable, Sendable, Identifiable {
             followUpDelivery: followUpDelivery,
             isWaitingForPickup: isWaitingForPickup,
             stopReason: copy.stopReason,
-            failure: failure
+            failure: copy.failure
         )
     }
 

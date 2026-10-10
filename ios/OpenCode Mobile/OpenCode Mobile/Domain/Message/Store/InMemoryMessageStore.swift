@@ -126,14 +126,16 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
             let live = adapter.message(info: info, domainParts: sortedParts)
             let message: Message
             // A delivered REST copy is the authority; a waiting inbox copy only guessed.
+            // An omitted error is partial. An explicit null is a clear and must win.
+            let failureOmitted = infoDict["error"] == nil
             if let stamp = contextStamps[sessionID]?[messageID] {
                 if let base, !base.isWaitingForPickup {
-                    message = stamp.stamp(live.withMetadata(from: base))
+                    message = stamp.stamp(live.withMetadata(from: base, failureOmitted: failureOmitted))
                 } else {
-                    message = stamp.stamp(live).withMetadata(from: base)
+                    message = stamp.stamp(live).withMetadata(from: base, failureOmitted: failureOmitted)
                 }
             } else {
-                message = live.withMetadata(from: base)
+                message = live.withMetadata(from: base, failureOmitted: failureOmitted)
             }
             return hasRenderableContent(message) ? message : baseByID[messageID]
         }
