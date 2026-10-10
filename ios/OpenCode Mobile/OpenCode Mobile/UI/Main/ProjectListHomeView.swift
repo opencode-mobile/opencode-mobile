@@ -13,6 +13,8 @@ struct ProjectListHomeView: View {
     @State private var selectedSessionFilterId = SessionListFilterTab.allId
     /// Trailing-pane session in the regular-width split view. Unused on compact.
     @State private var selectedSession: SessionListItem?
+    /// Session ids from the last fully loaded Home list; detects a selected session disappearing.
+    @State private var lastLoadedSessionIDs: Set<String>?
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Binding private var presentConnectionSetupOnAppear: Bool
@@ -112,6 +114,26 @@ struct ProjectListHomeView: View {
                     selectedSession = nil
                     navigationPath.append(session)
                 }
+            }
+            .onChange(of: viewModel.serversChrome.active?.id) { _, _ in
+                // Clear All Data (active profile becomes nil) and profile switches
+                // drop every session the trailing pane could be showing.
+                selectedSession = nil
+                lastLoadedSessionIDs = nil
+            }
+            .onChange(of: loadedSessionIDs) { _, current in
+                guard let current else { return }
+                if let selectedSession,
+                   HomeSplitSelection.wasRemoved(
+                       selectedID: selectedSession.id,
+                       previousIDs: lastLoadedSessionIDs,
+                       currentIDs: current
+                   )
+                {
+                    // Deleted (here or on another device) while open in the trailing pane.
+                    self.selectedSession = nil
+                }
+                lastLoadedSessionIDs = current
             }
             .onChange(of: viewModel.pendingSelectedFilterId) { _, worktree in
                 if let worktree {
@@ -518,6 +540,20 @@ struct ProjectListHomeView: View {
         OpenCodeLayoutWidth.resolve(sizeClass: horizontalSizeClass) == .regular
     }
 
+    /// Every session id in a fully loaded Home list; nil while loading, disconnected,
+    /// or when a project failed to load, so partial lists never clear the selection.
+    private var loadedSessionIDs: Set<String>? {
+        switch viewModel.state {
+        case .empty:
+            return []
+        case let .loaded(sections, _, _, _):
+            guard sections.allSatisfy({ $0.loadError == nil }) else { return nil }
+            return Set(sections.flatMap { $0.allSessions.map(\.id) })
+        default:
+            return nil
+        }
+    }
+
     private func openSession(_ session: SessionListItem) {
         if isSplitLayout {
             selectedSession = session
@@ -921,6 +957,23 @@ private extension SessionListItem {
         default:
             return isReady ? SessionListStatus.ready : SessionListStatus.idle
         }
+    }
+}
+
+/// Rules for keeping the Home split-view selection in sync with the session list.
+enum HomeSplitSelection {
+    /// Whether the selected session was in the previous loaded list and is gone
+    /// from the current one. Sessions not listed yet (a fresh fork, an optimistic
+    /// create placeholder that has not been reconciled) are never treated as removed.
+    static func wasRemoved(
+        selectedID: String,
+        previousIDs: Set<String>?,
+        currentIDs: Set<String>
+    ) -> Bool {
+        guard !OptimisticSessionCreate.isPlaceholder(selectedID),
+              let previousIDs
+        else { return false }
+        return previousIDs.contains(selectedID) && !currentIDs.contains(selectedID)
     }
 }
 

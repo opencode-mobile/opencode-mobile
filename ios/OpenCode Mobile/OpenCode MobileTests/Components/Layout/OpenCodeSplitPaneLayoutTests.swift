@@ -3,6 +3,16 @@ import Testing
 @testable import OpenCode_Mobile
 
 @Suite struct OpenCodeSplitPaneLayoutTests {
+    @Test func leadingWidthDelta_followsDragInLeftToRight() {
+        #expect(OpenCodeSplitPaneLayout.leadingWidthDelta(translationWidth: 40, isRightToLeft: false) == 40)
+        #expect(OpenCodeSplitPaneLayout.leadingWidthDelta(translationWidth: -40, isRightToLeft: false) == -40)
+    }
+
+    @Test func leadingWidthDelta_mirrorsDragInRightToLeft() {
+        #expect(OpenCodeSplitPaneLayout.leadingWidthDelta(translationWidth: -40, isRightToLeft: true) == 40)
+        #expect(OpenCodeSplitPaneLayout.leadingWidthDelta(translationWidth: 40, isRightToLeft: true) == -40)
+    }
+
     @Test func clamp_keepsWidthInsideBounds() {
         #expect(OpenCodeSplitPaneLayout.clamp(width: 100) == 280)
         #expect(OpenCodeSplitPaneLayout.clamp(width: 360) == 360)

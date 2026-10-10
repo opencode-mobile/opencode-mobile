@@ -82,6 +82,13 @@ enum OpenCodeSplitPaneLayout {
         )
     }
 
+    /// Leading-pane width change for a horizontal drag translation measured in
+    /// global (unmirrored) coordinates. Right-to-left layouts put the leading
+    /// pane on the right, so dragging left widens it.
+    static func leadingWidthDelta(translationWidth: CGFloat, isRightToLeft: Bool) -> CGFloat {
+        isRightToLeft ? -translationWidth : translationWidth
+    }
+
     static func toggled(_ state: OpenCodeSplitPaneState) -> OpenCodeSplitPaneState {
         OpenCodeSplitPaneState(leadingWidth: clamp(width: state.leadingWidth), isCollapsed: !state.isCollapsed)
     }

@@ -19,6 +19,7 @@ struct OpenCodeSplitPane<Leading: View, Trailing: View>: View {
     @ViewBuilder let leading: () -> Leading
     @ViewBuilder let trailing: (OpenCodeSplitPaneDetailControl) -> Trailing
 
+    @Environment(\.layoutDirection) private var layoutDirection
     @State private var dragStart: OpenCodeSplitPaneState?
     @State private var liveWidth: CGFloat?
     @State private var isHandleHovered = false
@@ -123,7 +124,7 @@ struct OpenCodeSplitPane<Leading: View, Trailing: View>: View {
         var transaction = Transaction()
         transaction.disablesAnimations = true
         withTransaction(transaction) {
-            liveWidth = OpenCodeSplitPaneLayout.liveWidth(proposedWidth: origin + value.translation.width)
+            liveWidth = OpenCodeSplitPaneLayout.liveWidth(proposedWidth: origin + leadingWidthDelta(value))
         }
     }
 
@@ -137,7 +138,7 @@ struct OpenCodeSplitPane<Leading: View, Trailing: View>: View {
         let origin = start.isCollapsed ? 0 : start.leadingWidth
         let resolved = OpenCodeSplitPaneLayout.resolveDragEnd(
             previous: start,
-            proposedWidth: origin + value.translation.width
+            proposedWidth: origin + leadingWidthDelta(value)
         )
         withAnimation(splitPaneAnimation) {
             liveWidth = nil
@@ -146,6 +147,14 @@ struct OpenCodeSplitPane<Leading: View, Trailing: View>: View {
         if resolved.isCollapsed != start.isCollapsed {
             onCollapsedChange?(resolved.isCollapsed)
         }
+    }
+
+    /// The drag runs in global space, which SwiftUI does not mirror for RTL.
+    private func leadingWidthDelta(_ value: DragGesture.Value) -> CGFloat {
+        OpenCodeSplitPaneLayout.leadingWidthDelta(
+            translationWidth: value.translation.width,
+            isRightToLeft: layoutDirection == .rightToLeft
+        )
     }
 
     private func toggle() {

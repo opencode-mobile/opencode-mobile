@@ -11,6 +11,21 @@ enum SettingsDetail: Hashable {
     case textMateLogbook
     case featureFlags
     case diagnosticLogs
+
+    /// Whether the screen lives in the Developer Tools section that Clear All Data locks.
+    var requiresDeveloperTools: Bool {
+        switch self {
+        case .servers, .appearance, .diagnosticLogs:
+            false
+        case .componentGallery, .textMateLanguages, .textMateLogbook, .featureFlags:
+            true
+        }
+    }
+
+    /// The detail to show: a locked Developer Tools screen falls back to Servers.
+    func resolved(developerToolsUnlocked: Bool) -> SettingsDetail {
+        requiresDeveloperTools && !developerToolsUnlocked ? .servers : self
+    }
 }
 
 struct SettingsView: View {
@@ -196,9 +211,16 @@ struct SettingsView: View {
                 Task { await refreshServersSubtitle() }
             }
         }
-        .onChange(of: selectedDetail) { previous, _ in
+        .onChange(of: visibleDetail) { previous, _ in
             if previous == .servers {
                 Task { await refreshServersSubtitle() }
+            }
+        }
+        .onChange(of: isSplitLayout) { _, split in
+            // Keep the open sub-screen when the window narrows to compact. The
+            // selection stays so widening again shows the same detail.
+            if !split {
+                push(visibleDetail)
             }
         }
     }
@@ -542,8 +564,13 @@ struct SettingsView: View {
         OpenCodeLayoutWidth.resolve(sizeClass: horizontalSizeClass) == .regular
     }
 
+    /// Selected detail after the Developer Tools lock; what the trailing pane renders.
+    private var visibleDetail: SettingsDetail {
+        selectedDetail.resolved(developerToolsUnlocked: developerToolsPreferences.unlocked)
+    }
+
     private func isDetailSelected(_ detail: SettingsDetail) -> Bool {
-        isSplitLayout && selectedDetail == detail
+        isSplitLayout && visibleDetail == detail
     }
 
     /// Regular width swaps the trailing pane; compact pushes as before.
@@ -552,6 +579,10 @@ struct SettingsView: View {
             selectedDetail = detail
             return
         }
+        push(detail)
+    }
+
+    private func push(_ detail: SettingsDetail) {
         switch detail {
         case .servers: showServers = true
         case .appearance: showAppearance = true
@@ -570,12 +601,12 @@ struct SettingsView: View {
             settingsDetail(control)
                 .toolbar(.hidden, for: .navigationBar)
         }
-        .id(selectedDetail)
+        .id(visibleDetail)
     }
 
     @ViewBuilder
     private func settingsDetail(_ control: OpenCodeSplitPaneDetailControl) -> some View {
-        switch selectedDetail {
+        switch visibleDetail {
         case .servers:
             ServersView(
                 onAddServer: onAddServer,

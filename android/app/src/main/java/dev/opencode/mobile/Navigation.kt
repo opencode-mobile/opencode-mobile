@@ -457,46 +457,53 @@ fun MainNavigation() {
                                             val useSplitLayout = currentOpenCodeUsesSplitLayout()
                                             var settingsDetail by rememberSaveable { mutableStateOf(SettingsDetail.Servers) }
                                             val visibleSettingsDetail =
-                                                if (settingsDetail.requiresDeveloperTools && !DeveloperToolsPreferences.unlocked) {
-                                                    SettingsDetail.Servers
-                                                } else {
-                                                    settingsDetail
+                                                settingsDetail.resolved(DeveloperToolsPreferences.unlocked)
+                                            // Last layout this entry rendered, so only a split -> compact
+                                            // transition (not first composition) hands off the detail.
+                                            var settingsRenderedSplit by rememberSaveable { mutableStateOf(useSplitLayout) }
+                                            LaunchedEffect(useSplitLayout) {
+                                                if (settingsRenderedSplit && !useSplitLayout) {
+                                                    // Window narrowed: hand the open detail to the stacked route.
+                                                    // The selection is kept for when the window widens again.
+                                                    val route = visibleSettingsDetail.route
+                                                    if (backStack.lastOrNull() != route) {
+                                                        backStack.add(route)
+                                                    }
                                                 }
+                                                settingsRenderedSplit = useSplitLayout
+                                            }
 
-                                            fun openSettingsDetail(
-                                                detail: SettingsDetail,
-                                                route: NavKey,
-                                            ) {
+                                            fun openSettingsDetail(detail: SettingsDetail) {
                                                 if (useSplitLayout) {
                                                     settingsDetail = detail
-                                                } else if (backStack.lastOrNull() != route) {
-                                                    backStack.add(route)
+                                                } else if (backStack.lastOrNull() != detail.route) {
+                                                    backStack.add(detail.route)
                                                 }
                                             }
                                             val settings: @Composable () -> Unit = {
                                                 SettingsScreen(
                                                     onComponentGalleryClick = {
-                                                        openSettingsDetail(SettingsDetail.ComponentGallery, ComponentGalleryHome)
+                                                        openSettingsDetail(SettingsDetail.ComponentGallery)
                                                     },
                                                     onTextMateLanguagesClick = {
-                                                        openSettingsDetail(SettingsDetail.TextMateLanguages, TextMateLanguagesHome)
+                                                        openSettingsDetail(SettingsDetail.TextMateLanguages)
                                                     },
                                                     onFeatureFlagsClick = {
-                                                        openSettingsDetail(SettingsDetail.FeatureFlags, FeatureFlagsHome)
+                                                        openSettingsDetail(SettingsDetail.FeatureFlags)
                                                     },
                                                     onTextMateLogbookClick = {
-                                                        openSettingsDetail(SettingsDetail.TextMateLogbook, TextMateLogbookHome)
+                                                        openSettingsDetail(SettingsDetail.TextMateLogbook)
                                                     },
                                                     onDiagnosticLogsClick = {
-                                                        openSettingsDetail(SettingsDetail.DiagnosticLogs, DiagnosticLogsHome)
+                                                        openSettingsDetail(SettingsDetail.DiagnosticLogs)
                                                     },
                                                     onNavigateBack = { backStack.popRouteUnlessRoot() },
                                                     onServersClick = {
                                                         serversViewModel.refresh()
-                                                        openSettingsDetail(SettingsDetail.Servers, ServersHome)
+                                                        openSettingsDetail(SettingsDetail.Servers)
                                                     },
                                                     onAppearanceClick = {
-                                                        openSettingsDetail(SettingsDetail.Appearance, AppearanceHome)
+                                                        openSettingsDetail(SettingsDetail.Appearance)
                                                     },
                                                     selectedDetail = if (useSplitLayout) visibleSettingsDetail else null,
                                                     serversSummary = serversSummary,
@@ -1010,18 +1017,17 @@ private val SessionOpenTargetSaver =
         },
     )
 
-private val SettingsDetail.requiresDeveloperTools: Boolean
+/** Stacked route that shows a Settings detail on compact width. */
+private val SettingsDetail.route: NavKey
     get() =
         when (this) {
-            SettingsDetail.Servers,
-            SettingsDetail.Appearance,
-            SettingsDetail.DiagnosticLogs,
-            -> false
-            SettingsDetail.ComponentGallery,
-            SettingsDetail.TextMateLanguages,
-            SettingsDetail.TextMateLogbook,
-            SettingsDetail.FeatureFlags,
-            -> true
+            SettingsDetail.Servers -> ServersHome
+            SettingsDetail.Appearance -> AppearanceHome
+            SettingsDetail.ComponentGallery -> ComponentGalleryHome
+            SettingsDetail.TextMateLanguages -> TextMateLanguagesHome
+            SettingsDetail.TextMateLogbook -> TextMateLogbookHome
+            SettingsDetail.FeatureFlags -> FeatureFlagsHome
+            SettingsDetail.DiagnosticLogs -> DiagnosticLogsHome
         }
 
 /** Empty trailing pane key for the Home split view. */
