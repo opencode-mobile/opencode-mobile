@@ -36,6 +36,44 @@ struct OpenCodeSubtleControlChrome<S: Shape>: ViewModifier {
     }
 }
 
+/// Press cue for subtle glass and wash controls. An opacity fade sinks into a
+/// dark dock; a `text-strong` ink wash brightens in dark mode and darkens in
+/// light mode. Not `.glassEffect(.interactive())` — that lens is too loud here.
+enum OpenCodeSubtlePress {
+    static let washOpacity: CGFloat = 0.14
+    static let scale: CGFloat = 0.97
+    static let animation: Animation = .smooth(duration: 0.16)
+}
+
+struct OpenCodeSubtleControlPress<S: Shape>: ViewModifier {
+    var isPressed: Bool
+    var shape: S
+
+    func body(content: Content) -> some View {
+        content
+            .overlay {
+                shape
+                    .fill(
+                        OpenCodeColors.textStrong.opacity(
+                            isPressed ? OpenCodeSubtlePress.washOpacity : 0
+                        )
+                    )
+                    .allowsHitTesting(false)
+            }
+            .scaleEffect(isPressed ? OpenCodeSubtlePress.scale : 1)
+            .animation(OpenCodeSubtlePress.animation, value: isPressed)
+    }
+}
+
+struct OpenCodeSubtleControlPressStyle<S: Shape>: ButtonStyle {
+    var shape: S
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .modifier(OpenCodeSubtleControlPress(isPressed: configuration.isPressed, shape: shape))
+    }
+}
+
 extension View {
     func openCodeFloatingChrome(cornerRadius: CGFloat) -> some View {
         modifier(OpenCodeFloatingChrome(cornerRadius: cornerRadius))
@@ -43,5 +81,9 @@ extension View {
 
     func openCodeSubtleControlChrome<S: Shape>(shape: S) -> some View {
         modifier(OpenCodeSubtleControlChrome(shape: shape))
+    }
+
+    func openCodeSubtleControlPress<S: Shape>(isPressed: Bool, shape: S) -> some View {
+        modifier(OpenCodeSubtleControlPress(isPressed: isPressed, shape: shape))
     }
 }
