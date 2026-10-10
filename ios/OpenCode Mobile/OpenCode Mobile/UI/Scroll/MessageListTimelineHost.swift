@@ -509,8 +509,9 @@ where Item.ID == String {
                     }
                 }
 
+                let holdingUserPlace = self.isHoldingUserScrollPlace
                 let shouldStayPinned =
-                    self.preservedOffsetY == nil
+                    !holdingUserPlace
                     && (
                         !self.hasCompletedInitialScroll
                         || self.isSettlingInitialLoad
@@ -547,7 +548,14 @@ where Item.ID == String {
                     self.hasCompletedInitialScroll = true
                     self.beginInitialLoadSettling()
                     self.scrollController?.reset(messageCount: self.orderedIDs.count)
-                    self.scrollController?.requestScrollToEnd(animated: false)
+                    if let y = self.scrollController?.userUnpinnedContentOffsetY {
+                        // Collection view was recreated under a surviving scroll
+                        // controller (push/pop). Do not treat that as a fresh open.
+                        self.preservedOffsetY = y
+                        self.restorePreservedUnpinnedScrollPositionIfNeeded()
+                    } else {
+                        self.scrollController?.requestScrollToEnd(animated: false)
+                    }
                     return
                 }
 
@@ -662,7 +670,16 @@ where Item.ID == String {
         return attributes.frame.minY - collectionView.contentOffset.y - anchor.offsetFromViewportTop
     }
 
+    /// User scrolled away, or we already saved that place for a navigation cover.
+    private var isHoldingUserScrollPlace: Bool {
+        preservedOffsetY != nil || scrollController?.userUnpinnedContentOffsetY != nil
+    }
+
     private func preserveUnpinnedScrollPositionIfNeeded() {
+        if let y = scrollController?.userUnpinnedContentOffsetY {
+            preservedOffsetY = y
+            return
+        }
         guard collectionView.bounds.height > 1 else { return }
         guard scrollController?.isPinnedToEnd != true else {
             preservedOffsetY = nil
@@ -672,8 +689,21 @@ where Item.ID == String {
     }
 
     private func restorePreservedUnpinnedScrollPositionIfNeeded() {
-        guard collectionView.bounds.height > 1 else { return }
         guard let y = preservedOffsetY else { return }
+        applyUnpinnedOffset(y)
+    }
+
+    /// A pin was attempted while the user is holding a place. Put them back if
+    /// the offset has already jumped (navigation layout, warm re-apply).
+    private func restoreHeldUserPlaceIfNeeded() {
+        let y = preservedOffsetY ?? scrollController?.userUnpinnedContentOffsetY
+        guard let y else { return }
+        guard abs(collectionView.contentOffset.y - y) > 1 else { return }
+        applyUnpinnedOffset(y)
+    }
+
+    private func applyUnpinnedOffset(_ y: CGFloat) {
+        guard collectionView.bounds.height > 1 else { return }
         let minY = -collectionView.adjustedContentInset.top
         let maxY = bottomContentOffsetY()
         let clamped = min(max(y, minY), maxY)
@@ -687,7 +717,13 @@ where Item.ID == String {
     }
 
     func performScrollToEnd(animated: Bool) {
-        guard preservedOffsetY == nil else { return }
+        // Pill clears the user anchor first. Follow and inset re-pins do not,
+        // so a held place wins over a programmatic snap.
+        if scrollController?.userUnpinnedContentOffsetY != nil {
+            restoreHeldUserPlaceIfNeeded()
+            return
+        }
+        preservedOffsetY = nil
         guard !orderedIDs.isEmpty else { return }
         // Match content-growth anchoring: never yank the offset under an
         // active user pan or residual deceleration.
@@ -750,7 +786,7 @@ where Item.ID == String {
     }
 
     func scrollViewDidChangeAdjustedContentInset(_ scrollView: UIScrollView) {
-        guard repinOnAdjustedInsetChange, !isCoveredByNavigation else { return }
+        guard repinOnAdjustedInsetChange, !isCoveredByNavigation, !isHoldingUserScrollPlace else { return }
         pinToBottomWithoutAnimation()
     }
 
@@ -758,6 +794,7 @@ where Item.ID == String {
         reportGeometry()
         guard scrollView.isDragging || scrollView.isTracking else { return }
         scrollController?.beginUserScrolling()
+        scrollController?.noteUserScrollOffset(scrollView.contentOffset.y)
         scheduleUserScrollEnd()
         noteUserScrollTowardOldestIfNeeded(scrollView)
     }
@@ -807,13 +844,17 @@ where Item.ID == String {
 
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
         if !decelerate {
-            scrollController?.endUserScrolling()
-            flushPendingApplyIfNeeded()
+            finishUserScroll(scrollView)
         }
     }
 
     func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+        finishUserScroll(scrollView)
+    }
+
+    private func finishUserScroll(_ scrollView: UIScrollView) {
         scrollController?.endUserScrolling()
+        scrollController?.noteUserScrollOffset(scrollView.contentOffset.y)
         flushPendingApplyIfNeeded()
     }
 
@@ -1012,7 +1053,7 @@ where Item.ID == String {
         guard abs(targetInset - bottomAlignmentTopInset) > 0.5 else { return }
 
         let keepPinned =
-            preservedOffsetY == nil
+            !isHoldingUserScrollPlace
             && !isRestoringOlderPrepend
             && (
                 !hasCompletedInitialScroll
@@ -1042,11 +1083,11 @@ where Item.ID == String {
     }
 
     private func pinToBottomWithoutAnimation() {
-        guard preservedOffsetY == nil else {
-            restorePreservedUnpinnedScrollPositionIfNeeded()
+        guard !collectionView.isDragging, !collectionView.isDecelerating else { return }
+        guard !isHoldingUserScrollPlace else {
+            restoreHeldUserPlaceIfNeeded()
             return
         }
-        guard !collectionView.isDragging, !collectionView.isDecelerating else { return }
         guard !orderedIDs.isEmpty else { return }
 
         CATransaction.begin()
@@ -1068,6 +1109,7 @@ where Item.ID == String {
     }
 
     private func anchorBottomForContentGrowth(delta: CGFloat) {
+        guard !isHoldingUserScrollPlace else { return }
         let shouldAnchor =
             !hasCompletedInitialScroll
             || scrollController?.isPinnedToEnd == true
@@ -1094,6 +1136,7 @@ where Item.ID == String {
                   !collectionView.isDecelerating
             else { return }
             scrollController?.endUserScrolling()
+            scrollController?.noteUserScrollOffset(collectionView.contentOffset.y)
             flushPendingApplyIfNeeded()
         }
     }

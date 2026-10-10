@@ -259,6 +259,35 @@ struct TimelineScrollControllerTests {
         #expect(!controller.isProgrammaticScrolling)
     }
 
+    @Test func pinnedGeometryAfterUserScrollAwayDoesNotFollow() {
+        let performer = FakeTimelineScrollPerformer()
+        let controller = TimelineScrollController(initialMessageCount: 8)
+        controller.attach(performer)
+        controller.updateGeometry(
+            distanceFromBottom: 400,
+            viewportHeight: 800,
+            contentHeight: 2_000
+        )
+        controller.beginUserScrolling()
+        controller.endUserScrolling()
+        controller.noteUserScrollOffset(640)
+        #expect(!controller.isPinnedToEnd)
+        #expect(controller.userUnpinnedContentOffsetY == 640)
+
+        // Navigation cover / inset change can report a real viewport pinned
+        // to the end. That must not re-arm follow or forget the user's place.
+        controller.updateGeometry(
+            distanceFromBottom: 0,
+            viewportHeight: 800,
+            contentHeight: 2_000
+        )
+        controller.notifyContentGrew()
+        controller.updateMessageCount(9)
+
+        #expect(performer.calls.isEmpty)
+        #expect(controller.userUnpinnedContentOffsetY == 640)
+    }
+
     @Test func collapsedViewportDoesNotRePinWhenUserWasUnpinned() {
         let controller = TimelineScrollController(initialMessageCount: 8)
         controller.updateGeometry(

@@ -1,6 +1,9 @@
 struct MessageListAutoFollowState {
     private var observedMessageCount: Int
     private var shouldFollowNextAppend = false
+    /// Set when the user scrolls away from the end. A covering destination
+    /// (subagent, tool group) can report a bogus pin; that must not re-arm follow.
+    private var userDisarmedFollow = false
 
     init(initialMessageCount: Int) {
         observedMessageCount = initialMessageCount
@@ -12,13 +15,16 @@ struct MessageListAutoFollowState {
         // Geometry can report "unpinned" while estimated heights are still resolving
         // after a programmatic scroll-to-end. Only arm from geometry here; disarming
         // happens from user-scroll callbacks (or explicit markProgrammaticScrollSettled).
-        if isPinnedToEnd {
+        // A later pinned sample after the user scrolled away is the same class of
+        // lie (navigation cover, inset change) and must not re-arm.
+        if isPinnedToEnd, !userDisarmedFollow {
             shouldFollowNextAppend = true
         }
     }
 
     mutating func markProgrammaticScrollSettled(isPinnedToEnd: Bool) {
         shouldFollowNextAppend = isPinnedToEnd
+        userDisarmedFollow = !isPinnedToEnd
     }
 
     func shouldFollowLayoutChange(autoFollowEnabled: Bool, isPinnedToEnd: Bool) -> Bool {

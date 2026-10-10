@@ -16,6 +16,12 @@ final class TimelineScrollController {
 
     var autoFollowEnabled = true
 
+    /// Content offset captured while the user was away from the end. Survives a
+    /// navigation cover that jumps geometry to a bogus pin, and a collection
+    /// view recreated on return, so we can put them back instead of snapping
+    /// to the end.
+    private(set) var userUnpinnedContentOffsetY: CGFloat?
+
     private var autoFollowState: MessageListAutoFollowState
     private weak var performer: TimelineScrollPerforming?
     private var scrollGeneration = 0
@@ -38,10 +44,24 @@ final class TimelineScrollController {
         self.messageCount = messageCount
         autoFollowState = MessageListAutoFollowState(initialMessageCount: messageCount)
         refreshDerivedState()
-        autoFollowState.updatePinnedState(
-            isPinnedToEnd: isPinnedToEnd,
-            messageCount: messageCount
-        )
+        if userUnpinnedContentOffsetY != nil {
+            autoFollowState.markProgrammaticScrollSettled(isPinnedToEnd: false)
+        } else {
+            autoFollowState.updatePinnedState(
+                isPinnedToEnd: isPinnedToEnd,
+                messageCount: messageCount
+            )
+        }
+    }
+
+    /// Record the offset of an in-progress or just-finished user scroll.
+    /// A pin sample after this must not forget where they were.
+    func noteUserScrollOffset(_ y: CGFloat) {
+        if isPinnedToEnd {
+            userUnpinnedContentOffsetY = nil
+        } else {
+            userUnpinnedContentOffsetY = y
+        }
     }
 
     func updateGeometry(
@@ -91,10 +111,15 @@ final class TimelineScrollController {
     }
 
     func scrollToEndAnimated() {
+        userUnpinnedContentOffsetY = nil
+        autoFollowState.markProgrammaticScrollSettled(isPinnedToEnd: true)
         requestScrollToEnd(animated: true)
     }
 
     func requestScrollToEnd(animated: Bool) {
+        // Follow and inset re-pins must not override a place the user is holding.
+        // The scroll-to-end pill clears that place before calling in.
+        guard userUnpinnedContentOffsetY == nil else { return }
         guard messageCount > 0 || contentHeight > 0 else { return }
         // Never fight an active user pan/deceleration; follow stays gated by
         // shouldFollowNextAppend until the gesture ends.

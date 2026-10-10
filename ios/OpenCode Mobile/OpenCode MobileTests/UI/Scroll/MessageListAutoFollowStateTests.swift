@@ -83,6 +83,18 @@ struct MessageListAutoFollowStateTests {
         #expect(!shouldFollow)
     }
 
+    @Test func pinnedGeometryAfterUserScrollAwayDoesNotRearmFollow() {
+        var state = MessageListAutoFollowState(initialMessageCount: 8)
+
+        state.updatePinnedState(isPinnedToEnd: true, messageCount: 8)
+        state.markProgrammaticScrollSettled(isPinnedToEnd: false)
+        state.updatePinnedState(isPinnedToEnd: true, messageCount: 8)
+
+        #expect(!state.shouldEnsureLayoutEnd(autoFollowEnabled: true))
+        let shouldFollow = state.onMessageCountChanged(messageCount: 9, autoFollowEnabled: true)
+        #expect(!shouldFollow)
+    }
+
     @Test func geometryUnpinnedDoesNotDisarmFollow() {
         var state = MessageListAutoFollowState(initialMessageCount: 8)
 
