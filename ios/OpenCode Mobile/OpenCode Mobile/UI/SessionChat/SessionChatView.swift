@@ -8,6 +8,8 @@ import UniformTypeIdentifiers
 struct SessionChatView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var viewModelStorage: SessionChatViewModel?
+    /// `sessionNavigationTaskID` the current `viewModelStorage` was built for.
+    @State private var viewModelTaskID: String?
     @State private var activePicker: ComposerPickerKind?
     @State private var activeModelProviderID: String?
     @State private var modelFilterText = ""
@@ -88,14 +90,31 @@ struct SessionChatView: View {
                 screenId: ProductAnalytics.Screen.sessionChat,
                 presentation: ProductAnalytics.Presentation.route
             )
-            viewModelStorage?.stopObserving()
-            viewModelStorage = injectedViewModel ?? Container.makeSessionChatViewModel(
-                sessionID: session.id,
-                sessionTitle: session.title,
-                worktree: session.worktree
-            )
-            viewModel.startObserving()
-            await viewModel.loadMessages()
+            let taskID = sessionNavigationTaskID
+            switch SessionChatViewModelReuse.decision(
+                currentTaskID: taskID,
+                boundTaskID: viewModelTaskID,
+                hasViewModel: viewModelStorage != nil
+            ) {
+            case .reuse:
+                // Back from a pushed screen: `.onDisappear` stopped observing. Resume on
+                // the same view model so the composer and timeline keep their state;
+                // the timeline's warm path refreshes quietly.
+                viewModel.startObserving()
+                if !viewModel.hasCompletedInitialLoad {
+                    await viewModel.loadMessages()
+                }
+            case .rebuild:
+                viewModelStorage?.stopObserving()
+                viewModelStorage = injectedViewModel ?? Container.makeSessionChatViewModel(
+                    sessionID: session.id,
+                    sessionTitle: session.title,
+                    worktree: session.worktree
+                )
+                viewModelTaskID = taskID
+                viewModel.startObserving()
+                await viewModel.loadMessages()
+            }
         }
     }
 

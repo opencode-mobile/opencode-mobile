@@ -5,6 +5,9 @@ import Observation
 @Observable
 final class SessionChatViewModel {
     private(set) var uiState: SessionChatUiState
+    /// Set once `loadMessages()` ran to completion. A retained view model that
+    /// reappears before then (its first `.task` was cancelled) loads again.
+    @ObservationIgnored private(set) var hasCompletedInitialLoad = false
 
     private var sessionID: String
     private var sessionTitle: String
@@ -185,6 +188,7 @@ final class SessionChatViewModel {
         isSessionBound = true
         startCollapsePreferenceObservation()
         repoStrip.start()
+        reviewChanges.start()
         if OptimisticSessionCreate.isPlaceholder(sessionID) {
             beginOptimisticCreate()
             return
@@ -219,6 +223,9 @@ final class SessionChatViewModel {
         async let catalogLoad: Void = composer.loadCatalog()
         _ = await catalogLoad
         await waitForTimelineResolution()
+        if !Task.isCancelled {
+            hasCompletedInitialLoad = true
+        }
     }
 
     func refreshMessages() async {
