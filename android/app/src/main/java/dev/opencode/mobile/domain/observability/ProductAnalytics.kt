@@ -291,6 +291,9 @@ object ProductAnalytics {
         const val CLEAR_CACHE_CANCEL = "clear_cache_cancel"
         const val CLEAR_ALL_DATA_CONFIRM = "clear_all_data_confirm"
         const val CLEAR_ALL_DATA_CANCEL = "clear_all_data_cancel"
+
+        // Tablet split view
+        const val SPLIT_PANE_TOGGLE_SIDEBAR = "split_pane_toggle_sidebar"
     }
 
     object Param {

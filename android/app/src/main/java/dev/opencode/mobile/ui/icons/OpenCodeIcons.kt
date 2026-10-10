@@ -34,6 +34,7 @@ private var _list: ImageVector? = null
 private var _more_vert: ImageVector? = null
 private var _search: ImageVector? = null
 private var _settings: ImageVector? = null
+private var _sidebar: ImageVector? = null
 private var _terminal: ImageVector? = null
 private var _architecture: ImageVector? = null
 private var _archive: ImageVector? = null
@@ -893,6 +894,38 @@ private var _plug: ImageVector? = null
     )
       }.build()
       return _settings!!
+    }
+
+  val Sidebar: ImageVector
+    get() {
+      if (_sidebar != null) return _sidebar!!
+      _sidebar = ImageVector.Builder(
+        name = "Sidebar",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+      ).apply {
+    addPath(
+      pathData = PathParser().parsePathString("M 5 3 h 14 a 2 2 0 0 1 2 2 v 14 a 2 2 0 0 1 -2 2 h -14 a 2 2 0 0 1 -2 -2 v -14 a 2 2 0 0 1 2 -2 z").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+    addPath(
+      pathData = PathParser().parsePathString("M9 3v18").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+      }.build()
+      return _sidebar!!
     }
 
   val Terminal: ImageVector

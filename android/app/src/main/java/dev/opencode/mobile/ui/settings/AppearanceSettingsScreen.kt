@@ -36,14 +36,17 @@ import dev.opencode.mobile.ui.components.OpenCodeSelectableCard
 import dev.opencode.mobile.ui.components.OpenCodeListItemAccessory
 import dev.opencode.mobile.ui.components.OpenCodeListItemStyle
 import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
+import dev.opencode.mobile.ui.components.OpenCodeSplitPaneDetailControl
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
 import dev.opencode.mobile.ui.components.StartDecorator
+import dev.opencode.mobile.ui.components.openCodeDetailLeading
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 @Composable
 fun AppearanceSettingsScreen(
     onNavigateBack: () -> Unit,
+    detailControl: OpenCodeSplitPaneDetailControl? = null,
     onThemeClick: () -> Unit,
     onSyntaxClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -53,7 +56,7 @@ fun AppearanceSettingsScreen(
     Column(modifier = modifier.fillMaxSize()) {
         OpenCodeTopBar(
             title = "Appearance",
-            leading = OpenCodeTopBarLeading.Back(onClick = onNavigateBack),
+            leading = openCodeDetailLeading(detailControl, onNavigateBack),
             showDivider = true,
         )
         OpenCodeReadableColumn(modifier = Modifier.weight(1f)) {

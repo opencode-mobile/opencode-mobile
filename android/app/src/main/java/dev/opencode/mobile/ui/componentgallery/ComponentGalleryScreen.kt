@@ -23,15 +23,17 @@ import dev.opencode.mobile.ui.components.OpenCodeEmptyState
 import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeListItemStyle
 import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
+import dev.opencode.mobile.ui.components.OpenCodeSplitPaneDetailControl
 import dev.opencode.mobile.ui.components.OpenCodeTextInput
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
-import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
+import dev.opencode.mobile.ui.components.openCodeDetailLeading
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 @Composable
 fun ComponentGalleryScreen(
     onEntryClick: (ComponentGalleryEntryId) -> Unit,
     onNavigateBack: () -> Unit,
+    detailControl: OpenCodeSplitPaneDetailControl? = null,
     modifier: Modifier = Modifier,
     entries: List<ComponentGalleryEntry> = ComponentGalleryEntries,
 ) {
@@ -42,7 +44,7 @@ fun ComponentGalleryScreen(
     Column(modifier = modifier.fillMaxSize()) {
         OpenCodeTopBar(
             title = "Component Gallery",
-            leading = OpenCodeTopBarLeading.Back(onClick = onNavigateBack),
+            leading = openCodeDetailLeading(detailControl, onNavigateBack),
             showDivider = true,
         )
 

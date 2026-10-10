@@ -2,6 +2,17 @@ import Factory
 import SwiftUI
 import UIKit
 
+/// Settings sub-screen shown in the trailing pane of the tablet split view.
+enum SettingsDetail: Hashable {
+    case servers
+    case appearance
+    case componentGallery
+    case textMateLanguages
+    case textMateLogbook
+    case featureFlags
+    case diagnosticLogs
+}
+
 struct SettingsView: View {
     var onAddServer: () -> Void = {}
     var onEditProfile: (ConnectionProfile) -> Void = { _ in }
@@ -10,6 +21,9 @@ struct SettingsView: View {
     var build: String = AppVersion.current().build
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    /// Trailing-pane sub-screen in the regular-width split view. Unused on compact.
+    @State private var selectedDetail: SettingsDetail = .servers
     @State private var showComponentGallery = false
     @State private var showTextMateLogbook = false
     @State private var showDiagnosticLogs = false
@@ -33,6 +47,163 @@ struct SettingsView: View {
     @State private var serversLetterAccent: LetterAccent = .blue
 
     var body: some View {
+        Group {
+            if isSplitLayout {
+                OpenCodeSplitPane(
+                    screen: .settings,
+                    onCollapsedChange: { _ in
+                        logSettingsAction(ProductAnalytics.Action.splitPaneToggleSidebar)
+                    }
+                ) {
+                    settingsPane
+                } trailing: { control in
+                    settingsDetailPane(control)
+                }
+            } else {
+                settingsPane
+            }
+        }
+        .navigationBarBackButtonHidden(true)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(OpenCodeColors.backgroundBase)
+        .navigationDestination(isPresented: $showComponentGallery) {
+            ComponentGalleryHomeView()
+        }
+        .navigationDestination(isPresented: $showTextMateLanguages) {
+            TextMateLanguagesView()
+        }
+        .navigationDestination(isPresented: $showTextMateLogbook) {
+            TextMateLogbookView()
+        }
+        .navigationDestination(isPresented: $showFeatureFlags) {
+            FeatureFlagsView()
+        }
+        .navigationDestination(isPresented: $showDiagnosticLogs) {
+            DiagnosticLogsView()
+        }
+        .navigationDestination(isPresented: $showAppearance) {
+            AppearanceSettingsView()
+        }
+        .openCodeBottomSheet(
+            isPresented: recentWindowPickerBinding,
+            title: "Recent Window",
+            scrollTargetID: "hours-\(homeDisplayPreferences.recentWindowHours)"
+        ) {
+            Text("Sessions stay in Recent while Running or Ready, or when updated within this window.")
+                .font(OpenCodeTypography.caption)
+                .foregroundStyle(OpenCodeColors.textBase)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 8)
+
+            ForEach(HomeSessionLadder.allowedWindowHours, id: \.self) { hours in
+                OpenCodeBottomSheetEntry(
+                    title: HomeSessionLadder.formatWindowHoursLabel(hours),
+                    endDecorator: hours == homeDisplayPreferences.recentWindowHours
+                        ? .icon(.check, accessibilityLabel: "Selected")
+                        : .none,
+                    action: {
+                        ProductAnalytics.logUserAction(
+                            screenId: ProductAnalytics.Screen.settingsRecentWindowPicker,
+                            actionId: ProductAnalytics.Action.recentWindowSelectHours,
+                            parameters: [ProductAnalytics.Param.hours: String(hours)]
+                        )
+                        homeDisplayPreferences.setRecentWindowHours(hours)
+                        showRecentWindowPicker = false
+                    }
+                )
+                .id("hours-\(hours)")
+            }
+        }
+        .openCodeBottomSheet(isPresented: $showFollowUpPicker, title: "Follow-up send") {
+            ForEach(FollowUpDelivery.allCases, id: \.self) { mode in
+                OpenCodeBottomSheetEntry(
+                    title: mode == .steer ? "Steer" : "Queue",
+                    startDecorator: .icon(mode == .steer ? .arrowWarmUp : .arrowUpward, accessibilityLabel: nil),
+                    endDecorator: mode == sessionChatDisplayPreferences.followUpDelivery
+                        ? .icon(.check, accessibilityLabel: "Selected")
+                        : .none,
+                    action: {
+                        sessionChatDisplayPreferences.setFollowUpDelivery(mode)
+                        showFollowUpPicker = false
+                    }
+                )
+            }
+        }
+        .task {
+            ProductAnalytics.logScreenView(
+                screenId: ProductAnalytics.Screen.settings,
+                presentation: ProductAnalytics.Presentation.route
+            )
+            sessionCacheSizeLabel = await Container.refreshSessionCacheSizeLabel()
+        }
+        .openCodeDialog(
+            isPresented: $showClearSessionCacheConfirmation,
+            title: "Clear session cache?",
+            subtitle: "Removes cached sessions and messages. Your connection and credentials stay.",
+            primaryOption: OpenCodeDialogOption(title: "Clear") {
+                ProductAnalytics.logUserAction(
+                    screenId: ProductAnalytics.Screen.settingsClearCacheConfirm,
+                    actionId: ProductAnalytics.Action.clearCacheConfirm
+                )
+                Task {
+                    await Container.clearSessionCache()
+                    sessionCacheSizeLabel = await Container.refreshSessionCacheSizeLabel()
+                }
+                showClearSessionCacheConfirmation = false
+            },
+            secondaryOption: OpenCodeDialogOption(title: "Cancel") {
+                ProductAnalytics.logUserAction(
+                    screenId: ProductAnalytics.Screen.settingsClearCacheConfirm,
+                    actionId: ProductAnalytics.Action.clearCacheCancel
+                )
+                showClearSessionCacheConfirmation = false
+            }
+        )
+        .openCodeDialog(
+            isPresented: $showClearConfirmation,
+            title: "Clear all data?",
+            subtitle: "This cannot be undone.",
+            primaryOption: OpenCodeDialogOption(title: "Clear") {
+                ProductAnalytics.logUserAction(
+                    screenId: ProductAnalytics.Screen.settingsClearAllDataConfirm,
+                    actionId: ProductAnalytics.Action.clearAllDataConfirm
+                )
+                Container.clearAllData()
+                Task {
+                    sessionCacheSizeLabel = await Container.refreshSessionCacheSizeLabel()
+                }
+                showClearConfirmation = false
+            },
+            secondaryOption: OpenCodeDialogOption(title: "Cancel") {
+                ProductAnalytics.logUserAction(
+                    screenId: ProductAnalytics.Screen.settingsClearAllDataConfirm,
+                    actionId: ProductAnalytics.Action.clearAllDataCancel
+                )
+                showClearConfirmation = false
+            }
+        )
+        .navigationDestination(isPresented: $showServers) {
+            ServersView(
+                onAddServer: onAddServer,
+                onEditProfile: onEditProfile,
+                refreshToken: serversRefreshToken
+            )
+        }
+        .task { await refreshServersSubtitle() }
+        .onChange(of: showServers) { _, visible in
+            if !visible {
+                Task { await refreshServersSubtitle() }
+            }
+        }
+        .onChange(of: selectedDetail) { previous, _ in
+            if previous == .servers {
+                Task { await refreshServersSubtitle() }
+            }
+        }
+    }
+
+    private var settingsPane: some View {
         VStack(spacing: 0) {
             OpenCodeTopBar(
                 title: "Settings",
@@ -53,6 +224,7 @@ struct SettingsView: View {
                     OpenCodeListItem(
                         title: "Servers",
                         subtitle: serversSubtitleState,
+                        selected: isDetailSelected(.servers),
                         style: .card,
                         startDecorator: .letter(serversLetter, serversLetterAccent),
                         accessory: .disclosure,
@@ -61,7 +233,7 @@ struct SettingsView: View {
                                 screenId: ProductAnalytics.Screen.settings,
                                 actionId: ProductAnalytics.Action.settingsOpenConnection
                             )
-                            showServers = true
+                            open(.servers)
                         }
                     )
                     .padding(.horizontal, 16)
@@ -71,12 +243,13 @@ struct SettingsView: View {
                     OpenCodeListItem(
                         title: "Appearance",
                         subtitle: "\(themeManager.currentTheme.name) · \(themeManager.currentSyntaxPreset.name)",
+                        selected: isDetailSelected(.appearance),
                         style: .card,
                         startDecorator: .icon(.widgets, accessibilityLabel: "Appearance"),
                         accessory: .disclosure,
                         action: {
                             logSettingsAction(ProductAnalytics.Action.settingsOpenAppearance)
-                            showAppearance = true
+                            open(.appearance)
                         }
                     )
                     .padding(.horizontal, 16)
@@ -250,9 +423,10 @@ struct SettingsView: View {
                     OpenCodeListItem(
                         title: "Diagnostic Logs",
                         subtitle: "Share a redacted rolling runtime log window",
+                        selected: isDetailSelected(.diagnosticLogs),
                         style: .card,
                         startDecorator: .icon(.description, accessibilityLabel: "Diagnostic Logs"),
-                        action: { showDiagnosticLogs = true }
+                        action: { open(.diagnosticLogs) }
                     )
                     .padding(.horizontal, 16)
 
@@ -299,9 +473,10 @@ struct SettingsView: View {
                         OpenCodeListItem(
                             title: "Component Gallery",
                             subtitle: "Design-system foundations and reusable components",
+                            selected: isDetailSelected(.componentGallery),
                             style: .card,
                             startDecorator: .icon(.architecture, accessibilityLabel: "Component Gallery"),
-                            action: { showComponentGallery = true }
+                            action: { open(.componentGallery) }
                         )
                         .padding(.horizontal, 16)
 
@@ -327,27 +502,30 @@ struct SettingsView: View {
                         OpenCodeListItem(
                             title: "TextMate Languages",
                             subtitle: "Opt out of any packaged language (all default on)",
+                            selected: isDetailSelected(.textMateLanguages),
                             style: .card,
                             startDecorator: .icon(.architecture, accessibilityLabel: "TextMate Languages"),
-                            action: { showTextMateLanguages = true }
+                            action: { open(.textMateLanguages) }
                         )
                         .padding(.horizontal, 16)
 
                         OpenCodeListItem(
                             title: "TextMate Logbook",
                             subtitle: "Persisted code-fence parsing measurements",
+                            selected: isDetailSelected(.textMateLogbook),
                             style: .card,
                             startDecorator: .icon(.description, accessibilityLabel: "TextMate Logbook"),
-                            action: { showTextMateLogbook = true }
+                            action: { open(.textMateLogbook) }
                         )
                         .padding(.horizontal, 16)
 
                         OpenCodeListItem(
                             title: "Feature Flags",
                             subtitle: "Remote flags with device overrides",
+                            selected: isDetailSelected(.featureFlags),
                             style: .card,
                             startDecorator: .icon(.settings, accessibilityLabel: "Feature Flags"),
-                            action: { showFeatureFlags = true }
+                            action: { open(.featureFlags) }
                         )
                         .padding(.horizontal, 16)
                     }
@@ -356,138 +534,67 @@ struct SettingsView: View {
             .openCodeReadableColumn()
             .accessibilityIdentifier("settingsContent")
         }
-        .navigationBarBackButtonHidden(true)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(OpenCodeColors.backgroundBase)
-        .navigationDestination(isPresented: $showComponentGallery) {
-            ComponentGalleryHomeView()
-        }
-        .navigationDestination(isPresented: $showTextMateLanguages) {
-            TextMateLanguagesView()
-        }
-        .navigationDestination(isPresented: $showTextMateLogbook) {
-            TextMateLogbookView()
-        }
-        .navigationDestination(isPresented: $showFeatureFlags) {
-            FeatureFlagsView()
-        }
-        .navigationDestination(isPresented: $showDiagnosticLogs) {
-            DiagnosticLogsView()
-        }
-        .navigationDestination(isPresented: $showAppearance) {
-            AppearanceSettingsView()
-        }
-        .openCodeBottomSheet(
-            isPresented: recentWindowPickerBinding,
-            title: "Recent Window",
-            scrollTargetID: "hours-\(homeDisplayPreferences.recentWindowHours)"
-        ) {
-            Text("Sessions stay in Recent while Running or Ready, or when updated within this window.")
-                .font(OpenCodeTypography.caption)
-                .foregroundStyle(OpenCodeColors.textBase)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 16)
-                .padding(.bottom, 8)
+    }
 
-            ForEach(HomeSessionLadder.allowedWindowHours, id: \.self) { hours in
-                OpenCodeBottomSheetEntry(
-                    title: HomeSessionLadder.formatWindowHoursLabel(hours),
-                    endDecorator: hours == homeDisplayPreferences.recentWindowHours
-                        ? .icon(.check, accessibilityLabel: "Selected")
-                        : .none,
-                    action: {
-                        ProductAnalytics.logUserAction(
-                            screenId: ProductAnalytics.Screen.settingsRecentWindowPicker,
-                            actionId: ProductAnalytics.Action.recentWindowSelectHours,
-                            parameters: [ProductAnalytics.Param.hours: String(hours)]
-                        )
-                        homeDisplayPreferences.setRecentWindowHours(hours)
-                        showRecentWindowPicker = false
-                    }
-                )
-                .id("hours-\(hours)")
-            }
+    private var isSplitLayout: Bool {
+        OpenCodeLayoutWidth.resolve(sizeClass: horizontalSizeClass) == .regular
+    }
+
+    private func isDetailSelected(_ detail: SettingsDetail) -> Bool {
+        isSplitLayout && selectedDetail == detail
+    }
+
+    /// Regular width swaps the trailing pane; compact pushes as before.
+    private func open(_ detail: SettingsDetail) {
+        if isSplitLayout {
+            selectedDetail = detail
+            return
         }
-        .openCodeBottomSheet(isPresented: $showFollowUpPicker, title: "Follow-up send") {
-            ForEach(FollowUpDelivery.allCases, id: \.self) { mode in
-                OpenCodeBottomSheetEntry(
-                    title: mode == .steer ? "Steer" : "Queue",
-                    startDecorator: .icon(mode == .steer ? .arrowWarmUp : .arrowUpward, accessibilityLabel: nil),
-                    endDecorator: mode == sessionChatDisplayPreferences.followUpDelivery
-                        ? .icon(.check, accessibilityLabel: "Selected")
-                        : .none,
-                    action: {
-                        sessionChatDisplayPreferences.setFollowUpDelivery(mode)
-                        showFollowUpPicker = false
-                    }
-                )
-            }
+        switch detail {
+        case .servers: showServers = true
+        case .appearance: showAppearance = true
+        case .componentGallery: showComponentGallery = true
+        case .textMateLanguages: showTextMateLanguages = true
+        case .textMateLogbook: showTextMateLogbook = true
+        case .featureFlags: showFeatureFlags = true
+        case .diagnosticLogs: showDiagnosticLogs = true
         }
-        .task {
-            ProductAnalytics.logScreenView(
-                screenId: ProductAnalytics.Screen.settings,
-                presentation: ProductAnalytics.Presentation.route
-            )
-            sessionCacheSizeLabel = await Container.refreshSessionCacheSizeLabel()
+    }
+
+    /// Trailing pane root. Its own stack keeps deeper pushes (theme and syntax
+    /// pickers, gallery details) inside the detail pane.
+    private func settingsDetailPane(_ control: OpenCodeSplitPaneDetailControl) -> some View {
+        NavigationStack {
+            settingsDetail(control)
+                .toolbar(.hidden, for: .navigationBar)
         }
-        .openCodeDialog(
-            isPresented: $showClearSessionCacheConfirmation,
-            title: "Clear session cache?",
-            subtitle: "Removes cached sessions and messages. Your connection and credentials stay.",
-            primaryOption: OpenCodeDialogOption(title: "Clear") {
-                ProductAnalytics.logUserAction(
-                    screenId: ProductAnalytics.Screen.settingsClearCacheConfirm,
-                    actionId: ProductAnalytics.Action.clearCacheConfirm
-                )
-                Task {
-                    await Container.clearSessionCache()
-                    sessionCacheSizeLabel = await Container.refreshSessionCacheSizeLabel()
-                }
-                showClearSessionCacheConfirmation = false
-            },
-            secondaryOption: OpenCodeDialogOption(title: "Cancel") {
-                ProductAnalytics.logUserAction(
-                    screenId: ProductAnalytics.Screen.settingsClearCacheConfirm,
-                    actionId: ProductAnalytics.Action.clearCacheCancel
-                )
-                showClearSessionCacheConfirmation = false
-            }
-        )
-        .openCodeDialog(
-            isPresented: $showClearConfirmation,
-            title: "Clear all data?",
-            subtitle: "This cannot be undone.",
-            primaryOption: OpenCodeDialogOption(title: "Clear") {
-                ProductAnalytics.logUserAction(
-                    screenId: ProductAnalytics.Screen.settingsClearAllDataConfirm,
-                    actionId: ProductAnalytics.Action.clearAllDataConfirm
-                )
-                Container.clearAllData()
-                Task {
-                    sessionCacheSizeLabel = await Container.refreshSessionCacheSizeLabel()
-                }
-                showClearConfirmation = false
-            },
-            secondaryOption: OpenCodeDialogOption(title: "Cancel") {
-                ProductAnalytics.logUserAction(
-                    screenId: ProductAnalytics.Screen.settingsClearAllDataConfirm,
-                    actionId: ProductAnalytics.Action.clearAllDataCancel
-                )
-                showClearConfirmation = false
-            }
-        )
-        .navigationDestination(isPresented: $showServers) {
+        .id(selectedDetail)
+    }
+
+    @ViewBuilder
+    private func settingsDetail(_ control: OpenCodeSplitPaneDetailControl) -> some View {
+        switch selectedDetail {
+        case .servers:
             ServersView(
                 onAddServer: onAddServer,
                 onEditProfile: onEditProfile,
-                refreshToken: serversRefreshToken
+                refreshToken: serversRefreshToken,
+                detailControl: control
             )
-        }
-        .task { await refreshServersSubtitle() }
-        .onChange(of: showServers) { _, visible in
-            if !visible {
-                Task { await refreshServersSubtitle() }
-            }
+        case .appearance:
+            AppearanceSettingsView(detailControl: control)
+        case .componentGallery:
+            ComponentGalleryHomeView(detailControl: control)
+        case .textMateLanguages:
+            TextMateLanguagesView(detailControl: control)
+        case .textMateLogbook:
+            TextMateLogbookView(detailControl: control)
+        case .featureFlags:
+            FeatureFlagsView(detailControl: control)
+        case .diagnosticLogs:
+            DiagnosticLogsView(detailControl: control)
         }
     }
 

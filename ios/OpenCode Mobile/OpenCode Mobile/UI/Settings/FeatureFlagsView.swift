@@ -14,6 +14,9 @@ struct FeatureFlagsView: View {
         ]
     }
 
+    /// Set when shown as the trailing root of the tablet Settings split view.
+    var detailControl: OpenCodeSplitPaneDetailControl? = nil
+
     var body: some View {
         VStack(spacing: 0) {
             OpenCodeTopBarOverflowHost(
@@ -22,7 +25,7 @@ struct FeatureFlagsView: View {
             ) {
                 OpenCodeTopBar(
                     title: "Feature Flags",
-                    leading: .back(action: { dismiss() }),
+                    leading: OpenCodeSplitPane.detailLeading(detailControl, back: { dismiss() }),
                     actions: [
                         .icon(.moreVert, accessibilityLabel: "More options") {
                             menuExpanded = true

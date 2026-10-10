@@ -39,9 +39,20 @@ struct SessionChatView: View {
 
     private let session: SessionListItem
     private let injectedViewModel: SessionChatViewModel?
+    /// Set when this chat is the trailing root of a tablet split view.
+    private let detailControl: OpenCodeSplitPaneDetailControl?
+    /// Replaces `dismiss()` when the chat is a split-view root with nothing to pop to.
+    private let onLeaveSession: (() -> Void)?
 
-    init(session: SessionListItem, viewModel: SessionChatViewModel? = nil) {
+    init(
+        session: SessionListItem,
+        viewModel: SessionChatViewModel? = nil,
+        detailControl: OpenCodeSplitPaneDetailControl? = nil,
+        onLeaveSession: (() -> Void)? = nil
+    ) {
         self.session = session
+        self.detailControl = detailControl
+        self.onLeaveSession = onLeaveSession
         // Do not construct the ViewModel in `State(initialValue:)` — SwiftUI re-runs
         // View.init (and that expression) whenever the parent body refreshes, while
         // keeping one live `@State`. Eager make() was spawning bind storms and
@@ -113,7 +124,7 @@ struct SessionChatView: View {
                         return nil
                     }(),
                     subtitleAccessory: .statusDot(viewModel.uiState.connectionStatus.openCodeStatus),
-                    leading: .back(action: {
+                    leading: OpenCodeSplitPane.detailLeading(detailControl, back: {
                         logChatAction(ProductAnalytics.Action.chatBack)
                         leaveSession()
                     }),
@@ -817,7 +828,11 @@ struct SessionChatView: View {
 
     private func leaveSession() {
         viewModelStorage?.stopObserving()
-        dismiss()
+        if detailControl != nil {
+            onLeaveSession?()
+        } else {
+            dismiss()
+        }
     }
 
     private func importPhotos(_ items: [PhotosPickerItem]) async {

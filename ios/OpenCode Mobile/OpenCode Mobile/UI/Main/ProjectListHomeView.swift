@@ -11,7 +11,10 @@ struct ProjectListHomeView: View {
     @State private var showNewSessionProjectPicker = false
     @State private var showProjectPicker = false
     @State private var selectedSessionFilterId = SessionListFilterTab.allId
+    /// Trailing-pane session in the regular-width split view. Unused on compact.
+    @State private var selectedSession: SessionListItem?
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Binding private var presentConnectionSetupOnAppear: Bool
 
     init(
@@ -24,18 +27,24 @@ struct ProjectListHomeView: View {
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
-            VStack(spacing: 0) {
-                OpenCodeTopBar(
-                    title: viewModel.serversChrome.title,
-                    subtitleAccessory: showsLiveUpdatesStatus
-                        ? .statusDot(viewModel.liveUpdatesConnectionStatus.openCodeStatus)
-                        : nil,
-                    actions: homeTopBarActions,
-                    onTitleClick: viewModel.serversChrome.isSwitcher ? { viewModel.showServersSheet() } : nil,
-                    titleMenuExpanded: viewModel.serversChrome.sheetVisible
-                )
-                content
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            Group {
+                if isSplitLayout {
+                    OpenCodeSplitPane(
+                        screen: .home,
+                        onCollapsedChange: { _ in
+                            ProductAnalytics.logUserAction(
+                                screenId: ProductAnalytics.Screen.home,
+                                actionId: ProductAnalytics.Action.splitPaneToggleSidebar
+                            )
+                        }
+                    ) {
+                        homePane
+                    } trailing: { control in
+                        homeDetailPane(control)
+                    }
+                } else {
+                    homePane
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(OpenCodeColors.backgroundBase)
@@ -95,6 +104,13 @@ struct ProjectListHomeView: View {
                 if let session = viewModel.pendingSessionOpen {
                     openSession(session)
                     viewModel.consumePendingSessionOpen()
+                }
+            }
+            .onChange(of: isSplitLayout) { _, split in
+                // Keep the open chat when the window narrows to compact.
+                if !split, let session = selectedSession {
+                    selectedSession = nil
+                    navigationPath.append(session)
                 }
             }
             .onChange(of: viewModel.pendingSelectedFilterId) { _, worktree in
@@ -247,6 +263,7 @@ struct ProjectListHomeView: View {
                                     Task {
                                         await viewModel.switchProfile(id: profile.id)
                                         navigationPath = NavigationPath()
+                                        selectedSession = nil
                                     }
                                 }
                             )
@@ -497,8 +514,75 @@ struct ProjectListHomeView: View {
         }
     }
 
+    private var isSplitLayout: Bool {
+        OpenCodeLayoutWidth.resolve(sizeClass: horizontalSizeClass) == .regular
+    }
+
     private func openSession(_ session: SessionListItem) {
-        navigationPath.append(session)
+        if isSplitLayout {
+            selectedSession = session
+        } else {
+            navigationPath.append(session)
+        }
+    }
+
+    private var homePane: some View {
+        VStack(spacing: 0) {
+            OpenCodeTopBar(
+                title: viewModel.serversChrome.title,
+                subtitleAccessory: showsLiveUpdatesStatus
+                    ? .statusDot(viewModel.liveUpdatesConnectionStatus.openCodeStatus)
+                    : nil,
+                actions: homeTopBarActions,
+                onTitleClick: viewModel.serversChrome.isSwitcher ? { viewModel.showServersSheet() } : nil,
+                titleMenuExpanded: viewModel.serversChrome.sheetVisible
+            )
+            content
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// Trailing pane root. Its own stack keeps chat pushes (context, changes,
+    /// tool groups, child sessions, terminal) inside the detail pane.
+    private func homeDetailPane(_ control: OpenCodeSplitPaneDetailControl) -> some View {
+        NavigationStack {
+            Group {
+                if let selectedSession {
+                    SessionChatView(
+                        session: selectedSession,
+                        detailControl: control,
+                        onLeaveSession: { self.selectedSession = nil }
+                    )
+                } else {
+                    VStack(spacing: 0) {
+                        OpenCodeTopBar(
+                            title: "",
+                            leading: OpenCodeSplitPane.detailLeading(control, back: {})
+                        )
+                        OpenCodeEmptyState(
+                            title: "No session selected",
+                            message: "Choose a session from the list",
+                            icon: .list
+                        )
+                        .openCodeReadableColumn()
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(OpenCodeColors.backgroundBase)
+                    .toolbar(.hidden, for: .navigationBar)
+                }
+            }
+        }
+        // A new stack per session drops the previous chat's pushed screens and state.
+        .id(selectedSessionNavigationID)
+    }
+
+    private var selectedSessionNavigationID: String {
+        guard let selectedSession else { return "none" }
+        if let instanceID = selectedSession.optimisticNavigationInstanceID {
+            return "\(selectedSession.id)-\(instanceID.uuidString)"
+        }
+        return selectedSession.id
     }
 
     private var showsTerminalAction: Bool {
@@ -712,6 +796,7 @@ struct ProjectListHomeView: View {
             sessions: sessions,
             filterTabs: filterTabs,
             selectedFilterId: selectedFilterId,
+            selectedSessionId: isSplitLayout ? selectedSession?.id : nil,
             createError: createError,
             onOpenProjectPicker: {
                 ProductAnalytics.logUserAction(

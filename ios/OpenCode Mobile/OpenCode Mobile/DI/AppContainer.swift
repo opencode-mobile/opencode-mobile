@@ -706,6 +706,7 @@ extension Container {
             AppOnboardingPreferences.shared.clear()
             DeveloperToolsPreferences.shared.clear()
             SessionChatDisplayPreferences.shared.clear()
+            SplitPanePreferences.shared.clear()
             FeatureFlags.shared.clearOverrides()
             MessageContentPreparer.shared.clearDocumentCache()
             BlockDecorationCache.shared.clear()

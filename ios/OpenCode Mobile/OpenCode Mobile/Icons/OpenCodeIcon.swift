@@ -25,6 +25,7 @@ enum OpenCodeIcon: String, CaseIterable, Hashable {
     case moreVert = "lucide_more_vert"
     case search = "lucide_search"
     case settings = "lucide_settings"
+    case sidebar = "lucide_sidebar"
     case terminal = "lucide_terminal"
     case architecture = "lucide_architecture"
     case archive = "lucide_archive"

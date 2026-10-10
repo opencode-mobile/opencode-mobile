@@ -96,6 +96,7 @@ fun MainScreen(
     onAddServerClick: () -> Unit = onConnectClick,
     onManageServersClick: () -> Unit = onSettingsClick,
     modifier: Modifier = Modifier,
+    selectedSessionId: String? = null,
     viewModel: MainScreenViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -179,6 +180,7 @@ fun MainScreen(
             onManageServersClick()
         },
         modifier = modifier,
+        selectedSessionId = selectedSessionId,
     )
 }
 
@@ -221,6 +223,7 @@ internal fun MainScreen(
     onSwitchProfile: (String) -> Unit = {},
     onAddServerClick: () -> Unit = {},
     onManageServersClick: () -> Unit = {},
+    selectedSessionId: String? = null,
 ) {
     val pendingOpenSession = (uiState as? MainScreenUiState.Loaded)?.pendingOpenSession
     LaunchedEffect(pendingOpenSession) {
@@ -406,6 +409,7 @@ internal fun MainScreen(
                         onConsumePendingSelectedFilter = onConsumePendingSelectedFilter,
                         selectedFilterId = selectedFilterId,
                         onSelectedFilterIdChange = { selectedFilterId = it },
+                        selectedSessionId = selectedSessionId,
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -816,6 +820,7 @@ private fun HomeProjectsContent(
     onConsumePendingSelectedFilter: () -> Unit = {},
     selectedFilterId: String,
     onSelectedFilterIdChange: (String) -> Unit,
+    selectedSessionId: String? = null,
     modifier: Modifier = Modifier,
 ) {
     PullToRefreshBox(
@@ -919,6 +924,7 @@ private fun HomeProjectsContent(
                 },
             onSessionLongPress = onSessionLongPress,
             revealNewestToken = revealNewestToken,
+            selectedSessionId = selectedSessionId,
             modifier = Modifier.fillMaxSize(),
             emptyContent =
                 if (sections.isEmpty()) {

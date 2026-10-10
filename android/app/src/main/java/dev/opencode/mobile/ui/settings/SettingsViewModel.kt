@@ -16,6 +16,7 @@ import dev.opencode.mobile.domain.preferences.DeveloperToolsPreferences
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.preferences.MarkdownHighlightPreferences
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
+import dev.opencode.mobile.domain.preferences.SplitPanePreferences
 import dev.opencode.mobile.domain.sessioncache.SessionCache
 import dev.opencode.mobile.domain.textmate.TextMateLogbook
 import dev.opencode.mobile.network.ActiveConnectionManager
@@ -86,6 +87,7 @@ class SettingsViewModel
                 AppOnboardingPreferences.clear()
                 DeveloperToolsPreferences.clear()
                 SessionChatDisplayPreferences.clear()
+                SplitPanePreferences.clear()
                 FeatureFlags.clearOverrides()
                 messageContentPreparer.clearDocumentCache()
                 BlockDecorationCache.clear()

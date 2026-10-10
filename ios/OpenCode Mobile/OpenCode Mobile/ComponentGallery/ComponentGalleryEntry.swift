@@ -30,6 +30,7 @@ enum ComponentGalleryEntryID: String, Hashable {
     case workingIndicator
     case reasoningRow
     case topBar
+    case splitPane
     case overflowMenu
     case bottomSheet
     case dialog
@@ -260,6 +261,12 @@ let componentGalleryEntries = [
         id: .overflowMenu,
         title: "Overflow Menu",
         description: "Compact anchored popup menu with icon and label entries.",
+        category: .navigation
+    ),
+    ComponentGalleryEntry(
+        id: .splitPane,
+        title: "Split Pane",
+        description: "Tablet list and detail panes with a resizable, collapsible sidebar.",
         category: .navigation
     ),
     ComponentGalleryEntry(

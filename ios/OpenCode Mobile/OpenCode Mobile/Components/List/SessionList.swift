@@ -135,6 +135,8 @@ struct SessionList<EmptyContent: View>: View {
     let sessions: [SessionListSession]
     let filterTabs: [SessionListFilterTab]
     let selectedFilterId: String
+    /// Session highlighted as the open trailing pane on tablets; nil on phones.
+    let selectedSessionId: String?
     let createError: String?
     let onOpenProjectPicker: () -> Void
     let onFilterSelected: (String) -> Void
@@ -162,6 +164,7 @@ struct SessionList<EmptyContent: View>: View {
         sessions: [SessionListSession],
         filterTabs: [SessionListFilterTab],
         selectedFilterId: String,
+        selectedSessionId: String? = nil,
         createError: String? = nil,
         onOpenProjectPicker: @escaping () -> Void = {},
         onFilterSelected: @escaping (String) -> Void = { _ in },
@@ -178,6 +181,7 @@ struct SessionList<EmptyContent: View>: View {
         self.sessions = sessions
         self.filterTabs = filterTabs
         self.selectedFilterId = selectedFilterId
+        self.selectedSessionId = selectedSessionId
         self.createError = createError
         self.onOpenProjectPicker = onOpenProjectPicker
         self.onFilterSelected = onFilterSelected
@@ -322,6 +326,7 @@ struct SessionList<EmptyContent: View>: View {
             ),
             status: listItemStatus(session.status, isStale: session.statusIsStale),
             caption: session.caption.isEmpty ? nil : session.caption,
+            selected: selectedSessionId == session.id,
             startDecorator: .letter(
                 session.letter,
                 session.letterAccent,
