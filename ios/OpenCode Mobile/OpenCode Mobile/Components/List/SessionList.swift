@@ -295,7 +295,7 @@ struct SessionList<EmptyContent: View>: View {
 
         ForEach(Array(section.items.enumerated()), id: \.element.id) { index, session in
             sessionRow(session, showStatusDot: true)
-            if index < section.items.count - 1 {
+            if sessionListShowsDivider(after: index, in: section.items, selectedSessionId: selectedSessionId) {
                 Divider()
                     .overlay(OpenCodeColors.borderWeakerBase)
                     .padding(.leading, 60)
@@ -309,7 +309,7 @@ struct SessionList<EmptyContent: View>: View {
 
         ForEach(Array(section.items.enumerated()), id: \.element.id) { index, session in
             sessionRow(session, showStatusDot: false)
-            if index < section.items.count - 1 {
+            if sessionListShowsDivider(after: index, in: section.items, selectedSessionId: selectedSessionId) {
                 Divider()
                     .overlay(OpenCodeColors.borderWeakerBase)
                     .padding(.leading, 60)
@@ -706,3 +706,15 @@ private struct SessionListRefreshableModifier: ViewModifier {
     .openCodeTheme()
 }
 #endif
+
+/// Whether the hairline divider after row `index` is drawn. Skipped after the last
+/// row and on either side of the selected row so it never butts against the pill.
+func sessionListShowsDivider(
+    after index: Int,
+    in items: [SessionListSession],
+    selectedSessionId: String?
+) -> Bool {
+    guard index >= 0, index < items.count - 1 else { return false }
+    guard let selectedSessionId else { return true }
+    return items[index].id != selectedSessionId && items[index + 1].id != selectedSessionId
+}

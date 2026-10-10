@@ -348,7 +348,7 @@ private fun SessionListFeed(
                             SessionListRow(
                                 session = session,
                                 showStatusDot = true,
-                                showDivider = index < section.items.lastIndex,
+                                showDivider = sessionListShowsDivider(index, section.items, selectedSessionId),
                                 borderWeaker = borderWeaker,
                                 selected = session.id == selectedSessionId,
                                 onSessionSelected = onSessionSelected,
@@ -369,7 +369,7 @@ private fun SessionListFeed(
                             SessionListRow(
                                 session = session,
                                 showStatusDot = false,
-                                showDivider = index < section.items.lastIndex,
+                                showDivider = sessionListShowsDivider(index, section.items, selectedSessionId),
                                 borderWeaker = borderWeaker,
                                 selected = session.id == selectedSessionId,
                                 onSessionSelected = onSessionSelected,
@@ -567,4 +567,18 @@ private fun SessionListPreview() {
             onNewSession = {},
         )
     }
+}
+
+/**
+ * Whether the hairline divider after row [index] is drawn. Skipped after the last
+ * row and on either side of the selected row so it never butts against the pill.
+ */
+internal fun sessionListShowsDivider(
+    index: Int,
+    items: List<SessionListSession>,
+    selectedSessionId: String?,
+): Boolean {
+    if (index < 0 || index >= items.lastIndex) return false
+    if (selectedSessionId == null) return true
+    return items[index].id != selectedSessionId && items[index + 1].id != selectedSessionId
 }

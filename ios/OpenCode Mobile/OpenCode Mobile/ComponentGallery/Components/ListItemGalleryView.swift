@@ -244,6 +244,32 @@ struct ListItemGalleryView: View {
                 startDecorator: startDecorator
             )
 
+            Text("Plain selection")
+                .font(OpenCodeTypography.button)
+                .foregroundStyle(OpenCodeColors.textStrong)
+
+            VStack(spacing: 0) {
+                OpenCodeListItem(
+                    title: "Unselected session",
+                    subtitle: "Plain row",
+                    style: .plain,
+                    action: {}
+                )
+                OpenCodeListItem(
+                    title: "Selected session",
+                    subtitle: "Inset highlight",
+                    selected: true,
+                    style: .plain,
+                    action: {}
+                )
+                OpenCodeListItem(
+                    title: "Unselected session",
+                    subtitle: "Plain row",
+                    style: .plain,
+                    action: {}
+                )
+            }
+
             Text("Trailing")
                 .font(OpenCodeTypography.button)
                 .foregroundStyle(OpenCodeColors.textStrong)

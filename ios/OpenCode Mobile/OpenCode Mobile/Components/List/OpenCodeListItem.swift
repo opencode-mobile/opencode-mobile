@@ -1,6 +1,11 @@
 import SwiftUI
 
 private let listItemCornerRadius: CGFloat = 8
+/// Plain-style selection and press highlights are inset from the row edges so they
+/// read as a compact rounded highlight; the row frame and tap target are unchanged.
+private let listItemSelectionHorizontalInset: CGFloat = 8
+private let listItemSelectionVerticalInset: CGFloat = 2
+private let listItemSelectionCornerRadius: CGFloat = 12
 private let listItemLetterBadgeSize: CGFloat = 32
 private let listItemLetterGlyphSize: CGFloat = 14
 private let listItemLetterStatusDotSize: CGFloat = 10
@@ -145,7 +150,7 @@ struct OpenCodeListItem<Trailing: View>: View {
                 Button(action: action) {
                     content
                 }
-                .buttonStyle(OpenCodeListItemPressStyle(enabled: enabled))
+                .buttonStyle(OpenCodeListItemPressStyle(enabled: enabled, style: style))
                 .disabled(!enabled)
             } else {
                 content
@@ -161,7 +166,7 @@ struct OpenCodeListItem<Trailing: View>: View {
     @ViewBuilder
     private var pressHighlight: some View {
         if isPressing || popScale != 1 {
-            RoundedRectangle(cornerRadius: listItemCornerRadius)
+            listItemHighlightShape(style: style)
                 .fill(OpenCodeColors.surfaceRaisedBase.opacity(isPressing ? 0.92 : 0.55))
         }
     }
@@ -317,7 +322,7 @@ struct OpenCodeListItem<Trailing: View>: View {
         case (.plain, false):
             Color.clear
         case (.plain, true), (.card, true):
-            RoundedRectangle(cornerRadius: listItemCornerRadius)
+            listItemHighlightShape(style: style)
                 .fill(OpenCodeColors.surfaceRaisedBase)
         case (.card, false):
             RoundedRectangle(cornerRadius: listItemCornerRadius)
@@ -390,14 +395,48 @@ private func normalizedBadgeLetter(_ character: Character) -> String {
     return first.isLetter || first.isNumber ? String(first) : "?"
 }
 
+/// Selection/press highlight shape. Plain rows inset the highlight inside the row
+/// frame; card rows keep the full-bleed rounded container.
+private func listItemHighlightShape(style: OpenCodeListItemStyle) -> some InsettableShape {
+    switch style {
+    case .plain:
+        return InsetRoundedHighlight(
+            cornerRadius: listItemSelectionCornerRadius,
+            horizontalInset: listItemSelectionHorizontalInset,
+            verticalInset: listItemSelectionVerticalInset
+        )
+    case .card:
+        return InsetRoundedHighlight(cornerRadius: listItemCornerRadius, horizontalInset: 0, verticalInset: 0)
+    }
+}
+
+private struct InsetRoundedHighlight: InsettableShape {
+    let cornerRadius: CGFloat
+    let horizontalInset: CGFloat
+    let verticalInset: CGFloat
+    var extraInset: CGFloat = 0
+
+    func path(in rect: CGRect) -> Path {
+        let insetRect = rect.insetBy(dx: horizontalInset + extraInset, dy: verticalInset + extraInset)
+        return RoundedRectangle(cornerRadius: cornerRadius).path(in: insetRect)
+    }
+
+    func inset(by amount: CGFloat) -> InsetRoundedHighlight {
+        var copy = self
+        copy.extraInset += amount
+        return copy
+    }
+}
+
 private struct OpenCodeListItemPressStyle: ButtonStyle {
     let enabled: Bool
+    let style: OpenCodeListItemStyle
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .background {
                 if configuration.isPressed && enabled {
-                    RoundedRectangle(cornerRadius: listItemCornerRadius)
+                    listItemHighlightShape(style: style)
                         .fill(OpenCodeColors.surfaceRaisedBase.opacity(0.92))
                 }
             }

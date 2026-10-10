@@ -248,6 +248,29 @@ fun ListItemGalleryScreen(modifier: Modifier = Modifier) {
             startDecorator = startDecorator,
         )
 
+        Text(text = "Plain selection", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
+        Column {
+            OpenCodeListItem(
+                title = "Unselected session",
+                subtitle = "Plain row",
+                style = OpenCodeListItemStyle.Plain,
+                onClick = {},
+            )
+            OpenCodeListItem(
+                title = "Selected session",
+                subtitle = "Inset highlight",
+                selected = true,
+                style = OpenCodeListItemStyle.Plain,
+                onClick = {},
+            )
+            OpenCodeListItem(
+                title = "Unselected session",
+                subtitle = "Plain row",
+                style = OpenCodeListItemStyle.Plain,
+                onClick = {},
+            )
+        }
+
         Text(text = "Trailing", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
         OpenCodeListItem(
             title = "Disclosure",
