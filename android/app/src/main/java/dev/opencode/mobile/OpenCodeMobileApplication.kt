@@ -15,6 +15,7 @@ import dev.opencode.mobile.domain.preferences.DeveloperToolsPreferences
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.preferences.MarkdownHighlightPreferences
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
+import dev.opencode.mobile.domain.preferences.SplitPanePreferences
 import dev.opencode.mobile.domain.textmate.TextMateProcessPressureObserver
 import dev.opencode.mobile.markdown.OpenCodeAndroidMarkdownAssets
 import dev.opencode.mobile.theme.ThemeManager
@@ -30,6 +31,7 @@ class OpenCodeMobileApplication : Application() {
         AppOnboardingPreferences.initialize(this)
         DeveloperToolsPreferences.initialize(this)
         SessionChatDisplayPreferences.initialize(this)
+        SplitPanePreferences.initialize(this)
         FeatureFlags.initialize(this)
         OpenCodeAndroidMarkdownAssets.init(this)
         OpenCodeReleaseObservability.initialize(this)

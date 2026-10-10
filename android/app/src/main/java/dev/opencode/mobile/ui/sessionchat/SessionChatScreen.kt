@@ -80,13 +80,14 @@ import dev.opencode.mobile.ui.components.OpenCodeSessionStatusBar
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarHost
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarMessage
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarVariant
+import dev.opencode.mobile.ui.components.OpenCodeSplitPaneDetailControl
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarAction
-import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
 import dev.opencode.mobile.ui.components.OpenCodeTopBarOverflowHost
 import dev.opencode.mobile.ui.components.OpenCodeTopBarSubtitleAccessory
 import dev.opencode.mobile.ui.components.OpenCodeTopBarSubtitleLeading
 import dev.opencode.mobile.ui.components.copySessionIdToClipboard
+import dev.opencode.mobile.ui.components.openCodeDetailLeading
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.sessionchat.view.ComposerPickerKind
 import dev.opencode.mobile.ui.sessionchat.view.SessionRetryCountdown
@@ -127,6 +128,7 @@ fun SessionChatScreen(
     onToolGroupClick: (SessionToolGroup) -> Unit = {},
     onSessionReplaceRequested: (ChildSessionNavigationTarget) -> Unit = {},
     onTerminalRequested: (worktree: String, projectTitle: String) -> Unit = { _, _ -> },
+    detailControl: OpenCodeSplitPaneDetailControl? = null,
     viewModel: SessionChatViewModel =
         hiltViewModel(
             key = sessionChatViewModelKey(sessionId, worktree, optimisticNavigationInstanceId),
@@ -436,12 +438,10 @@ fun SessionChatScreen(
                             uiState.connectionStatus.toOpenCodeSessionConnectionStatus(),
                         ),
                     leading =
-                        OpenCodeTopBarLeading.Back(
-                            onClick = {
-                                logChatAction(ProductAnalytics.Action.CHAT_BACK)
-                                onNavigateBack()
-                            },
-                        ),
+                        openCodeDetailLeading(detailControl) {
+                            logChatAction(ProductAnalytics.Action.CHAT_BACK)
+                            onNavigateBack()
+                        },
                     actions =
                         listOf(
                             OpenCodeTopBarAction.Icon(

@@ -94,6 +94,45 @@ class AppRootViewModelTest {
             assertSame(rest, httpClient.get())
             assertSame(sse, sseHttpClient.get())
         }
+
+    @Test
+    fun clearConnectionData_bumpsHomeResetGeneration() =
+        runTest(dispatcher) {
+            val store = SeededProfileStore()
+            val json = Json { ignoreUnknownKeys = true }
+            val manager = ActiveConnectionManager(store)
+            val stream = RecordingForegroundEventStream()
+            val httpClient = OpencodeHttpClient(json, manager)
+            val sseHttpClient = OpencodeSseHttpClient(json, manager)
+            val coordinator =
+                testConnectionSessionCoordinator(
+                    activeConnectionManager = manager,
+                    connectionProfileStore = store,
+                    secureCredentialStore = EmptySecureCredentialStore(),
+                    sessionModelSelectionStore = EmptyModelSelectionStore(),
+                    composerDraftStore = InMemoryComposerDraftStore(),
+                    httpClient = httpClient,
+                    sseHttpClient = sseHttpClient,
+                    eventStream = stream,
+                )
+            val viewModel =
+                AppRootViewModel(
+                    connectionProfileStore = store,
+                    activeConnectionManager = manager,
+                    connectionSessionCoordinator = coordinator,
+                    worldSignals = RecordingWorldSignals(),
+                    eventStream = stream,
+                    httpClient = httpClient,
+                    sseHttpClient = sseHttpClient,
+                )
+            advanceUntilIdle()
+            val before = viewModel.homeResetGeneration.value
+
+            coordinator.clearConnectionData()
+            advanceUntilIdle()
+
+            assertEquals(before + 1, viewModel.homeResetGeneration.value)
+        }
 }
 
 private class RecordingWorldSignals : WorldSignals {

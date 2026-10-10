@@ -23,7 +23,14 @@ final class SessionChatReviewChanges {
         self.worktree = worktree
         self.supportsSessionMessageDiff = supportsSessionMessageDiff
         self.lastTurnReviewChangesStore = lastTurnReviewChangesStore ?? LastTurnReviewChangesStore()
-        storeObservation = self.lastTurnReviewChangesStore.observe { [weak self] changedSessionID in
+        start()
+    }
+
+    /// Observes the store. Init starts it; call again after `stop()` when the
+    /// same Session Chat resumes.
+    func start() {
+        guard storeObservation == nil else { return }
+        storeObservation = lastTurnReviewChangesStore.observe { [weak self] changedSessionID in
             guard let self, changedSessionID == self.sessionID else { return }
             let previous = self.state
             self.applyPublishedSnapshot()

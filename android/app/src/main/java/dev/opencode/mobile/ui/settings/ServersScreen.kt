@@ -33,9 +33,10 @@ import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeListItemStyle
 import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
 import dev.opencode.mobile.ui.components.OpenCodeSectionHeader
+import dev.opencode.mobile.ui.components.OpenCodeSplitPaneDetailControl
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
-import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
 import dev.opencode.mobile.ui.components.StartDecorator
+import dev.opencode.mobile.ui.components.openCodeDetailLeading
 import dev.opencode.mobile.ui.connection.listCaption
 import dev.opencode.mobile.ui.connection.listStatus
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
@@ -44,6 +45,7 @@ import dev.opencode.mobile.ui.icons.OpenCodeIcons
 fun ServersScreen(
     uiState: ServersUiState,
     onNavigateBack: () -> Unit,
+    detailControl: OpenCodeSplitPaneDetailControl? = null,
     onAddServer: () -> Unit,
     onEditProfile: (ConnectionProfile) -> Unit,
     onRequestRemove: (ConnectionProfile) -> Unit,
@@ -65,7 +67,7 @@ fun ServersScreen(
             OpenCodeTopBar(
                 title = "Servers",
                 subtitle = countLabel,
-                leading = OpenCodeTopBarLeading.Back(onClick = onNavigateBack),
+                leading = openCodeDetailLeading(detailControl, onNavigateBack),
                 showDivider = true,
             )
             OpenCodeReadableColumn(modifier = Modifier.weight(1f)) {

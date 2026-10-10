@@ -1,5 +1,6 @@
 package dev.opencode.mobile
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -8,6 +9,7 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.displayCutout
@@ -24,8 +26,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -34,13 +38,16 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
 import androidx.navigation3.runtime.NavEntryDecorator
+import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
+import androidx.navigation3.runtime.rememberDecoratedNavEntries
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
 import dev.opencode.mobile.domain.app.AppVersion
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.preferences.AnalyticsConsentPreferences
+import dev.opencode.mobile.domain.preferences.DeveloperToolsPreferences
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.preferences.MarkdownHighlightPreferences
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
@@ -96,6 +103,7 @@ import dev.opencode.mobile.ui.componentgallery.components.ModalGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.PageIndicatorGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SkeletonIllustrationGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SnackbarGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.SplitPaneGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.StatusStackGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SyncingPillGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.TagGalleryScreen
@@ -107,11 +115,20 @@ import dev.opencode.mobile.ui.componentgallery.components.UnifiedDiffGalleryScre
 import dev.opencode.mobile.ui.componentgallery.components.WorkingIndicatorGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.foundation.ColorGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.foundation.TypographyGalleryScreen
+import dev.opencode.mobile.ui.components.OpenCodeEmptyState
+import dev.opencode.mobile.ui.components.OpenCodeSplitPane
+import dev.opencode.mobile.ui.components.OpenCodeSplitPaneDetailControl
+import dev.opencode.mobile.ui.components.OpenCodeSplitPaneScreen
 import dev.opencode.mobile.ui.components.OpenCodeStatusStack
+import dev.opencode.mobile.ui.components.OpenCodeTopBar
+import dev.opencode.mobile.ui.components.currentOpenCodeUsesSplitLayout
+import dev.opencode.mobile.ui.components.openCodeDetailLeading
 import dev.opencode.mobile.ui.connection.ConnectionSetupMode
 import dev.opencode.mobile.ui.connection.ConnectionSetupScreen
 import dev.opencode.mobile.ui.connection.ConnectionSetupViewModel
+import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.main.MainScreen
+import dev.opencode.mobile.ui.main.SessionOpenTarget
 import dev.opencode.mobile.ui.onboarding.AppOnboardingScreen
 import dev.opencode.mobile.ui.root.AppRootState
 import dev.opencode.mobile.ui.root.AppRootViewModel
@@ -130,6 +147,7 @@ import dev.opencode.mobile.ui.settings.SettingsScreen
 import dev.opencode.mobile.ui.settings.SettingsViewModel
 import dev.opencode.mobile.ui.settings.SyntaxHighlightPickerScreen
 import dev.opencode.mobile.ui.settings.FeatureFlagsRoute
+import dev.opencode.mobile.ui.settings.SettingsDetail
 import dev.opencode.mobile.ui.settings.TextMateLanguagesRoute
 import dev.opencode.mobile.ui.settings.TextMateLogbookScreen
 import dev.opencode.mobile.ui.settings.TextMateLogbookViewModel
@@ -203,6 +221,106 @@ fun MainNavigation() {
             rootViewModel.consumePresentConnectionSetup()
         }
     }
+    val settingsDetailContent: @Composable (SettingsDetail, OpenCodeSplitPaneDetailControl?, () -> Unit) -> Unit =
+        { detail, detailControl, onNavigateBack ->
+            when (detail) {
+                SettingsDetail.Servers -> {
+                    LaunchedEffect(Unit) {
+                        serversViewModel.refresh()
+                    }
+                    ServersScreen(
+                        uiState = serversUiState,
+                        onNavigateBack = onNavigateBack,
+                        detailControl = detailControl,
+                        onAddServer = {
+                            presentConnectionSetup(
+                                initialProfile = null,
+                                mode = ConnectionSetupMode.Add,
+                            )
+                        },
+                        onEditProfile = { profile ->
+                            presentConnectionSetup(
+                                initialProfile = profile,
+                                mode = ConnectionSetupMode.Edit,
+                            )
+                        },
+                        onRequestRemove = serversViewModel::requestRemove,
+                        onConfirmRemove = serversViewModel::confirmRemove,
+                        onDismissRemove = serversViewModel::dismissRemove,
+                    )
+                }
+                SettingsDetail.Appearance -> {
+                    ProductRouteScreenViewEffect(
+                        screenId = ProductAnalytics.Screen.SETTINGS_APPEARANCE,
+                        presentation =
+                            if (detailControl != null) {
+                                ProductAnalytics.Presentation.EMBEDDED
+                            } else {
+                                ProductAnalytics.Presentation.ROUTE
+                            },
+                    )
+                    AppearanceSettingsScreen(
+                        onNavigateBack = onNavigateBack,
+                        detailControl = detailControl,
+                        onThemeClick = {
+                            if (backStack.lastOrNull() != ThemePickerHome) {
+                                backStack.add(ThemePickerHome)
+                            }
+                        },
+                        onSyntaxClick = {
+                            if (backStack.lastOrNull() != SyntaxPickerHome) {
+                                backStack.add(SyntaxPickerHome)
+                            }
+                        },
+                    )
+                }
+                SettingsDetail.ComponentGallery ->
+                    ComponentGalleryScreen(
+                        onEntryClick = { entryId -> backStack.add(ComponentGalleryDetail(entryId)) },
+                        onNavigateBack = onNavigateBack,
+                        detailControl = detailControl,
+                    )
+                SettingsDetail.TextMateLanguages ->
+                    TextMateLanguagesRoute(
+                        onNavigateBack = onNavigateBack,
+                        detailControl = detailControl,
+                    )
+                SettingsDetail.FeatureFlags ->
+                    FeatureFlagsRoute(
+                        onNavigateBack = onNavigateBack,
+                        detailControl = detailControl,
+                    )
+                SettingsDetail.TextMateLogbook -> {
+                    val logbookViewModel: TextMateLogbookViewModel = hiltViewModel()
+                    val logbookState by logbookViewModel.state.collectAsStateWithLifecycle()
+                    TextMateLogbookScreen(
+                        state = logbookState,
+                        onNavigateBack = onNavigateBack,
+                        detailControl = detailControl,
+                        onRefresh = logbookViewModel::refresh,
+                        onClear = logbookViewModel::clear,
+                    )
+                }
+                SettingsDetail.DiagnosticLogs -> {
+                    val diagnosticLogsViewModel: DiagnosticLogsViewModel = hiltViewModel()
+                    val diagnosticLogsState by diagnosticLogsViewModel.state.collectAsStateWithLifecycle()
+                    val context = LocalContext.current
+                    DiagnosticLogsScreen(
+                        state = diagnosticLogsState,
+                        onNavigateBack = onNavigateBack,
+                        detailControl = detailControl,
+                        onShareViaApps = {
+                            diagnosticLogsViewModel.shareViaApps { intent ->
+                                context.startActivity(intent)
+                            }
+                        },
+                        onSaveToUri = diagnosticLogsViewModel::saveToUri,
+                        onClear = diagnosticLogsViewModel::clear,
+                        onExportWindowChange = diagnosticLogsViewModel::setExportWindow,
+                    )
+                }
+            }
+        }
     var themeMode by rememberSaveable { mutableStateOf(ComponentGalleryThemeMode.System) }
     val systemDarkTheme = isSystemInDarkTheme()
     val darkTheme =
@@ -259,30 +377,71 @@ fun MainNavigation() {
                                             ProductRouteScreenViewEffect(
                                                 screenId = ProductAnalytics.Screen.HOME,
                                             )
-                                            MainScreen(
-                                                onSettingsClick = { backStack.add(SettingsHome) },
-                                                onTerminalClick = { backStack.add(TerminalsCatalog) },
-                                                onSessionClick = { target ->
-                                                    backStack.add(
-                                                        SessionChat(
-                                                            sessionId = target.sessionId,
-                                                            sessionTitle = target.title,
-                                                            worktree = target.worktree,
-                                                            optimisticNavigationInstanceId = target.optimisticNavigationInstanceId,
-                                                        ),
-                                                    )
-                                                },
-                                                onEditConnectionClick = { profile ->
-                                                    presentConnectionSetup(initialProfile = profile, mode = ConnectionSetupMode.Edit)
-                                                },
-                                                onConnectClick = {
-                                                    presentConnectionSetup(initialProfile = null, mode = ConnectionSetupMode.First)
-                                                },
-                                                onAddServerClick = {
-                                                    presentConnectionSetup(initialProfile = null, mode = ConnectionSetupMode.Add)
-                                                },
-                                                onManageServersClick = { backStack.add(SettingsHome) },
-                                            )
+                                            val useSplitLayout = currentOpenCodeUsesSplitLayout()
+                                            var selectedSession by rememberSaveable(stateSaver = SessionOpenTargetSaver) {
+                                                mutableStateOf<SessionOpenTarget?>(null)
+                                            }
+                                            var handledHomeResetGeneration by rememberSaveable {
+                                                mutableIntStateOf(homeResetGeneration)
+                                            }
+                                            LaunchedEffect(homeResetGeneration) {
+                                                if (homeResetGeneration != handledHomeResetGeneration) {
+                                                    handledHomeResetGeneration = homeResetGeneration
+                                                    selectedSession = null
+                                                }
+                                            }
+                                            LaunchedEffect(useSplitLayout) {
+                                                val selection = selectedSession
+                                                if (!useSplitLayout && selection != null) {
+                                                    // Window narrowed: hand the open detail to the stacked route.
+                                                    selectedSession = null
+                                                    backStack.add(selection.toSessionChatRoute())
+                                                }
+                                            }
+                                            BackHandler(enabled = useSplitLayout && selectedSession != null) {
+                                                selectedSession = null
+                                            }
+                                            val home: @Composable () -> Unit = {
+                                                MainScreen(
+                                                    onSettingsClick = { backStack.add(SettingsHome) },
+                                                    onTerminalClick = { backStack.add(TerminalsCatalog) },
+                                                    onSessionClick = { target ->
+                                                        if (useSplitLayout) {
+                                                            selectedSession = target
+                                                        } else {
+                                                            backStack.add(target.toSessionChatRoute())
+                                                        }
+                                                    },
+                                                    onEditConnectionClick = { profile ->
+                                                        presentConnectionSetup(initialProfile = profile, mode = ConnectionSetupMode.Edit)
+                                                    },
+                                                    onConnectClick = {
+                                                        presentConnectionSetup(initialProfile = null, mode = ConnectionSetupMode.First)
+                                                    },
+                                                    onAddServerClick = {
+                                                        presentConnectionSetup(initialProfile = null, mode = ConnectionSetupMode.Add)
+                                                    },
+                                                    onManageServersClick = { backStack.add(SettingsHome) },
+                                                    selectedSessionId = if (useSplitLayout) selectedSession?.sessionId else null,
+                                                )
+                                            }
+                                            if (useSplitLayout) {
+                                                OpenCodeSplitPane(
+                                                    screen = OpenCodeSplitPaneScreen.Home,
+                                                    leading = home,
+                                                    trailing = { control ->
+                                                        HomeSessionDetail(
+                                                            selection = selectedSession,
+                                                            detailControl = control,
+                                                            onClearSelection = { selectedSession = null },
+                                                            onReplaceSelection = { target -> selectedSession = target },
+                                                            onPush = { route -> backStack.add(route) },
+                                                        )
+                                                    },
+                                                )
+                                            } else {
+                                                home()
+                                            }
                                         }
                                     }
                                     entry<SettingsHome> {
@@ -295,79 +454,112 @@ fun MainNavigation() {
                                             }
                                             val context = LocalContext.current
                                             val appVersion = remember(context) { AppVersion.from(context) }
-                                            SettingsScreen(
-                                                onComponentGalleryClick = { backStack.add(ComponentGalleryHome) },
-                                                onTextMateLanguagesClick = { backStack.add(TextMateLanguagesHome) },
-                                                onFeatureFlagsClick = { backStack.add(FeatureFlagsHome) },
-                                                onTextMateLogbookClick = { backStack.add(TextMateLogbookHome) },
-                                                onDiagnosticLogsClick = { backStack.add(DiagnosticLogsHome) },
-                                                onNavigateBack = { backStack.popRouteUnlessRoot() },
-                                                onServersClick = {
-                                                    serversViewModel.refresh()
-                                                    if (backStack.lastOrNull() != ServersHome) {
-                                                        backStack.add(ServersHome)
+                                            val useSplitLayout = currentOpenCodeUsesSplitLayout()
+                                            var settingsDetail by rememberSaveable { mutableStateOf(SettingsDetail.Servers) }
+                                            val visibleSettingsDetail =
+                                                settingsDetail.resolved(DeveloperToolsPreferences.unlocked)
+                                            // Last layout this entry rendered, so only a split -> compact
+                                            // transition (not first composition) hands off the detail.
+                                            var settingsRenderedSplit by rememberSaveable { mutableStateOf(useSplitLayout) }
+                                            LaunchedEffect(useSplitLayout) {
+                                                if (settingsRenderedSplit && !useSplitLayout) {
+                                                    // Window narrowed: hand the open detail to the stacked route.
+                                                    // The selection is kept for when the window widens again.
+                                                    val route = visibleSettingsDetail.route
+                                                    if (backStack.lastOrNull() != route) {
+                                                        backStack.add(route)
                                                     }
-                                                },
-                                                onAppearanceClick = {
-                                                    if (backStack.lastOrNull() != AppearanceHome) {
-                                                        backStack.add(AppearanceHome)
-                                                    }
-                                                },
-                                                serversSummary = serversSummary,
-                                                onClearData = settingsViewModel::clearAllData,
-                                                onClearSessionCache = settingsViewModel::clearSessionCache,
-                                                sessionCacheSizeLabel = sessionCacheSizeLabel,
-                                                onRefreshSessionCacheSize = settingsViewModel::refreshSessionCacheSize,
-                                                version = appVersion.version,
-                                                build = appVersion.build,
-                                                hideUserDirectoryPrefix =
-                                                    HomeDisplayPreferences.hideUserDirectoryPrefix,
-                                                onHideUserDirectoryPrefixChange =
-                                                    settingsViewModel::setHideUserDirectoryPrefix,
-                                                recentWindowHours = HomeDisplayPreferences.recentWindowHours,
-                                                onRecentWindowHoursChange =
-                                                    settingsViewModel::setRecentWindowHours,
-                                                collapseConsecutiveToolCalls =
-                                                    SessionChatDisplayPreferences.collapseConsecutiveToolCalls,
-                                                onCollapseConsecutiveToolCallsChange =
-                                                    settingsViewModel::setCollapseConsecutiveToolCalls,
-                                                chipTimeline = SessionChatDisplayPreferences.chipTimeline,
-                                                onChipTimelineChange = settingsViewModel::setChipTimeline,
-                                                chipTimelineAvailable =
-                                                    SessionChatDisplayPreferences.chipTimelineAvailable,
-                                                followUpDelivery =
-                                                    SessionChatDisplayPreferences.followUpDelivery,
-                                                onFollowUpDeliveryChange =
-                                                    settingsViewModel::setFollowUpDelivery,
-                                                supportsFollowUpDelivery =
-                                                    settingsViewModel.supportsFollowUpDelivery(),
-                                                textMateEnabled = MarkdownHighlightPreferences.textMateEnabled,
-                                                onTextMateEnabledChange = settingsViewModel::setTextMateEnabled,
-                                                productAnalyticsConsented =
-                                                    AnalyticsConsentPreferences.productAnalyticsConsented,
-                                                onProductAnalyticsConsentedChange =
-                                                    settingsViewModel::setProductAnalyticsConsented,
-                                            )
+                                                }
+                                                settingsRenderedSplit = useSplitLayout
+                                            }
+
+                                            fun openSettingsDetail(detail: SettingsDetail) {
+                                                if (useSplitLayout) {
+                                                    settingsDetail = detail
+                                                } else if (backStack.lastOrNull() != detail.route) {
+                                                    backStack.add(detail.route)
+                                                }
+                                            }
+                                            val settings: @Composable () -> Unit = {
+                                                SettingsScreen(
+                                                    onComponentGalleryClick = {
+                                                        openSettingsDetail(SettingsDetail.ComponentGallery)
+                                                    },
+                                                    onTextMateLanguagesClick = {
+                                                        openSettingsDetail(SettingsDetail.TextMateLanguages)
+                                                    },
+                                                    onFeatureFlagsClick = {
+                                                        openSettingsDetail(SettingsDetail.FeatureFlags)
+                                                    },
+                                                    onTextMateLogbookClick = {
+                                                        openSettingsDetail(SettingsDetail.TextMateLogbook)
+                                                    },
+                                                    onDiagnosticLogsClick = {
+                                                        openSettingsDetail(SettingsDetail.DiagnosticLogs)
+                                                    },
+                                                    onNavigateBack = { backStack.popRouteUnlessRoot() },
+                                                    onServersClick = {
+                                                        serversViewModel.refresh()
+                                                        openSettingsDetail(SettingsDetail.Servers)
+                                                    },
+                                                    onAppearanceClick = {
+                                                        openSettingsDetail(SettingsDetail.Appearance)
+                                                    },
+                                                    selectedDetail = if (useSplitLayout) visibleSettingsDetail else null,
+                                                    serversSummary = serversSummary,
+                                                    onClearData = settingsViewModel::clearAllData,
+                                                    onClearSessionCache = settingsViewModel::clearSessionCache,
+                                                    sessionCacheSizeLabel = sessionCacheSizeLabel,
+                                                    onRefreshSessionCacheSize = settingsViewModel::refreshSessionCacheSize,
+                                                    version = appVersion.version,
+                                                    build = appVersion.build,
+                                                    hideUserDirectoryPrefix =
+                                                        HomeDisplayPreferences.hideUserDirectoryPrefix,
+                                                    onHideUserDirectoryPrefixChange =
+                                                        settingsViewModel::setHideUserDirectoryPrefix,
+                                                    recentWindowHours = HomeDisplayPreferences.recentWindowHours,
+                                                    onRecentWindowHoursChange =
+                                                        settingsViewModel::setRecentWindowHours,
+                                                    collapseConsecutiveToolCalls =
+                                                        SessionChatDisplayPreferences.collapseConsecutiveToolCalls,
+                                                    onCollapseConsecutiveToolCallsChange =
+                                                        settingsViewModel::setCollapseConsecutiveToolCalls,
+                                                    chipTimeline = SessionChatDisplayPreferences.chipTimeline,
+                                                    onChipTimelineChange = settingsViewModel::setChipTimeline,
+                                                    chipTimelineAvailable =
+                                                        SessionChatDisplayPreferences.chipTimelineAvailable,
+                                                    followUpDelivery =
+                                                        SessionChatDisplayPreferences.followUpDelivery,
+                                                    onFollowUpDeliveryChange =
+                                                        settingsViewModel::setFollowUpDelivery,
+                                                    supportsFollowUpDelivery =
+                                                        settingsViewModel.supportsFollowUpDelivery(),
+                                                    textMateEnabled = MarkdownHighlightPreferences.textMateEnabled,
+                                                    onTextMateEnabledChange = settingsViewModel::setTextMateEnabled,
+                                                    productAnalyticsConsented =
+                                                        AnalyticsConsentPreferences.productAnalyticsConsented,
+                                                    onProductAnalyticsConsentedChange =
+                                                        settingsViewModel::setProductAnalyticsConsented,
+                                                )
+                                            }
+                                            if (useSplitLayout) {
+                                                OpenCodeSplitPane(
+                                                    screen = OpenCodeSplitPaneScreen.Settings,
+                                                    leading = settings,
+                                                    trailing = { control ->
+                                                        settingsDetailContent(visibleSettingsDetail, control) {}
+                                                    },
+                                                )
+                                            } else {
+                                                settings()
+                                            }
                                         }
                                     }
                                     entry<AppearanceHome> {
                                         RouteSurface {
-                                            ProductRouteScreenViewEffect(
-                                                screenId = ProductAnalytics.Screen.SETTINGS_APPEARANCE,
-                                            )
-                                            AppearanceSettingsScreen(
-                                                onNavigateBack = { backStack.popRouteUnlessRoot() },
-                                                onThemeClick = {
-                                                    if (backStack.lastOrNull() != ThemePickerHome) {
-                                                        backStack.add(ThemePickerHome)
-                                                    }
-                                                },
-                                                onSyntaxClick = {
-                                                    if (backStack.lastOrNull() != SyntaxPickerHome) {
-                                                        backStack.add(SyntaxPickerHome)
-                                                    }
-                                                },
-                                            )
+                                            settingsDetailContent(SettingsDetail.Appearance, null) {
+                                                backStack.popRouteUnlessRoot()
+                                            }
                                         }
                                     }
                                     entry<ThemePickerHome> {
@@ -394,28 +586,9 @@ fun MainNavigation() {
                                     }
                                     entry<ServersHome> {
                                         RouteSurface {
-                                            LaunchedEffect(Unit) {
-                                                serversViewModel.refresh()
+                                            settingsDetailContent(SettingsDetail.Servers, null) {
+                                                backStack.popRouteUnlessRoot()
                                             }
-                                            ServersScreen(
-                                                uiState = serversUiState,
-                                                onNavigateBack = { backStack.popRouteUnlessRoot() },
-                                                onAddServer = {
-                                                    presentConnectionSetup(
-                                                        initialProfile = null,
-                                                        mode = ConnectionSetupMode.Add,
-                                                    )
-                                                },
-                                                onEditProfile = { profile ->
-                                                    presentConnectionSetup(
-                                                        initialProfile = profile,
-                                                        mode = ConnectionSetupMode.Edit,
-                                                    )
-                                                },
-                                                onRequestRemove = serversViewModel::requestRemove,
-                                                onConfirmRemove = serversViewModel::confirmRemove,
-                                                onDismissRemove = serversViewModel::dismissRemove,
-                                            )
                                         }
                                     }
                                     entry<ConnectionSetupHome> {
@@ -463,56 +636,37 @@ fun MainNavigation() {
                                     }
                                     entry<TextMateLanguagesHome> {
                                         RouteSurface {
-                                            TextMateLanguagesRoute(
-                                                onNavigateBack = { backStack.popRouteUnlessRoot() },
-                                            )
+                                            settingsDetailContent(SettingsDetail.TextMateLanguages, null) {
+                                                backStack.popRouteUnlessRoot()
+                                            }
                                         }
                                     }
                                     entry<FeatureFlagsHome> {
                                         RouteSurface {
-                                            FeatureFlagsRoute(
-                                                onNavigateBack = { backStack.popRouteUnlessRoot() },
-                                            )
+                                            settingsDetailContent(SettingsDetail.FeatureFlags, null) {
+                                                backStack.popRouteUnlessRoot()
+                                            }
                                         }
                                     }
                                     entry<TextMateLogbookHome> {
                                         RouteSurface {
-                                            val logbookViewModel: TextMateLogbookViewModel = hiltViewModel()
-                                            val logbookState by logbookViewModel.state.collectAsStateWithLifecycle()
-                                            TextMateLogbookScreen(
-                                                state = logbookState,
-                                                onNavigateBack = { backStack.popRouteUnlessRoot() },
-                                                onRefresh = logbookViewModel::refresh,
-                                                onClear = logbookViewModel::clear,
-                                            )
+                                            settingsDetailContent(SettingsDetail.TextMateLogbook, null) {
+                                                backStack.popRouteUnlessRoot()
+                                            }
                                         }
                                     }
                                     entry<DiagnosticLogsHome> {
                                         RouteSurface {
-                                            val diagnosticLogsViewModel: DiagnosticLogsViewModel = hiltViewModel()
-                                            val diagnosticLogsState by
-                                                diagnosticLogsViewModel.state.collectAsStateWithLifecycle()
-                                            val context = LocalContext.current
-                                            DiagnosticLogsScreen(
-                                                state = diagnosticLogsState,
-                                                onNavigateBack = { backStack.popRouteUnlessRoot() },
-                                                onShareViaApps = {
-                                                    diagnosticLogsViewModel.shareViaApps { intent ->
-                                                        context.startActivity(intent)
-                                                    }
-                                                },
-                                                onSaveToUri = diagnosticLogsViewModel::saveToUri,
-                                                onClear = diagnosticLogsViewModel::clear,
-                                                onExportWindowChange = diagnosticLogsViewModel::setExportWindow,
-                                            )
+                                            settingsDetailContent(SettingsDetail.DiagnosticLogs, null) {
+                                                backStack.popRouteUnlessRoot()
+                                            }
                                         }
                                     }
                                     entry<ComponentGalleryHome> {
                                         RouteSurface {
-                                            ComponentGalleryScreen(
-                                                onEntryClick = { entryId -> backStack.add(ComponentGalleryDetail(entryId)) },
-                                                onNavigateBack = { backStack.popRouteUnlessRoot() },
-                                            )
+                                            settingsDetailContent(SettingsDetail.ComponentGallery, null) {
+                                                backStack.popRouteUnlessRoot()
+                                            }
                                         }
                                     }
                                     entry<ComponentGalleryDetail> { key ->
@@ -552,6 +706,7 @@ fun MainNavigation() {
                                                             WorkingIndicatorGalleryScreen()
                                                         ComponentGalleryEntryId.ReasoningRow -> ReasoningRowGalleryScreen()
                                                         ComponentGalleryEntryId.TopBar -> TopBarGalleryScreen()
+                                                        ComponentGalleryEntryId.SplitPane -> SplitPaneGalleryScreen()
                                                         ComponentGalleryEntryId.OverflowMenu -> OverflowMenuGalleryScreen()
                                                         ComponentGalleryEntryId.BottomSheet -> BottomSheetGalleryScreen()
                                                         ComponentGalleryEntryId.Dialog -> DialogGalleryScreen()
@@ -836,3 +991,137 @@ private fun ComponentGalleryEntryId.usesEdgeToEdgeBottomChrome(): Boolean =
     this == ComponentGalleryEntryId.SessionList ||
         this == ComponentGalleryEntryId.SessionListDock ||
         this == ComponentGalleryEntryId.SessionComposer
+
+private fun SessionOpenTarget.toSessionChatRoute(): SessionChat =
+    SessionChat(
+        sessionId = sessionId,
+        sessionTitle = title,
+        worktree = worktree,
+        optimisticNavigationInstanceId = optimisticNavigationInstanceId,
+    )
+
+private val SessionOpenTargetSaver =
+    Saver<SessionOpenTarget?, ArrayList<String?>>(
+        save = { target ->
+            target?.let {
+                arrayListOf(it.sessionId, it.title, it.worktree, it.optimisticNavigationInstanceId)
+            }
+        },
+        restore = { values ->
+            SessionOpenTarget(
+                sessionId = values[0].orEmpty(),
+                title = values[1].orEmpty(),
+                worktree = values[2].orEmpty(),
+                optimisticNavigationInstanceId = values[3],
+            )
+        },
+    )
+
+/** Stacked route that shows a Settings detail on compact width. */
+private val SettingsDetail.route: NavKey
+    get() =
+        when (this) {
+            SettingsDetail.Servers -> ServersHome
+            SettingsDetail.Appearance -> AppearanceHome
+            SettingsDetail.ComponentGallery -> ComponentGalleryHome
+            SettingsDetail.TextMateLanguages -> TextMateLanguagesHome
+            SettingsDetail.TextMateLogbook -> TextMateLogbookHome
+            SettingsDetail.FeatureFlags -> FeatureFlagsHome
+            SettingsDetail.DiagnosticLogs -> DiagnosticLogsHome
+        }
+
+/** Empty trailing pane key for the Home split view. */
+private data object HomeSessionDetailPlaceholder
+
+/**
+ * Trailing pane of the Home split view. The selection is rendered through its own decorated
+ * one-entry back stack so each selected chat gets an entry-scoped ViewModelStore that is
+ * cleared when the selection changes, matching how a popped [SessionChat] route behaves.
+ */
+@Composable
+private fun HomeSessionDetail(
+    selection: SessionOpenTarget?,
+    detailControl: OpenCodeSplitPaneDetailControl,
+    onClearSelection: () -> Unit,
+    onReplaceSelection: (SessionOpenTarget) -> Unit,
+    onPush: (NavKey) -> Unit,
+) {
+    val detailKey: Any = selection?.toSessionChatRoute() ?: HomeSessionDetailPlaceholder
+    val entries =
+        rememberDecoratedNavEntries(
+            backStack = listOf(detailKey),
+            entryDecorators = rememberMainNavEntryDecorators(),
+            entryProvider =
+                entryProvider {
+                    entry<SessionChat> { key ->
+                        ProductRouteScreenViewEffect(
+                            screenId = ProductAnalytics.Screen.SESSION_CHAT,
+                            presentation = ProductAnalytics.Presentation.EMBEDDED,
+                        )
+                        SessionChatScreen(
+                            sessionId = key.sessionId,
+                            sessionTitle = key.sessionTitle,
+                            worktree = key.worktree,
+                            optimisticNavigationInstanceId = key.optimisticNavigationInstanceId,
+                            parentId = key.parentId,
+                            detailControl = detailControl,
+                            onNavigateBack = onClearSelection,
+                            onSessionContextClick = {
+                                onPush(SessionContext(key.sessionId, key.worktree))
+                            },
+                            onReviewChangesClick = { target ->
+                                onPush(
+                                    Changes(
+                                        target.sessionId,
+                                        target.worktree,
+                                        target.messageId,
+                                        target.initialSource,
+                                        target.initialFilePath,
+                                    ),
+                                )
+                            },
+                            onChildSessionClick = { target ->
+                                onPush(
+                                    SessionChat(
+                                        sessionId = target.sessionId,
+                                        sessionTitle = target.sessionTitle,
+                                        worktree = target.worktree,
+                                        optimisticNavigationInstanceId = target.optimisticNavigationInstanceId,
+                                        parentId = key.sessionId,
+                                    ),
+                                )
+                            },
+                            onToolGroupClick = { target -> onPush(target) },
+                            onTerminalRequested = { worktree, projectTitle ->
+                                onPush(Terminal(worktree = worktree, projectTitle = projectTitle))
+                            },
+                            onSessionReplaceRequested = { target ->
+                                onReplaceSelection(
+                                    SessionOpenTarget(
+                                        sessionId = target.sessionId,
+                                        title = target.sessionTitle,
+                                        worktree = target.worktree,
+                                        optimisticNavigationInstanceId = target.optimisticNavigationInstanceId,
+                                    ),
+                                )
+                            },
+                        )
+                    }
+                    entry<HomeSessionDetailPlaceholder> {
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            OpenCodeTopBar(leading = openCodeDetailLeading(detailControl) {})
+                            OpenCodeEmptyState(
+                                title = "No session selected",
+                                message = "Choose a session from the list",
+                                icon = OpenCodeIcons.List,
+                                modifier =
+                                    Modifier
+                                        .weight(1f)
+                                        .navigationBarsPadding(),
+                            )
+                        }
+                    }
+                },
+        )
+    entries.last().Content()
+}

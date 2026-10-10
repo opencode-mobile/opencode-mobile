@@ -116,6 +116,8 @@ struct ComponentGalleryDetailView: View {
             ReasoningRowGalleryView()
         case .topBar:
             TopBarGalleryView()
+        case .splitPane:
+            SplitPaneGalleryView()
         case .overflowMenu:
             OverflowMenuGalleryView()
         case .bottomSheet:

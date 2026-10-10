@@ -145,6 +145,18 @@ final class SessionChatTimeline {
         if let warm = messageRepository.peekWarmDisplayMessages(sessionID: sessionID, directory: worktree), !warm.isEmpty {
             // In-memory rows already on screen. Not unconfirmed disk cache — resume
             // skip/same-fingerprint catch-up never confirms Syncing if we raise it here.
+            if warm.count <= Self.warmSynchronousPaintLimit {
+                // Project before publishing `.ready`: an async apply mounted the ready
+                // list with zero rows for a frame or more, which blinked on open.
+                applyWarmDisplayMessagesSynchronously(warm)
+                notifyChange()
+                observationTask = Task {
+                    await Task.yield()
+                    guard !Task.isCancelled, self.observationGeneration == generation else { return }
+                    await runObservationLoop(generation: generation)
+                }
+                return
+            }
             state.timeline = .ready
             state.errorMessage = nil
             notifyChange()
@@ -167,6 +179,70 @@ final class SessionChatTimeline {
         observationTask = Task {
             await runObservationLoop(generation: generation)
         }
+    }
+
+    /// Upper bound for projecting warm rows on the main actor. Larger in-memory
+    /// histories keep the off-main apply.
+    static let warmSynchronousPaintLimit = 120
+
+    /// Same projection as `applyLoadedDisplayMessagesTransform` for a quiet,
+    /// network-confirmed snapshot, without the off-main hop and row-loop yields.
+    private func applyWarmDisplayMessagesSynchronously(_ incoming: [DisplayMessage]) {
+        let displayMessages = applyPendingPromptOverlay(incoming, expireAgainstAuthoritative: true)
+        lastLoadedDisplayMessages = displayMessages
+        lastLoadedMessages = displayMessages.map(\.message)
+
+        displayFrameRevision &+= 1
+        let frameRevision = displayFrameRevision
+        let pendingRows: [TimelineRow] =
+            mergePendingWhileSending
+                ? pendingOptimisticItems().map { TimelineRow.fromSessionChatRow($0) }
+                : []
+        let optimistic = OptimisticInputs(
+            pendingRows: pendingRows,
+            baselineSignatureCounts: pendingBaselineSignatureCounts,
+            mergePending: mergePendingWhileSending
+        )
+        let previousFrame = timelineFrame.frameRevision == 0 && timelineFrame.rows.isEmpty
+            ? nil
+            : timelineFrame
+        let frame = DisplayFrameBuilder.build(
+            sessionKey: sessionID,
+            frameRevision: frameRevision,
+            sourceRevision: frameRevision,
+            displayMessages: displayMessages,
+            serverCommands: serverCommands,
+            collapseConsecutiveToolCalls: collapseConsecutiveToolCalls,
+            chipTimeline: chipTimeline
+        )
+        let stamped = SessionChatTimelineProjector.project(
+            frame: frame,
+            optimistic: optimistic,
+            previous: previousFrame
+        ).withRequired(false)
+        timelineFrame = stamped
+
+        let previousByID = Dictionary(uniqueKeysWithValues: state.messages.map { ($0.id, $0) })
+        let rows = stamped.rows.map { timelineRow -> SessionChatRow in
+            if let previous = previousByID[timelineRow.id],
+               !stamped.changedRowIDs.contains(timelineRow.id),
+               !stamped.insertedRowIDs.contains(timelineRow.id),
+               !timelineRow.isPending
+            {
+                return previous
+            }
+            return timelineRow.toSessionChatRow()
+        }
+
+        state.timeline = rows.isEmpty ? .empty : .ready
+        state.messages = rows
+        state.isRefreshing = false
+        networkCacheSyncConfirmed = true
+        state.messagesFromCache = false
+        state.isSyncingMessages = catchUpSyncing
+        state.hasOlder = messageRepository.hasOlderMessages(sessionID: sessionID, directory: worktree)
+        state.errorMessage = nil
+        clearOptimisticIfReconciled()
     }
 
     private func runObservationLoop(generation: Int) async {

@@ -44,6 +44,9 @@ struct ServersView: View {
     var onEditProfile: (ConnectionProfile) -> Void
     var refreshToken: Int = 0
 
+    /// Set when shown as the trailing root of the tablet Settings split view.
+    var detailControl: OpenCodeSplitPaneDetailControl? = nil
+
     var body: some View {
         let countLabel = viewModel.profiles.count == 1
             ? "1 Connection Profile"
@@ -52,7 +55,7 @@ struct ServersView: View {
             OpenCodeTopBar(
                 title: "Servers",
                 subtitle: countLabel,
-                leading: .back(action: { dismiss() }),
+                leading: OpenCodeSplitPane.detailLeading(detailControl, back: { dismiss() }),
                 showDivider: true
             )
             VStack(spacing: 0) {

@@ -57,6 +57,13 @@ class AppRootViewModel
                     _homeResetGeneration.update { it + 1 }
                 }
             }
+            viewModelScope.launch {
+                // Clear All Data (or removing the last profile) drops every session, so Home must
+                // forget its split-view selection just like on a profile switch.
+                connectionSessionCoordinator.profileCleared.collect {
+                    _homeResetGeneration.update { it + 1 }
+                }
+            }
         }
 
         private suspend fun loadInitialState() {

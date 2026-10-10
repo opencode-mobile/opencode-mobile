@@ -127,6 +127,7 @@ fun SessionList(
     onSessionLongPress: ((SessionListSession) -> Unit)? = null,
     onNewSessionLongPress: (() -> Unit)? = null,
     revealNewestToken: Int = 0,
+    selectedSessionId: String? = null,
 ) {
     val background = openCodeColor("background-base")
     val borderWeaker = openCodeColor("border-weaker-base")
@@ -165,6 +166,7 @@ fun SessionList(
                     background = background,
                     emptyContent = emptyContent,
                     revealNewestToken = revealNewestToken,
+                    selectedSessionId = selectedSessionId,
                     onSessionSelected = onSessionSelected,
                     onSessionLongPress = onSessionLongPress,
                 )
@@ -208,6 +210,7 @@ private fun SessionListFeedPage(
     background: androidx.compose.ui.graphics.Color,
     emptyContent: (@Composable () -> Unit)?,
     revealNewestToken: Int,
+    selectedSessionId: String?,
     onSessionSelected: (SessionListSession) -> Unit,
     onSessionLongPress: ((SessionListSession) -> Unit)?,
 ) {
@@ -293,6 +296,7 @@ private fun SessionListFeedPage(
         listBottomFadeHeight = listBottomFadeHeight,
         borderWeaker = borderWeaker,
         emptyContent = emptyContent,
+        selectedSessionId = selectedSessionId,
         onSessionSelected = onSessionSelected,
         onSessionLongPress = onSessionLongPress,
         modifier =
@@ -310,6 +314,7 @@ private fun SessionListFeed(
     listBottomFadeHeight: Dp,
     borderWeaker: androidx.compose.ui.graphics.Color,
     emptyContent: (@Composable () -> Unit)?,
+    selectedSessionId: String?,
     onSessionSelected: (SessionListSession) -> Unit,
     onSessionLongPress: ((SessionListSession) -> Unit)?,
     modifier: Modifier = Modifier,
@@ -343,8 +348,9 @@ private fun SessionListFeed(
                             SessionListRow(
                                 session = session,
                                 showStatusDot = true,
-                                showDivider = index < section.items.lastIndex,
+                                showDivider = sessionListShowsDivider(index, section.items, selectedSessionId),
                                 borderWeaker = borderWeaker,
+                                selected = session.id == selectedSessionId,
                                 onSessionSelected = onSessionSelected,
                                 onSessionLongPress = onSessionLongPress,
                             )
@@ -363,8 +369,9 @@ private fun SessionListFeed(
                             SessionListRow(
                                 session = session,
                                 showStatusDot = false,
-                                showDivider = index < section.items.lastIndex,
+                                showDivider = sessionListShowsDivider(index, section.items, selectedSessionId),
                                 borderWeaker = borderWeaker,
+                                selected = session.id == selectedSessionId,
                                 onSessionSelected = onSessionSelected,
                                 onSessionLongPress = onSessionLongPress,
                             )
@@ -382,6 +389,7 @@ private fun SessionListRow(
     showStatusDot: Boolean,
     showDivider: Boolean,
     borderWeaker: androidx.compose.ui.graphics.Color,
+    selected: Boolean,
     onSessionSelected: (SessionListSession) -> Unit,
     onSessionLongPress: ((SessionListSession) -> Unit)?,
 ) {
@@ -397,6 +405,7 @@ private fun SessionListRow(
                 accent = session.letterAccent,
                 statusDot = if (showStatusDot) status.tone else null,
             ),
+        selected = selected,
         onClick = { onSessionSelected(session) },
         onLongPress = onSessionLongPress?.let { handler -> { handler(session) } },
     )
@@ -558,4 +567,18 @@ private fun SessionListPreview() {
             onNewSession = {},
         )
     }
+}
+
+/**
+ * Whether the hairline divider after row [index] is drawn. Skipped after the last
+ * row and on either side of the selected row so it never butts against the pill.
+ */
+internal fun sessionListShowsDivider(
+    index: Int,
+    items: List<SessionListSession>,
+    selectedSessionId: String?,
+): Boolean {
+    if (index < 0 || index >= items.lastIndex) return false
+    if (selectedSessionId == null) return true
+    return items[index].id != selectedSessionId && items[index + 1].id != selectedSessionId
 }

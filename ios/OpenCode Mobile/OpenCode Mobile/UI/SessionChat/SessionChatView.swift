@@ -8,6 +8,8 @@ import UniformTypeIdentifiers
 struct SessionChatView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var viewModelStorage: SessionChatViewModel?
+    /// `sessionNavigationTaskID` the current `viewModelStorage` was built for.
+    @State private var viewModelTaskID: String?
     @State private var activePicker: ComposerPickerKind?
     @State private var activeModelProviderID: String?
     @State private var modelFilterText = ""
@@ -39,9 +41,20 @@ struct SessionChatView: View {
 
     private let session: SessionListItem
     private let injectedViewModel: SessionChatViewModel?
+    /// Set when this chat is the trailing root of a tablet split view.
+    private let detailControl: OpenCodeSplitPaneDetailControl?
+    /// Replaces `dismiss()` when the chat is a split-view root with nothing to pop to.
+    private let onLeaveSession: (() -> Void)?
 
-    init(session: SessionListItem, viewModel: SessionChatViewModel? = nil) {
+    init(
+        session: SessionListItem,
+        viewModel: SessionChatViewModel? = nil,
+        detailControl: OpenCodeSplitPaneDetailControl? = nil,
+        onLeaveSession: (() -> Void)? = nil
+    ) {
         self.session = session
+        self.detailControl = detailControl
+        self.onLeaveSession = onLeaveSession
         // Do not construct the ViewModel in `State(initialValue:)` — SwiftUI re-runs
         // View.init (and that expression) whenever the parent body refreshes, while
         // keeping one live `@State`. Eager make() was spawning bind storms and
@@ -77,14 +90,31 @@ struct SessionChatView: View {
                 screenId: ProductAnalytics.Screen.sessionChat,
                 presentation: ProductAnalytics.Presentation.route
             )
-            viewModelStorage?.stopObserving()
-            viewModelStorage = injectedViewModel ?? Container.makeSessionChatViewModel(
-                sessionID: session.id,
-                sessionTitle: session.title,
-                worktree: session.worktree
-            )
-            viewModel.startObserving()
-            await viewModel.loadMessages()
+            let taskID = sessionNavigationTaskID
+            switch SessionChatViewModelReuse.decision(
+                currentTaskID: taskID,
+                boundTaskID: viewModelTaskID,
+                hasViewModel: viewModelStorage != nil
+            ) {
+            case .reuse:
+                // Back from a pushed screen: `.onDisappear` stopped observing. Resume on
+                // the same view model so the composer and timeline keep their state;
+                // the timeline's warm path refreshes quietly.
+                viewModel.startObserving()
+                if !viewModel.hasCompletedInitialLoad {
+                    await viewModel.loadMessages()
+                }
+            case .rebuild:
+                viewModelStorage?.stopObserving()
+                viewModelStorage = injectedViewModel ?? Container.makeSessionChatViewModel(
+                    sessionID: session.id,
+                    sessionTitle: session.title,
+                    worktree: session.worktree
+                )
+                viewModelTaskID = taskID
+                viewModel.startObserving()
+                await viewModel.loadMessages()
+            }
         }
     }
 
@@ -113,7 +143,7 @@ struct SessionChatView: View {
                         return nil
                     }(),
                     subtitleAccessory: .statusDot(viewModel.uiState.connectionStatus.openCodeStatus),
-                    leading: .back(action: {
+                    leading: OpenCodeSplitPane.detailLeading(detailControl, back: {
                         logChatAction(ProductAnalytics.Action.chatBack)
                         leaveSession()
                     }),
@@ -817,7 +847,11 @@ struct SessionChatView: View {
 
     private func leaveSession() {
         viewModelStorage?.stopObserving()
-        dismiss()
+        if detailControl != nil {
+            onLeaveSession?()
+        } else {
+            dismiss()
+        }
     }
 
     private func importPhotos(_ items: [PhotosPickerItem]) async {

@@ -119,6 +119,12 @@ where Item.ID == String {
     /// Unpinned content offset to restore after a covering destination (tool
     /// group, Changes) pops. Navigation layout otherwise re-pins to the end.
     private var preservedOffsetY: CGFloat?
+    /// Set when an overlay inset changes while pinned to the end. UIKit can apply
+    /// the new adjusted inset in a later layout pass (after the async re-pin) and
+    /// moves the offset; re-pin right there, before that frame renders. Stays armed
+    /// briefly (other inset updates may land first) and drops on user drag.
+    private var repinOnAdjustedInsetChange = false
+    private var repinOnAdjustedInsetGeneration = 0
     private var isCoveredByNavigation = false
     private var userScrollEndTask: Task<Void, Never>?
     /// User must drag toward oldest after the first paint before older pages load.
@@ -237,17 +243,21 @@ where Item.ID == String {
         guard isViewLoaded else { return }
         let inheritedBottom = max(0, view.safeAreaInsets.bottom - additionalSafeAreaInsets.bottom)
         let inset = max(0, bottomOverlayInset - inheritedBottom)
+        // Read before the inset moves the offset: the change itself makes the list
+        // look unpinned for a frame.
+        let wasPinned = scrollController?.isPinnedToEnd == true
         if abs(additionalSafeAreaInsets.bottom - inset) > 0.5 {
+            if repinIfNeeded, wasPinned { armRepinOnAdjustedInsetChange() }
             var safe = additionalSafeAreaInsets
             safe.bottom = inset
             additionalSafeAreaInsets = safe
         }
         updateBottomAlignmentInset()
-        guard repinIfNeeded, scrollController?.isPinnedToEnd == true else { return }
+        guard repinIfNeeded, wasPinned || scrollController?.isPinnedToEnd == true else { return }
         performScrollToEnd(animated: false)
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            guard self.scrollController?.isPinnedToEnd == true else { return }
+            guard wasPinned || self.scrollController?.isPinnedToEnd == true else { return }
             self.pinToBottomWithoutAnimation()
         }
     }
@@ -265,17 +275,23 @@ where Item.ID == String {
     private func applyTopOverlaySafeArea(repinIfNeeded: Bool) {
         guard isViewLoaded else { return }
         let inset = topOverlayInset
+        // Read before the inset moves the offset. A taller top inset (Syncing or
+        // branch pill appearing on open) shifts contentOffset by the inset delta,
+        // so the list reads as unpinned and skipped the re-pin: one frame drawn
+        // ~46pt low, then a jump back.
+        let wasPinned = scrollController?.isPinnedToEnd == true
         if abs(additionalSafeAreaInsets.top - inset) > 0.5 {
+            if repinIfNeeded, wasPinned { armRepinOnAdjustedInsetChange() }
             var safe = additionalSafeAreaInsets
             safe.top = inset
             additionalSafeAreaInsets = safe
         }
         updateBottomAlignmentInset()
-        guard repinIfNeeded, scrollController?.isPinnedToEnd == true else { return }
+        guard repinIfNeeded, wasPinned || scrollController?.isPinnedToEnd == true else { return }
         performScrollToEnd(animated: false)
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            guard self.scrollController?.isPinnedToEnd == true else { return }
+            guard wasPinned || self.scrollController?.isPinnedToEnd == true else { return }
             self.pinToBottomWithoutAnimation()
         }
     }
@@ -723,6 +739,21 @@ where Item.ID == String {
         }
     }
 
+    private func armRepinOnAdjustedInsetChange() {
+        repinOnAdjustedInsetChange = true
+        repinOnAdjustedInsetGeneration &+= 1
+        let generation = repinOnAdjustedInsetGeneration
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            guard let self, self.repinOnAdjustedInsetGeneration == generation else { return }
+            self.repinOnAdjustedInsetChange = false
+        }
+    }
+
+    func scrollViewDidChangeAdjustedContentInset(_ scrollView: UIScrollView) {
+        guard repinOnAdjustedInsetChange, !isCoveredByNavigation else { return }
+        pinToBottomWithoutAnimation()
+    }
+
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
         reportGeometry()
         guard scrollView.isDragging || scrollView.isTracking else { return }
@@ -771,6 +802,7 @@ where Item.ID == String {
         pendingOlderLoadFromUserScroll = true
         didFireOlderLoadThisGesture = false
         lastUserScrollOffsetY = scrollView.contentOffset.y
+        repinOnAdjustedInsetChange = false
     }
 
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {

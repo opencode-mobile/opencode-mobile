@@ -35,6 +35,7 @@ enum class ComponentGalleryEntryId {
     WorkingIndicator,
     ReasoningRow,
     TopBar,
+    SplitPane,
     OverflowMenu,
     BottomSheet,
     Dialog,
@@ -278,6 +279,12 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.TopBar,
             title = "Top Bar",
             description = "Page-level navigation bar with leading affordance and actions.",
+            category = ComponentGalleryCategory.Navigation,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.SplitPane,
+            title = "Split Pane",
+            description = "Wide-window leading list and trailing detail with a resizable, collapsible divider.",
             category = ComponentGalleryCategory.Navigation,
         ),
         ComponentGalleryEntry(

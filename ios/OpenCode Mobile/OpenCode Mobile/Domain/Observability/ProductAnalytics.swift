@@ -278,6 +278,8 @@ enum ProductAnalytics {
         static let clearCacheCancel = "clear_cache_cancel"
         static let clearAllDataConfirm = "clear_all_data_confirm"
         static let clearAllDataCancel = "clear_all_data_cancel"
+
+        static let splitPaneToggleSidebar = "split_pane_toggle_sidebar"
     }
 
     enum Param {

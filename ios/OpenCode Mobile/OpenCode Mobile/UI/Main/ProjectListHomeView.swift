@@ -11,7 +11,12 @@ struct ProjectListHomeView: View {
     @State private var showNewSessionProjectPicker = false
     @State private var showProjectPicker = false
     @State private var selectedSessionFilterId = SessionListFilterTab.allId
+    /// Trailing-pane session in the regular-width split view. Unused on compact.
+    @State private var selectedSession: SessionListItem?
+    /// Session ids from the last fully loaded Home list; detects a selected session disappearing.
+    @State private var lastLoadedSessionIDs: Set<String>?
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Binding private var presentConnectionSetupOnAppear: Bool
 
     init(
@@ -24,18 +29,24 @@ struct ProjectListHomeView: View {
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
-            VStack(spacing: 0) {
-                OpenCodeTopBar(
-                    title: viewModel.serversChrome.title,
-                    subtitleAccessory: showsLiveUpdatesStatus
-                        ? .statusDot(viewModel.liveUpdatesConnectionStatus.openCodeStatus)
-                        : nil,
-                    actions: homeTopBarActions,
-                    onTitleClick: viewModel.serversChrome.isSwitcher ? { viewModel.showServersSheet() } : nil,
-                    titleMenuExpanded: viewModel.serversChrome.sheetVisible
-                )
-                content
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            Group {
+                if isSplitLayout {
+                    OpenCodeSplitPane(
+                        screen: .home,
+                        onCollapsedChange: { _ in
+                            ProductAnalytics.logUserAction(
+                                screenId: ProductAnalytics.Screen.home,
+                                actionId: ProductAnalytics.Action.splitPaneToggleSidebar
+                            )
+                        }
+                    ) {
+                        homePane
+                    } trailing: { control in
+                        homeDetailPane(control)
+                    }
+                } else {
+                    homePane
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(OpenCodeColors.backgroundBase)
@@ -96,6 +107,33 @@ struct ProjectListHomeView: View {
                     openSession(session)
                     viewModel.consumePendingSessionOpen()
                 }
+            }
+            .onChange(of: isSplitLayout) { _, split in
+                // Keep the open chat when the window narrows to compact.
+                if !split, let session = selectedSession {
+                    selectedSession = nil
+                    navigationPath.append(session)
+                }
+            }
+            .onChange(of: viewModel.serversChrome.active?.id) { _, _ in
+                // Clear All Data (active profile becomes nil) and profile switches
+                // drop every session the trailing pane could be showing.
+                selectedSession = nil
+                lastLoadedSessionIDs = nil
+            }
+            .onChange(of: loadedSessionIDs) { _, current in
+                guard let current else { return }
+                if let selectedSession,
+                   HomeSplitSelection.wasRemoved(
+                       selectedID: selectedSession.id,
+                       previousIDs: lastLoadedSessionIDs,
+                       currentIDs: current
+                   )
+                {
+                    // Deleted (here or on another device) while open in the trailing pane.
+                    self.selectedSession = nil
+                }
+                lastLoadedSessionIDs = current
             }
             .onChange(of: viewModel.pendingSelectedFilterId) { _, worktree in
                 if let worktree {
@@ -247,6 +285,7 @@ struct ProjectListHomeView: View {
                                     Task {
                                         await viewModel.switchProfile(id: profile.id)
                                         navigationPath = NavigationPath()
+                                        selectedSession = nil
                                     }
                                 }
                             )
@@ -497,8 +536,89 @@ struct ProjectListHomeView: View {
         }
     }
 
+    private var isSplitLayout: Bool {
+        OpenCodeLayoutWidth.resolve(sizeClass: horizontalSizeClass) == .regular
+    }
+
+    /// Every session id in a fully loaded Home list; nil while loading, disconnected,
+    /// or when a project failed to load, so partial lists never clear the selection.
+    private var loadedSessionIDs: Set<String>? {
+        switch viewModel.state {
+        case .empty:
+            return []
+        case let .loaded(sections, _, _, _):
+            guard sections.allSatisfy({ $0.loadError == nil }) else { return nil }
+            return Set(sections.flatMap { $0.allSessions.map(\.id) })
+        default:
+            return nil
+        }
+    }
+
     private func openSession(_ session: SessionListItem) {
-        navigationPath.append(session)
+        if isSplitLayout {
+            selectedSession = session
+        } else {
+            navigationPath.append(session)
+        }
+    }
+
+    private var homePane: some View {
+        VStack(spacing: 0) {
+            OpenCodeTopBar(
+                title: viewModel.serversChrome.title,
+                subtitleAccessory: showsLiveUpdatesStatus
+                    ? .statusDot(viewModel.liveUpdatesConnectionStatus.openCodeStatus)
+                    : nil,
+                actions: homeTopBarActions,
+                onTitleClick: viewModel.serversChrome.isSwitcher ? { viewModel.showServersSheet() } : nil,
+                titleMenuExpanded: viewModel.serversChrome.sheetVisible
+            )
+            content
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// Trailing pane root. Its own stack keeps chat pushes (context, changes,
+    /// tool groups, child sessions, terminal) inside the detail pane.
+    private func homeDetailPane(_ control: OpenCodeSplitPaneDetailControl) -> some View {
+        NavigationStack {
+            Group {
+                if let selectedSession {
+                    SessionChatView(
+                        session: selectedSession,
+                        detailControl: control,
+                        onLeaveSession: { self.selectedSession = nil }
+                    )
+                } else {
+                    VStack(spacing: 0) {
+                        OpenCodeTopBar(
+                            title: "",
+                            leading: OpenCodeSplitPane.detailLeading(control, back: {})
+                        )
+                        OpenCodeEmptyState(
+                            title: "No session selected",
+                            message: "Choose a session from the list",
+                            icon: .list
+                        )
+                        .openCodeReadableColumn()
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(OpenCodeColors.backgroundBase)
+                    .toolbar(.hidden, for: .navigationBar)
+                }
+            }
+        }
+        // A new stack per session drops the previous chat's pushed screens and state.
+        .id(selectedSessionNavigationID)
+    }
+
+    private var selectedSessionNavigationID: String {
+        guard let selectedSession else { return "none" }
+        if let instanceID = selectedSession.optimisticNavigationInstanceID {
+            return "\(selectedSession.id)-\(instanceID.uuidString)"
+        }
+        return selectedSession.id
     }
 
     private var showsTerminalAction: Bool {
@@ -712,6 +832,7 @@ struct ProjectListHomeView: View {
             sessions: sessions,
             filterTabs: filterTabs,
             selectedFilterId: selectedFilterId,
+            selectedSessionId: isSplitLayout ? selectedSession?.id : nil,
             createError: createError,
             onOpenProjectPicker: {
                 ProductAnalytics.logUserAction(
@@ -836,6 +957,23 @@ private extension SessionListItem {
         default:
             return isReady ? SessionListStatus.ready : SessionListStatus.idle
         }
+    }
+}
+
+/// Rules for keeping the Home split-view selection in sync with the session list.
+enum HomeSplitSelection {
+    /// Whether the selected session was in the previous loaded list and is gone
+    /// from the current one. Sessions not listed yet (a fresh fork, an optimistic
+    /// create placeholder that has not been reconciled) are never treated as removed.
+    static func wasRemoved(
+        selectedID: String,
+        previousIDs: Set<String>?,
+        currentIDs: Set<String>
+    ) -> Bool {
+        guard !OptimisticSessionCreate.isPlaceholder(selectedID),
+              let previousIDs
+        else { return false }
+        return previousIDs.contains(selectedID) && !currentIDs.contains(selectedID)
     }
 }
 

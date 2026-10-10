@@ -46,8 +46,9 @@ import dev.opencode.mobile.ui.components.OpenCodeListItemStatus
 import dev.opencode.mobile.ui.components.OpenCodeListItemStatusTone
 import dev.opencode.mobile.ui.components.OpenCodeListItemStyle
 import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
+import dev.opencode.mobile.ui.components.OpenCodeSplitPaneDetailControl
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
-import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
+import dev.opencode.mobile.ui.components.openCodeDetailLeading
 import java.text.DateFormat
 import java.util.Date
 import java.util.Locale
@@ -56,6 +57,7 @@ import java.util.Locale
 fun TextMateLogbookScreen(
     state: TextMateLogbookUiState,
     onNavigateBack: () -> Unit,
+    detailControl: OpenCodeSplitPaneDetailControl? = null,
     onRefresh: () -> Unit,
     onClear: () -> Unit,
     modifier: Modifier = Modifier,
@@ -66,7 +68,7 @@ fun TextMateLogbookScreen(
     Column(modifier = modifier.fillMaxSize()) {
         OpenCodeTopBar(
             title = "TextMate Logbook",
-            leading = OpenCodeTopBarLeading.Back(onClick = onNavigateBack),
+            leading = openCodeDetailLeading(detailControl, onNavigateBack),
             showDivider = true,
         )
 

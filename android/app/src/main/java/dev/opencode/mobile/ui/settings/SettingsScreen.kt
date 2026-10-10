@@ -84,6 +84,7 @@ fun SettingsScreen(
     onProductAnalyticsConsentedChange: (Boolean) -> Unit,
     serversSummary: ServersSummary = ServersSummary(),
     modifier: Modifier = Modifier,
+    selectedDetail: SettingsDetail? = null,
 ) {
     var showClearConfirmation by remember { mutableStateOf(false) }
     var showClearSessionCacheConfirmation by remember { mutableStateOf(false) }
@@ -140,6 +141,7 @@ fun SettingsScreen(
 
                 OpenCodeListItem(
                     title = "Servers",
+                    selected = selectedDetail == SettingsDetail.Servers,
                     subtitle = serversSummary.subtitle,
                     style = OpenCodeListItemStyle.Card,
                     startDecorator =
@@ -159,6 +161,7 @@ fun SettingsScreen(
 
                 OpenCodeListItem(
                     title = "Appearance",
+                    selected = selectedDetail == SettingsDetail.Appearance,
                     subtitle = "${currentTheme.name} · ${currentSyntax.name}",
                     style = OpenCodeListItemStyle.Card,
                     startDecorator = StartDecorator.Icon(OpenCodeIcons.Widgets, "Appearance"),
@@ -339,6 +342,7 @@ fun SettingsScreen(
 
                 OpenCodeListItem(
                     title = "Diagnostic Logs",
+                    selected = selectedDetail == SettingsDetail.DiagnosticLogs,
                     subtitle = "Share a redacted rolling runtime log window",
                     style = OpenCodeListItemStyle.Card,
                     startDecorator = StartDecorator.Icon(OpenCodeIcons.Description, "Diagnostic Logs"),
@@ -396,6 +400,7 @@ fun SettingsScreen(
 
                     OpenCodeListItem(
                         title = "TextMate Languages",
+                        selected = selectedDetail == SettingsDetail.TextMateLanguages,
                         subtitle = "Opt out of any packaged language (all default on)",
                         style = OpenCodeListItemStyle.Card,
                         startDecorator = StartDecorator.Icon(OpenCodeIcons.Architecture, "TextMate Languages"),
@@ -405,6 +410,7 @@ fun SettingsScreen(
 
                     OpenCodeListItem(
                         title = "Component Gallery",
+                        selected = selectedDetail == SettingsDetail.ComponentGallery,
                         subtitle = "Design-system foundations and reusable components",
                         style = OpenCodeListItemStyle.Card,
                         startDecorator = StartDecorator.Icon(OpenCodeIcons.Architecture, "Component Gallery"),
@@ -414,6 +420,7 @@ fun SettingsScreen(
 
                     OpenCodeListItem(
                         title = "TextMate Logbook",
+                        selected = selectedDetail == SettingsDetail.TextMateLogbook,
                         subtitle = "Persisted code-fence parsing measurements",
                         style = OpenCodeListItemStyle.Card,
                         startDecorator = StartDecorator.Icon(OpenCodeIcons.Description, "TextMate Logbook"),
@@ -423,6 +430,7 @@ fun SettingsScreen(
 
                     OpenCodeListItem(
                         title = "Feature Flags",
+                        selected = selectedDetail == SettingsDetail.FeatureFlags,
                         subtitle = "Remote flags with device overrides",
                         style = OpenCodeListItemStyle.Card,
                         startDecorator = StartDecorator.Icon(OpenCodeIcons.Settings, "Feature Flags"),

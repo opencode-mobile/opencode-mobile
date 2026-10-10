@@ -63,6 +63,9 @@ icons:
   - name: settings
     lucide: settings
     notes: Gear — home top bar Settings action
+  - name: sidebar
+    lucide: panel-left
+    notes: Tablet split view — show / hide the leading pane (Home list, Settings list)
   - name: terminal
     lucide: square-terminal
     notes: open Terminal from home

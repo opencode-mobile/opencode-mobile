@@ -21,6 +21,7 @@ lucide/list/list:lucide_list
 lucide/ellipsis-vertical/more_vert:lucide_more_vert
 lucide/search/search:lucide_search
 lucide/settings/settings:lucide_settings
+lucide/panel-left/sidebar:lucide_sidebar
 lucide/square-terminal/terminal:lucide_terminal
 lucide/component/architecture:lucide_architecture
 lucide/archive/archive:lucide_archive

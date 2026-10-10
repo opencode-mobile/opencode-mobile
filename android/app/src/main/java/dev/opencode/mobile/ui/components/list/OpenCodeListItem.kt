@@ -8,6 +8,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.indication
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -72,6 +73,12 @@ private val ListItemLetterStatusDotSize = 10.dp
 private val ListItemIconDecoratorSize = 24.dp
 private val ListItemIconCircleGlyphSize = 16.dp
 private val ListItemCornerRadius = OpenCodeRadius.small
+
+// Plain-style selection and press highlights are inset from the row edges so they read as
+// a compact rounded highlight; the row frame, padding, and tap target are unchanged.
+private val ListItemSelectionHorizontalInset = 8.dp
+private val ListItemSelectionVerticalInset = 2.dp
+private val ListItemSelectionShape = RoundedCornerShape(OpenCodeRadius.medium)
 private val ListItemVerticalPadding = 12.dp
 private val ListItemTitleSubtitleSpacing = 2.dp
 private val ListItemMetaSpacing = 4.dp
@@ -170,14 +177,22 @@ fun OpenCodeListItem(
     val combinedScale = if (isPopping) popScale.value else pressScale
     val surfaceBase = openCodeColor("surface-base")
     val surfaceRaised = openCodeColor("surface-raised-base")
+    val isPlain = style == OpenCodeListItemStyle.Plain
     val containerColor =
         when {
             style == OpenCodeListItemStyle.Card && selected -> surfaceRaised
             style == OpenCodeListItemStyle.Card -> surfaceBase
+            else -> Color.Transparent
+        }
+    val plainHighlightColor =
+        when {
             selected -> surfaceRaised
             enabled && isPressed -> surfaceRaised.copy(alpha = 0.92f)
             else -> Color.Transparent
         }
+    // Plain rows draw their ripple on the inset highlight layer below, so the row-level
+    // clickable keeps the full-width tap target without a full-bleed ripple.
+    val rowIndication = if (isPlain) null else ripple(bounded = true)
     val containerShape = RoundedCornerShape(ListItemCornerRadius)
     val contentColor =
         if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
@@ -195,7 +210,7 @@ fun OpenCodeListItem(
             onClick != null && onLongPress != null ->
                 Modifier.combinedClickable(
                     interactionSource = interactionSource,
-                    indication = ripple(bounded = true),
+                    indication = rowIndication,
                     enabled = enabled,
                     onClick = onClick,
                     onLongClick = {
@@ -207,14 +222,14 @@ fun OpenCodeListItem(
             onClick != null ->
                 Modifier.clickable(
                     interactionSource = interactionSource,
-                    indication = ripple(bounded = true),
+                    indication = rowIndication,
                     enabled = enabled,
                     onClick = onClick,
                 )
             onLongPress != null ->
                 Modifier.combinedClickable(
                     interactionSource = interactionSource,
-                    indication = ripple(bounded = true),
+                    indication = rowIndication,
                     enabled = enabled,
                     onClick = {},
                     onLongClick = {
@@ -242,6 +257,19 @@ fun OpenCodeListItem(
                         },
                     ).then(interactionModifier),
         ) {
+            if (isPlain) {
+                Box(
+                    modifier =
+                        Modifier
+                            .matchParentSize()
+                            .padding(
+                                horizontal = ListItemSelectionHorizontalInset,
+                                vertical = ListItemSelectionVerticalInset,
+                            ).clip(ListItemSelectionShape)
+                            .background(plainHighlightColor, ListItemSelectionShape)
+                            .indication(interactionSource, ripple(bounded = true)),
+                )
+            }
             Row(
                 modifier =
                     Modifier

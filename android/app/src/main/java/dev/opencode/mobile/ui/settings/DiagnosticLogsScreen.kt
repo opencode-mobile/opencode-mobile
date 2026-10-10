@@ -51,8 +51,9 @@ import dev.opencode.mobile.ui.components.OpenCodeListItemStyle
 import dev.opencode.mobile.ui.components.OpenCodeStatusStack
 import dev.opencode.mobile.ui.components.OpenCodeStatusStackStyle
 import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
+import dev.opencode.mobile.ui.components.OpenCodeSplitPaneDetailControl
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
-import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
+import dev.opencode.mobile.ui.components.openCodeDetailLeading
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -219,6 +220,7 @@ class DiagnosticLogsViewModel
 fun DiagnosticLogsScreen(
     state: DiagnosticLogsUiState,
     onNavigateBack: () -> Unit,
+    detailControl: OpenCodeSplitPaneDetailControl? = null,
     onShareViaApps: () -> Unit,
     onSaveToUri: (Uri) -> Unit,
     onClear: () -> Unit,
@@ -241,7 +243,7 @@ fun DiagnosticLogsScreen(
     Column(modifier = modifier.fillMaxSize()) {
         OpenCodeTopBar(
             title = "Diagnostic Logs",
-            leading = OpenCodeTopBarLeading.Back(onClick = onNavigateBack),
+            leading = openCodeDetailLeading(detailControl, onNavigateBack),
             showDivider = true,
         )
 

@@ -93,11 +93,14 @@ struct DiagnosticLogsView: View {
     @State private var showShareSheet = false
     @State private var showExportWindowPicker = false
 
+    /// Set when shown as the trailing root of the tablet Settings split view.
+    var detailControl: OpenCodeSplitPaneDetailControl? = nil
+
     var body: some View {
         VStack(spacing: 0) {
             OpenCodeTopBar(
                 title: "Diagnostic Logs",
-                leading: .back(action: { dismiss() }),
+                leading: OpenCodeSplitPane.detailLeading(detailControl, back: { dismiss() }),
                 showDivider: true
             )
 
