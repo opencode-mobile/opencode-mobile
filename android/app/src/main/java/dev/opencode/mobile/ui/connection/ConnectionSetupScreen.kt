@@ -4,7 +4,6 @@ import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,8 +16,6 @@ import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -27,16 +24,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.ui.components.OpenCodeButton
+import dev.opencode.mobile.ui.components.OpenCodeButtonContrast
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeDialog
 import dev.opencode.mobile.ui.components.OpenCodeDialogOption
@@ -65,11 +59,16 @@ fun ConnectionSetupScreen(
     onPairingQRScanned: (String) -> Unit = {},
     onPairingQRCameraDenied: () -> Unit = {},
     onPairingQRCameraUnavailable: () -> Unit = {},
+    onShowPairingCodeForm: () -> Unit = {},
+    onShowHostPasswordForm: () -> Unit = {},
+    onShowScanInstructions: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     var showRemoveConfirm by remember { mutableStateOf(false) }
     var showPairingScanner by remember { mutableStateOf(false) }
+    val showingPairAgain = uiState.pairAgainMessage != null && uiState.usesQrLayout
+    val showingAddresses = uiState.usesQrLayout && !showingPairAgain
     val cameraPermissionLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             if (granted) {
@@ -155,6 +154,7 @@ fun ConnectionSetupScreen(
                             onCredentialSegmentChanged = onCredentialSegmentChanged,
                             onPairingCodeChanged = onPairingCodeChanged,
                             onPasswordFocusConsumed = onPasswordFocusConsumed,
+                            showManualForm = uiState.showsManualForm,
                         )
                     }
                     Column(
@@ -165,20 +165,17 @@ fun ConnectionSetupScreen(
                                 .padding(bottom = 24.dp),
                         verticalArrangement = Arrangement.spacedBy(20.dp),
                     ) {
-                        if (!WindowInsets.isImeVisible) {
-                            PairingQREntry(
-                                enabled = !uiState.isBusy,
-                                onClick = { openPairingScanner() },
-                            )
-                        }
-                        if (uiState.showsPrimaryAction) {
-                            OpenCodeButton(
-                                variant = OpenCodeButtonVariant.FullWidthText(uiState.primaryActionLabel),
-                                enabled = uiState.primaryEnabled,
-                                onClick = onSubmit,
-                                modifier = Modifier.fillMaxWidth(),
-                            )
-                        }
+                        ConnectionSetupActions(
+                            uiState = uiState,
+                            showingPairAgain = showingPairAgain,
+                            showingAddresses = showingAddresses,
+                            manualFormVisible = uiState.showsManualForm,
+                            onScan = { openPairingScanner() },
+                            onEnterPairingCode = onShowPairingCodeForm,
+                            onUseHostAndPassword = onShowHostPasswordForm,
+                            onScanInstead = onShowScanInstructions,
+                            onSubmit = onSubmit,
+                        )
                     }
                 }
             }
@@ -230,37 +227,79 @@ fun ConnectionSetupScreen(
     )
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun PairingQREntry(
-    enabled: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
+private fun ConnectionSetupActions(
+    uiState: ConnectionSetupUiState,
+    showingPairAgain: Boolean,
+    showingAddresses: Boolean,
+    manualFormVisible: Boolean,
+    onScan: () -> Unit,
+    onEnterPairingCode: () -> Unit,
+    onUseHostAndPassword: () -> Unit,
+    onScanInstead: () -> Unit,
+    onSubmit: () -> Unit,
 ) {
-    Column(
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .semantics {
-                    contentDescription = "Running opencode2? Connect with a QR code"
-                }.clickable(
-                    enabled = enabled,
-                    role = Role.Button,
-                    onClick = onClick,
-                ).padding(vertical = 8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(3.dp),
-    ) {
-        Text(
-            text = "Running opencode2?",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            text = "Connect with a QR code",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-            textDecoration = TextDecoration.Underline,
-        )
+    when {
+        showingPairAgain -> {
+            OpenCodeButton(
+                variant = OpenCodeButtonVariant.FullWidthText("Scan a new QR"),
+                enabled = !uiState.isBusy,
+                onClick = onScan,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        showingAddresses -> {
+            if (uiState.showsPrimaryAction) {
+                OpenCodeButton(
+                    variant = OpenCodeButtonVariant.FullWidthText(uiState.primaryActionLabel),
+                    enabled = uiState.primaryEnabled,
+                    onClick = onSubmit,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
+        manualFormVisible -> {
+            if (!WindowInsets.isImeVisible) {
+                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    OpenCodeButton(
+                        variant = OpenCodeButtonVariant.Link("Scan a QR instead"),
+                        enabled = !uiState.isBusy,
+                        onClick = onScanInstead,
+                    )
+                }
+            }
+            if (uiState.showsPrimaryAction) {
+                OpenCodeButton(
+                    variant = OpenCodeButtonVariant.FullWidthText(uiState.primaryActionLabel),
+                    enabled = uiState.primaryEnabled,
+                    onClick = onSubmit,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
+        else -> {
+            OpenCodeButton(
+                variant = OpenCodeButtonVariant.FullWidthText("Scan QR"),
+                enabled = !uiState.isBusy,
+                onClick = onScan,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            OpenCodeButton(
+                variant = OpenCodeButtonVariant.FullWidthText("Enter a pairing code"),
+                contrast = OpenCodeButtonContrast.Low,
+                enabled = !uiState.isBusy,
+                onClick = onEnterPairingCode,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                OpenCodeButton(
+                    variant = OpenCodeButtonVariant.Link("Use a host and password"),
+                    enabled = !uiState.isBusy,
+                    onClick = onUseHostAndPassword,
+                )
+            }
+        }
     }
 }
 
@@ -296,6 +335,7 @@ private fun ConnectionSetupScreenEditPreview() {
                     mode = ConnectionSetupMode.Edit,
                     profileId = "profile-1",
                     connectionUnchanged = true,
+                    entry = ConnectionSetupEntry.Manual,
                 ),
             onNavigateBack = {},
             onNameChanged = {},

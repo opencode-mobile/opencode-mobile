@@ -14,7 +14,9 @@ struct ConnectionSetupViewModelTests {
             mode: .add
         )
         #expect(viewModel.baseURL.isEmpty)
-        #expect(viewModel.primaryActionLabel == "Connect")
+        #expect(viewModel.showsInstructionEssay)
+        #expect(viewModel.showsManualForm == false)
+        #expect(viewModel.primaryActionLabel == "Scan QR")
         #expect(viewModel.credentialSegment == .password)
         #expect(ConnectionSetupViewModel.hostIsBlank(viewModel.baseURL))
     }
@@ -141,6 +143,7 @@ struct ConnectionSetupViewModelTests {
             mode: .edit
         )
         #expect(viewModel.primaryActionLabel == "Save")
+        #expect(viewModel.showsManualForm)
         #expect(viewModel.credentialSegment == .password)
         #expect(viewModel.canSubmitWithoutProbe == true)
 
@@ -296,6 +299,7 @@ struct ConnectionSetupViewModelTests {
         #expect(saved == true)
         #expect(store.saved.last?.baseURL == "http://192.168.0.160:4096/")
         #expect(viewModel.baseURL == "http://192.168.0.160:4096/")
+        #expect(viewModel.addressRecovery == nil)
         #expect(Set(store.saved.last?.serverURLs ?? []) == Set([
             "http://192.168.0.160:4096/",
             "http://100.84.57.15:4096/",
@@ -729,6 +733,105 @@ struct ConnectionSetupViewModelTests {
         #expect(store.saved.last?.password == "secret")
         #expect(viewModel.pairingCode == "leftover-code")
     }
+
+    @Test func instructions_pairingCodeAndHostForm_roundTrip() {
+        let viewModel = ConnectionSetupViewModel(
+            connectionProbeService: FakeConnectionProbeService(result: .success(.v1)),
+            connectionSessionCoordinator: ConnectionSessionCoordinator(
+                activeConnectionManager: ActiveConnectionManager(),
+                connectionProfileStore: FakeSetupConnectionProfileStore()
+            ),
+            mode: .add
+        )
+        #expect(viewModel.showsInstructionEssay)
+        viewModel.showPairingCodeForm()
+        #expect(viewModel.showsManualForm)
+        #expect(viewModel.credentialSegment == .pairingCode)
+        viewModel.showScanInstructions()
+        #expect(viewModel.showsInstructionEssay)
+        #expect(viewModel.primaryActionLabel == "Scan QR")
+        viewModel.showHostPasswordForm()
+        #expect(viewModel.showsManualForm)
+        #expect(viewModel.credentialSegment == .password)
+        #expect(viewModel.primaryActionLabel == "Connect")
+    }
+
+    @Test func savedOpenTunnelAddress_rowTitleIsRemoteTunnel() {
+        let viewModel = makeSavedAddressViewModel(
+            urls: ["https://Route.ABC.OpenTunnel.XYZ/"],
+            probe: FakeConnectionProbeService(result: .success(.v2))
+        )
+        #expect(viewModel.savedAddressRows.map(\.title) == ["Remote tunnel"])
+        #expect(PairingQRPayload.isTailscaleURL(viewModel.serverURLs[0]) == false)
+    }
+
+    @Test func savedAddressesHint_tunnelOnly() {
+        let urls = ["https://ab12.cd34.opentunnel.xyz/", "https://other.route.opentunnel.xyz/"]
+        #expect(
+            ConnectionSetupViewModel.savedAddressesHint(for: urls)
+                == "Remote tunnel saved. Nothing else to pick. It stays until you turn remote access off."
+        )
+    }
+
+    @Test func savedAddressesHint_tailscaleAndLocalNetwork() {
+        let urls = ["http://192.168.0.160:4096/", "http://100.84.57.15:4096/"]
+        let viewModel = makeSavedAddressViewModel(
+            urls: urls,
+            probe: FakeConnectionProbeService(result: .success(.v2))
+        )
+        #expect(viewModel.savedAddressRows.map(\.title) == ["Local network", "Tailscale"])
+        #expect(
+            ConnectionSetupViewModel.savedAddressesHint(for: urls)
+                == "Tailscale is used when it answers. Local network is the fallback."
+        )
+    }
+
+    @Test func savedAddressesHint_otherMix() {
+        let urls = ["https://ab12.cd34.opentunnel.xyz/", "http://192.168.0.160:4096/"]
+        #expect(
+            ConnectionSetupViewModel.savedAddressesHint(for: urls)
+                == "Saved addresses are tried until one answers. Tailscale is preferred when it answers."
+        )
+    }
+
+    @Test func submit_savedAddresses_allUnreachable_asksToPairAgainWithoutPasswordFocus() async {
+        let viewModel = makeSavedAddressViewModel(
+            urls: ["https://ab12.cd34.opentunnel.xyz/"],
+            probe: FakeConnectionProbeService(
+                result: .failure(ServerProbeError.transport("down"))
+            )
+        )
+        viewModel.password = "rotated"
+        let saved = await viewModel.submit()
+        #expect(saved == false)
+        #expect(viewModel.requestPasswordFocus == false)
+        #expect(viewModel.addressRecovery == .unreachable)
+        #expect(viewModel.addressRecovery?.message == "Can't reach the saved address. Pair again.")
+        #expect(viewModel.primaryActionLabel == "Scan a new QR")
+        #expect(viewModel.usesQRLayout)
+        #expect(viewModel.snackbar == nil)
+    }
+
+    @Test func submit_savedAddress_unauthorized_asksToPairAgainWithoutPasswordFocus() async {
+        let viewModel = makeSavedAddressViewModel(
+            urls: ["https://ab12.cd34.opentunnel.xyz/"],
+            probe: FakeConnectionProbeService(
+                result: .failure(ServerProbeError.http(statusCode: 401, message: "Unauthorized"))
+            )
+        )
+        viewModel.password = "rotated"
+        let saved = await viewModel.submit()
+        #expect(saved == false)
+        #expect(viewModel.requestPasswordFocus == false)
+        #expect(viewModel.addressRecovery == .unauthorized)
+        #expect(
+            viewModel.addressRecovery?.message
+                == "This server rejected the saved sign-in. Pair again. A new password logs every device out."
+        )
+        #expect(viewModel.primaryActionLabel == "Scan a new QR")
+        #expect(viewModel.usesQRLayout)
+        #expect(viewModel.snackbar == nil)
+    }
 }
 
 private let qrScanFailureMessage = "QR didn't connect. OpenCode 2's pairing API is still changing, so a scan can fail while this app is working. Enter the host and connect. Password is optional. A pairing code works too."
@@ -736,6 +839,33 @@ private let qrScanFailureMessage = "QR didn't connect. OpenCode 2's pairing API 
 private let pairingCodeJSON = """
 {"code":"abc_DEF-123","urls":["http://192.168.1.2:49374","http://100.64.0.3:49374"]}
 """
+
+@MainActor
+private func makeSavedAddressViewModel(
+    urls: [String],
+    probe: ConnectionProbing
+) -> ConnectionSetupViewModel {
+    let viewModel = ConnectionSetupViewModel(
+        connectionProbeService: probe,
+        connectionSessionCoordinator: ConnectionSessionCoordinator(
+            activeConnectionManager: ActiveConnectionManager(),
+            connectionProfileStore: FakeSetupConnectionProfileStore()
+        )
+    )
+    viewModel.configure(
+        initialProfile: ConnectionProfile(
+            baseURL: urls[0],
+            serverURLs: urls,
+            username: "opencode",
+            password: "secret",
+            serverProtocol: .v2,
+            id: "saved",
+            name: "Saved"
+        ),
+        mode: .edit
+    )
+    return viewModel
+}
 
 @MainActor
 private func makePairingSetupViewModel(

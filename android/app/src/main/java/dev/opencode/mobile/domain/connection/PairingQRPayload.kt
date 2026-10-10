@@ -74,6 +74,13 @@ object PairingQRPayload {
         return isTailscaleIpv6(host)
     }
 
+    /** OpenCode remote tunnel. Tailscale wins when a host matches both checks. */
+    fun isRemoteTunnelUrl(raw: String): Boolean {
+        if (isTailscaleUrl(raw)) return false
+        val host = hostOf(raw) ?: return false
+        return host.endsWith(".opentunnel.xyz")
+    }
+
     private fun parseJson(raw: String): PairingQRParseResult {
         val element =
             runCatching { json.parseToJsonElement(raw) }.getOrNull() as? JsonObject

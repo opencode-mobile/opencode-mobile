@@ -200,6 +200,16 @@ struct PairingQRPayloadTests {
         }
     }
 
+    @Test func isOpenTunnelURL_matchesOpentunnelHostOnly() {
+        #expect(PairingQRPayload.isOpenTunnelURL("https://ab12.cd34.opentunnel.xyz/"))
+        #expect(PairingQRPayload.isOpenTunnelURL("https://Ab.Cd.OPENTUNNEL.XYZ"))
+        #expect(PairingQRPayload.isOpenTunnelURL("http://route.tunnel.opentunnel.xyz:443"))
+        #expect(PairingQRPayload.isOpenTunnelURL("http://192.168.0.160:4096/") == false)
+        #expect(PairingQRPayload.isOpenTunnelURL("http://mybox.tailxyz.ts.net:4096/") == false)
+        #expect(PairingQRPayload.isOpenTunnelURL("https://opentunnel.xyz/") == false)
+        #expect(PairingQRPayload.isTailscaleURL("https://ab12.cd34.opentunnel.xyz/") == false)
+    }
+
     @Test func parse_legacyPasswordQR_keepsPasswordAndOmitsCode() {
         let raw = """
         {"urls":["http://127.0.0.1:4096","http://192.168.0.160:4096"],"username":"opencode","password":"secret"}

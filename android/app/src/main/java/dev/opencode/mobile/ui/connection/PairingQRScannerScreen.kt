@@ -104,19 +104,19 @@ private fun PairingQRInstructionCard(modifier: Modifier = Modifier) {
                 .padding(16.dp),
     ) {
         Text(
-            text = "OpenCode 2 pairing QR",
+            text = "OpenCode pairing QR",
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurface,
         )
         Text(
             text =
-                "From opencode2 pair on a v2 server. Classic serve has no QR — enter the host instead.",
+                "From opencode pair --remote. Plain pair shows a QR only when the server is reachable beyond localhost.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 6.dp),
         )
         OpenCodeCodeSnippet(
-            code = "opencode2 pair",
+            code = "opencode pair --remote",
             modifier = Modifier.padding(top = 10.dp),
         )
     }

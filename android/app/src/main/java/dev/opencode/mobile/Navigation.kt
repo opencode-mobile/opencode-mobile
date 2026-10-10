@@ -448,6 +448,9 @@ fun MainNavigation() {
                                                     setupViewModel::pairingQRCameraDenied,
                                                 onPairingQRCameraUnavailable =
                                                     setupViewModel::pairingQRCameraUnavailable,
+                                                onShowPairingCodeForm = setupViewModel::showPairingCodeForm,
+                                                onShowHostPasswordForm = setupViewModel::showHostPasswordForm,
+                                                onShowScanInstructions = setupViewModel::showScanInstructions,
                                                 onRemove = {
                                                     setupViewModel.removeConnection {
                                                         serversViewModel.refresh()
