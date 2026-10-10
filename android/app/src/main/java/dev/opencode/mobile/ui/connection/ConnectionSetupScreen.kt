@@ -20,7 +20,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -60,14 +59,14 @@ fun ConnectionSetupScreen(
     onPairingQRScanned: (String) -> Unit = {},
     onPairingQRCameraDenied: () -> Unit = {},
     onPairingQRCameraUnavailable: () -> Unit = {},
+    onShowPairingCodeForm: () -> Unit = {},
+    onShowHostPasswordForm: () -> Unit = {},
+    onShowScanInstructions: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     var showRemoveConfirm by remember { mutableStateOf(false) }
     var showPairingScanner by remember { mutableStateOf(false) }
-    var manualFormVisible by rememberSaveable(uiState.mode, uiState.profileId) {
-        mutableStateOf(startsOnManualHostForm(uiState))
-    }
     val showingPairAgain = uiState.pairAgainMessage != null && uiState.usesQrLayout
     val showingAddresses = uiState.usesQrLayout && !showingPairAgain
     val cameraPermissionLauncher =
@@ -155,7 +154,7 @@ fun ConnectionSetupScreen(
                             onCredentialSegmentChanged = onCredentialSegmentChanged,
                             onPairingCodeChanged = onPairingCodeChanged,
                             onPasswordFocusConsumed = onPasswordFocusConsumed,
-                            showManualForm = manualFormVisible,
+                            showManualForm = uiState.showsManualForm,
                         )
                     }
                     Column(
@@ -170,17 +169,11 @@ fun ConnectionSetupScreen(
                             uiState = uiState,
                             showingPairAgain = showingPairAgain,
                             showingAddresses = showingAddresses,
-                            manualFormVisible = manualFormVisible,
+                            manualFormVisible = uiState.showsManualForm,
                             onScan = { openPairingScanner() },
-                            onEnterPairingCode = {
-                                onCredentialSegmentChanged(ConnectionCredentialSegment.PairingCode)
-                                manualFormVisible = true
-                            },
-                            onUseHostAndPassword = {
-                                onCredentialSegmentChanged(ConnectionCredentialSegment.Password)
-                                manualFormVisible = true
-                            },
-                            onScanInstead = { manualFormVisible = false },
+                            onEnterPairingCode = onShowPairingCodeForm,
+                            onUseHostAndPassword = onShowHostPasswordForm,
+                            onScanInstead = onShowScanInstructions,
                             onSubmit = onSubmit,
                         )
                     }
@@ -233,11 +226,6 @@ fun ConnectionSetupScreen(
         onDismissRequest = { showRemoveConfirm = false },
     )
 }
-
-private fun startsOnManualHostForm(uiState: ConnectionSetupUiState): Boolean =
-    uiState.mode == ConnectionSetupMode.Edit &&
-        uiState.serverUrls.isEmpty() &&
-        !ConnectionSetupViewModel.hostIsBlank(uiState.baseUrl)
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -347,6 +335,7 @@ private fun ConnectionSetupScreenEditPreview() {
                     mode = ConnectionSetupMode.Edit,
                     profileId = "profile-1",
                     connectionUnchanged = true,
+                    entry = ConnectionSetupEntry.Manual,
                 ),
             onNavigateBack = {},
             onNameChanged = {},

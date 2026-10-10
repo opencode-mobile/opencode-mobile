@@ -50,6 +50,12 @@ enum class ConnectionCredentialSegment {
     PairingCode,
 }
 
+/** Instruction essay, or the host form a failed scan and the manual actions open. */
+enum class ConnectionSetupEntry {
+    Instructions,
+    Manual,
+}
+
 /** A saved QR address list failed its probe. The screen asks the user to pair again. */
 enum class SavedAddressRecovery {
     Unreachable,
@@ -89,9 +95,14 @@ data class ConnectionSetupUiState(
     /** Camera scan still pairing. A saved address list is not a scan. */
     val qrScanPending: Boolean = false,
     val addressRecovery: SavedAddressRecovery? = null,
+    val entry: ConnectionSetupEntry = ConnectionSetupEntry.Instructions,
 ) {
     val usesQrLayout: Boolean
         get() = serverUrls.isNotEmpty()
+
+    /** The host form. Hidden while a QR address list is on screen. */
+    val showsManualForm: Boolean
+        get() = entry == ConnectionSetupEntry.Manual && !usesQrLayout
 
     val pairAgainMessage: String?
         get() = addressRecovery?.let(::savedAddressPairAgainMessage)
@@ -190,6 +201,12 @@ class ConnectionSetupViewModel
                         profileId = initialProfile.id,
                         connectionUnchanged = true,
                         serverUrls = initialProfile.serverUrls,
+                        entry =
+                            if (initialProfile.serverUrls.isEmpty() && !hostIsBlank(initialProfile.baseUrl)) {
+                                ConnectionSetupEntry.Manual
+                            } else {
+                                ConnectionSetupEntry.Instructions
+                            },
                     )
             }
             if (_uiState.value.serverUrls.isNotEmpty()) {
@@ -242,6 +259,27 @@ class ConnectionSetupViewModel
 
         fun onCredentialSegmentChanged(segment: ConnectionCredentialSegment) {
             _uiState.value = _uiState.value.copy(credentialSegment = segment)
+        }
+
+        fun showPairingCodeForm() {
+            _uiState.value =
+                _uiState.value.copy(
+                    entry = ConnectionSetupEntry.Manual,
+                    credentialSegment = ConnectionCredentialSegment.PairingCode,
+                )
+        }
+
+        fun showHostPasswordForm() {
+            _uiState.value =
+                _uiState.value.copy(
+                    entry = ConnectionSetupEntry.Manual,
+                    credentialSegment = ConnectionCredentialSegment.Password,
+                )
+        }
+
+        fun showScanInstructions() {
+            if (_uiState.value.usesQrLayout) return
+            _uiState.value = _uiState.value.copy(entry = ConnectionSetupEntry.Instructions)
         }
 
         fun onPairingCodeChanged(value: String) {
@@ -857,6 +895,7 @@ class ConnectionSetupViewModel
                     qrScanPending = false,
                     addressRecovery = null,
                     credentialSegment = ConnectionCredentialSegment.Password,
+                    entry = ConnectionSetupEntry.Manual,
                     requestPasswordFocus = false,
                     connectionUnchanged = isConnectionUnchanged(current.baseUrl, current.username, password),
                     snackbar =

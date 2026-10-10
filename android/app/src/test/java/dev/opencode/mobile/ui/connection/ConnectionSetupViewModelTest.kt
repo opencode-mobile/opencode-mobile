@@ -466,6 +466,7 @@ class ConnectionSetupViewModelTest {
             assertEquals("Connect", state.primaryActionLabel)
             assertEquals(qrScanFailureMessage, state.snackbar?.text)
             assertEquals(OpenCodeSnackbarVariant.Error, state.snackbar?.variant)
+            assertTrue(state.showsManualForm)
             assertTrue(store.saved.isEmpty())
         }
 
