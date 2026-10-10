@@ -42,8 +42,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
-import dev.opencode.mobile.theme.CodeTextStyle
-import dev.opencode.mobile.theme.openCodeColor
+import dev.opencode.mobile.ui.components.OpenCodeCodeSnippet
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
 import java.util.concurrent.Executors
@@ -116,17 +115,9 @@ private fun PairingQRInstructionCard(modifier: Modifier = Modifier) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 6.dp),
         )
-        Text(
-            text = "opencode2 pair",
-            style = CodeTextStyle,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier =
-                Modifier
-                    .padding(top = 10.dp)
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(openCodeColor("surface-raised-base"))
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
+        OpenCodeCodeSnippet(
+            code = "opencode2 pair",
+            modifier = Modifier.padding(top = 10.dp),
         )
     }
 }

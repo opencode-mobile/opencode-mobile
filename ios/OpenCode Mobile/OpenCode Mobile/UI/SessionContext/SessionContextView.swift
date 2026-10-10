@@ -45,30 +45,24 @@ struct SessionContextView: View {
     private var content: some View {
         switch viewModel.state {
         case .loading:
-            Spacer()
-            ProgressView()
-            Spacer()
+            OpenCodeStatusStack(
+                title: "Loading session context",
+                subtitle: "Fetching context…"
+            )
         case let .error(message):
-            VStack(spacing: 12) {
-                Text(message)
-                    .font(OpenCodeTypography.body)
-                    .foregroundStyle(OpenCodeColors.textBase)
-                    .multilineTextAlignment(.center)
-                OpenCodeButton(variant: .fullWidthText(title: "Retry")) {
+            OpenCodeEmptyState(
+                title: "Unable to load session context",
+                message: openCodeNonBlank(message, fallback: "The context didn't load."),
+                primaryAction: OpenCodeEmptyStateAction(title: "Retry") {
                     logAction(ProductAnalytics.Action.sessionContextRetry)
                     Task { await viewModel.load() }
                 }
-            }
-            .padding(24)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            )
         case let .loaded(displayState):
             ScrollView {
                 VStack(alignment: .leading, spacing: 28) {
                     if let refreshErrorMessage = viewModel.refreshErrorMessage {
-                        Text(refreshErrorMessage)
-                            .font(OpenCodeTypography.caption)
-                            .foregroundStyle(OpenCodeColors.textBase)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                        OpenCodeInlineNotice(message: refreshErrorMessage, tone: .neutral)
                     }
                     statsGrid(displayState.stats)
                     if !displayState.breakdown.isEmpty {
@@ -84,7 +78,7 @@ struct SessionContextView: View {
             }
             .overlay {
                 if viewModel.isRefreshing {
-                    ProgressView()
+                    OpenCodeStatusStack(spinner: "Refreshing session context")
                 }
             }
         }
@@ -93,16 +87,7 @@ struct SessionContextView: View {
     private func statsGrid(_ stats: [SessionContextStatItem]) -> some View {
         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], alignment: .leading, spacing: 20) {
             ForEach(stats) { stat in
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(stat.label)
-                        .font(OpenCodeTypography.caption)
-                        .foregroundStyle(OpenCodeColors.textBase)
-                    Text(stat.value)
-                        .font(OpenCodeTypography.body)
-                        .foregroundStyle(OpenCodeColors.textStrong)
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.85)
-                }
+                OpenCodeKeyValueRow(label: stat.label, value: stat.value, style: .stacked)
             }
         }
     }

@@ -101,14 +101,12 @@ struct TerminalView: View {
     }
 
     private func errorContent(title: String, message: String) -> some View {
-        VStack(spacing: 16) {
-            OpenCodeEmptyState(title: title, message: message)
-                .fixedSize(horizontal: false, vertical: true)
-            OpenCodeButton(variant: .fullWidthText(title: "Retry")) {
+        OpenCodeEmptyState(
+            title: title,
+            message: openCodeNonBlank(message, fallback: "The terminal didn't open."),
+            primaryAction: OpenCodeEmptyStateAction(title: "Retry") {
                 Task { await viewModel.retry() }
             }
-            .padding(.horizontal, 24)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        )
     }
 }

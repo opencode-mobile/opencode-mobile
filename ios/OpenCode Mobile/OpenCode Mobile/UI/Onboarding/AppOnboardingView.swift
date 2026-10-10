@@ -132,12 +132,7 @@ private struct AppOnboardingPageView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 20))
 
                 if let badge = page.badge {
-                    Text(badge)
-                        .font(OpenCodeTypography.caption)
-                        .fontWeight(.bold)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(OpenCodeColors.surfaceRaisedBase, in: Capsule())
+                    OpenCodeTag(badge)
                 }
 
                 Text(page.title)
@@ -152,14 +147,7 @@ private struct AppOnboardingPageView: View {
                             .foregroundStyle(OpenCodeColors.textBase)
                     }
                     if let setupLink = page.setupLink {
-                        Button(action: onNeedServerFirst) {
-                            Text(setupLink)
-                                .font(OpenCodeTypography.body)
-                                .fontWeight(.semibold)
-                                .underline()
-                                .foregroundStyle(OpenCodeColors.textStrong)
-                        }
-                        .buttonStyle(.plain)
+                        OpenCodeButton(variant: .link(title: setupLink), action: onNeedServerFirst)
                     }
                 } else {
                     OpenCodeListGroup(page.features, id: \.id) { row in
@@ -276,13 +264,7 @@ private struct AppOnboardingSetupGuideView: View {
                 .font(OpenCodeTypography.caption)
                 .foregroundStyle(OpenCodeColors.textBase)
             if let code {
-                Text(code)
-                    .font(OpenCodeTypography.code)
-                    .foregroundStyle(Color.white)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color(white: 0.12), in: RoundedRectangle(cornerRadius: 10))
+                OpenCodeCodeSnippet(code)
                     .padding(.top, 2)
             }
             if showDivider {

@@ -105,8 +105,7 @@ struct DiagnosticLogsView: View {
             ScrollView {
                 LazyVStack(spacing: 8) {
                     if model.isLoading {
-                        ProgressView()
-                            .tint(OpenCodeColors.interactive)
+                        OpenCodeStatusStack(spinner: "Loading diagnostic logs")
                             .padding(24)
                     } else {
                         OpenCodeListItem(
@@ -156,10 +155,7 @@ struct DiagnosticLogsView: View {
                             )
                         }
                         if let shareError = model.shareError {
-                            Text(shareError)
-                                .font(OpenCodeTypography.caption)
-                                .foregroundStyle(OpenCodeColors.error)
-                                .frame(maxWidth: .infinity, alignment: .leading)
+                            OpenCodeInlineNotice(message: shareError, tone: .error)
                                 .padding(.top, 4)
                         }
                     }

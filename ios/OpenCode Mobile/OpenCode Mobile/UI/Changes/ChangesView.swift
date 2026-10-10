@@ -103,7 +103,7 @@ struct ChangesView: View {
     @ViewBuilder private var content: some View {
         switch viewModel.state.phase {
         case .loading:
-            ProgressView("Loading changes…")
+            OpenCodeStatusStack(title: "Loading changes", subtitle: "Fetching the diff…")
         case .noTurn:
             refreshableMessage("No completed turn", detail: "Send a prompt and wait for it to complete, then try again.")
         case .noChanges:
@@ -111,13 +111,14 @@ struct ChangesView: View {
         case let .content(changeSet):
             changedFiles(changeSet)
         case let .error(error):
-            VStack(spacing: 12) {
-                message("Unable to load changes", detail: error)
-                OpenCodeButton(variant: .compactText(title: "Retry"), contrast: .low) {
+            OpenCodeEmptyState(
+                title: "Unable to load changes",
+                message: openCodeNonBlank(error, fallback: "The changes didn't load."),
+                primaryAction: OpenCodeEmptyStateAction(title: "Retry") {
                     logAction(ProductAnalytics.Action.changesRetry)
                     Task { await viewModel.retry() }
                 }
-            }
+            )
         }
     }
 
@@ -206,44 +207,38 @@ struct ChangesView: View {
         (
             Text(changeSet.summary + "  ")
                 .foregroundColor(OpenCodeColors.textBase)
-                + Text("+\(changeSet.additions)")
-                .foregroundColor(OpenCodeColors.diffAdd)
-                + Text("  ")
-                + Text("−\(changeSet.deletions)")
-                .foregroundColor(OpenCodeColors.diffDelete)
+                + OpenCodeDiffStat.text(
+                    additions: changeSet.additions,
+                    deletions: changeSet.deletions,
+                    separator: .wide
+                )
         )
         .font(OpenCodeTypography.caption)
         .accessibilityLabel(changeSet.aggregateAccessibilityLabel)
     }
 
     private func refreshFailure(_ detail: String) -> some View {
-        HStack(spacing: 12) {
-            Text("Refresh failed: \(detail)")
-                .font(OpenCodeTypography.bodySecondary)
-                .foregroundStyle(OpenCodeColors.textBase)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            OpenCodeButton(variant: .compactText(title: "Retry"), contrast: .low) {
+        OpenCodeInlineNotice(
+            message: "Refresh failed: \(detail)",
+            action: OpenCodeInlineNoticeAction(title: "Retry") {
                 logAction(ProductAnalytics.Action.changesRetry)
                 Task { await viewModel.refresh() }
             }
-        }
+        )
         .accessibilityElement(children: .combine)
     }
 
     private func fileRow(_ file: FileDiff, changeSet: ChangesContentState) -> some View {
-        OpenCodeListItem(title: changedFileName(file.path), action: {
+        OpenCodeListItem(title: changedFileName(file.path), accessory: .disclosure, action: {
             logAction(ProductAnalytics.Action.changesOpenFile)
             selectedPath = file.path
-        }, trailing: {
-            HStack(spacing: 12) {
-                Text("+\(file.additions)")
-                    .font(OpenCodeTypography.caption)
-                    .foregroundStyle(OpenCodeColors.diffAdd)
-                Text("−\(file.deletions)")
-                    .font(OpenCodeTypography.caption)
-                    .foregroundStyle(OpenCodeColors.diffDelete)
-                OpenCodeIconImage(icon: .chevronRight, size: 20)
-            }
+        },         trailing: {
+            OpenCodeDiffStat(
+                additions: file.additions,
+                deletions: file.deletions,
+                style: .label,
+                separator: .split
+            )
         })
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(changeSet.fileAccessibilityLabel(file))
@@ -251,15 +246,7 @@ struct ChangesView: View {
     }
 
     private func message(_ title: String, detail: String) -> some View {
-        VStack(spacing: 8) {
-            Text(title).font(OpenCodeTypography.heading)
-            Text(detail)
-                .font(OpenCodeTypography.bodySecondary)
-                .foregroundStyle(OpenCodeColors.textBase)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(24)
+        OpenCodeEmptyState(title: title, message: detail)
     }
 
     private func refreshableMessage(_ title: String, detail: String) -> some View {

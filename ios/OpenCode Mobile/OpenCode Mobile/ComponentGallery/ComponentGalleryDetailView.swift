@@ -86,6 +86,12 @@ struct ComponentGalleryDetailView: View {
             SkeletonIllustrationGalleryView()
         case .pageIndicator:
             PageIndicatorGalleryView()
+        case .bottomFade:
+            BottomFadeGalleryView()
+        case .tag:
+            TagGalleryView()
+        case .keyValueRow:
+            KeyValueRowGalleryView()
         case .attachment:
             AttachmentGalleryView()
         case .outgoingMessage:
@@ -104,6 +110,10 @@ struct ComponentGalleryDetailView: View {
             MessageNoteGalleryView()
         case .childSessionRow:
             ChildSessionRowGalleryView()
+        case .workingIndicator:
+            WorkingIndicatorGalleryView()
+        case .reasoningRow:
+            ReasoningRowGalleryView()
         case .topBar:
             TopBarGalleryView()
         case .overflowMenu:
@@ -118,6 +128,8 @@ struct ComponentGalleryDetailView: View {
             SnackbarGalleryView()
         case .listItem:
             ListItemGalleryView()
+        case .selectableCard:
+            SelectableCardGalleryView()
         case .listGroup:
             ListGroupGalleryView()
         case .sectionHeader:
@@ -154,6 +166,12 @@ struct ComponentGalleryDetailView: View {
             EmptyStateGalleryView()
         case .statusStack:
             StatusStackGalleryView()
+        case .diffStat:
+            DiffStatGalleryView()
+        case .inlineNotice:
+            InlineNoticeGalleryView()
+        case .codeSnippet:
+            CodeSnippetGalleryView()
         case .sessionList:
             SessionListGalleryView()
         case .sessionListDock:

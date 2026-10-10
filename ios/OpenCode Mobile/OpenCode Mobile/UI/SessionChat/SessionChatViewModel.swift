@@ -201,6 +201,16 @@ final class SessionChatViewModel {
         inbox.startObserving()
     }
 
+    /// Error-state Retry. Create failures start the session again. Load failures refetch the timeline.
+    func retryFailedTimeline() async {
+        if OptimisticSessionCreate.isPlaceholder(sessionID) {
+            beginOptimisticCreate()
+            await optimisticCreateTask?.value
+            return
+        }
+        await loadMessages()
+    }
+
     func loadMessages() async {
         if OptimisticSessionCreate.isPlaceholder(sessionID) {
             await optimisticCreateTask?.value

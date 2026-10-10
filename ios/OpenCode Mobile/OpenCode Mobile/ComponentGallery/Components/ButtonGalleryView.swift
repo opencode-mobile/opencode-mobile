@@ -3,6 +3,7 @@ import SwiftUI
 private enum GalleryButtonVariant: String, CaseIterable, Identifiable {
     case fullWidth
     case compact
+    case link
     case icon
     case circle
 
@@ -12,6 +13,7 @@ private enum GalleryButtonVariant: String, CaseIterable, Identifiable {
         switch self {
         case .fullWidth: "Full width"
         case .compact: "Compact"
+        case .link: "Link"
         case .icon: "Icon"
         case .circle: "Circle"
         }
@@ -30,6 +32,8 @@ struct ButtonGalleryView: View {
             .fullWidthText(title: "Run")
         case .compact:
             .compactText(title: "Build")
+        case .link:
+            .link(title: "Need the server first?")
         case .icon:
             .iconSquare(.arrowUpward, accessibilityLabel: "Send")
         case .circle:

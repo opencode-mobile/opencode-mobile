@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Switch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -27,6 +26,7 @@ import dev.opencode.mobile.markdown.OpenCodeBundledJoniMarkdownHighlighter
 import dev.opencode.mobile.markdown.TextMateLanguageAllowlist
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.ui.components.OpenCodeListItem
+import dev.opencode.mobile.ui.components.OpenCodeListItemAccessory
 import dev.opencode.mobile.ui.components.OpenCodeListItemStyle
 import dev.opencode.mobile.ui.components.OpenCodeOverflowMenuEntry
 import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
@@ -188,12 +188,11 @@ private fun LanguageToggleRow(
         subtitle = if (row.enabled) "Default on" else "Opted out",
         style = OpenCodeListItemStyle.Card,
         startDecorator = StartDecorator.Icon(OpenCodeIcons.Architecture, row.canonical),
-        trailing = {
-            Switch(
+        accessory =
+            OpenCodeListItemAccessory.Toggle(
                 checked = row.enabled,
                 onCheckedChange = { onLanguageEnabledChange(row.canonical, it) },
-            )
-        },
+            ),
         modifier = Modifier.padding(horizontal = 16.dp),
     )
 }

@@ -39,9 +39,7 @@ struct OpenCodeListGroup<Data: RandomAccessCollection, ID: Hashable, RowContent:
 
 #Preview("List Group") {
     OpenCodeListGroup(["Sources/App.swift", "README.md", "Tests/AppTests.swift"], id: \.self) { path in
-        OpenCodeListItem(title: path, trailing: {
-            OpenCodeIconImage(icon: .chevronRight, size: 20)
-        })
+        OpenCodeListItem(title: path, accessory: .disclosure)
     }
     .padding()
     .openCodeTheme()

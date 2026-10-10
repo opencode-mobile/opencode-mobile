@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -33,9 +32,15 @@ import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonContrast
+import dev.opencode.mobile.ui.components.OpenCodeStatusStack
+import dev.opencode.mobile.ui.components.OpenCodeStatusStackStyle
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeDialog
 import dev.opencode.mobile.ui.components.OpenCodeDialogOption
+import dev.opencode.mobile.ui.components.OpenCodeInlineNotice
+import dev.opencode.mobile.ui.components.OpenCodeInlineNoticeTone
+import dev.opencode.mobile.ui.components.OpenCodeInlineNoticeVariant
+import dev.opencode.mobile.ui.components.OpenCodeKeyValueRow
 import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeListItemStatus
 import dev.opencode.mobile.ui.components.OpenCodeListItemStatusTone
@@ -86,9 +91,10 @@ fun TextMateLogbookScreen(
 
                 when {
                     state.loading ->
-                        CircularProgressIndicator(
-                            modifier = Modifier.align(Alignment.CenterHorizontally).padding(24.dp),
-                            color = openCodeColor("interactive"),
+                        OpenCodeStatusStack(
+                            title = "Loading TextMate logbook",
+                            style = OpenCodeStatusStackStyle.Spinner,
+                            modifier = Modifier.fillMaxWidth().padding(24.dp),
                         )
                     state.entries.isEmpty() ->
                         Text(
@@ -168,22 +174,17 @@ private fun TextMateStoreHealth(
     droppedEntries: Long,
     storageError: String?,
 ) {
-    Surface(
-        color = MaterialTheme.colorScheme.errorContainer,
-        shape = MaterialTheme.shapes.small,
-    ) {
-        Text(
-            text =
-                buildString {
-                    if (droppedEntries > 0) append("$droppedEntries entries dropped under writer pressure.")
-                    if (droppedEntries > 0 && storageError != null) append(' ')
-                    storageError?.let { append("Storage error: $it.") }
-                },
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onErrorContainer,
-            modifier = Modifier.padding(12.dp),
-        )
-    }
+    val message =
+        buildString {
+            if (droppedEntries > 0) append("$droppedEntries entries dropped under writer pressure.")
+            if (droppedEntries > 0 && storageError != null) append(' ')
+            storageError?.let { append("Storage error: $it.") }
+        }
+    OpenCodeInlineNotice(
+        message = message,
+        tone = OpenCodeInlineNoticeTone.Error,
+        variant = OpenCodeInlineNoticeVariant.Banner,
+    )
 }
 
 @Composable
@@ -232,18 +233,7 @@ private fun DetailLine(
     label: String,
     value: String,
 ) {
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodySmall,
-            color = openCodeColor("text-base"),
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodySmall,
-            color = openCodeColor("text-strong"),
-        )
-    }
+    OpenCodeKeyValueRow(label = label, value = value)
 }
 
 private fun TextMateParseObservation.displayLanguage(): String = canonicalLanguage ?: requestedLanguage ?: "Unspecified language"

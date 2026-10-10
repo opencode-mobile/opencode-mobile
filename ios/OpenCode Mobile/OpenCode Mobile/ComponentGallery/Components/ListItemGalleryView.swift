@@ -78,6 +78,7 @@ struct ListItemGalleryView: View {
     @State private var statusTone: GalleryStatusTone = .interactive
     @State private var decoratorKind: GalleryDecoratorKind = .none
     @State private var letterAccent: LetterAccent = .violet
+    @State private var toggleOn = true
 
     private var subtitle: String? {
         subtitleKind == .plain ? "http://127.0.0.1:4096/" : nil
@@ -241,6 +242,42 @@ struct ListItemGalleryView: View {
                 enabled: enabled,
                 style: cardStyle ? .card : .plain,
                 startDecorator: startDecorator
+            )
+
+            Text("Trailing")
+                .font(OpenCodeTypography.button)
+                .foregroundStyle(OpenCodeColors.textStrong)
+
+            OpenCodeListItem(
+                title: "Disclosure",
+                subtitle: "Enabled",
+                style: .card,
+                accessory: .disclosure,
+                action: {}
+            )
+            OpenCodeListItem(
+                title: "Disclosure",
+                subtitle: "Disabled",
+                enabled: false,
+                style: .card,
+                accessory: .disclosure,
+                action: {}
+            )
+            OpenCodeListItem(
+                title: "Toggle",
+                subtitle: "Enabled",
+                style: .card,
+                accessory: .toggle(isOn: $toggleOn, accessibilityLabel: "Toggle")
+            )
+            OpenCodeListItem(
+                title: "Toggle",
+                subtitle: "Disabled",
+                enabled: false,
+                style: .card,
+                accessory: .toggle(
+                    isOn: .constant(false),
+                    accessibilityLabel: "Toggle disabled"
+                )
             )
         }
         .frame(maxWidth: .infinity, alignment: .leading)

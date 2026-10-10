@@ -111,25 +111,12 @@ struct OpenCodeToolCallCard: View {
             Spacer(minLength: 0)
 
             if hasDiffCounts {
-                diffCountsText
-                    .font(OpenCodeTypography.caption)
-                    .lineLimit(1)
+                OpenCodeDiffStat(
+                    additions: (additions ?? 0) > 0 ? additions : nil,
+                    deletions: (deletions ?? 0) > 0 ? deletions : nil
+                )
             }
         }
-    }
-
-    private var diffCountsText: Text {
-        var parts: [Text] = []
-        if let additions, additions > 0 {
-            parts.append(Text("+\(additions)").foregroundColor(OpenCodeColors.diffAdd))
-        }
-        if let deletions, deletions > 0 {
-            if !parts.isEmpty {
-                parts.append(Text(" ").foregroundColor(OpenCodeColors.textBase))
-            }
-            parts.append(Text("−\(deletions)").foregroundColor(OpenCodeColors.diffDelete))
-        }
-        return parts.reduce(Text("")) { $0 + $1 }
     }
 
     private var accessibilityLabel: String {

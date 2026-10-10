@@ -16,6 +16,9 @@ enum ComponentGalleryEntryID: String, Hashable {
     case icons
     case skeletonIllustration
     case pageIndicator
+    case bottomFade
+    case tag
+    case keyValueRow
     case attachment
     case outgoingMessage
     case pendingPromptsStrip
@@ -24,6 +27,8 @@ enum ComponentGalleryEntryID: String, Hashable {
     case toolChip
     case messageNote
     case childSessionRow
+    case workingIndicator
+    case reasoningRow
     case topBar
     case overflowMenu
     case bottomSheet
@@ -31,6 +36,7 @@ enum ComponentGalleryEntryID: String, Hashable {
     case modal
     case snackbar
     case listItem
+    case selectableCard
     case listGroup
     case sectionHeader
     case reorderableList
@@ -49,6 +55,9 @@ enum ComponentGalleryEntryID: String, Hashable {
     case serverAddressInput
     case emptyState
     case statusStack
+    case diffStat
+    case inlineNotice
+    case codeSnippet
     case sessionList
     case sessionListDock
     case sessionStatusBar
@@ -90,6 +99,24 @@ let componentGalleryEntries = [
         title: "Page Indicator",
         description: "Pager position dots under onboarding and promo carousels.",
         category: .navigation
+    ),
+    ComponentGalleryEntry(
+        id: .bottomFade,
+        title: "Bottom Fade",
+        description: "Gradient that fades list content into the background under a dock.",
+        category: .navigation
+    ),
+    ComponentGalleryEntry(
+        id: .tag,
+        title: "Tag",
+        description: "Static capsule label.",
+        category: .controls
+    ),
+    ComponentGalleryEntry(
+        id: .keyValueRow,
+        title: "Key Value Row",
+        description: "Label and value for detail lines and stat cells.",
+        category: .lists
     ),
     ComponentGalleryEntry(
         id: .typography,
@@ -136,7 +163,7 @@ let componentGalleryEntries = [
     ComponentGalleryEntry(
         id: .textInput,
         title: "Text Input",
-        description: "Single-line entry with in-field hint for text, URLs, usernames, and passwords.",
+        description: "Single-line entry with in-field hint for text, URLs, usernames, passwords, and filters.",
         category: .controls
     ),
     ComponentGalleryEntry(
@@ -158,6 +185,24 @@ let componentGalleryEntries = [
         category: .controls
     ),
     ComponentGalleryEntry(
+        id: .diffStat,
+        title: "Diff Stat",
+        description: "Addition and deletion counts for changed files.",
+        category: .diffs
+    ),
+    ComponentGalleryEntry(
+        id: .inlineNotice,
+        title: "Inline Notice",
+        description: "Tonal inline message with an optional trailing action.",
+        category: .controls
+    ),
+    ComponentGalleryEntry(
+        id: .codeSnippet,
+        title: "Code Snippet",
+        description: "Monospace command block.",
+        category: .controls
+    ),
+    ComponentGalleryEntry(
         id: .listGroup,
         title: "List Group",
         description: "Bordered and separated container for related List Item rows.",
@@ -167,6 +212,12 @@ let componentGalleryEntries = [
         id: .listItem,
         title: "List Item",
         description: "Reusable project and session row treatment.",
+        category: .lists
+    ),
+    ComponentGalleryEntry(
+        id: .selectableCard,
+        title: "Selectable Card",
+        description: "Title, blurb, and preview slot that can be selected.",
         category: .lists
     ),
     ComponentGalleryEntry(
@@ -275,6 +326,18 @@ let componentGalleryEntries = [
         id: .childSessionRow,
         title: "Child Session Row",
         description: "Quiet person/thread row for a child session in Session Chat.",
+        category: .chat
+    ),
+    ComponentGalleryEntry(
+        id: .workingIndicator,
+        title: "Working Indicator",
+        description: "Pulsing status row for a turn that is working, idle, or collapsed.",
+        category: .chat
+    ),
+    ComponentGalleryEntry(
+        id: .reasoningRow,
+        title: "Reasoning Row",
+        description: "Thinking and Thought rows for a reasoning block.",
         category: .chat
     ),
     ComponentGalleryEntry(

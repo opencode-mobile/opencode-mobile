@@ -19,6 +19,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.theme.OpenCodePillShape
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 
@@ -31,7 +32,7 @@ enum class OpenCodeChoiceBadgeVariant {
 }
 
 private val StandardShape = RoundedCornerShape(16.dp)
-private val GlassShape = RoundedCornerShape(999.dp)
+private val GlassShape = OpenCodePillShape
 private val BadgePaddingHorizontal = 12.dp
 private val BadgePaddingVertical = 8.dp
 

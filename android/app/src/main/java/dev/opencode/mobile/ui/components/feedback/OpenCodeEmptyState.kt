@@ -20,12 +20,19 @@ import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
+data class OpenCodeEmptyStateAction(
+    val title: String,
+    val onClick: () -> Unit,
+)
+
 @Composable
 fun OpenCodeEmptyState(
     title: String,
     message: String,
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
+    primaryAction: OpenCodeEmptyStateAction? = null,
+    secondaryAction: OpenCodeEmptyStateAction? = null,
 ) {
     require(title.isNotBlank()) { "OpenCodeEmptyState requires a non-blank title" }
     require(message.isNotBlank()) { "OpenCodeEmptyState requires a non-blank message" }
@@ -60,6 +67,22 @@ fun OpenCodeEmptyState(
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        if (primaryAction != null || secondaryAction != null) {
+            Spacer(modifier = Modifier.height(16.dp))
+            if (primaryAction != null) {
+                OpenCodeButton(
+                    variant = OpenCodeButtonVariant.FullWidthText(primaryAction.title),
+                    onClick = primaryAction.onClick,
+                )
+            }
+            if (secondaryAction != null) {
+                Spacer(modifier = Modifier.height(8.dp))
+                OpenCodeButton(
+                    variant = OpenCodeButtonVariant.FullWidthText(secondaryAction.title),
+                    onClick = secondaryAction.onClick,
+                )
+            }
+        }
     }
 }
 

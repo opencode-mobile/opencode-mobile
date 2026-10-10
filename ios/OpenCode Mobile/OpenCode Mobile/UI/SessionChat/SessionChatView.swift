@@ -61,7 +61,7 @@ struct SessionChatView: View {
             if viewModelStorage != nil {
                 sessionChatBody
             } else {
-                ProgressView()
+                OpenCodeStatusStack(spinner: "Loading session")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(OpenCodeColors.backgroundBase)
             }
@@ -144,10 +144,7 @@ struct SessionChatView: View {
             }
 
             if let notice = viewModel.uiState.composer.modelNotice {
-                Text(notice)
-                    .font(OpenCodeTypography.caption)
-                    .foregroundStyle(OpenCodeColors.textBase)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                OpenCodeInlineNotice(message: notice)
                     .padding(.horizontal, 16)
                     .padding(.bottom, 8)
                     .openCodeReadableColumn()
@@ -183,6 +180,7 @@ struct SessionChatView: View {
                             + composerHomeIndicatorLift
                             + keyboardOverlap,
                         onRefresh: { await viewModel.refreshMessages() },
+                        onRetry: { await viewModel.retryFailedTimeline() },
                         onLoadOlder: { Task { await viewModel.loadOlderMessages() } },
                         onSessionBranchTap: {
                             logChatAction(ProductAnalytics.Action.chatOpenChanges)

@@ -3,9 +3,7 @@ package dev.opencode.mobile.ui.terminal
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
@@ -22,9 +20,8 @@ import dev.opencode.mobile.theme.ThemeManager
 import dev.opencode.mobile.theme.ThemeResolver
 import dev.opencode.mobile.theme.letterAccentForWorktree
 import dev.opencode.mobile.theme.letterCharacterForProject
-import dev.opencode.mobile.ui.components.OpenCodeButton
-import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeEmptyState
+import dev.opencode.mobile.ui.components.OpenCodeEmptyStateAction
 import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
 import dev.opencode.mobile.ui.components.OpenCodeStatusStack
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
@@ -130,12 +127,10 @@ private fun TerminalErrorContent(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        OpenCodeEmptyState(title = title, message = message)
-        Spacer(modifier = Modifier.height(16.dp))
-        OpenCodeButton(
-            variant = OpenCodeButtonVariant.FullWidthText("Retry"),
-            onClick = onRetry,
-            modifier = Modifier.padding(horizontal = 24.dp),
+        OpenCodeEmptyState(
+            title = title,
+            message = message.ifBlank { "The terminal didn't open." },
+            primaryAction = OpenCodeEmptyStateAction(title = "Retry", onClick = onRetry),
         )
     }
 }

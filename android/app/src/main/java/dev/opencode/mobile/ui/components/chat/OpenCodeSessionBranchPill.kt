@@ -95,8 +95,6 @@ fun OpenCodeSessionBranchPill(
     val interactionSource = remember { MutableInteractionSource() }
     val contentColor =
         if (enabled) openCodeColor("text-strong") else MaterialTheme.colorScheme.onSurfaceVariant
-    val additionsColor = if (enabled) openCodeColor("diff-add") else MaterialTheme.colorScheme.onSurfaceVariant
-    val deletionsColor = if (enabled) openCodeColor("diff-delete") else MaterialTheme.colorScheme.onSurfaceVariant
     val iconColor = if (enabled) openCodeColor("icon-base") else MaterialTheme.colorScheme.onSurfaceVariant
     val surfaceRaised = openCodeColor("surface-raised-base")
     val branchStyle =
@@ -143,20 +141,18 @@ fun OpenCodeSessionBranchPill(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f, fill = false),
             )
-            additionLabel?.let { label ->
-                Text(
-                    text = label,
-                    style = branchStyle,
-                    color = additionsColor,
-                    maxLines = 1,
+            if (additionLabel != null) {
+                OpenCodeDiffStat(
+                    additions = additions,
+                    enabled = enabled,
+                    style = OpenCodeDiffStatStyle.Mono,
                 )
             }
-            deletionLabel?.let { label ->
-                Text(
-                    text = label,
-                    style = branchStyle,
-                    color = deletionsColor,
-                    maxLines = 1,
+            if (deletionLabel != null) {
+                OpenCodeDiffStat(
+                    deletions = deletions,
+                    enabled = enabled,
+                    style = OpenCodeDiffStatStyle.Mono,
                 )
             }
         }

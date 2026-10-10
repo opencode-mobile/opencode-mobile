@@ -56,16 +56,21 @@ import dev.opencode.mobile.ui.componentgallery.components.ActionPillGalleryScree
 import dev.opencode.mobile.ui.componentgallery.components.ActionTileGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.AssistantMessageGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.AttachmentGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.BottomFadeGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.BottomSheetGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ButtonGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ChildSessionRowGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ChoiceBadgeGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.CodeSnippetGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ComposerSuggestionOverlayGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.DialogGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.DiffStatGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.EmptyStateGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.FilterTabsGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.HunkNavigationPillGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.IconsGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.KeyValueRowGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.InlineNoticeGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ListGroupGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ListItemGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.MessageListGalleryDetailScreen
@@ -74,9 +79,11 @@ import dev.opencode.mobile.ui.componentgallery.components.OutgoingMessageGallery
 import dev.opencode.mobile.ui.componentgallery.components.OverflowMenuGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.PendingPromptsStripGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.RenderedMarkdownGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.ReasoningRowGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ReorderableListGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ReviewChangesPillGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SectionHeaderGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.SelectableCardGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ServerAddressInputGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SessionBranchPillGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SessionComposerGalleryScreen
@@ -91,11 +98,13 @@ import dev.opencode.mobile.ui.componentgallery.components.SkeletonIllustrationGa
 import dev.opencode.mobile.ui.componentgallery.components.SnackbarGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.StatusStackGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SyncingPillGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.TagGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.TextInputGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ToolCallCardGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ToolChipGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.TopBarGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.UnifiedDiffGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.WorkingIndicatorGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.foundation.ColorGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.foundation.TypographyGalleryScreen
 import dev.opencode.mobile.ui.components.OpenCodeStatusStack
@@ -524,6 +533,9 @@ fun MainNavigation() {
                                                         ComponentGalleryEntryId.SkeletonIllustration ->
                                                             SkeletonIllustrationGalleryScreen()
                                                         ComponentGalleryEntryId.PageIndicator -> PageIndicatorGalleryScreen()
+                                                        ComponentGalleryEntryId.BottomFade -> BottomFadeGalleryScreen()
+                                                        ComponentGalleryEntryId.Tag -> TagGalleryScreen()
+                                                        ComponentGalleryEntryId.KeyValueRow -> KeyValueRowGalleryScreen()
                                                         ComponentGalleryEntryId.Attachment -> AttachmentGalleryScreen()
                                                         ComponentGalleryEntryId.OutgoingMessage -> OutgoingMessageGalleryScreen()
                                                         ComponentGalleryEntryId.PendingPromptsStrip ->
@@ -533,6 +545,9 @@ fun MainNavigation() {
                                                         ComponentGalleryEntryId.ToolChip -> ToolChipGalleryScreen()
                                                         ComponentGalleryEntryId.MessageNote -> MessageNoteGalleryScreen()
                                                         ComponentGalleryEntryId.ChildSessionRow -> ChildSessionRowGalleryScreen()
+                                                        ComponentGalleryEntryId.WorkingIndicator ->
+                                                            WorkingIndicatorGalleryScreen()
+                                                        ComponentGalleryEntryId.ReasoningRow -> ReasoningRowGalleryScreen()
                                                         ComponentGalleryEntryId.TopBar -> TopBarGalleryScreen()
                                                         ComponentGalleryEntryId.OverflowMenu -> OverflowMenuGalleryScreen()
                                                         ComponentGalleryEntryId.BottomSheet -> BottomSheetGalleryScreen()
@@ -540,6 +555,8 @@ fun MainNavigation() {
                                                         ComponentGalleryEntryId.Modal -> ModalGalleryScreen()
                                                         ComponentGalleryEntryId.Snackbar -> SnackbarGalleryScreen()
                                                         ComponentGalleryEntryId.ListItem -> ListItemGalleryScreen()
+                                                        ComponentGalleryEntryId.SelectableCard ->
+                                                            SelectableCardGalleryScreen()
                                                         ComponentGalleryEntryId.ListGroup -> ListGroupGalleryScreen()
                                                         ComponentGalleryEntryId.SectionHeader -> SectionHeaderGalleryScreen()
                                                         ComponentGalleryEntryId.ReorderableList -> ReorderableListGalleryScreen()
@@ -565,6 +582,11 @@ fun MainNavigation() {
                                                             EmptyStateGalleryScreen()
                                                         ComponentGalleryEntryId.StatusStack ->
                                                             StatusStackGalleryScreen()
+                                                        ComponentGalleryEntryId.DiffStat -> DiffStatGalleryScreen()
+                                                        ComponentGalleryEntryId.InlineNotice ->
+                                                            InlineNoticeGalleryScreen()
+                                                        ComponentGalleryEntryId.CodeSnippet ->
+                                                            CodeSnippetGalleryScreen()
                                                         ComponentGalleryEntryId.SessionList ->
                                                             SessionListGalleryScreen()
                                                         ComponentGalleryEntryId.SessionListDock ->

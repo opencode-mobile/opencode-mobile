@@ -58,6 +58,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.opencode.mobile.theme.OpenCodeRadius
 import dev.opencode.mobile.theme.OpenCodeTheme
 import kotlinx.coroutines.delay
 import kotlin.math.PI
@@ -65,7 +66,7 @@ import kotlin.math.cos
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
-private val ToolChipCornerRadius = 8.dp
+private val ToolChipCornerRadius = OpenCodeRadius.small
 private val ToolChipPaddingStart = 8.dp
 private val ToolChipPaddingEnd = 10.dp
 private val ToolChipPaddingVertical = 6.dp

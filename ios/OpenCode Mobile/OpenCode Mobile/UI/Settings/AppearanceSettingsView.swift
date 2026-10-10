@@ -20,16 +20,13 @@ struct AppearanceSettingsView: View {
                         subtitle: "\(themeManager.currentTheme.name) · \(themeBlurb(themeManager.currentTheme.id))",
                         style: .card,
                         startDecorator: .icon(.widgets, accessibilityLabel: "Theme"),
+                        accessory: .disclosure,
                         action: {
                             ProductAnalytics.logUserAction(
                                 screenId: ProductAnalytics.Screen.settingsAppearance,
                                 actionId: ProductAnalytics.Action.settingsOpenThemePicker
                             )
                             showThemePicker = true
-                        },
-                        trailing: {
-                            OpenCodeIconImage(icon: .chevronRight, size: 18)
-                                .foregroundStyle(OpenCodeColors.textBase)
                         }
                     )
                     .padding(.horizontal, 16)
@@ -39,16 +36,13 @@ struct AppearanceSettingsView: View {
                         subtitle: "\(themeManager.currentSyntaxPreset.name) · \(themeManager.currentSyntaxPreset.blurb)",
                         style: .card,
                         startDecorator: .icon(.description, accessibilityLabel: "Code highlight"),
+                        accessory: .disclosure,
                         action: {
                             ProductAnalytics.logUserAction(
                                 screenId: ProductAnalytics.Screen.settingsAppearance,
                                 actionId: ProductAnalytics.Action.settingsOpenSyntaxPicker
                             )
                             showSyntaxPicker = true
-                        },
-                        trailing: {
-                            OpenCodeIconImage(icon: .chevronRight, size: 18)
-                                .foregroundStyle(OpenCodeColors.textBase)
                         }
                     )
                     .padding(.horizontal, 16)
@@ -185,37 +179,12 @@ private struct ThemePreviewCard: View {
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .center) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(name)
-                            .font(OpenCodeTypography.heading)
-                            .foregroundStyle(OpenCodeColors.textStrong)
-                        Text(blurb)
-                            .font(OpenCodeTypography.caption)
-                            .foregroundStyle(OpenCodeColors.textBase)
-                    }
-                    Spacer(minLength: 8)
-                    if selected {
-                        OpenCodeIconImage(icon: .check, size: 18)
-                            .foregroundStyle(OpenCodeColors.interactive)
-                    }
-                }
-                HStack(spacing: 8) {
-                    MiniThemePane(label: "Light", tokens: light)
-                    MiniThemePane(label: "Dark", tokens: dark)
-                }
-            }
-            .padding(12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .strokeBorder(selected ? OpenCodeColors.interactive : .clear, lineWidth: 2)
+        OpenCodeSelectableCard(title: name, blurb: blurb, selected: selected, action: action) {
+            HStack(spacing: 8) {
+                MiniThemePane(label: "Light", tokens: light)
+                MiniThemePane(label: "Dark", tokens: dark)
             }
         }
-        .buttonStyle(.plain)
     }
 }
 
@@ -233,7 +202,7 @@ private struct MiniThemePane: View {
                 .font(OpenCodeTypography.caption)
                 .foregroundStyle(ink)
             Text("Walk the token store.")
-                .font(.system(size: 9))
+                .font(OpenCodeTypography.caption)
                 .foregroundStyle(ink)
                 .lineLimit(1)
                 .padding(.horizontal, 6)
@@ -243,7 +212,7 @@ private struct MiniThemePane: View {
                 .frame(maxWidth: .infinity, alignment: .trailing)
                 .padding(.leading, 28)
             Text("Refreshing once, then retry.")
-                .font(.system(size: 9))
+                .font(OpenCodeTypography.caption)
                 .foregroundStyle(ink)
                 .lineLimit(2)
                 .padding(.horizontal, 6)
@@ -264,38 +233,9 @@ private struct SyntaxPreviewCard: View {
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .center) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(preset.name)
-                            .font(OpenCodeTypography.heading)
-                            .foregroundStyle(OpenCodeColors.textStrong)
-                        Text(preset.blurb)
-                            .font(OpenCodeTypography.caption)
-                            .foregroundStyle(OpenCodeColors.textBase)
-                    }
-                    Spacer(minLength: 8)
-                    if selected {
-                        OpenCodeIconImage(icon: .check, size: 18)
-                            .foregroundStyle(OpenCodeColors.interactive)
-                    }
-                }
-                Text(syntaxSnippet(tokens))
-                    .font(OpenCodeTypography.code)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(10)
-                    .background(OpenCodeColors.surfaceBase, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            }
-            .padding(12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .strokeBorder(selected ? OpenCodeColors.interactive : .clear, lineWidth: 2)
-            }
+        OpenCodeSelectableCard(title: preset.name, blurb: preset.blurb, selected: selected, action: action) {
+            OpenCodeCodeSnippet(syntaxSnippet(tokens), surface: .base)
         }
-        .buttonStyle(.plain)
     }
 }
 

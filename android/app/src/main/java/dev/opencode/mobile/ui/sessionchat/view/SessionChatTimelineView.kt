@@ -72,11 +72,14 @@ import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.OpenCodeActionPill
 import dev.opencode.mobile.ui.components.OpenCodeActionPillVariant
+import dev.opencode.mobile.ui.components.OpenCodeEmptyState
+import dev.opencode.mobile.ui.components.OpenCodeEmptyStateAction
 import dev.opencode.mobile.ui.components.OpenCodeAssistantMessage
 import dev.opencode.mobile.ui.components.OpenCodeAssistantMessagePresentation
 import dev.opencode.mobile.ui.components.OpenCodeMessageAttachment
 import dev.opencode.mobile.ui.components.OpenCodeMessageNote
 import dev.opencode.mobile.ui.components.OpenCodeMessageNoteVariant
+import dev.opencode.mobile.ui.components.OpenCodeChatActivityState
 import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessage
 import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessageContent
 import dev.opencode.mobile.ui.components.OpenCodeSessionBranchPill
@@ -88,6 +91,8 @@ import dev.opencode.mobile.ui.components.OpenCodeToolCallCardStatus
 import dev.opencode.mobile.ui.components.OpenCodeToolChip
 import dev.opencode.mobile.ui.components.OpenCodeToolChipStatus
 import dev.opencode.mobile.ui.components.OpenCodeToolChipVariant
+import dev.opencode.mobile.ui.components.OpenCodeReasoningRow
+import dev.opencode.mobile.ui.components.OpenCodeWorkingIndicator
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.scroll.MessageListOlderHistory
 import dev.opencode.mobile.ui.scroll.MessageListOlderLoadIntent
@@ -136,6 +141,7 @@ internal data class SessionChatTimelineViewProps(
     /** Extra bottom inset so the timeline can scroll under a floating composer. */
     val bottomOverlayInset: Dp = 0.dp,
     val onRefresh: () -> Unit,
+    val onRetry: () -> Unit = {},
     val onLoadOlder: () -> Unit = {},
     val onSessionBranchClick: () -> Unit = {},
     val onSessionTodosClick: () -> Unit = {},
@@ -178,19 +184,15 @@ internal fun SessionChatTimelineView(
             )
 
         SessionChatTimelineState.Error ->
-            Box(
-                modifier =
-                    modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = props.errorMessage ?: "Unable to load messages",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-            }
+            OpenCodeEmptyState(
+                title = "Unable to load messages",
+                message = props.errorMessage?.takeIf { it.isNotBlank() } ?: "The timeline didn't load.",
+                primaryAction =
+                    OpenCodeEmptyStateAction(title = "Retry") {
+                        props.onRetry()
+                    },
+                modifier = modifier.fillMaxSize(),
+            )
 
         SessionChatTimelineState.Empty ->
             Box(
@@ -437,10 +439,15 @@ private fun SessionChatTimelineReadyView(
                 statusIndicatorContent =
                     committedWorkingLabel?.let { label ->
                         {
-                            SessionChatWorkingIndicatorRow(
+                            OpenCodeWorkingIndicator(
                                 label = label,
+                                state =
+                                    when {
+                                        committedWorkingCollapsed -> OpenCodeChatActivityState.Collapsed
+                                        WorkingTurnIndicator.showsIdleMark(label) -> OpenCodeChatActivityState.Idle
+                                        else -> OpenCodeChatActivityState.Working
+                                    },
                                 fading = committedWorkingFading,
-                                collapsed = committedWorkingCollapsed,
                             )
                         }
                     },
@@ -760,10 +767,9 @@ private fun AssistantMessageContent(
                                 },
                         )
                     is SessionChatTimelineBlock.Reasoning ->
-                        ReasoningBlock(
-                            text = block.text,
-                            isStreaming = false,
-                            durationMs = block.durationMs,
+                        OpenCodeReasoningRow(
+                            state = OpenCodeChatActivityState.Expanded,
+                            durationLabel = SessionChatTimelineBlocks.thoughtDurationLabel(block.durationMs),
                             onClick =
                                 block.text.takeIf { it.isNotBlank() }?.let { body ->
                                     {
@@ -1012,168 +1018,6 @@ private fun ToolStatus.toToolCallCardStatusBase(): OpenCodeToolCallCardStatus =
 
 private const val SESSION_CHAT_BOTTOM_ANCHOR_KEY = "session-chat-timeline-bottom"
 private const val SESSION_CHAT_STATUS_INDICATOR_KEY = "session-chat-status-indicators"
-
-/** Feature-local Working/Retrying/Compacting status chrome (not prose). */
-@Composable
-private fun SessionChatWorkingIndicatorRow(
-    label: String,
-    fading: Boolean = false,
-    collapsed: Boolean = false,
-) {
-    val animateOut = collapsed && label == WorkingTurnIndicator.IDLE_LABEL
-    val collapseSpec = if (animateOut) tween<Float>(durationMillis = 220) else snap<Float>()
-    val contentAlpha by animateFloatAsState(
-        targetValue =
-            when {
-                collapsed -> 0f
-                fading -> 0.35f
-                else -> 1f
-            },
-        animationSpec = collapseSpec,
-        label = "session-chat-working-fade",
-    )
-    val heightFactor by animateFloatAsState(
-        targetValue = if (collapsed) 0f else 1f,
-        animationSpec = collapseSpec,
-        label = "session-chat-working-collapse",
-    )
-    Layout(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .clipToBounds()
-                .semantics {
-                    if (collapsed) {
-                        hideFromAccessibility()
-                    } else {
-                        contentDescription = label
-                    }
-                },
-        content = {
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(start = 4.dp, top = 12.dp, bottom = 8.dp)
-                        .alpha(contentAlpha),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                SessionChatWorkingStatusMark(isIdle = WorkingTurnIndicator.showsIdleMark(label))
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(modifier = Modifier.weight(1f))
-            }
-        },
-    ) { measurables, constraints ->
-        val placeable = measurables.first().measure(constraints)
-        val height = (placeable.height * heightFactor).toInt()
-        layout(placeable.width, height) {
-            placeable.placeRelative(0, 0)
-        }
-    }
-}
-
-@Composable
-private fun SessionChatWorkingStatusMark(isIdle: Boolean) {
-    val progress by animateFloatAsState(
-        targetValue = if (isIdle) 1f else 0f,
-        animationSpec = if (isIdle) tween(durationMillis = 220) else snap(),
-        label = "session-chat-working-idle-mark",
-    )
-    Box(
-        modifier = Modifier.size(12.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        SessionChatWorkingStatusDot(
-            modifier = Modifier.alpha(1f - progress),
-        )
-        Icon(
-            imageVector = OpenCodeIcons.Check,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier =
-                Modifier
-                    .size(12.dp)
-                    .graphicsLayer {
-                        alpha = progress
-                        val scale = 0.4f + (0.6f * progress)
-                        scaleX = scale
-                        scaleY = scale
-                    },
-        )
-    }
-}
-
-@Composable
-private fun SessionChatWorkingStatusDot(modifier: Modifier = Modifier) {
-    val pulse =
-        rememberInfiniteTransition(label = "session-chat-working-dot").animateFloat(
-            initialValue = 1f,
-            targetValue = 0.35f,
-            animationSpec =
-                infiniteRepeatable(
-                    animation = tween(durationMillis = 900),
-                    repeatMode = RepeatMode.Reverse,
-                ),
-            label = "session-chat-working-dot-alpha",
-        )
-    Box(
-        modifier =
-            modifier
-                .size(6.dp)
-                .alpha(pulse.value)
-                .background(
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    shape = CircleShape,
-                ),
-    )
-}
-
-@Composable
-private fun ReasoningBlock(
-    text: String,
-    isStreaming: Boolean,
-    durationMs: Long?,
-    onClick: (() -> Unit)?,
-) {
-    val duration = SessionChatTimelineBlocks.thoughtDurationLabel(durationMs)
-    val label =
-        when {
-            isStreaming -> "Thinking"
-            duration != null -> "Thought · $duration"
-            else -> "Thought"
-        }
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .padding(start = 4.dp, top = 12.dp, bottom = 8.dp)
-                .then(
-                    if (onClick != null) {
-                        Modifier
-                            .clickable(role = Role.Button, onClick = onClick)
-                            .semantics { contentDescription = label }
-                    } else {
-                        Modifier.semantics { contentDescription = label }
-                    },
-                ),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        if (isStreaming) {
-            SessionChatWorkingStatusDot()
-        }
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
 
 @Composable
 private fun FallbackMessageBubble(

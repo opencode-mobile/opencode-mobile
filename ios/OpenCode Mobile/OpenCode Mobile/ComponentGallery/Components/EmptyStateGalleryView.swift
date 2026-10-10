@@ -14,6 +14,13 @@ struct EmptyStateGalleryView: View {
                 icon: showsIcon ? .createNewFolder : nil
             )
             .frame(height: 280)
+            OpenCodeEmptyState(
+                title: "Unable to connect",
+                message: "The server did not answer.",
+                primaryAction: OpenCodeEmptyStateAction(title: "Retry", action: {}),
+                secondaryAction: OpenCodeEmptyStateAction(title: "Edit connection", action: {})
+            )
+            .frame(height: 320)
         }
     }
 }

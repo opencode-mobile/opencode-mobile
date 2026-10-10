@@ -41,12 +41,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
+import dev.opencode.mobile.theme.OpenCodeRadius
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import kotlin.math.roundToInt
 
-private val OverflowMenuCornerRadius = 8.dp
+private val OverflowMenuCornerRadius = OpenCodeRadius.small
 private val OverflowMenuMinWidth = 200.dp
 private val OverflowMenuPaddingVertical = 4.dp
 private val OverflowMenuEntryMinHeight = 48.dp

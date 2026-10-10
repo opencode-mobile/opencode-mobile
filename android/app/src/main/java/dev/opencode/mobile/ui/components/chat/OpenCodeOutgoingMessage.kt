@@ -29,11 +29,12 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.domain.command.commandTokenHighlightRange
 import dev.opencode.mobile.markdown.MarkdownDocument
+import dev.opencode.mobile.theme.OpenCodeSmallShape
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 
 private const val OUTGOING_MESSAGE_MAX_WIDTH_FRACTION = 0.80f
-private val OutgoingMessageShape = RoundedCornerShape(8.dp)
+private val OutgoingMessageShape = OpenCodeSmallShape
 private val OutgoingMessagePaddingHorizontal = 12.dp
 private val OutgoingMessagePaddingVertical = 8.dp
 private val OutgoingMessageFooterSpacing = 4.dp

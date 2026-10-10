@@ -45,6 +45,14 @@ struct OpenCodeListItemStatus {
     let tone: OpenCodeListItemStatusTone
 }
 
+/// Built-in trailing control. Custom trailing views stay available for anything else.
+enum OpenCodeListItemAccessory {
+    /// Navigation chevron. The row action owns the tap.
+    case disclosure
+    /// Switch. The row should not also take a tap action.
+    case toggle(isOn: Binding<Bool>, accessibilityLabel: String)
+}
+
 struct OpenCodeListItem<Trailing: View>: View {
     let title: String
     let subtitle: String?
@@ -55,6 +63,7 @@ struct OpenCodeListItem<Trailing: View>: View {
     let enabled: Bool
     let style: OpenCodeListItemStyle
     let startDecorator: StartDecorator
+    let accessory: OpenCodeListItemAccessory?
     let action: (() -> Void)?
     let onLongPress: (() -> Void)?
     @ViewBuilder let trailing: () -> Trailing
@@ -72,6 +81,7 @@ struct OpenCodeListItem<Trailing: View>: View {
         enabled: Bool = true,
         style: OpenCodeListItemStyle = .plain,
         startDecorator: StartDecorator = .none,
+        accessory: OpenCodeListItemAccessory? = nil,
         action: (() -> Void)? = nil,
         onLongPress: (() -> Void)? = nil,
         @ViewBuilder trailing: @escaping () -> Trailing = { EmptyView() }
@@ -86,6 +96,7 @@ struct OpenCodeListItem<Trailing: View>: View {
         self.enabled = enabled
         self.style = style
         self.startDecorator = startDecorator
+        self.accessory = accessory
         self.action = action
         self.onLongPress = onLongPress
         self.trailing = trailing
@@ -202,6 +213,8 @@ struct OpenCodeListItem<Trailing: View>: View {
 
             trailing()
                 .foregroundStyle(OpenCodeColors.iconStrongBase)
+
+            accessoryView
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
@@ -309,6 +322,23 @@ struct OpenCodeListItem<Trailing: View>: View {
         case (.card, false):
             RoundedRectangle(cornerRadius: listItemCornerRadius)
                 .fill(OpenCodeColors.surfaceBase)
+        }
+    }
+
+    @ViewBuilder
+    private var accessoryView: some View {
+        switch accessory {
+        case .none:
+            EmptyView()
+        case .disclosure:
+            OpenCodeIconImage(icon: .chevronRight, size: 18)
+                .foregroundStyle(enabled ? OpenCodeColors.textBase : OpenCodeColors.textWeaker)
+                .accessibilityHidden(true)
+        case let .toggle(isOn, accessibilityLabel):
+            Toggle(accessibilityLabel, isOn: isOn)
+                .labelsHidden()
+                .tint(OpenCodeColors.interactive)
+                .disabled(!enabled)
         }
     }
 

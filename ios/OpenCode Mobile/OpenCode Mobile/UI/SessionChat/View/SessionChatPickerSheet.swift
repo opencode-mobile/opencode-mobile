@@ -235,19 +235,18 @@ private struct ModelPickerFilterField: View {
     @State private var loggedEdit = false
 
     var body: some View {
-        TextField("Filter models...", text: $text)
-            .onChange(of: text) { _, _ in
-                guard !loggedEdit else { return }
-                loggedEdit = true
-                onFirstEdit()
-            }
-            .font(OpenCodeTypography.body)
-            .foregroundStyle(OpenCodeColors.textStrong)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: 12))
-            .padding(.horizontal, 20)
-            .padding(.bottom, 8)
+        OpenCodeTextInput(
+            text: $text,
+            hint: "Filter models...",
+            kind: .filter
+        )
+        .onChange(of: text) { _, _ in
+            guard !loggedEdit else { return }
+            loggedEdit = true
+            onFirstEdit()
+        }
+        .padding(.horizontal, 20)
+        .padding(.bottom, 8)
     }
 }
 

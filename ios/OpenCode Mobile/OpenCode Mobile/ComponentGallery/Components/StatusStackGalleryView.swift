@@ -13,6 +13,8 @@ struct StatusStackGalleryView: View {
                 subtitle: usesSessionCopy ? "Fetching timeline…" : "Checking server…"
             )
             .frame(height: 280)
+            OpenCodeStatusStack(spinner: "Loading")
+                .frame(height: 120)
             .background(OpenCodeColors.backgroundBase)
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }

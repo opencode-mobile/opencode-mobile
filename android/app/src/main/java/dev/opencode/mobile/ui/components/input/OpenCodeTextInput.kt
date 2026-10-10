@@ -39,10 +39,11 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.theme.OpenCodeRadius
 import dev.opencode.mobile.theme.openCodeColor
 
 internal val OpenCodeTextInputMinHeight = 48.dp
-internal val OpenCodeTextInputCornerRadius = 8.dp
+internal val OpenCodeTextInputCornerRadius = OpenCodeRadius.small
 internal val OpenCodeTextInputPaddingHorizontal = 12.dp
 
 enum class OpenCodeTextInputKind {
@@ -50,6 +51,9 @@ enum class OpenCodeTextInputKind {
     Url,
     Username,
     Password,
+
+    /** Filter field: no sentence capitalization or autocorrect. */
+    Filter,
 }
 
 enum class OpenCodeTextInputSubmitAction {
@@ -93,7 +97,7 @@ fun OpenCodeTextInput(
         when (kind) {
             OpenCodeTextInputKind.Username -> ContentType.Username
             OpenCodeTextInputKind.Password -> ContentType.Password
-            OpenCodeTextInputKind.Url, OpenCodeTextInputKind.Text -> null
+            OpenCodeTextInputKind.Url, OpenCodeTextInputKind.Text, OpenCodeTextInputKind.Filter -> null
         }
     // Do not set contentDescription when the hint/placeholder already names the
     // field. Overriding TextField semantics with contentDescription creates a
@@ -158,7 +162,8 @@ fun OpenCodeTextInput(
                             // Ascii avoids URI-variation IME quirks that can drop Paste when empty.
                             OpenCodeTextInputKind.Url -> KeyboardType.Ascii
                             OpenCodeTextInputKind.Password -> KeyboardType.Password
-                            OpenCodeTextInputKind.Text, OpenCodeTextInputKind.Username -> KeyboardType.Text
+                            OpenCodeTextInputKind.Text, OpenCodeTextInputKind.Username, OpenCodeTextInputKind.Filter ->
+                                KeyboardType.Text
                         },
                 ),
             keyboardActions =

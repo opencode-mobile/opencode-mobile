@@ -41,6 +41,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.opencode.mobile.theme.LetterAccent
+import dev.opencode.mobile.theme.OpenCodeSmallShape
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.badgeColors
 import dev.opencode.mobile.theme.openCodeColor
@@ -246,7 +247,7 @@ private fun TopBarTitleRow(
     Row(
         modifier =
             modifier
-                .clip(RoundedCornerShape(8.dp))
+                .clip(OpenCodeSmallShape)
                 .clickable(role = Role.Button, onClick = onTitleClick)
                 .padding(end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,

@@ -10,9 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -40,7 +38,10 @@ import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
 import dev.opencode.mobile.ui.components.OpenCodeDialog
 import dev.opencode.mobile.ui.components.OpenCodeDialogOption
+import dev.opencode.mobile.ui.components.OpenCodeInlineNotice
+import dev.opencode.mobile.ui.components.OpenCodeInlineNoticeTone
 import dev.opencode.mobile.ui.components.OpenCodeListItem
+import dev.opencode.mobile.ui.components.OpenCodeListItemAccessory
 import dev.opencode.mobile.ui.components.OpenCodeListItemStyle
 import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
 import dev.opencode.mobile.ui.components.OpenCodeSectionHeader
@@ -146,16 +147,10 @@ fun SettingsScreen(
                             serversSummary.letter,
                             serversSummary.letterAccent,
                         ),
+                    accessory = OpenCodeListItemAccessory.Disclosure,
                     onClick = {
                         logSettingsAction(ProductAnalytics.Action.SETTINGS_OPEN_CONNECTION)
                         onServersClick()
-                    },
-                    trailing = {
-                        Icon(
-                            imageVector = OpenCodeIcons.ChevronRight,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
                     },
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
@@ -167,16 +162,10 @@ fun SettingsScreen(
                     subtitle = "${currentTheme.name} · ${currentSyntax.name}",
                     style = OpenCodeListItemStyle.Card,
                     startDecorator = StartDecorator.Icon(OpenCodeIcons.Widgets, "Appearance"),
+                    accessory = OpenCodeListItemAccessory.Disclosure,
                     onClick = {
                         logSettingsAction(ProductAnalytics.Action.SETTINGS_OPEN_APPEARANCE)
                         onAppearanceClick()
-                    },
-                    trailing = {
-                        Icon(
-                            imageVector = OpenCodeIcons.ChevronRight,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
                     },
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
@@ -186,8 +175,8 @@ fun SettingsScreen(
                     subtitle = "Show ~/Projects/… instead of /Users/you/Projects/…",
                     style = OpenCodeListItemStyle.Card,
                     startDecorator = StartDecorator.Icon(OpenCodeIcons.Folder, "Hide User Directory"),
-                    trailing = {
-                        Switch(
+                    accessory =
+                        OpenCodeListItemAccessory.Toggle(
                             checked = hideUserDirectoryPrefix,
                             onCheckedChange = { enabled ->
                                 logSettingsToggle(
@@ -196,8 +185,7 @@ fun SettingsScreen(
                                 )
                                 onHideUserDirectoryPrefixChange(enabled)
                             },
-                        )
-                    },
+                        ),
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
 
@@ -219,8 +207,8 @@ fun SettingsScreen(
                     style = OpenCodeListItemStyle.Card,
                     startDecorator =
                         StartDecorator.Icon(OpenCodeIcons.CollapseContent, "Collapse Consecutive Tool Calls"),
-                    trailing = {
-                        Switch(
+                    accessory =
+                        OpenCodeListItemAccessory.Toggle(
                             checked = collapseConsecutiveToolCalls,
                             onCheckedChange = { enabled ->
                                 logSettingsToggle(
@@ -229,8 +217,7 @@ fun SettingsScreen(
                                 )
                                 onCollapseConsecutiveToolCallsChange(enabled)
                             },
-                        )
-                    },
+                        ),
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
 
@@ -240,15 +227,14 @@ fun SettingsScreen(
                         subtitle = "Show the tools an agent used as chips under its narration",
                         style = OpenCodeListItemStyle.Card,
                         startDecorator = StartDecorator.Icon(OpenCodeIcons.Widgets, "Chip Timeline"),
-                        trailing = {
-                            Switch(
+                        accessory =
+                            OpenCodeListItemAccessory.Toggle(
                                 checked = chipTimeline,
                                 onCheckedChange = { enabled ->
                                     logSettingsToggle(ProductAnalytics.Action.SETTINGS_TOGGLE_CHIP_TIMELINE, enabled)
                                     onChipTimelineChange(enabled)
                                 },
-                            )
-                        },
+                            ),
                         modifier = Modifier.padding(horizontal = 16.dp),
                     )
                 }
@@ -273,21 +259,10 @@ fun SettingsScreen(
                             },
                             "Follow-up send",
                         ),
+                    accessory = if (supportsFollowUpDelivery) OpenCodeListItemAccessory.Disclosure else null,
                     onClick =
                         if (supportsFollowUpDelivery) {
                             { showFollowUpPicker = true }
-                        } else {
-                            null
-                        },
-                    trailing =
-                        if (supportsFollowUpDelivery) {
-                            {
-                                Icon(
-                                    imageVector = OpenCodeIcons.ChevronRight,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
                         } else {
                             null
                         },
@@ -295,10 +270,9 @@ fun SettingsScreen(
                 )
 
                 themeLoadError?.let { error ->
-                    Text(
-                        text = error,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = openCodeColor("error"),
+                    OpenCodeInlineNotice(
+                        message = error,
+                        tone = OpenCodeInlineNoticeTone.Error,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     )
                 }
@@ -332,17 +306,11 @@ fun SettingsScreen(
                     subtitle = "How the apps handle data",
                     style = OpenCodeListItemStyle.Card,
                     startDecorator = StartDecorator.Icon(OpenCodeIcons.Description, "Privacy Policy"),
+                    accessory = OpenCodeListItemAccessory.Disclosure,
                     onClick = {
                         logSettingsAction(ProductAnalytics.Action.SETTINGS_OPEN_PRIVACY_POLICY)
                         context.startActivity(
                             Intent(Intent.ACTION_VIEW, Uri.parse(PrivacyPolicy.URL)),
-                        )
-                    },
-                    trailing = {
-                        Icon(
-                            imageVector = OpenCodeIcons.ChevronRight,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     },
                     modifier = Modifier.padding(horizontal = 16.dp),
@@ -353,8 +321,8 @@ fun SettingsScreen(
                     subtitle = "Allow optional product usage events. Crash reporting is unchanged.",
                     style = OpenCodeListItemStyle.Card,
                     startDecorator = StartDecorator.Icon(OpenCodeIcons.Description, "Product Analytics"),
-                    trailing = {
-                        Switch(
+                    accessory =
+                        OpenCodeListItemAccessory.Toggle(
                             checked = productAnalyticsConsented,
                             onCheckedChange = { enabled ->
                                 // Log after the consent change so a revoke is dropped by the
@@ -365,8 +333,7 @@ fun SettingsScreen(
                                     enabled,
                                 )
                             },
-                        )
-                    },
+                        ),
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
 
@@ -419,12 +386,11 @@ fun SettingsScreen(
                         subtitle = "On by default for all packaged languages; semantic fallback otherwise (can disable)",
                         style = OpenCodeListItemStyle.Card,
                         startDecorator = StartDecorator.Icon(OpenCodeIcons.Architecture, "TextMate Highlighting"),
-                        trailing = {
-                            Switch(
+                        accessory =
+                            OpenCodeListItemAccessory.Toggle(
                                 checked = textMateEnabled,
                                 onCheckedChange = onTextMateEnabledChange,
-                            )
-                        },
+                            ),
                         modifier = Modifier.padding(horizontal = 16.dp),
                     )
 

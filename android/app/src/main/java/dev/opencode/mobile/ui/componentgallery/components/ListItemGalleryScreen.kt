@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
 import dev.opencode.mobile.ui.components.OpenCodeListItem
+import dev.opencode.mobile.ui.components.OpenCodeListItemAccessory
 import dev.opencode.mobile.ui.components.OpenCodeListItemStatus
 import dev.opencode.mobile.ui.components.OpenCodeListItemStatusTone
 import dev.opencode.mobile.ui.components.OpenCodeListItemStyle
@@ -66,6 +67,7 @@ fun ListItemGalleryScreen(modifier: Modifier = Modifier) {
     var statusToneName by rememberSaveable { mutableStateOf(OpenCodeListItemStatusTone.Interactive.name) }
     var decoratorKindName by rememberSaveable { mutableStateOf(GalleryDecoratorKind.None.name) }
     var letterAccentName by rememberSaveable { mutableStateOf(LetterAccent.Violet.name) }
+    var toggleOn by rememberSaveable { mutableStateOf(true) }
 
     val decoratorKind =
         try {
@@ -244,6 +246,36 @@ fun ListItemGalleryScreen(modifier: Modifier = Modifier) {
             enabled = enabled,
             style = if (cardStyle) OpenCodeListItemStyle.Card else OpenCodeListItemStyle.Plain,
             startDecorator = startDecorator,
+        )
+
+        Text(text = "Trailing", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
+        OpenCodeListItem(
+            title = "Disclosure",
+            subtitle = "Enabled",
+            style = OpenCodeListItemStyle.Card,
+            accessory = OpenCodeListItemAccessory.Disclosure,
+            onClick = {},
+        )
+        OpenCodeListItem(
+            title = "Disclosure",
+            subtitle = "Disabled",
+            enabled = false,
+            style = OpenCodeListItemStyle.Card,
+            accessory = OpenCodeListItemAccessory.Disclosure,
+            onClick = {},
+        )
+        OpenCodeListItem(
+            title = "Toggle",
+            subtitle = "Enabled",
+            style = OpenCodeListItemStyle.Card,
+            accessory = OpenCodeListItemAccessory.Toggle(checked = toggleOn, onCheckedChange = { toggleOn = it }),
+        )
+        OpenCodeListItem(
+            title = "Toggle",
+            subtitle = "Disabled",
+            enabled = false,
+            style = OpenCodeListItemStyle.Card,
+            accessory = OpenCodeListItemAccessory.Toggle(checked = false, onCheckedChange = {}),
         )
     }
 }

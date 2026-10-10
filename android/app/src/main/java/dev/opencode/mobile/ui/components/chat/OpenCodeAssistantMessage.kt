@@ -14,10 +14,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.markdown.MarkdownDocument
+import dev.opencode.mobile.theme.OpenCodeRadius
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 
-private val AssistantMessageCornerRadius = 8.dp
+private val AssistantMessageCornerRadius = OpenCodeRadius.small
 private val AssistantMessagePaddingHorizontal = 12.dp
 private val AssistantMessagePaddingVertical = 8.dp
 

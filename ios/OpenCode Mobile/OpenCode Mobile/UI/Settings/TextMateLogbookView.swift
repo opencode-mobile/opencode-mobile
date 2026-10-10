@@ -75,8 +75,7 @@ struct TextMateLogbookView: View {
                     }
 
                     if model.isLoading {
-                        ProgressView()
-                            .tint(OpenCodeColors.interactive)
+                        OpenCodeStatusStack(spinner: "Loading TextMate logbook")
                             .padding(24)
                     } else if model.entries.isEmpty {
                         Text("No TextMate parsing entries yet.")
@@ -197,17 +196,7 @@ private struct TextMateLogbookDetailLine: View {
     let value: String
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Text(label)
-                .font(OpenCodeTypography.caption)
-                .foregroundStyle(OpenCodeColors.textBase)
-            Spacer(minLength: 8)
-            Text(value)
-                .font(OpenCodeTypography.caption)
-                .foregroundStyle(OpenCodeColors.textStrong)
-                .multilineTextAlignment(.trailing)
-        }
-        .accessibilityElement(children: .combine)
+        OpenCodeKeyValueRow(label: label, value: value)
     }
 }
 
@@ -216,12 +205,7 @@ private struct TextMateLogbookStoreHealthView: View {
     let storageError: String?
 
     var body: some View {
-        Text(message)
-            .font(OpenCodeTypography.caption)
-            .foregroundStyle(OpenCodeColors.error)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(12)
-            .background(OpenCodeColors.error.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
+        OpenCodeInlineNotice(message: message, tone: .error, variant: .banner)
     }
 
     private var message: String {

@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.domain.session.FileDiff
 import dev.opencode.mobile.domain.session.FileDiffStatus
 import dev.opencode.mobile.theme.CodeTextStyle
+import dev.opencode.mobile.theme.OpenCodeSmallShape
 import dev.opencode.mobile.theme.openCodeColor
 import kotlin.math.roundToInt
 
@@ -188,7 +189,7 @@ fun OpenCodeUnifiedDiff(
     /** Scroll the selected hunk into view; false keeps the file header in view on open. */
     revealSelectedHunk: Boolean = true,
 ) {
-    val shape = RoundedCornerShape(8.dp)
+    val shape = OpenCodeSmallShape
     Column(
         modifier =
             modifier

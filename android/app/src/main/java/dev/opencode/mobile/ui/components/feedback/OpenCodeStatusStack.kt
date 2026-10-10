@@ -23,16 +23,29 @@ import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 
-/** Centered mid-well indeterminate status: neutral ring + title + subtitle. */
+enum class OpenCodeStatusStackStyle {
+    /** Neutral ring with a title and subtitle. */
+    Labeled,
+
+    /** Ring only, for inline and overlay loading. */
+    Spinner,
+}
+
+/** Centered mid-well indeterminate status: neutral ring + title + subtitle, or a ring alone. */
 @Composable
 fun OpenCodeStatusStack(
-    title: String,
-    subtitle: String,
+    title: String = "",
+    subtitle: String = "",
     modifier: Modifier = Modifier,
+    style: OpenCodeStatusStackStyle = OpenCodeStatusStackStyle.Labeled,
     testTag: String? = null,
 ) {
-    require(title.isNotBlank()) { "OpenCodeStatusStack requires a non-blank title" }
-    require(subtitle.isNotBlank()) { "OpenCodeStatusStack requires a non-blank subtitle" }
+    if (style == OpenCodeStatusStackStyle.Labeled) {
+        require(title.isNotBlank()) { "OpenCodeStatusStack requires a non-blank title" }
+        require(subtitle.isNotBlank()) { "OpenCodeStatusStack requires a non-blank subtitle" }
+    } else {
+        require(title.isNotBlank()) { "OpenCodeStatusStack spinner requires a non-blank accessibility label" }
+    }
 
     val ringColor = openCodeColor("text-base")
     val trackColor = openCodeColor("border-weaker-base")
@@ -44,7 +57,12 @@ fun OpenCodeStatusStack(
                 .fillMaxWidth()
                 .padding(horizontal = 24.dp)
                 .semantics(mergeDescendants = true) {
-                    contentDescription = "$title. $subtitle"
+                    contentDescription =
+                        if (style == OpenCodeStatusStackStyle.Labeled) {
+                            "$title. $subtitle"
+                        } else {
+                            title
+                        }
                     if (testTag != null) {
                         this.testTag = testTag
                     }
@@ -58,20 +76,22 @@ fun OpenCodeStatusStack(
             trackColor = trackColor,
             strokeWidth = 2.5.dp,
         )
-        Spacer(modifier = Modifier.height(14.dp))
-        Text(
-            text = title,
-            style = MaterialTheme.typography.bodyLarge,
-            textAlign = TextAlign.Center,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = subtitle,
-            style = MaterialTheme.typography.bodySmall,
-            textAlign = TextAlign.Center,
-            color = subtitleColor,
-        )
+        if (style == OpenCodeStatusStackStyle.Labeled) {
+            Spacer(modifier = Modifier.height(14.dp))
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                textAlign = TextAlign.Center,
+                color = subtitleColor,
+            )
+        }
     }
 }
 

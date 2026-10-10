@@ -61,13 +61,14 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import dev.opencode.mobile.theme.LetterAccent
+import dev.opencode.mobile.theme.OpenCodeRadius
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.math.abs
 
-private val ReorderableRowCornerRadius = 8.dp
+private val ReorderableRowCornerRadius = OpenCodeRadius.small
 private val ReorderableRowLiftedElevation = 8.dp
 private val ReorderableRowFallbackHeight = 60.dp
 private const val ReorderableRowPressedScale = 0.965f

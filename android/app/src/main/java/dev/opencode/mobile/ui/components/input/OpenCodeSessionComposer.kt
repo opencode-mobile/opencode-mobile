@@ -66,6 +66,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.theme.CodeTextStyle
+import dev.opencode.mobile.theme.OpenCodeRadius
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
@@ -556,7 +557,7 @@ private class MentionVisualTransformation(
 
 @Composable
 private fun PendingRevertChip(onCancel: () -> Unit) {
-    val chipShape = RoundedCornerShape(8.dp)
+    val chipShape = RoundedCornerShape(OpenCodeRadius.small)
     Row(
         modifier =
             Modifier

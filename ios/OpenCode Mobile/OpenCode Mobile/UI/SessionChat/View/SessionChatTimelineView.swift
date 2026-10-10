@@ -21,6 +21,7 @@ struct SessionChatTimelineViewProps {
     /// Extra bottom inset so the timeline can scroll under a floating composer.
     let bottomOverlayInset: CGFloat
     let onRefresh: () async -> Void
+    let onRetry: () async -> Void
     let onLoadOlder: () -> Void
     let onSessionBranchTap: () -> Void
     let onSessionTodosTap: () -> Void
@@ -57,6 +58,7 @@ struct SessionChatTimelineViewProps {
         hideFloatStack: Bool = false,
         bottomOverlayInset: CGFloat = 0,
         onRefresh: @escaping () async -> Void,
+        onRetry: @escaping () async -> Void = {},
         onLoadOlder: @escaping () -> Void = {},
         onSessionBranchTap: @escaping () -> Void = {},
         onSessionTodosTap: @escaping () -> Void = {},
@@ -90,6 +92,7 @@ struct SessionChatTimelineViewProps {
         self.hideFloatStack = hideFloatStack
         self.bottomOverlayInset = bottomOverlayInset
         self.onRefresh = onRefresh
+        self.onRetry = onRetry
         self.onLoadOlder = onLoadOlder
         self.onSessionBranchTap = onSessionBranchTap
         self.onSessionTodosTap = onSessionTodosTap
@@ -134,14 +137,13 @@ struct SessionChatTimelineView: View {
                     Spacer()
                 }
             case .error:
-                VStack {
-                    Spacer()
-                    Text(props.errorMessage ?? "Unable to load messages")
-                        .font(OpenCodeTypography.body)
-                        .foregroundStyle(OpenCodeColors.textBase)
-                        .padding(.horizontal, 16)
-                    Spacer()
-                }
+                OpenCodeEmptyState(
+                    title: "Unable to load messages",
+                    message: openCodeNonBlank(props.errorMessage, fallback: "The timeline didn't load."),
+                    primaryAction: OpenCodeEmptyStateAction(title: "Retry") {
+                        Task { await props.onRetry() }
+                    }
+                )
             case .ready:
                 SessionChatTimelineReadyView(props: props)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -258,7 +260,7 @@ private struct SessionChatTimelineReadyView: View {
             .transaction { $0.animation = nil }
             .overlay {
                 if props.isRefreshing {
-                    ProgressView()
+                    OpenCodeStatusStack(spinner: "Refreshing messages")
                 }
             }
             .overlay(alignment: .top) {
@@ -441,9 +443,11 @@ private struct SessionChatTimelineHostRow: View {
 
     var body: some View {
         if message.id == SessionChatStatusChrome.workingRowID {
-            SessionChatWorkingIndicatorRow(
+            OpenCodeWorkingIndicator(
                 label: message.text,
-                collapsed: message.isLayoutCollapsed,
+                state: message.isLayoutCollapsed
+                    ? .collapsed
+                    : (WorkingTurnIndicator.showsIdleMark(label: message.text) ? .idle : .working),
                 fading: workingIndicatorFading
             )
         } else {
@@ -479,87 +483,6 @@ private struct SessionChatTimelineHostRow: View {
                 }
             }
         }
-    }
-}
-
-/// Feature-local Working/Retrying/Compacting status chrome (not prose).
-private struct SessionChatWorkingIndicatorRow: View {
-    let label: String
-    var collapsed: Bool = false
-    var fading: Bool = false
-
-    var body: some View {
-        HStack(alignment: .center, spacing: 8) {
-            SessionChatWorkingStatusMark(isIdle: WorkingTurnIndicator.showsIdleMark(label: label))
-            Text(label)
-                .font(OpenCodeTypography.body)
-                .foregroundStyle(OpenCodeColors.textWeak)
-            Spacer(minLength: 0)
-        }
-        .opacity(collapsed ? 0 : (fading ? 0.35 : 1))
-        .padding(.leading, collapsed ? 0 : 4)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        // Hosted cells with minSize 0 treated `frame(height: nil)` as 0 and
-        // never painted Working / Idle. Fixed expanded height matches the
-        // list estimate so pin-to-end needs no estimate→real correction.
-        .frame(height: collapsed ? 0 : WorkingTurnIndicator.rowHeight)
-        .clipped()
-        .accessibilityElement(children: .ignore)
-        .accessibilityHidden(collapsed)
-        .accessibilityLabel(label)
-        .transaction { transaction in
-            // Host clears animations so cells do not animate on open. Re-enable
-            // Idle so the lamp can become a check, then dismiss.
-            transaction.animation =
-                WorkingTurnIndicator.showsIdleMark(label: label)
-                ? .easeInOut(duration: 0.22)
-                : nil
-        }
-    }
-}
-
-private struct SessionChatWorkingStatusMark: View {
-    var isIdle: Bool = false
-    @State private var pulse = false
-
-    var body: some View {
-        ZStack {
-            Circle()
-                .fill(OpenCodeColors.textWeak)
-                .frame(width: 6, height: 6)
-                .opacity(isIdle ? 0 : (pulse ? 0.35 : 1))
-                .animation(
-                    isIdle ? nil : .easeInOut(duration: 0.9).repeatForever(autoreverses: true),
-                    value: pulse
-                )
-            OpenCodeIconImage(icon: .check, size: 12)
-                .foregroundStyle(OpenCodeColors.textWeak)
-                .opacity(isIdle ? 1 : 0)
-                .scaleEffect(isIdle ? 1 : 0.4)
-        }
-        .frame(width: 12, height: 12)
-        .onAppear { pulse = true }
-        .onChange(of: isIdle) { _, idle in
-            pulse = !idle
-        }
-        .accessibilityHidden(true)
-    }
-}
-
-private struct SessionChatWorkingStatusDot: View {
-    @State private var pulse = false
-
-    var body: some View {
-        Circle()
-            .fill(OpenCodeColors.textWeak)
-            .frame(width: 6, height: 6)
-            .opacity(pulse ? 0.35 : 1)
-            .animation(
-                .easeInOut(duration: 0.9).repeatForever(autoreverses: true),
-                value: pulse
-            )
-            .onAppear { pulse = true }
-            .accessibilityHidden(true)
     }
 }
 
@@ -766,19 +689,19 @@ private struct AssistantMessageContent: View {
                         }
                     )
                 case .reasoning(_, let text, _, let durationMs):
-                    ReasoningBlock(
-                        text: text,
-                        isStreaming: false,
-                        durationMs: durationMs,
-                        onTap: {
-                            guard !text.isEmpty else { return }
-                            onToolDetailTap(
-                                SessionChatToolDetailTarget(
-                                    title: "Thought",
-                                    body: text
+                    OpenCodeReasoningRow(
+                        state: .expanded,
+                        durationLabel: SessionChatTimelineBlocks.thoughtDurationLabel(durationMs),
+                        action: text.isEmpty
+                            ? nil
+                            : {
+                                onToolDetailTap(
+                                    SessionChatToolDetailTarget(
+                                        title: "Thought",
+                                        body: text
+                                    )
                                 )
-                            )
-                        }
+                            }
                     )
                 case .stopNote(_, let reason):
                     OpenCodeMessageNote(variant: reason == .length ? .truncated : .interrupted)
@@ -1070,47 +993,6 @@ private extension ToolStatus {
         case .completed: .completed
         case .error: interrupted ? .interrupted : .error
         }
-    }
-}
-
-private struct ReasoningBlock: View {
-    let text: String
-    let isStreaming: Bool
-    let durationMs: Int64?
-    let onTap: () -> Void
-
-    var body: some View {
-        let label = thoughtLabel
-        HStack(alignment: .center, spacing: 8) {
-            if isStreaming {
-                SessionChatWorkingStatusDot()
-            }
-            Text(label)
-                .font(OpenCodeTypography.body)
-                .foregroundStyle(OpenCodeColors.textWeak)
-            Spacer(minLength: 0)
-        }
-        .padding(.leading, 4)
-        .padding(.top, 12)
-        .padding(.bottom, 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            guard !text.isEmpty else { return }
-            onTap()
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityAddTraits(text.isEmpty ? [] : .isButton)
-        .accessibilityLabel(label)
-        .accessibilityHint(text.isEmpty ? "" : "Shows the full thought")
-    }
-
-    private var thoughtLabel: String {
-        if isStreaming { return "Thinking" }
-        if let duration = SessionChatTimelineBlocks.thoughtDurationLabel(durationMs) {
-            return "Thought · \(duration)"
-        }
-        return "Thought"
     }
 }
 

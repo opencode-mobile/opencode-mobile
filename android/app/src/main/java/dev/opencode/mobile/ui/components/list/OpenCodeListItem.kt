@@ -28,6 +28,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
@@ -58,6 +59,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.opencode.mobile.theme.LetterAccent
+import dev.opencode.mobile.theme.OpenCodePillShape
+import dev.opencode.mobile.theme.OpenCodeRadius
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.badgeColors
 import dev.opencode.mobile.theme.openCodeColor
@@ -68,11 +71,11 @@ private val ListItemLetterGlyphSize = 14.sp
 private val ListItemLetterStatusDotSize = 10.dp
 private val ListItemIconDecoratorSize = 24.dp
 private val ListItemIconCircleGlyphSize = 16.dp
-private val ListItemCornerRadius = 8.dp
+private val ListItemCornerRadius = OpenCodeRadius.small
 private val ListItemVerticalPadding = 12.dp
 private val ListItemTitleSubtitleSpacing = 2.dp
 private val ListItemMetaSpacing = 4.dp
-private val StatusChipShape = RoundedCornerShape(999.dp)
+private val StatusChipShape = OpenCodePillShape
 private const val ListItemPressedScale = 0.965f
 private const val ListItemPopPeakScale = 1.035f
 
@@ -106,6 +109,18 @@ data class OpenCodeListItemStatus(
     val tone: OpenCodeListItemStatusTone,
 )
 
+/** Built-in trailing control. Custom trailing composables stay available for anything else. */
+sealed class OpenCodeListItemAccessory {
+    /** Navigation chevron. The row click owns the tap. */
+    data object Disclosure : OpenCodeListItemAccessory()
+
+    /** Switch. The row should not also take a click. */
+    data class Toggle(
+        val checked: Boolean,
+        val onCheckedChange: (Boolean) -> Unit,
+    ) : OpenCodeListItemAccessory()
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun OpenCodeListItem(
@@ -118,6 +133,7 @@ fun OpenCodeListItem(
     enabled: Boolean = true,
     style: OpenCodeListItemStyle = OpenCodeListItemStyle.Plain,
     startDecorator: StartDecorator = StartDecorator.None,
+    accessory: OpenCodeListItemAccessory? = null,
     onClick: (() -> Unit)? = null,
     onLongPress: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
@@ -294,6 +310,25 @@ fun OpenCodeListItem(
 
                 if (trailing != null) {
                     Box(contentAlignment = Alignment.Center) { trailing() }
+                }
+
+                when (val itemAccessory = accessory) {
+                    null -> Unit
+                    OpenCodeListItemAccessory.Disclosure -> {
+                        Icon(
+                            imageVector = OpenCodeIcons.ChevronRight,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                            tint = if (enabled) openCodeColor("text-base") else openCodeColor("text-weaker"),
+                        )
+                    }
+                    is OpenCodeListItemAccessory.Toggle -> {
+                        Switch(
+                            checked = itemAccessory.checked,
+                            onCheckedChange = itemAccessory.onCheckedChange,
+                            enabled = enabled,
+                        )
+                    }
                 }
             }
         }

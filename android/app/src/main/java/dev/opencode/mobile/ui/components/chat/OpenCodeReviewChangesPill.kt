@@ -15,9 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.theme.OpenCodeTheme
@@ -124,8 +122,13 @@ fun OpenCodeReviewChangesPill(
     val interactionSource = remember { MutableInteractionSource() }
     val contentColor =
         if (enabled) openCodeColor("text-strong") else MaterialTheme.colorScheme.onSurfaceVariant
-    val additionsColor = if (enabled) openCodeColor("diff-add") else MaterialTheme.colorScheme.onSurfaceVariant
-    val deletionsColor = if (enabled) openCodeColor("diff-delete") else MaterialTheme.colorScheme.onSurfaceVariant
+    val counts =
+        openCodeDiffStatAnnotatedString(
+            additions = additions.takeIf { it > 0 },
+            deletions = deletions.takeIf { it > 0 },
+            enabled = enabled,
+            separator = OpenCodeDiffStatSeparator.Wide,
+        )
     val surfaceRaised = openCodeColor("surface-raised-base")
 
     Surface(
@@ -153,13 +156,9 @@ fun OpenCodeReviewChangesPill(
                 text =
                     buildAnnotatedString {
                         append(summary.fileLabel)
-                        summary.additionLabel?.let {
+                        if (counts.isNotEmpty()) {
                             append("  ")
-                            withStyle(SpanStyle(color = additionsColor)) { append(it) }
-                        }
-                        summary.deletionLabel?.let {
-                            append("  ")
-                            withStyle(SpanStyle(color = deletionsColor)) { append(it) }
+                            append(counts)
                         }
                     },
                 style = MaterialTheme.typography.labelLarge,
