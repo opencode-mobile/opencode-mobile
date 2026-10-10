@@ -71,17 +71,21 @@ struct CommandDomainAdapter: Sendable {
 
     func toV2RunRequest(_ options: CommandRunOptions) -> V2RunCommandRequestDTO {
         V2RunCommandRequestDTO(
-            command: options.command,
-            arguments: options.arguments.isEmpty ? nil : options.arguments,
-            agent: options.mode,
-            model: options.model.map {
-                V2PromptModelRefDTO(id: $0.modelID, providerID: $0.providerID, variant: options.variant)
-            },
+            name: options.command,
+            text: options.arguments,
             files: options.attachments.isEmpty ? nil : options.attachments.map { attachment in
                 V2PromptFileDTO(uri: attachment.dataURL, name: attachment.filename, mime: attachment.mime)
             },
             delivery: options.delivery.wireValue
         )
+    }
+
+    func v2SwitchModelRequest(_ options: CommandRunOptions) -> V2SwitchModelRequestDTO? {
+        options.model.map {
+            V2SwitchModelRequestDTO(
+                model: V2PromptModelRefDTO(id: $0.modelID, providerID: $0.providerID, variant: options.variant)
+            )
+        }
     }
 
     func mapError(_ error: Error) -> CommandError {

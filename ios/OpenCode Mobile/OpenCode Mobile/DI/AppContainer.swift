@@ -314,6 +314,7 @@ extension Container {
             DefaultCommandRepository(
                 api: self.commandsAPIClient(),
                 adapter: self.commandDomainAdapter(),
+                messages: self.messagesAPIClient(),
                 activeConnectionManager: self.activeConnectionManager()
             )
         }.singleton

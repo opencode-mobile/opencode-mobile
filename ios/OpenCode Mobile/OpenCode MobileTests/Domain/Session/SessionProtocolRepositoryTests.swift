@@ -707,11 +707,50 @@ struct SessionProtocolRepositoryTests {
         #expect(request.httpMethod == "POST")
         #expect(request.url?.path.hasSuffix("/api/session/ses_1/command") == true)
         let body = try #require(ProtocolRoutingURLProtocol.bodies.first.flatMap { $0 })
-        #expect(body.contains(#""command":"init""#))
+        #expect(body.contains(#""name":"init""#))
+        #expect(body.contains(#""text":"now""#))
         #expect(body.contains(#""delivery":"steer""#))
+        #expect(!body.contains(#""command""#))
+        #expect(!body.contains(#""arguments""#))
         #expect(!body.contains(#""parts""#))
         #expect(queryValue(try #require(request.url), "directory") == nil)
         #expect(queryValue(try #require(request.url), "location[directory]") == nil)
+    }
+
+    @Test func v2RunCommandSwitchesAgentAndModelBeforeCommand() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [.noContent, .noContent, .noContent])
+        let manager = makeManager(serverProtocol: .v2)
+        let session = makeURLSession()
+        let repository = DefaultCommandRepository(
+            api: CommandsAPIClient(connectionProvider: { manager.connection }, urlSession: session),
+            adapter: CommandDomainAdapter(),
+            messages: MessagesAPIClient(connectionProvider: { manager.connection }, urlSession: session),
+            activeConnectionManager: manager
+        )
+
+        try await repository.runCommand(
+            sessionID: "ses_1",
+            options: CommandRunOptions(
+                command: "init",
+                arguments: "",
+                model: PromptModelSelection(providerID: "openai", modelID: "gpt-4"),
+                variant: "high",
+                mode: "build"
+            ),
+            directory: "/repo"
+        )
+
+        #expect(ProtocolRoutingURLProtocol.requests.count == 3)
+        #expect(ProtocolRoutingURLProtocol.requests[0].url?.path.hasSuffix("/api/session/ses_1/agent") == true)
+        #expect(ProtocolRoutingURLProtocol.bodies[0]?.contains(#""agent":"build""#) == true)
+        #expect(ProtocolRoutingURLProtocol.requests[1].url?.path.hasSuffix("/api/session/ses_1/model") == true)
+        #expect(ProtocolRoutingURLProtocol.bodies[1]?.contains(#""id":"gpt-4""#) == true)
+        #expect(ProtocolRoutingURLProtocol.bodies[1]?.contains(#""providerID":"openai""#) == true)
+        #expect(ProtocolRoutingURLProtocol.requests[2].url?.path.hasSuffix("/api/session/ses_1/command") == true)
+        #expect(ProtocolRoutingURLProtocol.bodies[2]?.contains(#""name":"init""#) == true)
+        #expect(ProtocolRoutingURLProtocol.bodies[2]?.contains(#""text":"""#) == true)
+        #expect(ProtocolRoutingURLProtocol.bodies[2]?.contains(#""agent""#) == false)
+        #expect(ProtocolRoutingURLProtocol.bodies[2]?.contains(#""model""#) == false)
     }
 
     @Test func v2ListAgentsMapsIdAndFiltersPrimary() async throws {

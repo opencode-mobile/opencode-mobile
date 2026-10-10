@@ -128,14 +128,24 @@ class CommandDomainAdapterTest {
                     mode = "build",
                 ),
             )
-        assertEquals("init", request.command)
-        assertEquals("please", request.arguments)
-        assertEquals("build", request.agent)
-        assertEquals("gpt-4", request.model?.id)
-        assertEquals("openai", request.model?.providerId)
-        assertEquals("high", request.model?.variant)
+        assertEquals("init", request.name)
+        assertEquals("please", request.text)
         assertEquals("data:image/png;base64,abc", request.files?.single()?.uri)
         assertEquals("image/png", request.files?.single()?.mime)
+        assertEquals("a.png", request.files?.single()?.name)
         assertEquals("steer", request.delivery)
+        val model =
+            adapter.toV2SwitchModelRequest(
+                CommandRunOptions(
+                    command = "init",
+                    arguments = "please",
+                    model = PromptModelSelection(providerId = "openai", modelId = "gpt-4"),
+                    variant = "high",
+                    mode = "build",
+                ),
+            )
+        assertEquals("gpt-4", model?.model?.id)
+        assertEquals("openai", model?.model?.providerId)
+        assertEquals("high", model?.model?.variant)
     }
 }

@@ -134,16 +134,25 @@ struct CommandDomainAdapterTests {
             )
         )
 
-        #expect(request.command == "init")
-        #expect(request.arguments == "please")
-        #expect(request.agent == "build")
-        #expect(request.model?.id == "gpt-4")
-        #expect(request.model?.providerID == "openai")
-        #expect(request.model?.variant == "high")
+        #expect(request.name == "init")
+        #expect(request.text == "please")
         #expect(request.files?.count == 1)
         #expect(request.files?.first?.uri == "data:image/png;base64,abc")
+        #expect(request.files?.first?.name == "a.png")
         #expect(request.files?.first?.mime == "image/png")
         #expect(request.delivery == "steer")
+        let model = adapter.v2SwitchModelRequest(
+            CommandRunOptions(
+                command: "init",
+                arguments: "please",
+                model: PromptModelSelection(providerID: "openai", modelID: "gpt-4"),
+                variant: "high",
+                mode: "build"
+            )
+        )
+        #expect(model?.model.id == "gpt-4")
+        #expect(model?.model.providerID == "openai")
+        #expect(model?.model.variant == "high")
     }
 
     @Test func toServerCommands_blankDescriptionBecomesNil() {

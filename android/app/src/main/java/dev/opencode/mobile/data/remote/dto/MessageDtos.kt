@@ -2,6 +2,7 @@ package dev.opencode.mobile.data.remote.dto
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 import kotlinx.serialization.json.JsonObject
 
 @Serializable
@@ -179,7 +180,8 @@ data class V2PromptRequestDto(
 data class V2PromptFileDto(
     val uri: String,
     val name: String? = null,
-    val mime: String? = null,
+    /** Used to build a data URL from a local file. Not a wire field. */
+    @Transient val mime: String? = null,
 )
 
 @Serializable

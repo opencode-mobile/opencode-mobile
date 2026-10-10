@@ -108,10 +108,6 @@ object PromptJsonBodyWriter {
                         writer.key("name")
                         writer.writeString(it)
                     }
-                    file.mime?.let {
-                        writer.key("mime")
-                        writer.writeString(it)
-                    }
                     writer.endObject()
                 }
                 writer.endArray()
@@ -201,33 +197,10 @@ object PromptJsonBodyWriter {
     ): File =
         write(directory) { writer ->
             writer.beginObject()
-            writer.key("command")
-            writer.writeString(body.command)
-            body.arguments?.let {
-                writer.key("arguments")
-                writer.writeString(it)
-            }
-            body.agent?.let {
-                writer.key("agent")
-                writer.writeString(it)
-            }
-            body.model?.let { model ->
-                writer.key("model")
-                writer.beginObject()
-                model.id?.let {
-                    writer.key("id")
-                    writer.writeString(it)
-                }
-                model.providerId?.let {
-                    writer.key("providerID")
-                    writer.writeString(it)
-                }
-                model.variant?.let {
-                    writer.key("variant")
-                    writer.writeString(it)
-                }
-                writer.endObject()
-            }
+            writer.key("name")
+            writer.writeString(body.name)
+            writer.key("text")
+            writer.writeString(body.text)
             body.files?.takeIf { it.isNotEmpty() }?.let { files ->
                 writer.key("files")
                 writer.beginArray()
@@ -237,10 +210,6 @@ object PromptJsonBodyWriter {
                     writeFileUri(attachments, index, file.uri, file.mime, writer)
                     file.name?.let {
                         writer.key("name")
-                        writer.writeString(it)
-                    }
-                    file.mime?.let {
-                        writer.key("mime")
                         writer.writeString(it)
                     }
                     writer.endObject()
