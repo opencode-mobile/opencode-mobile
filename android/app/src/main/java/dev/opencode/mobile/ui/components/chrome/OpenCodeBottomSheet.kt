@@ -668,7 +668,9 @@ private fun BottomSheetWindowOverlay(
                 isFocusableInTouchMode = true
                 fitsSystemWindows = false
                 importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
-                accessibilityPaneTitle = paneTitle
+                // setAccessibilityPaneTitle is API 28. ViewCompat keeps the
+                // announcement on 28+ and skips the missing method on 24–27.
+                ViewCompat.setAccessibilityPaneTitle(this, paneTitle)
             }
         ViewCompat.setOnApplyWindowInsetsListener(overlay) { view, insets ->
             view.setPadding(0, 0, 0, 0)
