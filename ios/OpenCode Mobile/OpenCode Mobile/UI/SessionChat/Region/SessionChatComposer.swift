@@ -797,7 +797,7 @@ final class SessionChatComposer {
         do {
             let intent = ComposerSubmitRouting.resolve(
                 text: trimmed,
-                serverCommandNames: Set(state.serverCommands.map(\.name))
+                commands: state.serverCommands
             )
             let hasAttachments = !submittedAttachments.isEmpty
             try await PromptSendProgressReporting.$handler.withValue({ [weak self] sent, total in
@@ -805,6 +805,51 @@ final class SessionChatComposer {
                     self?.applySendProgress(sent: sent, total: total, hasAttachments: hasAttachments)
                 }
             }) {
+                @MainActor
+                func sendPrompt(
+                    text: String,
+                    skillIDs: [String],
+                    mentions: [AgentMention],
+                    sessionID: String,
+                    attachments: [Attachment],
+                    model: ModelSelection,
+                    worktree: String?
+                ) async throws {
+                    func send(delivery: FollowUpDelivery) async throws {
+                        try await messageRepository.sendPromptAsync(
+                            sessionID: sessionID,
+                            options: PromptSendOptions(
+                                text: text,
+                                attachments: attachments,
+                                model: PromptModelSelection(
+                                    providerID: model.option.providerID,
+                                    modelID: model.option.modelID
+                                ),
+                                variant: composer.selectedVariant,
+                                mode: composer.selectedMode,
+                                agentMentions: mentions,
+                                skillIDs: skillIDs,
+                                delivery: delivery
+                            ),
+                            directory: worktree
+                        )
+                    }
+                    do {
+                        try await send(delivery: composer.followUpDelivery)
+                    } catch {
+                        if supportsFollowUp,
+                           composer.followUpDelivery != .queue,
+                           errorMessage(error) == "Session is busy"
+                        {
+                            try await send(delivery: .queue)
+                        } else {
+                            throw error
+                        }
+                    }
+                    if !mentions.isEmpty {
+                        OpenCodeLog.sessionChat.info("prompt send agentParts=\(mentions.count)")
+                    }
+                }
                 switch intent {
                 case let .serverCommand(command, arguments):
                     try await commandRepository.runCommand(
@@ -824,39 +869,25 @@ final class SessionChatComposer {
                         directory: worktree
                     )
                 case let .prompt(text):
-                    func send(delivery: FollowUpDelivery) async throws {
-                        try await messageRepository.sendPromptAsync(
-                            sessionID: sessionID,
-                            options: PromptSendOptions(
-                                text: text,
-                                attachments: submittedAttachments,
-                                model: PromptModelSelection(
-                                    providerID: selectedModel.option.providerID,
-                                    modelID: selectedModel.option.modelID
-                                ),
-                                variant: composer.selectedVariant,
-                                mode: composer.selectedMode,
-                                agentMentions: mentionsForSend,
-                                delivery: delivery
-                            ),
-                            directory: worktree
-                        )
-                    }
-                    do {
-                        try await send(delivery: composer.followUpDelivery)
-                    } catch {
-                        if supportsFollowUp,
-                           composer.followUpDelivery != .queue,
-                           errorMessage(error) == "Session is busy"
-                        {
-                            try await send(delivery: .queue)
-                        } else {
-                            throw error
-                        }
-                    }
-                    if !mentionsForSend.isEmpty {
-                        OpenCodeLog.sessionChat.info("prompt send agentParts=\(mentionsForSend.count)")
-                    }
+                    try await sendPrompt(
+                        text: text,
+                        skillIDs: [],
+                        mentions: mentionsForSend,
+                        sessionID: sessionID,
+                        attachments: submittedAttachments,
+                        model: selectedModel,
+                        worktree: worktree
+                    )
+                case let .skillPrompt(skillID, text):
+                    try await sendPrompt(
+                        text: text,
+                        skillIDs: [skillID],
+                        mentions: [],
+                        sessionID: sessionID,
+                        attachments: submittedAttachments,
+                        model: selectedModel,
+                        worktree: worktree
+                    )
                 }
             }
             persistCurrentSelection(updatePreference: false)

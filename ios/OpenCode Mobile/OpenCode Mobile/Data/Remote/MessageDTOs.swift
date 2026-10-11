@@ -180,19 +180,26 @@ nonisolated struct V2PromptRequestDTO: Codable, Sendable {
     let text: String
     let files: [V2PromptFileDTO]?
     let agents: [V2PromptAgentDTO]?
+    let skills: [V2PromptSkillDTO]?
     let delivery: String
 
     init(
         text: String,
         files: [V2PromptFileDTO]? = nil,
         agents: [V2PromptAgentDTO]? = nil,
+        skills: [V2PromptSkillDTO]? = nil,
         delivery: String = "steer"
     ) {
         self.text = text
         self.files = files
         self.agents = agents
+        self.skills = skills
         self.delivery = delivery
     }
+}
+
+nonisolated struct V2PromptSkillDTO: Codable, Sendable, Equatable {
+    let id: String
 }
 
 nonisolated struct V2PromptFileDTO: Codable, Sendable {

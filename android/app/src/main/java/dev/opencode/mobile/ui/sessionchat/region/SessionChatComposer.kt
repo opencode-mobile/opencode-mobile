@@ -858,10 +858,7 @@ class SessionChatComposer(
                 val intent =
                     ComposerSubmitRouting.resolve(
                         text = prompt,
-                        serverCommandNames =
-                            _state.value.serverCommands
-                                .map { it.name }
-                                .toSet(),
+                        commands = _state.value.serverCommands,
                     )
                 val hasAttachments = attachments.isNotEmpty()
                 val progress =
@@ -869,6 +866,51 @@ class SessionChatComposer(
                         applySendProgress(sent = sent, total = total, hasAttachments = hasAttachments)
                     }
                 withContext(NonCancellable + progress) {
+                    suspend fun sendPrompt(
+                        text: String,
+                        skillIds: List<String>,
+                        mentions: List<dev.opencode.mobile.domain.agent.AgentMention>,
+                    ) {
+                        suspend fun send(delivery: FollowUpDelivery) {
+                            messageRepository.sendPromptAsync(
+                                sessionId = sessionId,
+                                options =
+                                    PromptSendOptions(
+                                        text = text,
+                                        attachments = attachments,
+                                        model =
+                                            PromptModelSelection(
+                                                selectedModel.option.providerId,
+                                                selectedModel.option.modelId,
+                                            ),
+                                        variant = composer.selectedVariant,
+                                        mode = composer.selectedMode,
+                                        agentMentions = mentions,
+                                        skillIds = skillIds,
+                                        delivery = delivery,
+                                    ),
+                                directory = worktree,
+                            )
+                        }
+                        try {
+                            send(composer.followUpDelivery)
+                        } catch (busy: CancellationException) {
+                            throw busy
+                        } catch (busy: Throwable) {
+                            if (
+                                supportsFollowUp &&
+                                composer.followUpDelivery != FollowUpDelivery.Queue &&
+                                errorMessage(busy) == "Session is busy"
+                            ) {
+                                send(FollowUpDelivery.Queue)
+                            } else {
+                                throw busy
+                            }
+                        }
+                        if (mentions.isNotEmpty()) {
+                            logI("prompt send agentParts=${mentions.size}")
+                        }
+                    }
                     when (intent) {
                         is ComposerSubmitIntent.ServerCommand ->
                             commandRepository.runCommand(
@@ -889,46 +931,18 @@ class SessionChatComposer(
                                     ),
                                 directory = worktree,
                             )
-                        is ComposerSubmitIntent.Prompt -> {
-                            suspend fun send(delivery: FollowUpDelivery) {
-                                messageRepository.sendPromptAsync(
-                                    sessionId = sessionId,
-                                    options =
-                                        PromptSendOptions(
-                                            text = intent.text,
-                                            attachments = attachments,
-                                            model =
-                                                PromptModelSelection(
-                                                    selectedModel.option.providerId,
-                                                    selectedModel.option.modelId,
-                                                ),
-                                            variant = composer.selectedVariant,
-                                            mode = composer.selectedMode,
-                                            agentMentions = mentionsForSend,
-                                            delivery = delivery,
-                                        ),
-                                    directory = worktree,
-                                )
-                            }
-                            try {
-                                send(composer.followUpDelivery)
-                            } catch (busy: CancellationException) {
-                                throw busy
-                            } catch (busy: Throwable) {
-                                if (
-                                    supportsFollowUp &&
-                                    composer.followUpDelivery != FollowUpDelivery.Queue &&
-                                    errorMessage(busy) == "Session is busy"
-                                ) {
-                                    send(FollowUpDelivery.Queue)
-                                } else {
-                                    throw busy
-                                }
-                            }
-                            if (mentionsForSend.isNotEmpty()) {
-                                logI("prompt send agentParts=${mentionsForSend.size}")
-                            }
-                        }
+                        is ComposerSubmitIntent.Prompt ->
+                            sendPrompt(
+                                text = intent.text,
+                                skillIds = emptyList(),
+                                mentions = mentionsForSend,
+                            )
+                        is ComposerSubmitIntent.SkillPrompt ->
+                            sendPrompt(
+                                text = intent.text,
+                                skillIds = listOf(intent.skillId),
+                                mentions = emptyList(),
+                            )
                     }
                     persistCurrentSelection(updatePreference = false)
                     _state.update { it.copy(sendProgressPercent = null) }

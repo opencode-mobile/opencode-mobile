@@ -44,12 +44,21 @@ class CommandDomainAdapter {
 
     fun toSkillCommand(dto: V2SkillDto): ServerCommand? {
         if (dto.slash == false) return null
+        val skillId = dto.id?.takeIf { it.isNotBlank() } ?: dto.name
         return ServerCommand(
             name = dto.name,
             description = dto.description?.takeIf { it.isNotBlank() },
             source = ServerCommandSource.Skill,
-            template = skillTemplate(dto.content, dto.location),
+            template = skillTemplate(dto.content, skillLocation(dto)),
+            skillId = skillId,
         )
+    }
+
+    private fun skillLocation(dto: V2SkillDto): String? {
+        dto.location?.takeIf { it.isNotBlank() }?.let { return it }
+        val path = dto.path?.takeIf { it.isNotBlank() } ?: return null
+        if (path == BUILT_IN_SKILL_LOCATION || path.startsWith("/builtin")) return BUILT_IN_SKILL_LOCATION
+        return path
     }
 
     internal fun skillTemplate(

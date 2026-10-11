@@ -4,16 +4,23 @@ enum ComposerSubmitRouting {
     private static let slashSuggestionPattern = /^\/(\S*)$/
 
     static func resolve(text: String, serverCommandNames: Set<String>) -> ComposerSubmitIntent {
+        resolve(text: text, commands: serverCommandNames.map { ServerCommand(name: $0) })
+    }
+
+    static func resolve(text: String, commands: [ServerCommand]) -> ComposerSubmitIntent {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.hasPrefix("/") else {
             return .prompt(text: trimmed)
         }
         let parts = trimmed.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: false)
         let head = String(parts[0].dropFirst())
-        guard !head.isEmpty, serverCommandNames.contains(head) else {
+        guard !head.isEmpty, let match = commands.first(where: { $0.name == head }) else {
             return .prompt(text: trimmed)
         }
         let arguments = parts.count > 1 ? String(parts[1]) : ""
+        if match.source == .skill, let skillID = match.skillID?.trimmingCharacters(in: .whitespacesAndNewlines), !skillID.isEmpty {
+            return .skillPrompt(skillID: skillID, text: arguments)
+        }
         return .serverCommand(command: head, arguments: arguments)
     }
 

@@ -16,10 +16,12 @@ data class V2CommandDto(
 
 @Serializable
 data class V2SkillDto(
+    val id: String? = null,
     val name: String,
     val description: String? = null,
     val slash: Boolean? = null,
     val location: String? = null,
+    val path: String? = null,
     val content: String? = null,
 )
 
