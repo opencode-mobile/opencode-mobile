@@ -1,4 +1,3 @@
-import CoreGraphics
 import Observation
 import SwiftUI
 
@@ -25,21 +24,10 @@ private struct OpenCodeSplitNestingKey: EnvironmentKey {
     static let defaultValue: OpenCodeSplitNesting? = nil
 }
 
-private struct OpenCodeWindowWidthKey: EnvironmentKey {
-    static let defaultValue: CGFloat = 0
-}
-
 extension EnvironmentValues {
     var openCodeSplitNesting: OpenCodeSplitNesting? {
         get { self[OpenCodeSplitNestingKey.self] }
         set { self[OpenCodeSplitNestingKey.self] = newValue }
-    }
-
-    /// Full width of the ancestor sidebar split, so a nested content split can
-    /// decide from the window rather than the already-narrow trailing pane.
-    var openCodeWindowWidth: CGFloat {
-        get { self[OpenCodeWindowWidthKey.self] }
-        set { self[OpenCodeWindowWidthKey.self] = newValue }
     }
 }
 

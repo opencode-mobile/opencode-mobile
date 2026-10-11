@@ -52,17 +52,11 @@ class SplitPanePreferencesCodecTest {
     }
 
     @Test
-    fun contentWidth_isNotClampedToSidebarMaximum() {
+    fun changesAndTerminals_clampToSidebarRange() {
+        assertEquals(480.dp, SplitPanePreferencesCodec.decode(640f, false).leadingWidth)
         assertEquals(
-            560.dp,
-            SplitPanePreferencesCodec.decode(560f, false, OpenCodeSplitPaneScreen.Changes).leadingWidth,
-        )
-        assertEquals(
-            OpenCodeSplitPaneState(leadingWidth = 640.dp, isCollapsed = false),
-            SplitPanePreferencesCodec.sanitize(
-                OpenCodeSplitPaneState(leadingWidth = 640.dp, isCollapsed = false),
-                OpenCodeSplitPaneScreen.Terminals,
-            ),
+            OpenCodeSplitPaneState(leadingWidth = 480.dp, isCollapsed = false),
+            SplitPanePreferencesCodec.sanitize(OpenCodeSplitPaneState(leadingWidth = 640.dp, isCollapsed = false)),
         )
     }
 }

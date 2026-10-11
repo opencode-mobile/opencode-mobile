@@ -35,7 +35,7 @@ final class SplitPanePreferences {
 
     func setState(_ state: OpenCodeSplitPaneState, for screen: OpenCodeSplitPaneScreen) {
         let sanitized = OpenCodeSplitPaneState(
-            leadingWidth: Self.storedWidth(state.leadingWidth, for: screen),
+            leadingWidth: Self.storedWidth(state.leadingWidth),
             isCollapsed: state.isCollapsed
         )
         states[screen] = sanitized
@@ -54,14 +54,9 @@ final class SplitPanePreferences {
     private static func load(_ screen: OpenCodeSplitPaneScreen, from defaults: UserDefaults) -> OpenCodeSplitPaneState {
         let width: CGFloat
         if defaults.object(forKey: StorageKeys.leadingWidth(screen)) == nil {
-            width = screen.usesContentMetrics
-                ? OpenCodeSplitPaneLayout.contentDefaultLeadingWidth
-                : OpenCodeSplitPaneLayout.defaultLeadingWidth
+            width = OpenCodeSplitPaneLayout.defaultLeadingWidth
         } else {
-            width = storedWidth(
-                CGFloat(defaults.double(forKey: StorageKeys.leadingWidth(screen))),
-                for: screen
-            )
+            width = storedWidth(CGFloat(defaults.double(forKey: StorageKeys.leadingWidth(screen))))
         }
         return OpenCodeSplitPaneState(
             leadingWidth: width,
@@ -69,12 +64,8 @@ final class SplitPanePreferences {
         )
     }
 
-    /// Sidebar widths stay inside 280–480. Content widths are clamped to the
-    /// current window when drawn, so a saved 560 is not collapsed to 480 here.
-    private static func storedWidth(_ width: CGFloat, for screen: OpenCodeSplitPaneScreen) -> CGFloat {
-        if screen.usesContentMetrics {
-            return width.isFinite && width > 0 ? width : OpenCodeSplitPaneLayout.contentDefaultLeadingWidth
-        }
-        return OpenCodeSplitPaneLayout.clamp(width: width)
+    /// Every screen keeps its leading pane inside the Home sidebar range.
+    private static func storedWidth(_ width: CGFloat) -> CGFloat {
+        OpenCodeSplitPaneLayout.clamp(width: width)
     }
 }

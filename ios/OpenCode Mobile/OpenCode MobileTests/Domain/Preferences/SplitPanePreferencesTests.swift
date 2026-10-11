@@ -44,13 +44,13 @@ import Testing
         #expect(preferences.state(for: .settings).leadingWidth == 480)
     }
 
-    @Test func setState_keepsContentWidthAboveSidebarMaximum() {
+    @Test func setState_clampsChangesAndTerminalsToSidebarRange() {
         let preferences = SplitPanePreferences(defaults: makeDefaults("contentWidth"))
 
         preferences.setState(OpenCodeSplitPaneState(leadingWidth: 640, isCollapsed: false), for: .changes)
 
-        #expect(preferences.state(for: .changes).leadingWidth == 640)
-        #expect(preferences.state(for: .terminals).leadingWidth == OpenCodeSplitPaneLayout.contentDefaultLeadingWidth)
+        #expect(preferences.state(for: .changes).leadingWidth == 480)
+        #expect(preferences.state(for: .terminals) == .initial)
     }
 
     @Test func storedOutOfRangeWidth_isClampedOnLoad() {

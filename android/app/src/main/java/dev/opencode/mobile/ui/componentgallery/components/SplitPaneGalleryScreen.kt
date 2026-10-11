@@ -41,7 +41,7 @@ fun SplitPaneGalleryScreen(modifier: Modifier = Modifier) {
                     OpenCodeTopBar(title = "Sessions")
                     OpenCodeEmptyState(
                         title = "Leading pane",
-                        message = "Drag the handle to resize. Release below 220dp to close; tap to toggle. Changes and Terminals use the same handle, with a 500dp column floor.",
+                        message = "Drag the handle to resize between 280 and 480dp. Release below 220dp to snap closed; tap to toggle. Home, Changes, and Terminals share this range.",
                         modifier = Modifier.fillMaxSize(),
                     )
                 }

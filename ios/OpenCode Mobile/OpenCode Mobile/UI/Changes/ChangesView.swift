@@ -3,12 +3,11 @@ import SwiftUI
 
 struct ChangesView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.openCodeWindowWidth) private var windowWidth
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var viewModel: ChangesViewModel
     @State private var sourceMenuPresented = false
     @State private var splitSelection: String?
     @State private var pushedPath: String?
-    @State private var localWidth: CGFloat = 0
     @State private var didAttemptDeepLink = false
     /// Filter Analytics fires once per screen; the query text is never sent.
     @State private var loggedFilterEdit = false
@@ -34,26 +33,20 @@ struct ChangesView: View {
         ))
     }
 
-    private var usesContentSplit: Bool {
-        let width = windowWidth > 0 ? windowWidth : localWidth
-        return OpenCodeSplitPaneLayout.usesContentSplit(containerWidth: width)
+    /// Same breakpoint as Home: iPad at regular width keeps the file list beside the diff.
+    private var isSplitLayout: Bool {
+        OpenCodeSplitPaneLayout.usesSplitLayout(horizontalSizeClass: horizontalSizeClass)
     }
 
     var body: some View {
         Group {
-            if usesContentSplit {
+            if isSplitLayout {
                 contentSplit
             } else {
                 stackedChanges
             }
         }
-        .background {
-            GeometryReader { proxy in
-                Color.clear.preference(key: ChangesLocalWidthKey.self, value: proxy.size.width)
-            }
-        }
-        .onPreferenceChange(ChangesLocalWidthKey.self) { localWidth = $0 }
-        .onChange(of: usesContentSplit) { _, split in
+        .onChange(of: isSplitLayout) { _, split in
             if split {
                 if splitSelection == nil { splitSelection = pushedPath }
                 pushedPath = nil
@@ -149,7 +142,7 @@ struct ChangesView: View {
         guard !didAttemptDeepLink, let initialFilePath, !initialFilePath.isEmpty else { return }
         guard case .content(let changeSet) = viewModel.state.phase else { return }
         if changeSet.files.contains(where: { $0.path == initialFilePath }) {
-            if usesContentSplit {
+            if isSplitLayout {
                 splitSelection = initialFilePath
             } else {
                 pushedPath = initialFilePath
@@ -344,15 +337,6 @@ struct ChangesView: View {
             logAction(ProductAnalytics.Action.changesRefresh)
             await viewModel.refresh()
         }
-    }
-}
-
-private struct ChangesLocalWidthKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        let next = nextValue()
-        if next > 0 { value = next }
     }
 }
 

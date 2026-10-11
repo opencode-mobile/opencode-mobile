@@ -99,40 +99,21 @@ import UIKit
         #expect(OpenCodeSplitPaneLayout.liveWidth(proposedWidth: 999) == 480)
     }
 
-    @Test func usesContentSplit_requiresTwoColumnsOf500() {
-        #expect(OpenCodeSplitPaneLayout.usesContentSplit(containerWidth: 834) == false)
-        #expect(OpenCodeSplitPaneLayout.usesContentSplit(containerWidth: 1000) == false)
-        #expect(OpenCodeSplitPaneLayout.usesContentSplit(containerWidth: 1001) == true)
-        #expect(OpenCodeSplitPaneLayout.usesContentSplit(containerWidth: 1194) == true)
-    }
-
-    @Test func contentBounds_keepBothColumnsAtLeast500() {
-        let bounds = OpenCodeSplitPaneLayout.contentBounds(containerWidth: 1194)
-        #expect(bounds.minLeading == 500)
-        #expect(bounds.maxLeading == 693)
-        let narrow = OpenCodeSplitPaneLayout.resolveDragEnd(
-            previous: OpenCodeSplitPaneState(leadingWidth: 560, isCollapsed: false),
+    @Test func everyScreen_usesTheHomeSidebarRange() {
+        let bounds = OpenCodeSplitPaneLayout.sidebarBounds
+        #expect(bounds.minLeading == 280)
+        #expect(bounds.maxLeading == 480)
+        #expect(bounds.collapseThreshold == 220)
+        #expect(OpenCodeSplitPaneScreen.home.collapsesAncestorSidebar == false)
+        #expect(OpenCodeSplitPaneScreen.settings.collapsesAncestorSidebar == false)
+        #expect(OpenCodeSplitPaneScreen.changes.collapsesAncestorSidebar)
+        #expect(OpenCodeSplitPaneScreen.terminals.collapsesAncestorSidebar)
+        let resized = OpenCodeSplitPaneLayout.resolveDragEnd(
+            previous: OpenCodeSplitPaneState(leadingWidth: 360, isCollapsed: false),
             proposedWidth: 300,
             bounds: bounds
         )
-        #expect(narrow == OpenCodeSplitPaneState(leadingWidth: 500, isCollapsed: false))
-        let wide = OpenCodeSplitPaneLayout.resolveDragEnd(
-            previous: OpenCodeSplitPaneState(leadingWidth: 560, isCollapsed: false),
-            proposedWidth: 900,
-            bounds: bounds
-        )
-        #expect(wide.leadingWidth == 693)
-        #expect(1194 - wide.leadingWidth - OpenCodeSplitPaneLayout.dividerWidth >= 500)
-    }
-
-    @Test func contentDrag_belowCollapseThreshold_snapsClosed() {
-        let bounds = OpenCodeSplitPaneLayout.contentBounds(containerWidth: 1180)
-        let state = OpenCodeSplitPaneLayout.resolveDragEnd(
-            previous: OpenCodeSplitPaneState(leadingWidth: 560, isCollapsed: false),
-            proposedWidth: 200,
-            bounds: bounds
-        )
-        #expect(state == OpenCodeSplitPaneState(leadingWidth: 560, isCollapsed: true))
+        #expect(resized == OpenCodeSplitPaneState(leadingWidth: 300, isCollapsed: false))
     }
 
     @Test func displayedCollapsed_overlaysNestedSplitWithoutReplacingPersistedFlag() {

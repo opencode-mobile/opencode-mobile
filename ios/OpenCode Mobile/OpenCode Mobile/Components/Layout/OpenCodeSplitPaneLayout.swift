@@ -10,9 +10,9 @@ enum OpenCodeSplitPaneScreen: String, CaseIterable, Sendable {
     case changes
     case terminals
 
-    /// Sidebar panes use a fixed 280–480 leading width. Content panes keep both
-    /// columns at least 500 when the window can hold them.
-    var usesContentMetrics: Bool {
+    /// Changes and Terminals are content splits: opening one inside Home collapses
+    /// that sidebar for the visit. Leading-pane resize matches Home on every screen.
+    var collapsesAncestorSidebar: Bool {
         switch self {
         case .home, .settings:
             false
@@ -61,7 +61,7 @@ enum OpenCodeSplitPaneLayout {
     /// Drags shorter than this count as a tap on the handle.
     static let tapSlop: CGFloat = 4
 
-    /// Home and Settings split only on iPad at regular width. Phones stay stacked in
+    /// Tablet split only on iPad at regular width. Phones stay stacked in
     /// every orientation, including large iPhones in landscape (regular width), and
     /// iPad Slide Over or narrow Split View (compact width) stays stacked too.
     static func usesSplitLayout(
@@ -75,16 +75,6 @@ enum OpenCodeSplitPaneLayout {
         usesSplitLayout(idiom: UIDevice.current.userInterfaceIdiom, horizontalSizeClass: horizontalSizeClass)
     }
 
-    /// Neither column of a Changes or Terminals split may settle narrower than this.
-    static let minContentColumn: CGFloat = 500
-    /// Remembered open width for a content split before the user drags.
-    static let contentDefaultLeadingWidth: CGFloat = 560
-
-    /// Smallest window that can show two content columns plus the divider.
-    static var contentSplitMinimumWidth: CGFloat {
-        minContentColumn * 2 + dividerWidth
-    }
-
     static let sidebarBounds = OpenCodeSplitPaneBounds(
         minLeading: minLeadingWidth,
         maxLeading: maxLeadingWidth,
@@ -92,25 +82,6 @@ enum OpenCodeSplitPaneLayout {
         collapseThreshold: collapseThreshold,
         reopenThreshold: reopenThreshold
     )
-
-    static func usesContentSplit(containerWidth: CGFloat) -> Bool {
-        containerWidth.isFinite && containerWidth >= contentSplitMinimumWidth
-    }
-
-    static func contentBounds(containerWidth: CGFloat) -> OpenCodeSplitPaneBounds {
-        let maxLeading = max(minContentColumn, containerWidth - minContentColumn - dividerWidth)
-        return OpenCodeSplitPaneBounds(
-            minLeading: minContentColumn,
-            maxLeading: maxLeading,
-            defaultLeading: min(maxLeading, max(minContentColumn, contentDefaultLeadingWidth)),
-            collapseThreshold: collapseThreshold,
-            reopenThreshold: reopenThreshold
-        )
-    }
-
-    static func bounds(for screen: OpenCodeSplitPaneScreen, containerWidth: CGFloat) -> OpenCodeSplitPaneBounds {
-        screen.usesContentMetrics ? contentBounds(containerWidth: containerWidth) : sidebarBounds
-    }
 
     /// Home's persisted collapsed flag, overlaid while a nested content split is showing.
     /// The overlay is not written back to preferences.
