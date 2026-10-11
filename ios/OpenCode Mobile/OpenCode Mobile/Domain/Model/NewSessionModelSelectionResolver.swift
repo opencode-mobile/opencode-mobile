@@ -2,18 +2,21 @@ import Foundation
 
 struct NewSessionModelSelectionResolver: Sendable {
     private let store: any SessionModelSelectionStore
-    private let modelRepository: any ModelRepository
+    private let modelCatalogStore: ModelCatalogStore
 
-    init(store: any SessionModelSelectionStore, modelRepository: any ModelRepository) {
+    init(store: any SessionModelSelectionStore, modelCatalogStore: ModelCatalogStore) {
         self.store = store
-        self.modelRepository = modelRepository
+        self.modelCatalogStore = modelCatalogStore
     }
 
     func resolve(profile: ConnectionProfile, worktree: String) async -> SessionModelSelection? {
         let identity = ModelSelectionConnectionIdentity(serverBaseURL: profile.baseURL, username: profile.username)
         async let preferenceLoad = store.loadNewSessionPreference(connectionIdentity: identity, worktree: worktree)
-        async let catalogLoad = try? modelRepository.listModelOptions(directory: worktree)
-        let (preference, loadedCatalog) = await (preferenceLoad, catalogLoad)
+        async let catalogLoad = try? modelCatalogStore.refreshCatalog(worktree: worktree)
+        let (preference, fetchedCatalog) = await (preferenceLoad, catalogLoad)
+        let loadedCatalog = fetchedCatalog.flatMap { $0.isEmpty ? nil : $0 }
+            ?? modelCatalogStore.peek(worktree: worktree)?.catalog
+            ?? fetchedCatalog
         guard let catalog = loadedCatalog else {
             OpenCodeLog.sessionChat.warning("newSessionModel catalog load failed")
             return nil
@@ -46,6 +49,7 @@ struct NewSessionModelSelectionResolver: Sendable {
             sessionID: sessionID,
             selection: selection
         )
+        modelCatalogStore.recordSelection(selection, worktree: worktree, sessionID: sessionID)
         OpenCodeLog.sessionChat.info("newSessionModel session handoff saved")
     }
 }
