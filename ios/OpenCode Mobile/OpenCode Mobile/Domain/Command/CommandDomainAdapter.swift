@@ -100,6 +100,14 @@ struct CommandDomainAdapter: Sendable {
                 return .http(statusCode: code, message: message)
             }
         }
+        if let apiError = error as? MessagesAPIError {
+            switch apiError {
+            case .invalidResponse, .noActiveConnection:
+                return .transport("Invalid response")
+            case let .httpStatus(code, message):
+                return .http(statusCode: code, message: message)
+            }
+        }
         if error is DecodingError {
             return .decoding(error.localizedDescription)
         }

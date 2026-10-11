@@ -214,4 +214,15 @@ struct CommandDomainAdapterTests {
         let decodingError = DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "bad"))
         #expect(adapter.mapError(decodingError) == .decoding(decodingError.localizedDescription))
     }
+
+    @Test func mapError_mapsV2SwitchHttpFailuresToHttpNotTransport() {
+        #expect(
+            adapter.mapError(MessagesAPIError.httpStatus(400, "unknown agent"))
+                == .http(statusCode: 400, message: "unknown agent")
+        )
+        #expect(adapter.mapError(MessagesAPIError.noActiveConnection) == .transport("Invalid response"))
+        #expect(adapter.mapError(MessagesAPIError.invalidResponse) == .transport("Invalid response"))
+        let offline = URLError(.notConnectedToInternet)
+        #expect(adapter.mapError(offline) == .transport(TransportFailure.captured(from: offline)))
+    }
 }

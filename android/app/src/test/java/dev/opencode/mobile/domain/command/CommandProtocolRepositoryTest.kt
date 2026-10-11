@@ -248,6 +248,38 @@ class CommandProtocolRepositoryTest {
             }
         }
 
+    @Test
+    fun v2RunCommand_agentSwitchHttp400_surfacesHttpErrorNotTransport() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respond("unknown agent", HttpStatusCode.BadRequest)
+                }
+            val repository =
+                DefaultCommandRepository(
+                    CommandsApi(client, json),
+                    CommandDomainAdapter(),
+                    MessagesApi(client, json),
+                    activeConnectionManager = manager(ServerProtocol.V2),
+                )
+
+            try {
+                repository.runCommand(
+                    "ses_1",
+                    CommandRunOptions(command = "init", arguments = "", mode = "missing"),
+                    "/repo",
+                )
+                fail("expected CommandError.Http")
+            } catch (error: CommandError.Http) {
+                assertEquals(400, error.statusCode)
+                assertEquals("unknown agent", error.message)
+            }
+            assertEquals(1, requests.size)
+            assertTrue(requests[0].url.encodedPath.endsWith("/api/session/ses_1/agent"))
+        }
+
     private suspend fun manager(protocol: ServerProtocol): ActiveConnectionManager {
         val manager = ActiveConnectionManager(FakeProfileStore())
         manager.applyProfile(
