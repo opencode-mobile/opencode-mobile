@@ -149,6 +149,182 @@ struct TerminalsCatalogViewModelTests {
         #expect(viewModel.rows.map(\.id) == ["pty_1"])
     }
 
+    @Test func appear_exposesProjectsFromAddedWorktrees() async {
+        let viewModel = makeViewModel(
+            repository: FakeCatalogTerminalRepository(running: []),
+            worktrees: ["/Users/ivan/Projects/opencode-mobile", "/Users/ivan/Projects/playground"]
+        )
+
+        await viewModel.appear()
+
+        #expect(
+            viewModel.projects == [
+                TerminalCatalogProject(worktree: "/Users/ivan/Projects/opencode-mobile", title: "opencode-mobile"),
+                TerminalCatalogProject(worktree: "/Users/ivan/Projects/playground", title: "playground"),
+            ]
+        )
+    }
+
+    @Test func showProjectPicker_setsVisible_dismissClearsVisibleAndCreateError() async {
+        let repository = FakeCatalogTerminalRepository(
+            running: [],
+            createError: TerminalError.transport("nope")
+        )
+        let viewModel = makeViewModel(repository: repository, worktrees: ["/repo"])
+
+        await viewModel.appear()
+        viewModel.showProjectPicker()
+        #expect(viewModel.isProjectPickerVisible)
+
+        _ = await viewModel.createShell(worktree: "/repo")
+        #expect(viewModel.createError == "Could not start a shell.")
+
+        viewModel.dismissProjectPicker()
+
+        #expect(!viewModel.isProjectPickerVisible)
+        #expect(viewModel.createError == nil)
+    }
+
+    @Test func createShell_createsWithDirectoryAndCwd_prependsRow() async {
+        let repository = FakeCatalogTerminalRepository(
+            running: [RunningTerminal(directory: "/repo", session: session(id: "pty_1", title: "zsh"))]
+        )
+        let viewModel = makeViewModel(repository: repository, worktrees: ["/repo", "/play"])
+
+        await viewModel.appear()
+        viewModel.showProjectPicker()
+        let row = await viewModel.createShell(worktree: "/play")
+
+        #expect(
+            row == TerminalCatalogRow(
+                id: "pty_created",
+                title: "zsh",
+                projectTitle: "play",
+                worktree: "/play"
+            )
+        )
+        #expect(viewModel.rows.first == row)
+        #expect(viewModel.rows.map(\.id) == ["pty_created", "pty_1"])
+        #expect(repository.created.map(\.directory) == ["/play"])
+        #expect(repository.created.map(\.cwd) == ["/play"])
+        #expect(repository.ensureRunningCalls == 0)
+        #expect(!viewModel.isProjectPickerVisible)
+        #expect(viewModel.createError == nil)
+    }
+
+    @Test func createShell_failure_leavesRowsUnchanged() async {
+        let repository = FakeCatalogTerminalRepository(
+            running: [RunningTerminal(directory: "/repo", session: session(id: "pty_1", title: "zsh"))],
+            createError: TerminalError.transport("nope")
+        )
+        let viewModel = makeViewModel(repository: repository, worktrees: ["/repo"])
+
+        await viewModel.appear()
+        viewModel.showProjectPicker()
+        let result = await viewModel.createShell(worktree: "/repo")
+
+        #expect(result == nil)
+        #expect(viewModel.rows.map(\.id) == ["pty_1"])
+        #expect(viewModel.isProjectPickerVisible)
+        #expect(viewModel.createError == "Could not start a shell.")
+        #expect(repository.created.map(\.directory) == ["/repo"])
+        #expect(repository.ensureRunningCalls == 0)
+    }
+
+    @Test func createShell_whileCreating_doesNotCallCreateAgain() async {
+        let repository = FakeCatalogTerminalRepository(running: [], hangCreate: true)
+        let viewModel = makeViewModel(repository: repository, worktrees: ["/repo"])
+
+        await viewModel.appear()
+        let first = Task { await viewModel.createShell(worktree: "/repo") }
+        await waitUntil { repository.created.count == 1 }
+        defer { repository.resumeHungCreate() }
+
+        let second = await viewModel.createShell(worktree: "/repo")
+
+        #expect(second == nil)
+        #expect(repository.created.count == 1)
+
+        repository.resumeHungCreate()
+        let row = await first.value
+        #expect(row?.id == "pty_created")
+    }
+
+    @Test func createShell_unknownWorktree_doesNotCreate() async {
+        let repository = FakeCatalogTerminalRepository(running: [])
+        let viewModel = makeViewModel(repository: repository, worktrees: ["/repo"])
+
+        await viewModel.appear()
+        viewModel.showProjectPicker()
+        let result = await viewModel.createShell(worktree: "/unknown")
+
+        #expect(result == nil)
+        #expect(repository.created.isEmpty)
+        #expect(viewModel.isProjectPickerVisible)
+        #expect(viewModel.rows.isEmpty)
+    }
+
+    @Test func createShell_refreshReturnsNewPtyWhileCreateInFlight_keepsSingleRow() async {
+        let repository = FakeCatalogTerminalRepository(
+            running: [RunningTerminal(directory: "/repo", session: session(id: "pty_1", title: "term"))],
+            hangCreate: true
+        )
+        let viewModel = makeViewModel(repository: repository, worktrees: ["/repo"])
+
+        await viewModel.appear()
+        let create = Task { await viewModel.createShell(worktree: "/repo") }
+        await waitUntil { repository.created.count == 1 }
+        repository.running = [
+            RunningTerminal(directory: "/repo", session: session(id: "pty_1", title: "term")),
+            RunningTerminal(directory: "/repo", session: session(id: "pty_created", title: "zsh")),
+        ]
+        await viewModel.appear()
+        repository.resumeHungCreate()
+        _ = await create.value
+
+        let keys = viewModel.rows.map(\.worktreeAndId)
+        #expect(keys.filter { $0 == "/repo:pty_created" }.count == 1)
+        #expect(Set(keys).count == keys.count)
+        #expect(Set(viewModel.rows.map(\.id)) == ["pty_1", "pty_created"])
+    }
+
+    @Test func createShell_staleRefreshLandingAfterCreate_keepsCreatedRow() async {
+        let repository = FakeCatalogTerminalRepository(
+            running: [RunningTerminal(directory: "/repo", session: session(id: "pty_1", title: "term"))]
+        )
+        let viewModel = makeViewModel(repository: repository, worktrees: ["/repo"])
+
+        await viewModel.appear()
+        repository.hangList = true
+        let refresh = Task { await viewModel.appear() }
+        await waitUntil { repository.listedDirectories.count == 2 }
+        _ = await viewModel.createShell(worktree: "/repo")
+        repository.resumeHungList()
+        await refresh.value
+
+        #expect(viewModel.rows.map(\.id) == ["pty_created", "pty_1"])
+    }
+
+    @Test func appear_startedAfterCreate_isAuthoritative() async {
+        let repository = FakeCatalogTerminalRepository(
+            running: [RunningTerminal(directory: "/repo", session: session(id: "pty_1", title: "term"))]
+        )
+        let viewModel = makeViewModel(repository: repository, worktrees: ["/repo"])
+
+        await viewModel.appear()
+        _ = await viewModel.createShell(worktree: "/repo")
+        await viewModel.appear()
+
+        #expect(viewModel.rows.map(\.id) == ["pty_1"])
+    }
+
+    private func waitUntil(_ condition: @MainActor () -> Bool) async {
+        for _ in 0 ..< 50 {
+            if condition() { return }
+            await Task.yield()
+        }
+    }
+
     private func makeViewModel(
         repository: FakeCatalogTerminalRepository,
         worktrees: [String]
@@ -182,12 +358,26 @@ struct TerminalsCatalogViewModelTests {
 }
 
 private final class FakeCatalogTerminalRepository: TerminalRepository, @unchecked Sendable {
-    private let running: [RunningTerminal]
+    var running: [RunningTerminal]
+    private let createError: Error?
+    private let hangCreate: Bool
+    private let hangLock = NSLock()
+    private var hangContinuation: CheckedContinuation<Void, Never>?
+    var hangList = false
+    private var listContinuation: CheckedContinuation<Void, Never>?
     var listedDirectories: [[String]] = []
     var removed: [(String, String)] = []
+    var created: [(directory: String, cwd: String)] = []
+    var ensureRunningCalls = 0
 
-    init(running: [RunningTerminal]) {
+    init(
+        running: [RunningTerminal],
+        createError: Error? = nil,
+        hangCreate: Bool = false
+    ) {
         self.running = running
+        self.createError = createError
+        self.hangCreate = hangCreate
     }
 
     func list(directory: String) async throws -> [TerminalSession] {
@@ -195,7 +385,36 @@ private final class FakeCatalogTerminalRepository: TerminalRepository, @unchecke
     }
 
     func create(directory: String, cwd: String) async throws -> TerminalSession {
-        throw TerminalError.transport("unused")
+        created.append((directory, cwd))
+        if hangCreate {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                hangLock.lock()
+                hangContinuation = continuation
+                hangLock.unlock()
+            }
+        }
+        if let createError { throw createError }
+        return TerminalSession(
+            id: "pty_created",
+            title: "zsh",
+            command: "/bin/zsh",
+            cwd: directory,
+            status: .running
+        )
+    }
+
+    func resumeHungCreate() {
+        hangLock.lock()
+        hangContinuation?.resume()
+        hangContinuation = nil
+        hangLock.unlock()
+    }
+
+    func resumeHungList() {
+        hangLock.lock()
+        listContinuation?.resume()
+        listContinuation = nil
+        hangLock.unlock()
     }
 
     func get(id: String, directory: String) async throws -> TerminalSession {
@@ -207,6 +426,7 @@ private final class FakeCatalogTerminalRepository: TerminalRepository, @unchecke
     }
 
     func ensureRunning(directory: String) async throws -> TerminalSession {
+        ensureRunningCalls += 1
         throw TerminalError.transport("unused")
     }
 
@@ -216,7 +436,15 @@ private final class FakeCatalogTerminalRepository: TerminalRepository, @unchecke
 
     func listRunning(directories: [String]) async throws -> [RunningTerminal] {
         listedDirectories.append(directories)
-        return running.filter { directories.contains($0.directory) }
+        let snapshot = running
+        if hangList {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                hangLock.lock()
+                listContinuation = continuation
+                hangLock.unlock()
+            }
+        }
+        return snapshot.filter { directories.contains($0.directory) }
     }
 
     func connectRequest(
