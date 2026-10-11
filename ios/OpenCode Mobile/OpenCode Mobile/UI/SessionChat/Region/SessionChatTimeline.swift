@@ -42,8 +42,9 @@ final class SessionChatTimeline {
     /// Test-only: runs after a frame revision is taken, before off-main build.
     static var applyTestGate: (@MainActor () async -> Void)?
     /// Wait before looking up child sessions, so a live `tool.progress` can link
-    /// a just-started subagent first.
+    /// a just-started subagent first. Doubles before each retry of a failed lookup.
     static var childSessionLookupDelay: Duration = .milliseconds(1_500)
+    static let childSessionLookupAttempts = 3
 
     init(
         sessionID: String,
@@ -112,7 +113,8 @@ final class SessionChatTimeline {
     /// Looks up this session's children when a subagent part has no child id
     /// (history reloads drop the one-shot `tool.progress` id), then re-projects
     /// so its row or chip can open the child. Each unlinked part is looked up
-    /// once; a later reload with a new unlinked part looks up again.
+    /// once; a later reload with a new unlinked part looks up again. A failed
+    /// fetch retries with backoff.
     private func scheduleChildSessionLookup() {
         guard listChildSessions != nil, childSessionLookupTask == nil else { return }
         guard !lastLoadedMessages.isEmpty, !OptimisticSessionCreate.isPlaceholder(sessionID) else { return }
@@ -120,26 +122,34 @@ final class SessionChatTimeline {
         guard !unlinked.isSubset(of: childSessionLookupPartIDs) else { return }
         let lookupSessionID = sessionID
         childSessionLookupTask = Task { [weak self] in
-            try? await Task.sleep(for: Self.childSessionLookupDelay)
-            await self?.lookUpChildSessions(sessionID: lookupSessionID)
+            var delay = Self.childSessionLookupDelay
+            for attempt in 1...Self.childSessionLookupAttempts {
+                try? await Task.sleep(for: delay)
+                guard let self, !Task.isCancelled, lookupSessionID == self.sessionID else { return }
+                let retry = await self.lookUpChildSessions(sessionID: lookupSessionID, attempt: attempt)
+                guard retry else { break }
+                delay *= 2
+            }
+            guard let self, !Task.isCancelled, lookupSessionID == self.sessionID else { return }
+            self.childSessionLookupTask = nil
         }
     }
 
-    private func lookUpChildSessions(sessionID lookupSessionID: String) async {
-        defer { childSessionLookupTask = nil }
-        guard !Task.isCancelled, lookupSessionID == sessionID, let listChildSessions else { return }
+    /// Returns true when the fetch failed and should be retried.
+    private func lookUpChildSessions(sessionID lookupSessionID: String, attempt: Int) async -> Bool {
+        guard let listChildSessions else { return false }
         let unlinked = SessionChatChildSessionLinker.unlinkedPartIDs(in: lastLoadedMessages)
-        guard !unlinked.isSubset(of: childSessionLookupPartIDs) else { return }
+        guard !unlinked.isSubset(of: childSessionLookupPartIDs) else { return false }
         let sessions: [Session]
         do {
             sessions = try await listChildSessions(lookupSessionID)
         } catch {
             OpenCodeLog.sessionChat.warning(
-                "childSessions lookup failed session=\(lookupSessionID) error=\(String(describing: error))"
+                "childSessions lookup failed session=\(lookupSessionID) attempt=\(attempt) error=\(String(describing: error))"
             )
-            return
+            return true
         }
-        guard !Task.isCancelled, lookupSessionID == sessionID else { return }
+        guard !Task.isCancelled, lookupSessionID == sessionID else { return false }
         childSessionLookupPartIDs.formUnion(unlinked)
         let candidates = sessions
             .filter { !$0.isArchived }
@@ -147,9 +157,9 @@ final class SessionChatTimeline {
         OpenCodeLog.sessionChat.info(
             "childSessions lookup session=\(lookupSessionID) unlinked=\(unlinked.count) children=\(candidates.count)"
         )
-        guard candidates != childSessions else { return }
+        guard candidates != childSessions else { return false }
         childSessions = candidates
-        guard !lastLoadedDisplayMessages.isEmpty else { return }
+        guard !lastLoadedDisplayMessages.isEmpty else { return false }
         await applyLoadedDisplayMessagesTransform(
             lastLoadedDisplayMessages,
             isRefreshing: false,
@@ -157,6 +167,7 @@ final class SessionChatTimeline {
             messagesFromCache: state.messagesFromCache,
             expirePendingPromptPatches: false
         )
+        return false
     }
 
     func reset() {

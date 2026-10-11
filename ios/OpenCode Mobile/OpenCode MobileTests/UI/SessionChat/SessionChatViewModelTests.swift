@@ -3216,6 +3216,71 @@ struct SessionChatViewModelTests {
         #expect(sessionRepository.childSessionRequests == ["ses-1"])
     }
 
+    @Test func childSessionLookupFailure_retriesAndLinks() async {
+        let previousDelay = SessionChatTimeline.childSessionLookupDelay
+        SessionChatTimeline.childSessionLookupDelay = .zero
+        defer { SessionChatTimeline.childSessionLookupDelay = previousDelay }
+        let sessionRepository = FakeChatSessionRepository(sessionStatusType: "busy")
+        sessionRepository.childSessionFailuresRemaining = 1
+        sessionRepository.childSessions = [
+            Session(
+                id: "ses-child",
+                title: "Find git projects",
+                slug: nil,
+                projectID: nil,
+                directory: nil,
+                parentID: "ses-1",
+                createdAtEpochMs: 1,
+                updatedAtEpochMs: nil
+            ),
+        ]
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(
+                messages: [
+                    Message(
+                        id: "msg-1",
+                        role: .assistant,
+                        text: "",
+                        parts: [
+                            .tool(
+                                ToolPart(
+                                    id: "prt-1",
+                                    toolName: "subagent",
+                                    status: .running,
+                                    input: [
+                                        "agent": .string("general"),
+                                        "description": .string("Find git projects"),
+                                    ],
+                                    metadata: [:]
+                                )
+                            ),
+                        ],
+                        model: nil,
+                        mode: nil,
+                        sentAtEpochMs: nil
+                    ),
+                ]
+            ),
+            sessionRepository: sessionRepository
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+
+        let linked = await waitUntil {
+            viewModel.uiState.messages.contains { row in
+                row.blocks.contains { block in
+                    if case .childSessionRow(_, let child) = block {
+                        return child.childSessionId == "ses-child"
+                    }
+                    return false
+                }
+            }
+        }
+
+        #expect(linked)
+        #expect(sessionRepository.childSessionRequests == ["ses-1", "ses-1"])
+    }
+
     @Test func abortSession_parentSuccessChildFailure_clearsWorking() async {
         let sessionRepository = FakeChatSessionRepository(
             sessionStatusType: "busy",
@@ -4611,6 +4676,7 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
 
     private let sessions: [Session]
     var childSessions: [Session] = []
+    var childSessionFailuresRemaining = 0
     private(set) var childSessionRequests: [String] = []
     private let pendingPermissions: [PermissionRequest]
     private let pendingQuestions: [QuestionRequest]
@@ -4809,6 +4875,10 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
     }
     func listChildSessions(id: String) async throws -> [Session] {
         childSessionRequests.append(id)
+        if childSessionFailuresRemaining > 0 {
+            childSessionFailuresRemaining -= 1
+            throw SessionError.http(statusCode: 503, message: "unavailable")
+        }
         return childSessions
     }
     func listSessionTodos(id: String, directory: String?) async throws -> [SessionTodo] { fatalError() }

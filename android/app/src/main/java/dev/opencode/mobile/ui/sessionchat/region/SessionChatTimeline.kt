@@ -33,6 +33,7 @@ import dev.opencode.mobile.ui.sessionchat.TimelineDisplayOrder
 import dev.opencode.mobile.ui.sessionchat.TimelineFrame
 import dev.opencode.mobile.ui.sessionchat.TimelineProjector
 import dev.opencode.mobile.ui.sessionchat.TimelineRow
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -53,7 +54,7 @@ class SessionChatTimeline(
 
     /**
      * Wait before looking up child sessions, so a live `tool.progress` can link
-     * a just-started subagent first.
+     * a just-started subagent first. Doubles before each retry of a failed lookup.
      */
     var childSessionLookupDelayMs: Long = 1_500L
 
@@ -982,7 +983,8 @@ class SessionChatTimeline(
      * Looks up this session's children when a subagent part has no child id
      * (history reloads drop the one-shot `tool.progress` id), then re-projects
      * so its row or chip can open the child. Each unlinked part is looked up
-     * once; a later reload with a new unlinked part looks up again.
+     * once; a later reload with a new unlinked part looks up again. A failed
+     * fetch retries with backoff.
      */
     private fun scheduleChildSessionLookup(
         sessionId: String,
@@ -993,36 +995,55 @@ class SessionChatTimeline(
         if (!hasNewUnlinkedSubagent()) return
         childSessionLookupJob =
             scope.launch {
-                delay(childSessionLookupDelayMs)
-                if (!isCurrentBinding(sessionId, worktree)) return@launch
-                val unlinked = SessionChatChildSessionLinker.unlinkedPartIds(lastLoadedMessages)
-                if (childSessionLookupPartIds.containsAll(unlinked)) return@launch
-                val sessions =
-                    runCatching { withContext(ioDispatcher) { listChildSessions(sessionId) } }
-                        .getOrElse { throwable ->
-                            logE("childSessions lookup failed session=$sessionId", throwable)
-                            return@launch
-                        }
-                if (!isCurrentBinding(sessionId, worktree)) return@launch
-                childSessionLookupPartIds = childSessionLookupPartIds + unlinked
-                val candidates =
-                    sessions
-                        .filterNot { it.isArchived }
-                        .map { SessionChatChildSessionCandidate(it.id, it.title, it.createdAtEpochMs) }
-                logI("childSessions lookup session=$sessionId unlinked=${unlinked.size} children=${candidates.size}")
-                if (candidates == childSessions) return@launch
-                childSessions = candidates
-                if (lastLoadedDisplayMessages.isNotEmpty()) {
-                    applyLoadedDisplayMessages(
-                        displayMessages = lastLoadedDisplayMessages,
-                        sourceSessionId = sessionId,
-                        sourceWorktree = worktree,
-                        fromQuietRefresh = true,
-                        source = SOURCE_CHILD_SESSIONS,
-                        messagesFromCache = _state.value.messagesFromCache,
-                    )
+                var delayMs = childSessionLookupDelayMs
+                for (attempt in 1..CHILD_SESSION_LOOKUP_ATTEMPTS) {
+                    delay(delayMs)
+                    if (!isCurrentBinding(sessionId, worktree)) return@launch
+                    val retry = lookUpChildSessions(listChildSessions, sessionId, worktree, attempt)
+                    if (!retry) return@launch
+                    delayMs *= 2
                 }
             }
+    }
+
+    /** Returns true when the fetch failed and should be retried. */
+    private suspend fun lookUpChildSessions(
+        listChildSessions: suspend (String) -> List<Session>,
+        sessionId: String,
+        worktree: String,
+        attempt: Int,
+    ): Boolean {
+        val unlinked = SessionChatChildSessionLinker.unlinkedPartIds(lastLoadedMessages)
+        if (childSessionLookupPartIds.containsAll(unlinked)) return false
+        val sessions =
+            try {
+                withContext(ioDispatcher) { listChildSessions(sessionId) }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (throwable: Throwable) {
+                logE("childSessions lookup failed session=$sessionId attempt=$attempt", throwable)
+                return true
+            }
+        if (!isCurrentBinding(sessionId, worktree)) return false
+        childSessionLookupPartIds = childSessionLookupPartIds + unlinked
+        val candidates =
+            sessions
+                .filterNot { it.isArchived }
+                .map { SessionChatChildSessionCandidate(it.id, it.title, it.createdAtEpochMs) }
+        logI("childSessions lookup session=$sessionId unlinked=${unlinked.size} children=${candidates.size}")
+        if (candidates == childSessions) return false
+        childSessions = candidates
+        if (lastLoadedDisplayMessages.isNotEmpty()) {
+            applyLoadedDisplayMessages(
+                displayMessages = lastLoadedDisplayMessages,
+                sourceSessionId = sessionId,
+                sourceWorktree = worktree,
+                fromQuietRefresh = true,
+                source = SOURCE_CHILD_SESSIONS,
+                messagesFromCache = _state.value.messagesFromCache,
+            )
+        }
+        return false
     }
 
     private fun hasNewUnlinkedSubagent(): Boolean =
@@ -1169,5 +1190,6 @@ class SessionChatTimeline(
         private const val TAG = "SessionChatTimeline"
         private const val SOURCE_PENDING_PROMPT = "pending-prompt"
         private const val SOURCE_CHILD_SESSIONS = "child-sessions"
+        private const val CHILD_SESSION_LOOKUP_ATTEMPTS = 3
     }
 }

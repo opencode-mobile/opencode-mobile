@@ -4358,6 +4358,66 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun childSessionLookupFailure_retriesAndLinks() =
+        runTest(testDispatcher) {
+            val sessionRepository =
+                FakeSessionRepository(
+                    sessionStatusType = "busy",
+                    childSessions =
+                        listOf(
+                            Session(
+                                id = "ses-child",
+                                title = "Find git projects",
+                                parentId = "ses-1",
+                                createdAtEpochMs = 1L,
+                            ),
+                        ),
+                )
+            val viewModel =
+                createViewModel(
+                    repository =
+                        FakeMessageRepository(
+                            messages =
+                                listOf(
+                                    Message(
+                                        id = "msg-1",
+                                        role = MessageRole.Assistant,
+                                        text = "",
+                                        parts =
+                                            listOf(
+                                                MessagePart.Tool(
+                                                    toolName = "subagent",
+                                                    status = ToolStatus.Running,
+                                                    id = "prt-1",
+                                                    input =
+                                                        buildJsonObject {
+                                                            put("agent", "general")
+                                                            put("description", "Find git projects")
+                                                        },
+                                                    metadata = buildJsonObject {},
+                                                ),
+                                            ),
+                                    ),
+                                ),
+                        ),
+                    sessionRepository = sessionRepository,
+                )
+            sessionRepository.childSessionFailuresRemaining = 1
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertTrue(
+                viewModel.uiState.value.messages.any { message ->
+                    message.blocks.any { block ->
+                        block is SessionChatTimelineBlock.ChildSessionRow &&
+                            block.childSessionId == "ses-child"
+                    }
+                },
+            )
+            assertEquals(listOf("ses-1", "ses-1"), sessionRepository.childSessionRequests)
+        }
+
+    @Test
     fun abort_parentSuccessChildFailure_clearsWorking() =
         runTest(testDispatcher) {
             val sessionRepository =
@@ -5822,6 +5882,7 @@ private class FakeSessionRepository(
     private val compactStart: CompactionStart = CompactionStart.Finished,
 ) : SessionRepository {
     val childSessionRequests = mutableListOf<String>()
+    var childSessionFailuresRemaining = 0
 
     data class DiffRequest(
         val sessionId: String,
@@ -5983,6 +6044,10 @@ private class FakeSessionRepository(
         directory: String?,
     ): List<Session> {
         childSessionRequests += id
+        if (childSessionFailuresRemaining > 0) {
+            childSessionFailuresRemaining -= 1
+            throw SessionError.Http(statusCode = 503, message = "unavailable")
+        }
         return childSessions
     }
 
