@@ -1,8 +1,6 @@
 package dev.opencode.mobile
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -889,6 +887,12 @@ internal fun rememberHomeSessionPaneHandoff(
     return useSplitLayout || hasSelection || handoffPending
 }
 
+private const val HomeSessionPaneCrossfadeMillis = 200
+
+private fun homeSessionPaneCrossfade() =
+    fadeIn(animationSpec = tween(HomeSessionPaneCrossfadeMillis)) togetherWith
+        fadeOut(animationSpec = tween(HomeSessionPaneCrossfadeMillis))
+
 /**
  * Trailing pane of the Home split view: a nested [NavDisplay] over [paneStack], so screens
  * opened from the selected session stay inside the pane. Each entry gets its own ViewModelStore,
@@ -907,9 +911,10 @@ private fun HomeSessionPane(
         onBack = { paneStack.popRouteUnlessRoot() },
         entryDecorators = rememberMainNavEntryDecorators(),
         transitionSpec = {
-            // A new pane root is a selection change, not a push.
+            // A new pane root is a selection change, not a push: crossfade so the shared top
+            // bar and composer stay put while the chat content changes.
             if (targetState.previousEntries.isEmpty()) {
-                EnterTransition.None togetherWith ExitTransition.None
+                homeSessionPaneCrossfade()
             } else {
                 forwardRouteTransition()
             }
@@ -921,7 +926,11 @@ private fun HomeSessionPane(
                 chatFlowEntries(
                     navigator = navigator,
                     sessionChatDetailControl = { key ->
-                        currentDetailControl.takeIf { paneStack.firstOrNull() == key }
+                        // A previous selection fading out has left the stack; it keeps the
+                        // sidebar toggle instead of flashing a back arrow. Pushed child chats
+                        // carry a parentId.
+                        val isRoot = paneStack.firstOrNull() == key || (key.parentId == null && key !in paneStack)
+                        currentDetailControl.takeIf { isRoot }
                     },
                 )
                 entry<HomeSessionPanePlaceholder> {
