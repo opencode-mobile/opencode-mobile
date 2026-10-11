@@ -115,5 +115,5 @@ in `../divergences.md` (Session chat scroll-to-end on iOS).
 
 Shared product semantics for pin state, auto-follow gating, reveal threshold,
 and scroll-to-end overlay behavior are aligned. Platform scroll hosts differ
-intentionally; see `../divergences.md`. Track temporary implementation gaps in
-Linear.
+intentionally; see `../divergences.md`. Track temporary implementation gaps on
+the GitHub issue.

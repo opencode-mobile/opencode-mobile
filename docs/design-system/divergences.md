@@ -3,9 +3,9 @@
 This historical reference records intentional design-system differences between
 iOS and Android.
 
-Do not use this file for unfinished work. Temporary mismatches during feature
-implementation belong in Linear. Do not update this page during implementation
-unless the user explicitly requests documentation.
+Keep unfinished work off this file. Temporary mismatches during feature
+implementation belong on the GitHub issue. Leave this page unchanged during
+implementation unless the user explicitly requests documentation.
 
 ## Divergence Template
 

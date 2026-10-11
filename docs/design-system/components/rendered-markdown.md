@@ -106,5 +106,5 @@ variants.
 
 ## Parity And Divergence
 
-No intentional visual divergence is defined. Track temporary differences in
-Linear.
+No intentional visual divergence is defined. Track temporary differences on
+the GitHub issue.

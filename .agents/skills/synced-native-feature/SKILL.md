@@ -9,19 +9,19 @@ One shared product contract. Separate native implementations.
 
 ## 1. Route the Feature Slice
 
-Identify the requested phase, affected platforms, and Linear issue when the
+Identify the requested phase, affected platforms, and GitHub issue when the
 work is ticket-backed. Read repository docs only when a stable constraint bears
-on the Feature Slice. Keep implementation state and temporary platform gaps in
-Linear. Do not create or update repository documentation unless the user asked
+on the Feature Slice. Keep implementation state and temporary platform gaps on
+the GitHub issue. Leave repository documentation unchanged unless the user asked
 for documentation.
 
 **Completion criterion:** Every requested behavior has a phase, both native
 entry points are identified or marked `not applicable`, and ticket-backed work
-has one Linear issue.
+has one GitHub issue.
 
 ## 2. Establish shared behavior
 
-Use the user's request and Linear issue as the plan. Define observable shared
+Use the user's request and GitHub issue as the plan. Define observable shared
 behavior. Keep native navigation and implementation choices platform-specific.
 Align domain terms, Screen Model state and actions, copy, errors, and permission
 behavior where they express the same product concept.
@@ -56,7 +56,7 @@ work.
 
 Align observable iOS/Android differences unless native platform behavior makes
 them intentional. Express durable behavior in code and tests. Put temporary
-gaps and follow-up work in Linear when ticket updates are in scope. Otherwise,
+gaps and follow-up work on the GitHub issue when ticket updates are in scope. Otherwise,
 report them in the handoff.
 
 **Completion criterion:** Every observed difference is resolved, intentional

@@ -18,8 +18,8 @@ Assign every requested change to a branch:
 
 `docs/design-system/` can explain why something exists. It is not a ledger.
 Read it only when stable background affects the change. Keep implementation
-state in code and Linear. Do not edit repository docs unless the user asked for
-docs.
+state in code and on the GitHub issue. Leave repository docs unchanged unless
+the user asked for docs.
 
 **Completion criterion:** Every requested change has one branch, every affected
 platform is named, and every code location is identified.
@@ -58,7 +58,7 @@ each omitted item has a specific reason.
 
 Align observable differences unless native platform behavior makes them
 intentional. Put intentional behavior in native implementation and tests. Put
-temporary mismatches in Linear when ticket updates are in scope. Otherwise,
+temporary mismatches on the GitHub issue when ticket updates are in scope. Otherwise,
 report them in the handoff.
 
 **Completion criterion:** Every observed iOS/Android mismatch is resolved,

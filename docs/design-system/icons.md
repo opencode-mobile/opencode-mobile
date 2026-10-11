@@ -78,7 +78,7 @@ Some catalog icons have a stable product meaning beyond gallery samples:
 | `call_split` | `git-fork` | Commands tile **Fork** |
 | `vertical_align_center` | `fold-vertical` | Commands tile **Compact** |
 
-Track feature-specific icon follow-ups in Linear.
+Track feature-specific icon follow-ups on the GitHub issue.
 
 ## Adding an icon
 
