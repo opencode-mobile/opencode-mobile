@@ -241,6 +241,16 @@ class SessionChatCommands(
         _state.update { it.copy(pendingTerminalOpen = null) }
     }
 
+    fun consumePendingFilesOpen() {
+        _state.update { it.copy(pendingFilesOpen = null) }
+    }
+
+    fun runFiles() {
+        dismissCommands()
+        val worktree = boundWorktree ?: return
+        _state.update { it.copy(pendingFilesOpen = worktree) }
+    }
+
     fun runTerminal(projectTitle: String) {
         dismissCommands()
         val worktree = boundWorktree ?: return

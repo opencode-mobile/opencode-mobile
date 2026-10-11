@@ -291,6 +291,7 @@ struct SessionChatUiState: Equatable {
     var forkedSessionTitle = ""
     var pendingSessionReplace: ChildSessionNavigationTarget?
     var pendingTerminalOpen: PendingTerminalOpen?
+    var pendingFilesOpen: PendingFilesOpen?
     var hasPendingRevert = false
     /// Chip-timeline step paragraphs expanded past `+N more`:
     /// `SessionChatStepParagraphBlock.id` to the chip count at tap time.
@@ -758,12 +759,18 @@ struct SessionChatCommandsRegionState: Equatable {
     var actionSuccessMessage: String?
     var pendingSessionReplace: ChildSessionNavigationTarget?
     var pendingTerminalOpen: PendingTerminalOpen?
+    var pendingFilesOpen: PendingFilesOpen?
     var hasPendingRevert = false
 }
 
 struct PendingTerminalOpen: Equatable {
     let worktree: String
     let projectTitle: String
+}
+
+/// Files opened from the Commands sheet, rooted at the Session Chat worktree.
+struct PendingFilesOpen: Equatable {
+    let worktree: String
 }
 
 struct LatestModelHint: Equatable {

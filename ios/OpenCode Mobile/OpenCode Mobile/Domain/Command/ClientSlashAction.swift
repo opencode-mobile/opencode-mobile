@@ -7,6 +7,7 @@ enum ClientSlashAction: String, Sendable, Equatable, CaseIterable {
     case redo
     case compact
     case terminal
+    case files
     case mcp
 
     var command: String { rawValue }
@@ -19,6 +20,7 @@ enum ClientSlashAction: String, Sendable, Equatable, CaseIterable {
         case .redo: "Redo undone message"
         case .compact: "Compact session context"
         case .terminal: "Open project shell"
+        case .files: "Browse project files"
         case .mcp: "Show MCP server status"
         }
     }
@@ -50,7 +52,7 @@ struct ClientSlashActionVisibilityInput: Sendable, Equatable {
 
 enum ClientSlashActionCatalog {
     static func visibleActions(_ input: ClientSlashActionVisibilityInput) -> [ClientSlashAction] {
-        var actions: [ClientSlashAction] = [.new, .terminal]
+        var actions: [ClientSlashAction] = [.new, .terminal, .files]
         if input.visibleUserMessageCount > 0 {
             actions.append(.fork)
         }

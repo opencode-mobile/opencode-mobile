@@ -147,6 +147,7 @@ fun SessionChatScreen(
     onToolGroupClick: (SessionToolGroup) -> Unit = {},
     onSessionReplaceRequested: (ChildSessionNavigationTarget) -> Unit = {},
     onTerminalRequested: (worktree: String, projectTitle: String) -> Unit = { _, _ -> },
+    onFilesRequested: (worktree: String) -> Unit = {},
     detailControl: OpenCodeSplitPaneDetailControl? = null,
     viewModel: SessionChatViewModel =
         hiltViewModel(
@@ -407,6 +408,13 @@ fun SessionChatScreen(
         }
     }
 
+    LaunchedEffect(uiState.pendingFilesOpen) {
+        uiState.pendingFilesOpen?.let { target ->
+            onFilesRequested(target)
+            viewModel.consumePendingFilesOpen()
+        }
+    }
+
     LaunchedEffect(uiState.pendingTerminalOpen) {
         uiState.pendingTerminalOpen?.let { target ->
             onTerminalRequested(target.worktree, target.projectTitle)
@@ -509,6 +517,18 @@ fun SessionChatScreen(
                                     logOverflowAction(ProductAnalytics.Action.CHAT_OVERFLOW_REVIEW_CHANGES)
                                     menuExpanded = false
                                     onReviewChangesClick(uiState.changesNavigationTarget(worktree))
+                                },
+                            ),
+                        )
+                        add(
+                            OpenCodeOverflowMenuEntry(
+                                title = "Browse files",
+                                icon = OpenCodeIcons.Folder,
+                                enabled = sessionCreated,
+                                onClick = {
+                                    logOverflowAction(ProductAnalytics.Action.CHAT_OVERFLOW_BROWSE_FILES)
+                                    menuExpanded = false
+                                    onFilesRequested(worktree)
                                 },
                             ),
                         )
@@ -1432,7 +1452,8 @@ private fun CommandsActionTileGrid(
         val requiresLive =
             action == ClientSlashAction.New ||
                 action == ClientSlashAction.Fork ||
-                action == ClientSlashAction.Terminal
+                action == ClientSlashAction.Terminal ||
+                action == ClientSlashAction.Files
         OpenCodeActionTile(
             icon = action.tileIcon(),
             label = action.tileLabel,
@@ -1449,6 +1470,7 @@ private fun ClientSlashAction.tileIcon(): ImageVector =
     when (this) {
         ClientSlashAction.New -> OpenCodeIcons.Add
         ClientSlashAction.Terminal -> OpenCodeIcons.Terminal
+        ClientSlashAction.Files -> OpenCodeIcons.Folder
         ClientSlashAction.Fork -> OpenCodeIcons.CallSplit
         ClientSlashAction.Undo -> OpenCodeIcons.Undo
         ClientSlashAction.Redo -> OpenCodeIcons.Redo

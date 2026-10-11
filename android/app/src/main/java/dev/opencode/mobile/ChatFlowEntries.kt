@@ -9,6 +9,7 @@ import androidx.navigation3.runtime.NavKey
 import dev.opencode.mobile.ui.changes.ChangeSource
 import dev.opencode.mobile.ui.changes.ChangesScreen
 import dev.opencode.mobile.ui.components.OpenCodeSplitPaneDetailControl
+import dev.opencode.mobile.ui.files.FilesScreen
 import dev.opencode.mobile.ui.sessionchat.SessionChatScreen
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolDetailSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolDetailTarget
@@ -113,6 +114,9 @@ internal fun EntryProviderScope<NavKey>.chatFlowEntries(
                 onToolGroupClick = { target ->
                     navigator.push(target)
                 },
+                onFilesRequested = { worktree ->
+                    navigator.push(FileBrowser(worktree = worktree))
+                },
                 onTerminalRequested = { worktree, projectTitle ->
                     navigator.push(
                         Terminal(
@@ -154,6 +158,14 @@ internal fun EntryProviderScope<NavKey>.chatFlowEntries(
                 messageId = key.messageId,
                 initialSource = key.initialSource,
                 initialFilePath = key.initialFilePath,
+                onNavigateBack = navigator.navigateBack,
+            )
+        }
+    }
+    entry<FileBrowser> { key ->
+        RouteSurface {
+            FilesScreen(
+                worktree = key.worktree,
                 onNavigateBack = navigator.navigateBack,
             )
         }

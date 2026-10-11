@@ -781,7 +781,7 @@ internal data class CodeColors(
 )
 
 @Composable
-private fun codeColors(): CodeColors =
+internal fun codeColors(): CodeColors =
     CodeColors(
         plain = MaterialTheme.colorScheme.onSurface,
         comment = openCodeColor("syntax-comment"),

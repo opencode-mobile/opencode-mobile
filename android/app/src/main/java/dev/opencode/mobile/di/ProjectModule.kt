@@ -21,8 +21,12 @@ import dev.opencode.mobile.domain.event.LiveUpdates
 import dev.opencode.mobile.domain.event.ProcessWorldSignals
 import dev.opencode.mobile.domain.event.WorldSignals
 import dev.opencode.mobile.domain.filesystem.DefaultFilesystemRepository
+import dev.opencode.mobile.domain.filesystem.DefaultProjectFilesRepository
 import dev.opencode.mobile.domain.filesystem.FilesystemDomainAdapter
 import dev.opencode.mobile.domain.filesystem.FilesystemRepository
+import dev.opencode.mobile.domain.filesystem.ProjectFileHighlighter
+import dev.opencode.mobile.domain.filesystem.ProjectFilesRepository
+import dev.opencode.mobile.domain.filesystem.TextMateProjectFileHighlighter
 import dev.opencode.mobile.domain.project.DefaultProjectRepository
 import dev.opencode.mobile.domain.project.ProjectDomainAdapter
 import dev.opencode.mobile.domain.project.ProjectRepository
@@ -45,6 +49,14 @@ abstract class ProjectModule {
     @Binds
     @Singleton
     abstract fun bindFilesystemRepository(impl: DefaultFilesystemRepository): FilesystemRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindProjectFilesRepository(impl: DefaultProjectFilesRepository): ProjectFilesRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindProjectFileHighlighter(impl: TextMateProjectFileHighlighter): ProjectFileHighlighter
 
     companion object {
         @Provides

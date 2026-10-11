@@ -211,6 +211,17 @@ final class SessionChatCommands {
         notifyChange()
     }
 
+    func consumePendingFilesOpen() {
+        state.pendingFilesOpen = nil
+        notifyChange()
+    }
+
+    func runFiles() {
+        dismissCommands()
+        state.pendingFilesOpen = PendingFilesOpen(worktree: worktree)
+        notifyChange()
+    }
+
     func runTerminal(projectTitle: String) {
         dismissCommands()
         state.pendingTerminalOpen = PendingTerminalOpen(worktree: worktree, projectTitle: projectTitle)

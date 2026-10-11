@@ -485,6 +485,8 @@ final class SessionChatViewModel {
             )
         case .terminal:
             commands.runTerminal(projectTitle: uiState.projectLabel ?? uiState.sessionTitle)
+        case .files:
+            commands.runFiles()
         case .mcp:
             commands.openMcpServers()
         case .compact:
@@ -529,6 +531,7 @@ final class SessionChatViewModel {
             case .redo: ProductAnalytics.Action.commandsRedo
             case .compact: ProductAnalytics.Action.commandsCompact
             case .terminal: ProductAnalytics.Action.commandsTerminal
+            case .files: ProductAnalytics.Action.commandsFiles
             case .mcp: ProductAnalytics.Action.commandsMcp
             }
         ProductAnalytics.logUserAction(
@@ -591,6 +594,10 @@ final class SessionChatViewModel {
 
     func consumePendingTerminalOpen() {
         commands.consumePendingTerminalOpen()
+    }
+
+    func consumePendingFilesOpen() {
+        commands.consumePendingFilesOpen()
     }
 
     func consumePendingSessionReplace() {
@@ -1424,6 +1431,7 @@ final class SessionChatViewModel {
             forkedSessionTitle: commandsState.forkedSessionTitle,
             pendingSessionReplace: commandsState.pendingSessionReplace,
             pendingTerminalOpen: commandsState.pendingTerminalOpen,
+            pendingFilesOpen: commandsState.pendingFilesOpen,
             hasPendingRevert: commandsState.hasPendingRevert,
             expandedStepParagraphs: expandedStepParagraphs,
             chipTimelineIntroVisible: chipTimelineIntroVisible,

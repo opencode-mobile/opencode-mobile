@@ -96,6 +96,7 @@ fun OpenCodeSplitPane(
             OpenCodeSplitPaneScreen.Settings -> ProductAnalytics.Screen.SETTINGS
             OpenCodeSplitPaneScreen.Changes -> ProductAnalytics.Screen.CHANGES
             OpenCodeSplitPaneScreen.Terminals -> ProductAnalytics.Screen.TERMINALS_CATALOG
+            OpenCodeSplitPaneScreen.Files -> ProductAnalytics.Screen.FILES
         }
     val ancestorNesting = LocalOpenCodeSplitNesting.current
     val ownedNesting = remember { OpenCodeSplitNesting() }

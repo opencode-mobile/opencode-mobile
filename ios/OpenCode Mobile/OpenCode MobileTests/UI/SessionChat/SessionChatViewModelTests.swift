@@ -2595,11 +2595,25 @@ struct SessionChatViewModelTests {
         #expect(viewModel.uiState.composer.text == "/in")
     }
 
+    @Test func runClientSlashAction_files_opensFilesAtWorktreeAndDismissesCommands() async {
+        let viewModel = makeViewModel(messageRepository: FakeMessageRepository())
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        viewModel.openCommands()
+
+        viewModel.runClientSlashAction(.files)
+
+        #expect(viewModel.uiState.pendingFilesOpen == PendingFilesOpen(worktree: "/repo"))
+        #expect(viewModel.uiState.commandsSheetVisible == false)
+        viewModel.consumePendingFilesOpen()
+        #expect(viewModel.uiState.pendingFilesOpen == nil)
+    }
+
     @Test func clientSlashActions_visibility_reflectsCatalogGates() async {
         let emptyMessages = makeViewModel(messageRepository: FakeMessageRepository(messages: []))
         defer { emptyMessages.stopObserving() }
         await emptyMessages.loadMessages()
-        #expect(emptyMessages.uiState.visibleClientSlashActions == [.new, .terminal, .mcp])
+        #expect(emptyMessages.uiState.visibleClientSlashActions == [.new, .terminal, .files, .mcp])
 
         let withMessages = makeViewModel(messageRepository: FakeMessageRepository())
         defer { withMessages.stopObserving() }

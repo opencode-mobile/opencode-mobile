@@ -33,6 +33,7 @@ internal object SplitPanePreferencesCodec {
                 OpenCodeSplitPaneScreen.Settings -> "settings"
                 OpenCodeSplitPaneScreen.Changes -> "changes"
                 OpenCodeSplitPaneScreen.Terminals -> "terminals"
+                OpenCodeSplitPaneScreen.Files -> "files"
             }
 }
 
