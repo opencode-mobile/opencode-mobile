@@ -602,14 +602,15 @@ struct MessageListTimelineHostDeclaredIDTests {
         let midY = bottomY / 2
         controller.testSetContentOffsetY(midY)
         scroll.beginUserScrolling()
-        scroll.endUserScrolling()
-        scroll.noteUserScrollOffset(midY)
+        scroll.endUserScrolling(contentOffsetY: midY)
         #expect(!scroll.isPinnedToEnd)
 
         // Cover layout jumps to the end and reports pinned before disappear.
         controller.testSetContentOffsetY(bottomY)
         scroll.updateGeometry(distanceFromBottom: 0, viewportHeight: 400, contentHeight: bottomY + 400)
         #expect(scroll.isPinnedToEnd)
+        // The pending idle check from that gesture fires after the cover pin.
+        scroll.endUserScrolling(contentOffsetY: bottomY)
 
         controller.viewWillDisappear(false)
         controller.viewWillAppear(false)

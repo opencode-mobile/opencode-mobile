@@ -314,6 +314,11 @@ where Item.ID == String {
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         isCoveredByNavigation = true
+        if let collectionView {
+            // A pending deceleration end or idle check must not read cover
+            // geometry as the user reaching the end.
+            scrollController?.interruptUserScrolling(contentOffsetY: collectionView.contentOffset.y)
+        }
         preserveUnpinnedScrollPositionIfNeeded()
     }
 
@@ -853,8 +858,7 @@ where Item.ID == String {
     }
 
     private func finishUserScroll(_ scrollView: UIScrollView) {
-        scrollController?.endUserScrolling()
-        scrollController?.noteUserScrollOffset(scrollView.contentOffset.y)
+        scrollController?.endUserScrolling(contentOffsetY: scrollView.contentOffset.y)
         flushPendingApplyIfNeeded()
     }
 
@@ -1135,8 +1139,7 @@ where Item.ID == String {
                   !collectionView.isDragging,
                   !collectionView.isDecelerating
             else { return }
-            scrollController?.endUserScrolling()
-            scrollController?.noteUserScrollOffset(collectionView.contentOffset.y)
+            scrollController?.endUserScrolling(contentOffsetY: collectionView.contentOffset.y)
             flushPendingApplyIfNeeded()
         }
     }

@@ -269,8 +269,7 @@ struct TimelineScrollControllerTests {
             contentHeight: 2_000
         )
         controller.beginUserScrolling()
-        controller.endUserScrolling()
-        controller.noteUserScrollOffset(640)
+        controller.endUserScrolling(contentOffsetY: 640)
         #expect(!controller.isPinnedToEnd)
         #expect(controller.userUnpinnedContentOffsetY == 640)
 
@@ -286,6 +285,93 @@ struct TimelineScrollControllerTests {
 
         #expect(performer.calls.isEmpty)
         #expect(controller.userUnpinnedContentOffsetY == 640)
+    }
+
+    @Test func flingLandingAtEndRearmsFollowAfterScrollAway() {
+        let performer = FakeTimelineScrollPerformer()
+        let controller = TimelineScrollController(initialMessageCount: 8)
+        controller.attach(performer)
+        controller.updateGeometry(
+            distanceFromBottom: 400,
+            viewportHeight: 800,
+            contentHeight: 2_000
+        )
+        // Drag away from the end disarms follow and holds the place.
+        controller.beginUserScrolling()
+        controller.noteUserScrollOffset(800)
+        #expect(controller.userUnpinnedContentOffsetY == 800)
+
+        // Fling decelerates onto the latest messages; only the end callback fires.
+        controller.updateGeometry(
+            distanceFromBottom: 0,
+            viewportHeight: 800,
+            contentHeight: 2_000
+        )
+        controller.endUserScrolling(contentOffsetY: 1_200)
+
+        #expect(controller.isPinnedToEnd)
+        #expect(!controller.shouldShowScrollToEnd)
+        #expect(controller.userUnpinnedContentOffsetY == nil)
+
+        controller.updateMessageCount(9)
+        #expect(performer.calls == [.init(animated: false)])
+    }
+
+    @Test func lateUserScrollEndAfterCoverPinKeepsHeldPlace() {
+        let performer = FakeTimelineScrollPerformer()
+        let controller = TimelineScrollController(initialMessageCount: 8)
+        controller.attach(performer)
+        controller.updateGeometry(
+            distanceFromBottom: 400,
+            viewportHeight: 800,
+            contentHeight: 2_000
+        )
+        controller.beginUserScrolling()
+        controller.endUserScrolling(contentOffsetY: 640)
+        #expect(controller.userUnpinnedContentOffsetY == 640)
+
+        // Covering route reports pinned, then the pending idle check fires.
+        controller.updateGeometry(
+            distanceFromBottom: 0,
+            viewportHeight: 800,
+            contentHeight: 2_000
+        )
+        controller.endUserScrolling(contentOffsetY: 1_200)
+        controller.noteUserScrollOffset(1_200)
+
+        #expect(controller.userUnpinnedContentOffsetY == 640)
+        controller.notifyContentGrew()
+        controller.updateMessageCount(9)
+        #expect(performer.calls.isEmpty)
+    }
+
+    @Test func coverInterruptingGestureKeepsHeldPlaceOverPinnedGeometry() {
+        let performer = FakeTimelineScrollPerformer()
+        let controller = TimelineScrollController(initialMessageCount: 8)
+        controller.attach(performer)
+        controller.updateGeometry(
+            distanceFromBottom: 400,
+            viewportHeight: 800,
+            contentHeight: 2_000
+        )
+        controller.beginUserScrolling()
+        controller.noteUserScrollOffset(640)
+
+        // Cover pins while the gesture is still open, then disappear interrupts it.
+        controller.updateGeometry(
+            distanceFromBottom: 0,
+            viewportHeight: 800,
+            contentHeight: 2_000
+        )
+        controller.interruptUserScrolling(contentOffsetY: 1_200)
+        #expect(!controller.isUserScrolling)
+
+        // A deceleration end delivered after the cover is ignored.
+        controller.endUserScrolling(contentOffsetY: 1_200)
+
+        #expect(controller.userUnpinnedContentOffsetY == 640)
+        controller.updateMessageCount(9)
+        #expect(performer.calls.isEmpty)
     }
 
     @Test func collapsedViewportDoesNotRePinWhenUserWasUnpinned() {

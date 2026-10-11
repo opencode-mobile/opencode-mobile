@@ -27,6 +27,16 @@ struct MessageListAutoFollowState {
         userDisarmedFollow = !isPinnedToEnd
     }
 
+    /// A user drag, fling, or deceleration came to rest. Unlike a geometry
+    /// sample, landing at the end is the user's own choice and re-arms follow
+    /// even after an earlier disarm. Landing away leaves the disarm that
+    /// `beginUserScrolling` already applied.
+    mutating func markUserScrollEnded(isPinnedToEnd: Bool) {
+        guard isPinnedToEnd else { return }
+        userDisarmedFollow = false
+        shouldFollowNextAppend = true
+    }
+
     func shouldFollowLayoutChange(autoFollowEnabled: Bool, isPinnedToEnd: Bool) -> Bool {
         autoFollowEnabled && shouldFollowNextAppend && !isPinnedToEnd
     }

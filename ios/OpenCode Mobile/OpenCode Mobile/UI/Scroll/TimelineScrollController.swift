@@ -54,14 +54,14 @@ final class TimelineScrollController {
         }
     }
 
-    /// Record the offset of an in-progress or just-finished user scroll.
-    /// A pin sample after this must not forget where they were.
+    /// Record the offset of an in-progress user scroll.
+    ///
+    /// Only the user's own scroll decides whether they reached the end. A pinned
+    /// sample outside an active gesture (navigation cover, inset change, a late
+    /// idle check after the gesture already ended) must not forget their place.
     func noteUserScrollOffset(_ y: CGFloat) {
-        if isPinnedToEnd {
-            userUnpinnedContentOffsetY = nil
-        } else {
-            userUnpinnedContentOffsetY = y
-        }
+        guard isUserScrolling else { return }
+        userUnpinnedContentOffsetY = isPinnedToEnd ? nil : y
     }
 
     func updateGeometry(
@@ -185,13 +185,32 @@ final class TimelineScrollController {
         autoFollowState.markProgrammaticScrollSettled(isPinnedToEnd: isPinnedToEnd)
     }
 
-    func endUserScrolling() {
+    /// The user's drag, fling, or deceleration came to rest at `contentOffsetY`.
+    /// Landing at the end clears the held place and re-arms follow; landing away
+    /// holds that offset. Ignored when no gesture is active, so a duplicate or
+    /// late end cannot read a covering route's pinned geometry as the user's.
+    func endUserScrolling(contentOffsetY: CGFloat? = nil) {
+        guard isUserScrolling else { return }
         isUserScrolling = false
         refreshDerivedState()
-        autoFollowState.updatePinnedState(
-            isPinnedToEnd: isPinnedToEnd,
-            messageCount: messageCount
-        )
+        if isPinnedToEnd {
+            userUnpinnedContentOffsetY = nil
+        } else if let contentOffsetY {
+            userUnpinnedContentOffsetY = contentOffsetY
+        }
+        autoFollowState.markUserScrollEnded(isPinnedToEnd: isPinnedToEnd)
+    }
+
+    /// A navigation cover took the timeline away before the gesture ended.
+    /// End it without trusting pinned geometry, which the cover may have
+    /// produced: keep the held place and leave follow as the gesture left it.
+    func interruptUserScrolling(contentOffsetY: CGFloat) {
+        guard isUserScrolling else { return }
+        isUserScrolling = false
+        refreshDerivedState()
+        if !isPinnedToEnd {
+            userUnpinnedContentOffsetY = contentOffsetY
+        }
     }
 
     private func refreshDerivedState() {
