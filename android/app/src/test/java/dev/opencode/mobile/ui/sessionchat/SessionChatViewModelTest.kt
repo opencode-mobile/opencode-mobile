@@ -5228,6 +5228,31 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun dictationUnavailable_duringFinishing_stillInserts() =
+        runTest(testDispatcher) {
+            val viewModel = dictationViewModel()
+            viewModel.dictationFinishDelayMs = 1_000
+            viewModel.updateComposerText("Hello there", cursor = 5)
+            advanceUntilIdle()
+            viewModel.beginDictation("English", onDevice = true)
+            viewModel.dictationPartial(committed = " big", volatile = "")
+            viewModel.dictationInsert()
+            viewModel.beginDictationUnavailable(
+                ComposerDictationPhase.RecognizerError,
+                "late",
+            )
+
+            assertEquals(ComposerDictationPhase.Finishing, viewModel.uiState.value.dictation?.phase)
+            assertEquals("Hello there", viewModel.uiState.value.composer.text)
+            advanceUntilIdle()
+
+            val composer = viewModel.uiState.value.composer
+            assertEquals("Hello big there", composer.text)
+            assertEquals(9, composer.cursor)
+            assertNull(viewModel.uiState.value.dictation)
+        }
+
+    @Test
     fun dictationPartial_doesNotChangeComposerText() =
         runTest(testDispatcher) {
             val viewModel = dictationViewModel()

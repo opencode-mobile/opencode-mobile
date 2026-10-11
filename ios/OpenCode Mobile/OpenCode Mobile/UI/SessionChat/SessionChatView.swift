@@ -673,8 +673,10 @@ struct SessionChatView: View {
                 viewModel.cancelDictationForModeChange()
             }
         }
-        .onChange(of: viewModel.uiState.dictation == nil) { _, isNil in
-            if isNil {
+        .onChange(of: viewModel.uiState.dictation?.phase) { _, phase in
+            // Stop as soon as the card leaves listening, including the insert beat,
+            // so a late recognizer error cannot replace a confirmed transcript.
+            if phase != .listening {
                 dictationSession.stop()
             }
         }

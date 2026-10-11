@@ -568,6 +568,9 @@ class SessionChatViewModel
             ) {
                 return
             }
+            // A recognizer error can arrive after Insert has already been confirmed.
+            // Dropping the card here would cancel the splice.
+            if (dictation?.phase == ComposerDictationPhase.Finishing) return
             invalidateDictationInsert()
             dictation =
                 ComposerDictationUiState(

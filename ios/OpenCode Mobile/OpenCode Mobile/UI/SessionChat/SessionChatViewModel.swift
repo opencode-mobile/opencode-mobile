@@ -276,6 +276,9 @@ final class SessionChatViewModel {
 
     func beginDictationUnavailable(_ phase: ComposerDictationPhase, message: String? = nil) {
         guard SessionChatDisplayPreferences.shared.composerDictation else { return }
+        // A recognizer error can arrive after Insert has already been confirmed.
+        // Dropping the card here would cancel the splice.
+        guard dictation?.phase != .finishing else { return }
         discardDictationInsert()
         dictation = ComposerDictationUiState(
             phase: phase,
