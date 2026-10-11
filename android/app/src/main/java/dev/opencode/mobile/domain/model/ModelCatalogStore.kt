@@ -63,7 +63,7 @@ class ModelCatalogStore(
 
     private data class SelectionKey(
         val catalogKey: ModelCatalogKey,
-        val sessionId: String?,
+        val sessionId: String,
     )
 
     private class InFlight<T>(
@@ -125,21 +125,19 @@ class ModelCatalogStore(
     fun lastSelection(
         worktree: String?,
         sessionId: String,
-    ): SessionModelSelection? = selection(worktree, sessionId)
+    ): SessionModelSelection? {
+        val key = keyFor(worktree) ?: return null
+        return synchronized(lock) { selections[SelectionKey(key, sessionId)] }
+    }
 
     fun rememberSelection(
         worktree: String?,
         sessionId: String,
         selection: SessionModelSelection,
-    ) = remember(worktree, sessionId, selection)
-
-    /** The New Session Model Preference last loaded or saved, kept in memory. */
-    fun newSessionPreference(worktree: String?): SessionModelSelection? = selection(worktree, sessionId = null)
-
-    fun rememberNewSessionPreference(
-        worktree: String?,
-        selection: SessionModelSelection,
-    ) = remember(worktree, sessionId = null, selection)
+    ) {
+        val key = keyFor(worktree) ?: return
+        synchronized(lock) { selections[SelectionKey(key, sessionId)] = selection }
+    }
 
     fun clear() {
         synchronized(lock) {
@@ -190,23 +188,6 @@ class ModelCatalogStore(
             }
         inFlight.deferred.start()
         return inFlight.deferred.await()
-    }
-
-    private fun selection(
-        worktree: String?,
-        sessionId: String?,
-    ): SessionModelSelection? {
-        val key = keyFor(worktree) ?: return null
-        return synchronized(lock) { selections[SelectionKey(key, sessionId)] }
-    }
-
-    private fun remember(
-        worktree: String?,
-        sessionId: String?,
-        selection: SessionModelSelection,
-    ) {
-        val key = keyFor(worktree) ?: return
-        synchronized(lock) { selections[SelectionKey(key, sessionId)] = selection }
     }
 
     private fun keyFor(worktree: String?): ModelCatalogKey? {
