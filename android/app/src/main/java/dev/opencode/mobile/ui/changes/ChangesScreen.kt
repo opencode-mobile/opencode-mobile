@@ -71,7 +71,7 @@ import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarAction
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
 import dev.opencode.mobile.ui.components.OpenCodeTopBarOverflowHost
-import dev.opencode.mobile.ui.components.currentOpenCodeUsesContentSplit
+import dev.opencode.mobile.ui.components.currentOpenCodeUsesSplitLayout
 import dev.opencode.mobile.ui.components.openCodeDetailLeading
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.components.OpenCodeUnifiedDiff
@@ -104,22 +104,22 @@ fun ChangesScreen(
     val backStack = rememberNavBackStack(ChangedFilesRoute)
     var didAttemptDeepLink by rememberSaveable(initialFilePath) { mutableStateOf(false) }
     var selectedPath by rememberSaveable { mutableStateOf<String?>(null) }
-    val useContentSplit = currentOpenCodeUsesContentSplit()
+    val useSplitLayout = currentOpenCodeUsesSplitLayout()
     val exitChanges = {
         viewModel.clearFilter()
         onNavigateBack()
     }
 
-    LaunchedEffect(state.phase, initialFilePath, didAttemptDeepLink, useContentSplit) {
+    LaunchedEffect(state.phase, initialFilePath, didAttemptDeepLink, useSplitLayout) {
         if (didAttemptDeepLink || initialFilePath.isNullOrEmpty()) return@LaunchedEffect
         val content = (state.phase as? ChangesPhase.Content)?.changeSet ?: return@LaunchedEffect
         if (content.files.any { it.path == initialFilePath }) {
-            if (useContentSplit) selectedPath = initialFilePath else backStack.add(FileViewerRoute(initialFilePath))
+            if (useSplitLayout) selectedPath = initialFilePath else backStack.add(FileViewerRoute(initialFilePath))
         }
         didAttemptDeepLink = true
     }
-    LaunchedEffect(useContentSplit) {
-        if (useContentSplit) {
+    LaunchedEffect(useSplitLayout) {
+        if (useSplitLayout) {
             val viewer = backStack.lastOrNull() as? FileViewerRoute
             if (viewer != null) {
                 selectedPath = viewer.path
@@ -134,7 +134,7 @@ fun ChangesScreen(
         }
     }
 
-    if (useContentSplit) {
+    if (useSplitLayout) {
         OpenCodeSplitPane(
             screen = OpenCodeSplitPaneScreen.Changes,
             modifier = modifier,

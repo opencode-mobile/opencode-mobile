@@ -41,7 +41,7 @@ import dev.opencode.mobile.ui.components.OpenCodeSplitPaneScreen
 import dev.opencode.mobile.ui.components.OpenCodeStatusStack
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
-import dev.opencode.mobile.ui.components.currentOpenCodeUsesContentSplit
+import dev.opencode.mobile.ui.components.currentOpenCodeUsesSplitLayout
 import dev.opencode.mobile.ui.components.openCodeDetailLeading
 import dev.opencode.mobile.ui.components.StartDecorator
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
@@ -60,12 +60,12 @@ fun TerminalsCatalogScreen(
     }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val coroutineScope = rememberCoroutineScope()
-    val useContentSplit = currentOpenCodeUsesContentSplit()
+    val useSplitLayout = currentOpenCodeUsesSplitLayout()
     var selectedPtyId by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedWorktree by rememberSaveable { mutableStateOf("") }
     var selectedTitle by rememberSaveable { mutableStateOf("") }
     val openShell = { worktree: String, projectTitle: String, ptyId: String ->
-        if (useContentSplit) {
+        if (useSplitLayout) {
             selectedWorktree = worktree
             selectedTitle = projectTitle
             selectedPtyId = ptyId
@@ -73,9 +73,9 @@ fun TerminalsCatalogScreen(
             onOpenTerminal(worktree, projectTitle, ptyId)
         }
     }
-    LaunchedEffect(useContentSplit) {
+    LaunchedEffect(useSplitLayout) {
         val ptyId = selectedPtyId
-        if (!useContentSplit && ptyId != null) {
+        if (!useSplitLayout && ptyId != null) {
             selectedPtyId = null
             onOpenTerminal(selectedWorktree, selectedTitle, ptyId)
         }
@@ -84,7 +84,7 @@ fun TerminalsCatalogScreen(
         val ptyId = selectedPtyId ?: return@LaunchedEffect
         if (uiState.rows.none { it.id == ptyId }) selectedPtyId = null
     }
-    if (useContentSplit) {
+    if (useSplitLayout) {
         OpenCodeSplitPane(
             screen = OpenCodeSplitPaneScreen.Terminals,
             modifier = modifier,

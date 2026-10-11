@@ -99,17 +99,16 @@ fun OpenCodeSplitPane(
         }
     val ancestorNesting = LocalOpenCodeSplitNesting.current
     val ownedNesting = remember { OpenCodeSplitNesting() }
-    val windowWidth = currentOpenCodeWindowWidth()
-    val bounds = OpenCodeSplitPaneLayout.bounds(screen, windowWidth)
-    val forcedCollapsed = !screen.usesContentMetrics && ownedNesting.isContentSplitVisible
-    if (screen.usesContentMetrics) {
+    val bounds = OpenCodeSplitPaneLayout.sidebarBounds
+    val forcedCollapsed = !screen.collapsesAncestorSidebar && ownedNesting.isContentSplitVisible
+    if (screen.collapsesAncestorSidebar) {
         DisposableEffect(ancestorNesting) {
             ancestorNesting?.enter()
             onDispose { ancestorNesting?.leave() }
         }
     }
     CompositionLocalProvider(
-        LocalOpenCodeSplitNesting provides if (screen.usesContentMetrics) ancestorNesting else ownedNesting,
+        LocalOpenCodeSplitNesting provides if (screen.collapsesAncestorSidebar) ancestorNesting else ownedNesting,
     ) {
         OpenCodeSplitPane(
             state = SplitPanePreferences.state(screen),

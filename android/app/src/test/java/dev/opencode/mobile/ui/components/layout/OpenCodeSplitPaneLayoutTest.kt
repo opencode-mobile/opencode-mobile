@@ -111,48 +111,23 @@ class OpenCodeSplitPaneLayoutTest {
     }
 
     @Test
-    fun usesContentSplit_requiresTwoColumnsOf500() {
-        assertFalse(OpenCodeSplitPaneLayout.usesContentSplit(834.dp))
-        assertFalse(OpenCodeSplitPaneLayout.usesContentSplit(1000.dp))
-        assertTrue(OpenCodeSplitPaneLayout.usesContentSplit(1001.dp))
-        assertTrue(OpenCodeSplitPaneLayout.usesContentSplit(1194.dp))
-    }
-
-    @Test
-    fun contentBounds_keepBothColumnsAtLeast500() {
-        val bounds = OpenCodeSplitPaneLayout.contentBounds(1194.dp)
-        assertEquals(500.dp, bounds.minLeading)
-        assertEquals(693.dp, bounds.maxLeading)
-        val narrow =
+    fun everyScreen_usesTheHomeSidebarRange() {
+        val bounds = OpenCodeSplitPaneLayout.sidebarBounds
+        assertEquals(280.dp, bounds.minLeading)
+        assertEquals(480.dp, bounds.maxLeading)
+        assertEquals(220.dp, bounds.collapseThreshold)
+        assertFalse(OpenCodeSplitPaneScreen.Home.collapsesAncestorSidebar)
+        assertFalse(OpenCodeSplitPaneScreen.Settings.collapsesAncestorSidebar)
+        assertTrue(OpenCodeSplitPaneScreen.Changes.collapsesAncestorSidebar)
+        assertTrue(OpenCodeSplitPaneScreen.Terminals.collapsesAncestorSidebar)
+        val resized =
             OpenCodeSplitPaneLayout.resolveDragEnd(
                 startedCollapsed = false,
-                rememberedWidth = 560.dp,
+                rememberedWidth = 360.dp,
                 proposedWidth = 300.dp,
                 bounds = bounds,
             )
-        assertEquals(OpenCodeSplitPaneState(leadingWidth = 500.dp, isCollapsed = false), narrow)
-        val wide =
-            OpenCodeSplitPaneLayout.resolveDragEnd(
-                startedCollapsed = false,
-                rememberedWidth = 560.dp,
-                proposedWidth = 900.dp,
-                bounds = bounds,
-            )
-        assertEquals(693.dp, wide.leadingWidth)
-        assertTrue(1194.dp - wide.leadingWidth - OpenCodeSplitPaneLayout.DividerWidth >= 500.dp)
-    }
-
-    @Test
-    fun contentDrag_belowCollapseThresholdSnapsClosed() {
-        val bounds = OpenCodeSplitPaneLayout.contentBounds(1180.dp)
-        val state =
-            OpenCodeSplitPaneLayout.resolveDragEnd(
-                startedCollapsed = false,
-                rememberedWidth = 560.dp,
-                proposedWidth = 200.dp,
-                bounds = bounds,
-            )
-        assertEquals(OpenCodeSplitPaneState(leadingWidth = 560.dp, isCollapsed = true), state)
+        assertEquals(OpenCodeSplitPaneState(leadingWidth = 300.dp, isCollapsed = false), resized)
     }
 
     @Test

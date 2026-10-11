@@ -8,15 +8,6 @@ struct OpenCodeSplitPaneDetailControl {
 
 private let splitPaneAnimation: Animation = .easeOut(duration: 0.3)
 
-private struct SplitPaneMeasuredWidthKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        let next = nextValue()
-        if next > 0 { value = next }
-    }
-}
-
 /// Regular-width two-pane container: a resizable, collapsible leading pane, a
 /// divider with a grab handle, and a trailing detail pane. Width and collapsed
 /// state persist per `OpenCodeSplitPaneScreen`. A nested content split forces
@@ -30,10 +21,8 @@ struct OpenCodeSplitPane<Leading: View, Trailing: View>: View {
     @ViewBuilder let trailing: (OpenCodeSplitPaneDetailControl) -> Trailing
 
     @Environment(\.layoutDirection) private var layoutDirection
-    @Environment(\.openCodeWindowWidth) private var windowWidth
     @Environment(\.openCodeSplitNesting) private var ancestorNesting
     @State private var ownedNesting = OpenCodeSplitNesting()
-    @State private var measuredWidth: CGFloat = 0
     @State private var dragStart: OpenCodeSplitPaneState?
     @State private var liveWidth: CGFloat?
     @State private var isHandleHovered = false
@@ -56,23 +45,14 @@ struct OpenCodeSplitPane<Leading: View, Trailing: View>: View {
         preferences.state(for: screen)
     }
 
-    /// Content splits inside Home use the ancestor's window width. A full-screen
-    /// content split measures itself.
-    private var layoutWidth: CGFloat {
-        if screen.usesContentMetrics, windowWidth > 0 { return windowWidth }
-        if measuredWidth > 0 { return measuredWidth }
-        return windowWidth
-    }
-
     private var bounds: OpenCodeSplitPaneBounds {
-        let width = layoutWidth > 0 ? layoutWidth : OpenCodeSplitPaneLayout.contentSplitMinimumWidth
-        return OpenCodeSplitPaneLayout.bounds(for: screen, containerWidth: width)
+        OpenCodeSplitPaneLayout.sidebarBounds
     }
 
     /// Only the sidebar that owns the nesting count force-collapses. The content
     /// split that incremented the count must not collapse itself.
     private var forcedCollapsed: Bool {
-        !screen.usesContentMetrics && ownedNesting.isContentSplitVisible
+        !screen.collapsesAncestorSidebar && ownedNesting.isContentSplitVisible
     }
 
     private var displayedCollapsed: Bool {
@@ -86,11 +66,6 @@ struct OpenCodeSplitPane<Leading: View, Trailing: View>: View {
         if let liveWidth, !displayedCollapsed { return liveWidth }
         if displayedCollapsed { return 0 }
         return OpenCodeSplitPaneLayout.clamp(width: state.leadingWidth, bounds: bounds)
-    }
-
-    private var publishedWindowWidth: CGFloat {
-        if screen.usesContentMetrics { return windowWidth }
-        return measuredWidth > 0 ? measuredWidth : windowWidth
     }
 
     var body: some View {
@@ -118,16 +93,9 @@ struct OpenCodeSplitPane<Leading: View, Trailing: View>: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(OpenCodeColors.backgroundBase)
+        .environment(\.openCodeSplitNesting, screen.collapsesAncestorSidebar ? ancestorNesting : ownedNesting)
         .background {
-            GeometryReader { proxy in
-                Color.clear.preference(key: SplitPaneMeasuredWidthKey.self, value: proxy.size.width)
-            }
-        }
-        .onPreferenceChange(SplitPaneMeasuredWidthKey.self) { measuredWidth = $0 }
-        .environment(\.openCodeSplitNesting, screen.usesContentMetrics ? ancestorNesting : ownedNesting)
-        .environment(\.openCodeWindowWidth, publishedWindowWidth)
-        .background {
-            if screen.usesContentMetrics {
+            if screen.collapsesAncestorSidebar {
                 OpenCodeNestedContentSplitRegistration()
             }
         }

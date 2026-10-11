@@ -3,20 +3,10 @@ import SwiftUI
 
 struct TerminalsCatalogRoute: Hashable {}
 
-private struct TerminalsLocalWidthKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        let next = nextValue()
-        if next > 0 { value = next }
-    }
-}
-
 struct TerminalsCatalogView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.openCodeWindowWidth) private var windowWidth
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var viewModel: TerminalsCatalogViewModel
-    @State private var localWidth: CGFloat = 0
     @State private var selected: TerminalRoute?
     var onOpen: (String, String, String) -> Void
 
@@ -28,14 +18,14 @@ struct TerminalsCatalogView: View {
         self.onOpen = onOpen
     }
 
-    private var usesContentSplit: Bool {
-        let width = windowWidth > 0 ? windowWidth : localWidth
-        return OpenCodeSplitPaneLayout.usesContentSplit(containerWidth: width)
+    /// Same breakpoint as Home: iPad at regular width keeps the list beside the shell.
+    private var isSplitLayout: Bool {
+        OpenCodeSplitPaneLayout.usesSplitLayout(horizontalSizeClass: horizontalSizeClass)
     }
 
     var body: some View {
         Group {
-            if usesContentSplit {
+            if isSplitLayout {
                 contentSplit
             } else {
                 catalogColumn(selectedID: nil, constrainWidth: true) { worktree, projectTitle, ptyId in
@@ -43,13 +33,7 @@ struct TerminalsCatalogView: View {
                 }
             }
         }
-        .background {
-            GeometryReader { proxy in
-                Color.clear.preference(key: TerminalsLocalWidthKey.self, value: proxy.size.width)
-            }
-        }
-        .onPreferenceChange(TerminalsLocalWidthKey.self) { localWidth = $0 }
-        .onChange(of: usesContentSplit) { _, split in
+        .onChange(of: isSplitLayout) { _, split in
             guard !split, let selected else { return }
             self.selected = nil
             onOpen(selected.worktree, selected.projectTitle, selected.ptyId ?? "")
@@ -238,7 +222,7 @@ struct TerminalsCatalogView: View {
     }
 
     private func openCreated(_ row: TerminalCatalogRow) {
-        if usesContentSplit {
+        if isSplitLayout {
             selected = TerminalRoute(worktree: row.worktree, projectTitle: row.projectTitle, ptyId: row.id)
         } else {
             onOpen(row.worktree, row.projectTitle, row.id)

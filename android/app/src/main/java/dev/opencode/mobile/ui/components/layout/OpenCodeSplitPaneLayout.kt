@@ -15,8 +15,11 @@ enum class OpenCodeSplitPaneScreen {
     Terminals,
     ;
 
-    /** Sidebar panes use a fixed 280–480dp leading width. Content panes keep both columns at least 500dp. */
-    val usesContentMetrics: Boolean
+    /**
+     * Changes and Terminals are content splits: opening one inside Home collapses that sidebar
+     * for the visit. Leading-pane resize matches Home on every screen.
+     */
+    val collapsesAncestorSidebar: Boolean
         get() =
             when (this) {
                 Home, Settings -> false
@@ -51,7 +54,7 @@ object OpenCodeSplitPaneLayout {
     /** Dragging a collapsed pane past this width reopens it at the remembered width. */
     val ReopenThreshold = 120.dp
 
-    /** Window container width at which Home and Settings switch to the split layout. */
+    /** Window container width at which a tablet switches to the split layout. */
     val SplitMinWindowWidth = 720.dp
 
     /**
@@ -71,15 +74,6 @@ object OpenCodeSplitPaneLayout {
 
     const val ANIMATION_DURATION_MILLIS = 300
 
-    /** Neither column of a Changes or Terminals split may settle narrower than this. */
-    val MinContentColumn = 500.dp
-
-    /** Remembered open width for a content split before the user drags. */
-    val ContentDefaultLeadingWidth = 560.dp
-
-    /** Smallest window that can show two content columns plus the divider. */
-    val ContentSplitMinimumWidth = MinContentColumn * 2 + DividerWidth
-
     val sidebarBounds =
         OpenCodeSplitPaneBounds(
             minLeading = MinLeadingWidth,
@@ -97,24 +91,6 @@ object OpenCodeSplitPaneLayout {
         windowWidth: Dp,
         smallestScreenWidth: Dp,
     ): Boolean = smallestScreenWidth >= SplitMinSmallestScreenWidth && windowWidth >= SplitMinWindowWidth
-
-    fun usesContentSplit(containerWidth: Dp): Boolean = containerWidth >= ContentSplitMinimumWidth
-
-    fun contentBounds(containerWidth: Dp): OpenCodeSplitPaneBounds {
-        val maxLeading = (containerWidth - MinContentColumn - DividerWidth).coerceAtLeast(MinContentColumn)
-        return OpenCodeSplitPaneBounds(
-            minLeading = MinContentColumn,
-            maxLeading = maxLeading,
-            defaultLeading = ContentDefaultLeadingWidth.coerceIn(MinContentColumn, maxLeading),
-            collapseThreshold = CollapseThreshold,
-            reopenThreshold = ReopenThreshold,
-        )
-    }
-
-    fun bounds(
-        screen: OpenCodeSplitPaneScreen,
-        containerWidth: Dp,
-    ): OpenCodeSplitPaneBounds = if (screen.usesContentMetrics) contentBounds(containerWidth) else sidebarBounds
 
     /**
      * Home's persisted collapsed flag, overlaid while a nested content split is showing.
@@ -177,6 +153,3 @@ fun currentOpenCodeUsesSplitLayout(): Boolean =
         windowWidth = currentOpenCodeWindowWidth(),
         smallestScreenWidth = LocalConfiguration.current.smallestScreenWidthDp.dp,
     )
-
-@Composable
-fun currentOpenCodeUsesContentSplit(): Boolean = OpenCodeSplitPaneLayout.usesContentSplit(currentOpenCodeWindowWidth())

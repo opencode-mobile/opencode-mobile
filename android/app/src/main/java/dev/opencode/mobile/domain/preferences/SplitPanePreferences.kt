@@ -17,31 +17,14 @@ internal object SplitPanePreferencesCodec {
     fun decode(
         storedLeadingWidthDp: Float?,
         storedIsCollapsed: Boolean?,
-        screen: OpenCodeSplitPaneScreen = OpenCodeSplitPaneScreen.Home,
     ): OpenCodeSplitPaneState {
         val stored = storedLeadingWidthDp?.takeIf { it.isFinite() && it > 0f }?.dp
-        val width =
-            if (screen.usesContentMetrics) {
-                stored ?: OpenCodeSplitPaneLayout.ContentDefaultLeadingWidth
-            } else {
-                stored?.let { OpenCodeSplitPaneLayout.clamp(it) } ?: OpenCodeSplitPaneLayout.DefaultLeadingWidth
-            }
+        val width = stored?.let { OpenCodeSplitPaneLayout.clamp(it) } ?: OpenCodeSplitPaneLayout.DefaultLeadingWidth
         return OpenCodeSplitPaneState(leadingWidth = width, isCollapsed = storedIsCollapsed ?: false)
     }
 
-    fun sanitize(
-        state: OpenCodeSplitPaneState,
-        screen: OpenCodeSplitPaneScreen = OpenCodeSplitPaneScreen.Home,
-    ): OpenCodeSplitPaneState {
-        val width =
-            if (screen.usesContentMetrics) {
-                state.leadingWidth.takeIf { it.value.isFinite() && it.value > 0f }
-                    ?: OpenCodeSplitPaneLayout.ContentDefaultLeadingWidth
-            } else {
-                OpenCodeSplitPaneLayout.clamp(state.leadingWidth)
-            }
-        return state.copy(leadingWidth = width)
-    }
+    fun sanitize(state: OpenCodeSplitPaneState): OpenCodeSplitPaneState =
+        state.copy(leadingWidth = OpenCodeSplitPaneLayout.clamp(state.leadingWidth))
 
     private val OpenCodeSplitPaneScreen.storagePrefix: String
         get() =
@@ -70,19 +53,18 @@ object SplitPanePreferences {
                 SplitPanePreferencesCodec.decode(
                     storedLeadingWidthDp = if (prefs.contains(widthKey)) prefs.getFloat(widthKey, 0f) else null,
                     storedIsCollapsed = if (prefs.contains(collapsedKey)) prefs.getBoolean(collapsedKey, false) else null,
-                    screen = screen,
                 )
         }
     }
 
     fun state(screen: OpenCodeSplitPaneScreen): OpenCodeSplitPaneState =
-        states[screen] ?: SplitPanePreferencesCodec.decode(null, null, screen)
+        states[screen] ?: SplitPanePreferencesCodec.decode(null, null)
 
     fun update(
         screen: OpenCodeSplitPaneScreen,
         state: OpenCodeSplitPaneState,
     ) {
-        val sanitized = SplitPanePreferencesCodec.sanitize(state, screen)
+        val sanitized = SplitPanePreferencesCodec.sanitize(state)
         states[screen] = sanitized
         prefs()
             ?.edit()
