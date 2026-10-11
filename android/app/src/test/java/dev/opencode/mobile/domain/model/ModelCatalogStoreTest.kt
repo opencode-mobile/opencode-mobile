@@ -6,6 +6,7 @@ import dev.opencode.mobile.domain.agent.SelectableAgent
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -18,6 +19,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class ModelCatalogStoreTest {
     private val sonnet = ModelSelectionOption("anthropic", "Anthropic", "claude-sonnet", "Claude Sonnet")
     private val gpt4 = ModelSelectionOption("openai", "OpenAI", "gpt-4", "GPT-4")
@@ -112,13 +114,11 @@ class ModelCatalogStoreTest {
             store.refreshCatalog("/repo")
             store.refreshSelectableAgents("/repo")
             store.rememberSelection("/repo", "ses-1", SessionModelSelection("openai", "gpt-4"))
-            store.rememberNewSessionPreference("/repo", SessionModelSelection("openai", "gpt-4"))
 
             store.clear()
 
             assertNull(store.peek("/repo"))
             assertNull(store.lastSelection("/repo", "ses-1"))
-            assertNull(store.newSessionPreference("/repo"))
         }
 
     @Test

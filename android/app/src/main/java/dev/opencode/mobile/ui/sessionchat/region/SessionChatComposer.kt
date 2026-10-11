@@ -186,9 +186,10 @@ class SessionChatComposer(
     }
 
     /**
-     * Shows the store's catalog and a provisional selection at once, so switching to a session
-     * whose catalog is loaded never shows "Loading model…". The gate reconciles it later against
-     * the persisted selection and history.
+     * Shows the store's catalog and agents at once, and for a session with a remembered selection
+     * also publishes that selection, so switching back to it never shows "Loading model…". The
+     * gate reconciles it later against the persisted selection and history. A session without one
+     * keeps waiting for the gate: a guessed default would flip once history arrives.
      */
     private fun seedFromCatalogStore(
         sessionId: String,
@@ -198,43 +199,31 @@ class SessionChatComposer(
         if (OptimisticSessionCreate.isPlaceholder(sessionId)) return
         val entry = modelCatalogStore.peek(worktree) ?: return
         val catalog = entry.catalog?.takeIf { it.options.isNotEmpty() } ?: return
-        val remembered =
-            modelCatalogStore
-                .lastSelection(worktree, sessionId)
-                ?.takeIf { catalog.option(it.providerId, it.modelId) != null }
-        val preference =
-            modelCatalogStore
-                .newSessionPreference(worktree)
-                ?.takeIf { catalog.option(it.providerId, it.modelId) != null }
-        val seed = remembered ?: preference
-        val option =
-            seed?.let { catalog.option(it.providerId, it.modelId) }
-                ?: catalog.serverDefault
-                ?: catalog.options.first()
-        val variant = resolvedVariant(seed?.variant, option)
         val agents = entry.selectableAgents?.ifEmpty { SelectableAgent.Fallback }
         loadedCatalog = catalog
         catalogSeededFromCache = true
-        provisionalSelection = true
         if (agents != null) loadedSelectableAgents = true
         updateComposer { composer ->
             val selectableAgents = agents ?: composer.selectableAgents
             composer.copy(
                 modelOptions = catalog.options,
+                selectableAgents = selectableAgents,
+                selectedMode = resolveSelectedAgentId(composer.selectedMode, selectableAgents),
+            )
+        }
+        val remembered = modelCatalogStore.lastSelection(worktree, sessionId) ?: return
+        val option = catalog.option(remembered.providerId, remembered.modelId) ?: return
+        val variant = resolvedVariant(remembered.variant, option)
+        provisionalSelection = true
+        updateComposer { composer ->
+            composer.copy(
                 selectedModel = ModelSelection(option, variant),
                 selectedVariant = variant,
-                selectableAgents = selectableAgents,
-                selectedMode = resolveSelectedAgentId(remembered?.agentId ?: composer.selectedMode, selectableAgents),
+                selectedMode = resolveSelectedAgentId(remembered.agentId ?: composer.selectedMode, composer.selectableAgents),
                 isModelSelectionReady = true,
             )
         }
-        val source =
-            when {
-                remembered != null -> "memory"
-                preference != null -> "new-session-preference"
-                else -> "catalog"
-            }
-        logI("modelSelection provisional source=$source")
+        logI("modelSelection provisional source=memory")
     }
 
     /**
@@ -1334,7 +1323,6 @@ class SessionChatComposer(
             cachedSelection =
                 listOfNotNull(loaded.session, remembered).maxByOrNull { it.savedAtEpochMs ?: Long.MIN_VALUE }
             newSessionPreference = loaded.preference
-            loaded.preference?.let { modelCatalogStore.rememberNewSessionPreference(worktree, it) }
             initialSelectionState =
                 if (loaded.hadStorageFailure) InitialSelectionState.WaitingForFallback else InitialSelectionState.WaitingForInputs
             applyInitialSelectionIfReady()
@@ -1361,7 +1349,6 @@ class SessionChatComposer(
                 savedAtEpochMs = timestamp,
             )
         modelCatalogStore.rememberSelection(worktree, sessionId, selection)
-        if (updatePreference) modelCatalogStore.rememberNewSessionPreference(worktree, selection)
         scope.launch {
             runCatching {
                 withContext(ioDispatcher) {

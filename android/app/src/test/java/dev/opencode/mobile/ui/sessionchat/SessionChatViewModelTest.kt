@@ -87,6 +87,7 @@ import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
@@ -4917,6 +4918,53 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun cachedCatalog_neverOpenedSessionWaitsForHistoryInsteadOfShowingTheServerDefault() =
+        runTest(testDispatcher) {
+            val (models, store) = sharedCatalog()
+            val first = createViewModel(FakeMessageRepository(messages = emptyList()), modelRepository = models, modelCatalogStore = store)
+            first.bind("ses-0", "Other", "/repo")
+            advanceUntilIdle()
+
+            val persistedGate = CompletableDeferred<Unit>()
+            val callsBefore = models.calls
+            models.gate = CompletableDeferred()
+            val second =
+                createViewModel(
+                    FakeMessageRepository(messages = listOf(gpt4UserMessage())),
+                    modelRepository = models,
+                    modelCatalogStore = store,
+                    sessionModelSelectionStore = FakeSessionModelSelectionStore(loadGate = persistedGate),
+                )
+            val shownModels = mutableListOf<String?>()
+            backgroundScope.launch {
+                second.uiState.collect { state ->
+                    val shown =
+                        state.composer.selectedModel
+                            ?.option
+                            ?.modelId
+                    if (state.composer.isModelSelectionReady && shownModels.lastOrNull() != shown) shownModels += shown
+                }
+            }
+            second.bind("ses-1", "Title", "/repo")
+            runCurrent()
+
+            assertEquals(false, second.uiState.value.composer.isModelSelectionReady)
+            assertNull(second.uiState.value.composer.selectedModel)
+            assertEquals(listOf(sonnetOption, gpt4Option), second.uiState.value.composer.modelOptions)
+
+            persistedGate.complete(Unit)
+            runCurrent()
+
+            // The catalog came from the store; the gated refresh did not hold the selection back.
+            assertEquals(callsBefore + 1, models.calls)
+            assertEquals(true, second.uiState.value.composer.isModelSelectionReady)
+            assertEquals(listOf<String?>("gpt-4"), shownModels)
+            models.gate?.complete(Unit)
+            advanceUntilIdle()
+            assertEquals(listOf<String?>("gpt-4"), shownModels)
+        }
+
+    @Test
     fun cachedCatalog_failedRefreshKeepsTheSelection() =
         runTest(testDispatcher) {
             val (models, store) = sharedCatalog()
@@ -5069,6 +5117,16 @@ class SessionChatViewModelTest {
         val models = FakeModelRepository(ModelSelectionCatalog(listOf(sonnetOption, gpt4Option), sonnetOption))
         return models to testModelCatalogStore(models)
     }
+
+    private fun gpt4UserMessage() =
+        Message(
+            id = "msg-gpt4",
+            role = MessageRole.User,
+            text = "Use GPT-4",
+            modelProviderId = "openai",
+            modelId = "gpt-4",
+            sentAtEpochMs = 1_000L,
+        )
 
     private fun newerSonnetUserMessage() =
         Message(
