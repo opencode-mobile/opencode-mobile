@@ -83,6 +83,46 @@ struct MessageListAutoFollowStateTests {
         #expect(!shouldFollow)
     }
 
+    @Test func pinnedGeometryAfterUserScrollAwayDoesNotRearmFollow() {
+        var state = MessageListAutoFollowState(initialMessageCount: 8)
+
+        state.updatePinnedState(isPinnedToEnd: true, messageCount: 8)
+        state.markProgrammaticScrollSettled(isPinnedToEnd: false)
+        state.updatePinnedState(isPinnedToEnd: true, messageCount: 8)
+
+        #expect(!state.shouldEnsureLayoutEnd(autoFollowEnabled: true))
+        let shouldFollow = state.onMessageCountChanged(messageCount: 9, autoFollowEnabled: true)
+        #expect(!shouldFollow)
+    }
+
+    @Test func userScrollEndingAtEndRearmsFollowAfterDisarm() {
+        var state = MessageListAutoFollowState(initialMessageCount: 8)
+
+        state.updatePinnedState(isPinnedToEnd: true, messageCount: 8)
+        state.markProgrammaticScrollSettled(isPinnedToEnd: false)
+        // Fling lands at the latest messages: geometry alone stays blocked...
+        state.updatePinnedState(isPinnedToEnd: true, messageCount: 8)
+        #expect(!state.shouldEnsureLayoutEnd(autoFollowEnabled: true))
+        // ...but the user's own scroll ending there re-arms.
+        state.markUserScrollEnded(isPinnedToEnd: true)
+
+        #expect(state.shouldEnsureLayoutEnd(autoFollowEnabled: true))
+        let shouldFollow = state.onMessageCountChanged(messageCount: 9, autoFollowEnabled: true)
+        #expect(shouldFollow)
+    }
+
+    @Test func userScrollEndingAwayFromEndKeepsFollowDisarmed() {
+        var state = MessageListAutoFollowState(initialMessageCount: 8)
+
+        state.updatePinnedState(isPinnedToEnd: true, messageCount: 8)
+        state.markProgrammaticScrollSettled(isPinnedToEnd: false)
+        state.markUserScrollEnded(isPinnedToEnd: false)
+        state.updatePinnedState(isPinnedToEnd: true, messageCount: 8)
+
+        let shouldFollow = state.onMessageCountChanged(messageCount: 9, autoFollowEnabled: true)
+        #expect(!shouldFollow)
+    }
+
     @Test func geometryUnpinnedDoesNotDisarmFollow() {
         var state = MessageListAutoFollowState(initialMessageCount: 8)
 
