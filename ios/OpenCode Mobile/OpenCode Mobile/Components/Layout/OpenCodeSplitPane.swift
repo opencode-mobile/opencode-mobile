@@ -8,9 +8,19 @@ struct OpenCodeSplitPaneDetailControl {
 
 private let splitPaneAnimation: Animation = .easeOut(duration: 0.3)
 
+private struct SplitPaneMeasuredWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        let next = nextValue()
+        if next > 0 { value = next }
+    }
+}
+
 /// Regular-width two-pane container: a resizable, collapsible leading pane, a
 /// divider with a grab handle, and a trailing detail pane. Width and collapsed
-/// state persist per `OpenCodeSplitPaneScreen`.
+/// state persist per `OpenCodeSplitPaneScreen`. A nested content split forces
+/// an ancestor sidebar closed without writing that collapse to preferences.
 struct OpenCodeSplitPane<Leading: View, Trailing: View>: View {
     let screen: OpenCodeSplitPaneScreen
     let preferences: SplitPanePreferences
@@ -20,6 +30,10 @@ struct OpenCodeSplitPane<Leading: View, Trailing: View>: View {
     @ViewBuilder let trailing: (OpenCodeSplitPaneDetailControl) -> Trailing
 
     @Environment(\.layoutDirection) private var layoutDirection
+    @Environment(\.openCodeWindowWidth) private var windowWidth
+    @Environment(\.openCodeSplitNesting) private var ancestorNesting
+    @State private var ownedNesting = OpenCodeSplitNesting()
+    @State private var measuredWidth: CGFloat = 0
     @State private var dragStart: OpenCodeSplitPaneState?
     @State private var liveWidth: CGFloat?
     @State private var isHandleHovered = false
@@ -42,18 +56,50 @@ struct OpenCodeSplitPane<Leading: View, Trailing: View>: View {
         preferences.state(for: screen)
     }
 
+    /// Content splits inside Home use the ancestor's window width. A full-screen
+    /// content split measures itself.
+    private var layoutWidth: CGFloat {
+        if screen.usesContentMetrics, windowWidth > 0 { return windowWidth }
+        if measuredWidth > 0 { return measuredWidth }
+        return windowWidth
+    }
+
+    private var bounds: OpenCodeSplitPaneBounds {
+        let width = layoutWidth > 0 ? layoutWidth : OpenCodeSplitPaneLayout.contentSplitMinimumWidth
+        return OpenCodeSplitPaneLayout.bounds(for: screen, containerWidth: width)
+    }
+
+    /// Only the sidebar that owns the nesting count force-collapses. The content
+    /// split that incremented the count must not collapse itself.
+    private var forcedCollapsed: Bool {
+        !screen.usesContentMetrics && ownedNesting.isContentSplitVisible
+    }
+
+    private var displayedCollapsed: Bool {
+        OpenCodeSplitPaneLayout.displayedCollapsed(
+            persisted: state.isCollapsed,
+            nestedContentSplitVisible: forcedCollapsed
+        )
+    }
+
     private var displayedLeadingWidth: CGFloat {
-        if let liveWidth { return liveWidth }
-        return state.isCollapsed ? 0 : state.leadingWidth
+        if let liveWidth, !displayedCollapsed { return liveWidth }
+        if displayedCollapsed { return 0 }
+        return OpenCodeSplitPaneLayout.clamp(width: state.leadingWidth, bounds: bounds)
+    }
+
+    private var publishedWindowWidth: CGFloat {
+        if screen.usesContentMetrics { return windowWidth }
+        return measuredWidth > 0 ? measuredWidth : windowWidth
     }
 
     var body: some View {
-        let collapsed = state.isCollapsed && liveWidth == nil
+        let collapsed = displayedCollapsed && liveWidth == nil
         HStack(spacing: 0) {
             leading()
                 // Content keeps at least the minimum width and is clipped rather than
                 // squeezed while the pane animates closed or is dragged narrow.
-                .frame(width: max(OpenCodeSplitPaneLayout.minLeadingWidth, displayedLeadingWidth))
+                .frame(width: max(bounds.minLeading, displayedLeadingWidth))
                 .frame(width: displayedLeadingWidth, alignment: .leading)
                 .clipped()
                 .allowsHitTesting(!collapsed)
@@ -64,7 +110,7 @@ struct OpenCodeSplitPane<Leading: View, Trailing: View>: View {
 
             trailing(
                 OpenCodeSplitPaneDetailControl(
-                    isCollapsed: state.isCollapsed,
+                    isCollapsed: displayedCollapsed,
                     toggle: toggle
                 )
             )
@@ -72,6 +118,19 @@ struct OpenCodeSplitPane<Leading: View, Trailing: View>: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(OpenCodeColors.backgroundBase)
+        .background {
+            GeometryReader { proxy in
+                Color.clear.preference(key: SplitPaneMeasuredWidthKey.self, value: proxy.size.width)
+            }
+        }
+        .onPreferenceChange(SplitPaneMeasuredWidthKey.self) { measuredWidth = $0 }
+        .environment(\.openCodeSplitNesting, screen.usesContentMetrics ? ancestorNesting : ownedNesting)
+        .environment(\.openCodeWindowWidth, publishedWindowWidth)
+        .background {
+            if screen.usesContentMetrics {
+                OpenCodeNestedContentSplitRegistration()
+            }
+        }
     }
 
     @ViewBuilder
@@ -117,6 +176,7 @@ struct OpenCodeSplitPane<Leading: View, Trailing: View>: View {
     }
 
     private func handleDragChanged(_ value: DragGesture.Value) {
+        guard !forcedCollapsed else { return }
         let start = dragStart ?? state
         if dragStart == nil { dragStart = start }
         guard abs(value.translation.width) >= OpenCodeSplitPaneLayout.tapSlop || liveWidth != nil else { return }
@@ -124,11 +184,19 @@ struct OpenCodeSplitPane<Leading: View, Trailing: View>: View {
         var transaction = Transaction()
         transaction.disablesAnimations = true
         withTransaction(transaction) {
-            liveWidth = OpenCodeSplitPaneLayout.liveWidth(proposedWidth: origin + leadingWidthDelta(value))
+            liveWidth = OpenCodeSplitPaneLayout.liveWidth(
+                proposedWidth: origin + leadingWidthDelta(value),
+                bounds: bounds
+            )
         }
     }
 
     private func handleDragEnded(_ value: DragGesture.Value) {
+        guard !forcedCollapsed else {
+            dragStart = nil
+            liveWidth = nil
+            return
+        }
         let start = dragStart ?? state
         dragStart = nil
         if liveWidth == nil, abs(value.translation.width) < OpenCodeSplitPaneLayout.tapSlop {
@@ -138,7 +206,8 @@ struct OpenCodeSplitPane<Leading: View, Trailing: View>: View {
         let origin = start.isCollapsed ? 0 : start.leadingWidth
         let resolved = OpenCodeSplitPaneLayout.resolveDragEnd(
             previous: start,
-            proposedWidth: origin + leadingWidthDelta(value)
+            proposedWidth: origin + leadingWidthDelta(value),
+            bounds: bounds
         )
         withAnimation(splitPaneAnimation) {
             liveWidth = nil
@@ -158,7 +227,8 @@ struct OpenCodeSplitPane<Leading: View, Trailing: View>: View {
     }
 
     private func toggle() {
-        let next = OpenCodeSplitPaneLayout.toggled(state)
+        guard !forcedCollapsed else { return }
+        let next = OpenCodeSplitPaneLayout.toggled(state, bounds: bounds)
         withAnimation(splitPaneAnimation) {
             liveWidth = nil
             preferences.setState(next, for: screen)

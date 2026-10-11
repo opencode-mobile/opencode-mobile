@@ -1,10 +1,23 @@
 import CoreGraphics
 
-/// Screens that render as a split view on regular width. Each keeps its own
+/// Screens that render as a split view on a wide window. Each keeps its own
 /// persisted leading-pane width and collapsed state.
 enum OpenCodeSplitPaneScreen: String, CaseIterable, Sendable {
     case home
     case settings
+    case changes
+    case terminals
+
+    /// Sidebar panes use a fixed 280–480 leading width. Content panes keep both
+    /// columns at least 500 when the window can hold them.
+    var usesContentMetrics: Bool {
+        switch self {
+        case .home, .settings:
+            false
+        case .changes, .terminals:
+            true
+        }
+    }
 }
 
 /// Leading-pane geometry for an `OpenCodeSplitPane`.
@@ -17,6 +30,15 @@ struct OpenCodeSplitPaneState: Equatable, Sendable {
         leadingWidth: OpenCodeSplitPaneLayout.defaultLeadingWidth,
         isCollapsed: false
     )
+}
+
+/// Width range and snap thresholds for one split-pane role.
+struct OpenCodeSplitPaneBounds: Equatable, Sendable {
+    var minLeading: CGFloat
+    var maxLeading: CGFloat
+    var defaultLeading: CGFloat
+    var collapseThreshold: CGFloat
+    var reopenThreshold: CGFloat
 }
 
 /// Pure sizing rules for the split-pane divider and handle.
@@ -37,16 +59,67 @@ enum OpenCodeSplitPaneLayout {
     /// Drags shorter than this count as a tap on the handle.
     static let tapSlop: CGFloat = 4
 
+    /// Neither column of a Changes or Terminals split may settle narrower than this.
+    static let minContentColumn: CGFloat = 500
+    /// Remembered open width for a content split before the user drags.
+    static let contentDefaultLeadingWidth: CGFloat = 560
+
+    /// Smallest window that can show two content columns plus the divider.
+    static var contentSplitMinimumWidth: CGFloat {
+        minContentColumn * 2 + dividerWidth
+    }
+
+    static let sidebarBounds = OpenCodeSplitPaneBounds(
+        minLeading: minLeadingWidth,
+        maxLeading: maxLeadingWidth,
+        defaultLeading: defaultLeadingWidth,
+        collapseThreshold: collapseThreshold,
+        reopenThreshold: reopenThreshold
+    )
+
+    static func usesContentSplit(containerWidth: CGFloat) -> Bool {
+        containerWidth.isFinite && containerWidth >= contentSplitMinimumWidth
+    }
+
+    static func contentBounds(containerWidth: CGFloat) -> OpenCodeSplitPaneBounds {
+        let maxLeading = max(minContentColumn, containerWidth - minContentColumn - dividerWidth)
+        return OpenCodeSplitPaneBounds(
+            minLeading: minContentColumn,
+            maxLeading: maxLeading,
+            defaultLeading: min(maxLeading, max(minContentColumn, contentDefaultLeadingWidth)),
+            collapseThreshold: collapseThreshold,
+            reopenThreshold: reopenThreshold
+        )
+    }
+
+    static func bounds(for screen: OpenCodeSplitPaneScreen, containerWidth: CGFloat) -> OpenCodeSplitPaneBounds {
+        screen.usesContentMetrics ? contentBounds(containerWidth: containerWidth) : sidebarBounds
+    }
+
+    /// Home's persisted collapsed flag, overlaid while a nested content split is showing.
+    /// The overlay is not written back to preferences.
+    static func displayedCollapsed(persisted: Bool, nestedContentSplitVisible: Bool) -> Bool {
+        persisted || nestedContentSplitVisible
+    }
+
     static func clamp(width: CGFloat) -> CGFloat {
-        guard width.isFinite else { return defaultLeadingWidth }
-        return min(maxLeadingWidth, max(minLeadingWidth, width))
+        clamp(width: width, bounds: sidebarBounds)
+    }
+
+    static func clamp(width: CGFloat, bounds: OpenCodeSplitPaneBounds) -> CGFloat {
+        guard width.isFinite else { return bounds.defaultLeading }
+        return min(bounds.maxLeading, max(bounds.minLeading, width))
     }
 
     /// Width shown while a drag is in flight. Not clamped below so the user sees
     /// the pane shrinking toward the snap point.
     static func liveWidth(proposedWidth: CGFloat) -> CGFloat {
-        guard proposedWidth.isFinite else { return defaultLeadingWidth }
-        return min(maxLeadingWidth, max(0, proposedWidth))
+        liveWidth(proposedWidth: proposedWidth, bounds: sidebarBounds)
+    }
+
+    static func liveWidth(proposedWidth: CGFloat, bounds: OpenCodeSplitPaneBounds) -> CGFloat {
+        guard proposedWidth.isFinite else { return bounds.defaultLeading }
+        return min(bounds.maxLeading, max(0, proposedWidth))
     }
 
     /// Resolves the pane state when a divider drag ends.
@@ -57,17 +130,28 @@ enum OpenCodeSplitPaneLayout {
         previous: OpenCodeSplitPaneState,
         proposedWidth: CGFloat
     ) -> OpenCodeSplitPaneState {
-        let remembered = clamp(width: previous.leadingWidth)
+        resolveDragEnd(previous: previous, proposedWidth: proposedWidth, bounds: sidebarBounds)
+    }
+
+    static func resolveDragEnd(
+        previous: OpenCodeSplitPaneState,
+        proposedWidth: CGFloat,
+        bounds: OpenCodeSplitPaneBounds
+    ) -> OpenCodeSplitPaneState {
+        let remembered = clamp(width: previous.leadingWidth, bounds: bounds)
         if previous.isCollapsed {
-            if proposedWidth > reopenThreshold {
+            if proposedWidth > bounds.reopenThreshold {
                 return OpenCodeSplitPaneState(leadingWidth: remembered, isCollapsed: false)
             }
             return OpenCodeSplitPaneState(leadingWidth: remembered, isCollapsed: true)
         }
-        if proposedWidth < collapseThreshold {
+        if proposedWidth < bounds.collapseThreshold {
             return OpenCodeSplitPaneState(leadingWidth: remembered, isCollapsed: true)
         }
-        return OpenCodeSplitPaneState(leadingWidth: clamp(width: proposedWidth), isCollapsed: false)
+        return OpenCodeSplitPaneState(
+            leadingWidth: clamp(width: proposedWidth, bounds: bounds),
+            isCollapsed: false
+        )
     }
 
     /// Convenience overload matching the drag start flag.
@@ -90,6 +174,16 @@ enum OpenCodeSplitPaneLayout {
     }
 
     static func toggled(_ state: OpenCodeSplitPaneState) -> OpenCodeSplitPaneState {
-        OpenCodeSplitPaneState(leadingWidth: clamp(width: state.leadingWidth), isCollapsed: !state.isCollapsed)
+        toggled(state, bounds: sidebarBounds)
+    }
+
+    static func toggled(
+        _ state: OpenCodeSplitPaneState,
+        bounds: OpenCodeSplitPaneBounds
+    ) -> OpenCodeSplitPaneState {
+        OpenCodeSplitPaneState(
+            leadingWidth: clamp(width: state.leadingWidth, bounds: bounds),
+            isCollapsed: !state.isCollapsed
+        )
     }
 }

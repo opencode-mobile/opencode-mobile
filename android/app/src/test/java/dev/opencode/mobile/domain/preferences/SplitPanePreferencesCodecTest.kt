@@ -13,6 +13,8 @@ class SplitPanePreferencesCodecTest {
         assertEquals("home.isCollapsed", SplitPanePreferencesCodec.isCollapsedKey(OpenCodeSplitPaneScreen.Home))
         assertEquals("settings.leadingWidthDp", SplitPanePreferencesCodec.leadingWidthKey(OpenCodeSplitPaneScreen.Settings))
         assertEquals("settings.isCollapsed", SplitPanePreferencesCodec.isCollapsedKey(OpenCodeSplitPaneScreen.Settings))
+        assertEquals("changes.leadingWidthDp", SplitPanePreferencesCodec.leadingWidthKey(OpenCodeSplitPaneScreen.Changes))
+        assertEquals("terminals.isCollapsed", SplitPanePreferencesCodec.isCollapsedKey(OpenCodeSplitPaneScreen.Terminals))
     }
 
     @Test
@@ -46,6 +48,21 @@ class SplitPanePreferencesCodecTest {
         assertEquals(
             OpenCodeSplitPaneState(leadingWidth = 480.dp, isCollapsed = true),
             SplitPanePreferencesCodec.sanitize(OpenCodeSplitPaneState(leadingWidth = 900.dp, isCollapsed = true)),
+        )
+    }
+
+    @Test
+    fun contentWidth_isNotClampedToSidebarMaximum() {
+        assertEquals(
+            560.dp,
+            SplitPanePreferencesCodec.decode(560f, false, OpenCodeSplitPaneScreen.Changes).leadingWidth,
+        )
+        assertEquals(
+            OpenCodeSplitPaneState(leadingWidth = 640.dp, isCollapsed = false),
+            SplitPanePreferencesCodec.sanitize(
+                OpenCodeSplitPaneState(leadingWidth = 640.dp, isCollapsed = false),
+                OpenCodeSplitPaneScreen.Terminals,
+            ),
         )
     }
 }

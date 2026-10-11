@@ -1,6 +1,7 @@
 package dev.opencode.mobile.ui.changes
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -63,13 +64,18 @@ import dev.opencode.mobile.ui.components.OpenCodeSectionHeaderInset
 import dev.opencode.mobile.ui.components.OpenCodeSectionHeaderTrailing
 import dev.opencode.mobile.ui.components.OpenCodeSectionHeaderVariant
 import dev.opencode.mobile.ui.components.OpenCodeTextInput
+import dev.opencode.mobile.ui.components.OpenCodeSplitPane
+import dev.opencode.mobile.ui.components.OpenCodeSplitPaneDetailControl
+import dev.opencode.mobile.ui.components.OpenCodeSplitPaneScreen
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarAction
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
 import dev.opencode.mobile.ui.components.OpenCodeTopBarOverflowHost
+import dev.opencode.mobile.ui.components.currentOpenCodeUsesContentSplit
+import dev.opencode.mobile.ui.components.openCodeDetailLeading
+import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.components.OpenCodeUnifiedDiff
 import dev.opencode.mobile.ui.components.UnifiedDiffContextMode
-import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -97,18 +103,75 @@ fun ChangesScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val backStack = rememberNavBackStack(ChangedFilesRoute)
     var didAttemptDeepLink by rememberSaveable(initialFilePath) { mutableStateOf(false) }
+    var selectedPath by rememberSaveable { mutableStateOf<String?>(null) }
+    val useContentSplit = currentOpenCodeUsesContentSplit()
     val exitChanges = {
         viewModel.clearFilter()
         onNavigateBack()
     }
 
-    LaunchedEffect(state.phase, initialFilePath, didAttemptDeepLink) {
+    LaunchedEffect(state.phase, initialFilePath, didAttemptDeepLink, useContentSplit) {
         if (didAttemptDeepLink || initialFilePath.isNullOrEmpty()) return@LaunchedEffect
         val content = (state.phase as? ChangesPhase.Content)?.changeSet ?: return@LaunchedEffect
         if (content.files.any { it.path == initialFilePath }) {
-            backStack.add(FileViewerRoute(initialFilePath))
+            if (useContentSplit) selectedPath = initialFilePath else backStack.add(FileViewerRoute(initialFilePath))
         }
         didAttemptDeepLink = true
+    }
+    LaunchedEffect(useContentSplit) {
+        if (useContentSplit) {
+            val viewer = backStack.lastOrNull() as? FileViewerRoute
+            if (viewer != null) {
+                selectedPath = viewer.path
+                backStack.removeLastOrNull()
+            }
+        } else {
+            val path = selectedPath
+            if (path != null) {
+                selectedPath = null
+                backStack.add(FileViewerRoute(path))
+            }
+        }
+    }
+
+    if (useContentSplit) {
+        OpenCodeSplitPane(
+            screen = OpenCodeSplitPaneScreen.Changes,
+            modifier = modifier,
+            leading = {
+                ChangedFilesScreen(
+                    state = state,
+                    viewModel = viewModel,
+                    onNavigateBack = exitChanges,
+                    onOpenFile = { selectedPath = it },
+                    onSourceChanged = { selectedPath = null },
+                    selectedPath = selectedPath,
+                    constrainToReadableColumn = false,
+                )
+            },
+            trailing = { control ->
+                val file = state.content?.files?.firstOrNull { it.path == selectedPath }
+                if (file != null) {
+                    FileViewerScreen(
+                        file = file,
+                        onNavigateBack = { selectedPath = null },
+                        detailControl = control,
+                        usesReadableColumn = false,
+                    )
+                } else {
+                    Column(Modifier.fillMaxSize()) {
+                        OpenCodeTopBar(leading = openCodeDetailLeading(control) {})
+                        OpenCodeEmptyState(
+                            title = "Select a file",
+                            message = "Choose a changed file to see the diff.",
+                            icon = OpenCodeIcons.List,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+            },
+        )
+        return
     }
 
     NavDisplay(
@@ -126,6 +189,7 @@ fun ChangesScreen(
                         viewModel = viewModel,
                         onNavigateBack = exitChanges,
                         onOpenFile = { backStack.add(FileViewerRoute(it)) },
+                        onSourceChanged = { if (backStack.size > 1) backStack.removeLastOrNull() },
                     )
                 }
                 entry<FileViewerRoute> { route ->
@@ -160,6 +224,9 @@ private fun ChangedFilesScreen(
     viewModel: ChangesViewModel,
     onNavigateBack: () -> Unit,
     onOpenFile: (String) -> Unit,
+    onSourceChanged: () -> Unit = {},
+    selectedPath: String? = null,
+    constrainToReadableColumn: Boolean = true,
 ) {
     var menuExpanded by rememberSaveable { mutableStateOf(false) }
     var listResetToken by rememberSaveable { mutableIntStateOf(0) }
@@ -176,7 +243,10 @@ private fun ChangedFilesScreen(
                         icon = if (selected) OpenCodeIcons.Check else null,
                         accessibilityLabel = if (selected) "${source.displayName}, selected" else source.displayName,
                         onClick = {
-                            if (source != state.selectedSource) listResetToken += 1
+                            if (source != state.selectedSource) {
+                                listResetToken += 1
+                                onSourceChanged()
+                            }
                             viewModel.selectSource(source)
                         },
                     )
@@ -206,7 +276,7 @@ private fun ChangedFilesScreen(
                 showDivider = true,
             )
         }
-        OpenCodeReadableColumn(modifier = Modifier.weight(1f)) {
+        val phaseContent: @Composable () -> Unit = {
             when (val phase = state.phase) {
                 ChangesPhase.Loading ->
                     OpenCodeStatusStack(
@@ -234,7 +304,8 @@ private fun ChangedFilesScreen(
                         state.selectedSource.emptyTitle,
                         state.selectedSource.emptyDetail,
                     )
-                is ChangesPhase.Content -> ChangedFilesContent(phase.changeSet, state, listResetToken, viewModel, onOpenFile)
+                is ChangesPhase.Content ->
+                    ChangedFilesContent(phase.changeSet, state, listResetToken, viewModel, onOpenFile, selectedPath)
                 is ChangesPhase.Error ->
                     OpenCodeEmptyState(
                         title = "Unable to load changes",
@@ -248,6 +319,11 @@ private fun ChangedFilesScreen(
                     )
             }
         }
+        if (constrainToReadableColumn) {
+            OpenCodeReadableColumn(modifier = Modifier.weight(1f)) { phaseContent() }
+        } else {
+            Box(Modifier.weight(1f)) { phaseContent() }
+        }
     }
 }
 
@@ -259,6 +335,7 @@ private fun ChangedFilesContent(
     listResetToken: Int,
     viewModel: ChangesViewModel,
     onOpenFile: (String) -> Unit,
+    selectedPath: String? = null,
 ) {
     val listState =
         rememberSaveable(state.selectedSource, listResetToken, saver = androidx.compose.foundation.lazy.LazyListState.Saver) {
@@ -344,7 +421,7 @@ private fun ChangedFilesContent(
                                 inset = OpenCodeSectionHeaderInset.Flush,
                             )
                             OpenCodeListGroup(itemCount = group.files.size) { index ->
-                                FileRow(group.files[index], changeSet, onOpenFile)
+                                FileRow(group.files[index], changeSet, onOpenFile, selectedPath)
                             }
                         }
                     }
@@ -359,9 +436,11 @@ private fun FileRow(
     file: FileDiff,
     changeSet: ChangesContentState,
     onOpenFile: (String) -> Unit,
+    selectedPath: String? = null,
 ) {
     OpenCodeListItem(
         title = changedFileName(file.path),
+        selected = file.path == selectedPath,
         onClick = {
             logChangesAction(ProductAnalytics.Action.CHANGES_OPEN_FILE)
             onOpenFile(file.path)
@@ -383,6 +462,8 @@ private fun FileRow(
 private fun FileViewerScreen(
     file: FileDiff,
     onNavigateBack: () -> Unit,
+    detailControl: OpenCodeSplitPaneDetailControl? = null,
+    usesReadableColumn: Boolean = true,
 ) {
     var viewer by remember(file.path) { mutableStateOf(FileViewerState(file)) }
     val scrollState = rememberScrollState()
@@ -397,15 +478,13 @@ private fun FileViewerScreen(
         OpenCodeTopBar(
             title = file.path,
             leading =
-                OpenCodeTopBarLeading.Back(
-                    onClick = {
-                        logFileViewerAction(ProductAnalytics.Action.FILE_VIEWER_BACK)
-                        onNavigateBack()
-                    },
-                ),
+                openCodeDetailLeading(detailControl) {
+                    logFileViewerAction(ProductAnalytics.Action.FILE_VIEWER_BACK)
+                    onNavigateBack()
+                },
             showDivider = true,
         )
-        OpenCodeReadableColumn(modifier = Modifier.weight(1f)) {
+        val viewerBody: @Composable () -> Unit = {
             if (!viewer.hasPreview) {
                 Centered {
                     OpenCodeEmptyState(
@@ -459,6 +538,11 @@ private fun FileViewerScreen(
                     )
                 }
             }
+        }
+        if (usesReadableColumn) {
+            OpenCodeReadableColumn(modifier = Modifier.weight(1f)) { viewerBody() }
+        } else {
+            Box(Modifier.weight(1f)) { viewerBody() }
         }
     }
 }

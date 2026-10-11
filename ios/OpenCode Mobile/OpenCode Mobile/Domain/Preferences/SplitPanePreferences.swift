@@ -35,7 +35,7 @@ final class SplitPanePreferences {
 
     func setState(_ state: OpenCodeSplitPaneState, for screen: OpenCodeSplitPaneScreen) {
         let sanitized = OpenCodeSplitPaneState(
-            leadingWidth: OpenCodeSplitPaneLayout.clamp(width: state.leadingWidth),
+            leadingWidth: Self.storedWidth(state.leadingWidth, for: screen),
             isCollapsed: state.isCollapsed
         )
         states[screen] = sanitized
@@ -54,15 +54,27 @@ final class SplitPanePreferences {
     private static func load(_ screen: OpenCodeSplitPaneScreen, from defaults: UserDefaults) -> OpenCodeSplitPaneState {
         let width: CGFloat
         if defaults.object(forKey: StorageKeys.leadingWidth(screen)) == nil {
-            width = OpenCodeSplitPaneLayout.defaultLeadingWidth
+            width = screen.usesContentMetrics
+                ? OpenCodeSplitPaneLayout.contentDefaultLeadingWidth
+                : OpenCodeSplitPaneLayout.defaultLeadingWidth
         } else {
-            width = OpenCodeSplitPaneLayout.clamp(
-                width: CGFloat(defaults.double(forKey: StorageKeys.leadingWidth(screen)))
+            width = storedWidth(
+                CGFloat(defaults.double(forKey: StorageKeys.leadingWidth(screen))),
+                for: screen
             )
         }
         return OpenCodeSplitPaneState(
             leadingWidth: width,
             isCollapsed: defaults.bool(forKey: StorageKeys.isCollapsed(screen))
         )
+    }
+
+    /// Sidebar widths stay inside 280–480. Content widths are clamped to the
+    /// current window when drawn, so a saved 560 is not collapsed to 480 here.
+    private static func storedWidth(_ width: CGFloat, for screen: OpenCodeSplitPaneScreen) -> CGFloat {
+        if screen.usesContentMetrics {
+            return width.isFinite && width > 0 ? width : OpenCodeSplitPaneLayout.contentDefaultLeadingWidth
+        }
+        return OpenCodeSplitPaneLayout.clamp(width: width)
     }
 }
