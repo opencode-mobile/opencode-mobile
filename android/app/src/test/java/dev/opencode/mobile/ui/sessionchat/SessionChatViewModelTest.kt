@@ -5259,6 +5259,142 @@ class SessionChatViewModelTest {
             )
         }
 
+    @Test
+    fun dictationInsert_splicesTranscriptAtCaret() =
+        runTest(testDispatcher) {
+            val viewModel = dictationViewModel()
+            viewModel.updateComposerText("Hello there", cursor = 5)
+            advanceUntilIdle()
+            viewModel.beginDictation("English", onDevice = true)
+            viewModel.dictationPartial(committed = " big", volatile = "")
+            viewModel.dictationInsert()
+            advanceUntilIdle()
+
+            val composer = viewModel.uiState.value.composer
+            assertEquals("Hello big there", composer.text)
+            assertEquals(9, composer.cursor)
+            assertNull(viewModel.uiState.value.dictation)
+        }
+
+    @Test
+    fun dictationCancel_afterPartial_leavesComposerUnchanged() =
+        runTest(testDispatcher) {
+            val viewModel = dictationViewModel()
+            viewModel.updateComposerText("Hello there", cursor = 5)
+            advanceUntilIdle()
+            viewModel.beginDictation("English", onDevice = true)
+            viewModel.dictationPartial(committed = " big", volatile = "")
+            viewModel.dictationCancel()
+            advanceUntilIdle()
+
+            val composer = viewModel.uiState.value.composer
+            assertEquals("Hello there", composer.text)
+            assertEquals(5, composer.cursor)
+            assertNull(viewModel.uiState.value.dictation)
+        }
+
+    @Test
+    fun dictationCancelForModeChangeAndBackground_doesNotInsert() =
+        runTest(testDispatcher) {
+            val viewModel = dictationViewModel()
+            viewModel.updateComposerText("Hello there", cursor = 5)
+            advanceUntilIdle()
+            viewModel.beginDictation("English", onDevice = true)
+            viewModel.dictationPartial(committed = " big", volatile = "")
+            viewModel.cancelDictationForModeChange()
+            advanceUntilIdle()
+
+            assertEquals("Hello there", viewModel.uiState.value.composer.text)
+            assertEquals(5, viewModel.uiState.value.composer.cursor)
+            assertNull(viewModel.uiState.value.dictation)
+
+            viewModel.beginDictation("English", onDevice = true)
+            viewModel.dictationPartial(committed = " big", volatile = "")
+            viewModel.cancelDictationForBackground()
+            advanceUntilIdle()
+
+            assertEquals("Hello there", viewModel.uiState.value.composer.text)
+            assertEquals(5, viewModel.uiState.value.composer.cursor)
+            assertNull(viewModel.uiState.value.dictation)
+
+            viewModel.dictationFinishDelayMs = 1_000
+            viewModel.beginDictation("English", onDevice = true)
+            viewModel.dictationPartial(committed = " big", volatile = "")
+            viewModel.dictationInsert()
+            viewModel.cancelDictationForBackground()
+            advanceUntilIdle()
+
+            assertEquals("Hello there", viewModel.uiState.value.composer.text)
+            assertEquals(5, viewModel.uiState.value.composer.cursor)
+            assertNull(viewModel.uiState.value.dictation)
+        }
+
+    @Test
+    fun dictationInsert_emptyTranscript_keepsCard() =
+        runTest(testDispatcher) {
+            val viewModel = dictationViewModel()
+            viewModel.updateComposerText("Hello there", cursor = 5)
+            advanceUntilIdle()
+            viewModel.beginDictation("English", onDevice = true)
+            viewModel.dictationPartial(committed = "   ", volatile = "")
+            viewModel.dictationInsert()
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertEquals("Hello there", state.composer.text)
+            assertEquals(5, state.composer.cursor)
+            assertEquals(ComposerDictationPhase.Listening, state.dictation?.phase)
+        }
+
+    @Test
+    fun dictationUnavailable_duringFinishing_stillInserts() =
+        runTest(testDispatcher) {
+            val viewModel = dictationViewModel()
+            viewModel.dictationFinishDelayMs = 1_000
+            viewModel.updateComposerText("Hello there", cursor = 5)
+            advanceUntilIdle()
+            viewModel.beginDictation("English", onDevice = true)
+            viewModel.dictationPartial(committed = " big", volatile = "")
+            viewModel.dictationInsert()
+            viewModel.beginDictationUnavailable(
+                ComposerDictationPhase.RecognizerError,
+                "late",
+            )
+
+            assertEquals(ComposerDictationPhase.Finishing, viewModel.uiState.value.dictation?.phase)
+            assertEquals("Hello there", viewModel.uiState.value.composer.text)
+            advanceUntilIdle()
+
+            val composer = viewModel.uiState.value.composer
+            assertEquals("Hello big there", composer.text)
+            assertEquals(9, composer.cursor)
+            assertNull(viewModel.uiState.value.dictation)
+        }
+
+    @Test
+    fun dictationPartial_doesNotChangeComposerText() =
+        runTest(testDispatcher) {
+            val viewModel = dictationViewModel()
+            viewModel.updateComposerText("Hello there", cursor = 5)
+            advanceUntilIdle()
+            viewModel.beginDictation("English", onDevice = true)
+            viewModel.dictationPartial(committed = " big", volatile = "ger")
+
+            val state = viewModel.uiState.value
+            assertEquals("Hello there", state.composer.text)
+            assertEquals(5, state.composer.cursor)
+            assertEquals(" big", state.dictation?.committed)
+            assertEquals("ger", state.dictation?.volatile)
+        }
+
+    private fun TestScope.dictationViewModel(): SessionChatViewModel {
+        val viewModel = createViewModel(FakeMessageRepository())
+        viewModel.dictationFinishDelayMs = 0
+        SessionChatDisplayPreferences.updateComposerDictation(true)
+        advanceUntilIdle()
+        return viewModel
+    }
+
     private val sonnetOption =
         ModelSelectionOption("anthropic", "Anthropic", "claude-sonnet", "Claude Sonnet", emptyList(), 128_000)
     private val gpt4Option =

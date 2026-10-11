@@ -421,6 +421,12 @@ private extension OpenCodeSessionComposerAction {
         case .submitQuestion: "Submit"
         case .dismissQuestion: "Dismiss"
         case .backToMainSession: "Back to main session"
+        case .beginDictation: "Dictate"
+        case .dictationCancel: "Cancel dictation"
+        case .dictationInsert: "Insert transcript"
+        case .dictationOpenSettings: "Open Settings"
+        case .dictationDownload: "Download"
+        case .dictationRetry: "Retry"
         }
     }
 }

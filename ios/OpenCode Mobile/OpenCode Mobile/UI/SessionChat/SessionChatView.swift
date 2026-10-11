@@ -1,3 +1,4 @@
+import AVFoundation
 import Combine
 import Factory
 import PhotosUI
@@ -7,6 +8,7 @@ import UniformTypeIdentifiers
 
 struct SessionChatView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
     @State private var viewModelStorage: SessionChatViewModel?
     /// `sessionNavigationTaskID` the current `viewModelStorage` was built for.
     @State private var viewModelTaskID: String?
@@ -42,6 +44,8 @@ struct SessionChatView: View {
     @State private var composerFocusRequest = 0
     /// False while another screen is pushed over this chat.
     @State private var isOnScreen = false
+    @State private var dictationSession: any ComposerDictationSession = ComposerDictationSessions.make()
+    @State private var dictationSupport = DictationSupport.hidden
 
     private let session: SessionListItem
     private let injectedViewModel: SessionChatViewModel?
@@ -114,6 +118,7 @@ struct SessionChatView: View {
                     await viewModel.loadMessages()
                 }
             case .rebuild:
+                dictationSession.stop()
                 viewModelStorage?.stopObserving()
                 viewModelStorage = injectedViewModel ?? Container.makeSessionChatViewModel(
                     sessionID: session.id,
@@ -325,7 +330,7 @@ struct SessionChatView: View {
                         isChildSession: session.parentID != nil,
                         hasPermission: viewModel.uiState.permissionRequest != nil && !viewModel.uiState.permissionDockHidden,
                         hasQuestion: viewModel.uiState.questionRequest != nil
-                    ) == .prompt {
+                    ) == .prompt, viewModel.uiState.dictation == nil {
                         if viewModel.uiState.atSuggestionsVisible {
                             OpenCodeComposerSuggestionOverlay(
                                 items: viewModel.uiState.atSuggestions.map { suggestion in
@@ -657,7 +662,31 @@ struct SessionChatView: View {
         }
         .onDisappear {
             isOnScreen = false
+            dictationSession.stop()
             viewModelStorage?.stopObserving()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard viewModelStorage != nil else { return }
+            if phase == .background {
+                viewModel.cancelDictationForBackground()
+            } else if phase == .active {
+                Task { await refreshDictationSupport() }
+            }
+        }
+        .onChange(of: composerKind) { _, kind in
+            if kind != .prompt {
+                viewModel.cancelDictationForModeChange()
+            }
+        }
+        .onChange(of: viewModel.uiState.dictation?.phase) { _, phase in
+            // Stop as soon as the card leaves listening, including the insert beat,
+            // so a late recognizer error cannot replace a confirmed transcript.
+            if phase != .listening {
+                dictationSession.stop()
+            }
+        }
+        .task(id: viewModel.uiState.composerDictationEnabled) {
+            await refreshDictationSupport()
         }
         .openCodeKeyboardShortcut(
             .focusComposer,
@@ -1082,7 +1111,8 @@ struct SessionChatView: View {
                     showStop: viewModel.uiState.sessionStatusLabel != nil,
                     stopEnabled: !viewModel.uiState.isAborting &&
                         viewModel.uiState.canMutate,
-                    followUpDelivery: composer.supportsFollowUpDelivery ? composer.followUpDelivery : nil
+                    followUpDelivery: composer.supportsFollowUpDelivery ? composer.followUpDelivery : nil,
+                    showDictationButton: viewModel.uiState.composerDictationEnabled && dictationSupport.showsMic
                 )
             )
         }
@@ -1116,6 +1146,7 @@ struct SessionChatView: View {
         return OpenCodeSessionComposer(
             state: state,
             focusRequestToken: composerFocusRequest,
+            dictation: kind == .prompt ? viewModel.uiState.dictation.map(composerDictation) : nil,
             onAction: { action in
                 switch action {
                 case let .textChanged(text, selectionStart, _):
@@ -1186,6 +1217,18 @@ struct SessionChatView: View {
                 case .backToMainSession:
                     logChatAction(ProductAnalytics.Action.chatBack)
                     leaveSession()
+                case .beginDictation:
+                    Task { await beginComposerDictation() }
+                case .dictationCancel:
+                    viewModel.dictationCancel()
+                case .dictationInsert:
+                    viewModel.dictationInsert()
+                case .dictationOpenSettings:
+                    UIApplication.shared.open(URL(string: UIApplication.openSettingsURLString)!)
+                case .dictationDownload:
+                    Task { await downloadDictationModel() }
+                case .dictationRetry:
+                    Task { await beginComposerDictation() }
                 }
             },
             status: status
@@ -1194,6 +1237,143 @@ struct SessionChatView: View {
 
     private func attachmentPresentation(_ attachment: Attachment) -> OpenCodeAttachmentPresentation {
         AttachmentPresentationMapper.presentation(from: attachment)
+    }
+
+    private func composerDictation(_ state: ComposerDictationUiState) -> OpenCodeSessionComposerDictation {
+        OpenCodeSessionComposerDictation(
+            variant: dictationCardVariant(state),
+            committed: state.committed,
+            volatileText: state.volatile,
+            level: state.level,
+            status: dictationStatus(state),
+            startedAt: state.startedAt
+        )
+    }
+
+    private func dictationCardVariant(_ state: ComposerDictationUiState) -> OpenCodeDictationCardVariant {
+        switch state.phase {
+        case .listening:
+            .listening
+        case .finishing:
+            .finishing
+        case .permissionDenied:
+            .unavailable(.permissionDenied)
+        case .modelNotInstalled:
+            .unavailable(.modelNotInstalled)
+        case .recognizerError:
+            .unavailable(.recognizerError(state.errorMessage ?? ""))
+        }
+    }
+
+    private func dictationStatus(_ state: ComposerDictationUiState) -> String {
+        if state.onDevice {
+            return "Listening · \(state.languageLabel) · on-device"
+        }
+        return "Listening · \(state.languageLabel)"
+    }
+
+    private func refreshDictationSupport() async {
+        guard viewModel.uiState.composerDictationEnabled else {
+            dictationSupport = .hidden
+            return
+        }
+        dictationSupport = await dictationSession.probe()
+    }
+
+    private func beginComposerDictation() async {
+        let support = await dictationSession.probe()
+        dictationSupport = support
+        switch support {
+        case .hidden:
+            return
+        case .permissionDenied:
+            viewModel.beginDictationUnavailable(
+                .permissionDenied,
+                message: "Microphone access is off"
+            )
+        case .modelNotInstalled:
+            viewModel.beginDictationUnavailable(
+                .modelNotInstalled,
+                message: "The on-device speech model is not installed"
+            )
+        case let .ready(languageLabel, onDevice):
+            let granted = await requestMicrophoneAccess()
+            guard granted else {
+                dictationSupport = .permissionDenied
+                viewModel.beginDictationUnavailable(
+                    .permissionDenied,
+                    message: "Microphone access is off"
+                )
+                return
+            }
+            resignComposerKeyboard()
+            viewModel.beginDictation(languageLabel: languageLabel, onDevice: onDevice)
+            guard viewModel.uiState.dictation?.phase == .listening else { return }
+            startDictationSession()
+        }
+    }
+
+    private func downloadDictationModel() async {
+        await dictationSession.downloadModel()
+        let support = await dictationSession.probe()
+        dictationSupport = support
+        switch support {
+        case let .ready(languageLabel, onDevice):
+            resignComposerKeyboard()
+            viewModel.beginDictation(languageLabel: languageLabel, onDevice: onDevice)
+            guard viewModel.uiState.dictation?.phase == .listening else { return }
+            startDictationSession()
+        case .permissionDenied:
+            viewModel.beginDictationUnavailable(
+                .permissionDenied,
+                message: "Microphone access is off"
+            )
+        case .modelNotInstalled:
+            viewModel.beginDictationUnavailable(
+                .modelNotInstalled,
+                message: "The on-device speech model is not installed"
+            )
+        case .hidden:
+            viewModel.dictationCancel()
+        }
+    }
+
+    private func startDictationSession() {
+        dictationSession.start(
+            onPartial: { committed, volatileText in
+                viewModel.dictationPartial(committed: committed, volatile: volatileText)
+            },
+            onLevel: { level in
+                viewModel.dictationLevel(level)
+            },
+            onError: { message in
+                if AVAudioApplication.shared.recordPermission == .denied {
+                    viewModel.beginDictationUnavailable(
+                        .permissionDenied,
+                        message: "Microphone access is off"
+                    )
+                } else {
+                    viewModel.beginDictationUnavailable(.recognizerError, message: message)
+                }
+            }
+        )
+    }
+
+    private func requestMicrophoneAccess() async -> Bool {
+        await withCheckedContinuation { continuation in
+            AVAudioApplication.requestRecordPermission { granted in
+                continuation.resume(returning: granted)
+            }
+        }
+    }
+
+    private func resignComposerKeyboard() {
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder),
+            to: nil,
+            from: nil,
+            for: nil
+        )
     }
 
     private var composerAttachmentSources: ComposerAttachmentSources {

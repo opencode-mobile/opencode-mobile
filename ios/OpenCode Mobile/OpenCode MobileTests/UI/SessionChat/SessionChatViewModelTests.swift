@@ -3839,6 +3839,118 @@ struct SessionChatViewModelTests {
         #expect(viewModel.uiState.workingIndicatorLabel == "Working")
     }
 
+    @Test func dictationInsert_splicesTranscriptAtCaret() {
+        SessionChatDisplayPreferences.shared.setComposerDictation(true)
+        defer { SessionChatDisplayPreferences.shared.clear() }
+        let viewModel = makeViewModel()
+        defer { viewModel.stopObserving() }
+        viewModel.dictationFinishDelayNs = 0
+
+        viewModel.updateComposerText("Hello there", cursor: 5)
+        viewModel.beginDictation(languageLabel: "English", onDevice: true)
+        viewModel.dictationPartial(committed: " big", volatile: "")
+        viewModel.dictationInsert()
+
+        #expect(viewModel.uiState.composer.text == "Hello big there")
+        #expect(viewModel.uiState.composer.cursor == 9)
+        #expect(viewModel.uiState.dictation == nil)
+    }
+
+    @Test func dictationCancel_afterPartialLeavesComposerUntouched() {
+        SessionChatDisplayPreferences.shared.setComposerDictation(true)
+        defer { SessionChatDisplayPreferences.shared.clear() }
+        let viewModel = makeViewModel()
+        defer { viewModel.stopObserving() }
+        viewModel.dictationFinishDelayNs = 0
+
+        viewModel.updateComposerText("Hello there", cursor: 5)
+        viewModel.beginDictation(languageLabel: "English", onDevice: true)
+        viewModel.dictationPartial(committed: " big", volatile: "ger")
+        viewModel.dictationCancel()
+
+        #expect(viewModel.uiState.composer.text == "Hello there")
+        #expect(viewModel.uiState.composer.cursor == 5)
+        #expect(viewModel.uiState.dictation == nil)
+    }
+
+    @Test func dictationAutoCancel_modeChangeAndBackgroundDoNotInsert() {
+        SessionChatDisplayPreferences.shared.setComposerDictation(true)
+        defer { SessionChatDisplayPreferences.shared.clear() }
+        let viewModel = makeViewModel()
+        defer { viewModel.stopObserving() }
+        viewModel.dictationFinishDelayNs = 0
+
+        viewModel.updateComposerText("Hello there", cursor: 5)
+        viewModel.beginDictation(languageLabel: "English", onDevice: true)
+        viewModel.dictationPartial(committed: " big", volatile: "")
+        viewModel.cancelDictationForModeChange()
+        #expect(viewModel.uiState.composer.text == "Hello there")
+        #expect(viewModel.uiState.composer.cursor == 5)
+        #expect(viewModel.uiState.dictation == nil)
+
+        viewModel.beginDictation(languageLabel: "English", onDevice: true)
+        viewModel.dictationPartial(committed: " big", volatile: "")
+        viewModel.cancelDictationForBackground()
+        #expect(viewModel.uiState.composer.text == "Hello there")
+        #expect(viewModel.uiState.composer.cursor == 5)
+        #expect(viewModel.uiState.dictation == nil)
+    }
+
+    @Test func dictationInsert_emptyTranscriptLeavesCardUp() {
+        SessionChatDisplayPreferences.shared.setComposerDictation(true)
+        defer { SessionChatDisplayPreferences.shared.clear() }
+        let viewModel = makeViewModel()
+        defer { viewModel.stopObserving() }
+        viewModel.dictationFinishDelayNs = 0
+
+        viewModel.updateComposerText("Hello there", cursor: 5)
+        viewModel.beginDictation(languageLabel: "English", onDevice: true)
+        viewModel.dictationPartial(committed: "  ", volatile: " ")
+        viewModel.dictationInsert()
+
+        #expect(viewModel.uiState.composer.text == "Hello there")
+        #expect(viewModel.uiState.composer.cursor == 5)
+        #expect(viewModel.uiState.dictation != nil)
+    }
+
+    @Test func dictationUnavailable_duringFinishingStillInserts() async throws {
+        SessionChatDisplayPreferences.shared.setComposerDictation(true)
+        defer { SessionChatDisplayPreferences.shared.clear() }
+        let viewModel = makeViewModel()
+        defer { viewModel.stopObserving() }
+        viewModel.dictationFinishDelayNs = 30_000_000
+
+        viewModel.updateComposerText("Hello there", cursor: 5)
+        viewModel.beginDictation(languageLabel: "English", onDevice: true)
+        viewModel.dictationPartial(committed: " big", volatile: "")
+        viewModel.dictationInsert()
+        viewModel.beginDictationUnavailable(.recognizerError, message: "late")
+
+        #expect(viewModel.uiState.dictation?.phase == .finishing)
+        #expect(viewModel.uiState.composer.text == "Hello there")
+        try await Task.sleep(nanoseconds: 80_000_000)
+        #expect(viewModel.uiState.composer.text == "Hello big there")
+        #expect(viewModel.uiState.composer.cursor == 9)
+        #expect(viewModel.uiState.dictation == nil)
+    }
+
+    @Test func dictationPartial_doesNotChangeComposerText() {
+        SessionChatDisplayPreferences.shared.setComposerDictation(true)
+        defer { SessionChatDisplayPreferences.shared.clear() }
+        let viewModel = makeViewModel()
+        defer { viewModel.stopObserving() }
+        viewModel.dictationFinishDelayNs = 0
+
+        viewModel.updateComposerText("Hello there", cursor: 5)
+        viewModel.beginDictation(languageLabel: "English", onDevice: true)
+        viewModel.dictationPartial(committed: " big", volatile: "ger")
+
+        #expect(viewModel.uiState.composer.text == "Hello there")
+        #expect(viewModel.uiState.composer.cursor == 5)
+        #expect(viewModel.uiState.dictation?.committed == " big")
+        #expect(viewModel.uiState.dictation?.volatile == "ger")
+    }
+
     private func makeViewModel(
         messageRepository: (any MessageRepository)? = nil,
         eventStream: FakeForegroundEventStream? = nil,

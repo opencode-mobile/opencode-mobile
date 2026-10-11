@@ -3,6 +3,7 @@ package dev.opencode.mobile.ui.components
 import android.content.res.Configuration
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -46,6 +47,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -96,6 +98,7 @@ sealed interface OpenCodeSessionComposerState {
         val showStop: Boolean,
         val stopEnabled: Boolean,
         val followUpDelivery: FollowUpDelivery? = null,
+        val showDictationButton: Boolean = false,
     ) : OpenCodeSessionComposerState
 
     /** A file an edit/write permission would change, with its diff size. */
@@ -243,6 +246,18 @@ sealed interface OpenCodeSessionComposerAction {
     ) : OpenCodeSessionComposerAction
 
     data object BackToMainSession : OpenCodeSessionComposerAction
+
+    data object BeginDictation : OpenCodeSessionComposerAction
+
+    data object DictationCancel : OpenCodeSessionComposerAction
+
+    data object DictationInsert : OpenCodeSessionComposerAction
+
+    data object DictationOpenSettings : OpenCodeSessionComposerAction
+
+    data object DictationDownload : OpenCodeSessionComposerAction
+
+    data object DictationRetry : OpenCodeSessionComposerAction
 }
 
 /**
@@ -305,6 +320,7 @@ fun OpenCodeSessionComposer(
     modifier: Modifier = Modifier,
     focus: OpenCodeSessionComposerFocus? = null,
     status: (@Composable () -> Unit)? = null,
+    dictation: ComposerDictationCardModel? = null,
 ) {
     val composerFocus = focus ?: rememberOpenCodeSessionComposerFocus()
     val showsPrompt = state is OpenCodeSessionComposerState.Prompt
@@ -379,11 +395,18 @@ fun OpenCodeSessionComposer(
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         when (state) {
                             is OpenCodeSessionComposerState.Prompt ->
-                                PromptEntryContent(
-                                    state = state,
-                                    onAction = onAction,
-                                    focus = composerFocus,
-                                )
+                                if (dictation != null) {
+                                    DictationTakeover(
+                                        card = dictation,
+                                        onAction = onAction,
+                                    )
+                                } else {
+                                    PromptEntryContent(
+                                        state = state,
+                                        onAction = onAction,
+                                        focus = composerFocus,
+                                    )
+                                }
 
                             is OpenCodeSessionComposerState.Permission ->
                                 PermissionApprovalContent(
@@ -409,6 +432,41 @@ fun OpenCodeSessionComposer(
             }
         }
     }
+}
+
+@Composable
+private fun DictationTakeover(
+    card: ComposerDictationCardModel,
+    onAction: (OpenCodeSessionComposerAction) -> Unit,
+) {
+    val focusManager = LocalFocusManager.current
+    val density = LocalDensity.current
+    val enter = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        focusManager.clearFocus()
+        enter.animateTo(1f, animationSpec = tween(durationMillis = 240))
+    }
+    OpenCodeDictationCard(
+        variant = card.variant,
+        committed = card.committed,
+        volatileTail = card.volatileTail,
+        level = card.level,
+        languageLabel = card.languageLabel,
+        onDevice = card.onDevice,
+        elapsedLabel = card.elapsedLabel,
+        unavailableReason = card.unavailableReason,
+        errorMessage = card.errorMessage,
+        onCancel = { onAction(OpenCodeSessionComposerAction.DictationCancel) },
+        onInsert = { onAction(OpenCodeSessionComposerAction.DictationInsert) },
+        onOpenSettings = { onAction(OpenCodeSessionComposerAction.DictationOpenSettings) },
+        onDownload = { onAction(OpenCodeSessionComposerAction.DictationDownload) },
+        onRetry = { onAction(OpenCodeSessionComposerAction.DictationRetry) },
+        modifier =
+            Modifier.graphicsLayer {
+                alpha = enter.value
+                translationY = with(density) { (12.dp * (1f - enter.value)).toPx() }
+            },
+    )
 }
 
 @Composable
@@ -539,6 +597,13 @@ private fun PromptEntryContent(
                 contrast = OpenCodeButtonContrast.Low,
                 onClick = { onAction(OpenCodeSessionComposerAction.OpenCommands) },
             )
+            if (state.showDictationButton) {
+                OpenCodeButton(
+                    variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Mic, "Dictate"),
+                    contrast = OpenCodeButtonContrast.Low,
+                    onClick = { onAction(OpenCodeSessionComposerAction.BeginDictation) },
+                )
+            }
         }
         Spacer(Modifier.weight(1f))
         Row(

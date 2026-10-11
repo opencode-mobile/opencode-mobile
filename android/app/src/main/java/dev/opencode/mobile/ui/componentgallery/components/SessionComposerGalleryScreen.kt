@@ -439,4 +439,10 @@ private val OpenCodeSessionComposerAction.label: String
             is OpenCodeSessionComposerAction.SubmitQuestion -> "Submit"
             is OpenCodeSessionComposerAction.DismissQuestion -> "Dismiss"
             OpenCodeSessionComposerAction.BackToMainSession -> "Back to main session"
+            OpenCodeSessionComposerAction.BeginDictation -> "Dictate"
+            OpenCodeSessionComposerAction.DictationCancel -> "Cancel dictation"
+            OpenCodeSessionComposerAction.DictationInsert -> "Insert transcript"
+            OpenCodeSessionComposerAction.DictationOpenSettings -> "Open Settings"
+            OpenCodeSessionComposerAction.DictationDownload -> "Download"
+            OpenCodeSessionComposerAction.DictationRetry -> "Retry"
         }

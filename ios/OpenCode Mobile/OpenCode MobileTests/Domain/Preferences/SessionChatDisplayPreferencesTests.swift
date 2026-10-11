@@ -173,4 +173,21 @@ import Testing
         let reloaded = SessionChatDisplayPreferences(defaults: defaults)
         #expect(reloaded.followUpDelivery == .queue)
     }
+
+    @Test func composerDictation_defaultsOffAndPersists() {
+        let suite = "SessionChatDisplayPreferencesTests.composerDictation"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        let preferences = SessionChatDisplayPreferences(defaults: defaults)
+        #expect(preferences.composerDictation == false)
+        preferences.setComposerDictation(true)
+        #expect(preferences.composerDictation == true)
+        let reloaded = SessionChatDisplayPreferences(defaults: defaults)
+        #expect(reloaded.composerDictation == true)
+        reloaded.clear()
+        #expect(reloaded.composerDictation == false)
+        #expect(defaults.object(forKey: "composerDictation") == nil)
+        let cleared = SessionChatDisplayPreferences(defaults: defaults)
+        #expect(cleared.composerDictation == false)
+    }
 }

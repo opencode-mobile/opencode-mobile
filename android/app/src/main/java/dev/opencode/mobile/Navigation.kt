@@ -70,6 +70,7 @@ import dev.opencode.mobile.ui.componentgallery.components.ChoiceBadgeGalleryScre
 import dev.opencode.mobile.ui.componentgallery.components.CodeSnippetGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ComposerSuggestionOverlayGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.DialogGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.DictationCardGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.DiffStatGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.EmptyStateGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.FilterTabsGalleryScreen
@@ -530,6 +531,10 @@ fun MainNavigation() {
                                                         settingsViewModel::setFollowUpDelivery,
                                                     supportsFollowUpDelivery =
                                                         settingsViewModel.supportsFollowUpDelivery(),
+                                                    composerDictation =
+                                                        SessionChatDisplayPreferences.composerDictation,
+                                                    onComposerDictationChange =
+                                                        settingsViewModel::setComposerDictation,
                                                     textMateEnabled = MarkdownHighlightPreferences.textMateEnabled,
                                                     onTextMateEnabledChange = settingsViewModel::setTextMateEnabled,
                                                     productAnalyticsConsented =
@@ -753,6 +758,8 @@ fun MainNavigation() {
                                                             SessionStatusBarGalleryScreen()
                                                         ComponentGalleryEntryId.SessionComposer ->
                                                             SessionComposerGalleryScreen()
+                                                        ComponentGalleryEntryId.DictationCard ->
+                                                            DictationCardGalleryScreen()
                                                         ComponentGalleryEntryId.RenderedMarkdown ->
                                                             RenderedMarkdownGalleryScreen()
                                                         ComponentGalleryEntryId.MessageList -> Unit

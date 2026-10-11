@@ -78,6 +78,8 @@ fun SettingsScreen(
     followUpDelivery: FollowUpDelivery,
     onFollowUpDeliveryChange: (FollowUpDelivery) -> Unit,
     supportsFollowUpDelivery: Boolean,
+    composerDictation: Boolean,
+    onComposerDictationChange: (Boolean) -> Unit,
     textMateEnabled: Boolean,
     onTextMateEnabledChange: (Boolean) -> Unit,
     productAnalyticsConsented: Boolean,
@@ -269,6 +271,25 @@ fun SettingsScreen(
                         } else {
                             null
                         },
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+
+                OpenCodeListItem(
+                    title = "Composer Dictation",
+                    subtitle = "Speak into the composer. Off until you turn this on.",
+                    style = OpenCodeListItemStyle.Card,
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Mic, "Composer Dictation"),
+                    accessory =
+                        OpenCodeListItemAccessory.Toggle(
+                            checked = composerDictation,
+                            onCheckedChange = { enabled ->
+                                logSettingsToggle(
+                                    ProductAnalytics.Action.SETTINGS_TOGGLE_COMPOSER_DICTATION,
+                                    enabled,
+                                )
+                                onComposerDictationChange(enabled)
+                            },
+                        ),
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
 
@@ -627,6 +648,8 @@ private fun SettingsScreenLightPreview() {
             followUpDelivery = FollowUpDelivery.Steer,
             onFollowUpDeliveryChange = {},
             supportsFollowUpDelivery = true,
+            composerDictation = SessionChatDisplayPreferences.composerDictation,
+            onComposerDictationChange = {},
             textMateEnabled = false,
             onTextMateEnabledChange = {},
             productAnalyticsConsented = false,
@@ -665,6 +688,8 @@ private fun SettingsScreenDarkPreview() {
             followUpDelivery = FollowUpDelivery.Steer,
             onFollowUpDeliveryChange = {},
             supportsFollowUpDelivery = true,
+            composerDictation = SessionChatDisplayPreferences.composerDictation,
+            onComposerDictationChange = {},
             textMateEnabled = false,
             onTextMateEnabledChange = {},
             productAnalyticsConsented = false,

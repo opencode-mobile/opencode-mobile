@@ -50,6 +50,7 @@ private var _radio_button_checked: ImageVector? = null
 private var _radio_button_unchecked: ImageVector? = null
 private var _widgets: ImageVector? = null
 private var _slash: ImageVector? = null
+private var _mic: ImageVector? = null
 private var _plug: ImageVector? = null
 
   val Add: ImageVector
@@ -1514,6 +1515,47 @@ private var _plug: ImageVector? = null
     )
       }.build()
       return _slash!!
+    }
+
+  val Mic: ImageVector
+    get() {
+      if (_mic != null) return _mic!!
+      _mic = ImageVector.Builder(
+        name = "Mic",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+      ).apply {
+    addPath(
+      pathData = PathParser().parsePathString("M12 19v3").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+    addPath(
+      pathData = PathParser().parsePathString("M19 10v2a7 7 0 0 1-14 0v-2").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+    addPath(
+      pathData = PathParser().parsePathString("M 12 2 h 0 a 3 3 0 0 1 3 3 v 7 a 3 3 0 0 1 -3 3 h 0 a 3 3 0 0 1 -3 -3 v -7 a 3 3 0 0 1 3 -3 z").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+      }.build()
+      return _mic!!
     }
 
   val Plug: ImageVector

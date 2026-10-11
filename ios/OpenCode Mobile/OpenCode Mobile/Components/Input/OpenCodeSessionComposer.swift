@@ -18,6 +18,7 @@ enum OpenCodeSessionComposerState {
         let showStop: Bool
         let stopEnabled: Bool
         let followUpDelivery: FollowUpDelivery?
+        let showDictationButton: Bool
 
         init(
             text: String,
@@ -35,7 +36,8 @@ enum OpenCodeSessionComposerState {
             attachEnabled: Bool = true,
             showStop: Bool,
             stopEnabled: Bool,
-            followUpDelivery: FollowUpDelivery? = nil
+            followUpDelivery: FollowUpDelivery? = nil,
+            showDictationButton: Bool = false
         ) {
             self.text = text
             self.mentionRanges = mentionRanges
@@ -53,6 +55,7 @@ enum OpenCodeSessionComposerState {
             self.showStop = showStop
             self.stopEnabled = stopEnabled
             self.followUpDelivery = followUpDelivery
+            self.showDictationButton = showDictationButton
         }
     }
 
@@ -222,6 +225,21 @@ enum OpenCodeSessionComposerAction {
     case submitQuestion(requestID: String, sessionID: String)
     case dismissQuestion(requestID: String, sessionID: String)
     case backToMainSession
+    case beginDictation
+    case dictationCancel
+    case dictationInsert
+    case dictationOpenSettings
+    case dictationDownload
+    case dictationRetry
+}
+
+struct OpenCodeSessionComposerDictation: Equatable {
+    var variant: OpenCodeDictationCardVariant
+    var committed: String
+    var volatileText: String
+    var level: Double
+    var status: String
+    var startedAt: Date
 }
 
 /// UIKit text input owned by the composer prompt. Lets keyboard-shortcut focus
@@ -237,6 +255,7 @@ struct OpenCodeSessionComposer: View {
     let focusRequestToken: Int
     /// Called with true when the prompt input gains keyboard focus, false when it loses it.
     let onInputFocusChange: ((Bool) -> Void)?
+    let dictation: OpenCodeSessionComposerDictation?
     let onAction: (OpenCodeSessionComposerAction) -> Void
     private let status: AnyView?
 
@@ -244,12 +263,14 @@ struct OpenCodeSessionComposer: View {
         state: OpenCodeSessionComposerState,
         focusRequestToken: Int = 0,
         onInputFocusChange: ((Bool) -> Void)? = nil,
+        dictation: OpenCodeSessionComposerDictation? = nil,
         onAction: @escaping (OpenCodeSessionComposerAction) -> Void,
         status: AnyView? = nil
     ) {
         self.state = state
         self.focusRequestToken = focusRequestToken
         self.onInputFocusChange = onInputFocusChange
+        self.dictation = dictation
         self.onAction = onAction
         self.status = status
     }
@@ -288,6 +309,7 @@ struct OpenCodeSessionComposer: View {
         .padding(.horizontal, 12)
         .padding(.bottom, 4)
         .animation(.easeInOut(duration: 0.24), value: contentKind)
+        .animation(.easeInOut(duration: 0.24), value: dictation != nil)
         .accessibilityIdentifier(composerAccessibilityIdentifier)
     }
 
@@ -302,6 +324,15 @@ struct OpenCodeSessionComposer: View {
 
     @ViewBuilder
     private func promptEntryContent(_ prompt: OpenCodeSessionComposerState.Prompt) -> some View {
+        if let dictation {
+            dictationContent(dictation)
+        } else {
+            promptFieldContent(prompt)
+        }
+    }
+
+    @ViewBuilder
+    private func promptFieldContent(_ prompt: OpenCodeSessionComposerState.Prompt) -> some View {
             if prompt.showPendingRevert || !prompt.attachments.isEmpty {
                 VStack(spacing: 8) {
                     if prompt.showPendingRevert {
@@ -347,6 +378,14 @@ struct OpenCodeSessionComposer: View {
                         contrast: .low,
                         action: { onAction(.openCommands) }
                     )
+
+                    if prompt.showDictationButton {
+                        OpenCodeButton(
+                            variant: .iconCircle(.mic, accessibilityLabel: "Dictate"),
+                            contrast: .low,
+                            action: { onAction(.beginDictation) }
+                        )
+                    }
                 }
 
                 Spacer(minLength: 0)
@@ -381,6 +420,60 @@ struct OpenCodeSessionComposer: View {
                     )
                 }
             }
+    }
+
+    private func dictationContent(_ dictation: OpenCodeSessionComposerDictation) -> some View {
+        let showsClock = dictation.variant == .listening || dictation.variant == .finishing
+        return Group {
+            if showsClock {
+                TimelineView(.periodic(from: dictation.startedAt, by: 1)) { context in
+                    dictationCard(
+                        dictation,
+                        elapsed: Self.dictationElapsedLabel(from: dictation.startedAt, to: context.date)
+                    )
+                }
+            } else {
+                dictationCard(
+                    dictation,
+                    elapsed: Self.dictationElapsedLabel(from: dictation.startedAt, to: Date())
+                )
+            }
+        }
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+    }
+
+    private func dictationCard(_ dictation: OpenCodeSessionComposerDictation, elapsed: String) -> some View {
+        OpenCodeDictationCard(
+            variant: dictation.variant,
+            committed: dictation.committed,
+            volatileText: dictation.volatileText,
+            level: dictation.level,
+            status: dictation.status,
+            elapsed: elapsed,
+            onCancel: { onAction(.dictationCancel) },
+            onInsert: { onAction(.dictationInsert) },
+            onUnavailableAction: { onAction(dictationUnavailableAction(dictation.variant)) }
+        )
+    }
+
+    private func dictationUnavailableAction(
+        _ variant: OpenCodeDictationCardVariant
+    ) -> OpenCodeSessionComposerAction {
+        switch variant {
+        case .unavailable(.permissionDenied):
+            .dictationOpenSettings
+        case .unavailable(.modelNotInstalled):
+            .dictationDownload
+        case .unavailable(.recognizerError):
+            .dictationRetry
+        case .listening, .finishing:
+            .dictationInsert
+        }
+    }
+
+    private static func dictationElapsedLabel(from start: Date, to now: Date) -> String {
+        let elapsed = max(0, Int(now.timeIntervalSince(start)))
+        return String(format: "%d:%02d", elapsed / 60, elapsed % 60)
     }
 
     private var pendingRevertChip: some View {

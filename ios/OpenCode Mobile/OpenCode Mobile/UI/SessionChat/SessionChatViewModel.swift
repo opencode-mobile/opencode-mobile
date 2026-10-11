@@ -61,6 +61,12 @@ final class SessionChatViewModel {
     private var chipTimelineIntroNotice: String?
     private var chipTimelineIntroTurnActive: Bool?
     private var chipTimelineIntroTask: Task<Void, Never>?
+    /// Composer dictation card. Kept off `uiState` so a republish does not drop it.
+    private var dictation: ComposerDictationUiState?
+    private var dictationInsertGeneration: UInt64 = 0
+    private var dictationFinishTask: Task<Void, Never>?
+    /// Tests set this to 0 to commit an insert synchronously.
+    var dictationFinishDelayNs: UInt64 = 350_000_000
 
     init(
         sessionID: String,
@@ -251,6 +257,91 @@ final class SessionChatViewModel {
 
     func updateComposerText(_ text: String, cursor: Int? = nil) {
         composer.updateComposerText(text, cursor: cursor)
+    }
+
+    func beginDictation(languageLabel: String, onDevice: Bool) {
+        guard SessionChatDisplayPreferences.shared.composerDictation else { return }
+        discardDictationInsert()
+        dictation = ComposerDictationUiState(
+            phase: .listening,
+            committed: "",
+            volatile: "",
+            level: 0,
+            languageLabel: languageLabel,
+            onDevice: onDevice,
+            startedAt: Date(),
+            errorMessage: nil
+        )
+        publishUiState()
+    }
+
+    func beginDictationUnavailable(_ phase: ComposerDictationPhase, message: String? = nil) {
+        guard SessionChatDisplayPreferences.shared.composerDictation else { return }
+        // A recognizer error can arrive after Insert has already been confirmed.
+        // Dropping the card here would cancel the splice.
+        guard dictation?.phase != .finishing else { return }
+        discardDictationInsert()
+        dictation = ComposerDictationUiState(
+            phase: phase,
+            errorMessage: message
+        )
+        publishUiState()
+    }
+
+    func dictationPartial(committed: String, volatile: String) {
+        guard var current = dictation, current.phase == .listening else { return }
+        current.committed = committed
+        current.volatile = volatile
+        dictation = current
+        publishUiState()
+    }
+
+    func dictationLevel(_ level: Double) {
+        guard var current = dictation else { return }
+        let clamped = min(1, max(0, level.isFinite ? level : 0))
+        guard clamped != current.level else { return }
+        current.level = clamped
+        dictation = current
+        uiState.dictation = current
+    }
+
+    func dictationInsert() {
+        guard let current = dictation else { return }
+        let transcript = current.committed + current.volatile
+        guard !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        dictationInsertGeneration &+= 1
+        let generation = dictationInsertGeneration
+        var finishing = current
+        finishing.phase = .finishing
+        dictation = finishing
+        publishUiState()
+        if dictationFinishDelayNs == 0 {
+            commitDictationInsert(generation: generation)
+            return
+        }
+        let delay = dictationFinishDelayNs
+        dictationFinishTask?.cancel()
+        dictationFinishTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: delay)
+            guard !Task.isCancelled, let self else { return }
+            self.commitDictationInsert(generation: generation)
+        }
+    }
+
+    func dictationCancel() {
+        cancelDictationCard()
+    }
+
+    func cancelDictationForModeChange() {
+        cancelDictationCard()
+    }
+
+    func cancelDictationForBackground() {
+        cancelDictationCard()
+    }
+
+    func cancelDictationForDismiss() {
+        cancelDictationCard()
     }
 
     func selectSlashSuggestion(commandName: String) {
@@ -937,6 +1028,7 @@ final class SessionChatViewModel {
         withObservationTracking {
             _ = SessionChatDisplayPreferences.shared.collapseConsecutiveToolCalls
             _ = SessionChatDisplayPreferences.shared.chipTimeline
+            _ = SessionChatDisplayPreferences.shared.composerDictation
         } onChange: { [weak self] in
             Task { @MainActor in
                 guard let self, self.collapsePreferenceGeneration == generation else { return }
@@ -944,6 +1036,10 @@ final class SessionChatViewModel {
                     SessionChatDisplayPreferences.shared.collapseConsecutiveToolCalls
                 )
                 self.timeline.updateChipTimeline(SessionChatDisplayPreferences.shared.chipTimeline)
+                if !SessionChatDisplayPreferences.shared.composerDictation {
+                    self.cancelDictationCard()
+                }
+                self.publishUiState()
                 self.observeCollapsePreference()
             }
         }
@@ -982,6 +1078,7 @@ final class SessionChatViewModel {
 
     func stopObserving() {
         OpenCodeLog.sessionChat.info("stop observing session=\(self.sessionID)")
+        cancelDictationForDismiss()
         isSessionBound = false
         resetWorkingFooter()
         resetChipTimelineIntro()
@@ -1329,8 +1426,36 @@ final class SessionChatViewModel {
             pendingTerminalOpen: commandsState.pendingTerminalOpen,
             hasPendingRevert: commandsState.hasPendingRevert,
             expandedStepParagraphs: expandedStepParagraphs,
-            chipTimelineIntroVisible: chipTimelineIntroVisible
+            chipTimelineIntroVisible: chipTimelineIntroVisible,
+            composerDictationEnabled: SessionChatDisplayPreferences.shared.composerDictation,
+            dictation: dictation
         )
+    }
+
+    /// Drops a listening card and any in-flight finishing insert. Does not touch composer text.
+    private func cancelDictationCard() {
+        let hadCard = dictation != nil || dictationFinishTask != nil
+        discardDictationInsert()
+        dictation = nil
+        guard hadCard else { return }
+        publishUiState()
+    }
+
+    private func discardDictationInsert() {
+        dictationInsertGeneration &+= 1
+        dictationFinishTask?.cancel()
+        dictationFinishTask = nil
+    }
+
+    private func commitDictationInsert(generation: UInt64) {
+        guard generation == dictationInsertGeneration, let current = dictation else { return }
+        let transcript = current.committed + current.volatile
+        let text = uiState.composer.text
+        let cursor = min(max(0, uiState.composer.cursor), text.count)
+        let updated = String(text.prefix(cursor)) + transcript + String(text.dropFirst(cursor))
+        updateComposerText(updated, cursor: cursor + transcript.count)
+        dictation = nil
+        publishUiState()
     }
 
     private func resolveSnackbar(transientError: String?, successNotice: String?) -> SessionChatSnackbar? {
