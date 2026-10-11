@@ -71,12 +71,8 @@ struct CommandDomainAdapter: Sendable {
 
     func toV2RunRequest(_ options: CommandRunOptions) -> V2RunCommandRequestDTO {
         V2RunCommandRequestDTO(
-            command: options.command,
-            arguments: options.arguments.isEmpty ? nil : options.arguments,
-            agent: options.mode,
-            model: options.model.map {
-                V2PromptModelRefDTO(id: $0.modelID, providerID: $0.providerID, variant: options.variant)
-            },
+            name: options.command,
+            text: options.arguments,
             files: options.attachments.isEmpty ? nil : options.attachments.map { attachment in
                 V2PromptFileDTO(uri: attachment.dataURL, name: attachment.filename, mime: attachment.mime)
             },
@@ -84,11 +80,27 @@ struct CommandDomainAdapter: Sendable {
         )
     }
 
+    func v2SwitchModelRequest(_ options: CommandRunOptions) -> V2SwitchModelRequestDTO? {
+        options.model.map {
+            V2SwitchModelRequestDTO(
+                model: V2PromptModelRefDTO(id: $0.modelID, providerID: $0.providerID, variant: options.variant)
+            )
+        }
+    }
+
     func mapError(_ error: Error) -> CommandError {
         if let commandError = error as? CommandError {
             return commandError
         }
         if let apiError = error as? CommandsAPIError {
+            switch apiError {
+            case .invalidResponse, .noActiveConnection:
+                return .transport("Invalid response")
+            case let .httpStatus(code, message):
+                return .http(statusCode: code, message: message)
+            }
+        }
+        if let apiError = error as? MessagesAPIError {
             switch apiError {
             case .invalidResponse, .noActiveConnection:
                 return .transport("Invalid response")

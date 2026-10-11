@@ -160,7 +160,7 @@ class MessageProtocolRepositoryTest {
             assertTrue(promptBody.contains("\"text\":\"Hello\""))
             assertTrue(promptBody.contains("data:text/plain;base64,SGk="))
             assertTrue(promptBody.contains("steer"))
-            assertTrue(promptBody.contains("\"mime\":\"text/plain\""))
+            assertTrue(!promptBody.contains("\"mime\""))
             assertTrue(!promptBody.contains("\"parts\""))
             assertTrue(!promptBody.contains("\"prompt\""))
         }

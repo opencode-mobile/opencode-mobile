@@ -8,6 +8,7 @@ import dev.opencode.mobile.data.remote.dto.V2ModelRefDto
 import dev.opencode.mobile.data.remote.dto.V2PromptFileDto
 import dev.opencode.mobile.data.remote.dto.V2RunCommandRequestDto
 import dev.opencode.mobile.data.remote.dto.V2SkillDto
+import dev.opencode.mobile.data.remote.dto.V2SwitchModelRequestDto
 import io.ktor.client.plugins.ResponseException
 import io.ktor.serialization.JsonConvertException
 
@@ -88,17 +89,8 @@ class CommandDomainAdapter {
 
     fun toV2RunRequest(options: CommandRunOptions): V2RunCommandRequestDto =
         V2RunCommandRequestDto(
-            command = options.command,
-            arguments = options.arguments.takeIf { it.isNotBlank() },
-            agent = options.mode,
-            model =
-                options.model?.let { selection ->
-                    V2ModelRefDto(
-                        id = selection.modelId,
-                        providerId = selection.providerId,
-                        variant = options.variant,
-                    )
-                },
+            name = options.command,
+            text = options.arguments,
             files =
                 options.attachments
                     .map { attachment ->
@@ -110,6 +102,18 @@ class CommandDomainAdapter {
                     }.takeIf { it.isNotEmpty() },
             delivery = options.delivery.wireValue,
         )
+
+    fun toV2SwitchModelRequest(options: CommandRunOptions): V2SwitchModelRequestDto? {
+        val model = options.model ?: return null
+        return V2SwitchModelRequestDto(
+            model =
+                V2ModelRefDto(
+                    id = model.modelId,
+                    providerId = model.providerId,
+                    variant = options.variant,
+                ),
+        )
+    }
 
     fun mapError(throwable: Throwable): CommandError =
         when (throwable) {

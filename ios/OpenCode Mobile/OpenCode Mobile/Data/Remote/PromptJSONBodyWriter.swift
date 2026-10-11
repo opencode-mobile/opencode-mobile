@@ -85,10 +85,6 @@ nonisolated enum PromptJSONBodyWriter {
                         try writer.key("name")
                         try writer.writeString(name)
                     }
-                    if let mime = file.mime {
-                        try writer.key("mime")
-                        try writer.writeString(mime)
-                    }
                     try writer.endObject()
                 }
                 try writer.endArray()
@@ -170,29 +166,10 @@ nonisolated enum PromptJSONBodyWriter {
     static func writeV2Command(_ body: V2RunCommandRequestDTO, attachments: [Attachment]) throws -> URL {
         try writeBody(to: newFile()) { writer in
             try writer.beginObject()
-            try writer.key("command")
-            try writer.writeString(body.command)
-            if let arguments = body.arguments {
-                try writer.key("arguments")
-                try writer.writeString(arguments)
-            }
-            if let agent = body.agent {
-                try writer.key("agent")
-                try writer.writeString(agent)
-            }
-            if let model = body.model {
-                try writer.key("model")
-                try writer.beginObject()
-                try writer.key("id")
-                try writer.writeString(model.id)
-                try writer.key("providerID")
-                try writer.writeString(model.providerID)
-                if let variant = model.variant {
-                    try writer.key("variant")
-                    try writer.writeString(variant)
-                }
-                try writer.endObject()
-            }
+            try writer.key("name")
+            try writer.writeString(body.name)
+            try writer.key("text")
+            try writer.writeString(body.text)
             if let files = body.files, !files.isEmpty {
                 try writer.key("files")
                 try writer.beginArray()
@@ -203,10 +180,6 @@ nonisolated enum PromptJSONBodyWriter {
                     if let name = file.name {
                         try writer.key("name")
                         try writer.writeString(name)
-                    }
-                    if let mime = file.mime {
-                        try writer.key("mime")
-                        try writer.writeString(mime)
                     }
                     try writer.endObject()
                 }

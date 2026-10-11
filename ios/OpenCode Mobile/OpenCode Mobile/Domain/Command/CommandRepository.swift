@@ -7,15 +7,18 @@ protocol CommandRepository: Sendable {
 
 struct DefaultCommandRepository: CommandRepository, Sendable {
     private let api: CommandsAPIClient
+    private let messages: (any MessagesAPI)?
     private let adapter: CommandDomainAdapter
     private let activeConnectionManager: ActiveConnectionManager?
 
     init(
         api: CommandsAPIClient,
         adapter: CommandDomainAdapter,
+        messages: (any MessagesAPI)? = nil,
         activeConnectionManager: ActiveConnectionManager? = nil
     ) {
         self.api = api
+        self.messages = messages
         self.adapter = adapter
         self.activeConnectionManager = activeConnectionManager
     }
@@ -36,6 +39,12 @@ struct DefaultCommandRepository: CommandRepository, Sendable {
     func runCommand(sessionID: String, options: CommandRunOptions, directory: String?) async throws {
         do {
             if await activeConnectionManager?.currentProtocolOrProbe() == .v2 {
+                if let agent = options.mode, !agent.isEmpty {
+                    try await messages?.switchSessionAgent(sessionID: sessionID, agent: agent, directory: directory)
+                }
+                if let model = adapter.v2SwitchModelRequest(options) {
+                    try await messages?.switchSessionModel(sessionID: sessionID, body: model, directory: directory)
+                }
                 try await api.runCommandV2(
                     sessionID: sessionID,
                     body: adapter.toV2RunRequest(options),
