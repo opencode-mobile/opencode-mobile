@@ -91,6 +91,21 @@ import Testing
         #expect(await store.loadNewSessionPreference(connectionIdentity: bob, worktree: "/repo") == nil)
     }
 
+    @Test func peek_readsSavedSelectionAndPreferenceSynchronously() async {
+        let defaults = UserDefaults(suiteName: "SessionModelSelectionStoreTests.peek")!
+        defaults.removePersistentDomain(forName: "SessionModelSelectionStoreTests.peek")
+        let store = UserDefaultsSessionModelSelectionStore(defaults: defaults)
+        let identity = ModelSelectionConnectionIdentity(serverBaseURL: "http://127.0.0.1:4096", username: "opencode")
+        let selection = SessionModelSelection(providerID: "openai", modelID: "gpt-4", variant: nil, savedAtEpochMs: 1_000)
+
+        await store.saveSession(connectionIdentity: identity, worktree: "/repo", sessionID: "ses-1", selection: selection)
+        await store.saveNewSessionPreference(connectionIdentity: identity, worktree: "/repo", selection: selection)
+
+        #expect(store.peekSession(connectionIdentity: identity, worktree: "/repo", sessionID: "ses-1") == selection)
+        #expect(store.peekSession(connectionIdentity: identity, worktree: "/repo", sessionID: "ses-2") == nil)
+        #expect(store.peekNewSessionPreference(connectionIdentity: identity, worktree: "/repo") == selection)
+    }
+
     @Test func olderWrite_cannotReplaceNewerSelection() async {
         let defaults = UserDefaults(suiteName: "SessionModelSelectionStoreTests.ordered")!
         defaults.removePersistentDomain(forName: "SessionModelSelectionStoreTests.ordered")
