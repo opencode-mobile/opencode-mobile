@@ -385,17 +385,10 @@ fun MainNavigation() {
                                                     paneStack.resetPane()
                                                 }
                                             }
-                                            // Keeps the pane composed until it recomposes with its reset stack,
-                                            // so Navigation3 pops the handed-off entries and clears their
-                                            // ViewModels instead of leaving them in the pane's store.
-                                            var paneHandoffPending by remember { mutableStateOf(false) }
-                                            LaunchedEffect(useSplitLayout) {
-                                                if (!useSplitLayout && paneStack.paneSelection != null) {
-                                                    // Window narrowed: hand the pane screens to the stacked routes.
-                                                    paneHandoffPending = true
-                                                    backStack.addAll(paneStack.handOffPane())
+                                            val showsSplit =
+                                                rememberHomeSessionPaneHandoff(useSplitLayout, paneStack) { routes ->
+                                                    backStack.addAll(routes)
                                                 }
-                                            }
                                             // Screens pushed in the pane pop through its own NavDisplay first.
                                             BackHandler(
                                                 enabled = useSplitLayout && paneSelection != null && paneStack.size == 1,
@@ -426,7 +419,7 @@ fun MainNavigation() {
                                                     selectedSessionId = if (useSplitLayout) paneSelection?.sessionId else null,
                                                 )
                                             }
-                                            if (useSplitLayout || paneSelection != null || paneHandoffPending) {
+                                            if (showsSplit) {
                                                 OpenCodeSplitPane(
                                                     screen = OpenCodeSplitPaneScreen.Home,
                                                     leading = home,
@@ -435,9 +428,6 @@ fun MainNavigation() {
                                                             paneStack = paneStack,
                                                             detailControl = control,
                                                         )
-                                                        if (paneHandoffPending && paneSelection == null) {
-                                                            SideEffect { paneHandoffPending = false }
-                                                        }
                                                     },
                                                 )
                                             } else {
@@ -859,6 +849,34 @@ private val SettingsDetail.route: NavKey
             SettingsDetail.FeatureFlags -> FeatureFlagsHome
             SettingsDetail.DiagnosticLogs -> DiagnosticLogsHome
         }
+
+/**
+ * Hands the Home split pane's screens to the stacked routes when the window narrows, and returns
+ * whether the split must still be composed. Navigation3 only clears the ViewModels of entries it
+ * sees leave the stack while composed, so the pane stays until it has recomposed with its reset
+ * stack instead of disappearing in the same frame and keeping the handed-off ViewModels.
+ */
+@Composable
+internal fun rememberHomeSessionPaneHandoff(
+    useSplitLayout: Boolean,
+    paneStack: MutableList<NavKey>,
+    onHandOff: (List<NavKey>) -> Unit,
+): Boolean {
+    val currentOnHandOff by rememberUpdatedState(onHandOff)
+    var handoffPending by remember { mutableStateOf(false) }
+    LaunchedEffect(useSplitLayout) {
+        if (!useSplitLayout && paneStack.paneSelection != null) {
+            handoffPending = true
+            currentOnHandOff(paneStack.handOffPane())
+        }
+    }
+    val hasSelection = paneStack.paneSelection != null
+    if (handoffPending && !hasSelection) {
+        // Runs after the composition that recomposed the pane with its reset stack.
+        SideEffect { handoffPending = false }
+    }
+    return useSplitLayout || hasSelection || handoffPending
+}
 
 /**
  * Trailing pane of the Home split view: a nested [NavDisplay] over [paneStack], so screens
