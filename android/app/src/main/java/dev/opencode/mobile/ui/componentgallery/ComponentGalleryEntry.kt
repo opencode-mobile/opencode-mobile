@@ -72,6 +72,7 @@ enum class ComponentGalleryEntryId {
     SessionStatusBar,
     SessionBranchPill,
     SessionComposer,
+    DictationCard,
     RenderedMarkdown,
     MessageList,
 }
@@ -383,6 +384,12 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.SessionComposer,
             title = "Session Composer",
             description = "Prompt entry and blocking permission states in one persistent session surface.",
+            category = ComponentGalleryCategory.Session,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.DictationCard,
+            title = "Dictation Card",
+            description = "Listening takeover for composer dictation.",
             category = ComponentGalleryCategory.Session,
         ),
         ComponentGalleryEntry(

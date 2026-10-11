@@ -298,6 +298,7 @@ object ProductAnalytics {
         const val SETTINGS_OPEN_RECENT_WINDOW_PICKER = "settings_open_recent_window_picker"
         const val SETTINGS_TOGGLE_COLLAPSE_CONSECUTIVE_TOOL_CALLS = "settings_toggle_collapse_consecutive_tool_calls"
         const val SETTINGS_TOGGLE_CHIP_TIMELINE = "settings_toggle_chip_timeline"
+        const val SETTINGS_TOGGLE_COMPOSER_DICTATION = "settings_toggle_composer_dictation"
         const val SETTINGS_CLEAR_SESSION_CACHE = "settings_clear_session_cache"
         const val SETTINGS_OPEN_PRIVACY_POLICY = "settings_open_privacy_policy"
         const val SETTINGS_TOGGLE_PRODUCT_ANALYTICS = "settings_toggle_product_analytics"

@@ -48,6 +48,7 @@ fun IconsGalleryScreen(modifier: Modifier = Modifier) {
             "create_new_folder" to OpenCodeIcons.CreateNewFolder,
             "folder_check" to OpenCodeIcons.FolderCheck,
             "list" to OpenCodeIcons.List,
+            "mic" to OpenCodeIcons.Mic,
             "more_vert" to OpenCodeIcons.MoreVert,
             "search" to OpenCodeIcons.Search,
             "settings" to OpenCodeIcons.Settings,

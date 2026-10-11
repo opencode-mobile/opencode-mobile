@@ -127,6 +127,7 @@ class SessionChatViewModel
             SessionChatTimeline(
                 messageRepository = messageRepository,
                 scope = viewModelScope,
+                listChildSessions = { id -> sessionRepository.listChildSessions(id) },
             )
         private val composer =
             SessionChatComposer(
@@ -206,6 +207,14 @@ class SessionChatViewModel
         // Chip-timeline paragraphs the user expanded past `+N more`, keyed by
         // expansion id with the chip count at tap time; reset per session.
         private var expandedStepParagraphs: Map<String, Int> = emptyMap()
+
+        // Composer dictation card. Preference off hides the mic; an active card is cancelled
+        // without inserting when the preference, mode, background, or screen goes away.
+        private var composerDictationEnabled = SessionChatDisplayPreferences.composerDictation
+        private var dictation: ComposerDictationUiState? = null
+        private var dictationGeneration = 0
+        private var dictationInsertJob: Job? = null
+        internal var dictationFinishDelayMs: Long = 350
 
         // One-time Chip timeline intro (OPE-270): offered after a long turn finishes.
         private var chipTimelineIntroVisible = false
@@ -292,6 +301,18 @@ class SessionChatViewModel
                     .distinctUntilChanged()
                     .collect { enabled ->
                         timeline.updateChipTimeline(enabled)
+                    }
+            }
+            viewModelScope.launch {
+                snapshotFlow { SessionChatDisplayPreferences.composerDictation }
+                    .distinctUntilChanged()
+                    .collect { enabled ->
+                        composerDictationEnabled = enabled
+                        if (!enabled && dictation != null) {
+                            cancelActiveDictation()
+                        } else {
+                            publishUiState()
+                        }
                     }
             }
         }
@@ -518,6 +539,107 @@ class SessionChatViewModel
             cursor: Int = text.length,
         ) {
             composer.updateComposerText(text, cursor)
+        }
+
+        fun beginDictation(
+            languageLabel: String,
+            onDevice: Boolean,
+        ) {
+            if (!SessionChatDisplayPreferences.composerDictation) return
+            invalidateDictationInsert()
+            dictation =
+                ComposerDictationUiState(
+                    phase = ComposerDictationPhase.Listening,
+                    languageLabel = languageLabel,
+                    onDevice = onDevice,
+                    startedAtEpochMs = nowMs(),
+                )
+            publishUiState()
+        }
+
+        fun beginDictationUnavailable(
+            phase: ComposerDictationPhase,
+            message: String? = null,
+        ) {
+            if (!SessionChatDisplayPreferences.composerDictation) return
+            if (
+                phase != ComposerDictationPhase.PermissionDenied &&
+                phase != ComposerDictationPhase.ModelNotInstalled &&
+                phase != ComposerDictationPhase.RecognizerError
+            ) {
+                return
+            }
+            // A recognizer error can arrive after Insert has already been confirmed.
+            // Dropping the card here would cancel the splice.
+            if (dictation?.phase == ComposerDictationPhase.Finishing) return
+            invalidateDictationInsert()
+            dictation =
+                ComposerDictationUiState(
+                    phase = phase,
+                    errorMessage = message,
+                    startedAtEpochMs = nowMs(),
+                )
+            publishUiState()
+        }
+
+        fun dictationPartial(
+            committed: String,
+            volatile: String,
+        ) {
+            val current = dictation ?: return
+            if (current.phase != ComposerDictationPhase.Listening) return
+            dictation = current.copy(committed = committed, volatile = volatile)
+            publishUiState()
+        }
+
+        fun dictationLevel(level: Float) {
+            val current = dictation ?: return
+            if (current.phase != ComposerDictationPhase.Listening) return
+            dictation = current.copy(level = level.coerceIn(0f, 1f))
+            publishUiState()
+        }
+
+        fun dictationInsert() {
+            val current = dictation ?: return
+            if (
+                current.phase != ComposerDictationPhase.Listening &&
+                current.phase != ComposerDictationPhase.Finishing
+            ) {
+                return
+            }
+            val transcript = current.committed + current.volatile
+            if (transcript.trim().isEmpty()) return
+            if (current.phase == ComposerDictationPhase.Finishing) return
+            val generation = ++dictationGeneration
+            dictation = current.copy(phase = ComposerDictationPhase.Finishing)
+            publishUiState()
+            dictationInsertJob?.cancel()
+            dictationInsertJob =
+                viewModelScope.launch {
+                    delay(dictationFinishDelayMs)
+                    if (generation != dictationGeneration) return@launch
+                    val latest = dictation ?: return@launch
+                    if (latest.phase != ComposerDictationPhase.Finishing) return@launch
+                    spliceDictationTranscript(latest.committed + latest.volatile)
+                    dictation = null
+                    publishUiState()
+                }
+        }
+
+        fun dictationCancel() {
+            cancelActiveDictation()
+        }
+
+        fun cancelDictationForModeChange() {
+            if (dictation != null) cancelActiveDictation()
+        }
+
+        fun cancelDictationForBackground() {
+            if (dictation != null) cancelActiveDictation()
+        }
+
+        fun cancelDictationForDismiss() {
+            if (dictation != null) cancelActiveDictation()
         }
 
         fun selectSlashSuggestion(commandName: String) {
@@ -1451,6 +1573,8 @@ class SessionChatViewModel
                 projectLetter = projectLetter,
                 projectLetterAccent = projectLetterAccent,
                 sessionBranchPill = repoStrip.state.value.toSessionBranchPill(),
+                composerDictationEnabled = composerDictationEnabled,
+                dictation = dictation,
             )
         }
 
@@ -1507,12 +1631,35 @@ class SessionChatViewModel
         }
 
         override fun onCleared() {
+            invalidateDictationInsert()
+            dictation = null
             composer.flushDraft()
             inbox.stop()
             resetWorkingFooter()
             clearSessionReadyFocus()
             syncCoordinator.markFocused(null)
             super.onCleared()
+        }
+
+        private fun cancelActiveDictation() {
+            invalidateDictationInsert()
+            if (dictation == null) return
+            dictation = null
+            publishUiState()
+        }
+
+        private fun invalidateDictationInsert() {
+            dictationGeneration += 1
+            dictationInsertJob?.cancel()
+            dictationInsertJob = null
+        }
+
+        private fun spliceDictationTranscript(transcript: String) {
+            val composerState = composer.state.value.composer
+            val text = composerState.text
+            val cursor = composerState.cursor.coerceIn(0, text.length)
+            val updated = text.substring(0, cursor) + transcript + text.substring(cursor)
+            updateComposerText(updated, cursor + transcript.length)
         }
 
         private fun resetWorkingFooter() {

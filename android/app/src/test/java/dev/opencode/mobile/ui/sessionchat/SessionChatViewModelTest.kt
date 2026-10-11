@@ -4318,6 +4318,125 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun runningSubagentLoadedWithoutChildId_linksChildSessionByDescription() =
+        runTest(testDispatcher) {
+            val sessionRepository =
+                FakeSessionRepository(
+                    sessionStatusType = "busy",
+                    childSessions =
+                        listOf(
+                            Session(
+                                id = "ses-child",
+                                title = "Find git projects",
+                                parentId = "ses-1",
+                                createdAtEpochMs = 1L,
+                            ),
+                        ),
+                )
+            val viewModel =
+                createViewModel(
+                    repository =
+                        FakeMessageRepository(
+                            messages =
+                                listOf(
+                                    Message(
+                                        id = "msg-1",
+                                        role = MessageRole.Assistant,
+                                        text = "",
+                                        parts =
+                                            listOf(
+                                                MessagePart.Tool(
+                                                    toolName = "subagent",
+                                                    status = ToolStatus.Running,
+                                                    id = "prt-1",
+                                                    input =
+                                                        buildJsonObject {
+                                                            put("agent", "general")
+                                                            put("description", "Find git projects")
+                                                        },
+                                                    metadata = buildJsonObject {},
+                                                ),
+                                            ),
+                                    ),
+                                ),
+                        ),
+                    sessionRepository = sessionRepository,
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertTrue(
+                viewModel.uiState.value.messages.any { message ->
+                    message.blocks.any { block ->
+                        block is SessionChatTimelineBlock.ChildSessionRow &&
+                            block.childSessionId == "ses-child"
+                    }
+                },
+            )
+            assertEquals(listOf("ses-1"), sessionRepository.childSessionRequests)
+        }
+
+    @Test
+    fun childSessionLookupFailure_retriesAndLinks() =
+        runTest(testDispatcher) {
+            val sessionRepository =
+                FakeSessionRepository(
+                    sessionStatusType = "busy",
+                    childSessions =
+                        listOf(
+                            Session(
+                                id = "ses-child",
+                                title = "Find git projects",
+                                parentId = "ses-1",
+                                createdAtEpochMs = 1L,
+                            ),
+                        ),
+                )
+            val viewModel =
+                createViewModel(
+                    repository =
+                        FakeMessageRepository(
+                            messages =
+                                listOf(
+                                    Message(
+                                        id = "msg-1",
+                                        role = MessageRole.Assistant,
+                                        text = "",
+                                        parts =
+                                            listOf(
+                                                MessagePart.Tool(
+                                                    toolName = "subagent",
+                                                    status = ToolStatus.Running,
+                                                    id = "prt-1",
+                                                    input =
+                                                        buildJsonObject {
+                                                            put("agent", "general")
+                                                            put("description", "Find git projects")
+                                                        },
+                                                    metadata = buildJsonObject {},
+                                                ),
+                                            ),
+                                    ),
+                                ),
+                        ),
+                    sessionRepository = sessionRepository,
+                )
+            sessionRepository.childSessionFailuresRemaining = 1
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertTrue(
+                viewModel.uiState.value.messages.any { message ->
+                    message.blocks.any { block ->
+                        block is SessionChatTimelineBlock.ChildSessionRow &&
+                            block.childSessionId == "ses-child"
+                    }
+                },
+            )
+            assertEquals(listOf("ses-1", "ses-1"), sessionRepository.childSessionRequests)
+        }
+
+    @Test
     fun abort_parentSuccessChildFailure_clearsWorking() =
         runTest(testDispatcher) {
             val sessionRepository =
@@ -5159,6 +5278,142 @@ class SessionChatViewModelTest {
             )
         }
 
+    @Test
+    fun dictationInsert_splicesTranscriptAtCaret() =
+        runTest(testDispatcher) {
+            val viewModel = dictationViewModel()
+            viewModel.updateComposerText("Hello there", cursor = 5)
+            advanceUntilIdle()
+            viewModel.beginDictation("English", onDevice = true)
+            viewModel.dictationPartial(committed = " big", volatile = "")
+            viewModel.dictationInsert()
+            advanceUntilIdle()
+
+            val composer = viewModel.uiState.value.composer
+            assertEquals("Hello big there", composer.text)
+            assertEquals(9, composer.cursor)
+            assertNull(viewModel.uiState.value.dictation)
+        }
+
+    @Test
+    fun dictationCancel_afterPartial_leavesComposerUnchanged() =
+        runTest(testDispatcher) {
+            val viewModel = dictationViewModel()
+            viewModel.updateComposerText("Hello there", cursor = 5)
+            advanceUntilIdle()
+            viewModel.beginDictation("English", onDevice = true)
+            viewModel.dictationPartial(committed = " big", volatile = "")
+            viewModel.dictationCancel()
+            advanceUntilIdle()
+
+            val composer = viewModel.uiState.value.composer
+            assertEquals("Hello there", composer.text)
+            assertEquals(5, composer.cursor)
+            assertNull(viewModel.uiState.value.dictation)
+        }
+
+    @Test
+    fun dictationCancelForModeChangeAndBackground_doesNotInsert() =
+        runTest(testDispatcher) {
+            val viewModel = dictationViewModel()
+            viewModel.updateComposerText("Hello there", cursor = 5)
+            advanceUntilIdle()
+            viewModel.beginDictation("English", onDevice = true)
+            viewModel.dictationPartial(committed = " big", volatile = "")
+            viewModel.cancelDictationForModeChange()
+            advanceUntilIdle()
+
+            assertEquals("Hello there", viewModel.uiState.value.composer.text)
+            assertEquals(5, viewModel.uiState.value.composer.cursor)
+            assertNull(viewModel.uiState.value.dictation)
+
+            viewModel.beginDictation("English", onDevice = true)
+            viewModel.dictationPartial(committed = " big", volatile = "")
+            viewModel.cancelDictationForBackground()
+            advanceUntilIdle()
+
+            assertEquals("Hello there", viewModel.uiState.value.composer.text)
+            assertEquals(5, viewModel.uiState.value.composer.cursor)
+            assertNull(viewModel.uiState.value.dictation)
+
+            viewModel.dictationFinishDelayMs = 1_000
+            viewModel.beginDictation("English", onDevice = true)
+            viewModel.dictationPartial(committed = " big", volatile = "")
+            viewModel.dictationInsert()
+            viewModel.cancelDictationForBackground()
+            advanceUntilIdle()
+
+            assertEquals("Hello there", viewModel.uiState.value.composer.text)
+            assertEquals(5, viewModel.uiState.value.composer.cursor)
+            assertNull(viewModel.uiState.value.dictation)
+        }
+
+    @Test
+    fun dictationInsert_emptyTranscript_keepsCard() =
+        runTest(testDispatcher) {
+            val viewModel = dictationViewModel()
+            viewModel.updateComposerText("Hello there", cursor = 5)
+            advanceUntilIdle()
+            viewModel.beginDictation("English", onDevice = true)
+            viewModel.dictationPartial(committed = "   ", volatile = "")
+            viewModel.dictationInsert()
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertEquals("Hello there", state.composer.text)
+            assertEquals(5, state.composer.cursor)
+            assertEquals(ComposerDictationPhase.Listening, state.dictation?.phase)
+        }
+
+    @Test
+    fun dictationUnavailable_duringFinishing_stillInserts() =
+        runTest(testDispatcher) {
+            val viewModel = dictationViewModel()
+            viewModel.dictationFinishDelayMs = 1_000
+            viewModel.updateComposerText("Hello there", cursor = 5)
+            advanceUntilIdle()
+            viewModel.beginDictation("English", onDevice = true)
+            viewModel.dictationPartial(committed = " big", volatile = "")
+            viewModel.dictationInsert()
+            viewModel.beginDictationUnavailable(
+                ComposerDictationPhase.RecognizerError,
+                "late",
+            )
+
+            assertEquals(ComposerDictationPhase.Finishing, viewModel.uiState.value.dictation?.phase)
+            assertEquals("Hello there", viewModel.uiState.value.composer.text)
+            advanceUntilIdle()
+
+            val composer = viewModel.uiState.value.composer
+            assertEquals("Hello big there", composer.text)
+            assertEquals(9, composer.cursor)
+            assertNull(viewModel.uiState.value.dictation)
+        }
+
+    @Test
+    fun dictationPartial_doesNotChangeComposerText() =
+        runTest(testDispatcher) {
+            val viewModel = dictationViewModel()
+            viewModel.updateComposerText("Hello there", cursor = 5)
+            advanceUntilIdle()
+            viewModel.beginDictation("English", onDevice = true)
+            viewModel.dictationPartial(committed = " big", volatile = "ger")
+
+            val state = viewModel.uiState.value
+            assertEquals("Hello there", state.composer.text)
+            assertEquals(5, state.composer.cursor)
+            assertEquals(" big", state.dictation?.committed)
+            assertEquals("ger", state.dictation?.volatile)
+        }
+
+    private fun TestScope.dictationViewModel(): SessionChatViewModel {
+        val viewModel = createViewModel(FakeMessageRepository())
+        viewModel.dictationFinishDelayMs = 0
+        SessionChatDisplayPreferences.updateComposerDictation(true)
+        advanceUntilIdle()
+        return viewModel
+    }
+
     private val sonnetOption =
         ModelSelectionOption("anthropic", "Anthropic", "claude-sonnet", "Claude Sonnet", emptyList(), 128_000)
     private val gpt4Option =
@@ -5769,6 +6024,7 @@ private class FakeSessionRepository(
     private val deleteHoldUntil: CompletableDeferred<Unit>? = null,
     private val questionHoldUntil: CompletableDeferred<Unit>? = null,
     var getSessionResult: Session? = null,
+    var childSessions: List<Session> = emptyList(),
     private val getSessionError: Throwable? = null,
     private val createSessionResult: Session? = null,
     private val createSessionError: Throwable? = null,
@@ -5780,6 +6036,9 @@ private class FakeSessionRepository(
     private val summarizeHoldUntil: CompletableDeferred<Unit>? = null,
     private val compactStart: CompactionStart = CompactionStart.Finished,
 ) : SessionRepository {
+    val childSessionRequests = mutableListOf<String>()
+    var childSessionFailuresRemaining = 0
+
     data class DiffRequest(
         val sessionId: String,
         val messageId: String?,
@@ -5938,7 +6197,14 @@ private class FakeSessionRepository(
     override suspend fun listChildSessions(
         id: String,
         directory: String?,
-    ) = error("unused")
+    ): List<Session> {
+        childSessionRequests += id
+        if (childSessionFailuresRemaining > 0) {
+            childSessionFailuresRemaining -= 1
+            throw SessionError.Http(statusCode = 503, message = "unavailable")
+        }
+        return childSessions
+    }
 
     override suspend fun listSessionTodos(
         id: String,

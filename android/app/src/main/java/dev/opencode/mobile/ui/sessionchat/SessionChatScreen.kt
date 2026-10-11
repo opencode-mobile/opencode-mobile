@@ -1,7 +1,10 @@
 package dev.opencode.mobile.ui.sessionchat
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -24,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -37,7 +41,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.domain.message.FailureAction
@@ -72,6 +79,9 @@ import dev.opencode.mobile.ui.components.OpenCodeLayout
 import dev.opencode.mobile.ui.components.OpenCodeOverflowMenuEntry
 import dev.opencode.mobile.ui.components.OpenCodePendingPromptsStrip
 import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
+import dev.opencode.mobile.ui.components.ComposerDictationCardModel
+import dev.opencode.mobile.ui.components.OpenCodeDictationCardVariant
+import dev.opencode.mobile.ui.components.OpenCodeDictationUnavailableReason
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposer
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposerAction
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposerState
@@ -108,6 +118,12 @@ import dev.opencode.mobile.ui.sessionchat.view.SessionChatSkillsSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatSkillsTarget
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolDetailSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolDetailTarget
+import dev.opencode.mobile.ui.sessionchat.dictation.ComposerDictationSession
+import dev.opencode.mobile.ui.sessionchat.dictation.DictationModelDownloader
+import dev.opencode.mobile.ui.sessionchat.dictation.DictationSupport
+import dev.opencode.mobile.ui.sessionchat.dictation.SystemComposerDictationSession
+import dev.opencode.mobile.ui.sessionchat.dictation.formatDictationElapsed
+import dev.opencode.mobile.ui.sessionchat.dictation.probeDictationSupport
 import dev.opencode.mobile.ui.sessionchat.view.toActionTileBadge
 import dev.opencode.mobile.ui.sessionchat.view.toRoute
 import kotlinx.coroutines.Dispatchers
@@ -150,6 +166,7 @@ fun SessionChatScreen(
     // in onCleared (parity with iOS stopObserving onDisappear).
     DisposableEffect(viewModel) {
         onDispose {
+            viewModel.cancelDictationForDismiss()
             viewModel.clearSessionReadyFocus()
         }
     }
@@ -250,6 +267,126 @@ fun SessionChatScreen(
         rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
             ingestAttachments(uris)
         }
+    val dictationSession = remember(context) { SystemComposerDictationSession(context) }
+    val dictationModelDownloader = remember(context) { DictationModelDownloader(context) }
+    var dictationSupport by remember { mutableStateOf<DictationSupport>(DictationSupport.Hidden) }
+    var dictationNowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    val dictationPhase = uiState.dictation?.phase
+    val dictationTicking =
+        dictationPhase == ComposerDictationPhase.Listening || dictationPhase == ComposerDictationPhase.Finishing
+
+    fun startReadyDictation(support: DictationSupport.Ready) {
+        viewModel.beginDictation(support.languageLabel, support.onDevice)
+        if (viewModel.uiState.value.dictation?.phase != ComposerDictationPhase.Listening) return
+        dictationSession.start(
+            object : ComposerDictationSession.Listener {
+                override fun onPartial(
+                    committed: String,
+                    volatile: String,
+                ) {
+                    viewModel.dictationPartial(committed, volatile)
+                }
+
+                override fun onLevel(level: Float) {
+                    viewModel.dictationLevel(level)
+                }
+
+                override fun onUnavailable(
+                    phase: ComposerDictationPhase,
+                    message: String?,
+                ) {
+                    viewModel.beginDictationUnavailable(phase, message)
+                }
+            },
+        )
+    }
+
+    fun applyProbedDictation(
+        support: DictationSupport,
+        startIfReady: Boolean,
+    ) {
+        dictationSupport = support
+        if (!startIfReady) return
+        when (support) {
+            is DictationSupport.Ready -> startReadyDictation(support)
+            DictationSupport.ModelNotInstalled ->
+                viewModel.beginDictationUnavailable(ComposerDictationPhase.ModelNotInstalled)
+            DictationSupport.PermissionDenied ->
+                viewModel.beginDictationUnavailable(ComposerDictationPhase.PermissionDenied)
+            DictationSupport.Hidden -> viewModel.dictationCancel()
+        }
+    }
+
+    val recordAudioPermissionLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) {
+                coroutineScope.launch {
+                    applyProbedDictation(probeDictationSupport(context), startIfReady = true)
+                }
+            } else {
+                viewModel.beginDictationUnavailable(ComposerDictationPhase.PermissionDenied)
+            }
+        }
+
+    fun requestDictationOrStart() {
+        when (val support = dictationSupport) {
+            DictationSupport.Hidden -> Unit
+            DictationSupport.ModelNotInstalled ->
+                viewModel.beginDictationUnavailable(ComposerDictationPhase.ModelNotInstalled)
+            DictationSupport.PermissionDenied,
+            is DictationSupport.Ready,
+            -> {
+                val granted =
+                    ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+                        PackageManager.PERMISSION_GRANTED
+                when {
+                    !granted -> recordAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                    support is DictationSupport.Ready -> startReadyDictation(support)
+                    else ->
+                        coroutineScope.launch {
+                            applyProbedDictation(probeDictationSupport(context), startIfReady = true)
+                        }
+                }
+            }
+        }
+    }
+
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
+        viewModel.cancelDictationForBackground()
+    }
+    LaunchedEffect(Unit) {
+        dictationSupport = probeDictationSupport(context)
+    }
+    LaunchedEffect(uiState.dictation == null, dictationPhase) {
+        if (uiState.dictation == null || dictationPhase != ComposerDictationPhase.Listening) {
+            dictationSession.stop()
+        }
+    }
+    LaunchedEffect(uiState.dictation?.startedAtEpochMs, dictationTicking) {
+        if (!dictationTicking) return@LaunchedEffect
+        dictationNowMs = System.currentTimeMillis()
+        while (true) {
+            delay(1000)
+            dictationNowMs = System.currentTimeMillis()
+        }
+    }
+    val composerKindForDictation =
+        SessionChatComposerKind.resolve(
+            isChildSession = parentId != null,
+            hasPermission = uiState.permissionRequest != null && !uiState.permissionDockHidden,
+            hasQuestion = uiState.questionRequest != null,
+        )
+    LaunchedEffect(composerKindForDictation) {
+        if (composerKindForDictation != SessionChatComposerKind.Prompt) {
+            viewModel.cancelDictationForModeChange()
+        }
+    }
+    DisposableEffect(dictationSession, dictationModelDownloader) {
+        onDispose {
+            dictationSession.stop()
+            dictationModelDownloader.close()
+        }
+    }
 
     LaunchedEffect(activePicker) {
         if (activePicker != ComposerPickerKind.Model) {
@@ -816,6 +953,8 @@ fun SessionChatScreen(
                                             uiState.composer.followUpDelivery.takeIf {
                                                 uiState.composer.supportsFollowUpDelivery
                                             },
+                                        showDictationButton =
+                                            uiState.composerDictationEnabled && dictationSupport.showsMic,
                                     )
                             }
                         val composerFocus = rememberOpenCodeSessionComposerFocus()
@@ -825,9 +964,18 @@ fun SessionChatScreen(
                         ) {
                             composerFocus.requestFocus()
                         }
+                        val dictationCard =
+                            uiState.dictation?.toCardModel(
+                                elapsedLabel =
+                                    formatDictationElapsed(
+                                        startedAtEpochMs = uiState.dictation?.startedAtEpochMs ?: 0L,
+                                        nowEpochMs = dictationNowMs,
+                                    ),
+                            )
                         OpenCodeSessionComposer(
                             state = composerState,
                             focus = composerFocus,
+                            dictation = dictationCard,
                             onAction = { action ->
                                 when (action) {
                                     is OpenCodeSessionComposerAction.TextChanged ->
@@ -894,6 +1042,33 @@ fun SessionChatScreen(
                                     OpenCodeSessionComposerAction.BackToMainSession -> {
                                         logChatAction(ProductAnalytics.Action.CHAT_BACK)
                                         onNavigateBack()
+                                    }
+                                    OpenCodeSessionComposerAction.BeginDictation -> requestDictationOrStart()
+                                    OpenCodeSessionComposerAction.DictationCancel -> viewModel.dictationCancel()
+                                    OpenCodeSessionComposerAction.DictationInsert -> viewModel.dictationInsert()
+                                    OpenCodeSessionComposerAction.DictationOpenSettings -> {
+                                        context.startActivity(
+                                            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                                data = Uri.fromParts("package", context.packageName, null)
+                                            },
+                                        )
+                                    }
+                                    OpenCodeSessionComposerAction.DictationDownload ->
+                                        dictationModelDownloader.trigger()
+                                    OpenCodeSessionComposerAction.DictationRetry -> {
+                                        coroutineScope.launch {
+                                            val support = probeDictationSupport(context)
+                                            dictationSupport = support
+                                            when (support) {
+                                                is DictationSupport.Ready -> requestDictationOrStart()
+                                                DictationSupport.ModelNotInstalled ->
+                                                    viewModel.beginDictationUnavailable(
+                                                        ComposerDictationPhase.ModelNotInstalled,
+                                                    )
+                                                DictationSupport.PermissionDenied -> requestDictationOrStart()
+                                                DictationSupport.Hidden -> viewModel.dictationCancel()
+                                            }
+                                        }
                                     }
                                 }
                             },
@@ -1225,6 +1400,31 @@ private fun SessionConnectionStatus.toOpenCodeSessionConnectionStatus(): OpenCod
         SessionConnectionStatus.Offline -> OpenCodeSessionConnectionStatus.Offline
         SessionConnectionStatus.AuthFailed -> OpenCodeSessionConnectionStatus.AuthFailed
     }
+
+private fun ComposerDictationUiState.toCardModel(elapsedLabel: String): ComposerDictationCardModel {
+    val (variant, reason) =
+        when (phase) {
+            ComposerDictationPhase.Listening -> OpenCodeDictationCardVariant.Listening to null
+            ComposerDictationPhase.Finishing -> OpenCodeDictationCardVariant.Finishing to null
+            ComposerDictationPhase.PermissionDenied ->
+                OpenCodeDictationCardVariant.Unavailable to OpenCodeDictationUnavailableReason.PermissionDenied
+            ComposerDictationPhase.ModelNotInstalled ->
+                OpenCodeDictationCardVariant.Unavailable to OpenCodeDictationUnavailableReason.ModelNotInstalled
+            ComposerDictationPhase.RecognizerError ->
+                OpenCodeDictationCardVariant.Unavailable to OpenCodeDictationUnavailableReason.RecognizerError
+        }
+    return ComposerDictationCardModel(
+        variant = variant,
+        committed = committed,
+        volatileTail = volatile,
+        level = level,
+        languageLabel = languageLabel,
+        onDevice = onDevice,
+        elapsedLabel = elapsedLabel,
+        unavailableReason = reason,
+        errorMessage = errorMessage,
+    )
+}
 
 private fun SessionChatSnackbar.toOpenCodeSnackbarMessage(): OpenCodeSnackbarMessage =
     OpenCodeSnackbarMessage(

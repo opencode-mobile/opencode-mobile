@@ -47,11 +47,12 @@ nonisolated enum DisplayFrameBuilder {
         displayMessages: [DisplayMessage],
         serverCommands: [ServerCommand] = [],
         collapseConsecutiveToolCalls: Bool = false,
-        chipTimeline: Bool = false
+        chipTimeline: Bool = false,
+        childSessions: [SessionChatChildSessionCandidate] = []
     ) -> DisplayFrame {
         // pthread_main_np avoids the async-context warning on Thread.isMainThread.
         lastBuildWasOnMainThread = pthread_main_np() != 0
-        let ordered = orderedDisplayMessages(displayMessages)
+        let ordered = linkChildSessions(orderedDisplayMessages(displayMessages), children: childSessions)
 
         var bodies: [DisplayMessageBody] = []
         bodies.reserveCapacity(ordered.count)
@@ -182,6 +183,22 @@ nonisolated enum DisplayFrameBuilder {
 
     /// Oldest-to-newest by `time.created`, without moving a user the store already
     /// placed before an assistant (v2 inbox user rows can be persisted after the reply starts).
+    private static func linkChildSessions(
+        _ displayMessages: [DisplayMessage],
+        children: [SessionChatChildSessionCandidate]
+    ) -> [DisplayMessage] {
+        let linked = SessionChatChildSessionLinker.link(displayMessages.map(\.message), children: children)
+        return zip(displayMessages, linked).map { display, message in
+            guard message != display.message else { return display }
+            return DisplayMessage(
+                message: message,
+                renderedMarkdown: display.renderedMarkdown,
+                awaitingTextMateUpgrade: display.awaitingTextMateUpgrade,
+                highlightEpoch: display.highlightEpoch
+            )
+        }
+    }
+
     static func orderedDisplayMessages(_ displayMessages: [DisplayMessage]) -> [DisplayMessage] {
         let inputIndex = Dictionary(
             uniqueKeysWithValues: displayMessages.enumerated().map { ($0.element.id, $0.offset) }

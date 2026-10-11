@@ -3166,6 +3166,135 @@ struct SessionChatViewModelTests {
         #expect(Set(sessionRepository.abortSessionIDs) == ["ses-1", "ses-child"])
     }
 
+    @Test func runningSubagentLoadedWithoutChildID_linksChildSessionByDescription() async {
+        let previousDelay = SessionChatTimeline.childSessionLookupDelay
+        SessionChatTimeline.childSessionLookupDelay = .zero
+        defer { SessionChatTimeline.childSessionLookupDelay = previousDelay }
+        let sessionRepository = FakeChatSessionRepository(sessionStatusType: "busy")
+        sessionRepository.childSessions = [
+            Session(
+                id: "ses-child",
+                title: "Find git projects",
+                slug: nil,
+                projectID: nil,
+                directory: nil,
+                parentID: "ses-1",
+                createdAtEpochMs: 1,
+                updatedAtEpochMs: nil
+            ),
+        ]
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(
+                messages: [
+                    Message(
+                        id: "msg-1",
+                        role: .assistant,
+                        text: "",
+                        parts: [
+                            .tool(
+                                ToolPart(
+                                    id: "prt-1",
+                                    toolName: "subagent",
+                                    status: .running,
+                                    input: [
+                                        "agent": .string("general"),
+                                        "description": .string("Find git projects"),
+                                    ],
+                                    metadata: [:]
+                                )
+                            ),
+                        ],
+                        model: nil,
+                        mode: nil,
+                        sentAtEpochMs: nil
+                    ),
+                ]
+            ),
+            sessionRepository: sessionRepository
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+
+        let linked = await waitUntil {
+            viewModel.uiState.messages.contains { row in
+                row.blocks.contains { block in
+                    if case .childSessionRow(_, let child) = block {
+                        return child.childSessionId == "ses-child"
+                    }
+                    return false
+                }
+            }
+        }
+
+        #expect(linked)
+        #expect(sessionRepository.childSessionRequests == ["ses-1"])
+    }
+
+    @Test func childSessionLookupFailure_retriesAndLinks() async {
+        let previousDelay = SessionChatTimeline.childSessionLookupDelay
+        SessionChatTimeline.childSessionLookupDelay = .zero
+        defer { SessionChatTimeline.childSessionLookupDelay = previousDelay }
+        let sessionRepository = FakeChatSessionRepository(sessionStatusType: "busy")
+        sessionRepository.childSessionFailuresRemaining = 1
+        sessionRepository.childSessions = [
+            Session(
+                id: "ses-child",
+                title: "Find git projects",
+                slug: nil,
+                projectID: nil,
+                directory: nil,
+                parentID: "ses-1",
+                createdAtEpochMs: 1,
+                updatedAtEpochMs: nil
+            ),
+        ]
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(
+                messages: [
+                    Message(
+                        id: "msg-1",
+                        role: .assistant,
+                        text: "",
+                        parts: [
+                            .tool(
+                                ToolPart(
+                                    id: "prt-1",
+                                    toolName: "subagent",
+                                    status: .running,
+                                    input: [
+                                        "agent": .string("general"),
+                                        "description": .string("Find git projects"),
+                                    ],
+                                    metadata: [:]
+                                )
+                            ),
+                        ],
+                        model: nil,
+                        mode: nil,
+                        sentAtEpochMs: nil
+                    ),
+                ]
+            ),
+            sessionRepository: sessionRepository
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+
+        let linked = await waitUntil {
+            viewModel.uiState.messages.contains { row in
+                row.blocks.contains { block in
+                    if case .childSessionRow(_, let child) = block {
+                        return child.childSessionId == "ses-child"
+                    }
+                    return false
+                }
+            }
+        }
+
+        #expect(linked)
+        #expect(sessionRepository.childSessionRequests == ["ses-1", "ses-1"])
+    }
+
     @Test func abortSession_parentSuccessChildFailure_clearsWorking() async {
         let sessionRepository = FakeChatSessionRepository(
             sessionStatusType: "busy",
@@ -3722,6 +3851,118 @@ struct SessionChatViewModelTests {
         await viewModel.loadMessages()
         await waitUntil { viewModel.uiState.sessionStatusLabel == "Working" }
         #expect(viewModel.uiState.workingIndicatorLabel == "Working")
+    }
+
+    @Test func dictationInsert_splicesTranscriptAtCaret() {
+        SessionChatDisplayPreferences.shared.setComposerDictation(true)
+        defer { SessionChatDisplayPreferences.shared.clear() }
+        let viewModel = makeViewModel()
+        defer { viewModel.stopObserving() }
+        viewModel.dictationFinishDelayNs = 0
+
+        viewModel.updateComposerText("Hello there", cursor: 5)
+        viewModel.beginDictation(languageLabel: "English", onDevice: true)
+        viewModel.dictationPartial(committed: " big", volatile: "")
+        viewModel.dictationInsert()
+
+        #expect(viewModel.uiState.composer.text == "Hello big there")
+        #expect(viewModel.uiState.composer.cursor == 9)
+        #expect(viewModel.uiState.dictation == nil)
+    }
+
+    @Test func dictationCancel_afterPartialLeavesComposerUntouched() {
+        SessionChatDisplayPreferences.shared.setComposerDictation(true)
+        defer { SessionChatDisplayPreferences.shared.clear() }
+        let viewModel = makeViewModel()
+        defer { viewModel.stopObserving() }
+        viewModel.dictationFinishDelayNs = 0
+
+        viewModel.updateComposerText("Hello there", cursor: 5)
+        viewModel.beginDictation(languageLabel: "English", onDevice: true)
+        viewModel.dictationPartial(committed: " big", volatile: "ger")
+        viewModel.dictationCancel()
+
+        #expect(viewModel.uiState.composer.text == "Hello there")
+        #expect(viewModel.uiState.composer.cursor == 5)
+        #expect(viewModel.uiState.dictation == nil)
+    }
+
+    @Test func dictationAutoCancel_modeChangeAndBackgroundDoNotInsert() {
+        SessionChatDisplayPreferences.shared.setComposerDictation(true)
+        defer { SessionChatDisplayPreferences.shared.clear() }
+        let viewModel = makeViewModel()
+        defer { viewModel.stopObserving() }
+        viewModel.dictationFinishDelayNs = 0
+
+        viewModel.updateComposerText("Hello there", cursor: 5)
+        viewModel.beginDictation(languageLabel: "English", onDevice: true)
+        viewModel.dictationPartial(committed: " big", volatile: "")
+        viewModel.cancelDictationForModeChange()
+        #expect(viewModel.uiState.composer.text == "Hello there")
+        #expect(viewModel.uiState.composer.cursor == 5)
+        #expect(viewModel.uiState.dictation == nil)
+
+        viewModel.beginDictation(languageLabel: "English", onDevice: true)
+        viewModel.dictationPartial(committed: " big", volatile: "")
+        viewModel.cancelDictationForBackground()
+        #expect(viewModel.uiState.composer.text == "Hello there")
+        #expect(viewModel.uiState.composer.cursor == 5)
+        #expect(viewModel.uiState.dictation == nil)
+    }
+
+    @Test func dictationInsert_emptyTranscriptLeavesCardUp() {
+        SessionChatDisplayPreferences.shared.setComposerDictation(true)
+        defer { SessionChatDisplayPreferences.shared.clear() }
+        let viewModel = makeViewModel()
+        defer { viewModel.stopObserving() }
+        viewModel.dictationFinishDelayNs = 0
+
+        viewModel.updateComposerText("Hello there", cursor: 5)
+        viewModel.beginDictation(languageLabel: "English", onDevice: true)
+        viewModel.dictationPartial(committed: "  ", volatile: " ")
+        viewModel.dictationInsert()
+
+        #expect(viewModel.uiState.composer.text == "Hello there")
+        #expect(viewModel.uiState.composer.cursor == 5)
+        #expect(viewModel.uiState.dictation != nil)
+    }
+
+    @Test func dictationUnavailable_duringFinishingStillInserts() async throws {
+        SessionChatDisplayPreferences.shared.setComposerDictation(true)
+        defer { SessionChatDisplayPreferences.shared.clear() }
+        let viewModel = makeViewModel()
+        defer { viewModel.stopObserving() }
+        viewModel.dictationFinishDelayNs = 30_000_000
+
+        viewModel.updateComposerText("Hello there", cursor: 5)
+        viewModel.beginDictation(languageLabel: "English", onDevice: true)
+        viewModel.dictationPartial(committed: " big", volatile: "")
+        viewModel.dictationInsert()
+        viewModel.beginDictationUnavailable(.recognizerError, message: "late")
+
+        #expect(viewModel.uiState.dictation?.phase == .finishing)
+        #expect(viewModel.uiState.composer.text == "Hello there")
+        try await Task.sleep(nanoseconds: 80_000_000)
+        #expect(viewModel.uiState.composer.text == "Hello big there")
+        #expect(viewModel.uiState.composer.cursor == 9)
+        #expect(viewModel.uiState.dictation == nil)
+    }
+
+    @Test func dictationPartial_doesNotChangeComposerText() {
+        SessionChatDisplayPreferences.shared.setComposerDictation(true)
+        defer { SessionChatDisplayPreferences.shared.clear() }
+        let viewModel = makeViewModel()
+        defer { viewModel.stopObserving() }
+        viewModel.dictationFinishDelayNs = 0
+
+        viewModel.updateComposerText("Hello there", cursor: 5)
+        viewModel.beginDictation(languageLabel: "English", onDevice: true)
+        viewModel.dictationPartial(committed: " big", volatile: "ger")
+
+        #expect(viewModel.uiState.composer.text == "Hello there")
+        #expect(viewModel.uiState.composer.cursor == 5)
+        #expect(viewModel.uiState.dictation?.committed == " big")
+        #expect(viewModel.uiState.dictation?.volatile == "ger")
     }
 
     private func makeViewModel(
@@ -4560,6 +4801,9 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
     }
 
     private let sessions: [Session]
+    var childSessions: [Session] = []
+    var childSessionFailuresRemaining = 0
+    private(set) var childSessionRequests: [String] = []
     private let pendingPermissions: [PermissionRequest]
     private let pendingQuestions: [QuestionRequest]
     private let permissionResponseError: SessionError?
@@ -4755,7 +4999,14 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
         if let deleteError { throw deleteError }
         return deleteResult
     }
-    func listChildSessions(id: String) async throws -> [Session] { fatalError() }
+    func listChildSessions(id: String) async throws -> [Session] {
+        childSessionRequests.append(id)
+        if childSessionFailuresRemaining > 0 {
+            childSessionFailuresRemaining -= 1
+            throw SessionError.http(statusCode: 503, message: "unavailable")
+        }
+        return childSessions
+    }
     func listSessionTodos(id: String, directory: String?) async throws -> [SessionTodo] { fatalError() }
     func initializeSessionAgents(id: String, messageID: String, providerID: String, modelID: String) async throws -> Bool { fatalError() }
     func forkSession(id: String, atMessageID: String?) async throws -> Session {
