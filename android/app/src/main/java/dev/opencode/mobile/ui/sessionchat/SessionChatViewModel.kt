@@ -127,6 +127,7 @@ class SessionChatViewModel
             SessionChatTimeline(
                 messageRepository = messageRepository,
                 scope = viewModelScope,
+                listChildSessions = { id -> sessionRepository.listChildSessions(id) },
             )
         private val composer =
             SessionChatComposer(

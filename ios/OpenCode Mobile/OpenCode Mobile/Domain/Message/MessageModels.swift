@@ -123,6 +123,30 @@ nonisolated struct Message: Equatable, Sendable, Identifiable {
             failure: failure
         )
     }
+
+    func withParts(_ parts: [MessagePart]) -> Message {
+        Message(
+            id: id,
+            role: role,
+            text: text,
+            parts: parts,
+            cost: cost,
+            tokens: tokens,
+            model: model,
+            modelProviderID: modelProviderID,
+            modelID: modelID,
+            variant: variant,
+            mode: mode,
+            sentAtEpochMs: sentAtEpochMs,
+            completedAtEpochMs: completedAtEpochMs,
+            contextInputTokens: contextInputTokens,
+            contextEstimate: contextEstimate,
+            followUpDelivery: followUpDelivery,
+            isWaitingForPickup: isWaitingForPickup,
+            stopReason: stopReason,
+            failure: failure
+        )
+    }
 }
 
 enum FailureSource: Equatable, Sendable {
@@ -510,6 +534,25 @@ nonisolated struct ToolPart: Equatable, Sendable {
 
     func withTimeStart(_ timeStartEpochMs: Int64?) -> ToolPart {
         ToolPart(
+            id: id,
+            toolName: toolName,
+            status: status,
+            title: title,
+            error: error,
+            callID: callID,
+            input: input,
+            output: output,
+            metadata: metadata,
+            timeStartEpochMs: timeStartEpochMs,
+            isInterrupted: isInterrupted,
+            isMalformed: isMalformed
+        )
+    }
+
+    func withMetadataValue(_ value: AnyCodable, forKey key: String) -> ToolPart {
+        var metadata = metadata ?? [:]
+        metadata[key] = value
+        return ToolPart(
             id: id,
             toolName: toolName,
             status: status,
