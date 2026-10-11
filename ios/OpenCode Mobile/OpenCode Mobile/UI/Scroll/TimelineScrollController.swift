@@ -16,6 +16,12 @@ final class TimelineScrollController {
 
     var autoFollowEnabled = true
 
+    /// Content offset captured while the user was away from the end. Survives a
+    /// navigation cover that jumps geometry to a bogus pin, and a collection
+    /// view recreated on return, so we can put them back instead of snapping
+    /// to the end.
+    private(set) var userUnpinnedContentOffsetY: CGFloat?
+
     private var autoFollowState: MessageListAutoFollowState
     private weak var performer: TimelineScrollPerforming?
     private var scrollGeneration = 0
@@ -38,10 +44,24 @@ final class TimelineScrollController {
         self.messageCount = messageCount
         autoFollowState = MessageListAutoFollowState(initialMessageCount: messageCount)
         refreshDerivedState()
-        autoFollowState.updatePinnedState(
-            isPinnedToEnd: isPinnedToEnd,
-            messageCount: messageCount
-        )
+        if userUnpinnedContentOffsetY != nil {
+            autoFollowState.markProgrammaticScrollSettled(isPinnedToEnd: false)
+        } else {
+            autoFollowState.updatePinnedState(
+                isPinnedToEnd: isPinnedToEnd,
+                messageCount: messageCount
+            )
+        }
+    }
+
+    /// Record the offset of an in-progress user scroll.
+    ///
+    /// Only the user's own scroll decides whether they reached the end. A pinned
+    /// sample outside an active gesture (navigation cover, inset change, a late
+    /// idle check after the gesture already ended) must not forget their place.
+    func noteUserScrollOffset(_ y: CGFloat) {
+        guard isUserScrolling else { return }
+        userUnpinnedContentOffsetY = isPinnedToEnd ? nil : y
     }
 
     func updateGeometry(
@@ -91,10 +111,15 @@ final class TimelineScrollController {
     }
 
     func scrollToEndAnimated() {
+        userUnpinnedContentOffsetY = nil
+        autoFollowState.markProgrammaticScrollSettled(isPinnedToEnd: true)
         requestScrollToEnd(animated: true)
     }
 
     func requestScrollToEnd(animated: Bool) {
+        // Follow and inset re-pins must not override a place the user is holding.
+        // The scroll-to-end pill clears that place before calling in.
+        guard userUnpinnedContentOffsetY == nil else { return }
         guard messageCount > 0 || contentHeight > 0 else { return }
         // Never fight an active user pan/deceleration; follow stays gated by
         // shouldFollowNextAppend until the gesture ends.
@@ -160,13 +185,32 @@ final class TimelineScrollController {
         autoFollowState.markProgrammaticScrollSettled(isPinnedToEnd: isPinnedToEnd)
     }
 
-    func endUserScrolling() {
+    /// The user's drag, fling, or deceleration came to rest at `contentOffsetY`.
+    /// Landing at the end clears the held place and re-arms follow; landing away
+    /// holds that offset. Ignored when no gesture is active, so a duplicate or
+    /// late end cannot read a covering route's pinned geometry as the user's.
+    func endUserScrolling(contentOffsetY: CGFloat? = nil) {
+        guard isUserScrolling else { return }
         isUserScrolling = false
         refreshDerivedState()
-        autoFollowState.updatePinnedState(
-            isPinnedToEnd: isPinnedToEnd,
-            messageCount: messageCount
-        )
+        if isPinnedToEnd {
+            userUnpinnedContentOffsetY = nil
+        } else if let contentOffsetY {
+            userUnpinnedContentOffsetY = contentOffsetY
+        }
+        autoFollowState.markUserScrollEnded(isPinnedToEnd: isPinnedToEnd)
+    }
+
+    /// A navigation cover took the timeline away before the gesture ended.
+    /// End it without trusting pinned geometry, which the cover may have
+    /// produced: keep the held place and leave follow as the gesture left it.
+    func interruptUserScrolling(contentOffsetY: CGFloat) {
+        guard isUserScrolling else { return }
+        isUserScrolling = false
+        refreshDerivedState()
+        if !isPinnedToEnd {
+            userUnpinnedContentOffsetY = contentOffsetY
+        }
     }
 
     private func refreshDerivedState() {

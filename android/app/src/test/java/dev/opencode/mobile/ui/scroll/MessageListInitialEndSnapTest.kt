@@ -21,4 +21,26 @@ class MessageListInitialEndSnapTest {
 
         assertFalse(afterFirstLayout.shouldSnap(messageCount = 4))
     }
+
+    @Test
+    fun restoredAwayFromEnd_doesNotSnap() {
+        assertFalse(
+            MessageListInitialEndSnapState().shouldSnap(
+                messageCount = 40,
+                firstVisibleItemIndex = 12,
+                firstVisibleItemScrollOffset = 40,
+            ),
+        )
+    }
+
+    @Test
+    fun restoredOffsetWithinEndItem_doesNotSnap() {
+        assertFalse(
+            MessageListInitialEndSnapState().shouldSnap(
+                messageCount = 40,
+                firstVisibleItemIndex = 0,
+                firstVisibleItemScrollOffset = 24,
+            ),
+        )
+    }
 }

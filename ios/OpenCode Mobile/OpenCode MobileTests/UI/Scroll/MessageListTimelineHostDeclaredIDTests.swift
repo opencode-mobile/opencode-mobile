@@ -558,6 +558,68 @@ struct MessageListTimelineHostDeclaredIDTests {
         #expect(!scroll.isPinnedToEnd)
     }
 
+    @Test func userPlaceSurvivesPinnedGeometryBeforeNavigationCover() {
+        let scroll = TimelineScrollController(initialMessageCount: 0)
+        let controller = MessageListTimelineViewController<EqualityCountingItem, Text>(
+            itemContent: { Text($0.label) },
+            horizontalContentPadding: 0,
+            topContentPadding: 0,
+            bottomContentPadding: 0,
+            bottomOverlayInset: 0,
+            interItemSpacing: 0
+        )
+        controller.scrollController = scroll
+        scroll.attach(controller)
+        controller.loadViewIfNeeded()
+        controller.view.frame = CGRect(x: 0, y: 0, width: 320, height: 400)
+
+        let items = (0..<24).map { index in
+            EqualityCountingItem(id: "row-\(index)", label: "Row \(index) " + String(repeating: "m", count: 48))
+        }
+        controller.apply(
+            items: items,
+            packet: MessageListTimelineApplyPacket(
+                frameRevision: 1,
+                insertedRowIDs: Set(items.map(\.id)),
+                changedRowIDs: [],
+                removedRowIDs: [],
+                layoutChangedRowIDs: Set(items.map(\.id)),
+                grewBottomRowIDs: [],
+                decorateRowIDs: [],
+                isRequired: true,
+                kinds: [.structure, .required]
+            ),
+            animatingDifferences: false
+        )
+        controller.view.layoutIfNeeded()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        controller.view.layoutIfNeeded()
+
+        let bottomY = controller.testBottomContentOffsetY
+        #expect(bottomY > 120)
+        guard bottomY > 120 else { return }
+
+        let midY = bottomY / 2
+        controller.testSetContentOffsetY(midY)
+        scroll.beginUserScrolling()
+        scroll.endUserScrolling(contentOffsetY: midY)
+        #expect(!scroll.isPinnedToEnd)
+
+        // Cover layout jumps to the end and reports pinned before disappear.
+        controller.testSetContentOffsetY(bottomY)
+        scroll.updateGeometry(distanceFromBottom: 0, viewportHeight: 400, contentHeight: bottomY + 400)
+        #expect(scroll.isPinnedToEnd)
+        // The pending idle check from that gesture fires after the cover pin.
+        scroll.endUserScrolling(contentOffsetY: bottomY)
+
+        controller.viewWillDisappear(false)
+        controller.viewWillAppear(false)
+        controller.view.layoutIfNeeded()
+
+        #expect(abs(controller.testContentOffsetY - midY) < 2)
+        #expect(scroll.userUnpinnedContentOffsetY != nil)
+    }
+
     @Test func updateTopOverlayInset_setsAdditionalSafeAreaTop() {
         let controller = MessageListTimelineViewController<EqualityCountingItem, Text>(
             itemContent: { Text($0.label) },

@@ -128,6 +128,7 @@ internal fun rememberMessageListTimeline(
         )
 
     MessageListInitialEndSnapEffect(
+        listState = listState,
         messageCount = messageCount,
         autoFollowEnabled = autoFollowEnabled,
         autoFollowTolerancePx = autoFollowTolerancePx,

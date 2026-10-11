@@ -13,6 +13,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
@@ -118,26 +119,35 @@ internal fun rememberMessageListScrollToEndVisibility(
 
 @Composable
 internal fun MessageListInitialEndSnapEffect(
+    listState: LazyListState,
     messageCount: Int,
     autoFollowEnabled: Boolean,
     autoFollowTolerancePx: Int,
     bottomAnchorHeightPx: Int,
     scrollController: MessageListTimelineScrollController,
 ) {
-    var snapState by remember(scrollController) { mutableStateOf(MessageListInitialEndSnapState()) }
+    // `remember` resets when a child route disposes this screen. Save the flag
+    // with the nav entry so popping back does not snap a restored list to the end.
+    var alreadySnapped by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(scrollController, messageCount) {
-        if (snapState.shouldSnap(messageCount = messageCount)) {
-            withFrameNanos { }
-            withFrameNanos { }
-            scrollController.snapToEnd(
+        if (messageCount <= 0 || alreadySnapped) return@LaunchedEffect
+        val shouldSnap =
+            MessageListInitialEndSnapState(alreadySnapped = alreadySnapped).shouldSnap(
                 messageCount = messageCount,
-                tolerancePx = autoFollowTolerancePx,
-                bottomAnchorHeightPx = bottomAnchorHeightPx,
-                autoFollowEnabled = autoFollowEnabled,
+                firstVisibleItemIndex = listState.firstVisibleItemIndex,
+                firstVisibleItemScrollOffset = listState.firstVisibleItemScrollOffset,
             )
-            snapState = snapState.markSnapped()
-        }
+        alreadySnapped = true
+        if (!shouldSnap) return@LaunchedEffect
+        withFrameNanos { }
+        withFrameNanos { }
+        scrollController.snapToEnd(
+            messageCount = messageCount,
+            tolerancePx = autoFollowTolerancePx,
+            bottomAnchorHeightPx = bottomAnchorHeightPx,
+            autoFollowEnabled = autoFollowEnabled,
+        )
     }
 }
 

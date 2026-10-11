@@ -157,7 +157,8 @@ private struct OpenCodeButtonStyle: ButtonStyle {
                     Circle()
                         .strokeBorder(borderColor(isPressed: isPressed), lineWidth: 1)
                 )
-                .opacity(isPressed ? 0.92 : 1)
+                .overlay { lowContrastPressWash(isPressed: isPressed, in: Circle()) }
+                .opacity(pressOpacity(isPressed: isPressed))
                 .scaleEffect(pressScale(isPressed: isPressed))
                 .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
                 .animation(accentEnableAnimation, value: enabled)
@@ -174,7 +175,13 @@ private struct OpenCodeButtonStyle: ButtonStyle {
                     RoundedRectangle(cornerRadius: 8)
                         .strokeBorder(borderColor(isPressed: isPressed), lineWidth: 1)
                 )
-                .opacity(isPressed ? 0.92 : 1)
+                .overlay {
+                    lowContrastPressWash(
+                        isPressed: isPressed,
+                        in: RoundedRectangle(cornerRadius: 8)
+                    )
+                }
+                .opacity(pressOpacity(isPressed: isPressed))
                 .scaleEffect(pressScale(isPressed: isPressed))
                 .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
                 .animation(accentEnableAnimation, value: enabled)
@@ -252,8 +259,28 @@ private struct OpenCodeButtonStyle: ButtonStyle {
         return .spring(response: 0.32, dampingFraction: 0.68)
     }
 
+    @ViewBuilder
+    private func lowContrastPressWash<S: Shape>(isPressed: Bool, in shape: S) -> some View {
+        if contrast == .low {
+            shape
+                .fill(
+                    OpenCodeColors.textStrong.opacity(
+                        isPressed ? OpenCodeSubtlePress.washOpacity : 0
+                    )
+                )
+                .allowsHitTesting(false)
+        }
+    }
+
+    private func pressOpacity(isPressed: Bool) -> CGFloat {
+        // Low contrast is a near-match for the page. Fading it hides the press
+        // in dark mode; the ink wash is the cue instead.
+        if contrast == .low { return 1 }
+        return isPressed ? 0.92 : 1
+    }
+
     private func pressScale(isPressed: Bool) -> CGFloat {
-        if isPressed { return 0.98 }
+        if isPressed { return contrast == .low ? OpenCodeSubtlePress.scale : 0.98 }
         if contrast == .accent, !enabled { return 0.96 }
         return 1
     }
