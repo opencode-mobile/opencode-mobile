@@ -68,9 +68,9 @@ struct OpenCodeChoiceBadge: View {
                 .frame(minHeight: 36)
                 .fixedSize(horizontal: true, vertical: false)
                 .contentShape(Capsule())
+                .modifier(OpenCodeChoiceBadgeGlassChrome(selected: selected))
         }
-        .buttonStyle(OpenCodeChoiceBadgeGlassPressStyle())
-        .modifier(OpenCodeChoiceBadgeGlassChrome(selected: selected))
+        .buttonStyle(OpenCodeSubtleControlPressStyle(shape: Capsule()))
         .fixedSize(horizontal: true, vertical: false)
         .disabled(!enabled)
         .opacity(enabled ? 1 : 0.5)
@@ -98,15 +98,6 @@ struct OpenCodeChoiceBadge: View {
     }
 }
 
-private struct OpenCodeChoiceBadgeGlassPressStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
-            .opacity(configuration.isPressed ? 0.92 : 1)
-            .animation(.smooth(duration: 0.16), value: configuration.isPressed)
-    }
-}
-
 private struct OpenCodeChoiceBadgeGlassChrome: ViewModifier {
     let selected: Bool
 
@@ -116,7 +107,7 @@ private struct OpenCodeChoiceBadgeGlassChrome: ViewModifier {
                 content
                     .background(OpenCodeColors.textStrong.opacity(0.12), in: Capsule())
                     // Non-interactive glass: `.interactive()` adds a loud lens press;
-                    // press feedback stays on OpenCodeChoiceBadgeGlassPressStyle.
+                    // press feedback stays on OpenCodeSubtleControlPressStyle.
                     .glassEffect(.regular, in: .capsule)
             } else {
                 content

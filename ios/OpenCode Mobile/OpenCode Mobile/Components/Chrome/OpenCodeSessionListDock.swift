@@ -68,7 +68,7 @@ struct OpenCodeSessionListDock: View {
                 .openCodeSubtleControlChrome(shape: Circle())
                 .contentShape(Circle())
         }
-        .buttonStyle(OpenCodeSessionListDockCtaPressStyle())
+        .buttonStyle(OpenCodeSubtleControlPressStyle(shape: Circle()))
         .accessibilityLabel("Add project")
     }
 
@@ -458,9 +458,7 @@ private struct NewSessionDockButton: View {
 
         if let onLongPress {
             label
-                .scaleEffect(isHolding ? 0.98 : 1)
-                .opacity(isHolding ? 0.92 : 1)
-                .animation(.smooth(duration: 0.16), value: isHolding)
+                .openCodeSubtleControlPress(isPressed: isHolding, shape: Capsule())
                 .overlay {
                     Color.clear
                         .contentShape(Capsule())
@@ -491,17 +489,8 @@ private struct NewSessionDockButton: View {
             Button(action: onNewSession) {
                 label
             }
-            .buttonStyle(OpenCodeSessionListDockCtaPressStyle())
+            .buttonStyle(OpenCodeSubtleControlPressStyle(shape: Capsule()))
         }
-    }
-}
-
-private struct OpenCodeSessionListDockCtaPressStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
-            .opacity(configuration.isPressed ? 0.92 : 1)
-            .animation(.smooth(duration: 0.16), value: configuration.isPressed)
     }
 }
 

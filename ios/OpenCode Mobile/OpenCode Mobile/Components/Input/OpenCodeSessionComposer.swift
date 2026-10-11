@@ -462,7 +462,7 @@ struct OpenCodeSessionComposer: View {
                 .openCodeSubtleControlChrome(shape: Capsule())
                 .contentShape(Capsule())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(OpenCodeSubtleControlPressStyle(shape: Capsule()))
     }
 
     private func lockoutChip(_ label: String) -> some View {
