@@ -65,4 +65,5 @@ before a chip is created and send progress belongs to the composer.
 
 ## Parity And Divergence
 
-No intentional divergence is defined. Track temporary differences in Linear.
+No intentional divergence is defined. Track temporary differences on the
+GitHub issue.

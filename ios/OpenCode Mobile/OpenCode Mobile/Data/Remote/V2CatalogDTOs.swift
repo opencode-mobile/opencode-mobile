@@ -40,11 +40,31 @@ nonisolated struct V2CommandDTO: Decodable, Sendable {
 }
 
 nonisolated struct V2SkillDTO: Decodable, Sendable {
+    let id: String?
     let name: String
     let description: String?
     let slash: Bool?
     let location: String?
+    let path: String?
     let content: String?
+
+    init(
+        id: String? = nil,
+        name: String,
+        description: String? = nil,
+        slash: Bool? = nil,
+        location: String? = nil,
+        path: String? = nil,
+        content: String? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.description = description
+        self.slash = slash
+        self.location = location
+        self.path = path
+        self.content = content
+    }
 }
 
 nonisolated struct V2AgentDTO: Decodable, Sendable {

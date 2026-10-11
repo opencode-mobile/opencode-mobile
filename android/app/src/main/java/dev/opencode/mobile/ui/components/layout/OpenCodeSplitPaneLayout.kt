@@ -11,12 +11,32 @@ import androidx.compose.ui.unit.dp
 enum class OpenCodeSplitPaneScreen {
     Home,
     Settings,
+    Changes,
+    Terminals,
+    ;
+
+    /** Sidebar panes use a fixed 280–480dp leading width. Content panes keep both columns at least 500dp. */
+    val usesContentMetrics: Boolean
+        get() =
+            when (this) {
+                Home, Settings -> false
+                Changes, Terminals -> true
+            }
 }
 
 /** Persisted leading-pane geometry for one [OpenCodeSplitPaneScreen]. */
 data class OpenCodeSplitPaneState(
     val leadingWidth: Dp = OpenCodeSplitPaneLayout.DefaultLeadingWidth,
     val isCollapsed: Boolean = false,
+)
+
+/** Width range and snap thresholds for one split-pane role. */
+data class OpenCodeSplitPaneBounds(
+    val minLeading: Dp,
+    val maxLeading: Dp,
+    val defaultLeading: Dp,
+    val collapseThreshold: Dp,
+    val reopenThreshold: Dp,
 )
 
 /** Pure sizing and gesture rules for [OpenCodeSplitPane]. */
@@ -51,7 +71,23 @@ object OpenCodeSplitPaneLayout {
 
     const val ANIMATION_DURATION_MILLIS = 300
 
-    fun clamp(width: Dp): Dp = width.coerceIn(MinLeadingWidth, MaxLeadingWidth)
+    /** Neither column of a Changes or Terminals split may settle narrower than this. */
+    val MinContentColumn = 500.dp
+
+    /** Remembered open width for a content split before the user drags. */
+    val ContentDefaultLeadingWidth = 560.dp
+
+    /** Smallest window that can show two content columns plus the divider. */
+    val ContentSplitMinimumWidth = MinContentColumn * 2 + DividerWidth
+
+    val sidebarBounds =
+        OpenCodeSplitPaneBounds(
+            minLeading = MinLeadingWidth,
+            maxLeading = MaxLeadingWidth,
+            defaultLeading = DefaultLeadingWidth,
+            collapseThreshold = CollapseThreshold,
+            reopenThreshold = ReopenThreshold,
+        )
 
     /**
      * Split only on tablet-class displays ([smallestScreenWidth], from
@@ -62,32 +98,85 @@ object OpenCodeSplitPaneLayout {
         smallestScreenWidth: Dp,
     ): Boolean = smallestScreenWidth >= SplitMinSmallestScreenWidth && windowWidth >= SplitMinWindowWidth
 
+    fun usesContentSplit(containerWidth: Dp): Boolean = containerWidth >= ContentSplitMinimumWidth
+
+    fun contentBounds(containerWidth: Dp): OpenCodeSplitPaneBounds {
+        val maxLeading = (containerWidth - MinContentColumn - DividerWidth).coerceAtLeast(MinContentColumn)
+        return OpenCodeSplitPaneBounds(
+            minLeading = MinContentColumn,
+            maxLeading = maxLeading,
+            defaultLeading = ContentDefaultLeadingWidth.coerceIn(MinContentColumn, maxLeading),
+            collapseThreshold = CollapseThreshold,
+            reopenThreshold = ReopenThreshold,
+        )
+    }
+
+    fun bounds(
+        screen: OpenCodeSplitPaneScreen,
+        containerWidth: Dp,
+    ): OpenCodeSplitPaneBounds = if (screen.usesContentMetrics) contentBounds(containerWidth) else sidebarBounds
+
+    /**
+     * Home's persisted collapsed flag, overlaid while a nested content split is showing.
+     * The overlay is not written back to preferences.
+     */
+    fun displayedCollapsed(
+        persisted: Boolean,
+        nestedContentSplitVisible: Boolean,
+    ): Boolean = persisted || nestedContentSplitVisible
+
+    fun clamp(width: Dp): Dp = clamp(width, sidebarBounds)
+
+    fun clamp(
+        width: Dp,
+        bounds: OpenCodeSplitPaneBounds,
+    ): Dp = width.coerceIn(bounds.minLeading, bounds.maxLeading)
+
     fun resolveDragEnd(
         startedCollapsed: Boolean,
         rememberedWidth: Dp,
         proposedWidth: Dp,
+    ): OpenCodeSplitPaneState = resolveDragEnd(startedCollapsed, rememberedWidth, proposedWidth, sidebarBounds)
+
+    fun resolveDragEnd(
+        startedCollapsed: Boolean,
+        rememberedWidth: Dp,
+        proposedWidth: Dp,
+        bounds: OpenCodeSplitPaneBounds,
     ): OpenCodeSplitPaneState {
-        val remembered = clamp(rememberedWidth)
+        val remembered = clamp(rememberedWidth, bounds)
         return if (startedCollapsed) {
             OpenCodeSplitPaneState(
                 leadingWidth = remembered,
-                isCollapsed = proposedWidth <= ReopenThreshold,
+                isCollapsed = proposedWidth <= bounds.reopenThreshold,
             )
-        } else if (proposedWidth < CollapseThreshold) {
+        } else if (proposedWidth < bounds.collapseThreshold) {
             OpenCodeSplitPaneState(leadingWidth = remembered, isCollapsed = true)
         } else {
-            OpenCodeSplitPaneState(leadingWidth = clamp(proposedWidth), isCollapsed = false)
+            OpenCodeSplitPaneState(leadingWidth = clamp(proposedWidth, bounds), isCollapsed = false)
         }
     }
 
-    fun toggled(state: OpenCodeSplitPaneState): OpenCodeSplitPaneState =
-        state.copy(leadingWidth = clamp(state.leadingWidth), isCollapsed = !state.isCollapsed)
+    fun toggled(state: OpenCodeSplitPaneState): OpenCodeSplitPaneState = toggled(state, sidebarBounds)
+
+    fun toggled(
+        state: OpenCodeSplitPaneState,
+        bounds: OpenCodeSplitPaneBounds,
+    ): OpenCodeSplitPaneState = state.copy(leadingWidth = clamp(state.leadingWidth, bounds), isCollapsed = !state.isCollapsed)
 }
 
 @Composable
-fun currentOpenCodeUsesSplitLayout(): Boolean {
+fun currentOpenCodeWindowWidth(): Dp {
     val containerSize = LocalWindowInfo.current.containerSize
-    val width = with(LocalDensity.current) { containerSize.width.toDp() }
-    val smallestScreenWidth = LocalConfiguration.current.smallestScreenWidthDp.dp
-    return OpenCodeSplitPaneLayout.usesSplitLayout(width, smallestScreenWidth)
+    return with(LocalDensity.current) { containerSize.width.toDp() }
 }
+
+@Composable
+fun currentOpenCodeUsesSplitLayout(): Boolean =
+    OpenCodeSplitPaneLayout.usesSplitLayout(
+        windowWidth = currentOpenCodeWindowWidth(),
+        smallestScreenWidth = LocalConfiguration.current.smallestScreenWidthDp.dp,
+    )
+
+@Composable
+fun currentOpenCodeUsesContentSplit(): Boolean = OpenCodeSplitPaneLayout.usesContentSplit(currentOpenCodeWindowWidth())

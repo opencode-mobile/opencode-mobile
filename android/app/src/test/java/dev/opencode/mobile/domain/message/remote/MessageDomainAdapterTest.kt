@@ -288,6 +288,7 @@ class MessageDomainAdapterTest {
         assertEquals("notes.txt", body.files?.single()?.name)
         assertEquals("text/plain", body.files?.single()?.mime)
         assertEquals("explore", body.agents?.single()?.name)
+        assertEquals(null, body.skills)
         assertEquals(
             "@explore",
             body.agents
@@ -295,6 +296,19 @@ class MessageDomainAdapterTest {
                 ?.mention
                 ?.text,
         )
+    }
+
+    @Test
+    fun toV2PromptRequest_mapsSkillIds() {
+        val body =
+            adapter.toV2PromptRequest(
+                PromptSendOptions(
+                    text = "check the error",
+                    skillIds = listOf(" opencode ", "opencode", ""),
+                ),
+            )
+        assertEquals("check the error", body.text)
+        assertEquals(listOf("opencode"), body.skills?.map { it.id })
     }
 
     @Test

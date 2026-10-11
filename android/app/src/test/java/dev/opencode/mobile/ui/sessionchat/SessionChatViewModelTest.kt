@@ -1702,6 +1702,38 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun sendPrompt_skillSlash_sendsPromptWithSkillId() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val commandRepository =
+                FakeCommandRepository(
+                    commands =
+                        listOf(
+                            ServerCommand(name = "init", source = ServerCommandSource.Command),
+                            ServerCommand(
+                                name = "OpenCode",
+                                description = "Ask about OpenCode",
+                                source = ServerCommandSource.Skill,
+                                skillId = "opencode",
+                            ),
+                        ),
+                )
+            val viewModel = createViewModel(repository = repository, commandRepository = commandRepository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.updateComposerText("/OpenCode check the error")
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+
+            assertFalse(commandRepository.runCommandCalled)
+            assertTrue(repository.sendPromptAsyncCalled)
+            assertEquals("check the error", repository.sentOptions?.text)
+            assertEquals(listOf("opencode"), repository.sentOptions?.skillIds)
+            assertEquals("", viewModel.uiState.value.composer.text)
+        }
+
+    @Test
     fun sendPrompt_unknownSlash_fallsThroughToPrompt() =
         runTest(testDispatcher) {
             val repository = FakeMessageRepository()

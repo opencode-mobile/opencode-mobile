@@ -792,6 +792,29 @@ struct SessionChatViewModelTests {
         #expect(viewModel.uiState.composer.text == "")
     }
 
+    @Test func sendPrompt_skillSlash_sendsPromptWithSkillId() async {
+        let repository = FakeMessageRepository()
+        let commandRepository = FakeCommandRepository(
+            commands: [
+                ServerCommand(name: "init", description: "Create AGENTS.md", source: .command),
+                ServerCommand(name: "OpenCode", description: "Ask about OpenCode", source: .skill, skillID: "opencode"),
+            ]
+        )
+        let viewModel = makeViewModel(
+            messageRepository: repository,
+            commandRepository: commandRepository
+        )
+        await viewModel.loadMessages()
+        viewModel.updateComposerText("/OpenCode check the error")
+        await viewModel.sendPrompt()
+
+        #expect(commandRepository.runCommandCalled == false)
+        #expect(repository.sendPromptAsyncCalled)
+        #expect(repository.sentOptions?.text == "check the error")
+        #expect(repository.sentOptions?.skillIDs == ["opencode"])
+        #expect(viewModel.uiState.composer.text == "")
+    }
+
     @Test func sendPrompt_unknownSlash_fallsThroughToPrompt() async {
         let repository = FakeMessageRepository()
         let commandRepository = FakeCommandRepository()

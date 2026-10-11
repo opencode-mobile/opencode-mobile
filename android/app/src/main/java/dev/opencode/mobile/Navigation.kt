@@ -33,6 +33,7 @@ import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -383,6 +384,9 @@ fun MainNavigation() {
                                             var selectedSession by rememberSaveable(stateSaver = SessionOpenTargetSaver) {
                                                 mutableStateOf<SessionOpenTarget?>(null)
                                             }
+                                            var nestedChanges by rememberSaveable(stateSaver = NestedChangesSaver) {
+                                                mutableStateOf<Changes?>(null)
+                                            }
                                             var handledHomeResetGeneration by rememberSaveable {
                                                 mutableIntStateOf(homeResetGeneration)
                                             }
@@ -390,17 +394,24 @@ fun MainNavigation() {
                                                 if (homeResetGeneration != handledHomeResetGeneration) {
                                                     handledHomeResetGeneration = homeResetGeneration
                                                     selectedSession = null
+                                                    nestedChanges = null
                                                 }
                                             }
                                             LaunchedEffect(useSplitLayout) {
                                                 val selection = selectedSession
                                                 if (!useSplitLayout && selection != null) {
                                                     // Window narrowed: hand the open detail to the stacked route.
+                                                    val changes = nestedChanges
                                                     selectedSession = null
+                                                    nestedChanges = null
                                                     backStack.add(selection.toSessionChatRoute())
+                                                    if (changes != null) backStack.add(changes)
                                                 }
                                             }
-                                            BackHandler(enabled = useSplitLayout && selectedSession != null) {
+                                            BackHandler(enabled = useSplitLayout && nestedChanges != null) {
+                                                nestedChanges = null
+                                            }
+                                            BackHandler(enabled = useSplitLayout && selectedSession != null && nestedChanges == null) {
                                                 selectedSession = null
                                             }
                                             val home: @Composable () -> Unit = {
@@ -409,6 +420,7 @@ fun MainNavigation() {
                                                     onTerminalClick = { backStack.add(TerminalsCatalog) },
                                                     onSessionClick = { target ->
                                                         if (useSplitLayout) {
+                                                            nestedChanges = null
                                                             selectedSession = target
                                                         } else {
                                                             backStack.add(target.toSessionChatRoute())
@@ -440,8 +452,17 @@ fun MainNavigation() {
                                                         HomeSessionDetail(
                                                             selection = selectedSession,
                                                             detailControl = control,
-                                                            onClearSelection = { selectedSession = null },
-                                                            onReplaceSelection = { target -> selectedSession = target },
+                                                            nestedChanges = nestedChanges,
+                                                            onOpenChanges = { nestedChanges = it },
+                                                            onCloseChanges = { nestedChanges = null },
+                                                            onClearSelection = {
+                                                                nestedChanges = null
+                                                                selectedSession = null
+                                                            },
+                                                            onReplaceSelection = { target ->
+                                                                nestedChanges = null
+                                                                selectedSession = target
+                                                            },
                                                             onPush = { route -> backStack.add(route) },
                                                         )
                                                     },
@@ -1011,6 +1032,32 @@ private fun SessionOpenTarget.toSessionChatRoute(): SessionChat =
         optimisticNavigationInstanceId = optimisticNavigationInstanceId,
     )
 
+private val NestedChangesSaver =
+    Saver<Changes?, ArrayList<String?>>(
+        save = { changes ->
+            changes?.let {
+                arrayListOf(
+                    it.sessionId,
+                    it.worktree,
+                    it.messageId,
+                    it.initialSource.name,
+                    it.initialFilePath,
+                )
+            }
+        },
+        restore = { values ->
+            Changes(
+                sessionId = values[0].orEmpty(),
+                worktree = values[1].orEmpty(),
+                messageId = values[2],
+                initialSource =
+                    values[3]?.let { runCatching { ChangeSource.valueOf(it) }.getOrNull() }
+                        ?: ChangeSource.LastTurn,
+                initialFilePath = values[4],
+            )
+        },
+    )
+
 private val SessionOpenTargetSaver =
     Saver<SessionOpenTarget?, ArrayList<String?>>(
         save = { target ->
@@ -1053,6 +1100,9 @@ private data object HomeSessionDetailPlaceholder
 private fun HomeSessionDetail(
     selection: SessionOpenTarget?,
     detailControl: OpenCodeSplitPaneDetailControl,
+    nestedChanges: Changes?,
+    onOpenChanges: (Changes) -> Unit,
+    onCloseChanges: () -> Unit,
     onClearSelection: () -> Unit,
     onReplaceSelection: (SessionOpenTarget) -> Unit,
     onPush: (NavKey) -> Unit,
@@ -1081,7 +1131,7 @@ private fun HomeSessionDetail(
                                 onPush(SessionContext(key.sessionId, key.worktree))
                             },
                             onReviewChangesClick = { target ->
-                                onPush(
+                                onOpenChanges(
                                     Changes(
                                         target.sessionId,
                                         target.worktree,
@@ -1134,5 +1184,19 @@ private fun HomeSessionDetail(
                     }
                 },
         )
-    entries.last().Content()
+    Box(Modifier.fillMaxSize()) {
+        Box(Modifier.graphicsLayer { alpha = if (nestedChanges == null) 1f else 0f }) {
+            entries.last().Content()
+        }
+        nestedChanges?.let { changes ->
+            ChangesScreen(
+                sessionId = changes.sessionId,
+                worktree = changes.worktree,
+                messageId = changes.messageId,
+                initialSource = changes.initialSource,
+                initialFilePath = changes.initialFilePath,
+                onNavigateBack = onCloseChanges,
+            )
+        }
+    }
 }

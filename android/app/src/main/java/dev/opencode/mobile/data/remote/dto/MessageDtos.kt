@@ -173,7 +173,13 @@ data class V2PromptRequestDto(
     val text: String,
     val files: List<V2PromptFileDto>? = null,
     val agents: List<V2PromptAgentDto>? = null,
+    val skills: List<V2PromptSkillDto>? = null,
     val delivery: String,
+)
+
+@Serializable
+data class V2PromptSkillDto(
+    val id: String,
 )
 
 @Serializable

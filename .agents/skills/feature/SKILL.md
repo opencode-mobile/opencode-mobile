@@ -5,104 +5,74 @@ description: "Feature: use to resolve anchors, start ticket-backed work, handle 
 
 # Feature
 
-A feature is its Linear issue, git branch, and pull request. Keep those three
-pointing at each other. Run only the routes the user asked for.
+A feature is its GitHub issue, git branch, and pull request. Keep those three
+pointing at each other. Do only what the user asked: resolving anchors never
+changes state, and committing, pushing, or opening a pull request happens only
+on an explicit request.
 
-## 1. Route the request
+Issue mutations go through `github-issue-tracking`; implementation through
+`synced-native-feature` and `design-system-component`. After another skill
+mutates state, read the result back and verify the link.
 
-Pick every route the user asked for:
+## Resolve the issue and branch
 
-| Route | Use when the user wants to | Required anchors |
-| --- | --- | --- |
-| Resolve | identify or connect existing feature state | the anchors they named |
-| Start | begin ticket-backed implementation | issue key, branch |
-| Docs | locate, create, or update documentation they asked for | requested document |
-| Merge | check whether existing work is merge-ready | branch, plus issue key when ticket-backed |
-| Publish | commit, push, or open a pull request | branch; plus issue key when ticket-backed |
+Start from the strongest anchor the user gave: `#<number>`, legacy
+`OPE-<number>`, the current branch, a pull request, or a feature name.
 
-If they named more than one, run them in this order: Resolve, Start, Docs,
-Merge, Publish. A later route in the table is not implied.
+- A branch yields a key from the first `ope[-_/]<number>` match, else the first
+  number in `feature/<number>-` or `fix/<number>-`. Fall back to `#<number>` or
+  titles in recent commits.
+- `OPE-<number>` is a title prefix on imported issues; resolve it with
+  `gh issue list --state all --search "OPE-<number> in:title"`. `OPE-5` and
+  `#5` are different tickets, and `gh issue view` on a pull request number is
+  not the ticket.
+- If evidence yields several candidates or none, ask before any ticket-linked
+  mutation.
 
-**Completion criterion:** Every requested action maps to one route, route order
-is explicit, and no unrequested mutation is included.
+When starting work, prefer an existing local or remote issue branch. Otherwise
+create one named per `AGENTS.md` **Issues, Branches, Documentation**. Leave
+unrelated worktree changes untouched.
 
-## Ownership
+## Docs
 
-This skill resolves anchors, changes branches in Start, checks links, and runs
-the publication steps in Publish. Other state changes belong to the owning
-skill:
+Only when the user asked for documentation: change the requested document and
+nothing else. Feature state stays on the issue, behavior in code and tests.
 
-- `linear-project-tracking` creates or updates Linear issues, statuses, and
-  links.
-- `synced-native-feature` owns cross-platform feature implementation and parity.
-- `design-system-component` owns reusable UI, tokens, variants, previews, and
-  galleries.
-- Publication runs through `git` and `gh` per
-  [publication steps](reference.md#publication-steps). If the harness provides
-  a GitHub publish tool (for example Codex `yeet`), it may replace the manual
-  `git`/`gh` commands but must produce the same commit, branch, and pull-request
-  shape.
+## Merge readiness
 
-Branch create or switch stays in this skill's Start route. After an owning
-skill mutates state, read the result and verify the requested link.
+Check what applies and report pass, fail, or not applicable for each:
 
-## 2. Resolve
+- branch name contains the issue key
+- diff contains only the intended scope
+- issue plan, status, and remaining work match the branch (when ticket state
+  is in scope)
+- relevant automated checks have a recorded pass, fail, or explicit skip
+- the pull-request summary states scope, checks, and remaining risks
 
-Start from the strongest supplied anchor: issue key (`OPE-<number>`), current
-branch, pull request, or feature name. Resolve only the extra anchors required
-by the selected routes. Read
-[branch resolution and naming](reference.md#branch-resolution-and-naming) when
-a branch must be parsed, inferred, selected, or created.
+Repair issue state only when asked; otherwise report the mismatch.
 
-Prefer current repository and Linear evidence over an inferred slug. If
-evidence stays ambiguous, report the candidates or ask for the missing issue
-key before ticket-linked mutations.
+## Publish
 
-**Completion criterion:** Every required anchor has one explicit value, or the
-result names each unresolved anchor and the evidence needed to settle it. Resolve
-changes no state.
+1. Review branch, status, and diff. Stage only the feature's files.
+2. Commit with the issue number and concise scope, e.g.
+   `#367 Add theme token previews`.
+3. Push the current branch.
+4. Open a draft pull request unless a ready one was requested. Body:
 
-## 3. Start
+```markdown
+## Summary
+- ...
 
-Resolve the issue key and inspect the worktree for unrelated changes. Read
-[branch resolution and naming](reference.md#branch-resolution-and-naming), then
-switch to the existing issue branch or create the specified branch. Preserve
-unrelated worktree changes. Use `linear-project-tracking` for requested Linear
-status or link updates, then read Linear to verify them.
+## Checks
+- ...
 
-**Completion criterion:** The current branch contains the normalized issue key,
-all unrelated worktree changes remain untouched, and every requested Linear
-mutation is confirmed from Linear.
+## Issue
+- #<number>
 
-## 4. Docs
+## Risks / Follow-ups
+- ...
+```
 
-Run Docs only when the user asked for documentation. Resolve and read the
-requested document, then make only that change. Keep feature state in Linear
-and implementation behavior in code and tests. Do not create feature ledgers,
-progress logs, ticket plans, research dumps, generated reports, or checked-in
-prototypes.
-
-**Completion criterion:** The requested document contains the requested change,
-and no unrelated documentation was created or changed.
-
-## 5. Merge
-
-Read [merge-readiness reference](reference.md#merge-readiness) and evaluate
-every applicable invariant against current repository and Linear state. Use the
-owning skill to repair Linear state only when the user asked for updates;
-otherwise report the mismatch.
-
-**Completion criterion:** Every applicable merge invariant has current evidence
-and a `pass`, `fail`, or `not applicable` result. Every failure is named as a
-merge blocker or accepted risk.
-
-## 6. Publish
-
-Publish only on an explicit commit, push, or pull-request request. Read and
-execute [publication steps](reference.md#publication-steps). Use
-`linear-project-tracking` for the Linear backlink after a pull request exists.
-
-**Completion criterion:** Every requested publication action has a commit
-identifier, remote branch, or pull-request URL. For ticket-backed work, the pull
-request, Linear issue, and branch cross-reference one another, or the exact
-missing link is reported.
+Name the issue as `#<number>`; write `Fixes #<number>` only when the pull
+request finishes the issue. Add an issue comment only when asked, via
+`github-issue-tracking`. Report the commit, remote branch, and pull-request URL.

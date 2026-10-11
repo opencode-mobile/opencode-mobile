@@ -15,6 +15,25 @@ struct ComposerSubmitRoutingTests {
         #expect(intent == .serverCommand(command: "review", arguments: ""))
     }
 
+    @Test func resolve_skillWithId_sendsSkillPromptNotCommand() {
+        let intent = ComposerSubmitRouting.resolve(
+            text: "/OpenCode check the error",
+            commands: [
+                ServerCommand(name: "init", source: .command),
+                ServerCommand(name: "OpenCode", source: .skill, skillID: "opencode"),
+            ]
+        )
+        #expect(intent == .skillPrompt(skillID: "opencode", text: "check the error"))
+    }
+
+    @Test func resolve_skillWithoutId_staysOnCommandRoute() {
+        let intent = ComposerSubmitRouting.resolve(
+            text: "/deploy now",
+            commands: [ServerCommand(name: "deploy", source: .skill)]
+        )
+        #expect(intent == .serverCommand(command: "deploy", arguments: "now"))
+    }
+
     @Test func resolve_unknownSlash_fallsThroughToPrompt() {
         let intent = ComposerSubmitRouting.resolve(text: "/not-a-command please", serverCommandNames: catalog)
         #expect(intent == .prompt(text: "/not-a-command please"))

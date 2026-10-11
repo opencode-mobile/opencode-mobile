@@ -8,7 +8,7 @@ struct SplitPaneGalleryView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Drag the handle to resize; release narrow to snap closed; tap to toggle.")
+            Text("Drag the handle to resize; release narrow to snap closed; tap to toggle. Changes and Terminals use the same handle, with a 500pt column floor.")
                 .font(OpenCodeTypography.caption)
                 .foregroundStyle(OpenCodeColors.textWeak)
 
