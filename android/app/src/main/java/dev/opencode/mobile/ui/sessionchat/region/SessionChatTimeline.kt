@@ -13,6 +13,7 @@ import dev.opencode.mobile.domain.message.MessageError
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.ThoughtPartChrome
+import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.ui.sessionchat.ContentRevision
 import dev.opencode.mobile.ui.sessionchat.DisplayFrame
@@ -20,6 +21,8 @@ import dev.opencode.mobile.ui.sessionchat.DisplayMessageBody
 import dev.opencode.mobile.ui.sessionchat.LatestAgentHint
 import dev.opencode.mobile.ui.sessionchat.LatestModelHint
 import dev.opencode.mobile.ui.sessionchat.OptimisticInputs
+import dev.opencode.mobile.ui.sessionchat.SessionChatChildSessionCandidate
+import dev.opencode.mobile.ui.sessionchat.SessionChatChildSessionLinker
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlock
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlocks
@@ -33,6 +36,7 @@ import dev.opencode.mobile.ui.sessionchat.TimelineRow
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -43,8 +47,24 @@ import kotlinx.coroutines.withContext
 class SessionChatTimeline(
     private val messageRepository: MessageRepository,
     private val scope: CoroutineScope,
+    private val listChildSessions: (suspend (String) -> List<Session>)? = null,
 ) {
     var ioDispatcher: CoroutineDispatcher = kotlinx.coroutines.Dispatchers.IO
+
+    /**
+     * Wait before looking up child sessions, so a live `tool.progress` can link
+     * a just-started subagent first.
+     */
+    var childSessionLookupDelayMs: Long = 1_500L
+
+    /** Children of this session that subagent parts without a child id link to (#648). */
+    @Volatile
+    var childSessions: List<SessionChatChildSessionCandidate> = emptyList()
+        private set
+
+    /** Unlinked subagent parts already covered by a child-session lookup. */
+    private var childSessionLookupPartIds: Set<String> = emptySet()
+    private var childSessionLookupJob: Job? = null
 
     @Volatile
     var serverCommands: List<ServerCommand> = emptyList()
@@ -141,6 +161,7 @@ class SessionChatTimeline(
         pendingBaselineSignatures = emptyMap()
         lastLoadedMessages = emptyList()
         lastLoadedDisplayMessages = emptyList()
+        resetChildSessionLookup()
         pendingPromptPatches.clear()
         lastTimelineFrame = null
         nextFrameRevision = 1L
@@ -177,6 +198,7 @@ class SessionChatTimeline(
         pendingBaselineSignatures = emptyMap()
         lastLoadedMessages = emptyList()
         lastLoadedDisplayMessages = emptyList()
+        resetChildSessionLookup()
         pendingPromptPatches.clear()
         lastTimelineFrame = null
         nextFrameRevision = 1L
@@ -691,6 +713,8 @@ class SessionChatTimeline(
         if (!isCurrentBinding(sourceSessionId, sourceWorktree)) return
         lastLoadedDisplayMessages = displayMessages
         lastLoadedMessages = displayMessages.map { it.message }
+        scheduleChildSessionLookup(sourceSessionId, sourceWorktree)
+        val children = childSessions
         val stateSnapshot = _state.value
         val previousById = stateSnapshot.messages.associateBy { it.id }
         val previousFrame = lastTimelineFrame
@@ -712,7 +736,7 @@ class SessionChatTimeline(
             withContext(ioDispatcher) {
                 val bodies =
                     SessionChatTimelineBlocks.mergeConsecutiveToolOnlyAssistantBodies(
-                        sortedDisplayMessages(displayMessages).mapNotNull { display ->
+                        linkChildSessions(sortedDisplayMessages(displayMessages), children).mapNotNull { display ->
                             displayMessageBody(display, previousById[display.id])
                         },
                         collapseConsecutiveToolCalls,
@@ -879,7 +903,8 @@ class SessionChatTimeline(
         source != SOURCE_PENDING_PROMPT &&
             source != "commands-ready" &&
             source != "collapse-pref" &&
-            source != "chip-pref"
+            source != "chip-pref" &&
+            source != SOURCE_CHILD_SESSIONS
 
     private fun applyPendingPromptOverlay(
         incoming: List<DisplayMessage>,
@@ -935,6 +960,73 @@ class SessionChatTimeline(
 
     private fun sortedDisplayMessages(displayMessages: List<DisplayMessage>): List<DisplayMessage> =
         TimelineDisplayOrder.ordered(displayMessages)
+
+    private fun linkChildSessions(
+        displayMessages: List<DisplayMessage>,
+        children: List<SessionChatChildSessionCandidate>,
+    ): List<DisplayMessage> {
+        val linked = SessionChatChildSessionLinker.link(displayMessages.map { it.message }, children)
+        return displayMessages.zip(linked) { display, message ->
+            if (message === display.message) display else display.copy(message = message)
+        }
+    }
+
+    private fun resetChildSessionLookup() {
+        childSessionLookupJob?.cancel()
+        childSessionLookupJob = null
+        childSessionLookupPartIds = emptySet()
+        childSessions = emptyList()
+    }
+
+    /**
+     * Looks up this session's children when a subagent part has no child id
+     * (history reloads drop the one-shot `tool.progress` id), then re-projects
+     * so its row or chip can open the child. Each unlinked part is looked up
+     * once; a later reload with a new unlinked part looks up again.
+     */
+    private fun scheduleChildSessionLookup(
+        sessionId: String,
+        worktree: String,
+    ) {
+        val listChildSessions = listChildSessions ?: return
+        if (childSessionLookupJob?.isActive == true) return
+        if (!hasNewUnlinkedSubagent()) return
+        childSessionLookupJob =
+            scope.launch {
+                delay(childSessionLookupDelayMs)
+                if (!isCurrentBinding(sessionId, worktree)) return@launch
+                val unlinked = SessionChatChildSessionLinker.unlinkedPartIds(lastLoadedMessages)
+                if (childSessionLookupPartIds.containsAll(unlinked)) return@launch
+                val sessions =
+                    runCatching { withContext(ioDispatcher) { listChildSessions(sessionId) } }
+                        .getOrElse { throwable ->
+                            logE("childSessions lookup failed session=$sessionId", throwable)
+                            return@launch
+                        }
+                if (!isCurrentBinding(sessionId, worktree)) return@launch
+                childSessionLookupPartIds = childSessionLookupPartIds + unlinked
+                val candidates =
+                    sessions
+                        .filterNot { it.isArchived }
+                        .map { SessionChatChildSessionCandidate(it.id, it.title, it.createdAtEpochMs) }
+                logI("childSessions lookup session=$sessionId unlinked=${unlinked.size} children=${candidates.size}")
+                if (candidates == childSessions) return@launch
+                childSessions = candidates
+                if (lastLoadedDisplayMessages.isNotEmpty()) {
+                    applyLoadedDisplayMessages(
+                        displayMessages = lastLoadedDisplayMessages,
+                        sourceSessionId = sessionId,
+                        sourceWorktree = worktree,
+                        fromQuietRefresh = true,
+                        source = SOURCE_CHILD_SESSIONS,
+                        messagesFromCache = _state.value.messagesFromCache,
+                    )
+                }
+            }
+    }
+
+    private fun hasNewUnlinkedSubagent(): Boolean =
+        !childSessionLookupPartIds.containsAll(SessionChatChildSessionLinker.unlinkedPartIds(lastLoadedMessages))
 
     private fun displayMessageBody(
         display: DisplayMessage,
@@ -1076,5 +1168,6 @@ class SessionChatTimeline(
     companion object {
         private const val TAG = "SessionChatTimeline"
         private const val SOURCE_PENDING_PROMPT = "pending-prompt"
+        private const val SOURCE_CHILD_SESSIONS = "child-sessions"
     }
 }

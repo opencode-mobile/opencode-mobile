@@ -33,17 +33,28 @@ final class SessionChatTimeline {
     private(set) var collapseConsecutiveToolCalls = false
     /// Chip-timeline preference (OPE-260); narration paragraphs with tool chips.
     private(set) var chipTimeline = false
+    /// Children of this session that subagent parts without a child id link to (#648).
+    private(set) var childSessions: [SessionChatChildSessionCandidate] = []
+    private let listChildSessions: (@MainActor (String) async throws -> [Session])?
+    /// Unlinked subagent parts already covered by a child-session lookup.
+    private var childSessionLookupPartIDs: Set<String> = []
+    private var childSessionLookupTask: Task<Void, Never>?
     /// Test-only: runs after a frame revision is taken, before off-main build.
     static var applyTestGate: (@MainActor () async -> Void)?
+    /// Wait before looking up child sessions, so a live `tool.progress` can link
+    /// a just-started subagent first.
+    static var childSessionLookupDelay: Duration = .milliseconds(1_500)
 
     init(
         sessionID: String,
         worktree: String,
-        messageRepository: any MessageRepository
+        messageRepository: any MessageRepository,
+        listChildSessions: (@MainActor (String) async throws -> [Session])? = nil
     ) {
         self.sessionID = sessionID
         self.worktree = worktree
         self.messageRepository = messageRepository
+        self.listChildSessions = listChildSessions
     }
 
     func updateServerCommands(_ commands: [ServerCommand]) {
@@ -98,6 +109,56 @@ final class SessionChatTimeline {
         }
     }
 
+    /// Looks up this session's children when a subagent part has no child id
+    /// (history reloads drop the one-shot `tool.progress` id), then re-projects
+    /// so its row or chip can open the child. Each unlinked part is looked up
+    /// once; a later reload with a new unlinked part looks up again.
+    private func scheduleChildSessionLookup() {
+        guard listChildSessions != nil, childSessionLookupTask == nil else { return }
+        guard !lastLoadedMessages.isEmpty, !OptimisticSessionCreate.isPlaceholder(sessionID) else { return }
+        let unlinked = SessionChatChildSessionLinker.unlinkedPartIDs(in: lastLoadedMessages)
+        guard !unlinked.isSubset(of: childSessionLookupPartIDs) else { return }
+        let lookupSessionID = sessionID
+        childSessionLookupTask = Task { [weak self] in
+            try? await Task.sleep(for: Self.childSessionLookupDelay)
+            await self?.lookUpChildSessions(sessionID: lookupSessionID)
+        }
+    }
+
+    private func lookUpChildSessions(sessionID lookupSessionID: String) async {
+        defer { childSessionLookupTask = nil }
+        guard !Task.isCancelled, lookupSessionID == sessionID, let listChildSessions else { return }
+        let unlinked = SessionChatChildSessionLinker.unlinkedPartIDs(in: lastLoadedMessages)
+        guard !unlinked.isSubset(of: childSessionLookupPartIDs) else { return }
+        let sessions: [Session]
+        do {
+            sessions = try await listChildSessions(lookupSessionID)
+        } catch {
+            OpenCodeLog.sessionChat.warning(
+                "childSessions lookup failed session=\(lookupSessionID) error=\(String(describing: error))"
+            )
+            return
+        }
+        guard !Task.isCancelled, lookupSessionID == sessionID else { return }
+        childSessionLookupPartIDs.formUnion(unlinked)
+        let candidates = sessions
+            .filter { !$0.isArchived }
+            .map { SessionChatChildSessionCandidate(id: $0.id, title: $0.title, createdAtEpochMs: $0.createdAtEpochMs) }
+        OpenCodeLog.sessionChat.info(
+            "childSessions lookup session=\(lookupSessionID) unlinked=\(unlinked.count) children=\(candidates.count)"
+        )
+        guard candidates != childSessions else { return }
+        childSessions = candidates
+        guard !lastLoadedDisplayMessages.isEmpty else { return }
+        await applyLoadedDisplayMessagesTransform(
+            lastLoadedDisplayMessages,
+            isRefreshing: false,
+            fromQuietRefresh: true,
+            messagesFromCache: state.messagesFromCache,
+            expirePendingPromptPatches: false
+        )
+    }
+
     func reset() {
         cancelObservationTasks()
         mergePendingWhileSending = false
@@ -105,6 +166,10 @@ final class SessionChatTimeline {
         pendingBaselineSignatureCounts = [:]
         lastLoadedMessages = []
         lastLoadedDisplayMessages = []
+        childSessionLookupTask?.cancel()
+        childSessionLookupTask = nil
+        childSessionLookupPartIDs = []
+        childSessions = []
         pendingPromptPatches = [:]
         pendingRequiredDisplayApplies = []
         pendingLiveDisplayUpdate = nil
@@ -191,6 +256,7 @@ final class SessionChatTimeline {
         let displayMessages = applyPendingPromptOverlay(incoming, expireAgainstAuthoritative: true)
         lastLoadedDisplayMessages = displayMessages
         lastLoadedMessages = displayMessages.map(\.message)
+        scheduleChildSessionLookup()
 
         displayFrameRevision &+= 1
         let frameRevision = displayFrameRevision
@@ -213,7 +279,8 @@ final class SessionChatTimeline {
             displayMessages: displayMessages,
             serverCommands: serverCommands,
             collapseConsecutiveToolCalls: collapseConsecutiveToolCalls,
-            chipTimeline: chipTimeline
+            chipTimeline: chipTimeline,
+            childSessions: childSessions
         )
         let stamped = SessionChatTimelineProjector.project(
             frame: frame,
@@ -539,7 +606,8 @@ final class SessionChatTimeline {
             displayMessages: [display],
             serverCommands: serverCommands,
             collapseConsecutiveToolCalls: collapseConsecutiveToolCalls,
-            chipTimeline: chipTimeline
+            chipTimeline: chipTimeline,
+            childSessions: childSessions
         )
         guard !frame.messages.isEmpty else { return nil }
         let previousTimeline: TimelineFrame? =
@@ -590,6 +658,7 @@ final class SessionChatTimeline {
         )
         lastLoadedDisplayMessages = displayMessages
         lastLoadedMessages = displayMessages.map(\.message)
+        scheduleChildSessionLookup()
         guard !Task.isCancelled else { return }
 
         let stateSnapshot = state
@@ -606,6 +675,7 @@ final class SessionChatTimeline {
         let commands = serverCommands
         let collapse = collapseConsecutiveToolCalls
         let chips = chipTimeline
+        let children = childSessions
 
         let pendingRows: [TimelineRow]
         if mergePendingWhileSending {
@@ -631,7 +701,8 @@ final class SessionChatTimeline {
                 displayMessages: displayMessages,
                 serverCommands: commands,
                 collapseConsecutiveToolCalls: collapse,
-                chipTimeline: chips
+                chipTimeline: chips,
+                childSessions: children
             )
             return SessionChatTimelineProjector.project(
                 frame: frame,
@@ -747,7 +818,8 @@ final class SessionChatTimeline {
             displayMessages: lastLoadedDisplayMessages,
             serverCommands: serverCommands,
             collapseConsecutiveToolCalls: collapseConsecutiveToolCalls,
-            chipTimeline: chipTimeline
+            chipTimeline: chipTimeline,
+            childSessions: childSessions
         )
         let stillUnacked = SessionChatTimelineProjector.unmatchedPending(
             pendingItems.map { TimelineRow.fromSessionChatRow($0) },

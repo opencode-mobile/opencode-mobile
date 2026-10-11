@@ -4299,6 +4299,65 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun runningSubagentLoadedWithoutChildId_linksChildSessionByDescription() =
+        runTest(testDispatcher) {
+            val sessionRepository =
+                FakeSessionRepository(
+                    sessionStatusType = "busy",
+                    childSessions =
+                        listOf(
+                            Session(
+                                id = "ses-child",
+                                title = "Find git projects",
+                                parentId = "ses-1",
+                                createdAtEpochMs = 1L,
+                            ),
+                        ),
+                )
+            val viewModel =
+                createViewModel(
+                    repository =
+                        FakeMessageRepository(
+                            messages =
+                                listOf(
+                                    Message(
+                                        id = "msg-1",
+                                        role = MessageRole.Assistant,
+                                        text = "",
+                                        parts =
+                                            listOf(
+                                                MessagePart.Tool(
+                                                    toolName = "subagent",
+                                                    status = ToolStatus.Running,
+                                                    id = "prt-1",
+                                                    input =
+                                                        buildJsonObject {
+                                                            put("agent", "general")
+                                                            put("description", "Find git projects")
+                                                        },
+                                                    metadata = buildJsonObject {},
+                                                ),
+                                            ),
+                                    ),
+                                ),
+                        ),
+                    sessionRepository = sessionRepository,
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertTrue(
+                viewModel.uiState.value.messages.any { message ->
+                    message.blocks.any { block ->
+                        block is SessionChatTimelineBlock.ChildSessionRow &&
+                            block.childSessionId == "ses-child"
+                    }
+                },
+            )
+            assertEquals(listOf("ses-1"), sessionRepository.childSessionRequests)
+        }
+
+    @Test
     fun abort_parentSuccessChildFailure_clearsWorking() =
         runTest(testDispatcher) {
             val sessionRepository =
@@ -5750,6 +5809,7 @@ private class FakeSessionRepository(
     private val deleteHoldUntil: CompletableDeferred<Unit>? = null,
     private val questionHoldUntil: CompletableDeferred<Unit>? = null,
     var getSessionResult: Session? = null,
+    var childSessions: List<Session> = emptyList(),
     private val getSessionError: Throwable? = null,
     private val createSessionResult: Session? = null,
     private val createSessionError: Throwable? = null,
@@ -5761,6 +5821,8 @@ private class FakeSessionRepository(
     private val summarizeHoldUntil: CompletableDeferred<Unit>? = null,
     private val compactStart: CompactionStart = CompactionStart.Finished,
 ) : SessionRepository {
+    val childSessionRequests = mutableListOf<String>()
+
     data class DiffRequest(
         val sessionId: String,
         val messageId: String?,
@@ -5919,7 +5981,10 @@ private class FakeSessionRepository(
     override suspend fun listChildSessions(
         id: String,
         directory: String?,
-    ) = error("unused")
+    ): List<Session> {
+        childSessionRequests += id
+        return childSessions
+    }
 
     override suspend fun listSessionTodos(
         id: String,

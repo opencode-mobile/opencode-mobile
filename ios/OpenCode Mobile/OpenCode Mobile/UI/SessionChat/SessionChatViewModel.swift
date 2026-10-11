@@ -109,7 +109,8 @@ final class SessionChatViewModel {
         self.timeline = SessionChatTimeline(
             sessionID: sessionID,
             worktree: worktree,
-            messageRepository: messageRepository
+            messageRepository: messageRepository,
+            listChildSessions: { id in try await sessionRepository.listChildSessions(id: id) }
         )
         self.composer = SessionChatComposer(
             sessionID: sessionID,
