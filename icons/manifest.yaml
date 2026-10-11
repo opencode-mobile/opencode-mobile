@@ -110,6 +110,9 @@ icons:
   - name: slash
     lucide: square-slash
     notes: Session Composer Commands action
+  - name: mic
+    lucide: mic
+    notes: Session Composer dictation
   - name: plug
     lucide: plug
     notes: MCP servers tile in Commands sheet

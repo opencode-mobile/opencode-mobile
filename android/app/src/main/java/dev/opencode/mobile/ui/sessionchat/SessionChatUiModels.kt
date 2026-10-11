@@ -110,6 +110,25 @@ data class SessionChatSnackbar(
     val id: Long,
 )
 
+enum class ComposerDictationPhase {
+    Listening,
+    Finishing,
+    PermissionDenied,
+    ModelNotInstalled,
+    RecognizerError,
+}
+
+data class ComposerDictationUiState(
+    val phase: ComposerDictationPhase,
+    val committed: String = "",
+    val volatile: String = "",
+    val level: Float = 0f,
+    val languageLabel: String = "",
+    val onDevice: Boolean = true,
+    val startedAtEpochMs: Long = 0L,
+    val errorMessage: String? = null,
+)
+
 data class SessionChatUiState(
     val sessionId: String,
     val sessionTitle: String,
@@ -202,6 +221,10 @@ data class SessionChatUiState(
     val expandedStepParagraphs: Map<String, Int> = emptyMap(),
     /** One-time Chip timeline intro sheet (OPE-270). */
     val chipTimelineIntroVisible: Boolean = false,
+    /** Settings gate for the composer mic. Off until the user turns it on. */
+    val composerDictationEnabled: Boolean = false,
+    /** Null while idle. A value shows the dictation card in place of prompt entry. */
+    val dictation: ComposerDictationUiState? = null,
 ) {
     /** A permission, question, or Screen Model-owned sheet or dialog would sit under the intro sheet. */
     fun blocksChipTimelineIntro(): Boolean =

@@ -188,6 +188,25 @@ struct SessionChatSnackbar: Equatable, Identifiable {
     let tone: SessionChatSnackbarTone
 }
 
+enum ComposerDictationPhase: Equatable {
+    case listening
+    case finishing
+    case permissionDenied
+    case modelNotInstalled
+    case recognizerError
+}
+
+struct ComposerDictationUiState: Equatable {
+    var phase: ComposerDictationPhase
+    var committed: String = ""
+    var volatile: String = ""
+    var level: Double = 0
+    var languageLabel: String = ""
+    var onDevice: Bool = true
+    var startedAt: Date = .init()
+    var errorMessage: String? = nil
+}
+
 struct SessionChatUiState: Equatable {
     var sessionID: String
     var sessionTitle: String
@@ -278,6 +297,9 @@ struct SessionChatUiState: Equatable {
     var expandedStepParagraphs: [String: Int] = [:]
     /// One-time Chip timeline intro sheet (OPE-270).
     var chipTimelineIntroVisible = false
+    /// Settings gate for the composer mic. The OS availability gate is applied in the view.
+    var composerDictationEnabled: Bool = false
+    var dictation: ComposerDictationUiState? = nil
 
     /// A permission, question, or Screen Model-owned sheet or dialog would sit under the intro sheet.
     var blocksChipTimelineIntro: Bool {

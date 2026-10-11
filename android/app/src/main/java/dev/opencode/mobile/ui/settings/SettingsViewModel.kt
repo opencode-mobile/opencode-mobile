@@ -125,6 +125,10 @@ class SettingsViewModel
             SessionChatDisplayPreferences.updateFollowUpDelivery(value)
         }
 
+        fun setComposerDictation(enabled: Boolean) {
+            SessionChatDisplayPreferences.updateComposerDictation(enabled)
+        }
+
         fun supportsFollowUpDelivery(): Boolean = activeConnectionManager.currentCapabilities().supportsFollowUpDelivery
 
         fun setTextMateEnabled(enabled: Boolean) {
