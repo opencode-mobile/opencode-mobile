@@ -70,7 +70,8 @@ release distribution are active.
   add it through the design-system component workflow before composing the
   feature screen.
 - Feature work should proceed as a synchronized Feature Slice across both apps.
-- Track plans, status, remaining work, and temporary platform gaps in Linear.
+- Track plans, status, remaining work, and temporary platform gaps on the
+  GitHub issue.
 - Do not create or update repository documentation during implementation unless
   the user explicitly asks for documentation.
 - On iOS, do not place design-system list components (OpenCodeListItem, etc.)
@@ -144,9 +145,9 @@ them.
   Actions, checking workflow status, or troubleshooting failed CI runs.
 - Use `.agents/skills/pull-app-logs/SKILL.md` when reading Android logcat or
   iOS simulator/device logs for OpenCode Mobile runtime debugging.
-- Use `.agents/skills/linear-project-tracking/SKILL.md` when reading or
-  updating Linear. Tickets live in Linear; do not copy them into `docs/`.
-- Use `.agents/skills/feature/SKILL.md` when linking a Linear ticket, branch,
+- Use `.agents/skills/github-issue-tracking/SKILL.md` when reading or
+  updating a GitHub issue. Tickets live on the issue; leave them out of `docs/`.
+- Use `.agents/skills/feature/SKILL.md` when linking a GitHub issue, branch,
   merge checklist, and pull request for a feature task.
 - Use `.agents/skills/publish-prototype/SKILL.md` when building a throwaway
   browser prototype and publishing it to the artifact server for remote review.
@@ -155,19 +156,26 @@ them.
 
 ## Branch naming
 
-Ticket-backed work uses a type prefix, never a username or agent name:
+Ticket-backed work uses a type prefix.
+
+Imported issues whose titles start with `OPE-<number>:`:
 
 ```text
 feature/ope-<number>-<short-slug>
 ```
 
-- Prefer `feature/` for product feature work tied to an `OPE-<number>` issue.
+Other GitHub issues:
+
+```text
+feature/<number>-<short-slug>
+```
+
+- Prefer `feature/` for product feature work tied to a GitHub issue.
 - Use `fix/` for bug-fix tickets when the issue is clearly a fix rather than
   a new capability.
 - Keep the slug lowercase ASCII with single hyphens; omit leading/trailing
   hyphens; keep the full branch name at 80 characters or fewer.
-- Ignore Linear's default `{username}/…` branch suggestion. Do not create
-  branches like `ivanfenenko/ope-48-…` or `codex/ope-48-…`.
+- The branch starts with `feature/` or `fix/`.
 
 Detailed resolution and publication rules live in
 `.agents/skills/feature/reference.md`.
@@ -176,8 +184,8 @@ Detailed resolution and publication rules live in
 
 ### Issue tracker
 
-Issues are tracked in Linear; use `gh` for GitHub repository and pull-request
-operations. See `.agents/skills/linear-project-tracking/`.
+Issues are tracked as GitHub issues. Use `gh` for issues and pull requests.
+See `.agents/skills/github-issue-tracking/`.
 
 ### Domain docs
 
@@ -188,8 +196,8 @@ Use the product vocabulary in `CONTEXT.md`.
 - Repository documentation is reference material, not an implementation ledger.
 - Do not create, update, or expand documentation during implementation unless
   the user explicitly requests documentation.
-- Linear owns feature scope, acceptance criteria, plans, status, remaining work,
-  and temporary iOS/Android gaps. Do not mirror that state into the repository.
+- The GitHub issue owns feature scope, acceptance criteria, plans, status,
+  remaining work, and temporary iOS/Android gaps. Leave that state on the issue.
 - Code and tests own implemented behavior. Git and pull requests own shipped
   history.
 - Keep `CONTEXT.md` limited to stable product vocabulary. Treat

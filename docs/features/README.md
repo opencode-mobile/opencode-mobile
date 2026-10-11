@@ -3,9 +3,9 @@
 Do not create feature plans, progress logs, decisions ledgers, parity ledgers,
 ticket plans, or research dumps in this directory.
 
-Linear owns feature scope, acceptance criteria, status, remaining work, and
-temporary platform gaps. Code and tests own implemented behavior. Git and pull
-requests own shipped history.
+The GitHub issue owns feature scope, acceptance criteria, status, remaining
+work, and temporary platform gaps. Code and tests own implemented behavior.
+Git and pull requests own shipped history.
 
 The remaining files below are operational references, not feature ledgers:
 

@@ -4,50 +4,65 @@ Read only the section the current route names.
 
 ## Branch resolution and naming
 
-Normalize issue keys to `OPE-<number>` outside branch names. In branches, take
-the first case-insensitive match of `ope[-_/]<number>` as the issue anchor.
+Resolve a ticket to one GitHub issue number. A legacy `OPE-<number>` is a title
+prefix on imported issues. Search `in:title` for that id, then use the GitHub
+issue number `gh` returns. `OPE-5` and `#5` are different tickets.
 
 When resolving a branch to a ticket:
 
 1. Parse the current branch for an issue key.
 
-   **Completion criterion:** The first case-insensitive branch match is
-   normalized to one `OPE-<number>` key, or the branch has no match.
+   Take the first case-insensitive match of `ope[-_/]<number>` as a legacy key.
+   When the branch has no legacy key, take the first number in
+   `feature/<number>-` or `fix/<number>-` as the GitHub issue number.
 
-2. If the branch has no issue key, inspect recent commits for an issue key or
-   feature title.
+   **Completion criterion:** The branch yields one legacy key, one GitHub issue
+   number, or no match.
 
-   **Completion criterion:** Relevant recent commits yield one normalized key
-   or one search title, or contain no ticket evidence.
+2. If the branch has no issue key, inspect recent commits for `#<number>`, a
+   legacy `OPE-<number>`, or a feature title.
 
-3. Search Linear by the feature title when no issue key was found.
+   **Completion criterion:** Relevant recent commits yield one issue number, one
+   legacy key, one search title, or contain no ticket evidence.
 
-   **Completion criterion:** Current Linear results identify one issue, multiple
+3. Resolve a legacy key or a title with
+   `gh issue list --state all --search`. Include `in:title` for a legacy key.
+   Confirm a bare number with `gh issue view`. A pull request at that number is
+   a different object.
+
+   **Completion criterion:** Current GitHub results identify one issue, multiple
    candidates, or no candidate.
 
-4. If evidence identifies multiple issues or none, ask for the issue key before
+4. If evidence identifies multiple issues or none, ask for the issue before
    ticket-linked mutations.
 
-   **Completion criterion:** Branch resolution has one normalized issue key, or
+   **Completion criterion:** Branch resolution has one GitHub issue number, or
    ticket-linked mutation is paused with the missing evidence named.
 
 When starting from a ticket, prefer an existing local issue branch. Check remote
 branches before creating one when remote state matters to the request. Name a
-new branch per `AGENTS.md` **Branch naming**:
+new branch per `AGENTS.md` **Branch naming**.
+
+If the issue title starts with `OPE-<number>:`, use:
 
 ```text
 feature/ope-<number>-<feature-slug-or-short-title>
 ```
 
-Use `fix/` instead of `feature/` when the ticket is clearly a bug fix. Ignore
-Linear's `{username}/…` suggestion. Do not put agent or username prefixes in the
-branch name.
+Otherwise use:
+
+```text
+feature/<number>-<feature-slug-or-short-title>
+```
+
+Use `fix/` instead of `feature/` when the ticket is a bug. The branch starts
+with `feature/` or `fix/`.
 
 The slug uses lowercase ASCII letters or numbers separated by single hyphens,
 with no leading or trailing hyphen, and the full branch name at 80 characters
-or fewer. Strip punctuation. Do not encode it.
+or fewer. Strip punctuation. Leave the slug as words.
 
-**Completion criterion:** Branch resolution produces one normalized issue key,
+**Completion criterion:** Branch resolution produces one GitHub issue number,
 or reports that local and requested remote evidence is insufficient. Every new
 branch matches the format and length rules exactly.
 
@@ -55,11 +70,12 @@ branch matches the format and length rules exactly.
 
 Evaluate these invariants only when they apply:
 
-- the branch name contains the normalized issue key
+- the branch name contains the issue key for that ticket: `ope-<number>` when
+  the title starts with that legacy id, otherwise the GitHub issue number
 - the diff contains only the intended feature scope and leaves unrelated user
   changes alone
-- planned, completed, and remaining work agree with Linear when ticket state is
-  part of the request
+- planned, completed, and remaining work agree with the GitHub issue when
+  ticket state is part of the request
 - relevant automated checks have a recorded pass, fail, or explicit skip reason
 - the pull-request summary, when one exists, states scope, automated checks, and
   remaining risks
@@ -83,8 +99,8 @@ publish tool may perform steps 2–5, but the result must match them:
    **Completion criterion:** Every staged path belongs to the requested feature,
    and every unrelated path remains unstaged.
 
-3. Commit with the issue key and concise scope, for example
-   `OPE-17 Add theme token previews`.
+3. Commit with the GitHub issue number and concise scope, for example
+   `#367 Add theme token previews`.
 
    **Completion criterion:** The commit succeeds and its identifier and
    issue-keyed subject are recorded.
@@ -104,19 +120,24 @@ publish tool may perform steps 2–5, but the result must match them:
 ## Checks
 - ...
 
-## Linear
-- OPE-<number>
+## Issue
+- #<number>
 
 ## Risks / Follow-ups
 - ...
 ```
 
+   Name the issue as `#<number>`. Write `Fixes #<number>` only when this pull
+   request finishes the issue.
+
    **Completion criterion:** The pull request has the requested draft state,
    correct base and head branches, the required non-empty body sections, and a
    direct URL.
 
-6. Use `linear-project-tracking` to add the pull-request link to Linear when the
-   work is ticket-backed and that mutation was requested.
+6. The `#<number>` mention in the pull request body is the cross-reference.
+   When the user asked for an issue comment, add it with `github-issue-tracking`
+   and read the issue again.
 
-   **Completion criterion:** Every requested Linear backlink is confirmed from
-   current issue state or named as missing.
+   **Completion criterion:** The pull request body names the GitHub issue. Every
+   requested issue comment is confirmed from current issue state or named as
+   missing.

@@ -1,4 +1,4 @@
 interface:
   display_name: "Feature"
-  short_description: "Resolve and link Linear, branch, and pull request anchors."
-  default_prompt: "Route only the requested Feature operation, then verify every required Linear, branch, docs, merge, and pull request anchor."
+  short_description: "Resolve and link GitHub issue, branch, and pull request anchors."
+  default_prompt: "Route only the requested Feature operation, then verify every required GitHub issue, branch, docs, merge, and pull request anchor."

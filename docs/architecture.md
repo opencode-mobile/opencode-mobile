@@ -156,4 +156,5 @@ credentials, prompts, or bodies. Tags filterable in Console / logcat.
 ## Parity
 
 Feature work is a synchronized slice on both apps. Track temporary gaps and
-follow-up work in Linear. Express intentional native behavior in code and tests.
+follow-up work on the GitHub issue. Express intentional native behavior in
+code and tests.
