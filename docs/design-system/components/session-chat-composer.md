@@ -246,4 +246,4 @@ resize motion can be reviewed in a realistic Session Chat placement.
 
 Intentional Floating Chrome material difference (iOS Liquid Glass vs Android
 raised Surface) is documented in `../divergences.md`. Track temporary feature
-mismatches in Linear.
+mismatches on the GitHub issue.

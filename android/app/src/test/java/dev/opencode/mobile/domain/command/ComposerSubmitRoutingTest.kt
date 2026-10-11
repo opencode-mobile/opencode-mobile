@@ -20,6 +20,36 @@ class ComposerSubmitRoutingTest {
     }
 
     @Test
+    fun resolve_skillWithId_sendsSkillPromptNotCommand() {
+        val intent =
+            ComposerSubmitRouting.resolve(
+                "/OpenCode check the error",
+                listOf(
+                    ServerCommand(name = "init", source = ServerCommandSource.Command),
+                    ServerCommand(
+                        name = "OpenCode",
+                        source = ServerCommandSource.Skill,
+                        skillId = "opencode",
+                    ),
+                ),
+            )
+        assertEquals(
+            ComposerSubmitIntent.SkillPrompt(skillId = "opencode", text = "check the error"),
+            intent,
+        )
+    }
+
+    @Test
+    fun resolve_skillWithoutId_staysOnCommandRoute() {
+        val intent =
+            ComposerSubmitRouting.resolve(
+                "/deploy now",
+                listOf(ServerCommand(name = "deploy", source = ServerCommandSource.Skill)),
+            )
+        assertEquals(ComposerSubmitIntent.ServerCommand(command = "deploy", arguments = "now"), intent)
+    }
+
+    @Test
     fun resolve_unknownSlash_fallsThroughToPrompt() {
         val intent = ComposerSubmitRouting.resolve("/not-a-command please", catalog)
         assertEquals(ComposerSubmitIntent.Prompt(text = "/not-a-command please"), intent)

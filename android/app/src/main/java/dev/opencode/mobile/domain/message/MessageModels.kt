@@ -168,6 +168,7 @@ data class PromptSendOptions(
     val variant: String? = null,
     val mode: String? = null,
     val agentMentions: List<AgentMention> = emptyList(),
+    val skillIds: List<String> = emptyList(),
     val delivery: FollowUpDelivery = FollowUpDelivery.Steer,
 )
 

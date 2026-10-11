@@ -6,6 +6,11 @@ object ComposerSubmitRouting {
     fun resolve(
         text: String,
         serverCommandNames: Set<String>,
+    ): ComposerSubmitIntent = resolve(text, serverCommandNames.map { ServerCommand(name = it) })
+
+    fun resolve(
+        text: String,
+        commands: List<ServerCommand>,
     ): ComposerSubmitIntent {
         val trimmed = text.trim()
         if (!trimmed.startsWith("/")) {
@@ -13,10 +18,15 @@ object ComposerSubmitRouting {
         }
         val parts = trimmed.split(" ", limit = 2)
         val head = parts[0].removePrefix("/")
-        if (head.isEmpty() || head !in serverCommandNames) {
+        val match = commands.find { it.name == head }
+        if (head.isEmpty() || match == null) {
             return ComposerSubmitIntent.Prompt(text = trimmed)
         }
         val arguments = parts.getOrNull(1).orEmpty()
+        val skillId = match.skillId?.takeIf { it.isNotBlank() }
+        if (match.source == ServerCommandSource.Skill && skillId != null) {
+            return ComposerSubmitIntent.SkillPrompt(skillId = skillId, text = arguments)
+        }
         return ComposerSubmitIntent.ServerCommand(command = head, arguments = arguments)
     }
 

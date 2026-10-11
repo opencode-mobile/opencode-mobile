@@ -290,7 +290,7 @@ If the non-fatal does not appear, confirm the installed Play version, relaunch
 the app, enable Crashlytics debug logging through ADB, and check for a
 successful report upload before changing code. Do not paste raw dashboard
 exports, tester identifiers, app content, or credentials into the repository or
-Linear.
+a GitHub issue.
 
 After an OPE-141 release, also confirm in Play Console that the uploaded AAB no
 longer warns about missing deobfuscation/mapping, and that the Crashlytics

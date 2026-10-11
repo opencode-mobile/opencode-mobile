@@ -76,9 +76,24 @@ struct CommandDomainAdapterTests {
         )
         #expect(merged.map(\.name) == ["init", "prototype"])
         #expect(merged[1].source == .skill)
+        #expect(merged[1].skillID == "prototype")
         #expect(merged[1].description == "A skill")
         #expect(merged[1].template?.contains("Do the thing") == true)
         #expect(merged[1].template?.contains("Base directory for this skill: /skills/prototype") == true)
+    }
+
+    @Test func toSkillCommand_usesSkillIdNotDisplayName() {
+        let command = adapter.toSkillCommand(
+            V2SkillDTO(
+                id: "opencode",
+                name: "OpenCode",
+                path: "/builtin/opencode.md",
+                content: "Ask about OpenCode"
+            )
+        )
+        #expect(command?.name == "OpenCode")
+        #expect(command?.skillID == "opencode")
+        #expect(command?.template == "Ask about OpenCode")
     }
 
     @Test func toRunRequest_mapsComposerSnapshotWithoutMessageId() {

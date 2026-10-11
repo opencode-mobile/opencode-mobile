@@ -1,6 +1,7 @@
 package dev.opencode.mobile.ui.terminal
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -10,8 +11,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -29,12 +34,18 @@ import dev.opencode.mobile.ui.components.OpenCodeDialog
 import dev.opencode.mobile.ui.components.OpenCodeDialogOption
 import dev.opencode.mobile.ui.components.OpenCodeEmptyState
 import dev.opencode.mobile.ui.components.OpenCodeListItem
+import dev.opencode.mobile.ui.components.OpenCodeEmptyState
 import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
+import dev.opencode.mobile.ui.components.OpenCodeSplitPane
+import dev.opencode.mobile.ui.components.OpenCodeSplitPaneScreen
 import dev.opencode.mobile.ui.components.OpenCodeStatusStack
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
+import dev.opencode.mobile.ui.components.currentOpenCodeUsesContentSplit
+import dev.opencode.mobile.ui.components.openCodeDetailLeading
 import dev.opencode.mobile.ui.components.StartDecorator
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
 @Composable
@@ -49,13 +60,101 @@ fun TerminalsCatalogScreen(
     }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val coroutineScope = rememberCoroutineScope()
+    val useContentSplit = currentOpenCodeUsesContentSplit()
+    var selectedPtyId by rememberSaveable { mutableStateOf<String?>(null) }
+    var selectedWorktree by rememberSaveable { mutableStateOf("") }
+    var selectedTitle by rememberSaveable { mutableStateOf("") }
+    val openShell = { worktree: String, projectTitle: String, ptyId: String ->
+        if (useContentSplit) {
+            selectedWorktree = worktree
+            selectedTitle = projectTitle
+            selectedPtyId = ptyId
+        } else {
+            onOpenTerminal(worktree, projectTitle, ptyId)
+        }
+    }
+    LaunchedEffect(useContentSplit) {
+        val ptyId = selectedPtyId
+        if (!useContentSplit && ptyId != null) {
+            selectedPtyId = null
+            onOpenTerminal(selectedWorktree, selectedTitle, ptyId)
+        }
+    }
+    LaunchedEffect(uiState.rows, selectedPtyId) {
+        val ptyId = selectedPtyId ?: return@LaunchedEffect
+        if (uiState.rows.none { it.id == ptyId }) selectedPtyId = null
+    }
+    if (useContentSplit) {
+        OpenCodeSplitPane(
+            screen = OpenCodeSplitPaneScreen.Terminals,
+            modifier = modifier,
+            leading = {
+                CatalogColumn(
+                    uiState = uiState,
+                    viewModel = viewModel,
+                    onNavigateBack = onNavigateBack,
+                    onOpenTerminal = openShell,
+                    selectedPtyId = selectedPtyId,
+                    constrainToReadableColumn = false,
+                    coroutineScope = coroutineScope,
+                )
+            },
+            trailing = { control ->
+                val ptyId = selectedPtyId
+                if (ptyId != null) {
+                    TerminalScreen(
+                        worktree = selectedWorktree,
+                        projectTitle = selectedTitle,
+                        ptyId = ptyId,
+                        onNavigateBack = { selectedPtyId = null },
+                        detailControl = control,
+                        usesReadableColumn = false,
+                    )
+                } else {
+                    Column(Modifier.fillMaxSize()) {
+                        OpenCodeTopBar(leading = openCodeDetailLeading(control) {})
+                        OpenCodeEmptyState(
+                            title = "Select a shell",
+                            message = "Choose a shell from the list.",
+                            icon = OpenCodeIcons.Terminal,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+            },
+        )
+        return
+    }
+    CatalogColumn(
+        uiState = uiState,
+        viewModel = viewModel,
+        onNavigateBack = onNavigateBack,
+        onOpenTerminal = openShell,
+        selectedPtyId = null,
+        constrainToReadableColumn = true,
+        coroutineScope = coroutineScope,
+        modifier = modifier,
+    )
+}
+
+@Composable
+private fun CatalogColumn(
+    uiState: TerminalsCatalogUiState,
+    viewModel: TerminalsCatalogViewModel,
+    onNavigateBack: () -> Unit,
+    onOpenTerminal: (String, String, String) -> Unit,
+    selectedPtyId: String?,
+    constrainToReadableColumn: Boolean,
+    coroutineScope: CoroutineScope,
+    modifier: Modifier = Modifier,
+) {
     Column(modifier = modifier.fillMaxSize()) {
         OpenCodeTopBar(
             title = "Terminals",
             leading = OpenCodeTopBarLeading.Back(onClick = onNavigateBack),
             showDivider = true,
         )
-        OpenCodeReadableColumn(modifier = Modifier.weight(1f)) {
+        val catalogBody: @Composable BoxScope.() -> Unit = {
             if (uiState.isLoading) {
                 OpenCodeStatusStack(
                     title = "Loading terminals",
@@ -91,6 +190,7 @@ fun TerminalsCatalogScreen(
                                             letterCharacterForProject(row.projectTitle),
                                             letterAccentForWorktree(row.worktree),
                                         ),
+                                    selected = row.id == selectedPtyId,
                                     onClick = { onOpenTerminal(row.worktree, row.projectTitle, row.id) },
                                     trailing = {
                                         OpenCodeButton(
@@ -113,6 +213,11 @@ fun TerminalsCatalogScreen(
                     )
                 }
             }
+        }
+        if (constrainToReadableColumn) {
+            OpenCodeReadableColumn(modifier = Modifier.weight(1f), content = catalogBody)
+        } else {
+            Box(Modifier.weight(1f), content = catalogBody)
         }
     }
     val pending = uiState.pendingClose

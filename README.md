@@ -113,9 +113,9 @@ After cloning, run `./scripts/sync-agent-links.sh` if agent symlinks are missing
 - [docs/features/](docs/features/) — CI and release operations references
 
 Repository documentation is not an implementation ledger. Feature planning,
-status, remaining work, and temporary platform gaps live in Linear. Code and
-tests own implemented behavior. Do not update docs during implementation unless
-the user explicitly requests documentation.
+status, remaining work, and temporary platform gaps live on the GitHub issue.
+Code and tests own implemented behavior. Leave docs unchanged during
+implementation unless the user explicitly requests documentation.
 
 ## Agent skills
 

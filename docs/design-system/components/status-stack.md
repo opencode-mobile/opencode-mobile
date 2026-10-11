@@ -60,4 +60,4 @@ Ring size is locked at ~32pt in the implementation.
 
 ## Parity And Divergence
 
-None. Track temporary feature wiring gaps in Linear.
+None. Track temporary feature wiring gaps on the GitHub issue.

@@ -12,7 +12,7 @@ commits.
 | Android throwaway tests | `android/screenshot/src/test/java/dev/opencode/mobile/ui/snapshot/GeneratedSnapshotEvidence/*SnapshotEvidence.kt` |
 | Android Paparazzi goldens | `android/screenshot/src/test/snapshots/images/` |
 | Output | `.snapshot-evidence/out/` |
-| iOS helper | `OpenCode MobileTests/SnapshotEvidenceRenderer.swift` |
+| iOS helper | `OpenCode MobileTests/GeneratedSnapshotEvidence/SnapshotEvidenceRenderer.swift` (gitignored; recreate if absent) |
 | Hosts/mocks | iOS `OpenCode Mobile/SnapshotEvidence/`, Android `ui/snapshot/` |
 
 ## iOS generation
@@ -34,9 +34,6 @@ xcodebuild test \
 If the simulator name is wrong, use `.github/scripts/select-ios-simulator.sh` /
 `xcrun simctl list`. Skip iOS on Linux.
 
-**Completion criterion:** Every requested iOS frame and appearance has a PNG in
-`.snapshot-evidence/out/`, or the result names the unavailable simulator,
-platform, or failing test.
 
 ## Android generation
 
@@ -61,9 +58,6 @@ Paparazzi lives on `:screenshot`, not `:app`. Applying it to `:app` breaks AGP 9
 `verifyPaparazzi*` and `:screenshot:testDebugUnitTest` out of Android Checks.
 Do not run `verifyPaparazziDebug`.
 
-**Completion criterion:** Every requested Android frame and appearance has a
-copied PNG under `.snapshot-evidence/out/`, and no verification task or
-`:app` Paparazzi configuration was used.
 
 ## iOS, assistant message
 

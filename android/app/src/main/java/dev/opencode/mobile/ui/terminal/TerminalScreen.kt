@@ -2,6 +2,7 @@ package dev.opencode.mobile.ui.terminal
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.imePadding
@@ -23,10 +24,11 @@ import dev.opencode.mobile.theme.letterCharacterForProject
 import dev.opencode.mobile.ui.components.OpenCodeEmptyState
 import dev.opencode.mobile.ui.components.OpenCodeEmptyStateAction
 import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
+import dev.opencode.mobile.ui.components.OpenCodeSplitPaneDetailControl
 import dev.opencode.mobile.ui.components.OpenCodeStatusStack
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
-import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
 import dev.opencode.mobile.ui.components.OpenCodeTopBarSubtitleLeading
+import dev.opencode.mobile.ui.components.openCodeDetailLeading
 
 @Composable
 fun TerminalScreen(
@@ -35,6 +37,8 @@ fun TerminalScreen(
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier,
     ptyId: String? = null,
+    detailControl: OpenCodeSplitPaneDetailControl? = null,
+    usesReadableColumn: Boolean = true,
     viewModel: TerminalViewModel = hiltViewModel(key = "terminal-$worktree-${ptyId.orEmpty()}"),
 ) {
     LifecycleEventEffect(Lifecycle.Event.ON_START) {
@@ -54,10 +58,10 @@ fun TerminalScreen(
                     letterCharacterForProject(projectTitle),
                     letterAccentForWorktree(worktree),
                 ),
-            leading = OpenCodeTopBarLeading.Back(onClick = onNavigateBack),
+            leading = openCodeDetailLeading(detailControl, onNavigateBack),
             showDivider = true,
         )
-        OpenCodeReadableColumn(modifier = Modifier.weight(1f)) {
+        val terminalBody: @Composable () -> Unit = {
             when (uiState) {
                 TerminalUiState.Connecting ->
                     OpenCodeStatusStack(
@@ -82,6 +86,11 @@ fun TerminalScreen(
                         onRetry = viewModel::retry,
                     )
             }
+        }
+        if (usesReadableColumn) {
+            OpenCodeReadableColumn(modifier = Modifier.weight(1f)) { terminalBody() }
+        } else {
+            Box(Modifier.weight(1f)) { terminalBody() }
         }
     }
 }

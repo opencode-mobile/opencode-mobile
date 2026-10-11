@@ -199,10 +199,17 @@ nonisolated struct MessageDomainAdapter: Sendable {
                 mention: V2PromptSourceDTO(start: part.start, end: part.end, text: part.sourceValue)
             )
         }
+        var seen = Set<String>()
+        let skills = options.skillIDs.compactMap { raw -> V2PromptSkillDTO? in
+            let id = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !id.isEmpty, seen.insert(id).inserted else { return nil }
+            return V2PromptSkillDTO(id: id)
+        }
         return V2PromptRequestDTO(
             text: options.text,
             files: files.isEmpty ? nil : files,
             agents: agents.isEmpty ? nil : agents,
+            skills: skills.isEmpty ? nil : skills,
             delivery: options.delivery.wireValue
         )
     }

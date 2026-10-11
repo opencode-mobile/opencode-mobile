@@ -17,6 +17,7 @@ import dev.opencode.mobile.data.remote.dto.V2ModelRefDto
 import dev.opencode.mobile.data.remote.dto.V2PromptAgentDto
 import dev.opencode.mobile.data.remote.dto.V2PromptFileDto
 import dev.opencode.mobile.data.remote.dto.V2PromptRequestDto
+import dev.opencode.mobile.data.remote.dto.V2PromptSkillDto
 import dev.opencode.mobile.data.remote.dto.V2PromptSourceDto
 import dev.opencode.mobile.data.remote.dto.V2SessionMessageDto
 import dev.opencode.mobile.data.remote.dto.V2SwitchModelRequestDto
@@ -252,10 +253,18 @@ class MessageDomainAdapter {
                             ),
                     )
                 }.takeIf { it.isNotEmpty() }
+        val skills =
+            options.skillIds
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+                .distinct()
+                .map { V2PromptSkillDto(id = it) }
+                .takeIf { it.isNotEmpty() }
         return V2PromptRequestDto(
             text = options.text,
             files = files,
             agents = agents,
+            skills = skills,
             delivery = options.delivery.wireValue,
         )
     }

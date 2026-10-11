@@ -66,9 +66,26 @@ class CommandDomainAdapterTest {
             )
         assertEquals(listOf("init", "prototype"), merged.map { it.name })
         assertEquals(ServerCommandSource.Skill, merged[1].source)
+        assertEquals("prototype", merged[1].skillId)
         assertEquals("A skill", merged[1].description)
         assertTrue(merged[1].template!!.contains("Do the thing"))
         assertTrue(merged[1].template!!.contains("Base directory for this skill: /skills/prototype"))
+    }
+
+    @Test
+    fun toSkillCommand_usesSkillIdNotDisplayName() {
+        val command =
+            adapter.toSkillCommand(
+                V2SkillDto(
+                    id = "opencode",
+                    name = "OpenCode",
+                    path = "/builtin/opencode.md",
+                    content = "Ask about OpenCode",
+                ),
+            )
+        assertEquals("OpenCode", command?.name)
+        assertEquals("opencode", command?.skillId)
+        assertEquals("Ask about OpenCode", command?.template)
     }
 
     @Test

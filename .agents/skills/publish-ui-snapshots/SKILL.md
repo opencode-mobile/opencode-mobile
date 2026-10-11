@@ -5,95 +5,35 @@ description: "UI snapshots: use when the user asks to generate and publish isola
 
 # Publish UI snapshots
 
-Trigger phrase, verbatim:
+Trigger phrase: "create ui snapshots to illustrate the changes and publish
+artifacts".
 
-> create ui snapshots to illustrate the changes and publish artifacts
+Defaults: subject = assistant message; platforms = iOS and Android; frames =
+`isolated` and `in-session`; appearance = light, plus dark when cheap.
 
-## 1. Define the snapshot matrix
+1. **Render hosts.** Reuse the committed mocks and hosts under
+   `ios/OpenCode Mobile/OpenCode Mobile/SnapshotEvidence/` and Android
+   `ui/snapshot/`. Use deterministic mock data; never screenshot a live server.
+   If the subject has no mock, add a small committed one or stop and name the
+   gap.
+2. **Throwaway tests.** Write them into the gitignored generated paths in
+   [reference.md](reference.md) using its templates. Do not edit
+   `project.pbxproj`.
+3. **Generate PNGs** with the platform recipe in `reference.md`. Record only;
+   do not verify goldens, run UITests, or run `verifyPaparazziDebug`.
+4. **Report.** Copy PNGs to `.snapshot-evidence/out/` as
+   `{platform}-{frame}-{appearance}.png` (e.g. `ios-isolated-light.png`) and run:
 
-Default subject: assistant message. Default platforms: iOS and Android. Default
-frames: `isolated` and `in-session`. Default appearance: light. Add dark when it
-is cheap.
+   ```bash
+   bash "$REPO/.agents/skills/publish-ui-snapshots/scripts/write-report.sh" \
+     "$REPO/.snapshot-evidence/out" "UI snapshots"
+   ```
 
-**Completion criterion:** Every requested subject has an explicit platform,
-frame, and appearance matrix, including every default the user did not
-override.
+5. **Publish** `.snapshot-evidence/out/` with the user-level `publish-artifact`
+   skill (`~/.agents/skills/publish-artifact/SKILL.md`; stop and report if
+   missing) using `--type plan`, and paste the returned URLs.
 
-## 2. Establish deterministic render hosts
-
-Reuse committed mocks and hosts under `SnapshotEvidence/` on iOS and
-`ui/snapshot/` on Android. If the subject has no mock, add a small committed
-mock or stop and name the gap. Use deterministic mock data. Never screenshot a
-live server.
-
-For the default subject, isolated frames render `OpenCodeTextInput` or
-`OpenCodeAssistantMessage` as available on `:screenshot`. In-session frames
-render the subject in screen chrome with `OpenCodeTopBar` plus fields, or
-`SessionChatSnapshotHost` when that host compiles on `:screenshot`.
-
-**Completion criterion:** Every frame in the matrix has a deterministic,
-platform-native render host and mock data, or a named missing-host blocker.
-
-## 3. Write throwaway tests
-
-Read only the matching platform section in
-[snapshot recipes and templates](reference.md). Write tests in the gitignored
-generated paths named there. Keep Xcode project membership unchanged. Do not
-edit `project.pbxproj`.
-
-**Completion criterion:** Every runnable platform has one throwaway test that
-generates every requested frame and appearance with the required filename.
-
-## 4. Generate PNGs
-
-Run the matching generation recipe from
-[reference.md](reference.md#ios-generation) or
-[reference.md](reference.md#android-generation). Record snapshots only. Do not
-verify goldens, run UITests, or run `verifyPaparazziDebug`.
-
-**Completion criterion:** A PNG exists for every runnable matrix entry, and
-each unavailable platform has a concrete environment or compilation blocker.
-
-## 5. Build the report
-
-Copy every PNG to `.snapshot-evidence/out/` with this filename convention:
-
-```text
-{platform}-{frame}-{appearance}.png
-```
-
-Examples: `ios-isolated-light.png`, `android-in-session-dark.png`.
-
-Then run:
-
-```bash
-bash "$REPO/.agents/skills/publish-ui-snapshots/scripts/write-report.sh" \
-  "$REPO/.snapshot-evidence/out" \
-  "UI snapshots"
-```
-
-The script emits the required sketch layout: centered column,
-`max-width: 72rem`, image grid, and viewport metadata.
-
-**Completion criterion:** `.snapshot-evidence/out/` contains every generated
-PNG under the exact filename convention, and `index.html` labels every image.
-
-## 6. Publish the sketch
-
-Load `~/.agents/skills/publish-artifact/SKILL.md` (a user-level skill on the
-developer's machine, not part of this repository; stop and report if it is
-missing). Publish `.snapshot-evidence/out/` as a sketch with `--type plan`,
-then paste the returned URLs.
-
-**Completion criterion:** The artifact is published, and the response contains
-every returned access URL.
-
-## 7. Keep evidence throwaway
-
-Keep throwaway tests, PNGs, HTML, and Paparazzi goldens under
-`src/test/snapshots/` out of commits. Do not `git add` them. Durable mock, host,
-or skill changes may be committed only when the user asks.
-
-**Completion criterion:** `git status` distinguishes every throwaway artifact
-from durable requested changes, and no throwaway file is staged or presented as
-an intended commit.
+Throwaway tests, PNGs, HTML, and Paparazzi goldens stay out of commits; commit
+durable mock or host changes only when asked. Remove the generated iOS test
+directory when you are done, since stale files there can break later test
+builds.

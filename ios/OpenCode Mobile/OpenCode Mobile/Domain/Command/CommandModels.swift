@@ -14,17 +14,21 @@ struct ServerCommand: Equatable, Sendable, Identifiable {
     let source: ServerCommandSource
     /// Expanded prompt template from `GET /command`; used to collapse chat display.
     let template: String?
+    /// v2 skill id used to admit the skill on a prompt. Absent for real commands.
+    let skillID: String?
 
     init(
         name: String,
         description: String? = nil,
         source: ServerCommandSource = .command,
-        template: String? = nil
+        template: String? = nil,
+        skillID: String? = nil
     ) {
         self.name = name
         self.description = description
         self.source = source
         self.template = template
+        self.skillID = skillID
     }
 }
 
@@ -59,6 +63,8 @@ struct CommandRunOptions: Equatable, Sendable {
 enum ComposerSubmitIntent: Equatable, Sendable {
     case prompt(text: String)
     case serverCommand(command: String, arguments: String)
+    /// A slash skill. Admitted on the prompt, not the command route.
+    case skillPrompt(skillID: String, text: String)
 }
 
 nonisolated enum CommandError: Error, Equatable {

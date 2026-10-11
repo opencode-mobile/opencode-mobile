@@ -215,4 +215,4 @@ and strip `GoogleService-Info.plist` from the Debug app bundle.
 If the non-fatal does not appear, confirm the installed TestFlight build,
 relaunch the app, and check Crashlytics for a successful report upload before
 changing code. Do not paste raw dashboard exports, tester identifiers, app
-content, or credentials into the repository or Linear.
+content, or credentials into the repository or a GitHub issue.
