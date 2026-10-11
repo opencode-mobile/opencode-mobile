@@ -5,84 +5,68 @@ description: "App logs: use for bounded capture, live tailing, or runtime diagno
 
 # Pull app logs
 
-Capture evidence from `dev.opencode.mobile`. Run capture commands directly.
-Ask the user to act only when no usable target exists or device-service access
-remains blocked.
+Capture logs from `dev.opencode.mobile` (bundle id, Android application id,
+and iOS log subsystem; iOS process name `OpenCode Mobile`). Run the commands
+yourself; ask the user only when no target exists or device-service access is
+blocked.
 
-## Steps
+**Target selection.** List Android devices and booted iOS simulators (and
+connected iOS devices). Pick a target automatically only when exactly one is
+connected or exactly one has the app running; otherwise list identifiers and
+ask. Always pass the explicit serial or UDID, never `booted` or the first
+device.
 
-### 1. Select the target
+**Capture.** Prefer a bounded recent capture; tail live only when asked or
+while the user reproduces a problem. If the app process is absent, capture
+bounded history, label it historical, and do not infer current state from it.
+If an app-scoped capture is empty, broaden the window once, verify the filter,
+then report that no app logs were available. Do not substitute system noise.
 
-Detect Android devices, booted iOS simulators, and connected iOS devices. If the
-user named a platform or target, use that. Otherwise pick a target only when
-exactly one connected target exists, or exactly one target has the app running.
-For a cross-platform comparison, apply that rule independently to each
-platform. If multiple candidates remain, report their identifiers and ask the
-user to choose. Do not silently use `booted` or the first device.
+**Report.** Target and identifier, capture mode and window, app running state,
+findings tied to timestamps or short excerpts, app-owned errors before system
+errors, and any evidence gap with the next capture that would close it. For
+general diagnostics cover app running state, server reachability, foreground
+event-stream state, active session evidence, and app warnings/errors.
 
-Read the matching platform reference before capturing:
+## Android
 
-- [Android capture](ANDROID.md) for an Android device or emulator.
-- [iOS capture](IOS.md) for an iOS simulator or physical device.
+```bash
+adb devices -l
+PID="$(adb -s "$SERIAL" shell pidof -s dev.opencode.mobile 2>/dev/null | tr -d '\r')"
+adb -s "$SERIAL" logcat -d --pid="$PID" -t 300          # bounded
+adb -s "$SERIAL" logcat -d --pid="$PID" -t 500 '*:W'    # warnings and errors
+adb -s "$SERIAL" logcat --pid="$PID"                    # live
+```
 
-**Completion criterion:** Every requested platform maps to exactly one target
-identifier, or every unresolved candidate and identifier is shown to the user.
+Never pass an empty PID. When the app is not running, build a tag filter from
+current source (`TAG = "..."` and `Log.x("...")` under
+`android/app/src/main/java`), then `adb logcat -d -t 2000 | grep -E "$FILTER"`.
+Keep the filter quoted. The standard emulator reaches the host at `10.0.2.2`,
+not `127.0.0.1`.
 
-### 2. Capture app-scoped evidence
+## iOS
 
-Prefer a bounded recent capture. Use a live tail only when the user asks for
-one or is reproducing a problem now. Scope output by the running app process on
-Android and by the app subsystem on iOS.
+```bash
+xcrun simctl list devices booted
+xcrun devicectl list devices
+xcrun simctl spawn "$UDID" launchctl list | grep -F dev.opencode.mobile   # running?
+xcrun simctl spawn "$UDID" log show --predicate 'subsystem == "dev.opencode.mobile"' \
+  --style compact --last 10m --info --debug                             # bounded
+xcrun simctl spawn "$UDID" log stream --predicate 'subsystem == "dev.opencode.mobile"' \
+  --level debug --style compact                                         # live
+xcrun simctl spawn "$UDID" log show \
+  --predicate 'subsystem == "dev.opencode.mobile" AND (messageType == error OR messageType == fault)' \
+  --style compact --last 30m --info                                     # errors
+```
 
-If the app process is absent, do not run a PID-filtered command. Capture bounded
-historical output using the platform fallback, label it as historical, and do
-not infer current app state from it. If an app-scoped capture is empty, broaden
-the time or line window once and verify the filter. Then report that no app
-logs were available. Do not substitute unrelated system noise.
+Keep `--info --debug`; event-stream and session state log below the default
+level. The subsystem is defined in
+`ios/OpenCode Mobile/OpenCode Mobile/OpenCodeLogging.swift`. For a physical
+device use Xcode device logs or Console.app filtered by subsystem or process;
+`devicectl` log commands vary by Xcode version, so check `xcrun devicectl help`
+rather than inventing one. A simulator reaches the host at `127.0.0.1`; a
+physical device does not.
 
-**Completion criterion:** Every selected target has app-scoped output with a
-stated interval and mode, or one explicit evidence gap: app not running, no
-matching output after one broadened capture, or access failure.
-
-### 3. Answer the question from the logs
-
-Trace the user's symptom through relevant events. Keep timestamps and error
-context. Separate observed facts from inference. Ignore platform noise unless
-it participates in the reported failure.
-
-For general diagnostics, account for:
-
-- app running state
-- server/API reachability
-- foreground event-stream state
-- active session evidence
-- app-owned warnings and errors
-
-**Completion criterion:** Every symptom and requested diagnostic area has
-supporting log evidence, a marked inference, or an explicit statement that the
-capture contains no evidence for it.
-
-### 4. Report the evidence
-
-Report:
-
-1. target platform, name, and identifier
-2. capture mode and interval
-3. app running state
-4. findings tied to timestamps or concise log excerpts
-5. app-owned errors before relevant system errors
-6. evidence gaps and the next discriminating capture, if one is needed
-
-When comparing platforms, distinguish observed differences from expected
-networking differences. Do not offer a live tail unless reproduction would
-resolve a stated evidence gap.
-
-**Completion criterion:** The report accounts for every selected target and
-every requested symptom with timestamps, app state, findings, and evidence
-gaps.
-
-## Troubleshooting
-
-When target discovery, device services, or filtering fails, read
-[connection and capture troubleshooting](TROUBLESHOOTING.md) and apply the
-matching branch. Do not load it for a successful capture.
+If `adb`, CoreSimulatorService, or device services are blocked by the
+environment, request device-service access through the harness permission flow
+and retry once, then report the exact command and error.
