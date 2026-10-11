@@ -8,9 +8,9 @@ struct OpenCodeSplitPaneDetailControl {
 
 private let splitPaneAnimation: Animation = .easeOut(duration: 0.3)
 
-/// Regular-width two-pane container: a resizable, collapsible leading pane, a
-/// divider with a grab handle, and a trailing detail pane. Width and collapsed
-/// state persist per `OpenCodeSplitPaneScreen`.
+/// iPad regular-width two-pane container (see `OpenCodeSplitPaneLayout.usesSplitLayout`):
+/// a resizable, collapsible leading pane, a divider with a grab handle, and a
+/// trailing detail pane. Width and collapsed state persist per `OpenCodeSplitPaneScreen`.
 struct OpenCodeSplitPane<Leading: View, Trailing: View>: View {
     let screen: OpenCodeSplitPaneScreen
     let preferences: SplitPanePreferences

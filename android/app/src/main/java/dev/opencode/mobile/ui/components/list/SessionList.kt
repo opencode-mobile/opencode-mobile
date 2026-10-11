@@ -4,6 +4,7 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.EaseInOut
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,6 +23,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -128,6 +130,8 @@ fun SessionList(
     onNewSessionLongPress: (() -> Unit)? = null,
     revealNewestToken: Int = 0,
     selectedSessionId: String? = null,
+    /** Rows of [selectedFilterId] in display order (sections flattened, top to bottom). */
+    onDisplayedSessionsChange: ((List<SessionListSession>) -> Unit)? = null,
 ) {
     val background = openCodeColor("background-base")
     val borderWeaker = openCodeColor("border-weaker-base")
@@ -169,6 +173,8 @@ fun SessionList(
                     selectedSessionId = selectedSessionId,
                     onSessionSelected = onSessionSelected,
                     onSessionLongPress = onSessionLongPress,
+                    onDisplayedSessionsChange =
+                        onDisplayedSessionsChange.takeIf { filterId == selectedFilterId },
                 )
             }
 
@@ -213,6 +219,7 @@ private fun SessionListFeedPage(
     selectedSessionId: String?,
     onSessionSelected: (SessionListSession) -> Unit,
     onSessionLongPress: ((SessionListSession) -> Unit)?,
+    onDisplayedSessionsChange: ((List<SessionListSession>) -> Unit)?,
 ) {
     val recentWindowHours = HomeDisplayPreferences.recentWindowHours
     val visibleSessions =
@@ -287,6 +294,21 @@ private fun SessionListFeedPage(
             followingTop = true
             listState.scrollToItem(0)
         }
+    }
+    if (onDisplayedSessionsChange != null) {
+        val displayedSessions = ladderSections.flatMap { section -> section.items }
+        SideEffect { onDisplayedSessionsChange(displayedSessions) }
+    }
+    // A selection made elsewhere (keyboard stepping) scrolls its row into view. The first
+    // composition keeps the restored scroll position.
+    val revealedSelection = remember { SelectionRevealHold(selectedSessionId) }
+    val currentLadderSections by rememberUpdatedState(ladderSections)
+    LaunchedEffect(selectedSessionId) {
+        val previous = revealedSelection.sessionId
+        revealedSelection.sessionId = selectedSessionId
+        if (selectedSessionId == null || selectedSessionId == previous) return@LaunchedEffect
+        val index = sessionListItemIndex(currentLadderSections, selectedSessionId) ?: return@LaunchedEffect
+        listState.revealItem(index)
     }
 
     SessionListFeed(
@@ -415,6 +437,42 @@ private fun SessionListRow(
             color = borderWeaker,
         )
     }
+}
+
+private class SelectionRevealHold(
+    var sessionId: String?,
+)
+
+/** Scrolls the least distance that shows item [index] above the bottom content padding (the dock). */
+private suspend fun LazyListState.revealItem(index: Int) {
+    val info = layoutInfo
+    val item = info.visibleItemsInfo.firstOrNull { it.index == index }
+    if (item == null) {
+        animateScrollToItem(index)
+        return
+    }
+    val visibleEnd = info.viewportEndOffset - info.afterContentPadding
+    val itemEnd = item.offset + item.size
+    when {
+        item.offset < 0 -> animateScrollBy(item.offset.toFloat())
+        itemEnd > visibleEnd -> animateScrollBy(minOf(itemEnd - visibleEnd, item.offset).toFloat())
+    }
+}
+
+/** LazyColumn index of [sessionId]'s row: every ladder section is a header item plus its rows. */
+internal fun sessionListItemIndex(
+    sections: List<HomeSessionLadderSection<SessionListSession>>,
+    sessionId: String,
+): Int? {
+    var index = 0
+    sections.forEach { section ->
+        index += 1
+        section.items.forEach { session ->
+            if (session.id == sessionId) return index
+            index += 1
+        }
+    }
+    return null
 }
 
 private class HomeSessionOrderHold {

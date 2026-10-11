@@ -127,6 +127,8 @@ import dev.opencode.mobile.ui.connection.ConnectionSetupMode
 import dev.opencode.mobile.ui.connection.ConnectionSetupScreen
 import dev.opencode.mobile.ui.connection.ConnectionSetupViewModel
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
+import dev.opencode.mobile.ui.keyboard.KeyboardShortcutAction
+import dev.opencode.mobile.ui.keyboard.KeyboardShortcutHandler
 import dev.opencode.mobile.ui.main.MainScreen
 import dev.opencode.mobile.ui.main.SessionOpenTarget
 import dev.opencode.mobile.ui.onboarding.AppOnboardingScreen
@@ -423,6 +425,7 @@ fun MainNavigation() {
                                                     },
                                                     onManageServersClick = { backStack.add(SettingsHome) },
                                                     selectedSessionId = if (useSplitLayout) selectedSession?.sessionId else null,
+                                                    sessionKeyboardNavigationEnabled = useSplitLayout,
                                                 )
                                             }
                                             if (useSplitLayout) {
@@ -430,6 +433,10 @@ fun MainNavigation() {
                                                     screen = OpenCodeSplitPaneScreen.Home,
                                                     leading = home,
                                                     trailing = { control ->
+                                                        KeyboardShortcutHandler(
+                                                            KeyboardShortcutAction.ToggleSidebar,
+                                                            onShortcut = control.toggle,
+                                                        )
                                                         HomeSessionDetail(
                                                             selection = selectedSession,
                                                             detailControl = control,
@@ -547,6 +554,10 @@ fun MainNavigation() {
                                                     screen = OpenCodeSplitPaneScreen.Settings,
                                                     leading = settings,
                                                     trailing = { control ->
+                                                        KeyboardShortcutHandler(
+                                                            KeyboardShortcutAction.ToggleSidebar,
+                                                            onShortcut = control.toggle,
+                                                        )
                                                         settingsDetailContent(visibleSettingsDetail, control) {}
                                                     },
                                                 )

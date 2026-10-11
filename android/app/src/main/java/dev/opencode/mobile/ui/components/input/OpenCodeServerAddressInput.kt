@@ -35,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.contentDescription
@@ -93,6 +94,7 @@ fun OpenCodeServerAddressInput(
     val hostInteractionSource = remember { MutableInteractionSource() }
     val schemeInteractionSource = remember { MutableInteractionSource() }
     val hostFocused by hostInteractionSource.collectIsFocusedAsState()
+    val reportFocus = rememberOpenCodeTextInputFocusReport(OpenCodeFocusedTextInput.Field)
 
     LaunchedEffect(value) {
         val next = parseServerAddressValue(value, fallbackScheme = scheme)
@@ -235,7 +237,7 @@ fun OpenCodeServerAddressInput(
                             onDone = { focusManager.clearFocus() },
                         ),
                     interactionSource = hostInteractionSource,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().onFocusChanged { reportFocus(it.isFocused) },
                 )
             }
         }

@@ -1,8 +1,26 @@
 import CoreGraphics
+import SwiftUI
 import Testing
+import UIKit
 @testable import OpenCode_Mobile
 
 @Suite struct OpenCodeSplitPaneLayoutTests {
+    @Test func usesSplitLayout_iPadRegularWidth_splits() {
+        #expect(OpenCodeSplitPaneLayout.usesSplitLayout(idiom: .pad, horizontalSizeClass: .regular))
+    }
+
+    @Test func usesSplitLayout_iPadCompactWidth_staysStacked() {
+        // Slide Over and narrow Split View.
+        #expect(!OpenCodeSplitPaneLayout.usesSplitLayout(idiom: .pad, horizontalSizeClass: .compact))
+        #expect(!OpenCodeSplitPaneLayout.usesSplitLayout(idiom: .pad, horizontalSizeClass: nil))
+    }
+
+    @Test func usesSplitLayout_phone_staysStackedInEveryOrientation() {
+        // Plus/Max iPhones report regular width in landscape.
+        #expect(!OpenCodeSplitPaneLayout.usesSplitLayout(idiom: .phone, horizontalSizeClass: .regular))
+        #expect(!OpenCodeSplitPaneLayout.usesSplitLayout(idiom: .phone, horizontalSizeClass: .compact))
+    }
+
     @Test func leadingWidthDelta_followsDragInLeftToRight() {
         #expect(OpenCodeSplitPaneLayout.leadingWidthDelta(translationWidth: 40, isRightToLeft: false) == 40)
         #expect(OpenCodeSplitPaneLayout.leadingWidthDelta(translationWidth: -40, isRightToLeft: false) == -40)

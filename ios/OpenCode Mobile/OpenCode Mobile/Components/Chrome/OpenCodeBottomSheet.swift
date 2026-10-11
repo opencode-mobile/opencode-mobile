@@ -478,11 +478,13 @@ private struct OpenCodeBottomSheetOverlayHost<PinnedContent: View, SheetContent:
                     configureOverlay(overlayController)
                     overlayController.rootView = content
                     overlayController.view.alpha = 1
+                    OpenCodeWindowOverlayRegistry.shared.attach(overlayController.view)
                 } else {
                     let controller = UIHostingController(rootView: content)
                     configureOverlay(controller)
                     controller.view.alpha = 0
                     attachOverlay(controller.view, to: window)
+                    OpenCodeWindowOverlayRegistry.shared.attach(controller.view)
                     overlayController = controller
                     UIView.animate(withDuration: bottomSheetEnterDuration) {
                         controller.view.alpha = 1
@@ -505,6 +507,9 @@ private struct OpenCodeBottomSheetOverlayHost<PinnedContent: View, SheetContent:
             isAnimatingOut = false
             wasPresented = false
             presentedContentMode = nil
+            if let view = overlayController?.view {
+                OpenCodeWindowOverlayRegistry.shared.detach(view)
+            }
             overlayController?.view.layer.removeAllAnimations()
             overlayController?.view.removeFromSuperview()
             overlayController = nil
@@ -542,6 +547,7 @@ private struct OpenCodeBottomSheetOverlayHost<PinnedContent: View, SheetContent:
 
         private func dismissOverlay() {
             guard let overlayController else { return }
+            OpenCodeWindowOverlayRegistry.shared.detach(overlayController.view)
             isAnimatingOut = true
             dismissGeneration += 1
             let generation = dismissGeneration

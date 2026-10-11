@@ -189,6 +189,14 @@ enum OpenCodeSessionComposerState {
     case childLockout(ChildLockout)
 }
 
+extension OpenCodeSessionComposerState {
+    /// Whether the composer has a prompt input that a focus request can focus.
+    var acceptsInputFocus: Bool {
+        if case .prompt = self { return true }
+        return false
+    }
+}
+
 enum OpenCodeSessionComposerAction {
     case textChanged(text: String, selectionStart: Int, selectionEnd: Int)
     case selectModel
@@ -216,17 +224,32 @@ enum OpenCodeSessionComposerAction {
     case backToMainSession
 }
 
+/// UIKit text input owned by the composer prompt. Lets keyboard-shortcut focus
+/// gating tell the composer apart from every other text field.
+protocol OpenCodeComposerTextInput: AnyObject {}
+
 struct OpenCodeSessionComposer: View {
     let state: OpenCodeSessionComposerState
+    /// Change the value to move keyboard focus (caret) into the prompt input. Only
+    /// the `.prompt` state takes input; a change while showing a permission,
+    /// question, or child-session lockout is ignored, and the value present when
+    /// the prompt appears never focuses it.
+    let focusRequestToken: Int
+    /// Called with true when the prompt input gains keyboard focus, false when it loses it.
+    let onInputFocusChange: ((Bool) -> Void)?
     let onAction: (OpenCodeSessionComposerAction) -> Void
     private let status: AnyView?
 
     init(
         state: OpenCodeSessionComposerState,
+        focusRequestToken: Int = 0,
+        onInputFocusChange: ((Bool) -> Void)? = nil,
         onAction: @escaping (OpenCodeSessionComposerAction) -> Void,
         status: AnyView? = nil
     ) {
         self.state = state
+        self.focusRequestToken = focusRequestToken
+        self.onInputFocusChange = onInputFocusChange
         self.onAction = onAction
         self.status = status
     }
@@ -299,6 +322,8 @@ struct OpenCodeSessionComposer: View {
                 selectionEnd: prompt.selectionEnd,
                 selectionRevision: prompt.selectionRevision,
                 placeholder: "Ask anything...",
+                focusRequestToken: focusRequestToken,
+                onFocusChange: onInputFocusChange,
                 onChange: { text, selectionStart, selectionEnd in
                     onAction(.textChanged(text: text, selectionStart: selectionStart, selectionEnd: selectionEnd))
                 }

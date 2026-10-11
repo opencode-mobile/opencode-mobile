@@ -147,6 +147,7 @@ private struct OpenCodeOverflowMenuWindowOverlay: UIViewRepresentable {
                     controller.view.frame = window.bounds
                     controller.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
                     window.addSubview(controller.view)
+                    OpenCodeWindowOverlayRegistry.shared.attach(controller.view)
                     overlayController = controller
                 } else {
                     overlayController?.rootView = OpenCodeOverflowMenuOverlayContent(
@@ -158,6 +159,9 @@ private struct OpenCodeOverflowMenuWindowOverlay: UIViewRepresentable {
                     overlayController?.view.frame = window.bounds
                 }
             } else {
+                if let view = overlayController?.view {
+                    OpenCodeWindowOverlayRegistry.shared.detach(view)
+                }
                 overlayController?.view.removeFromSuperview()
                 overlayController = nil
             }

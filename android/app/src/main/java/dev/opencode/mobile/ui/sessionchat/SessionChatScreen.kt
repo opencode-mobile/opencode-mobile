@@ -88,7 +88,10 @@ import dev.opencode.mobile.ui.components.OpenCodeTopBarSubtitleAccessory
 import dev.opencode.mobile.ui.components.OpenCodeTopBarSubtitleLeading
 import dev.opencode.mobile.ui.components.copySessionIdToClipboard
 import dev.opencode.mobile.ui.components.openCodeDetailLeading
+import dev.opencode.mobile.ui.components.rememberOpenCodeSessionComposerFocus
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
+import dev.opencode.mobile.ui.keyboard.KeyboardShortcutAction
+import dev.opencode.mobile.ui.keyboard.KeyboardShortcutHandler
 import dev.opencode.mobile.ui.sessionchat.view.ComposerPickerKind
 import dev.opencode.mobile.ui.sessionchat.view.SessionRetryCountdown
 import dev.opencode.mobile.ui.sessionchat.view.sessionFailureDetailTarget
@@ -795,8 +798,16 @@ fun SessionChatScreen(
                                             },
                                     )
                             }
+                        val composerFocus = rememberOpenCodeSessionComposerFocus()
+                        KeyboardShortcutHandler(
+                            KeyboardShortcutAction.FocusComposer,
+                            enabled = composerKind == SessionChatComposerKind.Prompt,
+                        ) {
+                            composerFocus.requestFocus()
+                        }
                         OpenCodeSessionComposer(
                             state = composerState,
+                            focus = composerFocus,
                             onAction = { action ->
                                 when (action) {
                                     is OpenCodeSessionComposerAction.TextChanged ->

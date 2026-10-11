@@ -1,6 +1,7 @@
 package dev.opencode.mobile.ui.components
 
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.Dp
@@ -33,6 +34,12 @@ object OpenCodeSplitPaneLayout {
     /** Window container width at which Home and Settings switch to the split layout. */
     val SplitMinWindowWidth = 720.dp
 
+    /**
+     * Smallest screen width that marks a tablet-class display. Phones stay stacked even when a
+     * landscape window is wider than [SplitMinWindowWidth]; unfolded foldables qualify.
+     */
+    val SplitMinSmallestScreenWidth = 600.dp
+
     val DividerWidth = 1.dp
     val HandleGripWidth = 6.dp
     val HandleGripHeight = 40.dp
@@ -46,7 +53,14 @@ object OpenCodeSplitPaneLayout {
 
     fun clamp(width: Dp): Dp = width.coerceIn(MinLeadingWidth, MaxLeadingWidth)
 
-    fun usesSplitLayout(windowWidth: Dp): Boolean = windowWidth >= SplitMinWindowWidth
+    /**
+     * Split only on tablet-class displays ([smallestScreenWidth], from
+     * `Configuration.smallestScreenWidthDp`) whose window is at least [SplitMinWindowWidth] wide.
+     */
+    fun usesSplitLayout(
+        windowWidth: Dp,
+        smallestScreenWidth: Dp,
+    ): Boolean = smallestScreenWidth >= SplitMinSmallestScreenWidth && windowWidth >= SplitMinWindowWidth
 
     fun resolveDragEnd(
         startedCollapsed: Boolean,
@@ -74,5 +88,6 @@ object OpenCodeSplitPaneLayout {
 fun currentOpenCodeUsesSplitLayout(): Boolean {
     val containerSize = LocalWindowInfo.current.containerSize
     val width = with(LocalDensity.current) { containerSize.width.toDp() }
-    return OpenCodeSplitPaneLayout.usesSplitLayout(width)
+    val smallestScreenWidth = LocalConfiguration.current.smallestScreenWidthDp.dp
+    return OpenCodeSplitPaneLayout.usesSplitLayout(width, smallestScreenWidth)
 }
