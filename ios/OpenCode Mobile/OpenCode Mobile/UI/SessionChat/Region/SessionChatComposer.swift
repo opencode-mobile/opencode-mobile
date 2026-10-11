@@ -1077,9 +1077,10 @@ final class SessionChatComposer {
         return (second.savedAtEpochMs ?? .min) > (first.savedAtEpochMs ?? .min) ? second : first
     }
 
-    /// Seeds the catalog, agents, and a provisional selection from the shared catalog so a
-    /// session whose catalog is already loaded never shows "Loading model…". The network
-    /// refresh and the history reconcile follow quietly.
+    /// Seeds the catalog and agents from the shared catalog, plus a provisional selection when
+    /// this session has one of its own, so a reopened session never shows "Loading model…".
+    /// A session opened for the first time waits for history instead of flashing a default.
+    /// The network refresh and the history reconcile follow quietly.
     private func seedFromCatalogStore() {
         guard let entry = modelCatalogStore.peek(worktree: worktree) else { return }
         if let agents = entry.selectableAgents {
@@ -1090,24 +1091,27 @@ final class SessionChatComposer {
         }
         guard let catalog = entry.catalog, !catalog.options.isEmpty else { return }
         loadedCatalog = catalog
+        state.composer.modelOptions = catalog.options
         let identity = currentIdentity()
         let remembered = modelCatalogStore.lastSelection(worktree: worktree, sessionID: sessionID)
         let persisted = identity.flatMap {
             sessionModelSelectionStore.peekSession(connectionIdentity: $0, worktree: worktree, sessionID: sessionID)
         }
-        let preference = identity.flatMap {
+        // An optimistic session has no history; it gets the same default the create resolver seeds.
+        let isOptimistic = OptimisticSessionCreate.isPlaceholder(sessionID)
+        let preference = isOptimistic ? identity.flatMap {
             sessionModelSelectionStore.peekNewSessionPreference(connectionIdentity: $0, worktree: worktree)
-        }
+        } : nil
         let candidate = [remembered, persisted, preference].compactMap { $0 }.first {
             catalog.option(providerID: $0.providerID, modelID: $0.modelID) != nil
         }
+        guard candidate != nil || isOptimistic else { return }
         let option = candidate.flatMap { catalog.option(providerID: $0.providerID, modelID: $0.modelID) }
             ?? catalog.serverDefault
             ?? catalog.options[0]
         let variant = resolvedVariant(remembered: candidate?.variant, for: option)
         let agentID = (remembered ?? persisted)?.agentID
         isSelectionProvisional = true
-        state.composer.modelOptions = catalog.options
         state.composer.selectedModel = ModelSelection(option: option, selectedVariant: variant)
         state.composer.selectedVariant = variant
         state.composer.selectedMode = resolveSelectedAgentID(

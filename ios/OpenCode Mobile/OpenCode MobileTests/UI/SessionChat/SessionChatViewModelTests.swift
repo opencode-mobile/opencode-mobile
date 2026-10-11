@@ -1602,10 +1602,63 @@ struct SessionChatViewModelTests {
         #expect(second.uiState.composer.selectedModel?.option.modelID == "gpt-4")
     }
 
+    @Test func firstOpenedSession_waitsForHistoryInsteadOfShowingTheServerDefault() async {
+        let (_, pickedOption, catalog) = sharedCatalogFixture()
+        let models = GatedModelRepository(catalog: catalog)
+        let (store, connection, agents) = await warmedCatalogStore(models: models)
+        let history = AsyncGate()
+        let messages = FakeMessageRepository(messages: [
+            Message(
+                id: "msg-1",
+                role: .user,
+                text: "Use GPT",
+                model: nil,
+                modelProviderID: "openai",
+                modelID: "gpt-4",
+                variant: nil,
+                mode: nil,
+                sentAtEpochMs: 2_000
+            ),
+        ])
+        messages.listHold = history
+        let viewModel = makeViewModel(
+            messageRepository: messages,
+            modelRepository: models,
+            modelCatalogStore: store,
+            activeConnectionManager: connection,
+            agentRepository: agents
+        )
+        defer { viewModel.stopObserving() }
+
+        // The catalog comes from the store at once; the selection waits for this session's history.
+        #expect(viewModel.uiState.composer.modelOptions == catalog.options)
+        #expect(viewModel.uiState.composer.isModelSelectionReady == false)
+        #expect(viewModel.uiState.composer.selectedModel == nil)
+        #expect(viewModel.uiState.composer.selectedModelLabel == "Loading model…")
+
+        let load = Task { await viewModel.loadMessages() }
+        _ = await waitUntil { models.calls >= 2 }
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(viewModel.uiState.composer.isModelSelectionReady == false)
+        #expect(viewModel.uiState.composer.selectedModel == nil)
+
+        await history.open()
+        await load.value
+        _ = await waitUntil { viewModel.uiState.composer.isModelSelectionReady }
+
+        #expect(viewModel.uiState.composer.isModelSelectionReady)
+        #expect(viewModel.uiState.composer.selectedModel?.option == pickedOption)
+    }
+
     @Test func reopenedSession_failedCatalogRefreshKeepsTheShownSelection() async {
         let (defaultOption, _, catalog) = sharedCatalogFixture()
         let models = GatedModelRepository(catalog: catalog)
         let (store, connection, agents) = await warmedCatalogStore(models: models)
+        store.recordSelection(
+            SessionModelSelection(providerID: "anthropic", modelID: "claude-sonnet", variant: nil, savedAtEpochMs: 1_000),
+            worktree: "/repo",
+            sessionID: "ses-1"
+        )
         models.setFailure(true)
 
         let viewModel = makeViewModel(
@@ -1668,6 +1721,11 @@ struct SessionChatViewModelTests {
         let (defaultOption, _, catalog) = sharedCatalogFixture()
         let models = GatedModelRepository(catalog: catalog)
         let (store, connection, agents) = await warmedCatalogStore(models: models)
+        store.recordSelection(
+            SessionModelSelection(providerID: "openai", modelID: "gpt-4", variant: nil, savedAtEpochMs: 1_000),
+            worktree: "/repo",
+            sessionID: "ses-1"
+        )
         let future = Int64(Date().timeIntervalSince1970 * 1_000) + 3_600_000
         let viewModel = makeViewModel(
             messageRepository: FakeMessageRepository(messages: [
@@ -1689,6 +1747,7 @@ struct SessionChatViewModelTests {
             agentRepository: agents
         )
         defer { viewModel.stopObserving() }
+        #expect(viewModel.uiState.composer.selectedModel?.option.modelID == "gpt-4")
 
         viewModel.selectModel(defaultOption)
         await viewModel.loadMessages()
@@ -4030,6 +4089,8 @@ private final class FakeMessageRepository: MessageRepository, @unchecked Sendabl
     var sendPromptAsyncCalled = false
     var sentOptions: PromptSendOptions?
     private var listMessagesCallCount = 0
+    /// Holds `listMessages` until opened.
+    var listHold: AsyncGate?
     private var sendContinuation: CheckedContinuation<Void, Never>?
     private var sendReleaseRequested = false
 
@@ -4102,6 +4163,7 @@ private final class FakeMessageRepository: MessageRepository, @unchecked Sendabl
 
     func listMessages(sessionID: String, directory: String?) async throws -> [Message] {
         listMessagesCallCount += 1
+        await listHold?.wait()
         if shouldFailLoad {
             throw MessageError.transport("load failed")
         }
