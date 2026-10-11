@@ -43,9 +43,11 @@ import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.PromptSendOptions
 import dev.opencode.mobile.domain.message.PromptSendProgressReporter
 import dev.opencode.mobile.domain.message.ToolStatus
+import dev.opencode.mobile.domain.model.ModelCatalogStore
 import dev.opencode.mobile.domain.model.ModelRepository
 import dev.opencode.mobile.domain.model.ModelSelectionCatalog
 import dev.opencode.mobile.domain.model.ModelSelectionConnectionIdentity
+import dev.opencode.mobile.domain.model.ModelSelectionError
 import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.model.SessionModelSelection
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
@@ -4887,6 +4889,197 @@ class SessionChatViewModelTest {
             assertNull(viewModel.uiState.value.sessionStatusLabel)
         }
 
+    @Test
+    fun secondViewModelForSameProfileAndWorktree_showsLastSelectionBeforeAnyFetchResolves() =
+        runTest(testDispatcher) {
+            val (models, store) = sharedCatalog()
+            val first = createViewModel(FakeMessageRepository(messages = emptyList()), modelRepository = models, modelCatalogStore = store)
+            first.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            first.selectModel(gpt4Option)
+            advanceUntilIdle()
+
+            models.gate = CompletableDeferred()
+            val callsBefore = models.calls
+            val second =
+                createViewModel(
+                    FakeMessageRepository(messages = emptyList()),
+                    modelRepository = models,
+                    modelCatalogStore = store,
+                    sessionModelSelectionStore = FakeSessionModelSelectionStore(loadGate = CompletableDeferred()),
+                )
+            second.bind("ses-1", "Title", "/repo")
+            runCurrent()
+
+            assertEquals(callsBefore + 1, models.calls)
+            assertEquals(true, second.uiState.value.composer.isModelSelectionReady)
+            assertEquals(gpt4Option.modelLabel, second.uiState.value.composer.selectedModelLabel)
+        }
+
+    @Test
+    fun cachedCatalog_failedRefreshKeepsTheSelection() =
+        runTest(testDispatcher) {
+            val (models, store) = sharedCatalog()
+            val first = createViewModel(FakeMessageRepository(messages = emptyList()), modelRepository = models, modelCatalogStore = store)
+            first.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            first.selectModel(gpt4Option)
+            advanceUntilIdle()
+
+            models.error = ModelSelectionError.Transport(IllegalStateException("offline"))
+            val second = createViewModel(FakeMessageRepository(messages = emptyList()), modelRepository = models, modelCatalogStore = store)
+            second.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertEquals(true, second.uiState.value.composer.isModelSelectionReady)
+            assertNull(second.uiState.value.composer.modelCatalogError)
+            assertEquals(
+                "gpt-4",
+                second.uiState.value.composer.selectedModel
+                    ?.option
+                    ?.modelId,
+            )
+        }
+
+    @Test
+    fun cachedCatalog_newerUserHistoryHintReplacesTheProvisionalSelection() =
+        runTest(testDispatcher) {
+            val (models, store) = sharedCatalog()
+            val first = createViewModel(FakeMessageRepository(messages = emptyList()), modelRepository = models, modelCatalogStore = store)
+            first.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            first.selectModel(gpt4Option)
+            advanceUntilIdle()
+
+            val persistedGate = CompletableDeferred<Unit>()
+            val second =
+                createViewModel(
+                    FakeMessageRepository(messages = listOf(newerSonnetUserMessage())),
+                    modelRepository = models,
+                    modelCatalogStore = store,
+                    sessionModelSelectionStore = FakeSessionModelSelectionStore(loadGate = persistedGate),
+                )
+            second.bind("ses-1", "Title", "/repo")
+            runCurrent()
+            assertEquals(true, second.uiState.value.composer.isModelSelectionReady)
+            assertEquals(
+                "gpt-4",
+                second.uiState.value.composer.selectedModel
+                    ?.option
+                    ?.modelId,
+            )
+
+            persistedGate.complete(Unit)
+            advanceUntilIdle()
+
+            assertEquals(
+                "claude-sonnet",
+                second.uiState.value.composer.selectedModel
+                    ?.option
+                    ?.modelId,
+            )
+        }
+
+    @Test
+    fun cachedCatalog_userPickBeforeReconcileIsKept() =
+        runTest(testDispatcher) {
+            val (models, store) = sharedCatalog()
+            val first = createViewModel(FakeMessageRepository(messages = emptyList()), modelRepository = models, modelCatalogStore = store)
+            first.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            val persistedGate = CompletableDeferred<Unit>()
+            val second =
+                createViewModel(
+                    FakeMessageRepository(messages = listOf(newerSonnetUserMessage())),
+                    modelRepository = models,
+                    modelCatalogStore = store,
+                    sessionModelSelectionStore = FakeSessionModelSelectionStore(loadGate = persistedGate),
+                )
+            second.bind("ses-1", "Title", "/repo")
+            runCurrent()
+            second.selectModel(gpt4Option)
+            persistedGate.complete(Unit)
+            advanceUntilIdle()
+
+            assertEquals(
+                "gpt-4",
+                second.uiState.value.composer.selectedModel
+                    ?.option
+                    ?.modelId,
+            )
+        }
+
+    @Test
+    fun profileSwitch_emptiesTheCatalogCache() =
+        runTest(testDispatcher) {
+            var profile = ConnectionProfile(baseUrl = "http://127.0.0.1:4096/", username = "opencode", id = "a")
+            val models = FakeModelRepository(ModelSelectionCatalog(listOf(sonnetOption, gpt4Option), sonnetOption))
+            val store = testModelCatalogStore(models, currentProfile = { profile })
+            val first = createViewModel(FakeMessageRepository(messages = emptyList()), modelRepository = models, modelCatalogStore = store)
+            first.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            assertEquals(true, first.uiState.value.composer.isModelSelectionReady)
+
+            profile = profile.copy(id = "b", baseUrl = "http://10.0.0.2:4096/")
+            store.clear()
+            models.gate = CompletableDeferred()
+            val second = createViewModel(FakeMessageRepository(messages = emptyList()), modelRepository = models, modelCatalogStore = store)
+            second.bind("ses-1", "Title", "/repo")
+            runCurrent()
+
+            assertEquals(false, second.uiState.value.composer.isModelSelectionReady)
+            assertEquals("Loading model…", second.uiState.value.composer.selectedModelLabel)
+        }
+
+    @Test
+    fun refreshedCatalogWithoutTheSelectedModel_fallsBackWithNotice() =
+        runTest(testDispatcher) {
+            val (models, store) = sharedCatalog()
+            val repository = FakeMessageRepository(messages = emptyList())
+            val viewModel = createViewModel(repository, modelRepository = models, modelCatalogStore = store)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            viewModel.selectModel(gpt4Option)
+            advanceUntilIdle()
+
+            models.enqueue(ModelSelectionCatalog(listOf(sonnetOption), sonnetOption))
+            repository.eventStream.emit(OpencodeEvent(type = "model.updated"))
+            advanceUntilIdle()
+
+            assertEquals(true, viewModel.uiState.value.composer.isModelSelectionReady)
+            assertEquals(
+                "claude-sonnet",
+                viewModel.uiState.value.composer.selectedModel
+                    ?.option
+                    ?.modelId,
+            )
+            assertEquals(
+                "Selected model is unavailable. Using ${sonnetOption.modelLabel}.",
+                viewModel.uiState.value.composer.modelNotice,
+            )
+        }
+
+    private val sonnetOption =
+        ModelSelectionOption("anthropic", "Anthropic", "claude-sonnet", "Claude Sonnet", emptyList(), 128_000)
+    private val gpt4Option =
+        ModelSelectionOption("openai", "OpenAI", "gpt-4", "GPT-4", emptyList(), 128_000)
+
+    private fun sharedCatalog(): Pair<FakeModelRepository, ModelCatalogStore> {
+        val models = FakeModelRepository(ModelSelectionCatalog(listOf(sonnetOption, gpt4Option), sonnetOption))
+        return models to testModelCatalogStore(models)
+    }
+
+    private fun newerSonnetUserMessage() =
+        Message(
+            id = "msg-newer",
+            role = MessageRole.User,
+            text = "Use Sonnet",
+            modelProviderId = "anthropic",
+            modelId = "claude-sonnet",
+            sentAtEpochMs = Long.MAX_VALUE / 2,
+        )
+
     private fun createViewModel(
         repository: FakeMessageRepository,
         modelRepository: FakeModelRepository = FakeModelRepository(),
@@ -4904,6 +5097,7 @@ class SessionChatViewModelTest {
         serverProtocol: ServerProtocol = ServerProtocol.V1,
         liveUpdates: LiveUpdates = FixedLiveUpdates(),
         catalogRetryDelaysMs: List<Long> = emptyList(),
+        modelCatalogStore: ModelCatalogStore? = null,
     ): SessionChatViewModel {
         val eventStream = repository.eventStream
         val liveStoreScope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
@@ -4949,9 +5143,12 @@ class SessionChatViewModelTest {
                 sseHttpClient = OpencodeSseHttpClient(json, activeConnectionManager),
                 eventStream = eventStream,
             )
+        val catalogStore =
+            modelCatalogStore
+                ?: testModelCatalogStore(modelRepository, agentRepository, activeConnectionManager::currentProfile)
         return SessionChatViewModel(
             messageRepository = repository,
-            modelRepository = modelRepository,
+            modelCatalogStore = catalogStore,
             commandRepository = commandRepository,
             agentRepository = agentRepository,
             sessionRepository = sessionRepository,
@@ -4967,7 +5164,7 @@ class SessionChatViewModelTest {
             newSessionModelSelectionResolver =
                 dev.opencode.mobile.domain.model.NewSessionModelSelectionResolver(
                     store = sessionModelSelectionStore,
-                    modelRepository = modelRepository,
+                    modelCatalogStore = catalogStore,
                 ),
             connectionProfileStore = connectionProfileStore,
             activeConnectionManager = activeConnectionManager,
@@ -4980,6 +5177,18 @@ class SessionChatViewModelTest {
             eventStream.setConnectionState(EventStreamConnectionState.Connected)
         }
     }
+
+    private fun testModelCatalogStore(
+        modelRepository: ModelRepository,
+        agentRepository: dev.opencode.mobile.domain.agent.AgentRepository = FakeAgentRepository(),
+        currentProfile: () -> ConnectionProfile? = { ConnectionProfile(baseUrl = "http://127.0.0.1:4096/", username = "opencode") },
+    ): ModelCatalogStore =
+        ModelCatalogStore(
+            modelRepository = modelRepository,
+            agentRepository = agentRepository,
+            currentProfile = currentProfile,
+            scope = CoroutineScope(SupervisorJob() + testDispatcher),
+        )
 
     private fun longMarkdownHistory(): List<Message> =
         (1..20).map { messageIndex ->
@@ -5404,8 +5613,16 @@ private class FakeModelRepository(
     var calls = 0
         private set
 
+    /** While set, calls wait on it; lets a test observe state before any answer resolves. */
+    var gate: CompletableDeferred<Unit>? = null
+
+    /** While set, calls fail with it. */
+    var error: Throwable? = null
+
     override suspend fun listModelOptions(directory: String?): ModelSelectionCatalog {
         calls += 1
+        gate?.await()
+        error?.let { throw it }
         queued.removeFirstOrNull()?.let { return it }
         catalog?.let { return it }
         val option =

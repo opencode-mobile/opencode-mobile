@@ -11,7 +11,7 @@ class NewSessionModelSelectionResolver
     @Inject
     constructor(
         private val store: SessionModelSelectionStore,
-        private val modelRepository: ModelRepository,
+        private val modelCatalogStore: ModelCatalogStore,
     ) {
         suspend fun resolve(
             profile: ConnectionProfile,
@@ -28,7 +28,7 @@ class NewSessionModelSelectionResolver
                         }
                     val catalog =
                         async {
-                            runCatching { modelRepository.listModelOptions(worktree) }
+                            runCatching { modelCatalogStore.catalog(worktree) }
                                 .onFailure { logW("load new-session catalog failed", it) }
                                 .getOrNull()
                         }
@@ -55,6 +55,7 @@ class NewSessionModelSelectionResolver
             sessionId: String,
             selection: SessionModelSelection,
         ) {
+            modelCatalogStore.rememberSelection(worktree, sessionId, selection)
             runCatching {
                 store.saveSession(
                     ModelSelectionConnectionIdentity(profile.baseUrl, profile.username),
