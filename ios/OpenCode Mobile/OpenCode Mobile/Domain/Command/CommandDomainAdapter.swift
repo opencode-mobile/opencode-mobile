@@ -30,12 +30,25 @@ struct CommandDomainAdapter: Sendable {
 
     func toSkillCommand(_ dto: V2SkillDTO) -> ServerCommand? {
         if dto.slash == false { return nil }
+        let skillID = dto.id?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? dto.name
         return ServerCommand(
             name: dto.name,
             description: dto.description?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
             source: .skill,
-            template: Self.skillTemplate(content: dto.content, location: dto.location)
+            template: Self.skillTemplate(content: dto.content, location: Self.skillLocation(dto)),
+            skillID: skillID
         )
+    }
+
+    private static func skillLocation(_ dto: V2SkillDTO) -> String? {
+        if let location = dto.location?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty {
+            return location
+        }
+        guard let path = dto.path?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty else { return nil }
+        if path == builtInSkillLocation || path.hasPrefix("/builtin") {
+            return builtInSkillLocation
+        }
+        return path
     }
 
     static func skillTemplate(content: String?, location: String?) -> String? {

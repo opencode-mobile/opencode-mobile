@@ -150,6 +150,18 @@ struct MessageDomainAdapterTests {
         #expect(body.files?.first?.mime == "text/plain")
         #expect(body.agents?.first?.name == "explore")
         #expect(body.agents?.first?.mention?.text == "@explore")
+        #expect(body.skills == nil)
+    }
+
+    @Test func v2PromptRequest_mapsSkillIds() {
+        let body = adapter.v2PromptRequest(
+            options: PromptSendOptions(
+                text: "check the error",
+                skillIDs: [" opencode ", "opencode", ""]
+            )
+        )
+        #expect(body.text == "check the error")
+        #expect(body.skills?.map(\.id) == ["opencode"])
     }
 
     @Test func v2SwitchModelRequest_mapsProviderModelAndVariant() {

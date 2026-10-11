@@ -140,6 +140,17 @@ object PromptJsonBodyWriter {
                 }
                 writer.endArray()
             }
+            body.skills?.takeIf { it.isNotEmpty() }?.let { skills ->
+                writer.key("skills")
+                writer.beginArray()
+                skills.forEach { skill ->
+                    writer.beginObject()
+                    writer.key("id")
+                    writer.writeString(skill.id)
+                    writer.endObject()
+                }
+                writer.endArray()
+            }
             writer.key("delivery")
             writer.writeString(body.delivery)
             writer.endObject()
