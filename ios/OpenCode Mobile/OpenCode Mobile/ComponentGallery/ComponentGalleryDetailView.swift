@@ -162,6 +162,8 @@ struct ComponentGalleryDetailView: View {
             CodeFileGalleryView()
         case .treeRow:
             TreeRowGalleryView()
+        case .fileTabs:
+            FileTabsGalleryView()
         case .button:
             ButtonGalleryView()
         case .textInput:

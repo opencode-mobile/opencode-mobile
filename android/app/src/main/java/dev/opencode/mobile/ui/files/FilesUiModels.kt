@@ -3,6 +3,8 @@ package dev.opencode.mobile.ui.files
 import dev.opencode.mobile.domain.filesystem.ProjectEntry
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.ui.components.OpenCodeCodeLine
+import java.util.Locale
+import kotlin.math.roundToLong
 
 /** Children of one folder in the File Browser tree. */
 sealed interface FilesFolderState {
@@ -90,6 +92,20 @@ sealed interface FilesViewerContent {
 
     data object Empty : FilesViewerContent
 
+    /** Past a read cap; [byteCount] is the file size when the server reported it. */
+    data class TooLarge(
+        val byteCount: Long?,
+    ) : FilesViewerContent {
+        val title: String get() = "Too large to preview"
+
+        val message: String
+            get() = listOfNotNull(MESSAGE, byteCount?.let(::formatFileSize)).joinToString("\n")
+
+        private companion object {
+            const val MESSAGE = "This file is bigger than the app previews."
+        }
+    }
+
     data class Failed(
         val message: String,
     ) : FilesViewerContent
@@ -124,4 +140,23 @@ data class FilesUiState(
     val isFinding: Boolean get() = query.isNotBlank()
 
     val activeViewer: FilesViewerState? get() = activePath?.let(viewers::get)
+}
+
+/** Decimal file size such as `40 MB` or `1.5 KB`, matching the platform file-size formatters. */
+internal fun formatFileSize(bytes: Long): String {
+    if (bytes < 1_000) return if (bytes == 1L) "1 byte" else "$bytes bytes"
+    val units = listOf("KB", "MB", "GB", "TB")
+    var value = bytes / 1_000.0
+    var unit = 0
+    while (value >= 999.5 && unit < units.lastIndex) {
+        value /= 1_000.0
+        unit++
+    }
+    val number =
+        if (value < 10) {
+            String.format(Locale.US, "%.1f", value).removeSuffix(".0")
+        } else {
+            value.roundToLong().toString()
+        }
+    return "$number ${units[unit]}"
 }

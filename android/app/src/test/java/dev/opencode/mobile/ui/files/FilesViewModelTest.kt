@@ -320,6 +320,36 @@ class FilesViewModelTest {
         }
 
     @Test
+    fun openFile_mapsTooLargeWithAndWithoutSize() =
+        runTest(dispatcher) {
+            val viewModel = viewModel(FakeFilesRepository())
+            viewModel.bind("/repo")
+            advanceUntilIdle()
+
+            viewModel.openFile("build.log")
+            viewModel.openFile("huge.png")
+            advanceUntilIdle()
+
+            val viewers = viewModel.uiState.value.viewers
+            val log = viewers.getValue("build.log").content as FilesViewerContent.TooLarge
+            assertEquals(FilesViewerContent.TooLarge(byteCount = null), log)
+            assertEquals("Too large to preview", log.title)
+            assertEquals("This file is bigger than the app previews.", log.message)
+            val image = viewers.getValue("huge.png").content as FilesViewerContent.TooLarge
+            assertEquals("This file is bigger than the app previews.\n40 MB", image.message)
+        }
+
+    @Test
+    fun formatFileSize_usesDecimalUnits() {
+        assertEquals("1 byte", formatFileSize(1))
+        assertEquals("999 bytes", formatFileSize(999))
+        assertEquals("1.5 KB", formatFileSize(1_500))
+        assertEquals("10 MB", formatFileSize(10_485_760))
+        assertEquals("1 MB", formatFileSize(999_600))
+        assertEquals("2.1 GB", formatFileSize(2_100_000_000))
+    }
+
+    @Test
     fun fileFailure_showsErrorAndRetryReloads() =
         runTest(dispatcher) {
             val repository = FakeFilesRepository(failingFiles = mutableSetOf("notes.txt"))
@@ -413,6 +443,8 @@ private class FakeFilesRepository(
             "app.bin" -> ProjectFileContent.Binary(mimeType = "application/octet-stream", byteCount = 10)
             "logo.png" -> ProjectFileContent.Image(byteArrayOf(1, 2, 3), "image/png")
             "empty.txt" -> ProjectFileContent.Empty
+            "build.log" -> ProjectFileContent.TooLarge(byteCount = null)
+            "huge.png" -> ProjectFileContent.TooLarge(byteCount = 40_000_000)
             else -> ProjectFileContent.Text("plain notes")
         }
     }

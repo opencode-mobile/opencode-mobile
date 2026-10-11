@@ -74,6 +74,7 @@ import dev.opencode.mobile.ui.componentgallery.components.DialogGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.DictationCardGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.DiffStatGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.EmptyStateGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.FileTabsGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.FilterTabsGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.HunkNavigationPillGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.IconsGalleryScreen
@@ -742,6 +743,7 @@ fun MainNavigation() {
                                                         ComponentGalleryEntryId.UnifiedDiff -> UnifiedDiffGalleryScreen()
                                                         ComponentGalleryEntryId.CodeFile -> CodeFileGalleryScreen()
                                                         ComponentGalleryEntryId.TreeRow -> TreeRowGalleryScreen()
+                                                        ComponentGalleryEntryId.FileTabs -> FileTabsGalleryScreen()
                                                         ComponentGalleryEntryId.Button -> ButtonGalleryScreen()
                                                         ComponentGalleryEntryId.TextInput -> TextInputGalleryScreen()
                                                         ComponentGalleryEntryId.ServerAddressInput ->

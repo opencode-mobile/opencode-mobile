@@ -55,8 +55,25 @@ enum ProjectFileViewerBody: Equatable {
     case text(FileTextDocument)
     case image(Data, mimeType: String)
     case binary(mimeType: String?)
+    case tooLarge(byteCount: Int?)
     case empty
     case failed
+}
+
+/// File Viewer copy shared with Android.
+nonisolated enum FileViewerCopy {
+    static let tooLargeTitle = "Too large to preview"
+    static let tooLargeMessage = "This file is bigger than the app previews."
+
+    /// The message plus the file size on a second line when known.
+    static func tooLargeDetail(byteCount: Int?) -> String {
+        [tooLargeMessage, byteCount.map { fileSize($0) }].compactMap { $0 }.joined(separator: "\n")
+    }
+
+    /// Decimal file-size units (`1.5 KB`, `40 MB`), like Android's platform formatter.
+    static func fileSize(_ bytes: Int) -> String {
+        Int64(bytes).formatted(.byteCount(style: .file))
+    }
 }
 
 struct ProjectFileViewerState: Equatable {
@@ -66,7 +83,8 @@ struct ProjectFileViewerState: Equatable {
     /// Markdown files open on the rendered preview; Source shows the text viewer.
     var showsMarkdownSource = false
     var markdownPreview: FileMarkdownPreview?
-    /// Highlight spans by 0-based line. A line present with `[]` is settled as plain.
+    /// Highlight spans by 0-based line, filled in one pass after the plain text shows.
+    /// A line present with `[]` is settled as plain.
     var lineSpans: [Int: [NativeCodeSpan]] = [:]
 
     var isMarkdown: Bool { ProjectPaths.isMarkdown(name: name) }
@@ -122,7 +140,7 @@ final class FilesViewModel {
     @ObservationIgnored private var folderTasks: [String: Task<Void, Never>] = [:]
     @ObservationIgnored private var findTask: Task<Void, Never>?
     @ObservationIgnored private var fileTasks: [String: Task<Void, Never>] = [:]
-    @ObservationIgnored private var requestedChunks: [String: Set<Int>] = [:]
+    @ObservationIgnored private var highlightTasks: [String: Task<Void, Never>] = [:]
     @ObservationIgnored private var highlightRevision: Int64 = 0
     @ObservationIgnored private var started = false
 
@@ -335,7 +353,8 @@ final class FilesViewModel {
         state.viewers[relativePath] = nil
         fileTasks[relativePath]?.cancel()
         fileTasks[relativePath] = nil
-        requestedChunks[relativePath] = nil
+        highlightTasks[relativePath]?.cancel()
+        highlightTasks[relativePath] = nil
         if state.activePath == relativePath {
             state.activePath = state.tabs.last?.relativePath
         }
@@ -368,7 +387,8 @@ final class FilesViewModel {
 
     private func loadFile(_ path: String) {
         fileTasks[path]?.cancel()
-        requestedChunks[path] = nil
+        highlightTasks[path]?.cancel()
+        highlightTasks[path] = nil
         let name = ProjectPaths.name(of: path)
         state.viewers[path] = ProjectFileViewerState(relativePath: path, name: name)
         let worktree = worktree
@@ -389,6 +409,9 @@ final class FilesViewModel {
             self.state.viewers[path]?.body = body
             self.state.viewers[path]?.markdownPreview = preview
             self.fileTasks[path] = nil
+            if case let .text(document) = body {
+                self.startHighlighting(path, document: document)
+            }
         }
     }
 
@@ -398,6 +421,8 @@ final class FilesViewModel {
             return .empty
         case let .binary(mimeType, _):
             return .binary(mimeType: mimeType)
+        case let .tooLarge(byteCount):
+            return .tooLarge(byteCount: byteCount)
         case let .image(data, mimeType):
             return .image(data, mimeType: mimeType)
         case let .text(text, isTruncated, _):
@@ -418,70 +443,71 @@ final class FilesViewModel {
 
     // MARK: Highlighting
 
-    /// Highlights the chunk holding `line` the first time it scrolls into view: the shared TextMate
-    /// engine, or the semantic fallback when TextMate is off (the same switch Session Chat code
-    /// fences use).
-    func codeLineAppeared(_ relativePath: String, line: Int) {
-        guard let viewer = state.viewers[relativePath],
-              let document = viewer.textDocument,
-              let language = document.language,
-              viewer.lineSpans[line] == nil,
-              let chunk = document.chunkIndex(containingLine: line),
-              !(requestedChunks[relativePath]?.contains(chunk) ?? false)
-        else { return }
-        requestedChunks[relativePath, default: []].insert(chunk)
-        let range = document.chunks[chunk]
-        let lines = document.lines[range]
-        let source = lines.joined(separator: "\n")
-        guard textMateEnabled() else {
-            let fallbackHighlighter = fallbackHighlighter
-            let languageID = language.id
-            Task { [weak self] in
-                let spans = await Task.detached(priority: .userInitiated) {
-                    fallbackHighlighter(languageID, source)
-                }.value
-                guard let self, self.state.viewers[relativePath]?.textDocument == document else { return }
-                let mapped = FileCodeHighlightMapper.lineSpans(spans, lines: lines, firstLine: range.lowerBound)
-                self.state.viewers[relativePath]?.lineSpans.merge(mapped) { _, new in new }
-            }
-            return
-        }
+    /// Colors the whole file in one pass off the main actor, after the plain text is showing:
+    /// the shared TextMate engine (grammar state carries across the file), or the semantic
+    /// fallback when TextMate is off or its result is not attachable. Closing the tab or
+    /// reloading the file cancels the pass.
+    private func startHighlighting(_ path: String, document: FileTextDocument) {
+        guard let language = document.language else { return }
+        highlightTasks[path]?.cancel()
+        let textMate: (any TextMateHighlighting)? = textMateEnabled() ? highlighter : nil
         highlightRevision += 1
-        let request = TextMateHighlightRequest(
-            key: TextMateCodeBlockKey(value: "files:\(document.id.uuidString):\(chunk)"),
-            revision: TextMateHighlightRevision(value: highlightRevision),
-            language: language.id,
-            source: source,
-            intent: .visibleHistory,
-            policyEpoch: Int64(MarkdownHighlightPreferences.currentEpoch()),
-            messageCharacters: source.utf16.count,
-            fenceIndex: chunk,
-            fenceCount: document.chunks.count
-        )
-        let highlighter = highlighter
-        Task { [weak self] in
-            let result = try? await highlighter.highlight(request)
-            guard let self else { return }
-            guard self.state.viewers[relativePath]?.textDocument == document else { return }
-            guard let result, result.source == source,
-                  !["Failed", "Cancelled", "BudgetExceeded"].contains(result.outcome)
-            else {
-                if Self.shouldRetry(result) {
-                    self.requestedChunks[relativePath]?.remove(chunk)
-                }
-                return
-            }
-            let spans = FileCodeHighlightMapper.lineSpans(result.spans, lines: lines, firstLine: range.lowerBound)
-            self.state.viewers[relativePath]?.lineSpans.merge(spans) { _, new in new }
+        let revision = highlightRevision
+        let policyEpoch = Int64(MarkdownHighlightPreferences.currentEpoch())
+        let fallbackHighlighter = fallbackHighlighter
+        highlightTasks[path] = Task { [weak self] in
+            let spans = await Self.lineSpans(
+                document: document,
+                language: language.id,
+                textMate: textMate,
+                revision: revision,
+                policyEpoch: policyEpoch,
+                fallback: fallbackHighlighter
+            )
+            guard let spans, !Task.isCancelled, let self,
+                  self.state.viewers[path]?.textDocument == document
+            else { return }
+            self.state.viewers[path]?.lineSpans = spans
+            self.highlightTasks[path] = nil
         }
     }
 
-    /// Queue pressure or supersession can clear on the next appearance; a parse failure or
-    /// search budget overrun will not.
-    private nonisolated static func shouldRetry(_ result: TextMateHighlightResult?) -> Bool {
-        guard let result else { return true }
-        if result.outcome == "Cancelled" { return true }
-        let reason = result.observation.schedulingReason
-        return reason == "QueuePressure" || reason == "Trim" || reason == "Supersession"
+    /// Outcomes Session Chat code fences do not attach (`attachTextMateResult`).
+    nonisolated static let unattachableOutcomes: Set<String> = ["Failed", "Cancelled", "BudgetExceeded"]
+
+    /// nil when cancelled.
+    @concurrent
+    private nonisolated static func lineSpans(
+        document: FileTextDocument,
+        language: String,
+        textMate: (any TextMateHighlighting)?,
+        revision: Int64,
+        policyEpoch: Int64,
+        fallback: @Sendable (String, String) -> [NativeCodeSpan]
+    ) async -> [Int: [NativeCodeSpan]]? {
+        let source = document.lines.joined(separator: "\n")
+        var spans: [NativeCodeSpan]?
+        if let textMate {
+            let request = TextMateHighlightRequest(
+                key: TextMateCodeBlockKey(value: "files:\(document.id.uuidString)"),
+                revision: TextMateHighlightRevision(value: revision),
+                language: language,
+                source: source,
+                intent: .interactiveFinal,
+                policyEpoch: policyEpoch,
+                messageCharacters: source.utf16.count,
+                fenceIndex: 0,
+                fenceCount: 1
+            )
+            if let result = try? await textMate.highlight(request),
+               result.source == source,
+               !unattachableOutcomes.contains(result.outcome) {
+                spans = result.spans
+            }
+        }
+        guard !Task.isCancelled else { return nil }
+        let resolved = spans ?? fallback(language, source)
+        guard !Task.isCancelled else { return nil }
+        return FileCodeHighlightMapper.lineSpans(resolved, lines: document.lines[...], firstLine: 0)
     }
 }

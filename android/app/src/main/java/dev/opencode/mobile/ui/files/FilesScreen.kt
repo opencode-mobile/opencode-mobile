@@ -24,6 +24,8 @@ import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.backwardRouteTransition
 import dev.opencode.mobile.forwardRouteTransition
 import dev.opencode.mobile.ui.components.OpenCodeEmptyState
+import dev.opencode.mobile.ui.components.OpenCodeFileTab
+import dev.opencode.mobile.ui.components.OpenCodeFileTabs
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarHost
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarMessage
 import dev.opencode.mobile.ui.components.OpenCodeSplitPane
@@ -159,9 +161,9 @@ fun FilesScreen(
                             onRetry = { retryFile(viewer.path) },
                             onToggleMarkdownSource = { toggleMarkdownSource(viewer.path) },
                             tabs = {
-                                FilesTabStrip(
-                                    tabs = state.tabs,
-                                    activePath = state.activePath,
+                                OpenCodeFileTabs(
+                                    tabs = state.tabs.map { path -> OpenCodeFileTab(id = path, title = path.substringAfterLast('/')) },
+                                    selectedTabId = state.activePath,
                                     onSelect = { path ->
                                         logFilesAction(ProductAnalytics.Action.FILES_SELECT_TAB)
                                         viewModel.selectTab(path)

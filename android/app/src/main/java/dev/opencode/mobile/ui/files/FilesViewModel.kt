@@ -233,6 +233,8 @@ class FilesViewModel internal constructor(
                     is ProjectFileContent.Binary ->
                         updateViewer(path) { it.copy(content = FilesViewerContent.Binary(content.mimeType)) }
                     ProjectFileContent.Empty -> updateViewer(path) { it.copy(content = FilesViewerContent.Empty) }
+                    is ProjectFileContent.TooLarge ->
+                        updateViewer(path) { it.copy(content = FilesViewerContent.TooLarge(content.byteCount)) }
                 }
             }
     }

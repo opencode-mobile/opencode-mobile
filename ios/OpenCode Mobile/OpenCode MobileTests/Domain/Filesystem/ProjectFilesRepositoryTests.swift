@@ -116,6 +116,15 @@ struct ProjectFilesRepositoryTests {
         #expect(kept.split(separator: "\n").allSatisfy { $0.count == 99 })
     }
 
+    @Test func v1ResponseOverCapIsTooLargeNotBinary() async throws {
+        let body = Data(repeating: 0x61, count: ProjectFileLimits.maxV1ResponseBytes + 4096)
+        ProjectFilesURLProtocol.reset(responses: [ProjectFilesStubResponse(statusCode: 200, headers: [:], body: body)])
+
+        let content = try await makeRepository(.v1).readFile(worktree: "/repo", relativePath: "huge.json")
+
+        #expect(content == .tooLarge(byteCount: nil))
+    }
+
     @Test func v1ServerErrorThrowsDomainError() async throws {
         ProjectFilesURLProtocol.reset(responses: [ProjectFilesStubResponse(statusCode: 500, headers: [:], body: Data("boom".utf8))])
         await #expect(throws: ProjectFilesError.server(statusCode: 500)) {
@@ -257,11 +266,70 @@ struct ProjectFilesRepositoryTests {
         #expect(ProjectFilesURLProtocol.requests.first?.value(forHTTPHeaderField: "Range") == nil)
     }
 
-    @Test func v2ReadImageOverCapIsBinary() async throws {
+    @Test func v2ReadImageOverCapIsTooLargeWithContentLength() async throws {
+        let big = Data(count: ProjectFileLimits.maxImageBytes + 10)
+        ProjectFilesURLProtocol.reset(responses: [
+            ProjectFilesStubResponse(
+                statusCode: 200,
+                headers: ["Content-Type": "image/jpeg", "Content-Length": String(big.count)],
+                body: big
+            ),
+        ])
+        let content = try await makeRepository(.v2).readFile(worktree: "/repo", relativePath: "photo.jpg")
+        #expect(content == .tooLarge(byteCount: big.count))
+    }
+
+    @Test func v2ReadImageOverCapWithoutContentLengthIsTooLargeWithUnknownSize() async throws {
         let big = Data(count: ProjectFileLimits.maxImageBytes + 10)
         ProjectFilesURLProtocol.reset(responses: [.bytes(big, contentType: "image/jpeg")])
         let content = try await makeRepository(.v2).readFile(worktree: "/repo", relativePath: "photo.jpg")
-        #expect(content == .binary(mimeType: "image/jpeg", byteCount: nil))
+        #expect(content == .tooLarge(byteCount: nil))
+    }
+
+    // MARK: Bounded reads
+
+    @Test func chunkedBodyAtLimitIsKeptWhole() async throws {
+        let limit = 300 * 1024
+        let body = Data((0..<limit).map { UInt8($0 % 251) })
+        ProjectFilesURLProtocol.reset(responses: [.bytes(body, contentType: "text/plain")])
+
+        let result = try await makeAPI(.v2).readProjectFileV2(worktree: "/repo", relativePath: "a.txt", rangeEnd: nil, limit: limit)
+
+        #expect(!result.exceededLimit)
+        #expect(result.data == body)
+        #expect(result.statusCode == 200)
+    }
+
+    @Test func chunkedBodyPastLimitStopsAtLimitPlusOneAndCancels() async throws {
+        let limit = 300 * 1024
+        let body = Data((0..<(limit * 2)).map { UInt8($0 % 251) })
+        ProjectFilesURLProtocol.reset(responses: [.bytes(body, contentType: "text/plain")])
+
+        let result = try await makeAPI(.v2).readProjectFileV2(worktree: "/repo", relativePath: "a.txt", rangeEnd: nil, limit: limit)
+
+        #expect(result.exceededLimit)
+        #expect(result.data == body.prefix(limit + 1))
+        let request = try #require(ProjectFilesURLProtocol.requests.first)
+        #expect(request.value(forHTTPHeaderField: "Authorization")?.hasPrefix("Basic ") == true)
+    }
+
+    @Test func cancellingTheCallerCancelsTheRead() async throws {
+        ProjectFilesURLProtocol.reset(responses: [
+            ProjectFilesStubResponse(statusCode: 200, headers: ["Content-Type": "text/plain"], body: Data("partial".utf8), hangs: true),
+        ])
+        let repository = makeRepository(.v2)
+
+        let read = Task {
+            try await repository.readFile(worktree: "/repo", relativePath: "slow.txt")
+        }
+        await waitUntil { ProjectFilesURLProtocol.startedCount == 1 }
+        read.cancel()
+
+        await #expect(throws: CancellationError.self) {
+            try await read.value
+        }
+        await waitUntil { ProjectFilesURLProtocol.stoppedCount == 1 }
+        #expect(ProjectFilesURLProtocol.stoppedCount == 1)
     }
 
     @Test func v2NotFoundThrowsNotFound() async throws {
@@ -272,6 +340,26 @@ struct ProjectFilesRepositoryTests {
     }
 
     // MARK: Helpers
+
+    private func makeAPI(_ serverProtocol: ServerProtocol) -> FilesystemAPIClient {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [ProjectFilesURLProtocol.self]
+        let connection = ServerConnection(
+            baseURL: URL(string: "https://example.test")!,
+            username: "opencode",
+            password: "secret",
+            serverProtocol: serverProtocol
+        )
+        return FilesystemAPIClient(fixedConnection: connection, urlSession: URLSession(configuration: configuration))
+    }
+
+    private func waitUntil(_ condition: () -> Bool) async {
+        for _ in 0..<400 {
+            if condition() { return }
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+        Issue.record("condition not met in time")
+    }
 
     private func makeRepository(_ serverProtocol: ServerProtocol) -> DefaultProjectFilesRepository {
         let manager = ActiveConnectionManager()
@@ -305,6 +393,8 @@ private struct ProjectFilesStubResponse {
     let statusCode: Int
     let headers: [String: String]
     let body: Data
+    /// Sends the headers and body but never finishes, so only cancellation ends the request.
+    var hangs = false
 
     static func json(_ body: String) -> ProjectFilesStubResponse {
         ProjectFilesStubResponse(statusCode: 200, headers: ["Content-Type": "application/json"], body: Data(body.utf8))
@@ -319,15 +409,33 @@ private struct ProjectFilesStubResponse {
     }
 }
 
+/// Delivers bodies in 64 KiB chunks, like a network transfer, and counts starts and stops.
 private final class ProjectFilesURLProtocol: URLProtocol {
     nonisolated(unsafe) static var requests: [URLRequest] = []
     nonisolated(unsafe) static var responses: [ProjectFilesStubResponse] = []
+    nonisolated(unsafe) private static var started = 0
+    nonisolated(unsafe) private static var stopped = 0
     private static let lock = NSLock()
+    private static let chunkSize = 64 * 1024
+
+    static var startedCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return started
+    }
+
+    static var stoppedCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return stopped
+    }
 
     static func reset(responses: [ProjectFilesStubResponse]) {
         lock.lock()
         defer { lock.unlock() }
         requests = []
+        started = 0
+        stopped = 0
         self.responses = responses
     }
 
@@ -338,6 +446,7 @@ private final class ProjectFilesURLProtocol: URLProtocol {
     override func startLoading() {
         Self.lock.lock()
         Self.requests.append(request)
+        Self.started += 1
         let stub = Self.responses.isEmpty ? ProjectFilesStubResponse.json("[]") : Self.responses.removeFirst()
         Self.lock.unlock()
         let response = HTTPURLResponse(
@@ -347,11 +456,20 @@ private final class ProjectFilesURLProtocol: URLProtocol {
             headerFields: stub.headers
         )!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-        if !stub.body.isEmpty {
-            client?.urlProtocol(self, didLoad: stub.body)
+        var offset = 0
+        while offset < stub.body.count {
+            let end = min(offset + Self.chunkSize, stub.body.count)
+            client?.urlProtocol(self, didLoad: stub.body.subdata(in: offset..<end))
+            offset = end
         }
-        client?.urlProtocolDidFinishLoading(self)
+        if !stub.hangs {
+            client?.urlProtocolDidFinishLoading(self)
+        }
     }
 
-    override func stopLoading() {}
+    override func stopLoading() {
+        Self.lock.lock()
+        Self.stopped += 1
+        Self.lock.unlock()
+    }
 }

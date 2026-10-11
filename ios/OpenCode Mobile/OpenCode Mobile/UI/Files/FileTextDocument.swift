@@ -1,13 +1,11 @@
 import Foundation
 import OpenCodeMarkdownCore
 
-/// Prepared text for the File Viewer: display lines, language, and highlight chunks.
+/// Prepared text for the File Viewer: display lines and language.
 /// A reference type so the Screen Model can cache up to 1 MiB per open tab and compare by identity.
 nonisolated final class FileTextDocument: Equatable, @unchecked Sendable {
     /// Lines longer than this are cut for display (minified files would stall layout).
     static let maxDisplayLineLength = 5_000
-    static let chunkMaxLines = 200
-    static let chunkMaxCharacters = 32_000
 
     let id = UUID()
     let text: String
@@ -15,8 +13,6 @@ nonisolated final class FileTextDocument: Equatable, @unchecked Sendable {
     let maxLineLength: Int
     let language: ProjectFileLanguage?
     let isTruncated: Bool
-    /// Line ranges highlighted together, so visible text is colored first.
-    let chunks: [Range<Int>]
 
     init(text: String, fileName: String, isTruncated: Bool) {
         self.text = text
@@ -25,7 +21,6 @@ nonisolated final class FileTextDocument: Equatable, @unchecked Sendable {
         let prepared = Self.displayLines(text)
         lines = prepared
         maxLineLength = prepared.reduce(0) { max($0, $1.count) }
-        chunks = Self.chunks(for: prepared)
     }
 
     var languageName: String { language?.displayName ?? ProjectFileLanguage.plainTextName }
@@ -33,10 +28,6 @@ nonisolated final class FileTextDocument: Equatable, @unchecked Sendable {
     /// `"Swift · 120 lines"`.
     var metaText: String {
         "\(languageName) · \(lines.count) \(lines.count == 1 ? "line" : "lines")"
-    }
-
-    func chunkIndex(containingLine line: Int) -> Int? {
-        chunks.firstIndex { $0.contains(line) }
     }
 
     static func == (lhs: FileTextDocument, rhs: FileTextDocument) -> Bool {
@@ -61,26 +52,9 @@ nonisolated final class FileTextDocument: Equatable, @unchecked Sendable {
         if lines.count > 1, lines.last?.isEmpty == true { lines.removeLast() }
         return lines
     }
-
-    static func chunks(for lines: [String]) -> [Range<Int>] {
-        var result: [Range<Int>] = []
-        var start = 0
-        var characters = 0
-        for (index, line) in lines.enumerated() {
-            let size = line.utf16.count + 1
-            if index > start, index - start >= chunkMaxLines || characters + size > chunkMaxCharacters {
-                result.append(start..<index)
-                start = index
-                characters = 0
-            }
-            characters += size
-        }
-        if start < lines.count { result.append(start..<lines.count) }
-        return result
-    }
 }
 
-/// Splits TextMate spans over a `\n`-joined chunk into per-line spans.
+/// Splits spans over the `\n`-joined display lines into per-line spans.
 nonisolated enum FileCodeHighlightMapper {
     static func lineSpans(
         _ spans: [NativeCodeSpan],
@@ -111,7 +85,7 @@ nonisolated enum FileCodeHighlightMapper {
                 lineIndex += 1
             }
         }
-        // Every line in the chunk is settled, even when it has no colored span.
+        // Every line is settled, even when it has no colored span.
         for index in 0..<lines.count where result[firstLine + index] == nil {
             result[firstLine + index] = []
         }

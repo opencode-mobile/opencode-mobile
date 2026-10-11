@@ -192,6 +192,35 @@ class ProjectFilesRepositoryTest {
         }
 
     @Test
+    fun v1ReadBodyPastCap_isTooLargeWithUnknownSize() =
+        runTest {
+            val text = "z".repeat(ProjectFileLimits.V1_BODY_BYTES + 1)
+            val repository =
+                repository(ServerProtocol.V1) {
+                    respondJson(Json.encodeToString(mapOf("type" to "text", "content" to text)))
+                }
+
+            assertEquals(ProjectFileContent.TooLarge(byteCount = null), repository.readFile("/repo", "build.log"))
+        }
+
+    @Test
+    fun v1ReadLargeText_cutMidCharacter_isTextWithoutReplacementCharacters() =
+        runTest {
+            val text = "ab" + "€".repeat(ProjectFileLimits.TEXT_PREVIEW_BYTES / 3 + 10) // single line, 3-byte chars
+            val repository =
+                repository(ServerProtocol.V1) {
+                    respondJson(Json.encodeToString(mapOf("type" to "text", "content" to text)))
+                }
+
+            val content = repository.readFile("/repo", "euros.txt") as ProjectFileContent.Text
+
+            assertTrue(content.isTruncated)
+            assertFalse(content.text.contains('\uFFFD'))
+            // 2 + 349,524 × 3 = 1,048,574 bytes; the next character's first 2 bytes are dropped.
+            assertEquals(ProjectFileLimits.TEXT_PREVIEW_BYTES - 2, content.text.encodeToByteArray().size)
+        }
+
+    @Test
     fun v1ServerError_throwsDomainError() =
         runTest {
             val repository =
@@ -333,6 +362,63 @@ class ProjectFilesRepositoryTest {
         }
 
     @Test
+    fun v2Read206_exactlyOneMebibyteEndingMidCharacter_isTruncatedText() =
+        runTest {
+            val limit = ProjectFileLimits.TEXT_PREVIEW_BYTES
+            // "ab" + 3-byte characters: 1 MiB holds 349,524 whole ones and 2 bytes of the next.
+            val full = ("ab" + "€".repeat(limit / 3 + 1)).encodeToByteArray()
+            val repository =
+                repository(ServerProtocol.V2) {
+                    respondBytes(
+                        full.copyOf(limit),
+                        status = HttpStatusCode.PartialContent,
+                        extraHeaders = listOf(HttpHeaders.ContentRange to "bytes 0-${limit - 1}/${full.size}"),
+                    )
+                }
+
+            val content = repository.readFile("/repo", "euros.txt") as ProjectFileContent.Text
+
+            assertTrue(content.isTruncated)
+            assertEquals(full.size.toLong(), content.totalBytes)
+            assertEquals(limit - 2, content.text.encodeToByteArray().size)
+            assertFalse(content.text.contains('\uFFFD'))
+        }
+
+    @Test
+    fun v2Read206_withUnknownTotal_fullRangeIsTruncatedText() =
+        runTest {
+            val limit = ProjectFileLimits.TEXT_PREVIEW_BYTES
+            // "a" + 2-byte characters: the range ends on the lead byte of a split character.
+            val cut = ("a" + "é".repeat(limit / 2)).encodeToByteArray().copyOf(limit)
+            val repository =
+                repository(ServerProtocol.V2) {
+                    respondBytes(
+                        cut,
+                        status = HttpStatusCode.PartialContent,
+                        extraHeaders = listOf(HttpHeaders.ContentRange to "bytes 0-${limit - 1}/*"),
+                    )
+                }
+
+            val content = repository.readFile("/repo", "accents.txt") as ProjectFileContent.Text
+
+            assertTrue(content.isTruncated)
+            assertNull(content.totalBytes)
+            assertEquals(limit - 1, content.text.encodeToByteArray().size)
+        }
+
+    @Test
+    fun v2ReadImagePastCap_isTooLarge() =
+        runTest {
+            val bytes = ByteArray(ProjectFileLimits.IMAGE_PREVIEW_BYTES + 1) { 1 }
+            val repository = repository(ServerProtocol.V2) { respondBytes(bytes, contentType = "image/png") }
+
+            assertEquals(
+                ProjectFileContent.TooLarge(byteCount = bytes.size.toLong()),
+                repository.readFile("/repo", "huge.png"),
+            )
+        }
+
+    @Test
     fun v2Read200_fullBodyPastLimit_stopsAfterOneMebibyteAndTruncates() =
         runTest {
             val body = ("b".repeat(499) + "\n").repeat(4200) // 2.1 MB, older server ignores Range
@@ -424,7 +510,7 @@ class ProjectFilesRepositoryTest {
     }
 
     @Test
-    fun decodeV2_imagePastCap_isBinaryPlaceholder() {
+    fun decodeV2_imagePastCap_isTooLarge() {
         val content =
             ProjectFileContentDecoder.decodeV2(
                 path = "huge.png",
@@ -434,11 +520,11 @@ class ProjectFilesRepositoryTest {
                 contentType = "image/png",
                 requestedAsImage = true,
             )
-        assertEquals(ProjectFileContent.Binary(mimeType = "image/png", byteCount = 20_000_000), content)
+        assertEquals(ProjectFileContent.TooLarge(byteCount = 20_000_000), content)
     }
 
     @Test
-    fun decodeV1_imagePastCap_isBinaryPlaceholder() {
+    fun decodeV1_imagePastCap_isTooLarge() {
         val bytes = ByteArray(ProjectFileLimits.IMAGE_PREVIEW_BYTES + 1)
         val content =
             ProjectFileContentDecoder.decodeV1(
@@ -448,7 +534,7 @@ class ProjectFilesRepositoryTest {
                 encoding = "base64",
                 mimeType = "image/png",
             )
-        assertEquals(ProjectFileContent.Binary(mimeType = "image/png", byteCount = bytes.size.toLong()), content)
+        assertEquals(ProjectFileContent.TooLarge(byteCount = bytes.size.toLong()), content)
     }
 
     @Test

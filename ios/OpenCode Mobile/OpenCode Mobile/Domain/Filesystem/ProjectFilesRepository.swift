@@ -54,26 +54,36 @@ nonisolated struct DefaultProjectFilesRepository: ProjectFilesRepository, Sendab
     }
 
     func readFile(worktree: String, relativePath: String) async throws -> ProjectFileContent {
+        try await Self.read(api: api, protocolProvider: protocolProvider, worktree: worktree, relativePath: relativePath)
+    }
+
+    /// `@concurrent` keeps streaming and decoding off the caller's actor (the Files Screen Model
+    /// is MainActor) while staying a structured call, so cancelling the caller (closing a tab,
+    /// popping the viewer, retrying, leaving Files) cancels the request too.
+    @concurrent
+    private static func read(
+        api: FilesystemAPIClient,
+        protocolProvider: @Sendable () async -> ServerProtocol,
+        worktree: String,
+        relativePath: String
+    ) async throws -> ProjectFileContent {
         let path = ProjectPaths.normalize(relativePath)
         let name = ProjectPaths.name(of: path)
-        let api = api
-        let protocolProvider = protocolProvider
-        // Streaming and decoding stay off the main actor.
-        return try await Task.detached(priority: .userInitiated) {
-            try await Self.mapErrors {
-                if await protocolProvider() == .v2 {
-                    return try await Self.readV2(api: api, worktree: worktree, path: path, name: name)
-                }
-                let body = try await api.readProjectFile(
-                    worktree: worktree,
-                    relativePath: path,
-                    limit: ProjectFileLimits.maxV1ResponseBytes
-                )
-                if body.exceededLimit { return .binary(mimeType: nil, byteCount: nil) }
-                let dto = try JSONDecoder().decode(FileContentDTO.self, from: body.data)
-                return ProjectFileContentDecoder.content(fromV1: dto, fileName: name)
+        return try await mapErrors {
+            if await protocolProvider() == .v2 {
+                return try await readV2(api: api, worktree: worktree, path: path, name: name)
             }
-        }.value
+            let body = try await api.readProjectFile(
+                worktree: worktree,
+                relativePath: path,
+                limit: ProjectFileLimits.maxV1ResponseBytes
+            )
+            // The JSON body size is not the file size, so the count stays unknown.
+            if body.exceededLimit { return .tooLarge(byteCount: nil) }
+            try Task.checkCancellation()
+            let dto = try JSONDecoder().decode(FileContentDTO.self, from: body.data)
+            return ProjectFileContentDecoder.content(fromV1: dto, fileName: name)
+        }
     }
 
     private static func readV2(
@@ -92,6 +102,7 @@ nonisolated struct DefaultProjectFilesRepository: ProjectFilesRepository, Sendab
             return ProjectFileContentDecoder.image(
                 fromBytes: body.data,
                 exceededLimit: body.exceededLimit,
+                totalBytes: body.expectedContentLength,
                 mimeType: ProjectFileContentDecoder.normalizedMimeType(body.contentType),
                 fileName: name
             )

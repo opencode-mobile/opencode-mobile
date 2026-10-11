@@ -53,6 +53,7 @@ enum ComponentGalleryEntryID: String, Hashable {
     case unifiedDiff
     case codeFile
     case treeRow
+    case fileTabs
     case button
     case textInput
     case serverAddressInput
@@ -433,5 +434,11 @@ let componentGalleryEntries = [
         title: "Tree Row",
         description: "File tree row with depth indent, disclosure, icon, and selected, dimmed, or loading states.",
         category: .lists
+    ),
+    ComponentGalleryEntry(
+        id: .fileTabs,
+        title: "File Tabs",
+        description: "Open files in the tablet viewer, with close buttons.",
+        category: .navigation
     ),
 ]

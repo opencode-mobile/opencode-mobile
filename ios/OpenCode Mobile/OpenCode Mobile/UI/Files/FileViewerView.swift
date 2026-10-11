@@ -1,3 +1,4 @@
+import ImageIO
 import SwiftUI
 import UIKit
 
@@ -124,8 +125,14 @@ struct FileViewerContent: View {
             OpenCodeEmptyState(title: "Empty file", message: "This file has no content.", icon: .description)
         case let .binary(mimeType):
             Self.binaryPlaceholder(mimeType: mimeType)
+        case let .tooLarge(byteCount):
+            OpenCodeEmptyState(
+                title: FileViewerCopy.tooLargeTitle,
+                message: FileViewerCopy.tooLargeDetail(byteCount: byteCount),
+                icon: .description
+            )
         case let .image(data, mimeType):
-            FileImagePreview(data: data, mimeType: mimeType)
+            FileImagePreview(relativePath: relativePath, data: data, mimeType: mimeType)
         case let .text(document):
             textContent(viewer, document: document)
         }
@@ -161,10 +168,7 @@ struct FileViewerContent: View {
                         lines: document.lines,
                         lineSpans: viewer.lineSpans,
                         wrapsLines: viewModel.state.wrapLines,
-                        maxLineLength: document.maxLineLength,
-                        onLineAppear: { line in
-                            viewModel.codeLineAppeared(relativePath, line: line)
-                        }
+                        maxLineLength: document.maxLineLength
                     )
                 }
             }
@@ -209,8 +213,10 @@ struct FileViewerContent: View {
     }
 }
 
-/// Fitted image preview. Decodes off the main actor; undecodable data shows the binary placeholder.
+/// Fitted image preview. Decodes a downsampled bitmap off the main actor; undecodable data
+/// shows the binary placeholder.
 private struct FileImagePreview: View {
+    let relativePath: String
     let data: Data
     let mimeType: String
 
@@ -232,13 +238,37 @@ private struct FileImagePreview: View {
                 OpenCodeStatusStack(spinner: "Loading image")
             }
         }
-        .task(id: data) {
-            let source = data
-            let decoded = await Task.detached(priority: .userInitiated) {
-                UIImage(data: source)?.preparingForDisplay()
-            }.value
-            image = decoded
+        // Path and size identify the bytes without comparing up to 10 MB of data per update.
+        .task(id: "\(relativePath):\(data.count)") {
+            let decoded = await FileImageDownsampler.image(from: data)
+            guard !Task.isCancelled else { return }
+            image = decoded.map { UIImage(cgImage: $0) }
             decodeFailed = decoded == nil
         }
+    }
+}
+
+/// Decodes image bytes at most `maxPixelSize` on the longer side, so a huge photo never
+/// becomes a full-resolution bitmap (Android samples down to the same size).
+nonisolated enum FileImageDownsampler {
+    static let maxPixelSize = 4096
+
+    @concurrent
+    static func image(from data: Data, maxPixelSize: Int = maxPixelSize) async -> CGImage? {
+        downsample(data, maxPixelSize: maxPixelSize)
+    }
+
+    static func downsample(_ data: Data, maxPixelSize: Int = maxPixelSize) -> CGImage? {
+        let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
+        guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions),
+              CGImageSourceGetCount(source) > 0
+        else { return nil }
+        let thumbnailOptions = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
+        ] as CFDictionary
+        return CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions)
     }
 }

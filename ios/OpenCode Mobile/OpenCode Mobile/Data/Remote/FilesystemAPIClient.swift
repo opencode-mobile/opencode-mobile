@@ -132,58 +132,32 @@ nonisolated struct FilesystemAPIClient: Sendable {
         return components.url ?? url
     }
 
-    /// Streams the body and stops after `limit + 1` bytes so callers can tell a cut body apart.
+    /// Collects the body in the chunks URLSession delivers and stops after `limit + 1` bytes, so
+    /// callers can tell a cut body apart. Cancelling the calling task cancels the request.
     private func boundedData(for request: URLRequest, limit: Int) async throws -> BoundedHTTPBody {
         let startedAt = OpenCodeAPITrace.start(request)
-        let bytes: URLSession.AsyncBytes
-        let response: URLResponse
+        let result: BoundedBodyCollector.Result
         do {
-            (bytes, response) = try await urlSession.bytes(for: request)
+            result = try await BoundedBodyCollector.load(request, in: urlSession, limit: limit)
+        } catch ProjectsAPIError.invalidResponse {
+            OpenCodeAPITrace.invalidResponse(request, startedAt: startedAt)
+            throw ProjectsAPIError.invalidResponse
         } catch {
             OpenCodeAPITrace.failure(request, error: error, startedAt: startedAt)
             throw error
         }
-        guard let http = response as? HTTPURLResponse else {
-            OpenCodeAPITrace.invalidResponse(request, startedAt: startedAt)
-            bytes.task.cancel()
-            throw ProjectsAPIError.invalidResponse
-        }
+        let http = result.response
         OpenCodeAPITrace.finish(request, statusCode: http.statusCode, startedAt: startedAt)
         guard (200 ..< 300).contains(http.statusCode) else {
-            bytes.task.cancel()
             throw ProjectsAPIError.httpStatus(http.statusCode, nil)
         }
-        var data = Data()
-        if http.expectedContentLength > 0 {
-            data.reserveCapacity(Int(min(Int64(limit + 1), http.expectedContentLength)))
-        }
-        var chunk: [UInt8] = []
-        chunk.reserveCapacity(64 * 1024)
-        var exceeded = false
-        do {
-            for try await byte in bytes {
-                chunk.append(byte)
-                if chunk.count == 64 * 1024 {
-                    data.append(contentsOf: chunk)
-                    chunk.removeAll(keepingCapacity: true)
-                }
-                if data.count + chunk.count > limit {
-                    exceeded = true
-                    break
-                }
-            }
-        } catch {
-            OpenCodeAPITrace.failure(request, error: error, startedAt: startedAt)
-            throw error
-        }
-        data.append(contentsOf: chunk)
-        if exceeded { bytes.task.cancel() }
         return BoundedHTTPBody(
-            data: data,
+            data: result.data,
             statusCode: http.statusCode,
             contentType: http.value(forHTTPHeaderField: "Content-Type"),
             contentRange: http.value(forHTTPHeaderField: "Content-Range"),
-            exceededLimit: exceeded
+            expectedContentLength: http.expectedContentLength > 0 ? Int(http.expectedContentLength) : nil,
+            exceededLimit: result.exceededLimit
         )
     }
 
@@ -243,6 +217,142 @@ nonisolated struct BoundedHTTPBody: Sendable {
     let statusCode: Int
     let contentType: String?
     let contentRange: String?
+    /// `Content-Length` when the server sent one.
+    let expectedContentLength: Int?
     /// True when the server sent more than the limit; `data` then holds `limit + 1` bytes.
     let exceededLimit: Bool
+}
+
+/// Per-task URLSession delegate that appends `didReceive data` chunks and cancels the task once
+/// more than `limit` bytes arrived. A non-2xx status is returned without reading the body.
+nonisolated final class BoundedBodyCollector: NSObject, URLSessionDataDelegate, @unchecked Sendable {
+    struct Result: Sendable {
+        let response: HTTPURLResponse
+        let data: Data
+        let exceededLimit: Bool
+    }
+
+    private let limit: Int
+    private let lock = NSLock()
+    private var task: URLSessionDataTask?
+    private var continuation: CheckedContinuation<Result, Error>?
+    private var response: HTTPURLResponse?
+    private var data = Data()
+    private var exceeded = false
+    private var cancelled = false
+    private var finished = false
+
+    private init(limit: Int) {
+        self.limit = limit
+    }
+
+    static func load(_ request: URLRequest, in session: URLSession, limit: Int) async throws -> Result {
+        let collector = BoundedBodyCollector(limit: limit)
+        let task = session.dataTask(with: request)
+        task.delegate = collector
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                collector.start(task, continuation: continuation)
+            }
+        } onCancel: {
+            collector.cancel()
+        }
+    }
+
+    private func start(_ task: URLSessionDataTask, continuation: CheckedContinuation<Result, Error>) {
+        lock.lock()
+        if cancelled {
+            finished = true
+            lock.unlock()
+            continuation.resume(throwing: CancellationError())
+            return
+        }
+        self.task = task
+        self.continuation = continuation
+        lock.unlock()
+        task.resume()
+    }
+
+    private func cancel() {
+        lock.lock()
+        cancelled = true
+        let task = task
+        lock.unlock()
+        task?.cancel()
+    }
+
+    /// Resumes the caller once; later callbacks are ignored.
+    private func finish(_ outcome: Swift.Result<Result, Error>) {
+        lock.lock()
+        guard !finished, let continuation else {
+            lock.unlock()
+            return
+        }
+        finished = true
+        self.continuation = nil
+        lock.unlock()
+        continuation.resume(with: outcome)
+    }
+
+    func urlSession(
+        _: URLSession,
+        dataTask _: URLSessionDataTask,
+        didReceive response: URLResponse,
+        completionHandler: @escaping @Sendable (URLSession.ResponseDisposition) -> Void
+    ) {
+        guard let http = response as? HTTPURLResponse else {
+            completionHandler(.cancel)
+            finish(.failure(ProjectsAPIError.invalidResponse))
+            return
+        }
+        guard (200 ..< 300).contains(http.statusCode) else {
+            completionHandler(.cancel)
+            finish(.success(Result(response: http, data: Data(), exceededLimit: false)))
+            return
+        }
+        lock.lock()
+        self.response = http
+        if http.expectedContentLength > 0 {
+            data.reserveCapacity(Int(min(Int64(limit + 1), http.expectedContentLength)))
+        }
+        lock.unlock()
+        completionHandler(.allow)
+    }
+
+    func urlSession(_: URLSession, dataTask: URLSessionDataTask, didReceive chunk: Data) {
+        lock.lock()
+        guard !finished, !exceeded, let response else {
+            lock.unlock()
+            return
+        }
+        let room = limit + 1 - data.count
+        if chunk.count < room {
+            data.append(chunk)
+            lock.unlock()
+            return
+        }
+        data.append(chunk.prefix(room))
+        exceeded = true
+        let result = Result(response: response, data: data, exceededLimit: true)
+        lock.unlock()
+        dataTask.cancel()
+        finish(.success(result))
+    }
+
+    func urlSession(_: URLSession, task _: URLSessionTask, didCompleteWithError error: Error?) {
+        lock.lock()
+        let response = response
+        let data = data
+        let wasCancelled = cancelled
+        lock.unlock()
+        if wasCancelled {
+            finish(.failure(CancellationError()))
+        } else if let error {
+            finish(.failure(error))
+        } else if let response {
+            finish(.success(Result(response: response, data: data, exceededLimit: false)))
+        } else {
+            finish(.failure(ProjectsAPIError.invalidResponse))
+        }
+    }
 }

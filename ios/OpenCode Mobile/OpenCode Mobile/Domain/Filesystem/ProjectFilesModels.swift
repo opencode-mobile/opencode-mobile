@@ -28,6 +28,8 @@ nonisolated enum ProjectFileContent: Equatable, Sendable {
     case text(String, isTruncated: Bool, totalBytes: Int?)
     case image(Data, mimeType: String)
     case binary(mimeType: String?, byteCount: Int?)
+    /// Past a read cap (v1 response or image). `byteCount` is the file size when known.
+    case tooLarge(byteCount: Int?)
     case empty
 }
 
@@ -42,9 +44,9 @@ nonisolated enum ProjectFilesError: Error, Equatable, Sendable {
 nonisolated enum ProjectFileLimits {
     /// Text past this is cut (UTF-8 boundary, trailing partial line dropped).
     static let maxTextBytes = 1024 * 1024
-    /// Images past this show the binary placeholder.
+    /// Images past this show "Too large to preview".
     static let maxImageBytes = 10 * 1024 * 1024
-    /// v1 returns whole files as JSON; reading stops here.
+    /// v1 returns whole files as JSON; reading stops here and the file shows "Too large to preview".
     static let maxV1ResponseBytes = 16 * 1024 * 1024
     /// v2 text detection: a NUL byte in this prefix means binary.
     static let binarySniffBytes = 8 * 1024

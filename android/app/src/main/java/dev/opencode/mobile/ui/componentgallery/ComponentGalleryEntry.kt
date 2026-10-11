@@ -59,6 +59,7 @@ enum class ComponentGalleryEntryId {
     UnifiedDiff,
     CodeFile,
     TreeRow,
+    FileTabs,
     Button,
     TextInput,
     ServerAddressInput,
@@ -235,6 +236,12 @@ val ComponentGalleryEntries =
             title = "Tree Row",
             description = "File tree row with depth indent, disclosure, icon, and selected, dimmed, or loading states.",
             category = ComponentGalleryCategory.Lists,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.FileTabs,
+            title = "File Tabs",
+            description = "Open files in the tablet viewer, with close buttons.",
+            category = ComponentGalleryCategory.Navigation,
         ),
         ComponentGalleryEntry(
             id = ComponentGalleryEntryId.SelectableCard,

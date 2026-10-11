@@ -206,6 +206,20 @@ struct FilesViewModelTests {
         #expect(viewModel.state.viewers["README.md"]?.showsMarkdownSource == true)
     }
 
+    @Test func tooLargeContentShowsTooLargeBody() async {
+        let repository = FakeProjectFilesRepository()
+        repository.contents["huge.json"] = .tooLarge(byteCount: nil)
+        repository.contents["photo.jpg"] = .tooLarge(byteCount: 40_000_000)
+        let viewModel = makeViewModel(repository)
+
+        viewModel.openFile("huge.json")
+        viewModel.openFile("photo.jpg")
+        await waitUntil { viewModel.state.viewers.values.allSatisfy { $0.body != .loading } }
+
+        #expect(viewModel.state.viewers["huge.json"]?.body == .tooLarge(byteCount: nil))
+        #expect(viewModel.state.viewers["photo.jpg"]?.body == .tooLarge(byteCount: 40_000_000))
+    }
+
     @Test func fileErrorThenRetry() async {
         let repository = FakeProjectFilesRepository()
         repository.failingFiles = ["a.txt"]
@@ -250,23 +264,78 @@ struct FilesViewModelTests {
         #expect(viewModel.state.snackbar == nil)
     }
 
-    @Test func visibleLinesHighlightOncePerChunk() async {
+    @Test func plainTextShowsFirstThenOneWholeFilePassColorsIt() async {
         let repository = FakeProjectFilesRepository()
         repository.contents["a.swift"] = .text("let a = 1\nlet b = 2", isTruncated: false, totalBytes: 19)
         let highlighter = FakeHighlighter()
+        let gate = FilesAsyncGate()
+        highlighter.gate = gate
         let viewModel = makeViewModel(repository, highlighter: highlighter)
         viewModel.openFile("a.swift")
         await waitUntil { viewModel.state.viewers["a.swift"]?.textDocument != nil }
+        await waitUntil { highlighter.requests.count == 1 }
 
-        viewModel.codeLineAppeared("a.swift", line: 0)
-        viewModel.codeLineAppeared("a.swift", line: 1)
+        // Plain text is on screen while the pass runs.
+        #expect(viewModel.state.viewers["a.swift"]?.lineSpans.isEmpty == true)
+        gate.open()
         await waitUntil { viewModel.state.viewers["a.swift"]?.lineSpans.count == 2 }
 
         #expect(highlighter.requests.count == 1)
         #expect(highlighter.requests.first?.language == "swift")
         #expect(highlighter.requests.first?.source == "let a = 1\nlet b = 2")
+        #expect(highlighter.requests.first?.intent == .interactiveFinal)
         #expect(viewModel.state.viewers["a.swift"]?.lineSpans[0] == [NativeCodeSpan(start: 0, end: 3, role: .keyword)])
         #expect(viewModel.state.viewers["a.swift"]?.lineSpans[1] == [NativeCodeSpan(start: 0, end: 3, role: .keyword)])
+    }
+
+    @Test func blockCommentAcrossTheOld200LineChunkBoundaryStaysCommentThroughout() async {
+        var lines = (0..<195).map { "let v\($0) = \($0)" }
+        lines.append("/* starts at line 195")
+        lines += (196..<210).map { "   still a comment \($0)" }
+        lines.append("   ends at line 210 */")
+        lines += (211..<230).map { "let w\($0) = \($0)" }
+        let text = lines.joined(separator: "\n")
+        let repository = FakeProjectFilesRepository()
+        repository.contents["big.swift"] = .text(text, isTruncated: false, totalBytes: text.utf8.count)
+        let highlighter = FakeHighlighter()
+        let viewModel = makeViewModel(repository, highlighter: highlighter)
+
+        viewModel.openFile("big.swift")
+        await waitUntil { viewModel.state.viewers["big.swift"]?.lineSpans.count == lines.count }
+
+        #expect(highlighter.requests.count == 1)
+        #expect(highlighter.requests.first?.source == text)
+        let spans = viewModel.state.viewers["big.swift"]?.lineSpans ?? [:]
+        for line in 195...210 {
+            #expect(spans[line] == [NativeCodeSpan(start: 0, end: lines[line].utf16.count, role: .comment)], "line \(line)")
+        }
+        #expect(spans[211] == [NativeCodeSpan(start: 0, end: 3, role: .keyword)])
+    }
+
+    @Test(arguments: ["BudgetExceeded", "Failed", "Cancelled"])
+    func unattachableTextMateOutcomeFallsBackForTheWholeFile(outcome: String) async {
+        let repository = FakeProjectFilesRepository()
+        repository.contents["a.kt"] = .text("val a = 1\nval b = 2", isTruncated: false, totalBytes: 19)
+        let highlighter = FakeHighlighter()
+        highlighter.outcome = outcome
+        let fallbackCalls = FallbackRecorder()
+        let viewModel = makeViewModel(
+            repository,
+            highlighter: highlighter,
+            fallbackHighlighter: { language, source in
+                fallbackCalls.record(language: language, source: source)
+                return [NativeCodeSpan(start: 0, end: 3, role: .keyword), NativeCodeSpan(start: 10, end: 13, role: .keyword)]
+            }
+        )
+
+        viewModel.openFile("a.kt")
+        await waitUntil { viewModel.state.viewers["a.kt"]?.lineSpans.count == 2 }
+
+        #expect(highlighter.requests.count == 1)
+        #expect(fallbackCalls.calls.count == 1)
+        #expect(fallbackCalls.calls.first?.language == "kotlin")
+        #expect(fallbackCalls.calls.first?.source == "val a = 1\nval b = 2")
+        #expect(viewModel.state.viewers["a.kt"]?.lineSpans[1] == [NativeCodeSpan(start: 0, end: 3, role: .keyword)])
     }
 
     @Test func textMateOffUsesSemanticFallbackInsteadOfEngine() async {
@@ -284,9 +353,6 @@ struct FilesViewModelTests {
             }
         )
         viewModel.openFile("a.kt")
-        await waitUntil { viewModel.state.viewers["a.kt"]?.textDocument != nil }
-
-        viewModel.codeLineAppeared("a.kt", line: 0)
         await waitUntil { viewModel.state.viewers["a.kt"]?.lineSpans.count == 2 }
 
         #expect(highlighter.requests.isEmpty)
@@ -297,6 +363,55 @@ struct FilesViewModelTests {
         #expect(viewModel.state.viewers["a.kt"]?.lineSpans[1] == [NativeCodeSpan(start: 0, end: 3, role: .keyword)])
     }
 
+    @Test func closingTheTabCancelsThePendingPass() async {
+        let repository = FakeProjectFilesRepository()
+        repository.contents["a.swift"] = .text("let a = 1", isTruncated: false, totalBytes: 9)
+        let highlighter = FakeHighlighter()
+        highlighter.outcome = "BudgetExceeded"
+        let gate = FilesAsyncGate()
+        highlighter.gate = gate
+        let fallbackCalls = FallbackRecorder()
+        let viewModel = makeViewModel(
+            repository,
+            highlighter: highlighter,
+            fallbackHighlighter: { language, source in
+                fallbackCalls.record(language: language, source: source)
+                return []
+            }
+        )
+        viewModel.openFile("a.swift")
+        await waitUntil { highlighter.requests.count == 1 }
+
+        viewModel.closeTab("a.swift")
+        gate.open()
+        try? await Task.sleep(for: .milliseconds(50))
+
+        #expect(viewModel.state.viewers["a.swift"] == nil)
+        #expect(fallbackCalls.calls.isEmpty)
+    }
+
+    @Test func megabyteFileStaysResponsiveWhileHighlighting() async {
+        let line = String(repeating: "x", count: 99)
+        let text = Array(repeating: "let a = \(line)", count: 9_500).joined(separator: "\n") // ~1 MiB
+        let repository = FakeProjectFilesRepository()
+        repository.contents["big.swift"] = .text(text, isTruncated: false, totalBytes: text.utf8.count)
+        let highlighter = FakeHighlighter()
+        let gate = FilesAsyncGate()
+        highlighter.gate = gate
+        let viewModel = makeViewModel(repository, highlighter: highlighter)
+
+        viewModel.openFile("big.swift")
+        await waitUntil { viewModel.state.viewers["big.swift"]?.textDocument != nil }
+        // The main actor keeps serving the screen while the pass is pending.
+        viewModel.toggleWrap()
+        #expect(viewModel.state.wrapLines)
+        #expect(viewModel.state.viewers["big.swift"]?.textDocument?.lines.count == 9_500)
+
+        gate.open()
+        await waitUntil(iterations: 4_000) { viewModel.state.viewers["big.swift"]?.lineSpans.count == 9_500 }
+        #expect(viewModel.state.viewers["big.swift"]?.lineSpans[9_499] == [NativeCodeSpan(start: 0, end: 3, role: .keyword)])
+    }
+
     @Test func plainTextIsNeverSentToHighlighter() async {
         let repository = FakeProjectFilesRepository()
         repository.contents["LICENSE"] = .text("MIT", isTruncated: false, totalBytes: 3)
@@ -305,9 +420,9 @@ struct FilesViewModelTests {
         viewModel.openFile("LICENSE")
         await waitUntil { viewModel.state.viewers["LICENSE"]?.textDocument != nil }
 
-        viewModel.codeLineAppeared("LICENSE", line: 0)
-        await Task.yield()
+        try? await Task.sleep(for: .milliseconds(20))
         #expect(highlighter.requests.isEmpty)
+        #expect(viewModel.state.viewers["LICENSE"]?.lineSpans.isEmpty == true)
     }
 
     // MARK: Helpers
@@ -347,8 +462,8 @@ struct FilesViewModelTests {
         }
     }
 
-    private func waitUntil(_ condition: @MainActor () -> Bool) async {
-        for _ in 0..<400 {
+    private func waitUntil(iterations: Int = 400, _ condition: @MainActor () -> Bool) async {
+        for _ in 0..<iterations {
             if condition() { return }
             try? await Task.sleep(for: .milliseconds(5))
         }
@@ -437,9 +552,13 @@ private final class FallbackRecorder: @unchecked Sendable {
     }
 }
 
+/// Colors every `let` keyword and every `/* … */` block across the whole source, the way a
+/// grammar carries comment state from line to line.
 private final class FakeHighlighter: TextMateHighlighting, @unchecked Sendable {
     private let lock = NSLock()
     private var storedRequests: [TextMateHighlightRequest] = []
+    var outcome = "Highlighted"
+    var gate: FilesAsyncGate?
 
     var requests: [TextMateHighlightRequest] {
         lock.lock()
@@ -451,17 +570,25 @@ private final class FakeHighlighter: TextMateHighlighting, @unchecked Sendable {
         lock.lock()
         storedRequests.append(request)
         lock.unlock()
-        // Color every `let` keyword.
-        var spans: [NativeCodeSpan] = []
+        if let gate { await gate.wait() }
         let utf16 = Array(request.source.utf16)
-        let keyword = Array("let".utf16)
+        var spans: [NativeCodeSpan] = []
         var index = 0
-        while index + keyword.count <= utf16.count {
-            if Array(utf16[index..<index + keyword.count]) == keyword {
-                spans.append(NativeCodeSpan(start: index, end: index + keyword.count, role: .keyword))
+        while index < utf16.count {
+            if Self.matches(utf16, at: index, "/*") {
+                var end = index + 2
+                while end < utf16.count, !Self.matches(utf16, at: end, "*/") { end += 1 }
+                end = min(end + 2, utf16.count)
+                spans.append(NativeCodeSpan(start: index, end: end, role: .comment))
+                index = end
+            } else if Self.matches(utf16, at: index, "let") {
+                spans.append(NativeCodeSpan(start: index, end: index + 3, role: .keyword))
+                index += 3
+            } else {
+                index += 1
             }
-            index += 1
         }
+        if outcome != "Highlighted" { spans = [] }
         return TextMateHighlightResult(
             key: request.key,
             revision: request.revision,
@@ -469,10 +596,10 @@ private final class FakeHighlighter: TextMateHighlighting, @unchecked Sendable {
             canonicalLanguage: request.language,
             policyEpoch: request.policyEpoch,
             spans: spans,
-            outcome: "Highlighted",
+            outcome: outcome,
             diagnostics: [],
             observation: NativeTextMateParseObservation(
-                outcome: "Highlighted",
+                outcome: outcome,
                 messageCharacters: request.messageCharacters,
                 fenceCharacters: request.source.utf16.count,
                 fenceLines: 1,
@@ -484,5 +611,11 @@ private final class FakeHighlighter: TextMateHighlighting, @unchecked Sendable {
                 diagnosticKinds: []
             )
         )
+    }
+
+    private static func matches(_ utf16: [UInt16], at index: Int, _ token: String) -> Bool {
+        let pattern = Array(token.utf16)
+        guard index + pattern.count <= utf16.count else { return false }
+        return Array(utf16[index..<index + pattern.count]) == pattern
     }
 }

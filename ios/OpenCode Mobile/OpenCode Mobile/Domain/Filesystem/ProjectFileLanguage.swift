@@ -2,106 +2,127 @@ import Foundation
 
 /// A TextMate grammar language for the File Viewer. `id` is the canonical language name the
 /// shared engine resolves (`shared/markdown-core/.../textmate-grammars/manifest.json`).
+/// Android implements the same table; both are tested against
+/// `shared/file-languages/file-language-cases.json`, so change all three together.
 nonisolated struct ProjectFileLanguage: Equatable, Hashable, Sendable {
     let id: String
     let displayName: String
 
     static let plainTextName = "Plain text"
 
-    /// File name → language. Unknown → nil (plain text).
+    /// File name (or relative path) → language. Unknown → nil (plain text).
     static func forFileName(_ fileName: String) -> ProjectFileLanguage? {
-        let lowered = fileName.lowercased()
+        let name = fileName.split(separator: "/").last.map(String.init) ?? fileName
+        let lowered = name.lowercased()
         if let byName = fileNames[lowered] { return byName }
-        let ext = ProjectPaths.fileExtension(of: fileName)
+        if lowered.hasPrefix("dockerfile.") || lowered.hasPrefix("containerfile.") { return docker }
+        let ext = ProjectPaths.fileExtension(of: name)
         guard !ext.isEmpty else { return nil }
         return extensions[ext]
     }
 
+    private static let docker = ProjectFileLanguage(id: "docker", displayName: "Dockerfile")
+    private static let make = ProjectFileLanguage(id: "make", displayName: "Makefile")
+    private static let ruby = ProjectFileLanguage(id: "ruby", displayName: "Ruby")
+    private static let shell = ProjectFileLanguage(id: "shellscript", displayName: "Shell")
+
     private struct Entry {
-        let id: String
-        let displayName: String
-        let extensions: [String]
+        let language: ProjectFileLanguage
+        let keys: [String]
+
+        init(_ id: String, _ displayName: String, _ keys: [String]) {
+            language = ProjectFileLanguage(id: id, displayName: displayName)
+            self.keys = keys
+        }
+
+        init(_ language: ProjectFileLanguage, _ keys: [String]) {
+            self.language = language
+            self.keys = keys
+        }
     }
 
-    /// Manifest languages and their file-extension aliases (non-extension aliases such as
-    /// `c#` or `shell` are left out), plus a few common extensions the manifest names only
-    /// as embedded grammars (`h`, `hpp`, `jsx`, `tsx`, `htm`).
-    private static let entries: [Entry] = [
-        Entry(id: "kotlin", displayName: "Kotlin", extensions: ["kt", "kts"]),
-        Entry(id: "swift", displayName: "Swift", extensions: ["swift"]),
-        Entry(id: "typescript", displayName: "TypeScript", extensions: ["ts", "cts", "mts", "tsx"]),
-        Entry(id: "javascript", displayName: "JavaScript", extensions: ["js", "cjs", "mjs", "jsx"]),
-        Entry(id: "json", displayName: "JSON", extensions: ["json"]),
-        Entry(id: "markdown", displayName: "Markdown", extensions: ["md", "markdown"]),
-        Entry(id: "shellscript", displayName: "Shell", extensions: ["sh", "bash", "zsh"]),
-        Entry(id: "yaml", displayName: "YAML", extensions: ["yaml", "yml"]),
-        Entry(id: "css", displayName: "CSS", extensions: ["css"]),
-        Entry(id: "html", displayName: "HTML", extensions: ["html", "htm"]),
-        Entry(id: "python", displayName: "Python", extensions: ["py"]),
-        Entry(id: "rust", displayName: "Rust", extensions: ["rs"]),
-        Entry(id: "go", displayName: "Go", extensions: ["go"]),
-        Entry(id: "diff", displayName: "Diff", extensions: ["diff", "patch"]),
-        Entry(id: "java", displayName: "Java", extensions: ["java"]),
-        Entry(id: "csharp", displayName: "C#", extensions: ["cs"]),
-        Entry(id: "c", displayName: "C", extensions: ["c", "h"]),
-        Entry(id: "cpp", displayName: "C++", extensions: ["cpp", "cc", "cxx", "hpp", "hh", "hxx"]),
-        Entry(id: "ruby", displayName: "Ruby", extensions: ["rb"]),
-        Entry(id: "php", displayName: "PHP", extensions: ["php"]),
-        Entry(id: "sql", displayName: "SQL", extensions: ["sql"]),
-        Entry(id: "toml", displayName: "TOML", extensions: ["toml"]),
-        Entry(id: "xml", displayName: "XML", extensions: ["xml"]),
-        Entry(id: "scala", displayName: "Scala", extensions: ["scala"]),
-        Entry(id: "lua", displayName: "Lua", extensions: ["lua"]),
-        Entry(id: "docker", displayName: "Dockerfile", extensions: ["dockerfile"]),
-        Entry(id: "vue", displayName: "Vue", extensions: ["vue"]),
-        Entry(id: "svelte", displayName: "Svelte", extensions: ["svelte"]),
-        Entry(id: "graphql", displayName: "GraphQL", extensions: ["graphql", "gql"]),
-        Entry(id: "powershell", displayName: "PowerShell", extensions: ["ps1"]),
-        Entry(id: "perl", displayName: "Perl", extensions: ["pl", "pm"]),
-        Entry(id: "haskell", displayName: "Haskell", extensions: ["hs"]),
-        Entry(id: "elixir", displayName: "Elixir", extensions: ["ex", "exs"]),
-        Entry(id: "erlang", displayName: "Erlang", extensions: ["erl"]),
-        Entry(id: "r", displayName: "R", extensions: ["r"]),
-        Entry(id: "zig", displayName: "Zig", extensions: ["zig"]),
-        Entry(id: "dart", displayName: "Dart", extensions: ["dart"]),
-        Entry(id: "groovy", displayName: "Groovy", extensions: ["groovy", "gradle"]),
-        Entry(id: "objective-c", displayName: "Objective-C", extensions: ["m"]),
-        Entry(id: "clojure", displayName: "Clojure", extensions: ["clj", "cljs"]),
-        Entry(id: "coffee", displayName: "CoffeeScript", extensions: ["coffee"]),
-        Entry(id: "fortran-free-form", displayName: "Fortran (Free Form)", extensions: ["f90", "f95", "f03", "f08", "f18"]),
-        Entry(id: "fortran-fixed-form", displayName: "Fortran (Fixed Form)", extensions: ["f", "f77", "for"]),
-        Entry(id: "pascal", displayName: "Pascal", extensions: ["pas"]),
-        Entry(id: "vb", displayName: "Visual Basic", extensions: ["vb"]),
-        Entry(id: "asm", displayName: "Assembly", extensions: ["asm", "s"]),
-        Entry(id: "cobol", displayName: "COBOL", extensions: ["cob", "cbl"]),
-        Entry(id: "julia", displayName: "Julia", extensions: ["jl"]),
-        Entry(id: "sas", displayName: "SAS", extensions: ["sas"]),
-        Entry(id: "abap", displayName: "ABAP", extensions: ["abap"]),
-        Entry(id: "apex", displayName: "Apex", extensions: ["cls", "apex"]),
-        Entry(id: "crystal", displayName: "Crystal", extensions: ["cr"]),
-        Entry(id: "fsharp", displayName: "F#", extensions: ["fs", "fsx"]),
-        Entry(id: "awk", displayName: "AWK", extensions: ["awk"]),
-        Entry(id: "nim", displayName: "Nim", extensions: ["nim"]),
-        Entry(id: "ada", displayName: "Ada", extensions: ["ada", "adb", "ads"]),
-        Entry(id: "ocaml", displayName: "OCaml", extensions: ["ml", "mli"]),
-        Entry(id: "common-lisp", displayName: "Common Lisp", extensions: ["lisp"]),
-        Entry(id: "make", displayName: "Makefile", extensions: ["mk"]),
+    /// Lowercased extension → language. `.m` is Objective-C (mobile projects), not MATLAB.
+    private static let extensionEntries: [Entry] = [
+        Entry("kotlin", "Kotlin", ["kt", "kts"]),
+        Entry("swift", "Swift", ["swift"]),
+        Entry("typescript", "TypeScript", ["ts", "cts", "mts", "tsx"]),
+        Entry("javascript", "JavaScript", ["js", "cjs", "mjs", "jsx"]),
+        Entry("json", "JSON", ["json", "jsonc", "json5", "xcstrings"]),
+        Entry("markdown", "Markdown", ["md", "markdown"]),
+        Entry(shell, ["sh", "bash", "zsh", "command"]),
+        Entry("yaml", "YAML", ["yaml", "yml"]),
+        Entry("css", "CSS", ["css"]),
+        Entry("html", "HTML", ["html", "htm"]),
+        Entry("python", "Python", ["py", "pyi"]),
+        Entry("rust", "Rust", ["rs"]),
+        Entry("go", "Go", ["go"]),
+        Entry("diff", "Diff", ["diff", "patch"]),
+        Entry("java", "Java", ["java"]),
+        Entry("csharp", "C#", ["cs"]),
+        Entry("c", "C", ["c", "h"]),
+        Entry("cpp", "C++", ["cpp", "cc", "cxx", "hpp", "hh", "hxx"]),
+        Entry("objective-c", "Objective-C", ["m", "mm"]),
+        Entry(ruby, ["rb"]),
+        Entry("php", "PHP", ["php"]),
+        Entry("sql", "SQL", ["sql"]),
+        Entry("toml", "TOML", ["toml"]),
+        Entry("xml", "XML", ["xml", "plist", "svg", "xib", "storyboard", "entitlements", "xcprivacy", "xcscheme"]),
+        Entry("scala", "Scala", ["scala", "sc"]),
+        Entry("lua", "Lua", ["lua"]),
+        Entry(docker, ["dockerfile"]),
+        Entry("vue", "Vue", ["vue"]),
+        Entry("svelte", "Svelte", ["svelte"]),
+        Entry("graphql", "GraphQL", ["graphql", "gql"]),
+        Entry("powershell", "PowerShell", ["ps1", "psm1", "psd1"]),
+        Entry("perl", "Perl", ["pl", "pm"]),
+        Entry("haskell", "Haskell", ["hs"]),
+        Entry("elixir", "Elixir", ["ex", "exs"]),
+        Entry("erlang", "Erlang", ["erl", "hrl"]),
+        Entry("r", "R", ["r"]),
+        Entry("zig", "Zig", ["zig"]),
+        Entry("dart", "Dart", ["dart"]),
+        Entry("groovy", "Groovy", ["groovy", "gradle"]),
+        Entry("clojure", "Clojure", ["clj", "cljs", "cljc", "edn"]),
+        Entry("coffee", "CoffeeScript", ["coffee"]),
+        Entry("fortran-free-form", "Fortran (Free Form)", ["f90", "f95", "f03", "f08", "f18"]),
+        Entry("fortran-fixed-form", "Fortran (Fixed Form)", ["f", "f77", "for"]),
+        Entry("pascal", "Pascal", ["pas", "dpr"]),
+        Entry("vb", "Visual Basic", ["vb", "vbs"]),
+        Entry("asm", "Assembly", ["asm", "s"]),
+        Entry("cobol", "COBOL", ["cob", "cbl"]),
+        Entry("julia", "Julia", ["jl"]),
+        Entry("sas", "SAS", ["sas"]),
+        Entry("abap", "ABAP", ["abap"]),
+        Entry("apex", "Apex", ["cls", "trigger", "apex"]),
+        Entry("crystal", "Crystal", ["cr"]),
+        Entry("fsharp", "F#", ["fs", "fsi", "fsx"]),
+        Entry("awk", "AWK", ["awk"]),
+        Entry("nim", "Nim", ["nim"]),
+        Entry("ada", "Ada", ["ada", "adb", "ads"]),
+        Entry("smalltalk", "Smalltalk", ["st"]),
+        Entry("ocaml", "OCaml", ["ml", "mli"]),
+        Entry("common-lisp", "Common Lisp", ["lisp", "lsp"]),
+        Entry(make, ["mk", "mak"]),
     ]
 
-    private static let extensions: [String: ProjectFileLanguage] = {
+    /// Lowercased whole file name → language, checked before the extension.
+    private static let fileNameEntries: [Entry] = [
+        Entry(docker, ["dockerfile", "containerfile"]),
+        Entry(make, ["makefile", "gnumakefile"]),
+        Entry(ruby, ["gemfile", "rakefile", "podfile", "fastfile", "appfile", "brewfile"]),
+        Entry(shell, [".bashrc", ".bash_profile", ".zshrc", ".zprofile", ".zshenv", ".profile", "gradlew"]),
+    ]
+
+    static let extensions: [String: ProjectFileLanguage] = index(extensionEntries)
+    static let fileNames: [String: ProjectFileLanguage] = index(fileNameEntries)
+
+    private static func index(_ entries: [Entry]) -> [String: ProjectFileLanguage] {
         var map: [String: ProjectFileLanguage] = [:]
         for entry in entries {
-            let language = ProjectFileLanguage(id: entry.id, displayName: entry.displayName)
-            for ext in entry.extensions where map[ext] == nil {
-                map[ext] = language
+            for key in entry.keys where map[key] == nil {
+                map[key] = entry.language
             }
         }
         return map
-    }()
-
-    private static let fileNames: [String: ProjectFileLanguage] = [
-        "dockerfile": ProjectFileLanguage(id: "docker", displayName: "Dockerfile"),
-        "makefile": ProjectFileLanguage(id: "make", displayName: "Makefile"),
-        "gnumakefile": ProjectFileLanguage(id: "make", displayName: "Makefile"),
-    ]
+    }
 }

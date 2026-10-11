@@ -68,9 +68,17 @@ object OpenCodeCodeLines {
     const val TAB_WIDTH = 4
 
     /**
+     * Longer lines are cut for display and end with [CUT_MARKER], so a minified or single-line
+     * file cannot outgrow the layout width limit.
+     */
+    const val MAX_DISPLAY_LINE_LENGTH = 5_000
+
+    const val CUT_MARKER = " …"
+
+    /**
      * `\n` and `\r\n` end lines; a single trailing newline does not add an empty last line. Tabs
      * expand to [TAB_WIDTH] spaces so the monospace width stays predictable. Spans that cross
-     * lines are clipped per line.
+     * lines are clipped per line, and to the cut of a line past [MAX_DISPLAY_LINE_LENGTH].
      */
     fun split(
         source: String,
@@ -87,6 +95,13 @@ object OpenCodeCodeLines {
             val newline = source.indexOf('\n', lineStart).let { if (it < 0 || it > contentEnd) contentEnd else it }
             var lineEnd = newline
             if (lineEnd > lineStart && source[lineEnd - 1] == '\r') lineEnd--
+            // Expanded tabs only grow a line, so cutting the raw line first bounds the work too.
+            val shownEnd =
+                if (lineEnd - lineStart > MAX_DISPLAY_LINE_LENGTH) {
+                    safeCut(source, lineStart + MAX_DISPLAY_LINE_LENGTH)
+                } else {
+                    lineEnd
+                }
             while (nextSpan < sorted.size && sorted[nextSpan].start < lineEnd) {
                 active += sorted[nextSpan]
                 nextSpan++
@@ -95,15 +110,40 @@ object OpenCodeCodeLines {
             val lineSpans =
                 active.mapNotNull { span ->
                     val start = maxOf(span.start, lineStart) - lineStart
-                    val end = minOf(span.end, lineEnd) - lineStart
+                    val end = minOf(span.end, shownEnd) - lineStart
                     if (start < end) CodeSpan(start, end, span.role) else null
                 }
-            lines += expandTabs(source.substring(lineStart, lineEnd), lineSpans)
+            lines += displayLine(source.substring(lineStart, shownEnd), lineSpans, cut = shownEnd < lineEnd)
             if (newline >= contentEnd) break
             lineStart = newline + 1
         }
         return lines
     }
+
+    private fun displayLine(
+        text: String,
+        spans: List<CodeSpan>,
+        cut: Boolean,
+    ): OpenCodeCodeLine {
+        val expanded = expandTabs(text, spans)
+        if (expanded.text.length <= MAX_DISPLAY_LINE_LENGTH) {
+            return if (cut) expanded.copy(text = expanded.text + CUT_MARKER) else expanded
+        }
+        val end = safeCut(expanded.text, MAX_DISPLAY_LINE_LENGTH)
+        return OpenCodeCodeLine(
+            text = expanded.text.substring(0, end) + CUT_MARKER,
+            spans =
+                expanded.spans.mapNotNull { span ->
+                    if (span.start < end) CodeSpan(span.start, minOf(span.end, end), span.role) else null
+                },
+        )
+    }
+
+    /** [index] moved back one so a cut never splits a surrogate pair. */
+    private fun safeCut(
+        text: String,
+        index: Int,
+    ): Int = if (index in 1 until text.length && text[index - 1].isHighSurrogate()) index - 1 else index
 
     private fun expandTabs(
         text: String,

@@ -28,8 +28,12 @@ object ProjectFileContentDecoder {
         if (type == "binary" || isBase64) {
             val bytes = if (isBase64) runCatching { Base64.Default.decode(content) }.getOrNull() else null
             if (bytes != null && bytes.isEmpty()) return ProjectFileContent.Empty
-            if (bytes != null && isImage(path, mimeType) && bytes.size <= ProjectFileLimits.IMAGE_PREVIEW_BYTES) {
-                return ProjectFileContent.Image(bytes, mimeType)
+            if (bytes != null && isImage(path, mimeType)) {
+                return if (bytes.size <= ProjectFileLimits.IMAGE_PREVIEW_BYTES) {
+                    ProjectFileContent.Image(bytes, mimeType)
+                } else {
+                    ProjectFileContent.TooLarge(byteCount = bytes.size.toLong())
+                }
             }
             return ProjectFileContent.Binary(mimeType = mimeType, byteCount = bytes?.size?.toLong())
         }
@@ -43,8 +47,8 @@ object ProjectFileContentDecoder {
         return ProjectFileContent.Text(prefix, isTruncated = true, totalBytes = bytes.size.toLong())
     }
 
-    /** v1 body that went past [ProjectFileLimits.V1_BODY_BYTES]. */
-    fun v1TooLarge(): ProjectFileContent = ProjectFileContent.Binary()
+    /** v1 body that went past [ProjectFileLimits.V1_BODY_BYTES]; the file size is unknown. */
+    fun v1TooLarge(): ProjectFileContent = ProjectFileContent.TooLarge(byteCount = null)
 
     /**
      * v2 `/api/fs/read` bytes. [bytes] holds at most the requested limit + 1; [exceededLimit] means
@@ -61,7 +65,7 @@ object ProjectFileContentDecoder {
         if (bytes.isEmpty() && !exceededLimit) return ProjectFileContent.Empty
         if (requestedAsImage) {
             return if (exceededLimit) {
-                ProjectFileContent.Binary(mimeType = contentType, byteCount = totalBytes)
+                ProjectFileContent.TooLarge(byteCount = totalBytes)
             } else {
                 ProjectFileContent.Image(bytes, contentType)
             }
@@ -91,22 +95,45 @@ object ProjectFileContentDecoder {
     }
 
     /**
-     * First [limit] bytes cut back to a UTF-8 boundary, strictly decoded, with the trailing partial
-     * line dropped. Null when the prefix is not valid UTF-8.
+     * First [limit] bytes of content known to be cut, backed off to a UTF-8 boundary, strictly
+     * decoded, with the trailing partial line dropped. Null when the prefix is not valid UTF-8.
      */
     fun truncatedText(
         bytes: ByteArray,
         limit: Int,
     ): String? {
-        var end = minOf(limit, bytes.size)
-        if (end < bytes.size) {
-            // bytes[end] is the first byte left out; a continuation byte means a split character.
-            while (end > 0 && (bytes[end].toInt() and 0xC0) == 0x80) end--
-        }
+        val end = utf8BoundaryAtOrBefore(bytes, minOf(limit, bytes.size))
         val text = decodeStrictUtf8(bytes, end) ?: return null
         val lastNewline = text.lastIndexOf('\n')
         return if (lastNewline >= 0) text.substring(0, lastNewline) else text
     }
+
+    /**
+     * [end] moved back so `bytes[0, end)` does not finish inside a multibyte sequence. The cut
+     * may sit at the end of the array (a 206 body of exactly the requested range), so this looks
+     * back from `end - 1` for the lead byte instead of forward at the first byte left out.
+     * Malformed input is left for the strict decoder to reject.
+     */
+    internal fun utf8BoundaryAtOrBefore(
+        bytes: ByteArray,
+        end: Int,
+    ): Int {
+        var lead = end - 1
+        while (lead >= 0 && end - lead < UTF8_MAX_SEQUENCE && bytes[lead].isContinuation()) lead--
+        if (lead < 0) return end
+        val length =
+            when (bytes[lead].toInt() and 0xFF) {
+                in 0xC0..0xDF -> 2
+                in 0xE0..0xEF -> 3
+                in 0xF0..0xF7 -> 4
+                else -> return end
+            }
+        return if (lead + length > end) lead else end
+    }
+
+    private fun Byte.isContinuation(): Boolean = (toInt() and 0xC0) == 0x80
+
+    private const val UTF8_MAX_SEQUENCE = 4
 
     fun decodeStrictUtf8(
         bytes: ByteArray,

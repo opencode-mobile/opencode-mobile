@@ -116,10 +116,12 @@ class DefaultProjectFilesRepository
                         rangeBytes = ProjectFileLimits.TEXT_PREVIEW_BYTES,
                     )
                 }
-            // A 206 that covers the whole range still hides the rest of the file.
-            val exceeded =
-                read.exceededLimit ||
-                    (read.isPartial && (read.totalBytes ?: 0L) > read.bytes.size)
+            // A 206 that covers the whole range still hides the rest of the file. Without a total
+            // (`bytes 0-n/*`), a body that fills the range is treated as cut.
+            val partialCut =
+                read.isPartial &&
+                    (read.totalBytes?.let { it > read.bytes.size } ?: (read.bytes.size >= ProjectFileLimits.TEXT_PREVIEW_BYTES))
+            val exceeded = read.exceededLimit || partialCut
             return ProjectFileContentDecoder.decodeV2(
                 path = path,
                 bytes = read.bytes,

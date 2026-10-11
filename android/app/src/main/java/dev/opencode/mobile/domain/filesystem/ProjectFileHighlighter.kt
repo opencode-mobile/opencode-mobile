@@ -8,6 +8,8 @@ import dev.opencode.mobile.markdown.HighlightRequest
 import dev.opencode.mobile.markdown.HighlightRevision
 import dev.opencode.mobile.markdown.OpenCodeSemanticFallbackHighlighter
 import dev.opencode.mobile.markdown.TextMateHighlightingEngine
+import dev.opencode.mobile.markdown.TextMateParseOutcome
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicLong
@@ -23,26 +25,31 @@ interface ProjectFileHighlighter {
 }
 
 /**
- * The shared TextMate engine (same one Session Chat code fences use), or the semantic fallback
- * when the user turned TextMate off.
+ * One whole-file pass on the shared TextMate engine (same one Session Chat code fences use), off
+ * the main thread. The semantic fallback covers a TextMate result that is not attachable (failed,
+ * cancelled, or over budget, as in `attachTextMateResult`) and the user turning TextMate off.
  */
-class TextMateProjectFileHighlighter
+class TextMateProjectFileHighlighter internal constructor(
+    private val engine: TextMateHighlightingEngine,
+    private val workDispatcher: CoroutineDispatcher,
+    private val textMateEnabled: () -> Boolean,
+) : ProjectFileHighlighter {
     @Inject
-    constructor(
-        private val engine: TextMateHighlightingEngine,
-    ) : ProjectFileHighlighter {
-        private val revisions = AtomicLong(0)
+    constructor(engine: TextMateHighlightingEngine) : this(
+        engine,
+        Dispatchers.Default,
+        { MarkdownHighlightPreferences.textMateEnabled },
+    )
 
-        override suspend fun highlight(
-            path: String,
-            grammar: String,
-            source: String,
-        ): List<CodeSpan> {
-            if (!MarkdownHighlightPreferences.textMateEnabled) {
-                return withContext(Dispatchers.Default) {
-                    OpenCodeSemanticFallbackHighlighter.highlight(grammar, source).spans
-                }
-            }
+    private val revisions = AtomicLong(0)
+
+    override suspend fun highlight(
+        path: String,
+        grammar: String,
+        source: String,
+    ): List<CodeSpan> =
+        withContext(workDispatcher) {
+            if (!textMateEnabled()) return@withContext fallback(grammar, source)
             val result =
                 engine.highlight(
                     HighlightRequest(
@@ -54,6 +61,21 @@ class TextMateProjectFileHighlighter
                         policyEpoch = MarkdownHighlightPreferences.epoch.toLong(),
                     ),
                 )
-            return result.spans
+            if (result.outcome in unattachableOutcomes) fallback(grammar, source) else result.spans
         }
+
+    private fun fallback(
+        grammar: String,
+        source: String,
+    ): List<CodeSpan> = OpenCodeSemanticFallbackHighlighter.highlight(grammar, source).spans
+
+    private companion object {
+        /** Mirrors the outcomes `attachTextMateResult` rejects for Session Chat fences. */
+        val unattachableOutcomes =
+            setOf(
+                TextMateParseOutcome.Failed,
+                TextMateParseOutcome.Cancelled,
+                TextMateParseOutcome.BudgetExceeded,
+            )
     }
+}

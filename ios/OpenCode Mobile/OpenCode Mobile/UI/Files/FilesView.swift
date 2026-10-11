@@ -307,7 +307,7 @@ struct FilesView: View {
     }
 }
 
-/// Trailing iPad pane: open-file tabs above the active file.
+/// Trailing iPad pane: open-file tabs on top, then the active file's header and body.
 private struct FilesTabbedViewer: View {
     let viewModel: FilesViewModel
     let detailControl: OpenCodeSplitPaneDetailControl
@@ -316,6 +316,24 @@ private struct FilesTabbedViewer: View {
     var body: some View {
         let active = viewModel.state.activeViewer
         VStack(spacing: 0) {
+            OpenCodeFileTabs(
+                tabs: viewModel.state.tabs.map { OpenCodeFileTab(id: $0.relativePath, title: $0.name) },
+                selectedTabId: viewModel.state.activePath,
+                onSelect: { path in
+                    ProductAnalytics.logUserAction(
+                        screenId: ProductAnalytics.Screen.files,
+                        actionId: ProductAnalytics.Action.filesSelectTab
+                    )
+                    viewModel.selectTab(path)
+                },
+                onClose: { path in
+                    ProductAnalytics.logUserAction(
+                        screenId: ProductAnalytics.Screen.files,
+                        actionId: ProductAnalytics.Action.filesCloseTab
+                    )
+                    viewModel.closeTab(path)
+                }
+            )
             OpenCodeTopBarOverflowHost(
                 isPresented: $menuPresented,
                 entries: active.map { FileViewerMenu.entries(viewModel: viewModel, relativePath: $0.relativePath, dismissMenu: { menuPresented = false }) } ?? []
@@ -327,27 +345,7 @@ private struct FilesTabbedViewer: View {
                     actions: active == nil ? [] : [
                         .icon(.moreVert, accessibilityLabel: "More options") { menuPresented = true },
                     ],
-                    showDivider: viewModel.state.tabs.isEmpty
-                )
-            }
-            if !viewModel.state.tabs.isEmpty {
-                FilesTabStrip(
-                    tabs: viewModel.state.tabs,
-                    activePath: viewModel.state.activePath,
-                    onSelect: { path in
-                        ProductAnalytics.logUserAction(
-                            screenId: ProductAnalytics.Screen.files,
-                            actionId: ProductAnalytics.Action.filesSelectTab
-                        )
-                        viewModel.selectTab(path)
-                    },
-                    onClose: { path in
-                        ProductAnalytics.logUserAction(
-                            screenId: ProductAnalytics.Screen.files,
-                            actionId: ProductAnalytics.Action.filesCloseTab
-                        )
-                        viewModel.closeTab(path)
-                    }
+                    showDivider: true
                 )
             }
             if let active {
@@ -363,73 +361,6 @@ private struct FilesTabbedViewer: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(OpenCodeColors.backgroundBase)
-    }
-}
-
-/// Feature-local tab strip for open files on iPad.
-private struct FilesTabStrip: View {
-    let tabs: [FilesViewerTab]
-    let activePath: String?
-    let onSelect: (String) -> Void
-    let onClose: (String) -> Void
-
-    var body: some View {
-        VStack(spacing: 0) {
-            ScrollViewReader { proxy in
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 4) {
-                        ForEach(tabs) { tab in
-                            tabView(tab)
-                                .id(tab.relativePath)
-                        }
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 6)
-                }
-                .onChange(of: activePath) { _, path in
-                    guard let path else { return }
-                    withAnimation { proxy.scrollTo(path) }
-                }
-            }
-            Rectangle()
-                .fill(OpenCodeColors.borderWeakerBase)
-                .frame(height: 1)
-        }
-    }
-
-    private func tabView(_ tab: FilesViewerTab) -> some View {
-        let isActive = tab.relativePath == activePath
-        return HStack(spacing: 4) {
-            Button {
-                onSelect(tab.relativePath)
-            } label: {
-                Text(tab.name)
-                    .font(OpenCodeTypography.caption)
-                    .foregroundStyle(isActive ? OpenCodeColors.textStrong : OpenCodeColors.textBase)
-                    .lineLimit(1)
-                    .padding(.leading, 10)
-                    .padding(.vertical, 6)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(tab.name)
-            .accessibilityAddTraits(isActive ? [.isButton, .isSelected] : .isButton)
-
-            Button {
-                onClose(tab.relativePath)
-            } label: {
-                OpenCodeIconImage(icon: .close, size: 14)
-                    .foregroundStyle(OpenCodeColors.iconWeakBase)
-                    .frame(width: 24, height: 24)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .padding(.trailing, 4)
-            .accessibilityLabel("Close \(tab.name)")
-        }
-        .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(isActive ? OpenCodeColors.surfaceRaisedBase : Color.clear)
-        )
     }
 }
 

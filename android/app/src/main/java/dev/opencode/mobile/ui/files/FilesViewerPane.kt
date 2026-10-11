@@ -3,23 +3,18 @@ package dev.opencode.mobile.ui.files
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -30,26 +25,19 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.selected
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductRouteScreenViewEffect
-import dev.opencode.mobile.theme.OpenCodeRadius
 import dev.opencode.mobile.theme.openCodeColor
-import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
 import dev.opencode.mobile.ui.components.OpenCodeCodeFile
 import dev.opencode.mobile.ui.components.OpenCodeEmptyState
 import dev.opencode.mobile.ui.components.OpenCodeEmptyStateAction
+import dev.opencode.mobile.ui.components.OpenCodeFilterTab
+import dev.opencode.mobile.ui.components.OpenCodeFilterTabs
 import dev.opencode.mobile.ui.components.OpenCodeInlineNotice
 import dev.opencode.mobile.ui.components.OpenCodeInlineNoticeVariant
 import dev.opencode.mobile.ui.components.OpenCodeOverflowMenuEntry
@@ -141,6 +129,14 @@ private fun FilesViewerBody(
         is FilesViewerContent.Text -> TextContent(viewer, content, wrapLines, onToggleMarkdownSource)
         is FilesViewerContent.Image -> ImageContent(content)
         is FilesViewerContent.Binary -> BinaryPlaceholder(content.mimeType)
+        is FilesViewerContent.TooLarge ->
+            Centered {
+                OpenCodeEmptyState(
+                    title = content.title,
+                    message = content.message,
+                    icon = OpenCodeIcons.Description,
+                )
+            }
         FilesViewerContent.Empty ->
             Centered {
                 OpenCodeEmptyState(
@@ -196,11 +192,18 @@ private fun TextContent(
                 .height(1.dp)
                 .background(openCodeColor("border-weaker-base")),
         )
+        // Filter Tabs bring their own row padding, so the footer drops its end and vertical inset.
+        val hasModeTabs = content.markdown != null
         Row(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .padding(
+                        start = 16.dp,
+                        end = if (hasModeTabs) 0.dp else 16.dp,
+                        top = if (hasModeTabs) 0.dp else 8.dp,
+                        bottom = if (hasModeTabs) 0.dp else 8.dp,
+                    ),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -212,16 +215,14 @@ private fun TextContent(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            if (content.markdown != null) {
-                OpenCodeChoiceBadge(
-                    label = "Preview",
-                    selected = !viewer.showsMarkdownSource,
-                    onClick = { if (viewer.showsMarkdownSource) onToggleMarkdownSource() },
-                )
-                OpenCodeChoiceBadge(
-                    label = "Source",
-                    selected = viewer.showsMarkdownSource,
-                    onClick = { if (!viewer.showsMarkdownSource) onToggleMarkdownSource() },
+            if (hasModeTabs) {
+                OpenCodeFilterTabs(
+                    tabs = MarkdownModeTabs,
+                    selectedTabId = if (viewer.showsMarkdownSource) MARKDOWN_SOURCE_TAB else MARKDOWN_PREVIEW_TAB,
+                    onTabSelected = { id ->
+                        if ((id == MARKDOWN_SOURCE_TAB) != viewer.showsMarkdownSource) onToggleMarkdownSource()
+                    },
+                    modifier = Modifier.width(IntrinsicSize.Max),
                 )
             }
         }
@@ -279,6 +280,15 @@ private fun decodeSampledBitmap(bytes: ByteArray): ImageBitmap? =
 
 private const val MAX_IMAGE_DIMENSION = 4096
 
+private const val MARKDOWN_PREVIEW_TAB = "preview"
+private const val MARKDOWN_SOURCE_TAB = "source"
+
+private val MarkdownModeTabs =
+    listOf(
+        OpenCodeFilterTab(id = MARKDOWN_PREVIEW_TAB, title = "Preview"),
+        OpenCodeFilterTab(id = MARKDOWN_SOURCE_TAB, title = "Source"),
+    )
+
 @Composable
 private fun BinaryPlaceholder(mimeType: String?) {
     Centered {
@@ -293,89 +303,4 @@ private fun BinaryPlaceholder(mimeType: String?) {
 @Composable
 private fun Centered(content: @Composable () -> Unit) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { content() }
-}
-
-/** Open files on split layouts: tap to switch, × to close. */
-@Composable
-internal fun FilesTabStrip(
-    tabs: List<String>,
-    activePath: String?,
-    onSelect: (String) -> Unit,
-    onClose: (String) -> Unit,
-) {
-    Column(Modifier.fillMaxWidth()) {
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            tabs.forEach { path ->
-                FilesTab(
-                    name = path.substringAfterLast('/'),
-                    active = path == activePath,
-                    onSelect = { onSelect(path) },
-                    onClose = { onClose(path) },
-                )
-            }
-        }
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .height(1.dp)
-                .background(openCodeColor("border-weaker-base")),
-        )
-    }
-}
-
-@Composable
-private fun FilesTab(
-    name: String,
-    active: Boolean,
-    onSelect: () -> Unit,
-    onClose: () -> Unit,
-) {
-    val shape = RoundedCornerShape(OpenCodeRadius.small)
-    Row(
-        modifier =
-            Modifier
-                .clip(shape)
-                .background(if (active) openCodeColor("surface-raised-base") else Color.Transparent, shape)
-                .border(1.dp, if (active) openCodeColor("border-weak-base") else Color.Transparent, shape)
-                .clickable(onClick = onSelect)
-                .semantics {
-                    role = Role.Tab
-                    selected = active
-                    contentDescription = name
-                }.padding(start = 10.dp, end = 2.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = name,
-            modifier = Modifier.widthIn(max = 180.dp),
-            style = MaterialTheme.typography.labelLarge,
-            color = if (active) openCodeColor("text-strong") else openCodeColor("text-weak"),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Box(
-            modifier =
-                Modifier
-                    .size(32.dp)
-                    .clip(shape)
-                    .clickable(onClick = onClose)
-                    .semantics { contentDescription = "Close $name" },
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = OpenCodeIcons.Close,
-                contentDescription = null,
-                modifier = Modifier.size(14.dp),
-                tint = openCodeColor("icon-base"),
-            )
-        }
-    }
 }

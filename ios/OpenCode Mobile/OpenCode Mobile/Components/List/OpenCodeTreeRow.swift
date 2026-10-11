@@ -26,7 +26,7 @@ enum OpenCodeTreeRowState: Equatable {
 }
 
 /// One row of a file tree: depth indent, disclosure, leading icon, title, optional subtitle,
-/// and an optional dimmed treatment with a small tag (such as git-ignored entries).
+/// and an optional dimmed treatment with a small trailing tag (such as git-ignored entries).
 struct OpenCodeTreeRow: View {
     let title: String
     let subtitle: String?
@@ -86,15 +86,17 @@ struct OpenCodeTreeRow: View {
                     }
                 }
                 .opacity(isDimmed ? OpenCodeTreeRowMetrics.dimmedOpacity : 1)
+                Spacer(minLength: 0)
                 if let tag {
                     Text(tag)
                         .font(OpenCodeTypography.caption)
                         .foregroundStyle(OpenCodeColors.textWeak)
+                        .lineLimit(1)
+                        .fixedSize()
                         .padding(.horizontal, 6)
                         .padding(.vertical, 1)
                         .background(OpenCodeColors.surfaceRaisedBase, in: Capsule())
                 }
-                Spacer(minLength: 0)
                 if state == .loading {
                     ProgressView()
                         .controlSize(.small)

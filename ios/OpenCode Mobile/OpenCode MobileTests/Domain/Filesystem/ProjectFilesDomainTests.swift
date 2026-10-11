@@ -65,43 +65,34 @@ struct ProjectFileContentDecoderTests {
         #expect(early == .binary(mimeType: "x/y", byteCount: 2))
     }
 
-    @Test func v1Base64ImageOverCapIsBinary() {
+    @Test func v1Base64ImageOverCapIsTooLarge() {
         let big = Data(count: ProjectFileLimits.maxImageBytes + 1)
         let dto = FileContentDTO(type: "binary", content: big.base64EncodedString(), encoding: "base64", mimeType: "image/png")
-        #expect(ProjectFileContentDecoder.content(fromV1: dto, fileName: "a.png") == .binary(mimeType: "image/png", byteCount: big.count))
+        #expect(ProjectFileContentDecoder.content(fromV1: dto, fileName: "a.png") == .tooLarge(byteCount: big.count))
+    }
+
+    @Test func v1Base64NonImageOverImageCapStaysBinary() {
+        let big = Data(count: ProjectFileLimits.maxImageBytes + 1)
+        let dto = FileContentDTO(type: "binary", content: big.base64EncodedString(), encoding: "base64", mimeType: "application/zip")
+        #expect(ProjectFileContentDecoder.content(fromV1: dto, fileName: "a.zip") == .binary(mimeType: "application/zip", byteCount: big.count))
+    }
+
+    @Test func v2ImageOverCapIsTooLargeWithReportedSize() {
+        let cut = ProjectFileContentDecoder.image(
+            fromBytes: Data(count: 8),
+            exceededLimit: true,
+            totalBytes: 40_000_000,
+            mimeType: "image/png",
+            fileName: "a.png"
+        )
+        #expect(cut == .tooLarge(byteCount: 40_000_000))
+        let unknown = ProjectFileContentDecoder.image(fromBytes: Data(count: 8), exceededLimit: true, mimeType: nil, fileName: "a.png")
+        #expect(unknown == .tooLarge(byteCount: nil))
     }
 
     @Test func normalizedMimeTypeStripsParameters() {
         #expect(ProjectFileContentDecoder.normalizedMimeType("Text/Plain; charset=utf-8") == "text/plain")
         #expect(ProjectFileContentDecoder.normalizedMimeType("") == nil)
-    }
-}
-
-@MainActor
-struct ProjectFileLanguageTests {
-    @Test func mapsExtensionsAndAliasesToCanonicalLanguages() {
-        #expect(ProjectFileLanguage.forFileName("App.swift")?.id == "swift")
-        #expect(ProjectFileLanguage.forFileName("build.gradle.kts")?.id == "kotlin")
-        #expect(ProjectFileLanguage.forFileName("index.TS")?.id == "typescript")
-        #expect(ProjectFileLanguage.forFileName("main.rs")?.displayName == "Rust")
-        #expect(ProjectFileLanguage.forFileName("config.yml")?.id == "yaml")
-        #expect(ProjectFileLanguage.forFileName("run.zsh")?.id == "shellscript")
-        #expect(ProjectFileLanguage.forFileName("Program.cs")?.displayName == "C#")
-        #expect(ProjectFileLanguage.forFileName("README.md")?.id == "markdown")
-        #expect(ProjectFileLanguage.forFileName("notes.markdown")?.id == "markdown")
-        #expect(ProjectFileLanguage.forFileName("fix.patch")?.id == "diff")
-    }
-
-    @Test func mapsWellKnownFileNames() {
-        #expect(ProjectFileLanguage.forFileName("Dockerfile")?.id == "docker")
-        #expect(ProjectFileLanguage.forFileName("Makefile")?.id == "make")
-    }
-
-    @Test func unknownIsPlainText() {
-        #expect(ProjectFileLanguage.forFileName("LICENSE") == nil)
-        #expect(ProjectFileLanguage.forFileName("data.xyz") == nil)
-        #expect(ProjectFileLanguage.forFileName(".gitignore") == nil)
-        #expect(FileTextDocument(text: "a\nb\n", fileName: "LICENSE", isTruncated: false).metaText == "Plain text · 2 lines")
     }
 }
 
@@ -117,12 +108,10 @@ struct FileTextDocumentTests {
         #expect(FileTextDocument(text: "x", fileName: "a.json", isTruncated: false).metaText == "JSON · 1 line")
     }
 
-    @Test func chunksCoverEveryLineWithinBudget() {
-        let lines = (0..<450).map { "line \($0)" }
-        let chunks = FileTextDocument.chunks(for: lines)
-        #expect(chunks.first == 0..<200)
-        #expect(chunks.last?.upperBound == 450)
-        #expect(chunks.map(\.count).reduce(0, +) == 450)
+    @Test func veryLongLinesAreCutForDisplay() {
+        let long = String(repeating: "x", count: FileTextDocument.maxDisplayLineLength + 10)
+        let document = FileTextDocument(text: "a\n\(long)", fileName: "min.js", isTruncated: false)
+        #expect(document.lines[1] == String(repeating: "x", count: FileTextDocument.maxDisplayLineLength) + " …")
     }
 
     @Test func semanticFallbackColorsKeywordsLikeCodeFences() {

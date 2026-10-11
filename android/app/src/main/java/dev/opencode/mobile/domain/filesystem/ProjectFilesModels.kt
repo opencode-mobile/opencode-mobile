@@ -41,6 +41,11 @@ sealed interface ProjectFileContent {
     ) : ProjectFileContent
 
     data object Empty : ProjectFileContent
+
+    /** Past a read cap (v1 body or image preview); [byteCount] is the file size when known. */
+    data class TooLarge(
+        val byteCount: Long? = null,
+    ) : ProjectFileContent
 }
 
 /** A File Browser request that failed (HTTP error, transport, or undecodable body). */
@@ -55,10 +60,10 @@ object ProjectFileLimits {
     /** Text preview cap; larger files show the first 1 MiB. */
     const val TEXT_PREVIEW_BYTES: Int = 1024 * 1024
 
-    /** Images above this render as a binary placeholder. */
+    /** Images above this show as too large to preview. */
     const val IMAGE_PREVIEW_BYTES: Int = 10 * 1024 * 1024
 
-    /** v1 reads stop past this body size (the server has no cap). */
+    /** v1 reads stop past this body size (the server has no cap) and show as too large to preview. */
     const val V1_BODY_BYTES: Int = 16 * 1024 * 1024
 
     /** A NUL byte in this prefix marks a v2 file as binary. */

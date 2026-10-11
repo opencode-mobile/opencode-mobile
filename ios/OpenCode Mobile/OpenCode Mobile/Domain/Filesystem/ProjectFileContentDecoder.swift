@@ -32,7 +32,8 @@ nonisolated enum ProjectFileContentDecoder {
             }
             if data.isEmpty { return .empty }
             let isImage = mimeType?.hasPrefix("image/") == true || ProjectPaths.isImage(name: fileName)
-            if isImage, data.count <= ProjectFileLimits.maxImageBytes {
+            if isImage {
+                guard data.count <= ProjectFileLimits.maxImageBytes else { return .tooLarge(byteCount: data.count) }
                 return .image(data, mimeType: mimeType ?? guessedImageMimeType(fileName))
             }
             return .binary(mimeType: mimeType, byteCount: data.count)
@@ -49,10 +50,17 @@ nonisolated enum ProjectFileContentDecoder {
         return .text(text, isTruncated: true, totalBytes: data.count)
     }
 
-    /// v2 image body read without Range. Over the image cap → binary placeholder.
-    static func image(fromBytes data: Data, exceededLimit: Bool, mimeType: String?, fileName: String) -> ProjectFileContent {
+    /// v2 image body read without Range. Over the image cap → too large to preview;
+    /// `totalBytes` is the server-reported size (Content-Length) when the read was cut.
+    static func image(
+        fromBytes data: Data,
+        exceededLimit: Bool,
+        totalBytes: Int? = nil,
+        mimeType: String?,
+        fileName: String
+    ) -> ProjectFileContent {
         if exceededLimit || data.count > ProjectFileLimits.maxImageBytes {
-            return .binary(mimeType: mimeType, byteCount: exceededLimit ? nil : data.count)
+            return .tooLarge(byteCount: exceededLimit ? totalBytes : data.count)
         }
         if data.isEmpty { return .empty }
         let resolved = mimeType.flatMap { $0.hasPrefix("image/") ? $0 : nil } ?? guessedImageMimeType(fileName)
