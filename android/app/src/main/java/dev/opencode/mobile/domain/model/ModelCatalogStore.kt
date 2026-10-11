@@ -74,10 +74,14 @@ class ModelCatalogStore(
 
     private val lock = Any()
     private var generation = 0L
+    private var nextFetchId = 0L
     private val entries = MutableStateFlow<Map<ModelCatalogKey, ModelCatalogEntry>>(emptyMap())
     private val selections = mutableMapOf<SelectionKey, SessionModelSelection>()
     private val catalogFetches = mutableMapOf<ModelCatalogKey, InFlight<ModelSelectionCatalog>>()
     private val agentFetches = mutableMapOf<ModelCatalogKey, InFlight<List<SelectableAgent>>>()
+    /** Highest fetch id stored per key, so an older answer never overwrites a newer one. */
+    private val storedCatalogFetchIds = mutableMapOf<ModelCatalogKey, Long>()
+    private val storedAgentFetchIds = mutableMapOf<ModelCatalogKey, Long>()
 
     fun peek(worktree: String?): ModelCatalogEntry? {
         val key = keyFor(worktree) ?: return null
@@ -102,12 +106,16 @@ class ModelCatalogStore(
         force: Boolean = false,
     ): ModelSelectionCatalog {
         val key = keyFor(worktree) ?: return modelRepository.listModelOptions(worktree)
-        return shared(catalogFetches, key, force, fetch = { modelRepository.listModelOptions(worktree) }) { entry, catalog ->
-            if (catalog.options.isEmpty()) {
-                entry
-            } else {
-                entry.copy(catalog = catalog, fetchedAtEpochMs = nowMs())
-            }
+        return shared(
+            fetches = catalogFetches,
+            storedIds = storedCatalogFetchIds,
+            key = key,
+            force = force,
+            fetch = { modelRepository.listModelOptions(worktree) },
+            // An empty answer (a server still loading providers) keeps the last usable catalog.
+            stores = { it.options.isNotEmpty() },
+        ) { entry, catalog ->
+            entry.copy(catalog = catalog, fetchedAtEpochMs = nowMs())
         }
     }
 
@@ -116,7 +124,14 @@ class ModelCatalogStore(
         force: Boolean = false,
     ): List<SelectableAgent> {
         val key = keyFor(worktree) ?: return agentRepository.listSelectableAgents(worktree)
-        return shared(agentFetches, key, force, fetch = { agentRepository.listSelectableAgents(worktree) }) { entry, agents ->
+        return shared(
+            fetches = agentFetches,
+            storedIds = storedAgentFetchIds,
+            key = key,
+            force = force,
+            fetch = { agentRepository.listSelectableAgents(worktree) },
+            stores = { _ -> true },
+        ) { entry, agents ->
             entry.copy(selectableAgents = agents)
         }
     }
@@ -136,7 +151,14 @@ class ModelCatalogStore(
         selection: SessionModelSelection,
     ) {
         val key = keyFor(worktree) ?: return
-        synchronized(lock) { selections[SelectionKey(key, sessionId)] = selection }
+        synchronized(lock) {
+            val selectionKey = SelectionKey(key, sessionId)
+            val existing = selections[selectionKey]?.savedAtEpochMs
+            val incoming = selection.savedAtEpochMs
+            // An older persist must not hide a newer in-memory pick.
+            if (existing != null && incoming != null && existing > incoming) return
+            selections[selectionKey] = selection
+        }
     }
 
     fun clear() {
@@ -146,14 +168,18 @@ class ModelCatalogStore(
             selections.clear()
             catalogFetches.clear()
             agentFetches.clear()
+            storedCatalogFetchIds.clear()
+            storedAgentFetchIds.clear()
         }
     }
 
     private suspend fun <T> shared(
         fetches: MutableMap<ModelCatalogKey, InFlight<T>>,
+        storedIds: MutableMap<ModelCatalogKey, Long>,
         key: ModelCatalogKey,
         force: Boolean,
         fetch: suspend () -> T,
+        stores: (T) -> Boolean,
         merge: (ModelCatalogEntry, T) -> ModelCatalogEntry,
     ): T {
         val inFlight =
@@ -163,16 +189,21 @@ class ModelCatalogStore(
                     ?.let { return@synchronized it }
                 lateinit var started: InFlight<T>
                 val fetchGeneration = generation
+                val fetchId = ++nextFetchId
                 val deferred =
                     scope.async(start = CoroutineStart.LAZY) {
                         try {
                             fetch().also { result ->
                                 synchronized(lock) {
-                                    // A profile change since this fetch began makes its answer stale.
-                                    if (generation == fetchGeneration) {
-                                        val entries = entries.value
+                                    // A profile change, or a newer fetch for this key, makes this answer stale.
+                                    if (generation == fetchGeneration &&
+                                        fetchId > (storedIds[key] ?: 0L) &&
+                                        stores(result)
+                                    ) {
+                                        storedIds[key] = fetchId
+                                        val current = entries.value
                                         this@ModelCatalogStore.entries.value =
-                                            entries + (key to merge(entries[key] ?: ModelCatalogEntry(), result))
+                                            current + (key to merge(current[key] ?: ModelCatalogEntry(), result))
                                     }
                                 }
                             }

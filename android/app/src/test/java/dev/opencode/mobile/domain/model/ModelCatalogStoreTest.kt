@@ -122,6 +122,43 @@ class ModelCatalogStoreTest {
         }
 
     @Test
+    fun slowerInitialLoad_doesNotReplaceANewerForcedCatalog() =
+        runTest {
+            val models = SequencedModelRepository()
+            val store = store(models)
+            val older = ModelSelectionCatalog(listOf(sonnet), sonnet)
+            val newer = ModelSelectionCatalog(listOf(gpt4), gpt4)
+
+            val initial = async { store.refreshCatalog("/repo") }
+            runCurrent()
+            val forced = async { store.refreshCatalog("/repo", force = true) }
+            runCurrent()
+            assertEquals(2, models.calls)
+
+            models.complete(1, newer)
+            advanceUntilIdle()
+            models.complete(0, older)
+            advanceUntilIdle()
+
+            assertEquals(older, initial.await())
+            assertEquals(newer, forced.await())
+            assertEquals(newer, store.peek("/repo")?.catalog)
+        }
+
+    @Test
+    fun rememberSelection_keepsTheNewerSelection() =
+        runTest {
+            val store = store(QueuedModelRepository(mutableListOf()))
+            store.rememberSelection("/repo", "ses-1", SessionModelSelection("openai", "newer", savedAtEpochMs = 2))
+            store.rememberSelection("/repo", "ses-1", SessionModelSelection("openai", "older", savedAtEpochMs = 1))
+
+            assertEquals("newer", store.lastSelection("/repo", "ses-1")?.modelId)
+
+            store.rememberSelection("/repo", "ses-1", SessionModelSelection("openai", "newest", savedAtEpochMs = 3))
+            assertEquals("newest", store.lastSelection("/repo", "ses-1")?.modelId)
+        }
+
+    @Test
     fun resultLandingAfterProfileChange_isDiscarded() =
         runTest {
             val models = GatedModelRepository()
@@ -168,6 +205,27 @@ class ModelCatalogStoreTest {
         override suspend fun listModelOptions(directory: String?): ModelSelectionCatalog {
             calls += 1
             return answers.await()
+        }
+    }
+
+    private class SequencedModelRepository : ModelRepository {
+        private val gates = mutableListOf<CompletableDeferred<ModelSelectionCatalog>>()
+        var calls = 0
+
+        override suspend fun listModelOptions(directory: String?): ModelSelectionCatalog {
+            val gate = CompletableDeferred<ModelSelectionCatalog>()
+            synchronized(this) {
+                gates += gate
+                calls += 1
+            }
+            return gate.await()
+        }
+
+        fun complete(
+            index: Int,
+            catalog: ModelSelectionCatalog,
+        ) {
+            gates[index].complete(catalog)
         }
     }
 
