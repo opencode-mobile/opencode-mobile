@@ -4,7 +4,7 @@ import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.MessageTokenUsage
-import dev.opencode.mobile.domain.model.ModelRepository
+import dev.opencode.mobile.domain.model.ModelCatalogStore
 import dev.opencode.mobile.domain.model.ModelSelectionCatalog
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionRepository
@@ -25,7 +25,7 @@ class DefaultSessionContextRepository
     constructor(
         private val sessionRepository: SessionRepository,
         private val messageRepository: MessageRepository,
-        private val modelRepository: ModelRepository,
+        private val modelCatalogStore: ModelCatalogStore,
         private val calculator: SessionContextCalculator,
     ) : SessionContextRepository {
         override suspend fun loadSessionContext(
@@ -36,7 +36,7 @@ class DefaultSessionContextRepository
                 calculator.snapshot(
                     session = sessionRepository.getSession(sessionId, directory),
                     messages = messageRepository.listMessages(sessionId, directory),
-                    modelCatalog = modelRepository.listModelOptions(directory),
+                    modelCatalog = modelCatalogStore.catalog(directory),
                 )
             }.getOrElse {
                 throw SessionContextError.Underlying(it.message ?: "Unable to load session context")

@@ -1,6 +1,8 @@
 package dev.opencode.mobile
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -25,23 +27,23 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
+import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavEntryDecorator
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
-import androidx.navigation3.runtime.rememberDecoratedNavEntries
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
@@ -53,8 +55,6 @@ import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.preferences.MarkdownHighlightPreferences
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.theme.OpenCodeTheme
-import dev.opencode.mobile.ui.changes.ChangeSource
-import dev.opencode.mobile.ui.changes.ChangesScreen
 import dev.opencode.mobile.ui.componentgallery.ComponentGalleryDetailScreen
 import dev.opencode.mobile.ui.componentgallery.ComponentGalleryEntries
 import dev.opencode.mobile.ui.componentgallery.ComponentGalleryEntryId
@@ -77,17 +77,19 @@ import dev.opencode.mobile.ui.componentgallery.components.EmptyStateGalleryScree
 import dev.opencode.mobile.ui.componentgallery.components.FilterTabsGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.HunkNavigationPillGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.IconsGalleryScreen
-import dev.opencode.mobile.ui.componentgallery.components.KeyValueRowGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.InlineNoticeGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.KeyValueRowGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ListGroupGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ListItemGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.MessageListGalleryDetailScreen
 import dev.opencode.mobile.ui.componentgallery.components.MessageNoteGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.ModalGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.OutgoingMessageGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.OverflowMenuGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.PageIndicatorGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.PendingPromptsStripGalleryScreen
-import dev.opencode.mobile.ui.componentgallery.components.RenderedMarkdownGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ReasoningRowGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.RenderedMarkdownGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ReorderableListGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ReviewChangesPillGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SectionHeaderGalleryScreen
@@ -100,8 +102,6 @@ import dev.opencode.mobile.ui.componentgallery.components.SessionListGalleryScre
 import dev.opencode.mobile.ui.componentgallery.components.SessionStatusBarGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SessionTodoItemGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SessionTodosPillGalleryScreen
-import dev.opencode.mobile.ui.componentgallery.components.ModalGalleryScreen
-import dev.opencode.mobile.ui.componentgallery.components.PageIndicatorGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SkeletonIllustrationGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SnackbarGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SplitPaneGalleryScreen
@@ -135,27 +135,20 @@ import dev.opencode.mobile.ui.main.SessionOpenTarget
 import dev.opencode.mobile.ui.onboarding.AppOnboardingScreen
 import dev.opencode.mobile.ui.root.AppRootState
 import dev.opencode.mobile.ui.root.AppRootViewModel
-import dev.opencode.mobile.ui.sessionchat.SessionChatScreen
-import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolDetailSheet
-import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolDetailTarget
-import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolGroupScreen
-import dev.opencode.mobile.ui.sessionchat.view.toTarget
-import dev.opencode.mobile.ui.sessioncontext.SessionContextScreen
 import dev.opencode.mobile.ui.settings.AppearanceSettingsScreen
 import dev.opencode.mobile.ui.settings.DiagnosticLogsScreen
 import dev.opencode.mobile.ui.settings.DiagnosticLogsViewModel
+import dev.opencode.mobile.ui.settings.FeatureFlagsRoute
 import dev.opencode.mobile.ui.settings.ServersScreen
 import dev.opencode.mobile.ui.settings.ServersViewModel
+import dev.opencode.mobile.ui.settings.SettingsDetail
 import dev.opencode.mobile.ui.settings.SettingsScreen
 import dev.opencode.mobile.ui.settings.SettingsViewModel
 import dev.opencode.mobile.ui.settings.SyntaxHighlightPickerScreen
-import dev.opencode.mobile.ui.settings.FeatureFlagsRoute
-import dev.opencode.mobile.ui.settings.SettingsDetail
 import dev.opencode.mobile.ui.settings.TextMateLanguagesRoute
 import dev.opencode.mobile.ui.settings.TextMateLogbookScreen
 import dev.opencode.mobile.ui.settings.TextMateLogbookViewModel
 import dev.opencode.mobile.ui.settings.ThemePickerScreen
-import dev.opencode.mobile.ui.terminal.TerminalScreen
 import dev.opencode.mobile.ui.terminal.TerminalsCatalogScreen
 
 /**
@@ -191,6 +184,7 @@ fun MainNavigation() {
     val serversUiState by serversViewModel.uiState.collectAsStateWithLifecycle()
 
     val backStack = rememberNavBackStack(ProjectListHome)
+    val rootChatFlowNavigator = remember(backStack) { backStack.rootChatFlowNavigator() }
     val homeResetGeneration by rootViewModel.homeResetGeneration.collectAsStateWithLifecycle()
     LaunchedEffect(homeResetGeneration) {
         if (homeResetGeneration == 0) return@LaunchedEffect
@@ -381,38 +375,27 @@ fun MainNavigation() {
                                                 screenId = ProductAnalytics.Screen.HOME,
                                             )
                                             val useSplitLayout = currentOpenCodeUsesSplitLayout()
-                                            var selectedSession by rememberSaveable(stateSaver = SessionOpenTargetSaver) {
-                                                mutableStateOf<SessionOpenTarget?>(null)
-                                            }
-                                            var nestedChanges by rememberSaveable(stateSaver = NestedChangesSaver) {
-                                                mutableStateOf<Changes?>(null)
-                                            }
+                                            // Trailing pane stack; its root is the selected session.
+                                            val paneStack = rememberNavBackStack(HomeSessionPanePlaceholder)
+                                            val paneSelection = paneStack.paneSelection
                                             var handledHomeResetGeneration by rememberSaveable {
                                                 mutableIntStateOf(homeResetGeneration)
                                             }
                                             LaunchedEffect(homeResetGeneration) {
                                                 if (homeResetGeneration != handledHomeResetGeneration) {
                                                     handledHomeResetGeneration = homeResetGeneration
-                                                    selectedSession = null
-                                                    nestedChanges = null
+                                                    paneStack.resetPane()
                                                 }
                                             }
-                                            LaunchedEffect(useSplitLayout) {
-                                                val selection = selectedSession
-                                                if (!useSplitLayout && selection != null) {
-                                                    // Window narrowed: hand the open detail to the stacked route.
-                                                    val changes = nestedChanges
-                                                    selectedSession = null
-                                                    nestedChanges = null
-                                                    backStack.add(selection.toSessionChatRoute())
-                                                    if (changes != null) backStack.add(changes)
+                                            val showsSplit =
+                                                rememberHomeSessionPaneHandoff(useSplitLayout, paneStack) { routes ->
+                                                    backStack.addAll(routes)
                                                 }
-                                            }
-                                            BackHandler(enabled = useSplitLayout && nestedChanges != null) {
-                                                nestedChanges = null
-                                            }
-                                            BackHandler(enabled = useSplitLayout && selectedSession != null && nestedChanges == null) {
-                                                selectedSession = null
+                                            // Screens pushed in the pane pop through its own NavDisplay first.
+                                            BackHandler(
+                                                enabled = useSplitLayout && paneSelection != null && paneStack.size == 1,
+                                            ) {
+                                                paneStack.resetPane()
                                             }
                                             val home: @Composable () -> Unit = {
                                                 MainScreen(
@@ -420,8 +403,7 @@ fun MainNavigation() {
                                                     onTerminalClick = { backStack.add(TerminalsCatalog) },
                                                     onSessionClick = { target ->
                                                         if (useSplitLayout) {
-                                                            nestedChanges = null
-                                                            selectedSession = target
+                                                            paneStack.selectPaneSession(target.toSessionChatRoute())
                                                         } else {
                                                             backStack.add(target.toSessionChatRoute())
                                                         }
@@ -436,11 +418,11 @@ fun MainNavigation() {
                                                         presentConnectionSetup(initialProfile = null, mode = ConnectionSetupMode.Add)
                                                     },
                                                     onManageServersClick = { backStack.add(SettingsHome) },
-                                                    selectedSessionId = if (useSplitLayout) selectedSession?.sessionId else null,
+                                                    selectedSessionId = if (useSplitLayout) paneSelection?.sessionId else null,
                                                     sessionKeyboardNavigationEnabled = useSplitLayout,
                                                 )
                                             }
-                                            if (useSplitLayout) {
+                                            if (showsSplit) {
                                                 OpenCodeSplitPane(
                                                     screen = OpenCodeSplitPaneScreen.Home,
                                                     leading = home,
@@ -449,21 +431,9 @@ fun MainNavigation() {
                                                             KeyboardShortcutAction.ToggleSidebar,
                                                             onShortcut = control.toggle,
                                                         )
-                                                        HomeSessionDetail(
-                                                            selection = selectedSession,
+                                                        HomeSessionPane(
+                                                            paneStack = paneStack,
                                                             detailControl = control,
-                                                            nestedChanges = nestedChanges,
-                                                            onOpenChanges = { nestedChanges = it },
-                                                            onCloseChanges = { nestedChanges = null },
-                                                            onClearSelection = {
-                                                                nestedChanges = null
-                                                                selectedSession = null
-                                                            },
-                                                            onReplaceSelection = { target ->
-                                                                nestedChanges = null
-                                                                selectedSession = target
-                                                            },
-                                                            onPush = { route -> backStack.add(route) },
                                                         )
                                                     },
                                                 )
@@ -812,161 +782,7 @@ fun MainNavigation() {
                                             )
                                         }
                                     }
-                                    entry<Terminal> { key ->
-                                        RouteSurface {
-                                            ProductRouteScreenViewEffect(
-                                                screenId = ProductAnalytics.Screen.TERMINAL,
-                                            )
-                                            TerminalScreen(
-                                                worktree = key.worktree,
-                                                projectTitle = key.projectTitle,
-                                                ptyId = key.ptyId,
-                                                onNavigateBack = { backStack.popRouteUnlessRoot() },
-                                            )
-                                        }
-                                    }
-                                    entry<SessionChat> { key ->
-                                        RouteSurface(edgeToEdgeBottom = true) {
-                                            ProductRouteScreenViewEffect(
-                                                screenId = ProductAnalytics.Screen.SESSION_CHAT,
-                                            )
-                                            SessionChatScreen(
-                                                sessionId = key.sessionId,
-                                                sessionTitle = key.sessionTitle,
-                                                worktree = key.worktree,
-                                                optimisticNavigationInstanceId = key.optimisticNavigationInstanceId,
-                                                parentId = key.parentId,
-                                                onNavigateBack = { backStack.popRouteUnlessRoot() },
-                                                onSessionContextClick = {
-                                                    backStack.add(SessionContext(key.sessionId, key.worktree))
-                                                },
-                                                onReviewChangesClick = { target ->
-                                                    backStack.add(
-                                                        Changes(
-                                                            target.sessionId,
-                                                            target.worktree,
-                                                            target.messageId,
-                                                            target.initialSource,
-                                                            target.initialFilePath,
-                                                        ),
-                                                    )
-                                                },
-                                                onChildSessionClick = { target ->
-                                                    backStack.add(
-                                                        SessionChat(
-                                                            sessionId = target.sessionId,
-                                                            sessionTitle = target.sessionTitle,
-                                                            worktree = target.worktree,
-                                                            optimisticNavigationInstanceId = target.optimisticNavigationInstanceId,
-                                                            parentId = key.sessionId,
-                                                        ),
-                                                    )
-                                                },
-                                                onToolGroupClick = { target ->
-                                                    backStack.add(target)
-                                                },
-                                                onTerminalRequested = { worktree, projectTitle ->
-                                                    backStack.add(
-                                                        Terminal(
-                                                            worktree = worktree,
-                                                            projectTitle = projectTitle,
-                                                        ),
-                                                    )
-                                                },
-                                                onSessionReplaceRequested = { target ->
-                                                    backStack.popRouteUnlessRoot()
-                                                    backStack.add(
-                                                        SessionChat(
-                                                            sessionId = target.sessionId,
-                                                            sessionTitle = target.sessionTitle,
-                                                            worktree = target.worktree,
-                                                            optimisticNavigationInstanceId = target.optimisticNavigationInstanceId,
-                                                        ),
-                                                    )
-                                                },
-                                            )
-                                        }
-                                    }
-                                    entry<SessionContext> { key ->
-                                        RouteSurface {
-                                            ProductRouteScreenViewEffect(
-                                                screenId = ProductAnalytics.Screen.SESSION_CONTEXT,
-                                            )
-                                            SessionContextScreen(
-                                                sessionId = key.sessionId,
-                                                worktree = key.worktree,
-                                                onNavigateBack = { backStack.popRouteUnlessRoot() },
-                                            )
-                                        }
-                                    }
-                                    entry<Changes> { key ->
-                                        RouteSurface {
-                                            ChangesScreen(
-                                                sessionId = key.sessionId,
-                                                worktree = key.worktree,
-                                                messageId = key.messageId,
-                                                initialSource = key.initialSource,
-                                                initialFilePath = key.initialFilePath,
-                                                onNavigateBack = { backStack.popRouteUnlessRoot() },
-                                            )
-                                        }
-                                    }
-                                    entry<SessionToolGroup> { key ->
-                                        RouteSurface {
-                                            var toolDetailTarget by remember {
-                                                mutableStateOf<SessionChatToolDetailTarget?>(null)
-                                            }
-                                            SessionChatToolGroupScreen(
-                                                target = key.toTarget(),
-                                                supportsSessionMessageDiff = key.supportsSessionMessageDiff,
-                                                onNavigateBack = { backStack.popRouteUnlessRoot() },
-                                                onToolDetailTap = {
-                                                    ProductAnalytics.logUserAction(
-                                                        screenId = ProductAnalytics.Screen.SESSION_CHAT,
-                                                        actionId = ProductAnalytics.Action.CHAT_OPEN_TOOL_DETAIL,
-                                                    )
-                                                    toolDetailTarget = it
-                                                },
-                                                onChildSessionTap = { childSessionId, childTitle ->
-                                                    ProductAnalytics.logUserAction(
-                                                        screenId = ProductAnalytics.Screen.SESSION_CHAT,
-                                                        actionId = ProductAnalytics.Action.CHAT_OPEN_CHILD_SESSION,
-                                                    )
-                                                    backStack.add(
-                                                        SessionChat(
-                                                            sessionId = childSessionId,
-                                                            sessionTitle = childTitle,
-                                                            worktree = key.worktree,
-                                                            parentId = key.sessionId,
-                                                        ),
-                                                    )
-                                                },
-                                                onChangesReviewTap = changesReview@{ _, initialFilePath ->
-                                                    val owningTurn = key.owningTurnMessageId
-                                                    if (!key.supportsSessionMessageDiff || owningTurn == null) {
-                                                        return@changesReview
-                                                    }
-                                                    ProductAnalytics.logUserAction(
-                                                        screenId = ProductAnalytics.Screen.SESSION_CHAT,
-                                                        actionId = ProductAnalytics.Action.CHAT_OPEN_CHANGES_FROM_TOOL,
-                                                    )
-                                                    backStack.add(
-                                                        Changes(
-                                                            sessionId = key.sessionId,
-                                                            worktree = key.worktree,
-                                                            messageId = owningTurn,
-                                                            initialSource = ChangeSource.LastTurn,
-                                                            initialFilePath = initialFilePath,
-                                                        ),
-                                                    )
-                                                },
-                                            )
-                                            SessionChatToolDetailSheet(
-                                                target = toolDetailTarget,
-                                                onDismiss = { toolDetailTarget = null },
-                                            )
-                                        }
-                                    }
+                                    chatFlowEntries(rootChatFlowNavigator)
                                 },
                         )
                 }
@@ -1005,7 +821,7 @@ internal fun backwardRouteTransition() =
     )
 
 @Composable
-private fun RouteSurface(
+internal fun RouteSurface(
     edgeToEdgeBottom: Boolean = false,
     content: @Composable () -> Unit,
 ) {
@@ -1032,49 +848,6 @@ private fun SessionOpenTarget.toSessionChatRoute(): SessionChat =
         optimisticNavigationInstanceId = optimisticNavigationInstanceId,
     )
 
-private val NestedChangesSaver =
-    Saver<Changes?, ArrayList<String?>>(
-        save = { changes ->
-            changes?.let {
-                arrayListOf(
-                    it.sessionId,
-                    it.worktree,
-                    it.messageId,
-                    it.initialSource.name,
-                    it.initialFilePath,
-                )
-            }
-        },
-        restore = { values ->
-            Changes(
-                sessionId = values[0].orEmpty(),
-                worktree = values[1].orEmpty(),
-                messageId = values[2],
-                initialSource =
-                    values[3]?.let { runCatching { ChangeSource.valueOf(it) }.getOrNull() }
-                        ?: ChangeSource.LastTurn,
-                initialFilePath = values[4],
-            )
-        },
-    )
-
-private val SessionOpenTargetSaver =
-    Saver<SessionOpenTarget?, ArrayList<String?>>(
-        save = { target ->
-            target?.let {
-                arrayListOf(it.sessionId, it.title, it.worktree, it.optimisticNavigationInstanceId)
-            }
-        },
-        restore = { values ->
-            SessionOpenTarget(
-                sessionId = values[0].orEmpty(),
-                title = values[1].orEmpty(),
-                worktree = values[2].orEmpty(),
-                optimisticNavigationInstanceId = values[3],
-            )
-        },
-    )
-
 /** Stacked route that shows a Settings detail on compact width. */
 private val SettingsDetail.route: NavKey
     get() =
@@ -1088,89 +861,73 @@ private val SettingsDetail.route: NavKey
             SettingsDetail.DiagnosticLogs -> DiagnosticLogsHome
         }
 
-/** Empty trailing pane key for the Home split view. */
-private data object HomeSessionDetailPlaceholder
-
 /**
- * Trailing pane of the Home split view. The selection is rendered through its own decorated
- * one-entry back stack so each selected chat gets an entry-scoped ViewModelStore that is
- * cleared when the selection changes, matching how a popped [SessionChat] route behaves.
+ * Hands the Home split pane's screens to the stacked routes when the window narrows, and returns
+ * whether the split must still be composed. Navigation3 only clears the ViewModels of entries it
+ * sees leave the stack while composed, so the pane stays until it has recomposed with its reset
+ * stack instead of disappearing in the same frame and keeping the handed-off ViewModels.
  */
 @Composable
-private fun HomeSessionDetail(
-    selection: SessionOpenTarget?,
+internal fun rememberHomeSessionPaneHandoff(
+    useSplitLayout: Boolean,
+    paneStack: MutableList<NavKey>,
+    onHandOff: (List<NavKey>) -> Unit,
+): Boolean {
+    val currentOnHandOff by rememberUpdatedState(onHandOff)
+    var handoffPending by remember { mutableStateOf(false) }
+    LaunchedEffect(useSplitLayout) {
+        if (!useSplitLayout && paneStack.paneSelection != null) {
+            handoffPending = true
+            currentOnHandOff(paneStack.handOffPane())
+        }
+    }
+    val hasSelection = paneStack.paneSelection != null
+    if (handoffPending && !hasSelection) {
+        // Runs after the composition that recomposed the pane with its reset stack.
+        SideEffect { handoffPending = false }
+    }
+    return useSplitLayout || hasSelection || handoffPending
+}
+
+/**
+ * Trailing pane of the Home split view: a nested [NavDisplay] over [paneStack], so screens
+ * opened from the selected session stay inside the pane. Each entry gets its own ViewModelStore,
+ * cleared when the entry leaves the pane stack, matching how a popped root route behaves.
+ */
+@Composable
+private fun HomeSessionPane(
+    paneStack: NavBackStack<NavKey>,
     detailControl: OpenCodeSplitPaneDetailControl,
-    nestedChanges: Changes?,
-    onOpenChanges: (Changes) -> Unit,
-    onCloseChanges: () -> Unit,
-    onClearSelection: () -> Unit,
-    onReplaceSelection: (SessionOpenTarget) -> Unit,
-    onPush: (NavKey) -> Unit,
 ) {
-    val detailKey: Any = selection?.toSessionChatRoute() ?: HomeSessionDetailPlaceholder
-    val entries =
-        rememberDecoratedNavEntries(
-            backStack = listOf(detailKey),
-            entryDecorators = rememberMainNavEntryDecorators(),
-            entryProvider =
-                entryProvider {
-                    entry<SessionChat> { key ->
-                        ProductRouteScreenViewEffect(
-                            screenId = ProductAnalytics.Screen.SESSION_CHAT,
-                            presentation = ProductAnalytics.Presentation.EMBEDDED,
-                        )
-                        SessionChatScreen(
-                            sessionId = key.sessionId,
-                            sessionTitle = key.sessionTitle,
-                            worktree = key.worktree,
-                            optimisticNavigationInstanceId = key.optimisticNavigationInstanceId,
-                            parentId = key.parentId,
-                            detailControl = detailControl,
-                            onNavigateBack = onClearSelection,
-                            onSessionContextClick = {
-                                onPush(SessionContext(key.sessionId, key.worktree))
-                            },
-                            onReviewChangesClick = { target ->
-                                onOpenChanges(
-                                    Changes(
-                                        target.sessionId,
-                                        target.worktree,
-                                        target.messageId,
-                                        target.initialSource,
-                                        target.initialFilePath,
-                                    ),
-                                )
-                            },
-                            onChildSessionClick = { target ->
-                                onPush(
-                                    SessionChat(
-                                        sessionId = target.sessionId,
-                                        sessionTitle = target.sessionTitle,
-                                        worktree = target.worktree,
-                                        optimisticNavigationInstanceId = target.optimisticNavigationInstanceId,
-                                        parentId = key.sessionId,
-                                    ),
-                                )
-                            },
-                            onToolGroupClick = { target -> onPush(target) },
-                            onTerminalRequested = { worktree, projectTitle ->
-                                onPush(Terminal(worktree = worktree, projectTitle = projectTitle))
-                            },
-                            onSessionReplaceRequested = { target ->
-                                onReplaceSelection(
-                                    SessionOpenTarget(
-                                        sessionId = target.sessionId,
-                                        title = target.sessionTitle,
-                                        worktree = target.worktree,
-                                        optimisticNavigationInstanceId = target.optimisticNavigationInstanceId,
-                                    ),
-                                )
-                            },
-                        )
-                    }
-                    entry<HomeSessionDetailPlaceholder> {
+    // Entries are built once per stack change, so they read the live control through state.
+    val currentDetailControl by rememberUpdatedState(detailControl)
+    val navigator = remember(paneStack) { paneStack.paneChatFlowNavigator() }
+    NavDisplay(
+        backStack = paneStack,
+        onBack = { paneStack.popRouteUnlessRoot() },
+        entryDecorators = rememberMainNavEntryDecorators(),
+        transitionSpec = {
+            // A new pane root is a selection change, not a push.
+            if (targetState.previousEntries.isEmpty()) {
+                EnterTransition.None togetherWith ExitTransition.None
+            } else {
+                forwardRouteTransition()
+            }
+        },
+        popTransitionSpec = { backwardRouteTransition() },
+        predictivePopTransitionSpec = { backwardRouteTransition() },
+        entryProvider =
+            entryProvider {
+                chatFlowEntries(
+                    navigator = navigator,
+                    sessionChatDetailControl = { key ->
+                        currentDetailControl.takeIf { paneStack.firstOrNull() == key }
+                    },
+                )
+                entry<HomeSessionPanePlaceholder> {
+                    RouteSurface(edgeToEdgeBottom = true) {
                         Column(modifier = Modifier.fillMaxSize()) {
-                            OpenCodeTopBar(leading = openCodeDetailLeading(detailControl) {})
+                            OpenCodeTopBar(leading = openCodeDetailLeading(currentDetailControl) {})
                             OpenCodeEmptyState(
                                 title = "No session selected",
                                 message = "Choose a session from the list",
@@ -1182,21 +939,7 @@ private fun HomeSessionDetail(
                             )
                         }
                     }
-                },
-        )
-    Box(Modifier.fillMaxSize()) {
-        Box(Modifier.graphicsLayer { alpha = if (nestedChanges == null) 1f else 0f }) {
-            entries.last().Content()
-        }
-        nestedChanges?.let { changes ->
-            ChangesScreen(
-                sessionId = changes.sessionId,
-                worktree = changes.worktree,
-                messageId = changes.messageId,
-                initialSource = changes.initialSource,
-                initialFilePath = changes.initialFilePath,
-                onNavigateBack = onCloseChanges,
-            )
-        }
-    }
+                }
+            },
+    )
 }

@@ -16,6 +16,7 @@ final class ProjectionCaches: ProjectionCaching {
     private let sessionTodoLiveStore: any SessionTodoLiveStore
     private let sessionReadyStore: any SessionReadyStore
     private let messageRepository: any MessageRepository
+    private let modelCatalogStore: ModelCatalogStore
 
     init(
         sessionLiveStore: any SessionLiveStore,
@@ -24,7 +25,8 @@ final class ProjectionCaches: ProjectionCaching {
         questionLiveStore: any QuestionLiveStore,
         sessionTodoLiveStore: any SessionTodoLiveStore,
         sessionReadyStore: any SessionReadyStore,
-        messageRepository: any MessageRepository
+        messageRepository: any MessageRepository,
+        modelCatalogStore: ModelCatalogStore
     ) {
         self.sessionLiveStore = sessionLiveStore
         self.sessionStatusLiveStore = sessionStatusLiveStore
@@ -33,6 +35,7 @@ final class ProjectionCaches: ProjectionCaching {
         self.sessionTodoLiveStore = sessionTodoLiveStore
         self.sessionReadyStore = sessionReadyStore
         self.messageRepository = messageRepository
+        self.modelCatalogStore = modelCatalogStore
     }
 
     func clearAll() {
@@ -43,6 +46,7 @@ final class ProjectionCaches: ProjectionCaching {
         sessionTodoLiveStore.clearCache()
         sessionReadyStore.clearCache()
         messageRepository.clearMessageCache()
+        modelCatalogStore.clearCache()
     }
 
     /// Profile switch: keep parked Ready records for bindProfile to reload.
@@ -53,5 +57,6 @@ final class ProjectionCaches: ProjectionCaching {
         questionLiveStore.clearCache()
         sessionTodoLiveStore.clearCache()
         messageRepository.clearMessageCache()
+        modelCatalogStore.clearCache()
     }
 }

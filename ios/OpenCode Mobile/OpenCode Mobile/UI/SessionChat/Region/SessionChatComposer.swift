@@ -18,7 +18,7 @@ final class SessionChatComposer {
     private var sessionID: String
     private let worktree: String
     private let messageRepository: any MessageRepository
-    private let modelRepository: any ModelRepository
+    private let modelCatalogStore: ModelCatalogStore
     private let commandRepository: any CommandRepository
     private let agentRepository: any AgentRepository
     private let sessionRepository: any SessionRepository
@@ -31,6 +31,8 @@ final class SessionChatComposer {
     private var cachedSelection: SessionModelSelection?
     private var newSessionPreference: SessionModelSelection?
     private var initialSelectionState: InitialSelectionState = .loadingCache
+    /// A selection seeded from the shared catalog is shown; the history reconcile is pending.
+    private var isSelectionProvisional = false
     private var latestTimelineState: SessionChatTimelineRegionState?
     private var latestHistoryHints: ModelSelectionHistoryHints?
     private var lastSelectionTimestamp: Int64 = 0
@@ -43,6 +45,7 @@ final class SessionChatComposer {
     private var mentionableAgentsTask: Task<Void, Never>?
     private var selectableAgentsTask: Task<Void, Never>?
     private var loadedSelectableAgents = false
+    private var seededSelectableAgents = false
     private var catalogLoadGeneration = 0
     private var catalogEventTask: Task<Void, Never>?
     private var catalogRefreshTask: Task<Void, Never>?
@@ -53,7 +56,7 @@ final class SessionChatComposer {
         sessionID: String,
         worktree: String,
         messageRepository: any MessageRepository,
-        modelRepository: any ModelRepository,
+        modelCatalogStore: ModelCatalogStore,
         commandRepository: any CommandRepository,
         agentRepository: any AgentRepository,
         sessionRepository: any SessionRepository,
@@ -66,7 +69,7 @@ final class SessionChatComposer {
         self.sessionID = sessionID
         self.worktree = worktree
         self.messageRepository = messageRepository
-        self.modelRepository = modelRepository
+        self.modelCatalogStore = modelCatalogStore
         self.commandRepository = commandRepository
         self.agentRepository = agentRepository
         self.sessionRepository = sessionRepository
@@ -79,6 +82,7 @@ final class SessionChatComposer {
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "h:mm a"
         self.sentTimeFormatter = formatter
+        seedFromCatalogStore()
         Task {
             await self.loadCachedSelection()
             self.applyOrLoadDraft(preserve: nil)
@@ -104,9 +108,11 @@ final class SessionChatComposer {
         self.sessionID = sessionID
         loadedCatalog = nil
         loadedSelectableAgents = false
+        seededSelectableAgents = false
         cachedSelection = nil
         newSessionPreference = nil
         initialSelectionState = .loadingCache
+        isSelectionProvisional = false
         latestTimelineState = nil
         latestHistoryHints = nil
         draftRevision = 0
@@ -114,6 +120,7 @@ final class SessionChatComposer {
         attachmentRevisions = [:]
         state = SessionChatComposerRegionState()
         state.composer.followUpDelivery = SessionChatDisplayPreferences.shared.followUpDelivery
+        seedFromCatalogStore()
         notifyChange()
         Task {
             await self.loadCachedSelection()
@@ -160,7 +167,7 @@ final class SessionChatComposer {
         OpenCodeLog.sessionChat.info("model catalog refresh reason=\(reason)")
         catalogRefreshTask?.cancel()
         catalogRefreshTask = Task { [weak self] in
-            await self?.loadCatalog(keepLoadedCatalogOnFailure: true)
+            await self?.loadCatalog(force: true, emptyRetryAttempt: 0)
         }
     }
 
@@ -169,9 +176,11 @@ final class SessionChatComposer {
         catalogRetryTask = nil
         loadedCatalog = nil
         loadedSelectableAgents = false
+        seededSelectableAgents = false
         cachedSelection = nil
         newSessionPreference = nil
         initialSelectionState = .loadingCache
+        isSelectionProvisional = false
         latestTimelineState = nil
         latestHistoryHints = nil
         draftRevision = 0
@@ -183,12 +192,13 @@ final class SessionChatComposer {
         notifyChange()
     }
 
-    func loadCatalog() async {
-        await loadCatalog(keepLoadedCatalogOnFailure: false)
+    /// `force` asks the shared catalog for a fresh answer instead of joining one in flight.
+    func loadCatalog(force: Bool = false) async {
+        await loadCatalog(force: force, emptyRetryAttempt: 0)
     }
 
     /// `emptyRetryAttempt` is non-zero only for a backoff retry of an empty answer.
-    private func loadCatalog(keepLoadedCatalogOnFailure: Bool, emptyRetryAttempt: Int = 0) async {
+    private func loadCatalog(force: Bool, emptyRetryAttempt: Int) async {
         catalogLoadGeneration += 1
         let generation = catalogLoadGeneration
         if emptyRetryAttempt == 0 {
@@ -196,13 +206,13 @@ final class SessionChatComposer {
             catalogRetryTask = nil
         }
         do {
-            let catalog = try await modelRepository.listModelOptions(directory: worktree)
+            let catalog = try await modelCatalogStore.refreshCatalog(worktree: worktree, force: force)
             // An older request must not overwrite the answer to a newer one.
             guard generation == catalogLoadGeneration else { return }
             if catalog.options.isEmpty {
                 scheduleEmptyCatalogRetry(attempt: emptyRetryAttempt)
                 // A server still loading must not hide a catalog this session already has.
-                if keepLoadedCatalogOnFailure, loadedCatalog?.options.isEmpty == false { return }
+                if loadedCatalog?.options.isEmpty == false { return }
             }
             applyCatalog(catalog)
         } catch {
@@ -212,7 +222,8 @@ final class SessionChatComposer {
             if emptyRetryAttempt > 0 {
                 scheduleEmptyCatalogRetry(attempt: emptyRetryAttempt)
             }
-            if keepLoadedCatalogOnFailure, loadedCatalog?.options.isEmpty == false { return }
+            // A failed refresh keeps the catalog and selection already shown.
+            if loadedCatalog?.options.isEmpty == false { return }
             updateComposer {
                 $0.isModelSelectionReady = false
                 $0.modelCatalogError = "Unable to load models. Tap Model to retry."
@@ -228,7 +239,7 @@ final class SessionChatComposer {
         catalogRetryTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(delayMs))
             guard !Task.isCancelled else { return }
-            await self?.loadCatalog(keepLoadedCatalogOnFailure: true, emptyRetryAttempt: attempt + 1)
+            await self?.loadCatalog(force: true, emptyRetryAttempt: attempt + 1)
         }
     }
 
@@ -259,7 +270,7 @@ final class SessionChatComposer {
         selectableAgentsTask?.cancel()
         selectableAgentsTask = Task {
             do {
-                let agents = try await agentRepository.listSelectableAgents(directory: worktree)
+                let agents = try await modelCatalogStore.refreshSelectableAgents(worktree: worktree, force: force)
                 guard !Task.isCancelled else { return }
                 loadedSelectableAgents = true
                 applySelectableAgents(agents)
@@ -308,7 +319,7 @@ final class SessionChatComposer {
     private func applyInitialSelectionIfReady() {
         guard initialSelectionState != .resolved, initialSelectionState != .failedWithFallback else { return }
         guard initialSelectionState != .loadingCache else { return }
-        guard loadedSelectableAgents else { return }
+        guard loadedSelectableAgents || seededSelectableAgents else { return }
         guard let catalog = loadedCatalog, !catalog.options.isEmpty else { return }
         guard let timelineState = latestTimelineState else { return }
 
@@ -366,6 +377,8 @@ final class SessionChatComposer {
                 : nil
         }
         initialSelectionState = initialSelectionState == .waitingForFallback ? .failedWithFallback : .resolved
+        let wasProvisional = isSelectionProvisional
+        isSelectionProvisional = false
         let droppedForModel = state.composer.attachments.filter { !option.acceptsAttachmentKind($0.kind) }
         for attachment in droppedForModel {
             attachmentRevisions[attachment.id] = nil
@@ -394,9 +407,10 @@ final class SessionChatComposer {
         }
         discardStoredAttachments(droppedForModel)
         let source = chosen?.sourceName ?? (catalog.serverDefault == nil ? "first-usable" : "server-default")
-        OpenCodeLog.sessionChat.info("modelSelection source=\(source)")
-        if case .cached? = chosen {
+        OpenCodeLog.sessionChat.info("modelSelection source=\(source) reconciled=\(wasProvisional)")
+        if case let .cached(value)? = chosen {
             // Keep the original timestamp when the session cache wins.
+            recordLastSelection(value)
         } else if staleCached == nil {
             persistCurrentSelection(updatePreference: false)
         }
@@ -613,6 +627,7 @@ final class SessionChatComposer {
     }
 
     func selectModel(_ option: ModelSelectionOption) {
+        settleProvisionalSelection()
         let dropped = state.composer.attachments.filter { !option.acceptsAttachmentKind($0.kind) }
         for attachment in dropped {
             attachmentRevisions[attachment.id] = nil
@@ -635,11 +650,13 @@ final class SessionChatComposer {
         guard let match = state.composer.selectableAgents.first(where: {
             $0.id.compare(mode, options: .caseInsensitive) == .orderedSame
         }) else { return }
+        settleProvisionalSelection()
         updateComposer { $0.selectedMode = match.id }
         persistCurrentSelection(updatePreference: false)
     }
 
     func selectVariant(_ variant: String) {
+        settleProvisionalSelection()
         updateComposer { composer in
             if variant == ModelSelection.defaultVariantLabel {
                 composer.selectedVariant = nil
@@ -1067,12 +1084,95 @@ final class SessionChatComposer {
                 connectionIdentity: identity,
                 worktree: worktree
             )
-            cachedSelection = await session
+            let persisted = await session
             newSessionPreference = await preference
+            // A pick made on the provisional selection already settled this session.
+            guard initialSelectionState == .loadingCache else { return }
+            cachedSelection = newerSelection(
+                persisted,
+                modelCatalogStore.lastSelection(worktree: worktree, sessionID: sessionID)
+            )
         }
+        guard initialSelectionState == .loadingCache else { return }
         initialSelectionState = .waitingForInputs
         applyInitialSelectionIfReady()
         notifyChange()
+    }
+
+    private func newerSelection(
+        _ first: SessionModelSelection?,
+        _ second: SessionModelSelection?
+    ) -> SessionModelSelection? {
+        guard let first else { return second }
+        guard let second else { return first }
+        return (second.savedAtEpochMs ?? .min) > (first.savedAtEpochMs ?? .min) ? second : first
+    }
+
+    /// Seeds the catalog and agents from the shared catalog, plus a provisional selection when
+    /// this session has one of its own, so a reopened session never shows "Loading model…".
+    /// A session opened for the first time waits for history instead of flashing a default.
+    /// The network refresh and the history reconcile follow quietly.
+    private func seedFromCatalogStore() {
+        guard let entry = modelCatalogStore.peek(worktree: worktree) else { return }
+        if let agents = entry.selectableAgents {
+            seededSelectableAgents = true
+            let catalog = agents.isEmpty ? SelectableAgent.fallback : agents
+            state.composer.selectableAgents = catalog
+            state.composer.selectedMode = resolveSelectedAgentID(state.composer.selectedMode, in: catalog)
+        }
+        guard let catalog = entry.catalog, !catalog.options.isEmpty else { return }
+        loadedCatalog = catalog
+        state.composer.modelOptions = catalog.options
+        let identity = currentIdentity()
+        let remembered = modelCatalogStore.lastSelection(worktree: worktree, sessionID: sessionID)
+        let persisted = identity.flatMap {
+            sessionModelSelectionStore.peekSession(connectionIdentity: $0, worktree: worktree, sessionID: sessionID)
+        }
+        // An optimistic session has no history; it gets the same default the create resolver seeds.
+        let isOptimistic = OptimisticSessionCreate.isPlaceholder(sessionID)
+        let preference = isOptimistic ? identity.flatMap {
+            sessionModelSelectionStore.peekNewSessionPreference(connectionIdentity: $0, worktree: worktree)
+        } : nil
+        let candidate = [remembered, persisted, preference].compactMap { $0 }.first {
+            catalog.option(providerID: $0.providerID, modelID: $0.modelID) != nil
+        }
+        guard candidate != nil || isOptimistic else { return }
+        let option = candidate.flatMap { catalog.option(providerID: $0.providerID, modelID: $0.modelID) }
+            ?? catalog.serverDefault
+            ?? catalog.options[0]
+        let variant = resolvedVariant(remembered: candidate?.variant, for: option)
+        let agentID = (remembered ?? persisted)?.agentID
+        isSelectionProvisional = true
+        state.composer.selectedModel = ModelSelection(option: option, selectedVariant: variant)
+        state.composer.selectedVariant = variant
+        state.composer.selectedMode = resolveSelectedAgentID(
+            agentID ?? state.composer.selectedMode,
+            in: state.composer.selectableAgents
+        )
+        state.composer.isModelSelectionReady = true
+        state.composer.modelCatalogError = nil
+        let source = if candidate == nil {
+            catalog.serverDefault == nil ? "first-usable" : "server-default"
+        } else if candidate == remembered {
+            "last-selection"
+        } else if candidate == persisted {
+            "session-cache"
+        } else {
+            "new-session-preference"
+        }
+        OpenCodeLog.sessionChat.info("modelSelection provisional source=\(source)")
+    }
+
+    /// An explicit pick on the provisional selection wins over the pending history reconcile.
+    private func settleProvisionalSelection() {
+        guard isSelectionProvisional else { return }
+        isSelectionProvisional = false
+        initialSelectionState = .resolved
+    }
+
+    private func recordLastSelection(_ selection: SessionModelSelection) {
+        guard !OptimisticSessionCreate.isPlaceholder(sessionID) else { return }
+        modelCatalogStore.recordSelection(selection, worktree: worktree, sessionID: sessionID)
     }
 
     private func persistCurrentSelection(updatePreference: Bool) {
@@ -1090,6 +1190,7 @@ final class SessionChatComposer {
             savedAtEpochMs: timestamp
         )
         cachedSelection = selection
+        recordLastSelection(selection)
         Task {
             await sessionModelSelectionStore.saveSession(
                 connectionIdentity: identity,
@@ -1129,7 +1230,35 @@ final class SessionChatComposer {
             $0.modelOptions = catalog.options
             $0.modelCatalogError = nil
         }
+        revalidateSelectedModel(in: catalog)
         applyInitialSelectionIfReady()
+    }
+
+    /// A refreshed catalog replaces the shown option and falls back when it dropped the model.
+    private func revalidateSelectedModel(in catalog: ModelSelectionCatalog) {
+        guard let selected = state.composer.selectedModel else { return }
+        if let refreshed = catalog.option(providerID: selected.option.providerID, modelID: selected.option.modelID) {
+            guard refreshed != selected.option else { return }
+            let variant = resolvedVariant(remembered: state.composer.selectedVariant, for: refreshed)
+            updateComposer {
+                $0.selectedModel = ModelSelection(option: refreshed, selectedVariant: variant)
+                $0.selectedVariant = variant
+            }
+            return
+        }
+        let fallback = catalog.serverDefault ?? catalog.options[0]
+        OpenCodeLog.sessionChat.info("modelSelection refreshed catalog dropped selected model")
+        let dropped = state.composer.attachments.filter { !fallback.acceptsAttachmentKind($0.kind) }
+        for attachment in dropped {
+            attachmentRevisions[attachment.id] = nil
+        }
+        updateComposer {
+            $0.attachments.removeAll { !fallback.acceptsAttachmentKind($0.kind) }
+            $0.selectedModel = ModelSelection(option: fallback, selectedVariant: nil)
+            $0.selectedVariant = nil
+            $0.modelNotice = "Selected model is unavailable. Using \(fallback.modelLabel)."
+        }
+        discardStoredAttachments(dropped)
     }
 
     private func resolvedVariant(remembered: String?, for option: ModelSelectionOption) -> String? {
