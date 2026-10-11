@@ -11,8 +11,8 @@ struct ProjectListHomeView: View {
     @State private var showNewSessionProjectPicker = false
     @State private var showProjectPicker = false
     @State private var selectedSessionFilterId = SessionListFilterTab.allId
-    /// Trailing-pane session in the regular-width split view. Unused on compact.
-    @State private var selectedSession: SessionListItem?
+    /// Trailing-pane chat in the regular-width split view. Unused on compact.
+    @State private var splitSelection: SplitSessionSelection?
     /// Session ids from the last fully loaded Home list; detects a selected session disappearing.
     @State private var lastLoadedSessionIDs: Set<String>?
     /// Sessions as rendered in the list under the current filter, top to bottom.
@@ -559,9 +559,30 @@ struct ProjectListHomeView: View {
         }
     }
 
+    /// Building the view model with the selection lets the new chat's first frame
+    /// render its top bar and composer, so switching sessions crossfades instead of
+    /// flashing a full-pane spinner.
+    private var selectedSession: SessionListItem? {
+        get { splitSelection?.session }
+        nonmutating set {
+            splitSelection = newValue.map { session in
+                SplitSessionSelection(
+                    session: session,
+                    viewModel: Container.makeSessionChatViewModel(
+                        sessionID: session.id,
+                        sessionTitle: session.title,
+                        worktree: session.worktree
+                    )
+                )
+            }
+        }
+    }
+
     private func openSession(_ session: SessionListItem) {
         if isSplitLayout {
-            selectedSession = session
+            withAnimation(.easeInOut(duration: 0.2)) {
+                selectedSession = session
+            }
         } else {
             navigationPath.append(session)
         }
@@ -587,11 +608,31 @@ struct ProjectListHomeView: View {
     /// Trailing pane root. Its own stack keeps chat pushes (context, changes,
     /// tool groups, child sessions, terminal) inside the detail pane.
     private func homeDetailPane(_ control: OpenCodeSplitPaneDetailControl) -> some View {
+        // ZStack overlays the outgoing and incoming stacks while they crossfade.
+        ZStack {
+            detailStack(control)
+                // A new stack per session drops the previous chat's pushed screens and state.
+                .id(selectedSessionNavigationID)
+                .transition(.opacity)
+        }
+        .openCodeKeyboardShortcut(.toggleSidebar, action: homeShortcutsActive ? control.toggle : nil)
+        .openCodeKeyboardShortcut(
+            .nextSession,
+            action: homeShortcutsActive && !displayedSessions.isEmpty ? { selectAdjacentSession(.next) } : nil
+        )
+        .openCodeKeyboardShortcut(
+            .previousSession,
+            action: homeShortcutsActive && !displayedSessions.isEmpty ? { selectAdjacentSession(.previous) } : nil
+        )
+    }
+
+    private func detailStack(_ control: OpenCodeSplitPaneDetailControl) -> some View {
         NavigationStack {
             Group {
-                if let selectedSession {
+                if let splitSelection {
                     SessionChatView(
-                        session: selectedSession,
+                        session: splitSelection.session,
+                        viewModel: splitSelection.viewModel,
                         detailControl: control,
                         onLeaveSession: { self.selectedSession = nil }
                     )
@@ -614,17 +655,6 @@ struct ProjectListHomeView: View {
                 }
             }
         }
-        // A new stack per session drops the previous chat's pushed screens and state.
-        .id(selectedSessionNavigationID)
-        .openCodeKeyboardShortcut(.toggleSidebar, action: homeShortcutsActive ? control.toggle : nil)
-        .openCodeKeyboardShortcut(
-            .nextSession,
-            action: homeShortcutsActive && !displayedSessions.isEmpty ? { selectAdjacentSession(.next) } : nil
-        )
-        .openCodeKeyboardShortcut(
-            .previousSession,
-            action: homeShortcutsActive && !displayedSessions.isEmpty ? { selectAdjacentSession(.previous) } : nil
-        )
     }
 
     /// Split-view shortcuts apply while the split is the visible screen: nothing
@@ -1224,4 +1254,9 @@ nonisolated private final class PreviewForegroundEventStream: ForegroundEventStr
     func events() -> AsyncStream<OpencodeEvent> { AsyncStream { _ in } }
     func start() {}
     func stop() async {}
+}
+
+private struct SplitSessionSelection {
+    let session: SessionListItem
+    let viewModel: SessionChatViewModel
 }

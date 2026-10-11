@@ -66,9 +66,14 @@ struct SessionChatView: View {
         self.injectedViewModel = viewModel
     }
 
-    /// Available after `.task` bootstrap; only read from content that is gated on storage.
+    /// Available after `.task` bootstrap, or on the first frame when injected; only
+    /// read from content that is gated on `hasViewModel`.
     private var viewModel: SessionChatViewModel {
-        viewModelStorage!
+        (viewModelStorage ?? injectedViewModel)!
+    }
+
+    private var hasViewModel: Bool {
+        viewModelStorage != nil || injectedViewModel != nil
     }
 
     /// Temporarily off: bar currently only shows context usage.
@@ -76,7 +81,7 @@ struct SessionChatView: View {
 
     var body: some View {
         Group {
-            if viewModelStorage != nil {
+            if hasViewModel {
                 sessionChatBody
             } else {
                 OpenCodeStatusStack(spinner: "Loading session")
