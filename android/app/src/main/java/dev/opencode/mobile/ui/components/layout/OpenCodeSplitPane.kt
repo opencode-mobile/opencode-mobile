@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -92,22 +94,41 @@ fun OpenCodeSplitPane(
         when (screen) {
             OpenCodeSplitPaneScreen.Home -> ProductAnalytics.Screen.HOME
             OpenCodeSplitPaneScreen.Settings -> ProductAnalytics.Screen.SETTINGS
+            OpenCodeSplitPaneScreen.Changes -> ProductAnalytics.Screen.CHANGES
+            OpenCodeSplitPaneScreen.Terminals -> ProductAnalytics.Screen.TERMINALS_CATALOG
         }
-    OpenCodeSplitPane(
-        state = SplitPanePreferences.state(screen),
-        onStateChange = { next ->
-            if (next.isCollapsed != SplitPanePreferences.state(screen).isCollapsed) {
-                ProductAnalytics.logUserAction(
-                    screenId = analyticsScreenId,
-                    actionId = ProductAnalytics.Action.SPLIT_PANE_TOGGLE_SIDEBAR,
-                )
-            }
-            SplitPanePreferences.update(screen, next)
-        },
-        modifier = modifier,
-        leading = leading,
-        trailing = trailing,
-    )
+    val ancestorNesting = LocalOpenCodeSplitNesting.current
+    val ownedNesting = remember { OpenCodeSplitNesting() }
+    val windowWidth = currentOpenCodeWindowWidth()
+    val bounds = OpenCodeSplitPaneLayout.bounds(screen, windowWidth)
+    val forcedCollapsed = !screen.usesContentMetrics && ownedNesting.isContentSplitVisible
+    if (screen.usesContentMetrics) {
+        DisposableEffect(ancestorNesting) {
+            ancestorNesting?.enter()
+            onDispose { ancestorNesting?.leave() }
+        }
+    }
+    CompositionLocalProvider(
+        LocalOpenCodeSplitNesting provides if (screen.usesContentMetrics) ancestorNesting else ownedNesting,
+    ) {
+        OpenCodeSplitPane(
+            state = SplitPanePreferences.state(screen),
+            onStateChange = { next ->
+                if (next.isCollapsed != SplitPanePreferences.state(screen).isCollapsed) {
+                    ProductAnalytics.logUserAction(
+                        screenId = analyticsScreenId,
+                        actionId = ProductAnalytics.Action.SPLIT_PANE_TOGGLE_SIDEBAR,
+                    )
+                }
+                SplitPanePreferences.update(screen, next)
+            },
+            modifier = modifier,
+            bounds = bounds,
+            forcedCollapsed = forcedCollapsed,
+            leading = leading,
+            trailing = trailing,
+        )
+    }
 }
 
 /** State-hoisted [OpenCodeSplitPane] for previews and the Component Gallery. */
@@ -116,18 +137,23 @@ fun OpenCodeSplitPane(
     state: OpenCodeSplitPaneState,
     onStateChange: (OpenCodeSplitPaneState) -> Unit,
     modifier: Modifier = Modifier,
+    bounds: OpenCodeSplitPaneBounds = OpenCodeSplitPaneLayout.sidebarBounds,
+    forcedCollapsed: Boolean = false,
     leading: @Composable () -> Unit,
     trailing: @Composable (OpenCodeSplitPaneDetailControl) -> Unit,
 ) {
     val currentState by rememberUpdatedState(state)
     val currentOnStateChange by rememberUpdatedState(onStateChange)
+    val currentBounds by rememberUpdatedState(bounds)
+    val currentForcedCollapsed by rememberUpdatedState(forcedCollapsed)
     var dragWidth by remember { mutableStateOf<Dp?>(null) }
     val liveDragWidth = dragWidth
+    val displayedCollapsed = OpenCodeSplitPaneLayout.displayedCollapsed(state.isCollapsed, forcedCollapsed)
     val targetWidth =
         when {
-            liveDragWidth != null -> liveDragWidth.coerceIn(0.dp, OpenCodeSplitPaneLayout.MaxLeadingWidth)
-            state.isCollapsed -> 0.dp
-            else -> OpenCodeSplitPaneLayout.clamp(state.leadingWidth)
+            displayedCollapsed && liveDragWidth == null -> 0.dp
+            liveDragWidth != null -> liveDragWidth.coerceIn(0.dp, bounds.maxLeading)
+            else -> OpenCodeSplitPaneLayout.clamp(state.leadingWidth, bounds)
         }
     val animatedWidth by animateDpAsState(
         targetValue = targetWidth,
@@ -140,8 +166,12 @@ fun OpenCodeSplitPane(
         label = "splitPaneLeadingWidth",
     )
     // The leading content keeps its own width and slides out under the clip instead of squishing.
-    val leadingContentWidth = OpenCodeSplitPaneLayout.clamp(liveDragWidth ?: state.leadingWidth)
-    val toggle = { currentOnStateChange(OpenCodeSplitPaneLayout.toggled(currentState)) }
+    val leadingContentWidth = OpenCodeSplitPaneLayout.clamp(liveDragWidth ?: state.leadingWidth, bounds)
+    val toggle = {
+        if (!currentForcedCollapsed) {
+            currentOnStateChange(OpenCodeSplitPaneLayout.toggled(currentState, currentBounds))
+        }
+    }
     val density = LocalDensity.current
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val coordinates = remember { SplitPaneCoordinates() }
@@ -153,7 +183,7 @@ fun OpenCodeSplitPane(
         val fromLeading = if (isRtl) container.size.width - containerX else containerX
         return with(density) { fromLeading.toDp() }
     }
-    val control = OpenCodeSplitPaneDetailControl(isCollapsed = state.isCollapsed, toggle = toggle)
+    val control = OpenCodeSplitPaneDetailControl(isCollapsed = displayedCollapsed, toggle = toggle)
 
     Box(
         modifier =
@@ -198,14 +228,14 @@ fun OpenCodeSplitPane(
             }
         }
 
-        if (!state.isCollapsed || liveDragWidth != null) {
+        if (!forcedCollapsed && (!state.isCollapsed || liveDragWidth != null)) {
             SplitPaneHandle(
                 dividerOffset = animatedWidth,
                 isDragging = liveDragWidth != null,
                 onToggle = toggle,
                 onHandlePositioned = { coordinates.handle = it },
                 onDragStart = { handleLocal ->
-                    val startWidth = OpenCodeSplitPaneLayout.clamp(currentState.leadingWidth)
+                    val startWidth = OpenCodeSplitPaneLayout.clamp(currentState.leadingWidth, currentBounds)
                     val containerX = coordinates.toContainerX(handleLocal)
                     grabOffset = if (containerX != null) dividerPosition(containerX) - startWidth else 0.dp
                     dragWidth = startWidth
@@ -219,14 +249,16 @@ fun OpenCodeSplitPane(
                     val proposed = dragWidth
                     dragWidth = null
                     if (proposed == null) return@SplitPaneHandle
+                    if (currentForcedCollapsed) return@SplitPaneHandle
                     val next =
                         if (travelled < OpenCodeSplitPaneLayout.HandleTapSlop) {
-                            OpenCodeSplitPaneLayout.toggled(currentState)
+                            OpenCodeSplitPaneLayout.toggled(currentState, currentBounds)
                         } else {
                             OpenCodeSplitPaneLayout.resolveDragEnd(
                                 startedCollapsed = currentState.isCollapsed,
                                 rememberedWidth = currentState.leadingWidth,
                                 proposedWidth = proposed,
+                                bounds = currentBounds,
                             )
                         }
                     if (next != currentState) currentOnStateChange(next)

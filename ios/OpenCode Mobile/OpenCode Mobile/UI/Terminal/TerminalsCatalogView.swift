@@ -3,9 +3,21 @@ import SwiftUI
 
 struct TerminalsCatalogRoute: Hashable {}
 
+private struct TerminalsLocalWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        let next = nextValue()
+        if next > 0 { value = next }
+    }
+}
+
 struct TerminalsCatalogView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openCodeWindowWidth) private var windowWidth
     @State private var viewModel: TerminalsCatalogViewModel
+    @State private var localWidth: CGFloat = 0
+    @State private var selected: TerminalRoute?
     var onOpen: (String, String, String) -> Void
 
     init(
@@ -16,68 +28,32 @@ struct TerminalsCatalogView: View {
         self.onOpen = onOpen
     }
 
+    private var usesContentSplit: Bool {
+        let width = windowWidth > 0 ? windowWidth : localWidth
+        return OpenCodeSplitPaneLayout.usesContentSplit(containerWidth: width)
+    }
+
     var body: some View {
-        VStack(spacing: 0) {
-            OpenCodeTopBar(
-                title: "Terminals",
-                leading: .back(action: { dismiss() }),
-                showDivider: true
-            )
-            VStack(spacing: 0) {
-                if viewModel.isLoading {
-                    OpenCodeStatusStack(
-                        title: "Loading terminals",
-                        subtitle: "Checking server…"
-                    )
-                } else {
-                    if viewModel.rows.isEmpty {
-                        OpenCodeEmptyState(
-                            title: "No running shells",
-                            message: "Start one for a project. It is not tied to a chat session."
-                        )
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    } else {
-                        ScrollView {
-                            VStack(spacing: 0) {
-                                ForEach(viewModel.rows, id: \.worktreeAndId) { row in
-                                    OpenCodeListItem(
-                                        title: row.title,
-                                        subtitle: row.projectTitle,
-                                        startDecorator: .letter(
-                                            letterCharacter(for: row.projectTitle),
-                                            letterAccent(for: row.worktree)
-                                        ),
-                                        action: {
-                                            onOpen(row.worktree, row.projectTitle, row.id)
-                                        },
-                                        trailing: {
-                                            OpenCodeButton(
-                                                variant: .iconCircle(.close, accessibilityLabel: "Close"),
-                                                contrast: .low,
-                                                action: {
-                                                    viewModel.requestClose(row)
-                                                }
-                                            )
-                                        }
-                                    )
-                                }
-                            }
-                            .padding(.bottom, 88)
-                        }
-                    }
-                    OpenCodeButton(
-                        variant: .fullWidthText(title: "New shell"),
-                        action: { viewModel.showProjectPicker() }
-                    )
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 24)
+        Group {
+            if usesContentSplit {
+                contentSplit
+            } else {
+                catalogColumn(selectedID: nil, constrainWidth: true) { worktree, projectTitle, ptyId in
+                    onOpen(worktree, projectTitle, ptyId)
                 }
             }
-            .openCodeReadableColumn()
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .background(OpenCodeColors.backgroundBase)
-        .toolbar(.hidden, for: .navigationBar)
+        .background {
+            GeometryReader { proxy in
+                Color.clear.preference(key: TerminalsLocalWidthKey.self, value: proxy.size.width)
+            }
+        }
+        .onPreferenceChange(TerminalsLocalWidthKey.self) { localWidth = $0 }
+        .onChange(of: usesContentSplit) { _, split in
+            guard !split, let selected else { return }
+            self.selected = nil
+            onOpen(selected.worktree, selected.projectTitle, selected.ptyId ?? "")
+        }
         .task {
             ProductAnalytics.logScreenView(
                 screenId: ProductAnalytics.Screen.terminalsCatalog,
@@ -109,40 +85,175 @@ struct TerminalsCatalogView: View {
             ),
             title: "New shell"
         ) {
-            VStack(spacing: 0) {
-                if let createError = viewModel.createError {
-                    Text(createError)
-                        .font(OpenCodeTypography.bodySecondary)
-                        .foregroundStyle(OpenCodeColors.textWeak)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 8)
-                }
-                if viewModel.projects.isEmpty {
+            projectPicker
+        }
+    }
+
+    private var contentSplit: some View {
+        OpenCodeSplitPane(screen: .terminals, onCollapsedChange: { _ in
+            ProductAnalytics.logUserAction(
+                screenId: ProductAnalytics.Screen.terminalsCatalog,
+                actionId: ProductAnalytics.Action.splitPaneToggleSidebar
+            )
+        }) {
+            catalogColumn(selectedID: selected?.ptyId, constrainWidth: false) { worktree, projectTitle, ptyId in
+                selected = TerminalRoute(worktree: worktree, projectTitle: projectTitle, ptyId: ptyId)
+            }
+        } trailing: { control in
+            if let selected {
+                TerminalView(
+                    worktree: selected.worktree,
+                    projectTitle: selected.projectTitle,
+                    ptyId: selected.ptyId,
+                    detailControl: control,
+                    usesReadableColumn: false
+                )
+                .id(selected.ptyId)
+            } else {
+                VStack(spacing: 0) {
+                    OpenCodeTopBar(
+                        title: "Terminal",
+                        leading: OpenCodeSplitPane.detailLeading(control, back: {})
+                    )
                     OpenCodeEmptyState(
-                        title: "No projects yet",
-                        message: "Add a project on home, then start a shell here.",
-                        fillsAvailableSpace: false
+                        title: "Select a shell",
+                        message: "Choose a shell from the list.",
+                        icon: .terminal
+                    )
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(OpenCodeColors.backgroundBase)
+            }
+        }
+    }
+
+    private func catalogColumn(
+        selectedID: String?,
+        constrainWidth: Bool,
+        onOpenShell: @escaping (String, String, String) -> Void
+    ) -> some View {
+        VStack(spacing: 0) {
+            OpenCodeTopBar(
+                title: "Terminals",
+                leading: .back(action: { dismiss() }),
+                showDivider: true
+            )
+            VStack(spacing: 0) {
+                if viewModel.isLoading {
+                    OpenCodeStatusStack(
+                        title: "Loading terminals",
+                        subtitle: "Checking server…"
                     )
                 } else {
-                    ForEach(viewModel.projects, id: \.worktree) { project in
-                        OpenCodeListItem(
-                            title: project.title,
-                            startDecorator: .letter(
-                                letterCharacter(for: project.title),
-                                letterAccent(for: project.worktree)
-                            ),
-                            action: {
-                                Task {
-                                    if let row = await viewModel.createShell(worktree: project.worktree) {
-                                        onOpen(row.worktree, row.projectTitle, row.id)
-                                    }
+                    if viewModel.rows.isEmpty {
+                        OpenCodeEmptyState(
+                            title: "No running shells",
+                            message: "Start one for a project. It is not tied to a chat session."
+                        )
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else {
+                        ScrollView {
+                            VStack(spacing: 0) {
+                                ForEach(viewModel.rows, id: \.worktreeAndId) { row in
+                                    OpenCodeListItem(
+                                        title: row.title,
+                                        subtitle: row.projectTitle,
+                                        selected: row.id == selectedID,
+                                        startDecorator: .letter(
+                                            letterCharacter(for: row.projectTitle),
+                                            letterAccent(for: row.worktree)
+                                        ),
+                                        action: {
+                                            onOpenShell(row.worktree, row.projectTitle, row.id)
+                                        },
+                                        trailing: {
+                                            OpenCodeButton(
+                                                variant: .iconCircle(.close, accessibilityLabel: "Close"),
+                                                contrast: .low,
+                                                action: {
+                                                    viewModel.requestClose(row)
+                                                }
+                                            )
+                                        }
+                                    )
                                 }
                             }
-                        )
+                            .padding(.bottom, 88)
+                        }
                     }
+                    OpenCodeButton(
+                        variant: .fullWidthText(title: "New shell"),
+                        action: { viewModel.showProjectPicker() }
+                    )
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 24)
                 }
             }
+            .modifier(TerminalsReadableColumnModifier(enabled: constrainWidth))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .background(OpenCodeColors.backgroundBase)
+        .toolbar(.hidden, for: .navigationBar)
+        .onChange(of: viewModel.rows.map(\.id)) { _, ids in
+            guard let selected, !ids.contains(selected.ptyId ?? "") else { return }
+            self.selected = nil
+        }
+    }
+
+    private var projectPicker: some View {
+        VStack(spacing: 0) {
+            if let createError = viewModel.createError {
+                Text(createError)
+                    .font(OpenCodeTypography.bodySecondary)
+                    .foregroundStyle(OpenCodeColors.textWeak)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 8)
+            }
+            if viewModel.projects.isEmpty {
+                OpenCodeEmptyState(
+                    title: "No projects yet",
+                    message: "Add a project on home, then start a shell here.",
+                    fillsAvailableSpace: false
+                )
+            } else {
+                ForEach(viewModel.projects, id: \.worktree) { project in
+                    OpenCodeListItem(
+                        title: project.title,
+                        startDecorator: .letter(
+                            letterCharacter(for: project.title),
+                            letterAccent(for: project.worktree)
+                        ),
+                        action: {
+                            Task {
+                                if let row = await viewModel.createShell(worktree: project.worktree) {
+                                    openCreated(row)
+                                }
+                            }
+                        }
+                    )
+                }
+            }
+        }
+    }
+
+    private func openCreated(_ row: TerminalCatalogRow) {
+        if usesContentSplit {
+            selected = TerminalRoute(worktree: row.worktree, projectTitle: row.projectTitle, ptyId: row.id)
+        } else {
+            onOpen(row.worktree, row.projectTitle, row.id)
+        }
+    }
+}
+
+private struct TerminalsReadableColumnModifier: ViewModifier {
+    let enabled: Bool
+
+    func body(content: Content) -> some View {
+        if enabled {
+            content.openCodeReadableColumn()
+        } else {
+            content
         }
     }
 }

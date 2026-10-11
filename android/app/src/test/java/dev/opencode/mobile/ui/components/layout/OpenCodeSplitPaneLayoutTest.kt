@@ -92,4 +92,56 @@ class OpenCodeSplitPaneLayoutTest {
             OpenCodeSplitPaneState(),
         )
     }
+
+    @Test
+    fun usesContentSplit_requiresTwoColumnsOf500() {
+        assertFalse(OpenCodeSplitPaneLayout.usesContentSplit(834.dp))
+        assertFalse(OpenCodeSplitPaneLayout.usesContentSplit(1000.dp))
+        assertTrue(OpenCodeSplitPaneLayout.usesContentSplit(1001.dp))
+        assertTrue(OpenCodeSplitPaneLayout.usesContentSplit(1194.dp))
+    }
+
+    @Test
+    fun contentBounds_keepBothColumnsAtLeast500() {
+        val bounds = OpenCodeSplitPaneLayout.contentBounds(1194.dp)
+        assertEquals(500.dp, bounds.minLeading)
+        assertEquals(693.dp, bounds.maxLeading)
+        val narrow =
+            OpenCodeSplitPaneLayout.resolveDragEnd(
+                startedCollapsed = false,
+                rememberedWidth = 560.dp,
+                proposedWidth = 300.dp,
+                bounds = bounds,
+            )
+        assertEquals(OpenCodeSplitPaneState(leadingWidth = 500.dp, isCollapsed = false), narrow)
+        val wide =
+            OpenCodeSplitPaneLayout.resolveDragEnd(
+                startedCollapsed = false,
+                rememberedWidth = 560.dp,
+                proposedWidth = 900.dp,
+                bounds = bounds,
+            )
+        assertEquals(693.dp, wide.leadingWidth)
+        assertTrue(1194.dp - wide.leadingWidth - OpenCodeSplitPaneLayout.DividerWidth >= 500.dp)
+    }
+
+    @Test
+    fun contentDrag_belowCollapseThresholdSnapsClosed() {
+        val bounds = OpenCodeSplitPaneLayout.contentBounds(1180.dp)
+        val state =
+            OpenCodeSplitPaneLayout.resolveDragEnd(
+                startedCollapsed = false,
+                rememberedWidth = 560.dp,
+                proposedWidth = 200.dp,
+                bounds = bounds,
+            )
+        assertEquals(OpenCodeSplitPaneState(leadingWidth = 560.dp, isCollapsed = true), state)
+    }
+
+    @Test
+    fun displayedCollapsed_overlaysNestedSplitWithoutReplacingPersistedFlag() {
+        assertTrue(OpenCodeSplitPaneLayout.displayedCollapsed(persisted = false, nestedContentSplitVisible = true))
+        assertTrue(OpenCodeSplitPaneLayout.displayedCollapsed(persisted = true, nestedContentSplitVisible = false))
+        assertFalse(OpenCodeSplitPaneLayout.displayedCollapsed(persisted = false, nestedContentSplitVisible = false))
+    }
 }

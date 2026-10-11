@@ -3,9 +3,12 @@ import SwiftUI
 
 struct ChangesView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openCodeWindowWidth) private var windowWidth
     @State private var viewModel: ChangesViewModel
     @State private var sourceMenuPresented = false
-    @State private var selectedPath: String?
+    @State private var splitSelection: String?
+    @State private var pushedPath: String?
+    @State private var localWidth: CGFloat = 0
     @State private var didAttemptDeepLink = false
     /// Filter Analytics fires once per screen; the query text is never sent.
     @State private var loggedFilterEdit = false
@@ -31,7 +34,94 @@ struct ChangesView: View {
         ))
     }
 
+    private var usesContentSplit: Bool {
+        let width = windowWidth > 0 ? windowWidth : localWidth
+        return OpenCodeSplitPaneLayout.usesContentSplit(containerWidth: width)
+    }
+
     var body: some View {
+        Group {
+            if usesContentSplit {
+                contentSplit
+            } else {
+                stackedChanges
+            }
+        }
+        .background {
+            GeometryReader { proxy in
+                Color.clear.preference(key: ChangesLocalWidthKey.self, value: proxy.size.width)
+            }
+        }
+        .onPreferenceChange(ChangesLocalWidthKey.self) { localWidth = $0 }
+        .onChange(of: usesContentSplit) { _, split in
+            if split {
+                if splitSelection == nil { splitSelection = pushedPath }
+                pushedPath = nil
+            } else if pushedPath == nil {
+                // Drop the split selection so a later pop does not restore it.
+                pushedPath = splitSelection
+                splitSelection = nil
+            }
+        }
+        .task {
+            ProductAnalytics.logScreenView(
+                screenId: ProductAnalytics.Screen.changes,
+                presentation: ProductAnalytics.Presentation.route
+            )
+            await viewModel.load()
+            attemptDeepLinkIfNeeded()
+        }
+        .onChange(of: viewModel.state.phase) { _, _ in
+            attemptDeepLinkIfNeeded()
+        }
+        .onDisappear {
+            if splitSelection == nil, pushedPath == nil {
+                viewModel.clearFilter()
+            }
+        }
+    }
+
+    private var stackedChanges: some View {
+        changesColumn(selectedPath: nil, constrainWidth: true) { pushedPath = $0 }
+            .navigationDestination(item: $pushedPath) { path in
+                if let file = viewModel.content?.files.first(where: { $0.path == path }) {
+                    FileViewerView(file: file)
+                }
+            }
+    }
+
+    private var contentSplit: some View {
+        OpenCodeSplitPane(screen: .changes, onCollapsedChange: { _ in
+            logAction(ProductAnalytics.Action.splitPaneToggleSidebar)
+        }) {
+            changesColumn(selectedPath: splitSelection, constrainWidth: false) { splitSelection = $0 }
+        } trailing: { control in
+            if let path = splitSelection, let file = viewModel.content?.files.first(where: { $0.path == path }) {
+                FileViewerView(file: file, detailControl: control, usesReadableColumn: false)
+                    .id(path)
+            } else {
+                VStack(spacing: 0) {
+                    OpenCodeTopBar(
+                        title: "Changes",
+                        leading: OpenCodeSplitPane.detailLeading(control, back: {})
+                    )
+                    OpenCodeEmptyState(
+                        title: "Select a file",
+                        message: "Choose a changed file to see the diff.",
+                        icon: .list
+                    )
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(OpenCodeColors.backgroundBase)
+            }
+        }
+    }
+
+    private func changesColumn(
+        selectedPath: String?,
+        constrainWidth: Bool,
+        onOpenFile: @escaping (String) -> Void
+    ) -> some View {
         VStack(spacing: 0) {
             OpenCodeTopBarOverflowHost(isPresented: $sourceMenuPresented, entries: sourceMenuEntries) {
                 OpenCodeTopBar(
@@ -47,40 +137,23 @@ struct ChangesView: View {
                     showDivider: true
                 )
             }
-            content
-                .openCodeReadableColumn()
+            columnContent(selectedPath: selectedPath, onOpenFile: onOpenFile)
+                .modifier(ReadableColumnModifier(enabled: constrainWidth))
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(OpenCodeColors.backgroundBase)
         .toolbar(.hidden, for: .navigationBar)
-        .task {
-            ProductAnalytics.logScreenView(
-                screenId: ProductAnalytics.Screen.changes,
-                presentation: ProductAnalytics.Presentation.route
-            )
-            await viewModel.load()
-            attemptDeepLinkIfNeeded()
-        }
-        .onChange(of: viewModel.state.phase) { _, _ in
-            attemptDeepLinkIfNeeded()
-        }
-        .onDisappear {
-            if selectedPath == nil {
-                viewModel.clearFilter()
-            }
-        }
-        .navigationDestination(item: $selectedPath) { path in
-            if let file = viewModel.content?.files.first(where: { $0.path == path }) {
-                FileViewerView(file: file)
-            }
-        }
     }
 
     private func attemptDeepLinkIfNeeded() {
         guard !didAttemptDeepLink, let initialFilePath, !initialFilePath.isEmpty else { return }
         guard case .content(let changeSet) = viewModel.state.phase else { return }
         if changeSet.files.contains(where: { $0.path == initialFilePath }) {
-            selectedPath = initialFilePath
+            if usesContentSplit {
+                splitSelection = initialFilePath
+            } else {
+                pushedPath = initialFilePath
+            }
         }
         didAttemptDeepLink = true
     }
@@ -100,7 +173,10 @@ struct ChangesView: View {
         )
     }
 
-    @ViewBuilder private var content: some View {
+    @ViewBuilder private func columnContent(
+        selectedPath: String?,
+        onOpenFile: @escaping (String) -> Void
+    ) -> some View {
         switch viewModel.state.phase {
         case .loading:
             OpenCodeStatusStack(title: "Loading changes", subtitle: "Fetching the diff…")
@@ -109,7 +185,7 @@ struct ChangesView: View {
         case .noChanges:
             refreshableMessage(viewModel.state.selectedSource.emptyTitle, detail: viewModel.state.selectedSource.emptyDetail)
         case let .content(changeSet):
-            changedFiles(changeSet)
+            changedFiles(changeSet, selectedPath: selectedPath, onOpenFile: onOpenFile)
         case let .error(error):
             OpenCodeEmptyState(
                 title: "Unable to load changes",
@@ -131,14 +207,19 @@ struct ChangesView: View {
                 icon: selected ? .check : nil,
                 accessibilityLabel: selected ? "\(source.displayName), selected" : source.displayName,
                 action: {
-                    selectedPath = nil
+                    splitSelection = nil
+                    pushedPath = nil
                     Task { await viewModel.selectSource(source) }
                 }
             )
         }
     }
 
-    private func changedFiles(_ changeSet: ChangesContentState) -> some View {
+    private func changedFiles(
+        _ changeSet: ChangesContentState,
+        selectedPath: String?,
+        onOpenFile: @escaping (String) -> Void
+    ) -> some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 16) {
                 aggregateSummary(changeSet)
@@ -181,7 +262,7 @@ struct ChangesView: View {
                                 inset: .flush
                             )
                             OpenCodeListGroup(group.files, id: \.path) { file in
-                                fileRow(file, changeSet: changeSet)
+                                fileRow(file, changeSet: changeSet, selectedPath: selectedPath, onOpenFile: onOpenFile)
                             }
                         }
                     }
@@ -228,10 +309,15 @@ struct ChangesView: View {
         .accessibilityElement(children: .combine)
     }
 
-    private func fileRow(_ file: FileDiff, changeSet: ChangesContentState) -> some View {
-        OpenCodeListItem(title: changedFileName(file.path), accessory: .disclosure, action: {
+    private func fileRow(
+        _ file: FileDiff,
+        changeSet: ChangesContentState,
+        selectedPath: String?,
+        onOpenFile: @escaping (String) -> Void
+    ) -> some View {
+        OpenCodeListItem(title: changedFileName(file.path), selected: file.path == selectedPath, accessory: .disclosure, action: {
             logAction(ProductAnalytics.Action.changesOpenFile)
-            selectedPath = file.path
+            onOpenFile(file.path)
         },         trailing: {
             OpenCodeDiffStat(
                 additions: file.additions,
@@ -261,19 +347,48 @@ struct ChangesView: View {
     }
 }
 
+private struct ChangesLocalWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        let next = nextValue()
+        if next > 0 { value = next }
+    }
+}
+
+private struct ReadableColumnModifier: ViewModifier {
+    let enabled: Bool
+
+    func body(content: Content) -> some View {
+        if enabled {
+            content.openCodeReadableColumn()
+        } else {
+            content
+        }
+    }
+}
+
 private struct FileViewerView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var state: FileViewerState
+    private let detailControl: OpenCodeSplitPaneDetailControl?
+    private let usesReadableColumn: Bool
 
-    init(file: FileDiff) {
+    init(
+        file: FileDiff,
+        detailControl: OpenCodeSplitPaneDetailControl? = nil,
+        usesReadableColumn: Bool = true
+    ) {
         _state = State(initialValue: FileViewerState(file: file))
+        self.detailControl = detailControl
+        self.usesReadableColumn = usesReadableColumn
     }
 
     var body: some View {
         VStack(spacing: 0) {
             OpenCodeTopBar(
                 title: state.file.path,
-                leading: .back(action: {
+                leading: OpenCodeSplitPane.detailLeading(detailControl, back: {
                     Self.logAction(ProductAnalytics.Action.fileViewerBack)
                     dismiss()
                 }),
@@ -295,7 +410,7 @@ private struct FileViewerView: View {
                 .padding(24)
             }
             }
-            .openCodeReadableColumn()
+            .modifier(ReadableColumnModifier(enabled: usesReadableColumn))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(OpenCodeColors.backgroundBase)
