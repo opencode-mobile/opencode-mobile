@@ -82,7 +82,7 @@ fun TerminalsCatalogScreen(
                             modifier = Modifier.fillMaxSize(),
                             contentPadding = PaddingValues(bottom = 88.dp),
                         ) {
-                            items(uiState.rows, key = { "${it.worktree}:${it.id}" }) { row ->
+                            items(uiState.rows, key = { it.key }) { row ->
                                 OpenCodeListItem(
                                     title = row.title,
                                     subtitle = row.projectTitle,

@@ -29,6 +29,8 @@ final class TerminalsCatalogViewModel {
     private let repository: any TerminalRepository
     private let activeConnectionManager: ActiveConnectionManager
     private let connectionProfileStore: any ConnectionProfileStore
+    private var createSequence = 0
+    private var createdRows: [(sequence: Int, row: TerminalCatalogRow)] = []
 
     init(
         repository: any TerminalRepository,
@@ -41,6 +43,7 @@ final class TerminalsCatalogViewModel {
     }
 
     func appear() async {
+        let sequenceAtStart = createSequence
         guard let connection = activeConnectionManager.connection else {
             projects = []
             isLoading = false
@@ -54,14 +57,23 @@ final class TerminalsCatalogViewModel {
             )
         }
         let running = (try? await repository.listRunning(directories: worktrees)) ?? []
-        rows = running.map { item in
-            TerminalCatalogRow(
+        var serverKeys = Set<String>()
+        let serverRows = running.compactMap { item -> TerminalCatalogRow? in
+            let row = TerminalCatalogRow(
                 id: item.session.id,
                 title: catalogTitle(item.session),
                 projectTitle: ProjectDomainAdapter.displayName(from: item.directory),
                 worktree: item.directory
             )
+            return serverKeys.insert(row.worktreeAndId).inserted ? row : nil
         }
+        // Shells created while this refresh was in flight may be missing from its response.
+        createdRows.removeAll { $0.sequence <= sequenceAtStart }
+        let createdInFlight = createdRows
+            .map(\.row)
+            .filter { !serverKeys.contains($0.worktreeAndId) }
+            .reversed()
+        rows = Array(createdInFlight) + serverRows
         isLoading = false
     }
 
@@ -89,7 +101,13 @@ final class TerminalsCatalogViewModel {
                 projectTitle: project.title,
                 worktree: worktree
             )
-            rows.insert(row, at: 0)
+            createSequence += 1
+            createdRows.append((createSequence, row))
+            if let index = rows.firstIndex(where: { $0.worktreeAndId == row.worktreeAndId }) {
+                rows[index] = row
+            } else {
+                rows.insert(row, at: 0)
+            }
             isProjectPickerVisible = false
             createError = nil
             return row
@@ -112,6 +130,7 @@ final class TerminalsCatalogViewModel {
         pendingClose = nil
         do {
             try await repository.remove(id: pending.id, directory: pending.worktree)
+            createdRows.removeAll { $0.row.worktreeAndId == pending.worktreeAndId }
             rows.removeAll { $0.id == pending.id && $0.worktree == pending.worktree }
         } catch {
             return

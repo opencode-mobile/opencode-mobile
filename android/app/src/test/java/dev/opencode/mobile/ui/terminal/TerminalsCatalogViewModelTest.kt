@@ -401,6 +401,88 @@ class TerminalsCatalogViewModelTest {
             assertEquals(true, viewModel.uiState.value.isProjectPickerVisible)
         }
 
+    @Test
+    fun createShell_refreshReturnsNewPtyWhileCreateInFlight_keepsSingleRow() =
+        runTest(testDispatcher) {
+            val gate = CompletableDeferred<Unit>()
+            val repository =
+                FakeCatalogTerminalRepository(
+                    running = listOf(RunningTerminal("/repo", session("pty_1", "term"))),
+                    createSession = session("pty_new", "zsh"),
+                    createGate = gate,
+                )
+            val viewModel = viewModel(repository = repository, worktrees = listOf("/repo"))
+
+            viewModel.appear()
+            advanceUntilIdle()
+            val create = launch { viewModel.createShell("/repo") }
+            advanceUntilIdle()
+            repository.running =
+                listOf(
+                    RunningTerminal("/repo", session("pty_1", "term")),
+                    RunningTerminal("/repo", session("pty_new", "zsh")),
+                )
+            viewModel.appear()
+            advanceUntilIdle()
+            gate.complete(Unit)
+            create.join()
+
+            val rows = viewModel.uiState.value.rows
+            assertEquals(1, rows.count { it.id == "pty_new" && it.worktree == "/repo" })
+            assertEquals(rows.size, rows.map { it.key }.distinct().size)
+            assertEquals(setOf("pty_1", "pty_new"), rows.map { it.id }.toSet())
+        }
+
+    @Test
+    fun createShell_staleRefreshLandingAfterCreate_keepsCreatedRow() =
+        runTest(testDispatcher) {
+            val repository =
+                FakeCatalogTerminalRepository(
+                    running = listOf(RunningTerminal("/repo", session("pty_1", "term"))),
+                    createSession = session("pty_new", "zsh"),
+                )
+            val viewModel = viewModel(repository = repository, worktrees = listOf("/repo"))
+
+            viewModel.appear()
+            advanceUntilIdle()
+            val listGate = CompletableDeferred<Unit>()
+            repository.listGate = listGate
+            viewModel.appear()
+            advanceUntilIdle()
+            viewModel.createShell("/repo")
+            listGate.complete(Unit)
+            advanceUntilIdle()
+
+            assertEquals(
+                listOf("pty_new", "pty_1"),
+                viewModel.uiState.value.rows
+                    .map { it.id },
+            )
+        }
+
+    @Test
+    fun appear_startedAfterCreate_isAuthoritative() =
+        runTest(testDispatcher) {
+            val repository =
+                FakeCatalogTerminalRepository(
+                    running = listOf(RunningTerminal("/repo", session("pty_1", "term"))),
+                    createSession = session("pty_new", "zsh"),
+                )
+            val viewModel = viewModel(repository = repository, worktrees = listOf("/repo"))
+
+            viewModel.appear()
+            advanceUntilIdle()
+            viewModel.createShell("/repo")
+            viewModel.appear()
+            advanceUntilIdle()
+
+            assertEquals(
+                listOf("pty_1"),
+                viewModel.uiState.value.rows
+                    .map { it.id },
+            )
+        }
+
     private suspend fun viewModel(
         repository: FakeCatalogTerminalRepository,
         worktrees: List<String>,
@@ -436,7 +518,7 @@ class TerminalsCatalogViewModelTest {
 }
 
 private class FakeCatalogTerminalRepository(
-    private val running: List<RunningTerminal>,
+    var running: List<RunningTerminal>,
     private val createSession: TerminalSession? = null,
     private val createFailure: Throwable? = null,
     private val createGate: CompletableDeferred<Unit>? = null,
@@ -445,6 +527,7 @@ private class FakeCatalogTerminalRepository(
     val removed = mutableListOf<Pair<String, String>>()
     val created = mutableListOf<Pair<String, String>>()
     val ensureRunningCalls = mutableListOf<String>()
+    var listGate: CompletableDeferred<Unit>? = null
 
     override suspend fun list(directory: String): List<TerminalSession> = error("unused")
 
@@ -484,7 +567,9 @@ private class FakeCatalogTerminalRepository(
 
     override suspend fun listRunning(directories: List<String>): List<RunningTerminal> {
         listedDirectories += directories
-        return running.filter { it.directory in directories }
+        val snapshot = running
+        listGate?.await()
+        return snapshot.filter { it.directory in directories }
     }
 
     override fun connectRequest(

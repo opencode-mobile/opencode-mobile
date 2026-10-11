@@ -21,7 +21,9 @@ data class TerminalCatalogRow(
     val title: String,
     val projectTitle: String,
     val worktree: String,
-)
+) {
+    val key: String get() = "$worktree:$id"
+}
 
 data class TerminalCatalogProject(
     val worktree: String,
@@ -49,8 +51,12 @@ class TerminalsCatalogViewModel
         private val _uiState = MutableStateFlow(TerminalsCatalogUiState())
         val uiState: StateFlow<TerminalsCatalogUiState> = _uiState.asStateFlow()
 
+        private var createSequence = 0L
+        private val createdRows = mutableListOf<Pair<Long, TerminalCatalogRow>>()
+
         fun appear() {
             viewModelScope.launch {
+                val sequenceAtStart = createSequence
                 val connection = activeConnectionManager.current()
                 if (connection == null) {
                     _uiState.update { it.copy(isLoading = false, projects = emptyList()) }
@@ -67,9 +73,18 @@ class TerminalsCatalogViewModel
                             title = ProjectDomainAdapter.displayNameFromWorktree(worktree),
                         )
                     }
+                val serverRows = running.map { it.toRow() }.distinctBy { it.key }
+                val serverKeys = serverRows.mapTo(mutableSetOf()) { it.key }
+                // Shells created while this refresh was in flight may be missing from its response.
+                createdRows.removeAll { (sequence, _) -> sequence <= sequenceAtStart }
+                val createdInFlight =
+                    createdRows
+                        .map { it.second }
+                        .filter { it.key !in serverKeys }
+                        .asReversed()
                 _uiState.update {
                     it.copy(
-                        rows = running.map { running -> running.toRow() },
+                        rows = createdInFlight + serverRows,
                         projects = projects,
                         isLoading = false,
                     )
@@ -101,9 +116,11 @@ class TerminalsCatalogViewModel
                             projectTitle = project.title,
                             worktree = worktree,
                         )
+                    createSequence += 1
+                    createdRows += createSequence to row
                     _uiState.update { current ->
                         current.copy(
-                            rows = listOf(row) + current.rows,
+                            rows = current.rows.mergingCreated(row),
                             isProjectPickerVisible = false,
                             isCreating = false,
                             createError = null,
@@ -132,6 +149,7 @@ class TerminalsCatalogViewModel
             viewModelScope.launch {
                 runCatching { terminalRepository.remove(pending.id, pending.worktree) }
                     .onSuccess {
+                        createdRows.removeAll { (_, row) -> row.key == pending.key }
                         _uiState.update { state ->
                             state.copy(
                                 rows =
@@ -143,6 +161,13 @@ class TerminalsCatalogViewModel
                     }
             }
         }
+
+        private fun List<TerminalCatalogRow>.mergingCreated(row: TerminalCatalogRow): List<TerminalCatalogRow> =
+            if (any { it.key == row.key }) {
+                map { if (it.key == row.key) row else it }
+            } else {
+                listOf(row) + this
+            }
 
         private fun RunningTerminal.toRow(): TerminalCatalogRow =
             TerminalCatalogRow(
