@@ -42,6 +42,8 @@ import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetContentMode
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
+import dev.opencode.mobile.ui.components.OpenCodeButton
+import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeDialog
 import dev.opencode.mobile.ui.components.OpenCodeDialogOption
 import dev.opencode.mobile.ui.components.OpenCodeDialogTextField
@@ -1179,7 +1181,9 @@ private fun List<ProjectSectionUi>.homeFeed(
     nowEpochMs: Long,
 ): HomeFeed {
     if (!showsSettle) {
-        val ladder = crossProjectRows { it.allSessions } + crossProjectRows { it.archivedSessions }
+        val ladder =
+            crossProjectRows(sessionsOf = { it.allSessions }) +
+                crossProjectRows(sessionsOf = { it.archivedSessions })
         return HomeFeed(ladder = ladder, settled = emptyList(), activeCount = ladder.size)
     }
     val ladder =
@@ -1205,7 +1209,8 @@ private fun List<ProjectSectionUi>.homeFeed(
 
 /** Active rows newest first, then archived rows newest first. */
 internal fun List<ProjectSectionUi>.toCrossProjectSessionListSessions(): List<SessionListSession> =
-    crossProjectRows { it.allSessions } + crossProjectRows { it.archivedSessions }
+    crossProjectRows(sessionsOf = { it.allSessions }) +
+        crossProjectRows(sessionsOf = { it.archivedSessions })
 
 private fun List<ProjectSectionUi>.crossProjectRows(
     sessionsOf: (ProjectSectionUi) -> List<SessionSummary>,

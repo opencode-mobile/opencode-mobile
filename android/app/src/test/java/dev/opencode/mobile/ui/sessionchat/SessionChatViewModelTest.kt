@@ -44,6 +44,8 @@ import dev.opencode.mobile.domain.message.PromptSendOptions
 import dev.opencode.mobile.domain.message.PromptSendProgressReporter
 import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.domain.model.ModelCatalogStore
+import dev.opencode.mobile.domain.model.ModelChangeLock
+import dev.opencode.mobile.domain.model.ModelProviderTraits
 import dev.opencode.mobile.domain.model.ModelRepository
 import dev.opencode.mobile.domain.model.ModelSelectionCatalog
 import dev.opencode.mobile.domain.model.ModelSelectionConnectionIdentity
@@ -6761,9 +6763,6 @@ private class FakeQuestionLiveStore(
     override fun observeQuestions(directory: String): Flow<List<QuestionRequest>> = requests
 
     override fun clearCache() = Unit
-}
-
-
 }
 
 private fun questionRequest(
