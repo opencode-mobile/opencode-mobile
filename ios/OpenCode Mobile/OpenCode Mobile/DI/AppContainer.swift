@@ -108,6 +108,16 @@ extension Container {
         }.singleton
     }
 
+    var projectFilesRepository: Factory<any ProjectFilesRepository> {
+        self {
+            DefaultProjectFilesRepository(
+                api: self.filesystemAPIClient(),
+                adapter: FilesystemDomainAdapter(),
+                activeConnectionManager: self.activeConnectionManager()
+            )
+        }.singleton
+    }
+
     var sessionRepository: Factory<any SessionRepository> {
         self {
             DefaultSessionRepository(
@@ -699,6 +709,11 @@ extension Container {
     @MainActor
     static func makeTerminalViewModel(worktree: String, ptyId: String? = nil) -> TerminalViewModel {
         shared.terminalViewModel((worktree: worktree, ptyId: ptyId))
+    }
+
+    @MainActor
+    static func makeFilesViewModel(worktree: String) -> FilesViewModel {
+        FilesViewModel(worktree: worktree, repository: shared.projectFilesRepository())
     }
 
     @MainActor

@@ -3628,7 +3628,7 @@ class SessionChatViewModelTest {
             emptyMessages.bind("ses-1", "Title", "/repo")
             advanceUntilIdle()
             assertEquals(
-                listOf(ClientSlashAction.New, ClientSlashAction.Terminal, ClientSlashAction.Mcp),
+                listOf(ClientSlashAction.New, ClientSlashAction.Terminal, ClientSlashAction.Files, ClientSlashAction.Mcp),
                 emptyMessages.uiState.value.visibleClientSlashActions,
             )
 
@@ -3642,6 +3642,25 @@ class SessionChatViewModelTest {
             assertTrue(ClientSlashAction.Undo in visible)
             assertTrue(ClientSlashAction.Compact in visible)
             assertFalse(ClientSlashAction.Redo in visible)
+        }
+
+    @Test
+    fun runClientSlashAction_files_requestsFileBrowserForWorktree() =
+        runTest(testDispatcher) {
+            val viewModel = createViewModel(FakeMessageRepository())
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            viewModel.openCommands()
+
+            viewModel.runClientSlashAction(ClientSlashAction.Files)
+            advanceUntilIdle()
+
+            assertFalse(viewModel.uiState.value.commandsSheetVisible)
+            assertEquals("/repo", viewModel.uiState.value.pendingFilesOpen)
+
+            viewModel.consumePendingFilesOpen()
+            advanceUntilIdle()
+            assertNull(viewModel.uiState.value.pendingFilesOpen)
         }
 
     @Test

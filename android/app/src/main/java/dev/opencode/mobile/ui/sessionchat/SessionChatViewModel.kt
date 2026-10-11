@@ -654,6 +654,7 @@ class SessionChatViewModel
                     commands.runTerminal(
                         projectTitle = _uiState.value.projectLabel ?: sessionInfo.state.value.sessionTitle,
                     )
+                ClientSlashAction.Files -> commands.runFiles()
                 ClientSlashAction.Mcp -> commands.openMcpServers()
                 ClientSlashAction.Compact -> compactCurrentSession()
             }
@@ -729,6 +730,10 @@ class SessionChatViewModel
 
         fun consumePendingTerminalOpen() {
             commands.consumePendingTerminalOpen()
+        }
+
+        fun consumePendingFilesOpen() {
+            commands.consumePendingFilesOpen()
         }
 
         fun enableChipTimelineFromIntro() {
@@ -1440,6 +1445,7 @@ class SessionChatViewModel
                 expandedStepParagraphs = expandedStepParagraphs,
                 chipTimelineIntroVisible = chipTimelineIntroVisible,
                 pendingTerminalOpen = commandsState.pendingTerminalOpen,
+                pendingFilesOpen = commandsState.pendingFilesOpen,
                 hasPendingRevert = commandsState.hasPendingRevert,
                 projectLabel = projectLabel,
                 projectLetter = projectLetter,
@@ -1609,6 +1615,7 @@ private val ClientSlashAction.productActionId: String
             ClientSlashAction.Redo -> ProductAnalytics.Action.COMMANDS_REDO
             ClientSlashAction.Compact -> ProductAnalytics.Action.COMMANDS_COMPACT
             ClientSlashAction.Terminal -> ProductAnalytics.Action.COMMANDS_TERMINAL
+            ClientSlashAction.Files -> ProductAnalytics.Action.COMMANDS_FILES
             ClientSlashAction.Mcp -> ProductAnalytics.Action.COMMANDS_MCP
         }
 

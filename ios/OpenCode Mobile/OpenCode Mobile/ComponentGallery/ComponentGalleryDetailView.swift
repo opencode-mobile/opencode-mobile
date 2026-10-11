@@ -158,6 +158,10 @@ struct ComponentGalleryDetailView: View {
             HunkNavigationPillGalleryView()
         case .unifiedDiff:
             UnifiedDiffGalleryView()
+        case .codeFile:
+            CodeFileGalleryView()
+        case .treeRow:
+            TreeRowGalleryView()
         case .button:
             ButtonGalleryView()
         case .textInput:

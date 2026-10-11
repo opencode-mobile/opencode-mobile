@@ -15,6 +15,7 @@ class SplitPanePreferencesCodecTest {
         assertEquals("settings.isCollapsed", SplitPanePreferencesCodec.isCollapsedKey(OpenCodeSplitPaneScreen.Settings))
         assertEquals("changes.leadingWidthDp", SplitPanePreferencesCodec.leadingWidthKey(OpenCodeSplitPaneScreen.Changes))
         assertEquals("terminals.isCollapsed", SplitPanePreferencesCodec.isCollapsedKey(OpenCodeSplitPaneScreen.Terminals))
+        assertEquals("files.leadingWidthDp", SplitPanePreferencesCodec.leadingWidthKey(OpenCodeSplitPaneScreen.Files))
     }
 
     @Test

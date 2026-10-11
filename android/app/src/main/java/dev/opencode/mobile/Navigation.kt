@@ -67,6 +67,7 @@ import dev.opencode.mobile.ui.componentgallery.components.BottomSheetGalleryScre
 import dev.opencode.mobile.ui.componentgallery.components.ButtonGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ChildSessionRowGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ChoiceBadgeGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.CodeFileGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.CodeSnippetGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ComposerSuggestionOverlayGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.DialogGalleryScreen
@@ -110,6 +111,7 @@ import dev.opencode.mobile.ui.componentgallery.components.TextInputGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ToolCallCardGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ToolChipGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.TopBarGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.TreeRowGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.UnifiedDiffGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.WorkingIndicatorGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.foundation.ColorGalleryScreen
@@ -191,6 +193,7 @@ fun MainNavigation() {
                 is SessionChat,
                 is SessionContext,
                 is Changes,
+                is FileBrowser,
                 is SessionToolGroup,
                 is Terminal,
                 is TerminalsCatalog,
@@ -732,6 +735,8 @@ fun MainNavigation() {
                                                         ComponentGalleryEntryId.SessionTodoItem -> SessionTodoItemGalleryScreen()
                                                         ComponentGalleryEntryId.HunkNavigationPill -> HunkNavigationPillGalleryScreen()
                                                         ComponentGalleryEntryId.UnifiedDiff -> UnifiedDiffGalleryScreen()
+                                                        ComponentGalleryEntryId.CodeFile -> CodeFileGalleryScreen()
+                                                        ComponentGalleryEntryId.TreeRow -> TreeRowGalleryScreen()
                                                         ComponentGalleryEntryId.Button -> ButtonGalleryScreen()
                                                         ComponentGalleryEntryId.TextInput -> TextInputGalleryScreen()
                                                         ComponentGalleryEntryId.ServerAddressInput ->

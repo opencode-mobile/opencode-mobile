@@ -9,14 +9,15 @@ enum OpenCodeSplitPaneScreen: String, CaseIterable, Sendable {
     case settings
     case changes
     case terminals
+    case files
 
-    /// Changes and Terminals are content splits: opening one inside Home collapses
+    /// Changes, Terminals, and Files are content splits: opening one inside Home collapses
     /// that sidebar for the visit. Leading-pane resize matches Home on every screen.
     var collapsesAncestorSidebar: Bool {
         switch self {
         case .home, .settings:
             false
-        case .changes, .terminals:
+        case .changes, .terminals, .files:
             true
         }
     }

@@ -12,7 +12,7 @@ struct ClientSlashActionCatalogTests {
                 hasSelectedComposerModel: false
             )
         )
-        #expect(visible == [.new, .terminal, .mcp])
+        #expect(visible == [.new, .terminal, .files, .mcp])
     }
 
     @Test func visibleActions_userMessageWithoutModel_showsNewForkUndo() {
@@ -24,7 +24,7 @@ struct ClientSlashActionCatalogTests {
                 hasSelectedComposerModel: false
             )
         )
-        #expect(visible == [.new, .terminal, .fork, .undo, .mcp])
+        #expect(visible == [.new, .terminal, .files, .fork, .undo, .mcp])
     }
 
     @Test func visibleActions_userMessageWithModel_includesCompact() {
@@ -36,7 +36,7 @@ struct ClientSlashActionCatalogTests {
                 hasSelectedComposerModel: true
             )
         )
-        #expect(visible == [.new, .terminal, .fork, .undo, .compact, .mcp])
+        #expect(visible == [.new, .terminal, .files, .fork, .undo, .compact, .mcp])
     }
 
     @Test func visibleActions_activeRevert_includesRedo() {
@@ -48,7 +48,7 @@ struct ClientSlashActionCatalogTests {
                 hasSelectedComposerModel: true
             )
         )
-        #expect(visible == [.new, .terminal, .redo, .mcp])
+        #expect(visible == [.new, .terminal, .files, .redo, .mcp])
     }
 
     @Test func rowTitle_matchesAllowlistCopy() {
@@ -58,6 +58,7 @@ struct ClientSlashActionCatalogTests {
         #expect(ClientSlashAction.redo.rowTitle == "[redo] Redo undone message")
         #expect(ClientSlashAction.compact.rowTitle == "[compact] Compact session context")
         #expect(ClientSlashAction.terminal.rowTitle == "[terminal] Open project shell")
+        #expect(ClientSlashAction.files.rowTitle == "[files] Browse project files")
         #expect(ClientSlashAction.mcp.rowTitle == "[mcp] Show MCP server status")
         #expect(ClientSlashAction.mcp.tileLabel == "MCP servers")
     }
@@ -69,6 +70,25 @@ struct ClientSlashActionCatalogTests {
         #expect(ClientSlashAction.redo.tileLabel == "Redo")
         #expect(ClientSlashAction.compact.tileLabel == "Compact")
         #expect(ClientSlashAction.terminal.tileLabel == "Terminal")
+        #expect(ClientSlashAction.files.tileLabel == "Files")
+    }
+
+    @Test func visibleActions_filesAlwaysFollowsTerminal() {
+        for count in [0, 1] {
+            for revert in [false, true] {
+                let visible = ClientSlashActionCatalog.visibleActions(
+                    ClientSlashActionVisibilityInput(
+                        visibleUserMessageCount: count,
+                        hasUndoableUserMessage: count > 0,
+                        hasActiveSessionRevert: revert,
+                        hasSelectedComposerModel: true
+                    )
+                )
+                let terminal = visible.firstIndex(of: .terminal)
+                #expect(terminal != nil)
+                #expect(visible.firstIndex(of: .files) == terminal.map { $0 + 1 })
+            }
+        }
     }
 
     @Test func visibilityInput_filtersMessagesAtOrAfterRevertBoundary() {

@@ -17,7 +17,7 @@ class ClientSlashActionCatalogTest {
                     hasSelectedComposerModel = false,
                 ),
             )
-        assertEquals(listOf(ClientSlashAction.New, ClientSlashAction.Terminal, ClientSlashAction.Mcp), visible)
+        assertEquals(listOf(ClientSlashAction.New, ClientSlashAction.Terminal, ClientSlashAction.Files, ClientSlashAction.Mcp), visible)
     }
 
     @Test
@@ -35,6 +35,7 @@ class ClientSlashActionCatalogTest {
             listOf(
                 ClientSlashAction.New,
                 ClientSlashAction.Terminal,
+                ClientSlashAction.Files,
                 ClientSlashAction.Fork,
                 ClientSlashAction.Undo,
                 ClientSlashAction.Mcp,
@@ -58,6 +59,7 @@ class ClientSlashActionCatalogTest {
             listOf(
                 ClientSlashAction.New,
                 ClientSlashAction.Terminal,
+                ClientSlashAction.Files,
                 ClientSlashAction.Fork,
                 ClientSlashAction.Undo,
                 ClientSlashAction.Compact,
@@ -79,9 +81,33 @@ class ClientSlashActionCatalogTest {
                 ),
             )
         assertEquals(
-            listOf(ClientSlashAction.New, ClientSlashAction.Terminal, ClientSlashAction.Redo, ClientSlashAction.Mcp),
+            listOf(
+                ClientSlashAction.New,
+                ClientSlashAction.Terminal,
+                ClientSlashAction.Files,
+                ClientSlashAction.Redo,
+                ClientSlashAction.Mcp,
+            ),
             visible,
         )
+    }
+
+    @Test
+    fun visibleActions_filesAlwaysFollowsTerminal() {
+        listOf(0, 1).forEach { messages ->
+            listOf(false, true).forEach { revert ->
+                val visible =
+                    ClientSlashActionCatalog.visibleActions(
+                        ClientSlashActionVisibilityInput(
+                            visibleUserMessageCount = messages,
+                            hasUndoableUserMessage = messages > 0,
+                            hasActiveSessionRevert = revert,
+                            hasSelectedComposerModel = true,
+                        ),
+                    )
+                assertEquals(visible.indexOf(ClientSlashAction.Terminal) + 1, visible.indexOf(ClientSlashAction.Files))
+            }
+        }
     }
 
     @Test
@@ -92,6 +118,7 @@ class ClientSlashActionCatalogTest {
         assertEquals("[redo] Redo undone message", ClientSlashAction.Redo.rowTitle)
         assertEquals("[compact] Compact session context", ClientSlashAction.Compact.rowTitle)
         assertEquals("[terminal] Open project shell", ClientSlashAction.Terminal.rowTitle)
+        assertEquals("[files] Browse project files", ClientSlashAction.Files.rowTitle)
         assertEquals("[mcp] Show MCP server status", ClientSlashAction.Mcp.rowTitle)
     }
 
@@ -103,6 +130,7 @@ class ClientSlashActionCatalogTest {
         assertEquals("Redo", ClientSlashAction.Redo.tileLabel)
         assertEquals("Compact", ClientSlashAction.Compact.tileLabel)
         assertEquals("Terminal", ClientSlashAction.Terminal.tileLabel)
+        assertEquals("Files", ClientSlashAction.Files.tileLabel)
         assertEquals("MCP servers", ClientSlashAction.Mcp.tileLabel)
     }
 

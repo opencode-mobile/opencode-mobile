@@ -120,6 +120,7 @@ class OpenCodeSplitPaneLayoutTest {
         assertFalse(OpenCodeSplitPaneScreen.Settings.collapsesAncestorSidebar)
         assertTrue(OpenCodeSplitPaneScreen.Changes.collapsesAncestorSidebar)
         assertTrue(OpenCodeSplitPaneScreen.Terminals.collapsesAncestorSidebar)
+        assertTrue(OpenCodeSplitPaneScreen.Files.collapsesAncestorSidebar)
         val resized =
             OpenCodeSplitPaneLayout.resolveDragEnd(
                 startedCollapsed = false,

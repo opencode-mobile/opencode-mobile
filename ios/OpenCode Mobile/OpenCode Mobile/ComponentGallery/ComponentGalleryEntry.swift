@@ -51,6 +51,8 @@ enum ComponentGalleryEntryID: String, Hashable {
     case sessionTodoItem
     case hunkNavigationPill
     case unifiedDiff
+    case codeFile
+    case treeRow
     case button
     case textInput
     case serverAddressInput
@@ -412,5 +414,17 @@ let componentGalleryEntries = [
         title: "Unified Diff",
         description: "Read-only file changes with stable old and new line gutters.",
         category: .diffs
+    ),
+    ComponentGalleryEntry(
+        id: .codeFile,
+        title: "Code File",
+        description: "Read-only source file with a line-number gutter, highlighting, and wrap on or off.",
+        category: .diffs
+    ),
+    ComponentGalleryEntry(
+        id: .treeRow,
+        title: "Tree Row",
+        description: "File tree row with depth indent, disclosure, icon, and selected, dimmed, or loading states.",
+        category: .lists
     ),
 ]

@@ -57,6 +57,8 @@ enum class ComponentGalleryEntryId {
     SessionTodoItem,
     HunkNavigationPill,
     UnifiedDiff,
+    CodeFile,
+    TreeRow,
     Button,
     TextInput,
     ServerAddressInput,
@@ -225,6 +227,12 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.ListItem,
             title = "List Item",
             description = "Reusable project and session row treatment.",
+            category = ComponentGalleryCategory.Lists,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.TreeRow,
+            title = "Tree Row",
+            description = "File tree row with depth indent, disclosure, icon, and selected, dimmed, or loading states.",
             category = ComponentGalleryCategory.Lists,
         ),
         ComponentGalleryEntry(
@@ -417,6 +425,12 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.UnifiedDiff,
             title = "Unified Diff",
             description = "Read-only file changes with stable old and new line gutters.",
+            category = ComponentGalleryCategory.Diffs,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.CodeFile,
+            title = "Code File",
+            description = "Read-only source file with a line-number gutter, highlighting, and wrap on or off.",
             category = ComponentGalleryCategory.Diffs,
         ),
     )

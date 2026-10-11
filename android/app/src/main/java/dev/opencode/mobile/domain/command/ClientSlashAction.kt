@@ -10,6 +10,7 @@ enum class ClientSlashAction(
     Redo("redo", "Redo undone message"),
     Compact("compact", "Compact session context"),
     Terminal("terminal", "Open project shell"),
+    Files("files", "Browse project files"),
     Mcp("mcp", "Show MCP server status"),
     ;
 
@@ -44,6 +45,7 @@ object ClientSlashActionCatalog {
         buildList {
             add(ClientSlashAction.New)
             add(ClientSlashAction.Terminal)
+            add(ClientSlashAction.Files)
             if (input.visibleUserMessageCount > 0) {
                 add(ClientSlashAction.Fork)
             }

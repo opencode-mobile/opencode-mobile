@@ -20,3 +20,11 @@ nonisolated struct V2FsEntryDTO: Decodable, Sendable {
     let path: String
     let type: String
 }
+
+/// v1 `GET /file/content` body. Text is trimmed server-side; binary content is base64.
+nonisolated struct FileContentDTO: Decodable, Sendable {
+    let type: String
+    let content: String
+    let encoding: String?
+    let mimeType: String?
+}

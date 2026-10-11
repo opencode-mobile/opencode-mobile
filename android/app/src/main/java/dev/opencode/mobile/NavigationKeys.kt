@@ -65,6 +65,11 @@ import kotlinx.serialization.Serializable
     val initialFilePath: String? = null,
 ) : NavKey
 
+/** Read-only File Browser rooted at a Session Chat worktree. */
+@Serializable data class FileBrowser(
+    val worktree: String,
+) : NavKey
+
 @Serializable data class SessionToolGroup(
     val sessionId: String,
     val worktree: String,

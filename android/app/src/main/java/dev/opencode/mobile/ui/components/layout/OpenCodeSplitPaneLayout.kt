@@ -13,17 +13,18 @@ enum class OpenCodeSplitPaneScreen {
     Settings,
     Changes,
     Terminals,
+    Files,
     ;
 
     /**
-     * Changes and Terminals are content splits: opening one inside Home collapses that sidebar
+     * Changes, Terminals, and Files are content splits: opening one inside Home collapses that sidebar
      * for the visit. Leading-pane resize matches Home on every screen.
      */
     val collapsesAncestorSidebar: Boolean
         get() =
             when (this) {
                 Home, Settings -> false
-                Changes, Terminals -> true
+                Changes, Terminals, Files -> true
             }
 }
 

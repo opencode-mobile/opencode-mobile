@@ -176,7 +176,7 @@ data class SessionChatUiState(
     val atSuggestions: List<SessionChatAtSuggestion> = emptyList(),
     val commandsSheetVisible: Boolean = false,
     val visibleClientSlashActions: List<ClientSlashAction> =
-        listOf(ClientSlashAction.New, ClientSlashAction.Terminal, ClientSlashAction.Mcp),
+        listOf(ClientSlashAction.New, ClientSlashAction.Terminal, ClientSlashAction.Files, ClientSlashAction.Mcp),
     val mcpPageVisible: Boolean = false,
     val mcpServers: List<McpServer> = emptyList(),
     val mcpLoading: Boolean = false,
@@ -190,6 +190,8 @@ data class SessionChatUiState(
     val forkedSessionTitle: String = "",
     val pendingSessionReplace: ChildSessionNavigationTarget? = null,
     val pendingTerminalOpen: PendingTerminalOpen? = null,
+    /** Worktree to open in the File Browser; consumed by the screen once it navigates. */
+    val pendingFilesOpen: String? = null,
     val hasPendingRevert: Boolean = false,
     /** Smart project label for top-bar chrome; null when worktree missing. */
     val projectLabel: String? = null,
@@ -594,7 +596,7 @@ data class SessionChatInboxRegionState(
 data class SessionChatCommandsRegionState(
     val commandsSheetVisible: Boolean = false,
     val visibleActions: List<ClientSlashAction> =
-        listOf(ClientSlashAction.New, ClientSlashAction.Terminal, ClientSlashAction.Mcp),
+        listOf(ClientSlashAction.New, ClientSlashAction.Terminal, ClientSlashAction.Files, ClientSlashAction.Mcp),
     val mcpPageVisible: Boolean = false,
     val mcpServers: List<McpServer> = emptyList(),
     val mcpLoading: Boolean = false,
@@ -612,6 +614,8 @@ data class SessionChatCommandsRegionState(
     val actionSuccessMessage: String? = null,
     val pendingSessionReplace: ChildSessionNavigationTarget? = null,
     val pendingTerminalOpen: PendingTerminalOpen? = null,
+    /** Worktree to open in the File Browser; consumed by the screen once it navigates. */
+    val pendingFilesOpen: String? = null,
 )
 
 data class LatestModelHint(

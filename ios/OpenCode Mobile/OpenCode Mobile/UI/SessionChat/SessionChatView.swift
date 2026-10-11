@@ -24,6 +24,7 @@ struct SessionChatView: View {
     @State private var skillsTarget: SessionChatSkillsTarget?
     @State private var childSessionTarget: ChildSessionNavigationTarget?
     @State private var terminalRoute: TerminalRoute?
+    @State private var filesRoute: FilesRoute?
     @State private var developerToolsPreferences = DeveloperToolsPreferences.shared
     @State private var showAttachmentSources = false
     @State private var showFilesPicker = false
@@ -739,6 +740,15 @@ struct SessionChatView: View {
         .navigationDestination(item: $terminalRoute) { route in
             TerminalView(worktree: route.worktree, projectTitle: route.projectTitle, ptyId: route.ptyId)
         }
+        .onChange(of: viewModel.uiState.pendingFilesOpen) { _, _ in
+            if let target = viewModel.uiState.pendingFilesOpen {
+                filesRoute = FilesRoute(worktree: target.worktree)
+                viewModel.consumePendingFilesOpen()
+            }
+        }
+        .navigationDestination(item: $filesRoute) { route in
+            FilesView(worktree: route.worktree)
+        }
     }
 
     /// Home-indicator lift for the floating composer. The timeline host ignores
@@ -910,6 +920,16 @@ struct SessionChatView: View {
                     logOverflowAction(ProductAnalytics.Action.chatOverflowReviewChanges)
                     menuExpanded = false
                     changesTarget = viewModel.uiState.changesNavigationTarget(worktree: session.worktree)
+                }
+            ),
+            OpenCodeOverflowMenuEntry(
+                title: "Browse files",
+                icon: .folder,
+                enabled: sessionCreated,
+                action: {
+                    logOverflowAction(ProductAnalytics.Action.chatOverflowBrowseFiles)
+                    menuExpanded = false
+                    filesRoute = FilesRoute(worktree: session.worktree)
                 }
             ),
             OpenCodeOverflowMenuEntry(
@@ -1343,7 +1363,7 @@ private struct CommandsActionTileGrid: View {
     }
 
     private func tile(_ action: ClientSlashAction) -> OpenCodeActionTile {
-        let requiresLive = action == .new || action == .fork || action == .terminal
+        let requiresLive = action == .new || action == .fork || action == .terminal || action == .files
         return OpenCodeActionTile(
             icon: action.tileIcon,
             label: action.tileLabel,
@@ -1360,6 +1380,7 @@ private extension ClientSlashAction {
         switch self {
         case .new: .add
         case .terminal: .terminal
+        case .files: .folder
         case .fork: .callSplit
         case .undo: .undo
         case .redo: .redo
