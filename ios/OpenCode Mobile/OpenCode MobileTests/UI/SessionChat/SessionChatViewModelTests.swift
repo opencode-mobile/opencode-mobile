@@ -1578,6 +1578,237 @@ struct SessionChatViewModelTests {
         #expect(viewModel.uiState.composer.isModelSelectionReady == false)
     }
 
+    @Test func reopenedSession_showsLastSelectionBeforeAnyRepositoryCallResolves() async {
+        let (_, pickedOption, catalog) = sharedCatalogFixture()
+        let models = GatedModelRepository(catalog: catalog)
+        let agents = FakeAgentRepository()
+        let connection = Self.makeActiveConnectionManager()
+        let store = ModelCatalogStore(modelRepository: models, agentRepository: agents, activeConnectionManager: connection)
+        let selectionStore = InMemorySessionModelSelectionStore()
+        let first = makeViewModel(
+            sessionModelSelectionStore: selectionStore,
+            modelRepository: models,
+            modelCatalogStore: store,
+            activeConnectionManager: connection,
+            agentRepository: agents
+        )
+        await first.loadMessages()
+        _ = await waitUntil { first.uiState.composer.isModelSelectionReady }
+        first.selectModel(pickedOption)
+        first.stopObserving()
+
+        models.close()
+        let callsBeforeReopen = models.calls
+        let second = makeViewModel(
+            sessionModelSelectionStore: selectionStore,
+            modelRepository: models,
+            modelCatalogStore: store,
+            activeConnectionManager: connection,
+            agentRepository: agents
+        )
+        defer {
+            models.open()
+            second.stopObserving()
+        }
+
+        #expect(second.uiState.composer.isModelSelectionReady)
+        #expect(second.uiState.composer.selectedModelLabel == pickedOption.modelLabel)
+        #expect(second.uiState.composer.modelOptions == catalog.options)
+
+        // The quiet refresh is still blocked; the chip never falls back to "Loading model…".
+        let load = Task { await second.loadMessages() }
+        _ = await waitUntil { models.calls > callsBeforeReopen }
+        #expect(second.uiState.composer.isModelSelectionReady)
+        #expect(second.uiState.composer.selectedModel?.option.modelID == "gpt-4")
+        models.open()
+        await load.value
+        #expect(second.uiState.composer.selectedModel?.option.modelID == "gpt-4")
+    }
+
+    @Test func firstOpenedSession_waitsForHistoryInsteadOfShowingTheServerDefault() async {
+        let (_, pickedOption, catalog) = sharedCatalogFixture()
+        let models = GatedModelRepository(catalog: catalog)
+        let (store, connection, agents) = await warmedCatalogStore(models: models)
+        let history = AsyncGate()
+        let messages = FakeMessageRepository(messages: [
+            Message(
+                id: "msg-1",
+                role: .user,
+                text: "Use GPT",
+                model: nil,
+                modelProviderID: "openai",
+                modelID: "gpt-4",
+                variant: nil,
+                mode: nil,
+                sentAtEpochMs: 2_000
+            ),
+        ])
+        messages.listHold = history
+        let viewModel = makeViewModel(
+            messageRepository: messages,
+            modelRepository: models,
+            modelCatalogStore: store,
+            activeConnectionManager: connection,
+            agentRepository: agents
+        )
+        defer { viewModel.stopObserving() }
+
+        // The catalog comes from the store at once; the selection waits for this session's history.
+        #expect(viewModel.uiState.composer.modelOptions == catalog.options)
+        #expect(viewModel.uiState.composer.isModelSelectionReady == false)
+        #expect(viewModel.uiState.composer.selectedModel == nil)
+        #expect(viewModel.uiState.composer.selectedModelLabel == "Loading model…")
+
+        let load = Task { await viewModel.loadMessages() }
+        _ = await waitUntil { models.calls >= 2 }
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(viewModel.uiState.composer.isModelSelectionReady == false)
+        #expect(viewModel.uiState.composer.selectedModel == nil)
+
+        await history.open()
+        await load.value
+        _ = await waitUntil { viewModel.uiState.composer.isModelSelectionReady }
+
+        #expect(viewModel.uiState.composer.isModelSelectionReady)
+        #expect(viewModel.uiState.composer.selectedModel?.option == pickedOption)
+    }
+
+    @Test func reopenedSession_failedCatalogRefreshKeepsTheShownSelection() async {
+        let (defaultOption, _, catalog) = sharedCatalogFixture()
+        let models = GatedModelRepository(catalog: catalog)
+        let (store, connection, agents) = await warmedCatalogStore(models: models)
+        store.recordSelection(
+            SessionModelSelection(providerID: "anthropic", modelID: "claude-sonnet", variant: nil, savedAtEpochMs: 1_000),
+            worktree: "/repo",
+            sessionID: "ses-1"
+        )
+        models.setFailure(true)
+
+        let viewModel = makeViewModel(
+            modelRepository: models,
+            modelCatalogStore: store,
+            activeConnectionManager: connection,
+            agentRepository: agents
+        )
+        defer { viewModel.stopObserving() }
+        #expect(viewModel.uiState.composer.isModelSelectionReady)
+        await viewModel.loadMessages()
+
+        #expect(models.calls >= 2)
+        #expect(viewModel.uiState.composer.isModelSelectionReady)
+        #expect(viewModel.uiState.composer.modelCatalogError == nil)
+        #expect(viewModel.uiState.composer.selectedModel?.option == defaultOption)
+    }
+
+    @Test func reopenedSession_newerUserHistorySwitchesTheProvisionalSelection() async {
+        let (defaultOption, pickedOption, catalog) = sharedCatalogFixture()
+        let models = GatedModelRepository(catalog: catalog)
+        let (store, connection, agents) = await warmedCatalogStore(models: models)
+        store.recordSelection(
+            SessionModelSelection(providerID: "openai", modelID: "gpt-4", variant: nil, savedAtEpochMs: 1_000),
+            worktree: "/repo",
+            sessionID: "ses-1"
+        )
+
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(messages: [
+                Message(
+                    id: "msg-1",
+                    role: .user,
+                    text: "Use Claude",
+                    model: nil,
+                    modelProviderID: "anthropic",
+                    modelID: "claude-sonnet",
+                    variant: "high",
+                    mode: nil,
+                    sentAtEpochMs: 2_000
+                ),
+            ]),
+            modelRepository: models,
+            modelCatalogStore: store,
+            activeConnectionManager: connection,
+            agentRepository: agents
+        )
+        defer { viewModel.stopObserving() }
+        #expect(viewModel.uiState.composer.selectedModel?.option == pickedOption)
+
+        await viewModel.loadMessages()
+        _ = await waitUntil { viewModel.uiState.composer.selectedModel?.option == defaultOption }
+
+        #expect(viewModel.uiState.composer.selectedModel?.option == defaultOption)
+        #expect(viewModel.uiState.composer.selectedVariant == "high")
+        #expect(viewModel.uiState.composer.isModelSelectionReady)
+    }
+
+    @Test func reopenedSession_userPickBeforeReconcileIsKept() async {
+        let (defaultOption, _, catalog) = sharedCatalogFixture()
+        let models = GatedModelRepository(catalog: catalog)
+        let (store, connection, agents) = await warmedCatalogStore(models: models)
+        store.recordSelection(
+            SessionModelSelection(providerID: "openai", modelID: "gpt-4", variant: nil, savedAtEpochMs: 1_000),
+            worktree: "/repo",
+            sessionID: "ses-1"
+        )
+        let future = Int64(Date().timeIntervalSince1970 * 1_000) + 3_600_000
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(messages: [
+                Message(
+                    id: "msg-1",
+                    role: .user,
+                    text: "Use GPT",
+                    model: nil,
+                    modelProviderID: "openai",
+                    modelID: "gpt-4",
+                    variant: nil,
+                    mode: nil,
+                    sentAtEpochMs: future
+                ),
+            ]),
+            modelRepository: models,
+            modelCatalogStore: store,
+            activeConnectionManager: connection,
+            agentRepository: agents
+        )
+        defer { viewModel.stopObserving() }
+        #expect(viewModel.uiState.composer.selectedModel?.option.modelID == "gpt-4")
+
+        viewModel.selectModel(defaultOption)
+        await viewModel.loadMessages()
+        try? await Task.sleep(for: .milliseconds(50))
+
+        #expect(viewModel.uiState.composer.selectedModel?.option == defaultOption)
+    }
+
+    @Test func reopenedSession_refreshThatDropsTheSelectedModelFallsBackWithNotice() async {
+        let (defaultOption, _, catalog) = sharedCatalogFixture()
+        let models = GatedModelRepository(catalog: catalog)
+        let (store, connection, agents) = await warmedCatalogStore(models: models)
+        store.recordSelection(
+            SessionModelSelection(providerID: "openai", modelID: "gpt-4", variant: nil, savedAtEpochMs: 1_000),
+            worktree: "/repo",
+            sessionID: "ses-1"
+        )
+        models.setCatalog(ModelSelectionCatalog(options: [defaultOption], serverDefault: defaultOption))
+
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(messages: []),
+            modelRepository: models,
+            modelCatalogStore: store,
+            activeConnectionManager: connection,
+            agentRepository: agents
+        )
+        defer { viewModel.stopObserving() }
+        #expect(viewModel.uiState.composer.selectedModel?.option.modelID == "gpt-4")
+
+        await viewModel.loadMessages()
+        _ = await waitUntil { viewModel.uiState.composer.selectedModel?.option == defaultOption }
+
+        #expect(viewModel.uiState.composer.selectedModel?.option == defaultOption)
+        #expect(viewModel.uiState.composer.modelOptions == [defaultOption])
+        #expect(viewModel.uiState.composer.modelNotice == "Selected model is unavailable. Using Claude Sonnet.")
+        #expect(viewModel.uiState.composer.isModelSelectionReady)
+    }
+
     @Test func selectMode_persistsAgentForTheSessionWithoutNewSessionPreference() async {
         let selectionStore = InMemorySessionModelSelectionStore()
         let viewModel = makeViewModel(sessionModelSelectionStore: selectionStore)
@@ -3485,6 +3716,8 @@ struct SessionChatViewModelTests {
         sessionModelSelectionStore: (any SessionModelSelectionStore)? = nil,
         composerDraftStore: (any ComposerDraftStore)? = nil,
         modelRepository: any ModelRepository = FakeModelRepository(),
+        modelCatalogStore: ModelCatalogStore? = nil,
+        activeConnectionManager: ActiveConnectionManager? = nil,
         commandRepository: FakeCommandRepository = FakeCommandRepository(),
         agentRepository: FakeAgentRepository = FakeAgentRepository(),
         sessionRepository: FakeChatSessionRepository? = nil,
@@ -3518,17 +3751,19 @@ struct SessionChatViewModelTests {
             }
         let selectionStore = sessionModelSelectionStore ?? InMemorySessionModelSelectionStore()
         let draftStore = composerDraftStore ?? InMemoryComposerDraftStore()
-        let activeConnectionManager = ActiveConnectionManager()
-        activeConnectionManager.apply(
-            ConnectionProfile(baseURL: "http://127.0.0.1:4096/", username: "opencode", password: ""),
-            serverProtocol: serverProtocol
+        let activeConnectionManager = activeConnectionManager ?? Self.makeActiveConnectionManager(serverProtocol: serverProtocol)
+        // A fresh store per view model keeps each test's first open cold unless it shares one.
+        let catalogStore = modelCatalogStore ?? ModelCatalogStore(
+            modelRepository: modelRepository,
+            agentRepository: agentRepository,
+            activeConnectionManager: activeConnectionManager
         )
         let viewModel = SessionChatViewModel(
             sessionID: sessionID,
             sessionTitle: sessionTitle,
             worktree: "/repo",
             messageRepository: repo,
-            modelRepository: modelRepository,
+            modelCatalogStore: catalogStore,
             commandRepository: commandRepository,
             agentRepository: agentRepository,
             sessionRepository: sessionRepository,
@@ -3543,7 +3778,7 @@ struct SessionChatViewModelTests {
             connectionProfileStore: EmptyConnectionProfileStore(),
             newSessionModelSelectionResolver: NewSessionModelSelectionResolver(
                 store: selectionStore,
-                modelRepository: modelRepository
+                modelCatalogStore: catalogStore
             ),
             liveUpdates: liveUpdates,
             clock: clock,
@@ -3551,6 +3786,51 @@ struct SessionChatViewModelTests {
         )
         viewModel.startObserving()
         return viewModel
+    }
+
+    private func sharedCatalogFixture() -> (ModelSelectionOption, ModelSelectionOption, ModelSelectionCatalog) {
+        let defaultOption = ModelSelectionOption(
+            providerID: "anthropic",
+            providerName: "Anthropic",
+            modelID: "claude-sonnet",
+            modelName: "Claude Sonnet",
+            variants: ["low", "high"],
+            contextLimitTokens: 128_000
+        )
+        let pickedOption = ModelSelectionOption(
+            providerID: "openai",
+            providerName: "OpenAI",
+            modelID: "gpt-4",
+            modelName: "GPT-4",
+            variants: [],
+            contextLimitTokens: 128_000
+        )
+        return (
+            defaultOption,
+            pickedOption,
+            ModelSelectionCatalog(options: [defaultOption, pickedOption], serverDefault: defaultOption)
+        )
+    }
+
+    /// A store that already holds the catalog and agents for `/repo`, as after an earlier Session Chat.
+    private func warmedCatalogStore(
+        models: GatedModelRepository
+    ) async -> (ModelCatalogStore, ActiveConnectionManager, FakeAgentRepository) {
+        let agents = FakeAgentRepository()
+        let connection = Self.makeActiveConnectionManager()
+        let store = ModelCatalogStore(modelRepository: models, agentRepository: agents, activeConnectionManager: connection)
+        _ = try? await store.refreshCatalog(worktree: "/repo")
+        _ = try? await store.refreshSelectableAgents(worktree: "/repo")
+        return (store, connection, agents)
+    }
+
+    private static func makeActiveConnectionManager(serverProtocol: ServerProtocol = .v1) -> ActiveConnectionManager {
+        let activeConnectionManager = ActiveConnectionManager()
+        activeConnectionManager.apply(
+            ConnectionProfile(baseURL: "http://127.0.0.1:4096/", username: "opencode", password: ""),
+            serverProtocol: serverProtocol
+        )
+        return activeConnectionManager
     }
 
     private func longMarkdownHistory() -> [Message] {
@@ -3832,6 +4112,8 @@ private final class FakeMessageRepository: MessageRepository, @unchecked Sendabl
     var sendPromptAsyncCalled = false
     var sentOptions: PromptSendOptions?
     private var listMessagesCallCount = 0
+    /// Holds `listMessages` until opened.
+    var listHold: AsyncGate?
     private var sendContinuation: CheckedContinuation<Void, Never>?
     private var sendReleaseRequested = false
 
@@ -3904,6 +4186,7 @@ private final class FakeMessageRepository: MessageRepository, @unchecked Sendabl
 
     func listMessages(sessionID: String, directory: String?) async throws -> [Message] {
         listMessagesCallCount += 1
+        await listHold?.wait()
         if shouldFailLoad {
             throw MessageError.transport("load failed")
         }
@@ -3957,6 +4240,42 @@ private struct FakeModelRepository: ModelRepository {
 
     func listModelOptions(directory: String?) async throws -> ModelSelectionCatalog {
         catalog
+    }
+}
+
+/// Answers with `catalog` while open; counts calls and can fail instead.
+private final class GatedModelRepository: ModelRepository, @unchecked Sendable {
+    private let lock = NSLock()
+    private var isOpen = true
+    private var shouldFail = false
+    private var catalog: ModelSelectionCatalog
+    private var _calls = 0
+
+    init(catalog: ModelSelectionCatalog) {
+        self.catalog = catalog
+    }
+
+    var calls: Int { withLock { _calls } }
+
+    func open() { withLock { isOpen = true } }
+    func close() { withLock { isOpen = false } }
+    func setFailure(_ fail: Bool) { withLock { shouldFail = fail } }
+    func setCatalog(_ catalog: ModelSelectionCatalog) { withLock { self.catalog = catalog } }
+
+    func listModelOptions(directory: String?) async throws -> ModelSelectionCatalog {
+        withLock { _calls += 1 }
+        while !withLock({ isOpen }) {
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+        let (fail, catalog) = withLock { (shouldFail, self.catalog) }
+        if fail { throw ModelSelectionError.transport("offline") }
+        return catalog
+    }
+
+    private func withLock<T>(_ body: () -> T) -> T {
+        lock.lock()
+        defer { lock.unlock() }
+        return body()
     }
 }
 

@@ -44,6 +44,33 @@ protocol SessionModelSelectionStore: Sendable {
         selection: SessionModelSelection
     ) async
     func clearAll() async
+    /// Synchronous reads for a Session Chat's first frame; `nil` when the store only loads asynchronously.
+    func peekSession(
+        connectionIdentity: ModelSelectionConnectionIdentity,
+        worktree: String,
+        sessionID: String
+    ) -> SessionModelSelection?
+    func peekNewSessionPreference(
+        connectionIdentity: ModelSelectionConnectionIdentity,
+        worktree: String
+    ) -> SessionModelSelection?
+}
+
+extension SessionModelSelectionStore {
+    func peekSession(
+        connectionIdentity: ModelSelectionConnectionIdentity,
+        worktree: String,
+        sessionID: String
+    ) -> SessionModelSelection? {
+        nil
+    }
+
+    func peekNewSessionPreference(
+        connectionIdentity: ModelSelectionConnectionIdentity,
+        worktree: String
+    ) -> SessionModelSelection? {
+        nil
+    }
 }
 
 struct UserDefaultsSessionModelSelectionStore: SessionModelSelectionStore, @unchecked Sendable {
@@ -76,6 +103,14 @@ struct UserDefaultsSessionModelSelectionStore: SessionModelSelectionStore, @unch
         worktree: String,
         sessionID: String
     ) async -> SessionModelSelection? {
+        peekSession(connectionIdentity: connectionIdentity, worktree: worktree, sessionID: sessionID)
+    }
+
+    func peekSession(
+        connectionIdentity: ModelSelectionConnectionIdentity,
+        worktree: String,
+        sessionID: String
+    ) -> SessionModelSelection? {
         decode(defaults.data(forKey: sessionKey(connectionIdentity, worktree: worktree, sessionID: sessionID)))
             ?? decode(defaults.data(forKey: legacyKey(
                 serverBaseURL: connectionIdentity.serverBaseURL,
@@ -117,6 +152,13 @@ struct UserDefaultsSessionModelSelectionStore: SessionModelSelectionStore, @unch
         connectionIdentity: ModelSelectionConnectionIdentity,
         worktree: String
     ) async -> SessionModelSelection? {
+        peekNewSessionPreference(connectionIdentity: connectionIdentity, worktree: worktree)
+    }
+
+    func peekNewSessionPreference(
+        connectionIdentity: ModelSelectionConnectionIdentity,
+        worktree: String
+    ) -> SessionModelSelection? {
         decode(defaults.data(forKey: preferenceKey(connectionIdentity, worktree: worktree)))
     }
 

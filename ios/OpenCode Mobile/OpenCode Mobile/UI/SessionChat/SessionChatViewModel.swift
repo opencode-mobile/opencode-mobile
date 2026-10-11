@@ -67,7 +67,7 @@ final class SessionChatViewModel {
         sessionTitle: String,
         worktree: String,
         messageRepository: any MessageRepository,
-        modelRepository: any ModelRepository,
+        modelCatalogStore: ModelCatalogStore,
         commandRepository: any CommandRepository,
         agentRepository: any AgentRepository,
         sessionRepository: any SessionRepository,
@@ -115,7 +115,7 @@ final class SessionChatViewModel {
             sessionID: sessionID,
             worktree: worktree,
             messageRepository: messageRepository,
-            modelRepository: modelRepository,
+            modelCatalogStore: modelCatalogStore,
             commandRepository: commandRepository,
             agentRepository: agentRepository,
             sessionRepository: sessionRepository,
@@ -289,7 +289,7 @@ final class SessionChatViewModel {
 
     func retryModelCatalog() async {
         logChatAction(ProductAnalytics.Action.composerRetryModelCatalog)
-        await composer.loadCatalog()
+        await composer.loadCatalog(force: true)
     }
 
     func selectModel(_ option: ModelSelectionOption) {

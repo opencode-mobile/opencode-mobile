@@ -296,6 +296,16 @@ extension Container {
         }.singleton
     }
 
+    var modelCatalogStore: Factory<ModelCatalogStore> {
+        self { @MainActor in
+            ModelCatalogStore(
+                modelRepository: self.modelRepository(),
+                agentRepository: self.agentRepository(),
+                activeConnectionManager: self.activeConnectionManager()
+            )
+        }.singleton
+    }
+
     var commandsAPIClient: Factory<CommandsAPIClient> {
         self {
             CommandsAPIClient(
@@ -533,7 +543,8 @@ extension Container {
                 questionLiveStore: self.questionLiveStore(),
                 sessionTodoLiveStore: self.sessionTodoLiveStore(),
                 sessionReadyStore: self.sessionReadyStore(),
-                messageRepository: self.messageRepository()
+                messageRepository: self.messageRepository(),
+                modelCatalogStore: self.modelCatalogStore()
             )
         }.singleton
     }
@@ -591,7 +602,7 @@ extension Container {
                 sessionTitle: $0.sessionTitle,
                 worktree: $0.worktree,
                 messageRepository: self.messageRepository(),
-                modelRepository: self.modelRepository(),
+                modelCatalogStore: self.modelCatalogStore(),
                 commandRepository: self.commandRepository(),
                 agentRepository: self.agentRepository(),
                 sessionRepository: self.sessionRepository(),
@@ -607,7 +618,7 @@ extension Container {
                 connectionProfileStore: self.connectionProfileStore(),
                 newSessionModelSelectionResolver: NewSessionModelSelectionResolver(
                     store: self.sessionModelSelectionStore(),
-                    modelRepository: self.modelRepository()
+                    modelCatalogStore: self.modelCatalogStore()
                 ),
                 liveUpdates: self.liveUpdates(),
                 lastTurnReviewChangesStore: self.lastTurnReviewChangesStore(),
