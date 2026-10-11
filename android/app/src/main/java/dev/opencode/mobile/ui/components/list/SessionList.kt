@@ -309,6 +309,14 @@ private fun SessionListFeedPage(
         if (selectedSessionId == null || selectedSessionId == previous) return@LaunchedEffect
         val index = sessionListItemIndex(currentLadderSections, selectedSessionId) ?: return@LaunchedEffect
         listState.revealItem(index)
+        // A reveal that leaves the top stops following it, so a newcomer does not scroll the
+        // selected row back out of view. The scroll-start sample cannot see this: it fires
+        // while the list is still at the top.
+        followingTop =
+            SessionListScrollPin.isAtTop(
+                firstVisibleItemIndex = listState.firstVisibleItemIndex,
+                firstVisibleItemScrollOffset = listState.firstVisibleItemScrollOffset,
+            )
     }
 
     SessionListFeed(
