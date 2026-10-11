@@ -26,7 +26,7 @@ import dev.opencode.mobile.domain.message.PromptModelSelection
 import dev.opencode.mobile.domain.message.PromptSendOptions
 import dev.opencode.mobile.domain.message.PromptSendProgress
 import dev.opencode.mobile.domain.message.PromptSendProgressReporter
-import dev.opencode.mobile.domain.model.ModelRepository
+import dev.opencode.mobile.domain.model.ModelCatalogStore
 import dev.opencode.mobile.domain.model.ModelSelection
 import dev.opencode.mobile.domain.model.ModelSelectionCatalog
 import dev.opencode.mobile.domain.model.ModelSelectionConnectionIdentity
@@ -74,7 +74,7 @@ import java.util.UUID
 
 class SessionChatComposer(
     private val messageRepository: MessageRepository,
-    private val modelRepository: ModelRepository,
+    private val modelCatalogStore: ModelCatalogStore,
     private val commandRepository: CommandRepository,
     private val agentRepository: AgentRepository,
     private val sessionRepository: SessionRepository,
@@ -110,6 +110,15 @@ class SessionChatComposer(
     private var catalogLoadGeneration = 0
     private var catalogEventJob: Job? = null
     private var catalogRetryJob: Job? = null
+
+    /** The chip shows a selection seeded from [ModelCatalogStore] that the gate has not reconciled yet. */
+    private var provisionalSelection = false
+
+    /** The user picked a model, variant, or agent while the selection was provisional; reconcile keeps it. */
+    private var pickedDuringProvisional = false
+
+    /** The catalog came from [ModelCatalogStore]; a failed or empty refresh must not hide it. */
+    private var catalogSeededFromCache = false
 
     fun bind(
         sessionId: String,
@@ -153,6 +162,9 @@ class SessionChatComposer(
         initialSelectionState = InitialSelectionState.LoadingCache
         latestTimelineState = null
         latestHistoryHints = null
+        provisionalSelection = false
+        pickedDuringProvisional = false
+        catalogSeededFromCache = false
         draftRevision = 0
         nextAttachmentRevision = 1
         attachmentRevisions.clear()
@@ -164,12 +176,65 @@ class SessionChatComposer(
                     ),
             )
         logI("bind session=$sessionId worktree=$worktree")
+        seedFromCatalogStore(sessionId, worktree)
         loadCachedSelection()
         loadServerCommands()
         loadMentionableAgents()
-        loadSelectableAgents()
+        loadSelectableAgents(force = true)
         applyOrLoadDraft(preserve)
         startCatalogEventRefresh()
+    }
+
+    /**
+     * Shows the store's catalog and a provisional selection at once, so switching to a session
+     * whose catalog is loaded never shows "Loading model…". The gate reconciles it later against
+     * the persisted selection and history.
+     */
+    private fun seedFromCatalogStore(
+        sessionId: String,
+        worktree: String,
+    ) {
+        // A session still being created keeps waiting; its promotion rebinds with the seeded selection.
+        if (OptimisticSessionCreate.isPlaceholder(sessionId)) return
+        val entry = modelCatalogStore.peek(worktree) ?: return
+        val catalog = entry.catalog?.takeIf { it.options.isNotEmpty() } ?: return
+        val remembered =
+            modelCatalogStore
+                .lastSelection(worktree, sessionId)
+                ?.takeIf { catalog.option(it.providerId, it.modelId) != null }
+        val preference =
+            modelCatalogStore
+                .newSessionPreference(worktree)
+                ?.takeIf { catalog.option(it.providerId, it.modelId) != null }
+        val seed = remembered ?: preference
+        val option =
+            seed?.let { catalog.option(it.providerId, it.modelId) }
+                ?: catalog.serverDefault
+                ?: catalog.options.first()
+        val variant = resolvedVariant(seed?.variant, option)
+        val agents = entry.selectableAgents?.ifEmpty { SelectableAgent.Fallback }
+        loadedCatalog = catalog
+        catalogSeededFromCache = true
+        provisionalSelection = true
+        if (agents != null) loadedSelectableAgents = true
+        updateComposer { composer ->
+            val selectableAgents = agents ?: composer.selectableAgents
+            composer.copy(
+                modelOptions = catalog.options,
+                selectedModel = ModelSelection(option, variant),
+                selectedVariant = variant,
+                selectableAgents = selectableAgents,
+                selectedMode = resolveSelectedAgentId(remembered?.agentId ?: composer.selectedMode, selectableAgents),
+                isModelSelectionReady = true,
+            )
+        }
+        val source =
+            when {
+                remembered != null -> "memory"
+                preference != null -> "new-session-preference"
+                else -> "catalog"
+            }
+        logI("modelSelection provisional source=$source")
     }
 
     /**
@@ -186,7 +251,7 @@ class SessionChatComposer(
                     .filter { it.type in CATALOG_UPDATE_EVENTS || it.type in CATALOG_RECONNECT_EVENTS }
                     .collect { event ->
                         logI("model catalog refresh reason=${event.type}")
-                        loadCatalog(keepLoadedCatalogOnFailure = true)
+                        loadCatalog(keepLoadedCatalogOnFailure = true, force = true)
                     }
             }
     }
@@ -229,7 +294,7 @@ class SessionChatComposer(
         scope.launch {
             runCatching {
                 withContext(ioDispatcher) {
-                    agentRepository.listSelectableAgents(directory = worktree)
+                    modelCatalogStore.refreshSelectableAgents(worktree)
                 }
             }.onSuccess { agents ->
                 if (boundWorktree != worktree) return@onSuccess
@@ -277,12 +342,17 @@ class SessionChatComposer(
 
     fun loadCatalog() = loadCatalog(keepLoadedCatalogOnFailure = false)
 
-    /** [emptyRetryAttempt] is non-zero only for a backoff retry of an empty answer. */
+    /**
+     * [emptyRetryAttempt] is non-zero only for a backoff retry of an empty answer. [force] asks
+     * the store for an answer newer than a fetch already in flight (server catalog events).
+     */
     private fun loadCatalog(
         keepLoadedCatalogOnFailure: Boolean,
         emptyRetryAttempt: Int = 0,
+        force: Boolean = false,
     ) {
         val worktree = boundWorktree ?: return
+        val keepLoaded = keepLoadedCatalogOnFailure || catalogSeededFromCache
         val generation = ++catalogLoadGeneration
         if (emptyRetryAttempt == 0) {
             catalogRetryJob?.cancel()
@@ -291,7 +361,7 @@ class SessionChatComposer(
         scope.launch {
             runCatching {
                 withContext(ioDispatcher) {
-                    modelRepository.listModelOptions(worktree)
+                    modelCatalogStore.refreshCatalog(worktree, force = force)
                 }
             }.onSuccess { catalog ->
                 // An older request must not overwrite the answer to a newer one.
@@ -304,7 +374,7 @@ class SessionChatComposer(
                     if (catalog.options.isEmpty()) {
                         scheduleEmptyCatalogRetry(emptyRetryAttempt)
                         // A server still loading must not hide a catalog this session already has.
-                        if (keepLoadedCatalogOnFailure && loadedCatalog?.options?.isNotEmpty() == true) return@onSuccess
+                        if (keepLoaded && loadedCatalog?.options?.isNotEmpty() == true) return@onSuccess
                     }
                     applyCatalog(catalog)
                 }
@@ -312,7 +382,7 @@ class SessionChatComposer(
                 if (generation != catalogLoadGeneration) return@onFailure
                 logW("loadCatalog failed error=${throwable.message ?: throwable::class.simpleName}")
                 if (emptyRetryAttempt > 0) scheduleEmptyCatalogRetry(emptyRetryAttempt)
-                if (keepLoadedCatalogOnFailure && loadedCatalog?.options?.isNotEmpty() == true) return@onFailure
+                if (keepLoaded && loadedCatalog?.options?.isNotEmpty() == true) return@onFailure
                 if (boundWorktree == worktree) {
                     updateComposer {
                         it.copy(
@@ -373,6 +443,14 @@ class SessionChatComposer(
         catalog: ModelSelectionCatalog,
         historyHints: ModelSelectionHistoryHints,
     ) {
+        if (provisionalSelection) {
+            provisionalSelection = false
+            if (pickedDuringProvisional) {
+                initialSelectionState = resolvedInitialSelectionState()
+                logI("modelSelection reconcile kept user pick")
+                return
+            }
+        }
         val staleCached = staleCachedSelection()
         val validCached = cachedSelection?.takeIf { staleCached == null }
         val validUserHint = historyHints.user?.takeIf { catalog.option(it.providerId, it.modelId) != null }
@@ -398,12 +476,7 @@ class SessionChatComposer(
             rememberedVariant
                 ?.takeIf { !ModelVariants.isDefault(it, option.variants) && it !in option.variants }
                 ?.let { "Remembered Variant is unavailable. Using Default." }
-        initialSelectionState =
-            if (initialSelectionState == InitialSelectionState.WaitingForFallback) {
-                InitialSelectionState.FailedWithFallback
-            } else {
-                InitialSelectionState.Resolved
-            }
+        initialSelectionState = resolvedInitialSelectionState()
         val droppedForModel =
             _state.value.composer.attachments
                 .filterNot { option.acceptsAttachmentKind(it.kind) }
@@ -442,8 +515,17 @@ class SessionChatComposer(
         logI("modelSelection source=${chosen?.sourceName ?: if (catalog.serverDefault != null) "server-default" else "first-usable"}")
         if (chosen !is InitialSelection.Cached && staleCached == null) {
             persistCurrentSelection(updatePreference = false)
+        } else if (chosen is InitialSelection.Cached) {
+            boundSessionId?.let { modelCatalogStore.rememberSelection(boundWorktree, it, chosen.value) }
         }
     }
+
+    private fun resolvedInitialSelectionState(): InitialSelectionState =
+        if (initialSelectionState == InitialSelectionState.WaitingForFallback) {
+            InitialSelectionState.FailedWithFallback
+        } else {
+            InitialSelectionState.Resolved
+        }
 
     private fun chooseInitialSelection(
         cached: SessionModelSelection?,
@@ -1246,8 +1328,13 @@ class SessionChatComposer(
                         hadStorageFailure = session.isFailure || preference.isFailure,
                     )
                 }
-            cachedSelection = loaded.session
+            if (!isCurrentBinding(sessionId, worktree)) return@launch
+            // The in-memory selection is newer when its write is still in flight or failed.
+            val remembered = modelCatalogStore.lastSelection(worktree, sessionId)
+            cachedSelection =
+                listOfNotNull(loaded.session, remembered).maxByOrNull { it.savedAtEpochMs ?: Long.MIN_VALUE }
             newSessionPreference = loaded.preference
+            loaded.preference?.let { modelCatalogStore.rememberNewSessionPreference(worktree, it) }
             initialSelectionState =
                 if (loaded.hadStorageFailure) InitialSelectionState.WaitingForFallback else InitialSelectionState.WaitingForInputs
             applyInitialSelectionIfReady()
@@ -1263,15 +1350,19 @@ class SessionChatComposer(
         val variant = _state.value.composer.selectedVariant
         val timestamp = maxOf(System.currentTimeMillis(), lastSelectionTimestamp + 1)
         lastSelectionTimestamp = timestamp
+        // Only user picks and sends persist while the selection is provisional.
+        if (provisionalSelection) pickedDuringProvisional = true
+        val selection =
+            SessionModelSelection(
+                providerId = selected.option.providerId,
+                modelId = selected.option.modelId,
+                variant = variant,
+                agentId = _state.value.composer.selectedMode,
+                savedAtEpochMs = timestamp,
+            )
+        modelCatalogStore.rememberSelection(worktree, sessionId, selection)
+        if (updatePreference) modelCatalogStore.rememberNewSessionPreference(worktree, selection)
         scope.launch {
-            val selection =
-                SessionModelSelection(
-                    providerId = selected.option.providerId,
-                    modelId = selected.option.modelId,
-                    variant = variant,
-                    agentId = _state.value.composer.selectedMode,
-                    savedAtEpochMs = timestamp,
-                )
             runCatching {
                 withContext(ioDispatcher) {
                     sessionModelSelectionStore.saveSession(
@@ -1330,7 +1421,36 @@ class SessionChatComposer(
         }
         loadedCatalog = catalog
         updateComposer { it.copy(modelOptions = catalog.options, modelCatalogError = null) }
+        revalidateSelection(catalog)
         applyInitialSelectionIfReady()
+    }
+
+    /** A refreshed catalog that dropped the selected model falls back like a stale remembered one. */
+    private fun revalidateSelection(catalog: ModelSelectionCatalog) {
+        val selected = _state.value.composer.selectedModel ?: return
+        val refreshed = catalog.option(selected.option.providerId, selected.option.modelId)
+        if (refreshed == selected.option) return
+        val option = refreshed ?: catalog.serverDefault ?: catalog.options.first()
+        val variant = resolvedVariant(_state.value.composer.selectedVariant, option)
+        val dropped =
+            _state.value.composer.attachments
+                .filterNot { option.acceptsAttachmentKind(it.kind) }
+        dropped.forEach { attachmentRevisions.remove(it.id) }
+        updateComposer { composer ->
+            composer.copy(
+                selectedModel = ModelSelection(option, variant),
+                selectedVariant = variant,
+                attachments = composer.attachments.filter { option.acceptsAttachmentKind(it.kind) },
+                modelNotice =
+                    if (refreshed == null) {
+                        "Selected model is unavailable. Using ${option.modelLabel}."
+                    } else {
+                        composer.modelNotice
+                    },
+            )
+        }
+        discardStoredAttachments(dropped)
+        if (refreshed == null) logI("modelSelection unavailable after refresh; using ${option.modelLabel}")
     }
 
     private fun resolvedVariant(

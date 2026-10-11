@@ -31,7 +31,7 @@ import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.MessageRole
-import dev.opencode.mobile.domain.model.ModelRepository
+import dev.opencode.mobile.domain.model.ModelCatalogStore
 import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.model.NewSessionModelSelectionResolver
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
@@ -82,7 +82,7 @@ class SessionChatViewModel
     @Inject
     constructor(
         messageRepository: MessageRepository,
-        modelRepository: ModelRepository,
+        modelCatalogStore: ModelCatalogStore,
         commandRepository: CommandRepository,
         agentRepository: AgentRepository,
         private val sessionRepository: SessionRepository,
@@ -131,7 +131,7 @@ class SessionChatViewModel
         private val composer =
             SessionChatComposer(
                 messageRepository = messageRepository,
-                modelRepository = modelRepository,
+                modelCatalogStore = modelCatalogStore,
                 commandRepository = commandRepository,
                 agentRepository = agentRepository,
                 sessionRepository = sessionRepository,
