@@ -60,6 +60,8 @@ struct SettingsView: View {
     @State private var serversSubtitleState = "No servers saved"
     @State private var serversLetter: Character = "S"
     @State private var serversLetterAccent: LetterAccent = .blue
+    /// False while another screen is pushed over Settings.
+    @State private var isOnScreen = false
 
     var body: some View {
         Group {
@@ -81,6 +83,8 @@ struct SettingsView: View {
         .navigationBarBackButtonHidden(true)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(OpenCodeColors.backgroundBase)
+        .onAppear { isOnScreen = true }
+        .onDisappear { isOnScreen = false }
         .navigationDestination(isPresented: $showComponentGallery) {
             ComponentGalleryHomeView()
         }
@@ -561,7 +565,7 @@ struct SettingsView: View {
     }
 
     private var isSplitLayout: Bool {
-        OpenCodeLayoutWidth.resolve(sizeClass: horizontalSizeClass) == .regular
+        OpenCodeSplitPaneLayout.usesSplitLayout(horizontalSizeClass: horizontalSizeClass)
     }
 
     /// Selected detail after the Developer Tools lock; what the trailing pane renders.
@@ -602,6 +606,7 @@ struct SettingsView: View {
                 .toolbar(.hidden, for: .navigationBar)
         }
         .id(visibleDetail)
+        .openCodeKeyboardShortcut(.toggleSidebar, action: isOnScreen ? control.toggle : nil)
     }
 
     @ViewBuilder

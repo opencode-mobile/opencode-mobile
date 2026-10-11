@@ -128,6 +128,7 @@ struct OpenCodeDialogOverlayHost<Card: View>: UIViewRepresentable {
                 if let overlayController {
                     overlayController.rootView = content
                     overlayController.view.frame = window.bounds
+                    OpenCodeWindowOverlayRegistry.shared.attach(overlayController.view)
                 } else {
                     let controller = UIHostingController(rootView: content)
                     controller.view.backgroundColor = .clear
@@ -135,6 +136,7 @@ struct OpenCodeDialogOverlayHost<Card: View>: UIViewRepresentable {
                     controller.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
                     controller.view.alpha = 0
                     window.addSubview(controller.view)
+                    OpenCodeWindowOverlayRegistry.shared.attach(controller.view)
                     overlayController = controller
                     UIView.animate(withDuration: dialogPresentationDuration) {
                         controller.view.alpha = 1
@@ -147,6 +149,7 @@ struct OpenCodeDialogOverlayHost<Card: View>: UIViewRepresentable {
 
         private func dismissOverlay() {
             guard let overlayController else { return }
+            OpenCodeWindowOverlayRegistry.shared.detach(overlayController.view)
             isAnimatingOut = true
             UIView.animate(withDuration: dialogPresentationDuration, animations: {
                 overlayController.view.alpha = 0

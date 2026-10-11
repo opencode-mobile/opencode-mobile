@@ -34,7 +34,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -43,6 +46,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.onSizeChanged
@@ -239,6 +245,56 @@ sealed interface OpenCodeSessionComposerAction {
     data object BackToMainSession : OpenCodeSessionComposerAction
 }
 
+/**
+ * Focus handle for the prompt text input of [OpenCodeSessionComposer]. Hoist it with
+ * [rememberOpenCodeSessionComposerFocus] to move the caret into the prompt (for example from a
+ * hardware keyboard shortcut) or to observe whether the prompt is focused.
+ */
+@Stable
+class OpenCodeSessionComposerFocus {
+    internal val requester = FocusRequester()
+    private var attachedPromptInputs by mutableIntStateOf(0)
+    private var showsPrompt by mutableStateOf(false)
+
+    /** True while the prompt text input holds focus. */
+    var isFocused by mutableStateOf(false)
+        private set
+
+    /** True while the composer shows a prompt text input that can take focus. */
+    val canRequestFocus: Boolean
+        get() = showsPrompt && attachedPromptInputs > 0
+
+    /**
+     * Focuses the prompt text input and returns true. A no-op returning false when the composer
+     * cannot take input: permission, question, or child-session lockout content, or no composer.
+     */
+    fun requestFocus(): Boolean {
+        if (!canRequestFocus) return false
+        requester.requestFocus()
+        return true
+    }
+
+    internal fun updateShowsPrompt(value: Boolean) {
+        showsPrompt = value
+    }
+
+    internal fun attachPromptInput() {
+        attachedPromptInputs += 1
+    }
+
+    internal fun detachPromptInput() {
+        attachedPromptInputs = (attachedPromptInputs - 1).coerceAtLeast(0)
+        if (attachedPromptInputs == 0) isFocused = false
+    }
+
+    internal fun updateFocused(focused: Boolean) {
+        isFocused = focused
+    }
+}
+
+@Composable
+fun rememberOpenCodeSessionComposerFocus(): OpenCodeSessionComposerFocus = remember { OpenCodeSessionComposerFocus() }
+
 /** ~5 body lines — enough for a long prompt without swallowing the chat (OPE-127). */
 private const val PromptMaxVisibleLines = 5
 
@@ -247,8 +303,12 @@ fun OpenCodeSessionComposer(
     state: OpenCodeSessionComposerState,
     onAction: (OpenCodeSessionComposerAction) -> Unit,
     modifier: Modifier = Modifier,
+    focus: OpenCodeSessionComposerFocus? = null,
     status: (@Composable () -> Unit)? = null,
 ) {
+    val composerFocus = focus ?: rememberOpenCodeSessionComposerFocus()
+    val showsPrompt = state is OpenCodeSessionComposerState.Prompt
+    SideEffect { composerFocus.updateShowsPrompt(showsPrompt) }
     val outline =
         when (state) {
             is OpenCodeSessionComposerState.Permission ->
@@ -322,6 +382,7 @@ fun OpenCodeSessionComposer(
                                 PromptEntryContent(
                                     state = state,
                                     onAction = onAction,
+                                    focus = composerFocus,
                                 )
 
                             is OpenCodeSessionComposerState.Permission ->
@@ -354,8 +415,14 @@ fun OpenCodeSessionComposer(
 private fun PromptEntryContent(
     state: OpenCodeSessionComposerState.Prompt,
     onAction: (OpenCodeSessionComposerAction) -> Unit,
+    focus: OpenCodeSessionComposerFocus,
 ) {
     val focusManager = LocalFocusManager.current
+    val reportFocus = rememberOpenCodeTextInputFocusReport(OpenCodeFocusedTextInput.SessionComposer)
+    DisposableEffect(focus) {
+        focus.attachPromptInput()
+        onDispose { focus.detachPromptInput() }
+    }
     if (state.showPendingRevert || state.attachments.isNotEmpty()) {
         Column(
             modifier = Modifier.fillMaxWidth(),
@@ -428,7 +495,15 @@ private fun PromptEntryContent(
         cursorBrush = SolidColor(bodyColor),
         visualTransformation = mentionTransformation,
         maxLines = PromptMaxVisibleLines,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 4.dp, vertical = 4.dp)
+                .focusRequester(focus.requester)
+                .onFocusChanged {
+                    focus.updateFocused(it.isFocused)
+                    reportFocus(it.isFocused)
+                },
         decorationBox = { innerTextField ->
             Box {
                 if (state.text.isBlank()) {

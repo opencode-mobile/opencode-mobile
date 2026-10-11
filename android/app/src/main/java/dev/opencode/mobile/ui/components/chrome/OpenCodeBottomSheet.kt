@@ -206,6 +206,9 @@ fun OpenCodeBottomSheet(
         }
     }
 
+    // The sheet is an overlay in the activity window, so window-level key handling must be told it is up.
+    OpenCodeModalSurfaceEffect(shown = visible || shouldRender)
+
     if (!shouldRender) return
 
     fun dismissWithAnimation() {

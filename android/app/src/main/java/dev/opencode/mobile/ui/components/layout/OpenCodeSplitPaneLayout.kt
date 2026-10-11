@@ -1,6 +1,7 @@
 package dev.opencode.mobile.ui.components
 
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.Dp
@@ -53,6 +54,12 @@ object OpenCodeSplitPaneLayout {
     /** Window container width at which Home and Settings switch to the split layout. */
     val SplitMinWindowWidth = 720.dp
 
+    /**
+     * Smallest screen width that marks a tablet-class display. Phones stay stacked even when a
+     * landscape window is wider than [SplitMinWindowWidth]; unfolded foldables qualify.
+     */
+    val SplitMinSmallestScreenWidth = 600.dp
+
     val DividerWidth = 1.dp
     val HandleGripWidth = 6.dp
     val HandleGripHeight = 40.dp
@@ -82,7 +89,14 @@ object OpenCodeSplitPaneLayout {
             reopenThreshold = ReopenThreshold,
         )
 
-    fun usesSplitLayout(windowWidth: Dp): Boolean = windowWidth >= SplitMinWindowWidth
+    /**
+     * Split only on tablet-class displays ([smallestScreenWidth], from
+     * `Configuration.smallestScreenWidthDp`) whose window is at least [SplitMinWindowWidth] wide.
+     */
+    fun usesSplitLayout(
+        windowWidth: Dp,
+        smallestScreenWidth: Dp,
+    ): Boolean = smallestScreenWidth >= SplitMinSmallestScreenWidth && windowWidth >= SplitMinWindowWidth
 
     fun usesContentSplit(containerWidth: Dp): Boolean = containerWidth >= ContentSplitMinimumWidth
 
@@ -158,7 +172,11 @@ fun currentOpenCodeWindowWidth(): Dp {
 }
 
 @Composable
-fun currentOpenCodeUsesSplitLayout(): Boolean = OpenCodeSplitPaneLayout.usesSplitLayout(currentOpenCodeWindowWidth())
+fun currentOpenCodeUsesSplitLayout(): Boolean =
+    OpenCodeSplitPaneLayout.usesSplitLayout(
+        windowWidth = currentOpenCodeWindowWidth(),
+        smallestScreenWidth = LocalConfiguration.current.smallestScreenWidthDp.dp,
+    )
 
 @Composable
 fun currentOpenCodeUsesContentSplit(): Boolean = OpenCodeSplitPaneLayout.usesContentSplit(currentOpenCodeWindowWidth())

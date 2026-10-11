@@ -15,6 +15,11 @@ struct ProjectListHomeView: View {
     @State private var selectedSession: SessionListItem?
     /// Session ids from the last fully loaded Home list; detects a selected session disappearing.
     @State private var lastLoadedSessionIDs: Set<String>?
+    /// Sessions as rendered in the list under the current filter, top to bottom.
+    /// Drives Next/Previous Session.
+    @State private var displayedSessions: [SessionListSession] = []
+    /// Bumped when a keyboard shortcut selects a row so the list scrolls it into view.
+    @State private var revealSelectedSessionToken = 0
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Binding private var presentConnectionSetupOnAppear: Bool
@@ -537,7 +542,7 @@ struct ProjectListHomeView: View {
     }
 
     private var isSplitLayout: Bool {
-        OpenCodeLayoutWidth.resolve(sizeClass: horizontalSizeClass) == .regular
+        OpenCodeSplitPaneLayout.usesSplitLayout(horizontalSizeClass: horizontalSizeClass)
     }
 
     /// Every session id in a fully loaded Home list; nil while loading, disconnected,
@@ -611,6 +616,48 @@ struct ProjectListHomeView: View {
         }
         // A new stack per session drops the previous chat's pushed screens and state.
         .id(selectedSessionNavigationID)
+        .openCodeKeyboardShortcut(.toggleSidebar, action: homeShortcutsActive ? control.toggle : nil)
+        .openCodeKeyboardShortcut(
+            .nextSession,
+            action: homeShortcutsActive && !displayedSessions.isEmpty ? { selectAdjacentSession(.next) } : nil
+        )
+        .openCodeKeyboardShortcut(
+            .previousSession,
+            action: homeShortcutsActive && !displayedSessions.isEmpty ? { selectAdjacentSession(.previous) } : nil
+        )
+    }
+
+    /// Split-view shortcuts apply while the split is the visible screen: nothing
+    /// pushed over it and connection setup not presented.
+    private var homeShortcutsActive: Bool {
+        isSplitLayout && isHomeVisible && connectionSetupPresentation == nil
+    }
+
+    /// Next/Previous Session: opens the adjacent row exactly as a tap would.
+    private func selectAdjacentSession(_ direction: OpenCodeSessionNavigationDirection) {
+        guard let targetID = OpenCodeSessionNavigation.adjacentSessionID(
+            orderedIDs: displayedSessions.map(\.id),
+            selectedID: selectedSession?.id,
+            direction: direction
+        ),
+            let target = displayedSessions.first(where: { $0.id == targetID })
+        else { return }
+        openListSession(target)
+        revealSelectedSessionToken += 1
+    }
+
+    private func openListSession(_ session: SessionListSession) {
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.home,
+            actionId: ProductAnalytics.Action.homeOpenSession
+        )
+        openSession(
+            SessionListItem(
+                id: session.id,
+                title: session.title,
+                worktree: session.worktree
+            )
+        )
     }
 
     private var selectedSessionNavigationID: String {
@@ -854,17 +901,7 @@ struct ProjectListHomeView: View {
                 selectedSessionFilterId = filterId
             },
             onSessionSelected: { session in
-                ProductAnalytics.logUserAction(
-                    screenId: ProductAnalytics.Screen.home,
-                    actionId: ProductAnalytics.Action.homeOpenSession
-                )
-                openSession(
-                    SessionListItem(
-                        id: session.id,
-                        title: session.title,
-                        worktree: session.worktree
-                    )
-                )
+                openListSession(session)
             },
             onSessionLongPress: { session in
                 viewModel.onSessionLongPress(
@@ -894,6 +931,12 @@ struct ProjectListHomeView: View {
                 : nil,
             onRefresh: { await viewModel.pullToRefresh() },
             revealNewestToken: viewModel.revealNewestToken,
+            revealSelectedSessionToken: revealSelectedSessionToken,
+            onDisplayedSessionsChange: { rendered in
+                if rendered != displayedSessions {
+                    displayedSessions = rendered
+                }
+            },
             showsEmptyContent: sections.isEmpty,
             emptyContent: { NoProjectsEmptyState() }
         )

@@ -1,4 +1,6 @@
 import CoreGraphics
+import SwiftUI
+import UIKit
 
 /// Screens that render as a split view on a wide window. Each keeps its own
 /// persisted leading-pane width and collapsed state.
@@ -58,6 +60,20 @@ enum OpenCodeSplitPaneLayout {
     static let handleHitHeight: CGFloat = 72
     /// Drags shorter than this count as a tap on the handle.
     static let tapSlop: CGFloat = 4
+
+    /// Home and Settings split only on iPad at regular width. Phones stay stacked in
+    /// every orientation, including large iPhones in landscape (regular width), and
+    /// iPad Slide Over or narrow Split View (compact width) stays stacked too.
+    static func usesSplitLayout(
+        idiom: UIUserInterfaceIdiom,
+        horizontalSizeClass: UserInterfaceSizeClass?
+    ) -> Bool {
+        idiom == .pad && horizontalSizeClass == .regular
+    }
+
+    static func usesSplitLayout(horizontalSizeClass: UserInterfaceSizeClass?) -> Bool {
+        usesSplitLayout(idiom: UIDevice.current.userInterfaceIdiom, horizontalSizeClass: horizontalSizeClass)
+    }
 
     /// Neither column of a Changes or Terminals split may settle narrower than this.
     static let minContentColumn: CGFloat = 500

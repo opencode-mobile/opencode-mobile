@@ -67,6 +67,8 @@ struct SessionComposerGalleryView: View {
     @State private var customSelected = false
     @State private var customText = ""
     @State private var questionIndex = 0
+    @State private var focusRequest = 0
+    @State private var inputFocused = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -91,14 +93,35 @@ struct SessionComposerGalleryView: View {
                 Text("Last action: \(lastAction)")
                     .font(OpenCodeTypography.caption)
                     .foregroundStyle(OpenCodeColors.textBase)
+                HStack(spacing: 8) {
+                    OpenCodeChoiceBadge(
+                        label: "Request focus",
+                        selected: false,
+                        enabled: state.acceptsInputFocus,
+                        action: { focusRequest += 1 }
+                    )
+                    Text(inputFocusCaption)
+                        .font(OpenCodeTypography.caption)
+                        .foregroundStyle(OpenCodeColors.textBase)
+                }
             }
             .padding(.horizontal, 16)
 
             Spacer(minLength: 0)
 
-            OpenCodeSessionComposer(state: state, onAction: handle)
+            OpenCodeSessionComposer(
+                state: state,
+                focusRequestToken: focusRequest,
+                onInputFocusChange: { inputFocused = $0 },
+                onAction: handle
+            )
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+    }
+
+    private var inputFocusCaption: String {
+        if !state.acceptsInputFocus { return "Input: none in this state" }
+        return inputFocused ? "Input: focused" : "Input: not focused"
     }
 
     private var questionAnswered: Bool {

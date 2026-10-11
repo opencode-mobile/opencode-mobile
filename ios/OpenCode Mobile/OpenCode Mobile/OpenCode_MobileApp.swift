@@ -12,6 +12,7 @@ import SwiftUI
 struct OpenCode_MobileApp: App {
     init() {
         _ = ThemeManager.shared
+        _ = OpenCodeTextInputFocusMonitor.shared
         OpenCodeReleaseObservability.initialize()
         MainThreadHangWatchdog.shared.start()
     }
@@ -25,6 +26,14 @@ struct OpenCode_MobileApp: App {
                         .allowsHitTesting(false)
                         .accessibilityHidden(true)
                 }
+                .background {
+                    OpenCodeKeyCommandBridgeAnchor()
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
+        }
+        .commands {
+            OpenCodeKeyboardShortcutCommands()
         }
         .backgroundTask(.urlSession(DurableJSONUploader.sessionIdentifier)) {
             await DurableJSONUploader.shared.waitForBackgroundEvents()

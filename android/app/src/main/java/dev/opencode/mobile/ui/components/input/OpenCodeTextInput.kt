@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.autofill.ContentType
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.contentDescription
@@ -105,6 +106,7 @@ fun OpenCodeTextInput(
     val explicitAccessibilityLabel = accessibilityLabel?.takeIf { it.isNotBlank() }
     val interactionSource = remember { MutableInteractionSource() }
     val focused by interactionSource.collectIsFocusedAsState()
+    val reportFocus = rememberOpenCodeTextInputFocusReport(OpenCodeFocusedTextInput.Field)
     val fieldShape = RoundedCornerShape(OpenCodeTextInputCornerRadius)
     val borderColor =
         when {
@@ -134,6 +136,7 @@ fun OpenCodeTextInput(
             modifier =
                 Modifier
                     .fillMaxWidth()
+                    .onFocusChanged { reportFocus(it.isFocused) }
                     .semantics {
                         autofillContentType?.let { contentType = it }
                         explicitAccessibilityLabel?.let { contentDescription = it }

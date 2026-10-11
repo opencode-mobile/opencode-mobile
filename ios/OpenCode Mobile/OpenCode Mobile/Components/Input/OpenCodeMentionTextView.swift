@@ -62,6 +62,11 @@ struct OpenCodeMentionTextView: View {
     let selectionEnd: Int?
     let selectionRevision: Int
     let placeholder: String
+    /// Changing the value moves keyboard focus into the field. The value present
+    /// when the field is created never focuses it.
+    var focusRequestToken: Int = 0
+    /// Called with true when the field starts editing and false when it stops.
+    var onFocusChange: ((Bool) -> Void)?
     let onChange: (_ text: String, _ selectionStart: Int, _ selectionEnd: Int) -> Void
 
     var body: some View {
@@ -72,6 +77,8 @@ struct OpenCodeMentionTextView: View {
             selectionEnd: selectionEnd,
             selectionRevision: selectionRevision,
             placeholder: placeholder,
+            focusRequestToken: focusRequestToken,
+            onFocusChange: onFocusChange,
             onChange: onChange
         )
     }
@@ -84,6 +91,8 @@ private struct Representable: UIViewRepresentable {
     let selectionEnd: Int?
     let selectionRevision: Int
     let placeholder: String
+    let focusRequestToken: Int
+    let onFocusChange: ((Bool) -> Void)?
     let onChange: (String, Int, Int) -> Void
 
     func makeUIView(context: Context) -> PlaceholderTextView {
@@ -109,6 +118,11 @@ private struct Representable: UIViewRepresentable {
         let resolvedMentionColor = UIColor(OpenCodeColors.syntaxType)
         uiView.placeholderLabel.text = placeholder
         uiView.placeholderLabel.textColor = UIColor(OpenCodeColors.textWeak)
+        context.coordinator.onFocusChange = onFocusChange
+        if context.coordinator.lastFocusRequestToken != focusRequestToken {
+            context.coordinator.lastFocusRequestToken = focusRequestToken
+            uiView.requestFocus()
+        }
         context.coordinator.apply(
             text: text,
             mentionRanges: mentionRanges,
@@ -146,17 +160,28 @@ private struct Representable: UIViewRepresentable {
     }
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(onChange: onChange)
+        Coordinator(focusRequestToken: focusRequestToken, onChange: onChange)
     }
 
     final class Coordinator: NSObject, UITextViewDelegate {
         private let onChange: (String, Int, Int) -> Void
+        var onFocusChange: ((Bool) -> Void)?
+        var lastFocusRequestToken: Int
         private var lastRenderedText: String?
         private var lastRenderedMentionRanges: [Range<Int>] = []
         private var lastAppliedSelectionRevision: Int?
 
-        init(onChange: @escaping (String, Int, Int) -> Void) {
+        init(focusRequestToken: Int, onChange: @escaping (String, Int, Int) -> Void) {
+            lastFocusRequestToken = focusRequestToken
             self.onChange = onChange
+        }
+
+        func textViewDidBeginEditing(_ textView: UITextView) {
+            onFocusChange?(true)
+        }
+
+        func textViewDidEndEditing(_ textView: UITextView) {
+            onFocusChange?(false)
         }
 
         func apply(
@@ -226,9 +251,10 @@ private struct Representable: UIViewRepresentable {
     }
 }
 
-final class PlaceholderTextView: UITextView {
+final class PlaceholderTextView: UITextView, OpenCodeComposerTextInput {
     let placeholderLabel = UILabel()
     private var pendingCaretScroll = false
+    private var pendingFocus = false
 
     override init(frame: CGRect, textContainer: NSTextContainer?) {
         super.init(frame: frame, textContainer: textContainer)
@@ -250,6 +276,27 @@ final class PlaceholderTextView: UITextView {
     override func layoutSubviews() {
         super.layoutSubviews()
         retryPendingCaretScrollIfNeeded()
+    }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        if pendingFocus, window != nil {
+            requestFocus()
+        }
+    }
+
+    /// Becomes first responder once the view is in a window. Deferred a turn so it
+    /// never runs inside a SwiftUI update.
+    func requestFocus() {
+        guard window != nil else {
+            pendingFocus = true
+            return
+        }
+        pendingFocus = false
+        DispatchQueue.main.async { [weak self] in
+            guard let self, window != nil, !isFirstResponder else { return }
+            becomeFirstResponder()
+        }
     }
 
     func scrollCaretIntoViewIfNeeded() {

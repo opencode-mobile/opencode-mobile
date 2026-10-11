@@ -18,14 +18,19 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ui.components.OpenCodeAttachmentPresentation
 import dev.opencode.mobile.ui.components.OpenCodeAttachmentVariant
+import dev.opencode.mobile.ui.components.OpenCodeButton
+import dev.opencode.mobile.ui.components.OpenCodeButtonContrast
+import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposer
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposerAction
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposerState
+import dev.opencode.mobile.ui.components.rememberOpenCodeSessionComposerFocus
 
 private enum class SessionComposerGalleryScenario(
     val label: String,
@@ -77,6 +82,7 @@ fun SessionComposerGalleryScreen(modifier: Modifier = Modifier) {
     var mentionText by rememberSaveable { mutableStateOf(MentionGalleryText) }
     var mentionsCleared by rememberSaveable { mutableStateOf(false) }
     var lastAction by rememberSaveable { mutableStateOf("None") }
+    val composerFocus = rememberOpenCodeSessionComposerFocus()
     var selectedLabels by rememberSaveable { mutableStateOf(listOf("Minimal patch")) }
     var customSelected by rememberSaveable { mutableStateOf(false) }
     var customText by rememberSaveable { mutableStateOf("") }
@@ -259,12 +265,29 @@ fun SessionComposerGalleryScreen(modifier: Modifier = Modifier) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                OpenCodeButton(
+                    variant = OpenCodeButtonVariant.CompactText("Focus input"),
+                    contrast = OpenCodeButtonContrast.Low,
+                    enabled = composerFocus.canRequestFocus,
+                    onClick = { composerFocus.requestFocus() },
+                )
+                Text(
+                    if (composerFocus.isFocused) "Input focused" else "Input not focused",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
 
         Spacer(modifier = Modifier.weight(1f))
 
         OpenCodeSessionComposer(
             state = state,
+            focus = composerFocus,
             onAction = { action ->
                 when (action) {
                     is OpenCodeSessionComposerAction.TextChanged ->

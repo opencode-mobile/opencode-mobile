@@ -14,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -64,6 +65,10 @@ import dev.opencode.mobile.ui.connection.ConnectionOnboardingScreen
 import dev.opencode.mobile.ui.connection.listCaption
 import dev.opencode.mobile.ui.connection.listStatus
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
+import dev.opencode.mobile.ui.keyboard.KeyboardShortcutAction
+import dev.opencode.mobile.ui.keyboard.KeyboardShortcutHandler
+import dev.opencode.mobile.ui.keyboard.KeyboardShortcutRules
+import dev.opencode.mobile.ui.keyboard.SessionStepDirection
 import dev.opencode.mobile.ui.sessionchat.SessionConnectionStatus
 
 /** Long-press session actions on home: sheet, rename/fork dialogs, delete confirm. */
@@ -97,6 +102,7 @@ fun MainScreen(
     onManageServersClick: () -> Unit = onSettingsClick,
     modifier: Modifier = Modifier,
     selectedSessionId: String? = null,
+    sessionKeyboardNavigationEnabled: Boolean = false,
     viewModel: MainScreenViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -181,6 +187,7 @@ fun MainScreen(
         },
         modifier = modifier,
         selectedSessionId = selectedSessionId,
+        sessionKeyboardNavigationEnabled = sessionKeyboardNavigationEnabled,
     )
 }
 
@@ -224,6 +231,7 @@ internal fun MainScreen(
     onAddServerClick: () -> Unit = {},
     onManageServersClick: () -> Unit = {},
     selectedSessionId: String? = null,
+    sessionKeyboardNavigationEnabled: Boolean = false,
 ) {
     val pendingOpenSession = (uiState as? MainScreenUiState.Loaded)?.pendingOpenSession
     LaunchedEffect(pendingOpenSession) {
@@ -410,6 +418,7 @@ internal fun MainScreen(
                         selectedFilterId = selectedFilterId,
                         onSelectedFilterIdChange = { selectedFilterId = it },
                         selectedSessionId = selectedSessionId,
+                        sessionKeyboardNavigationEnabled = sessionKeyboardNavigationEnabled,
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -821,8 +830,41 @@ private fun HomeProjectsContent(
     selectedFilterId: String,
     onSelectedFilterIdChange: (String) -> Unit,
     selectedSessionId: String? = null,
+    sessionKeyboardNavigationEnabled: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
+    // Rows exactly as the list renders them for the selected filter; read by Ctrl+Tab stepping.
+    val displayedSessions = remember { DisplayedSessions() }
+    val openSession: (SessionListSession) -> Unit = { session ->
+        ProductAnalytics.logUserAction(
+            screenId = ProductAnalytics.Screen.HOME,
+            actionId = ProductAnalytics.Action.HOME_OPEN_SESSION,
+        )
+        onSessionClick(
+            SessionOpenTarget(
+                sessionId = session.id,
+                title = session.title,
+                worktree = session.worktree,
+            ),
+        )
+    }
+
+    fun stepSession(direction: SessionStepDirection) {
+        val sessions = displayedSessions.value
+        val targetId =
+            KeyboardShortcutRules.adjacentSessionId(
+                orderedIds = sessions.map { it.id },
+                selectedId = selectedSessionId,
+                direction = direction,
+            ) ?: return
+        sessions.firstOrNull { it.id == targetId }?.let(openSession)
+    }
+    KeyboardShortcutHandler(KeyboardShortcutAction.NextSession, enabled = sessionKeyboardNavigationEnabled) {
+        stepSession(SessionStepDirection.Next)
+    }
+    KeyboardShortcutHandler(KeyboardShortcutAction.PreviousSession, enabled = sessionKeyboardNavigationEnabled) {
+        stepSession(SessionStepDirection.Previous)
+    }
     PullToRefreshBox(
         isRefreshing = isRefreshing,
         onRefresh = onRefresh,
@@ -883,19 +925,8 @@ private fun HomeProjectsContent(
                 )
                 onSelectedFilterIdChange(filterId)
             },
-            onSessionSelected = { session ->
-                ProductAnalytics.logUserAction(
-                    screenId = ProductAnalytics.Screen.HOME,
-                    actionId = ProductAnalytics.Action.HOME_OPEN_SESSION,
-                )
-                onSessionClick(
-                    SessionOpenTarget(
-                        sessionId = session.id,
-                        title = session.title,
-                        worktree = session.worktree,
-                    ),
-                )
-            },
+            onSessionSelected = openSession,
+            onDisplayedSessionsChange = { displayedSessions.value = it },
             onAddProject = onBrowseProjectsClick,
             onNewSession = {
                 when (
@@ -960,6 +991,11 @@ private fun HomeProjectsContent(
             )
         }
     }
+}
+
+/** Plain holder: the list reports its rows on every composition, and only key handling reads them. */
+private class DisplayedSessions {
+    var value: List<SessionListSession> = emptyList()
 }
 
 internal fun List<ProjectSectionUi>.toCrossProjectSessionListSessions(): List<SessionListSession> {

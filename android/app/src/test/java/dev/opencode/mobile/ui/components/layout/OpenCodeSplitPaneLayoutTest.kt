@@ -9,10 +9,27 @@ import org.junit.Test
 class OpenCodeSplitPaneLayoutTest {
     @Test
     fun usesSplitLayout_startsAtTabletPortraitWidth() {
-        assertFalse(OpenCodeSplitPaneLayout.usesSplitLayout(600.dp))
-        assertFalse(OpenCodeSplitPaneLayout.usesSplitLayout(719.dp))
-        assertTrue(OpenCodeSplitPaneLayout.usesSplitLayout(720.dp))
-        assertTrue(OpenCodeSplitPaneLayout.usesSplitLayout(1280.dp))
+        val tablet = 800.dp
+        assertFalse(OpenCodeSplitPaneLayout.usesSplitLayout(600.dp, smallestScreenWidth = tablet))
+        assertFalse(OpenCodeSplitPaneLayout.usesSplitLayout(719.dp, smallestScreenWidth = tablet))
+        assertTrue(OpenCodeSplitPaneLayout.usesSplitLayout(720.dp, smallestScreenWidth = tablet))
+        assertTrue(OpenCodeSplitPaneLayout.usesSplitLayout(1280.dp, smallestScreenWidth = tablet))
+    }
+
+    @Test
+    fun usesSplitLayout_phoneStaysStackedInWideLandscape() {
+        assertFalse(OpenCodeSplitPaneLayout.usesSplitLayout(780.dp, smallestScreenWidth = 360.dp))
+        assertFalse(OpenCodeSplitPaneLayout.usesSplitLayout(932.dp, smallestScreenWidth = 430.dp))
+        assertFalse(OpenCodeSplitPaneLayout.usesSplitLayout(1280.dp, smallestScreenWidth = 599.dp))
+    }
+
+    @Test
+    fun usesSplitLayout_tabletClassStartsAtSmallestWidth600() {
+        assertTrue(OpenCodeSplitPaneLayout.usesSplitLayout(720.dp, smallestScreenWidth = 600.dp))
+        // Unfolded foldable inner display.
+        assertTrue(OpenCodeSplitPaneLayout.usesSplitLayout(841.dp, smallestScreenWidth = 673.dp))
+        // Tablet window narrowed by multi-window stays stacked.
+        assertFalse(OpenCodeSplitPaneLayout.usesSplitLayout(600.dp, smallestScreenWidth = 600.dp))
     }
 
     @Test

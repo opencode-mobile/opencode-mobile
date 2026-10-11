@@ -147,6 +147,11 @@ struct SessionList<EmptyContent: View>: View {
     let onNewSessionLongPress: (() -> Void)?
     let onRefresh: (() async -> Void)?
     let revealNewestToken: Int
+    /// Change to scroll `selectedSessionId` into view (keyboard session navigation).
+    let revealSelectedSessionToken: Int
+    /// Rendered sessions under the selected filter, top to bottom, whenever the
+    /// rendered order changes. Empty while nothing is rendered.
+    let onDisplayedSessionsChange: (([SessionListSession]) -> Void)?
     let showsEmptyContent: Bool
     let emptyContent: EmptyContent
 
@@ -175,6 +180,8 @@ struct SessionList<EmptyContent: View>: View {
         onNewSessionLongPress: (() -> Void)? = nil,
         onRefresh: (() async -> Void)? = nil,
         revealNewestToken: Int = 0,
+        revealSelectedSessionToken: Int = 0,
+        onDisplayedSessionsChange: (([SessionListSession]) -> Void)? = nil,
         showsEmptyContent: Bool = false,
         @ViewBuilder emptyContent: () -> EmptyContent = { EmptyView() }
     ) {
@@ -192,6 +199,8 @@ struct SessionList<EmptyContent: View>: View {
         self.onNewSessionLongPress = onNewSessionLongPress
         self.onRefresh = onRefresh
         self.revealNewestToken = revealNewestToken
+        self.revealSelectedSessionToken = revealSelectedSessionToken
+        self.onDisplayedSessionsChange = onDisplayedSessionsChange
         self.showsEmptyContent = showsEmptyContent
         self.emptyContent = emptyContent()
         _incomingFilterId = State(initialValue: selectedFilterId)
@@ -245,6 +254,7 @@ struct SessionList<EmptyContent: View>: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(OpenCodeColors.backgroundBase)
         .accessibilityIdentifier("homeContent")
+        .onDisappear { onDisplayedSessionsChange?([]) }
         .background {
             GeometryReader { geometry in
                 Color.clear
@@ -269,13 +279,20 @@ struct SessionList<EmptyContent: View>: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(OpenCodeColors.backgroundBase)
                 .modifier(SessionListRefreshableModifier(onRefresh: isCurrent ? onRefresh : nil))
+                .onAppear {
+                    if isCurrent { onDisplayedSessionsChange?([]) }
+                }
             } else {
                 SessionListStabilizedScrollView(
                     visible: visible,
                     recentWindowHours: homeDisplayPreferences.recentWindowHours,
                     revealNewestToken: isCurrent ? revealNewestToken : 0,
+                    revealSessionToken: isCurrent ? revealSelectedSessionToken : 0,
+                    revealSessionID: selectedSessionId,
+                    bottomObscuredHeight: dockHeight,
                     followingTop: isCurrent ? $followingTop : .constant(true),
-                    onRefresh: isCurrent ? onRefresh : nil
+                    onRefresh: isCurrent ? onRefresh : nil,
+                    onDisplayedSessionsChange: isCurrent ? onDisplayedSessionsChange : nil
                 ) { section in
                     switch section.kind {
                     case .recent:
@@ -335,6 +352,16 @@ struct SessionList<EmptyContent: View>: View {
             action: { onSessionSelected(session) },
             onLongPress: onSessionLongPress.map { handler in { handler(session) } }
         )
+        .background {
+            if selectedSessionId == session.id {
+                GeometryReader { geometry in
+                    Color.clear.preference(
+                        key: SessionListSelectedRowFrameKey.self,
+                        value: geometry.frame(in: .named(sessionListViewportSpace))
+                    )
+                }
+            }
+        }
     }
 
     private func listItemStatus(_ status: SessionListStatus, isStale: Bool) -> OpenCodeListItemStatus {
@@ -387,6 +414,39 @@ private struct SessionListFeedLayer: Identifiable, Equatable {
 }
 
 private let sessionListTopAnchorID = "session-list-top"
+private let sessionListViewportSpace = "session-list-viewport"
+
+/// Frame of the selected row in the list viewport; nil while it is not laid out.
+private struct SessionListSelectedRowFrameKey: PreferenceKey {
+    static let defaultValue: CGRect? = nil
+
+    static func reduce(value: inout CGRect?, nextValue: () -> CGRect?) {
+        value = nextValue() ?? value
+    }
+}
+
+/// Scrolling a keyboard-selected row into view without jumping when it is
+/// already visible.
+nonisolated enum SessionListReveal {
+    /// `scrollTo` anchor for the selected row, or nil when it is fully visible above
+    /// the bottom dock. A row above the viewport aligns to the top; one below (or
+    /// under the dock) lands just above the dock; one not laid out yet is centered.
+    static func anchor(rowFrame: CGRect?, viewportHeight: CGFloat, bottomObscuredHeight: CGFloat) -> UnitPoint? {
+        guard viewportHeight > 0 else { return nil }
+        guard let rowFrame else { return .center }
+        let visibleBottom = viewportHeight - max(0, bottomObscuredHeight)
+        if rowFrame.minY < 0 {
+            return .top
+        }
+        guard rowFrame.maxY > visibleBottom else { return nil }
+        // `scrollTo` lines up the same unit point of row and viewport. Pick the
+        // point that puts the row's bottom edge on `visibleBottom`.
+        let travel = viewportHeight - rowFrame.height
+        guard travel > 0 else { return .top }
+        let y = (visibleBottom - rowFrame.height) / travel
+        return UnitPoint(x: 0.5, y: min(1, max(0, y)))
+    }
+}
 
 enum SessionListStabilizedOrder {
     struct Snapshot: Equatable {
@@ -445,8 +505,12 @@ private struct SessionListStabilizedScrollView<SectionContent: View>: View {
     let visible: [SessionListSession]
     let recentWindowHours: Int
     let revealNewestToken: Int
+    let revealSessionToken: Int
+    let revealSessionID: String?
+    let bottomObscuredHeight: CGFloat
     @Binding var followingTop: Bool
     let onRefresh: (() async -> Void)?
+    let onDisplayedSessionsChange: (([SessionListSession]) -> Void)?
     let sectionContent: (HomeSessionLadderSection<SessionListSession>) -> SectionContent
 
     @State private var previousSections: [HomeSessionLadderSection<SessionListSession>]
@@ -460,15 +524,23 @@ private struct SessionListStabilizedScrollView<SectionContent: View>: View {
         visible: [SessionListSession],
         recentWindowHours: Int,
         revealNewestToken: Int,
+        revealSessionToken: Int,
+        revealSessionID: String?,
+        bottomObscuredHeight: CGFloat,
         followingTop: Binding<Bool>,
         onRefresh: (() async -> Void)?,
+        onDisplayedSessionsChange: (([SessionListSession]) -> Void)?,
         @ViewBuilder sectionContent: @escaping (HomeSessionLadderSection<SessionListSession>) -> SectionContent
     ) {
         self.visible = visible
         self.recentWindowHours = recentWindowHours
         self.revealNewestToken = revealNewestToken
+        self.revealSessionToken = revealSessionToken
+        self.revealSessionID = revealSessionID
+        self.bottomObscuredHeight = bottomObscuredHeight
         _followingTop = followingTop
         self.onRefresh = onRefresh
+        self.onDisplayedSessionsChange = onDisplayedSessionsChange
         self.sectionContent = sectionContent
         let seeded = SessionListStabilizedOrder.apply(
             visible: visible,
@@ -491,6 +563,9 @@ private struct SessionListStabilizedScrollView<SectionContent: View>: View {
             ladderSections: displayedSections,
             newestSessionId: newcomerId,
             revealNewestToken: revealNewestToken,
+            revealSessionToken: revealSessionToken,
+            revealSessionID: revealSessionID,
+            bottomObscuredHeight: bottomObscuredHeight,
             followingTop: $followingTop,
             onRefresh: onRefresh,
             sectionContent: sectionContent
@@ -528,6 +603,7 @@ private struct SessionListStabilizedScrollView<SectionContent: View>: View {
         nextApplyAtEpochMs = snapshot.nextApplyAtEpochMs
         newcomerId = snapshot.newcomerId
         seenIds = snapshot.seenIds
+        onDisplayedSessionsChange?(snapshot.sections.flatMap(\.items))
     }
 }
 
@@ -535,14 +611,23 @@ private struct SessionListScrollView<SectionContent: View>: View {
     let ladderSections: [HomeSessionLadderSection<SessionListSession>]
     let newestSessionId: String?
     let revealNewestToken: Int
+    let revealSessionToken: Int
+    let revealSessionID: String?
+    let bottomObscuredHeight: CGFloat
     @Binding var followingTop: Bool
     let onRefresh: (() async -> Void)?
     let sectionContent: (HomeSessionLadderSection<SessionListSession>) -> SectionContent
+
+    @State private var viewportHeight: CGFloat = 0
+    @State private var selectedRowFrame: CGRect?
 
     init(
         ladderSections: [HomeSessionLadderSection<SessionListSession>],
         newestSessionId: String?,
         revealNewestToken: Int,
+        revealSessionToken: Int,
+        revealSessionID: String?,
+        bottomObscuredHeight: CGFloat,
         followingTop: Binding<Bool>,
         onRefresh: (() async -> Void)?,
         @ViewBuilder sectionContent: @escaping (HomeSessionLadderSection<SessionListSession>) -> SectionContent
@@ -550,6 +635,9 @@ private struct SessionListScrollView<SectionContent: View>: View {
         self.ladderSections = ladderSections
         self.newestSessionId = newestSessionId
         self.revealNewestToken = revealNewestToken
+        self.revealSessionToken = revealSessionToken
+        self.revealSessionID = revealSessionID
+        self.bottomObscuredHeight = bottomObscuredHeight
         _followingTop = followingTop
         self.onRefresh = onRefresh
         self.sectionContent = sectionContent
@@ -569,6 +657,13 @@ private struct SessionListScrollView<SectionContent: View>: View {
                 Color.clear.frame(height: sessionListFallbackBottomSpacer)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .coordinateSpace(name: sessionListViewportSpace)
+            .onPreferenceChange(SessionListSelectedRowFrameKey.self) { frame in
+                selectedRowFrame = frame
+            }
+            .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { height in
+                viewportHeight = height
+            }
             .background(OpenCodeColors.backgroundBase)
             .overlay {
                 SessionListScrollOffsetReader { offsetFromTop, isUserScrolling in
@@ -600,6 +695,26 @@ private struct SessionListScrollView<SectionContent: View>: View {
                     newestIdentityChanged: false,
                     forceRevealNewest: true
                 )
+            }
+            .onChange(of: revealSessionToken) { _, token in
+                guard token > 0, let revealSessionID else { return }
+                // Away from the top, stop following it so a newcomer does not scroll
+                // the selected row back out of view.
+                if ladderSections.first?.items.first?.id != revealSessionID {
+                    followingTop = false
+                }
+                // Let the newly selected row report its frame first.
+                Task { @MainActor in
+                    await Task.yield()
+                    guard let anchor = SessionListReveal.anchor(
+                        rowFrame: selectedRowFrame,
+                        viewportHeight: viewportHeight,
+                        bottomObscuredHeight: bottomObscuredHeight
+                    ) else { return }
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        proxy.scrollTo(revealSessionID, anchor: anchor)
+                    }
+                }
             }
         }
     }

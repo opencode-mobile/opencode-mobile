@@ -38,6 +38,10 @@ struct SessionChatView: View {
     @State private var bottomSafeAreaInset: CGFloat = 0
     /// Keyboard overlap reported by `keyboardOverlapPadding`. Zero when hidden.
     @State private var keyboardOverlap: CGFloat = 0
+    /// Bumped by the Focus Composer keyboard shortcut.
+    @State private var composerFocusRequest = 0
+    /// False while another screen is pushed over this chat.
+    @State private var isOnScreen = false
 
     private let session: SessionListItem
     private let injectedViewModel: SessionChatViewModel?
@@ -643,9 +647,17 @@ struct SessionChatView: View {
                 showDeleteConfirmation = false
             }
         )
+        .onAppear {
+            isOnScreen = true
+        }
         .onDisappear {
+            isOnScreen = false
             viewModelStorage?.stopObserving()
         }
+        .openCodeKeyboardShortcut(
+            .focusComposer,
+            action: acceptsComposerFocusShortcut ? { composerFocusRequest += 1 } : nil
+        )
         .openCodeDialog(
             isPresented: renameDialogBinding,
             title: "Rename session",
@@ -951,14 +963,25 @@ struct SessionChatView: View {
         return entries
     }
 
-    private var composer: some View {
-        let composer = viewModel.uiState.composer
-        let isSending = viewModel.uiState.isSending
-        let kind = SessionChatComposerKind.resolve(
+    private var composerKind: SessionChatComposerKind {
+        SessionChatComposerKind.resolve(
             isChildSession: session.parentID != nil,
             hasPermission: viewModel.uiState.permissionRequest != nil && !viewModel.uiState.permissionDockHidden,
             hasQuestion: viewModel.uiState.questionRequest != nil
         )
+    }
+
+    /// Focus Composer applies while this chat is the visible screen and shows the
+    /// prompt (not a permission, question, or child-session lockout) with no
+    /// system picker on top.
+    private var acceptsComposerFocusShortcut: Bool {
+        isOnScreen && composerKind == .prompt && !showPhotosPicker && !showFilesPicker
+    }
+
+    private var composer: some View {
+        let composer = viewModel.uiState.composer
+        let isSending = viewModel.uiState.isSending
+        let kind = composerKind
         let state: OpenCodeSessionComposerState
 
         if kind == .permission, let request = viewModel.uiState.permissionRequest {
@@ -1087,6 +1110,7 @@ struct SessionChatView: View {
 
         return OpenCodeSessionComposer(
             state: state,
+            focusRequestToken: composerFocusRequest,
             onAction: { action in
                 switch action {
                 case let .textChanged(text, selectionStart, _):
