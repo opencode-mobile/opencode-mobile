@@ -11,9 +11,13 @@ Read the issue before answering or changing it, and read it again after a
 mutation. Report a missing issue or failed `gh` call instead of guessing.
 Change only what the user asked to change.
 
-Before implementation, treat the issue's outcome, acceptance criteria, and
-Remaining list, together with current code and tests, as the contract. Raise
-scope conflicts before they change the implementation.
+## Before implementing ticket-backed work
+
+Read the issue first. Its outcome, acceptance criteria, and Remaining list,
+together with current code and tests, are the contract. Where the issue and
+the code disagree, or the request goes beyond the issue, raise it before
+changing the implementation. Do not write a plan into the repository; put it on
+the issue if the user wants it recorded.
 
 Read [conventions](reference.md) when creating an issue or classifying labels,
 state, priority, milestone, or relationships.
