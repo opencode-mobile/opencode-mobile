@@ -58,7 +58,9 @@ struct ChangesView: View {
                 if splitSelection == nil { splitSelection = pushedPath }
                 pushedPath = nil
             } else if pushedPath == nil {
+                // Drop the split selection so a later pop does not restore it.
                 pushedPath = splitSelection
+                splitSelection = nil
             }
         }
         .task {
@@ -96,6 +98,7 @@ struct ChangesView: View {
         } trailing: { control in
             if let path = splitSelection, let file = viewModel.content?.files.first(where: { $0.path == path }) {
                 FileViewerView(file: file, detailControl: control, usesReadableColumn: false)
+                    .id(path)
             } else {
                 VStack(spacing: 0) {
                     OpenCodeTopBar(

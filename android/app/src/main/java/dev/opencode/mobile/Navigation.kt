@@ -392,6 +392,7 @@ fun MainNavigation() {
                                                 if (homeResetGeneration != handledHomeResetGeneration) {
                                                     handledHomeResetGeneration = homeResetGeneration
                                                     selectedSession = null
+                                                    nestedChanges = null
                                                 }
                                             }
                                             LaunchedEffect(useSplitLayout) {
