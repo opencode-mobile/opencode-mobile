@@ -36,9 +36,10 @@ nonisolated final class T3EnvironmentClient: @unchecked Sendable {
     private var shellFetchIdentity: String?
     private var lastShellFetchStart: ContinuousClock.Instant?
     private var lastShellFetchIdentity: String?
-    /// True between lifecycle `start` and `stop`: the shell subscription is kept alive.
+    /// True between lifecycle `start` and `stop`: the shell subscriptions are kept alive.
     private var shellLiveWanted = false
     private var shellTask: Task<Void, Never>?
+    private var archiveTask: Task<Void, Never>?
     private var cachedCatalog: T3HarnessCatalog?
     private var cachedCatalogIdentity: String?
 
@@ -167,9 +168,18 @@ nonisolated final class T3EnvironmentClient: @unchecked Sendable {
             if let previous, snapshot.sequence > 0, snapshot.sequence < previous.sequence {
                 return (previous, previous)
             }
-            cachedShell = snapshot
+            var next = snapshot
+            if next.storedArchivedThreads.isEmpty, let previous {
+                next.storedArchivedThreads = previous.storedArchivedThreads
+                next.archiveSequence = previous.archiveSequence
+            }
+            let archivedIDs = Set(next.storedArchivedThreads.map(\.id))
+            if !archivedIDs.isEmpty {
+                next.threads.removeAll { archivedIDs.contains($0.id) }
+            }
+            cachedShell = next
             cachedShellIdentity = identity
-            return (previous, snapshot)
+            return (previous, next)
         }
         if applied != previous {
             publishShellEvents(T3ShellLive.events(previous: previous, next: applied, includeLifecycle: false))
@@ -185,10 +195,11 @@ nonisolated final class T3EnvironmentClient: @unchecked Sendable {
 
     // MARK: - Shell subscription
 
-    /// Keeps `orchestration.subscribeShell` running until `reset()`. Items
-    /// update the cached shell and publish the resulting synthetic events; a
-    /// dead socket re-subscribes from the last applied sequence through the
-    /// client's normal reconnect.
+    /// Keeps `orchestration.subscribeShell` and `orchestration.subscribeArchivedShell`
+    /// running until `reset()`. Items update the cached shell and publish the
+    /// resulting synthetic events; a dead socket re-subscribes through the
+    /// client's normal reconnect. The active stream resumes after the last
+    /// applied sequence. The archive stream always starts from a snapshot.
     func startShellLive() {
         locked { shellLiveWanted = true }
         ensureShellSubscription()
@@ -201,9 +212,16 @@ nonisolated final class T3EnvironmentClient: @unchecked Sendable {
     private func ensureShellSubscription() {
         guard (try? credentials()) != nil else { return }
         locked {
-            guard shellLiveWanted, shellTask == nil else { return }
-            shellTask = Task { [weak self] in
-                await self?.runShellSubscription()
+            guard shellLiveWanted else { return }
+            if shellTask == nil {
+                shellTask = Task { [weak self] in
+                    await self?.runShellSubscription()
+                }
+            }
+            if archiveTask == nil {
+                archiveTask = Task { [weak self] in
+                    await self?.runArchiveSubscription()
+                }
             }
         }
     }
@@ -270,6 +288,112 @@ nonisolated final class T3EnvironmentClient: @unchecked Sendable {
         publishShellEvents(T3ShellLive.events(previous: previous, next: next, includeLifecycle: true))
     }
 
+    /// Same reconnect loop as the active shell. The server sends a snapshot
+    /// first; there is no `afterSequence` on this subscription.
+    private func runArchiveSubscription() async {
+        var attempt = 0
+        while !Task.isCancelled {
+            var failure: Error?
+            do {
+                let credentials = try credentials()
+                let identity = identity(of: credentials)
+                let session = try await rpc()
+                for try await item in session.subscribe(tag: T3RpcCodec.subscribeArchivedShellTag, payload: [:]) {
+                    if Task.isCancelled { return }
+                    attempt = 0
+                    applyArchivedStreamItem(item, identity: identity)
+                }
+                failure = T3SocketError.connectionLost(detail: "T3 archived shell subscription ended.")
+            } catch is CancellationError {
+                return
+            } catch {
+                failure = error
+            }
+            if Task.isCancelled { return }
+            if let failure {
+                if Self.isProtocolMismatch(failure) {
+                    DiagnosticLog.warning(.connection, "T3 archived shell subscription stopped: protocol mismatch")
+                    locked { if archiveTask?.isCancelled == false { archiveTask = nil } }
+                    return
+                }
+                DiagnosticLog.warning(.sse, "T3 archived shell subscription lost: \(T3ErrorText.detail(failure) ?? T3ErrorText.userMessage(failure))")
+                Task { [weak self] in
+                    _ = try? await self?.fetchShell(force: true)
+                }
+            }
+            let delay = min(
+                Self.maxShellResubscribeDelay,
+                shellResubscribeDelay * (1 << min(attempt, 4))
+            )
+            attempt += 1
+            try? await Task.sleep(for: delay)
+        }
+    }
+
+    private func applyArchivedStreamItem(_ item: Any, identity: String) {
+        let outcome = locked { () -> (T3ShellSnapshot?, T3ShellSnapshot)? in
+            let current = cachedShellIdentity == identity ? cachedShell : nil
+            switch T3ShellLive.applyArchived(item, to: current) {
+            case .ignored, .synchronized:
+                return nil
+            case let .replaced(next, _):
+                if let current, next.sequence > 0, next.sequence < current.sequence { return nil }
+                cachedShell = next
+                cachedShellIdentity = identity
+                return (current, next)
+            }
+        }
+        guard let (previous, next) = outcome else { return }
+        publishShellEvents(T3ShellLive.events(previous: previous, next: next, includeLifecycle: true))
+    }
+
+    func noteThreadArchived(id: String) {
+        guard let credentials = try? credentials() else { return }
+        let identity = identity(of: credentials)
+        updateCachedShell(identity: identity) { shell in
+            guard var thread = shell.thread(id: id) else { return false }
+            if thread.archivedAt == nil {
+                thread.archivedAt = Self.archiveTimestamp()
+            }
+            shell.threads.removeAll { $0.id == id }
+            shell.storedArchivedThreads.removeAll { $0.id == id }
+            shell.storedArchivedThreads.append(thread)
+            return true
+        }
+    }
+
+    func noteThreadUnarchived(id: String) {
+        guard let credentials = try? credentials() else { return }
+        let identity = identity(of: credentials)
+        updateCachedShell(identity: identity) { shell in
+            guard var thread = shell.thread(id: id) else { return false }
+            thread.archivedAt = nil
+            shell.storedArchivedThreads.removeAll { $0.id == id }
+            shell.threads.removeAll { $0.id == id }
+            shell.threads.append(thread)
+            return true
+        }
+    }
+
+    /// Applies `transform` when the cache belongs to `identity` and publishes the thread diff.
+    private func updateCachedShell(identity: String, _ transform: (inout T3ShellSnapshot) -> Bool) {
+        let outcome = locked { () -> (T3ShellSnapshot, T3ShellSnapshot)? in
+            guard cachedShellIdentity == identity, var shell = cachedShell else { return nil }
+            let previous = shell
+            guard transform(&shell) else { return nil }
+            cachedShell = shell
+            return (previous, shell)
+        }
+        guard let (previous, next) = outcome else { return }
+        publishShellEvents(T3ShellLive.events(previous: previous, next: next, includeLifecycle: true))
+    }
+
+    private static func archiveTimestamp() -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter.string(from: Date())
+    }
+
     func replaceShell(_ snapshot: T3ShellSnapshot) {
         guard let credentials = try? credentials() else { return }
         let identity = identity(of: credentials)
@@ -299,10 +423,20 @@ nonisolated final class T3EnvironmentClient: @unchecked Sendable {
         if let thread = detail.thread {
             locked {
                 if cachedShellIdentity == identity, var shell = cachedShell {
-                    if let index = shell.threads.firstIndex(where: { $0.id == thread.id }) {
-                        shell.threads[index] = thread
+                    if thread.archivedAt != nil {
+                        shell.threads.removeAll { $0.id == thread.id }
+                        if let index = shell.storedArchivedThreads.firstIndex(where: { $0.id == thread.id }) {
+                            shell.storedArchivedThreads[index] = thread
+                        } else {
+                            shell.storedArchivedThreads.append(thread)
+                        }
                     } else {
-                        shell.threads.append(thread)
+                        shell.storedArchivedThreads.removeAll { $0.id == thread.id }
+                        if let index = shell.threads.firstIndex(where: { $0.id == thread.id }) {
+                            shell.threads[index] = thread
+                        } else {
+                            shell.threads.append(thread)
+                        }
                     }
                     cachedShell = shell
                 }
@@ -526,8 +660,8 @@ nonisolated final class T3EnvironmentClient: @unchecked Sendable {
     /// Drops the socket and every identity-bound cache. Called on profile switch
     /// and when the app leaves the foreground; the next call reconnects lazily.
     func reset() async {
-        let (session, connect, shell, fetch) = locked {
-            () -> (T3RpcSession?, Task<T3RpcSession, Error>?, Task<Void, Never>?, Task<T3ShellSnapshot, Error>?) in
+        let (session, connect, shell, archive, fetch) = locked {
+            () -> (T3RpcSession?, Task<T3RpcSession, Error>?, Task<Void, Never>?, Task<Void, Never>?, Task<T3ShellSnapshot, Error>?) in
             cachedShell = nil
             cachedShellIdentity = nil
             cachedCatalog = nil
@@ -537,6 +671,8 @@ nonisolated final class T3EnvironmentClient: @unchecked Sendable {
             protocolFailures = [:]
             let shell = shellTask
             shellTask = nil
+            let archive = archiveTask
+            archiveTask = nil
             let fetch = shellFetchTask
             shellFetchTask = nil
             shellFetchIdentity = nil
@@ -549,9 +685,10 @@ nonisolated final class T3EnvironmentClient: @unchecked Sendable {
             connectIdentity = nil
             let connect = connectTask
             connectTask = nil
-            return (session, connect, shell, fetch)
+            return (session, connect, shell, archive, fetch)
         }
         shell?.cancel()
+        archive?.cancel()
         fetch?.cancel()
         connect?.cancel()
         await session?.close()

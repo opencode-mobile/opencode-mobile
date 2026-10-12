@@ -291,18 +291,26 @@ struct T3ShellSnapshot: Equatable, Sendable {
     var sequence: Int
     var threads: [T3Thread]
     var projects: [T3Project]
+    /// Threads the server lists under `archivedThreads`. Never merged into `threads`.
+    var storedArchivedThreads: [T3Thread] = []
+    /// Cursor for `storedArchivedThreads`. Independent of `sequence`: both streams share one log.
+    var archiveSequence: Int = 0
 
     var activeThreads: [T3Thread] {
         threads.filter(\.isActiveListItem)
     }
 
-    /// Archived and settled threads (the shell's `archivedThreads` plus settled active ones).
+    /// Settled threads still on the active shell, then the stored archive. Deleted threads are omitted.
     var archivedThreads: [T3Thread] {
-        threads.filter(\.isArchivedListItem)
+        let onActiveShell = threads.filter(\.isArchivedListItem)
+        let seen = Set(onActiveShell.map(\.id))
+        let stored = storedArchivedThreads.filter { $0.isArchivedListItem && !seen.contains($0.id) }
+        return onActiveShell + stored
     }
 
+    /// Active list first, then the stored archive.
     func thread(id: String) -> T3Thread? {
-        threads.first { $0.id == id }
+        threads.first { $0.id == id } ?? storedArchivedThreads.first { $0.id == id }
     }
 }
 

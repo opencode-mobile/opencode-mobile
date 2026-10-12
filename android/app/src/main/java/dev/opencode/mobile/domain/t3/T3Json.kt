@@ -55,6 +55,16 @@ object T3Json {
         )
     }
 
+    /**
+     * Threads from an archived-shell snapshot. Null when [key] is absent, so a
+     * non-snapshot payload cannot wipe a list the active shell already holds.
+     */
+    fun optionalThreads(element: JsonElement, key: String = "threads"): List<T3Thread>? {
+        val obj = element as? JsonObject ?: return null
+        if (!obj.containsKey(key)) return null
+        return obj.array(key).mapNotNull { thread(it) }
+    }
+
     fun threadSnapshot(raw: String): T3ThreadSnapshot = threadSnapshot(parser.parseToJsonElement(raw))
 
     fun threadSnapshot(element: JsonElement): T3ThreadSnapshot {

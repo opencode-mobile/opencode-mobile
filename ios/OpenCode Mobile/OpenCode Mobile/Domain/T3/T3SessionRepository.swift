@@ -170,7 +170,8 @@ final class T3SessionRepository: SessionRepository, @unchecked Sendable {
         try await client.dispatchCommand(
             T3RpcCodec.archiveCommand(commandID: UUID().uuidString, threadID: id)
         )
-        let thread = try await resolveThread(id: id, refresh: true)
+        client.noteThreadArchived(id: id)
+        let thread = try await resolveThread(id: id, refresh: false)
         var session = T3ShellMapper.session(from: thread, directory: await resolvedDirectory(directory, thread: thread))
         if session.archivedAtEpochMs == nil {
             session.archivedAtEpochMs = Int64(Date().timeIntervalSince1970 * 1_000)
@@ -277,7 +278,8 @@ final class T3SessionRepository: SessionRepository, @unchecked Sendable {
         try await client.dispatchCommand(
             T3SessionCommands.unarchiveCommand(commandID: UUID().uuidString, threadID: id)
         )
-        let thread = try await resolveThread(id: id, refresh: true)
+        client.noteThreadUnarchived(id: id)
+        let thread = try await resolveThread(id: id, refresh: false)
         var session = T3ShellMapper.session(from: thread, directory: await resolvedDirectory(directory, thread: thread))
         session.archivedAtEpochMs = nil
         return session
@@ -349,7 +351,8 @@ final class T3SessionRepository: SessionRepository, @unchecked Sendable {
         if let sessionID = Self.nonEmpty(sessionID) {
             thread = snapshot.thread(id: sessionID)
         } else {
-            thread = snapshot.threads.first { T3ShellMapper.questionID(for: $0) == requestID }
+            let stored = snapshot.storedArchivedThreads
+            thread = (snapshot.threads + stored).first { T3ShellMapper.questionID(for: $0) == requestID }
         }
         guard let thread, T3ShellMapper.questionID(for: thread) == requestID else { return nil }
         return thread

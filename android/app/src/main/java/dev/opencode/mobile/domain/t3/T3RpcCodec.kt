@@ -49,6 +49,8 @@ object T3RpcCodec {
     const val DISPATCH_COMMAND = "orchestration.dispatchCommand"
     const val SUBSCRIBE_THREAD = "orchestration.subscribeThread"
     const val SUBSCRIBE_SHELL = "orchestration.subscribeShell"
+    const val SUBSCRIBE_ARCHIVED_SHELL = "orchestration.subscribeArchivedShell"
+    const val GET_ARCHIVED_SHELL_SNAPSHOT = "orchestration.getArchivedShellSnapshot"
     const val LAUNCH_THREAD = "orchestration.launchThread"
     const val SERVER_GET_CONFIG = "server.getConfig"
 

@@ -282,6 +282,9 @@ class T3SessionControlsTest {
             assertEquals("thr-1", command.str("threadId"))
             assertTrue(command.str("commandId")!!.isNotBlank())
             assertEquals("thr-1", session.id)
+            assertTrue(session.isArchived)
+            assertEquals(listOf("thr-1"), h.runtime.shell.value!!.archivedThreads.map { it.id })
+            assertEquals(emptyList<String>(), h.runtime.shell.value!!.threads.map { it.id })
         }
 
     @Test

@@ -129,6 +129,8 @@ nonisolated enum T3RpcCodec {
     }
 
     static let subscribeShellTag = "orchestration.subscribeShell"
+    static let subscribeArchivedShellTag = "orchestration.subscribeArchivedShell"
+    static let archivedShellSnapshotTag = "orchestration.getArchivedShellSnapshot"
 
     /// `orchestration.subscribeShell` input. With `afterSequence` the server
     /// replays shell events after that sequence instead of sending the full

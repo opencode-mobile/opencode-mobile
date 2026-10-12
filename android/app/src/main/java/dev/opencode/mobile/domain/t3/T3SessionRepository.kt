@@ -136,8 +136,9 @@ class T3SessionRepository
             directory: String?,
         ): Session {
             runtime.dispatch(T3Commands.threadUnarchive(id))
-            val session = refreshedSession(id, directory)
-            return session.copy(archivedAtEpochMs = null)
+            if (runtime.shell.value == null) runCatching { runtime.refreshShell() }
+            runtime.noteUnarchived(id)
+            return getSession(id, directory).copy(archivedAtEpochMs = null)
         }
 
         override suspend fun unsettleSession(
@@ -193,6 +194,8 @@ class T3SessionRepository
             directory: String?,
         ): Session {
             runtime.dispatch(T3Commands.threadArchive(id))
+            if (runtime.shell.value == null) runCatching { runtime.refreshShell() }
+            runtime.noteArchived(id)
             return getSession(id, directory)
         }
 
@@ -376,7 +379,7 @@ class T3SessionRepository
         ): Boolean {
             val thread =
                 runtime.thread(sessionId)
-                    ?: runtime.refreshShell().threads.firstOrNull { it.id == sessionId }
+                    ?: runtime.refreshShell().thread(sessionId)
                     ?: return false
             if (T3SessionMapper.approvalId(thread) != permissionId) return false
             runtime.dispatch(T3Commands.runtimeRequestRespond(sessionId, permissionId, decision))
@@ -412,9 +415,9 @@ class T3SessionRepository
             val snapshot = runtime.refreshShell()
             val thread =
                 if (sessionId.isNotBlank()) {
-                    snapshot.threads.firstOrNull { it.id == sessionId }
+                    snapshot.thread(sessionId)
                 } else {
-                    snapshot.threads.firstOrNull { T3SessionMapper.questionId(it) == requestId }
+                    snapshot.allThreads.firstOrNull { T3SessionMapper.questionId(it) == requestId }
                 }
             return thread?.takeIf { T3SessionMapper.questionId(it) == requestId }
         }

@@ -331,6 +331,31 @@ final class FakeT3EngineClient: T3EngineClient, @unchecked Sendable {
         dispatched.append(command)
     }
 
+    func noteThreadArchived(id: String) {
+        lock.lock(); defer { lock.unlock() }
+        guard var thread = cachedSnapshot.thread(id: id) else { return }
+        if thread.archivedAt == nil {
+            thread.archivedAt = "2026-10-12T00:00:00Z"
+        }
+        cachedSnapshot.threads.removeAll { $0.id == id }
+        cachedSnapshot.storedArchivedThreads.removeAll { $0.id == id }
+        cachedSnapshot.storedArchivedThreads.append(thread)
+    }
+
+    func noteThreadUnarchived(id: String) {
+        lock.lock(); defer { lock.unlock() }
+        guard var thread = cachedSnapshot.thread(id: id) else { return }
+        thread.archivedAt = nil
+        cachedSnapshot.storedArchivedThreads.removeAll { $0.id == id }
+        cachedSnapshot.threads.removeAll { $0.id == id }
+        cachedSnapshot.threads.append(thread)
+    }
+
+    var cachedThreadIDs: (active: [String], archived: [String]) {
+        lock.lock(); defer { lock.unlock() }
+        return (cachedSnapshot.threads.map(\.id), cachedSnapshot.storedArchivedThreads.map(\.id))
+    }
+
     func launchThread(
         title: String?,
         projectID: String?,

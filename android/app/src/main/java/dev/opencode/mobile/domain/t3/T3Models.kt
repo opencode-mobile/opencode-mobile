@@ -106,6 +106,8 @@ data class T3ShellSnapshot(
     val snapshotSequence: Long = 0,
     /** Threads the server lists under `archivedThreads`; never merged into [threads]. */
     val archivedThreads: List<T3Thread> = emptyList(),
+    /** Cursor for [archivedThreads]. Independent of [snapshotSequence]: both streams share one log. */
+    val archiveSequence: Long = 0,
 ) {
     /** Active and archived threads; an id present in both resolves to the active copy. */
     val allThreads: List<T3Thread>

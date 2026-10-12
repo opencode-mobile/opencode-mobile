@@ -229,6 +229,9 @@ object T3Commands {
             put("requestCompletionMarker", true)
         }
 
+    /** `orchestration.subscribeArchivedShell` takes an empty payload. */
+    fun subscribeArchivedShell(): JsonObject = buildJsonObject {}
+
     /** `ChatAttachment` as persisted by the server: a stored id plus its metadata. */
     private fun encodeAttachment(attachment: T3Attachment): JsonObject =
         buildJsonObject {

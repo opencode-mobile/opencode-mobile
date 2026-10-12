@@ -374,6 +374,32 @@ internal fun threadRemovedItem(
         put("threadId", threadId)
     }
 
+internal fun archivedSnapshotItem(
+    threads: List<JsonObject>,
+    sequence: Long,
+): JsonObject =
+    buildJsonObject {
+        put("kind", "snapshot")
+        put(
+            "snapshot",
+            buildJsonObject {
+                put("snapshotSequence", sequence)
+                put("threads", JsonArray(threads))
+                put("projects", JsonArray(emptyList()))
+            },
+        )
+    }
+
+internal fun archivedThreadUpdatedItem(
+    sequence: Long,
+    thread: JsonObject,
+): JsonObject =
+    buildJsonObject {
+        put("kind", "thread.updated")
+        put("sequence", sequence)
+        put("thread", thread)
+    }
+
 internal fun threadEventItem(
     sequence: Long,
     event: JsonObject,

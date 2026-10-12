@@ -27,15 +27,26 @@ nonisolated enum T3ShellLive {
             return .synchronized
         case "snapshot":
             guard let raw = object["snapshot"], T3JSON.object(raw) != nil else { return .ignored }
-            return .replaced(T3ShellMapper.snapshot(from: raw), isSnapshot: true)
+            return .replaced(preservingArchive(T3ShellMapper.snapshot(from: raw), current: current), isSnapshot: true)
         case "thread.updated":
             guard let thread = T3ShellMapper.thread(from: object["thread"] as Any) else { return .ignored }
+            if T3JSON.string(object, "location") == "archive" {
+                return mutateArchive(object, current) { shell in
+                    upsertArchive(&shell, thread)
+                }
+            }
             return mutate(object, current) { shell in
+                shell.storedArchivedThreads.removeAll { $0.id == thread.id }
                 shell.threads.removeAll { $0.id == thread.id }
                 shell.threads.append(thread)
             }
         case "thread.removed":
             guard let threadID = T3JSON.string(object, "threadId") else { return .ignored }
+            if T3JSON.string(object, "location") == "archive" {
+                return mutateArchive(object, current) { shell in
+                    shell.storedArchivedThreads.removeAll { $0.id == threadID }
+                }
+            }
             return mutate(object, current) { shell in
                 shell.threads.removeAll { $0.id == threadID }
             }
@@ -64,6 +75,72 @@ nonisolated enum T3ShellLive {
         guard sequence > shell.sequence else { return .ignored }
         transform(&shell)
         shell.sequence = sequence
+        return .replaced(shell, isSnapshot: false)
+    }
+
+    /// Applies one `orchestration.subscribeArchivedShell` item. That stream's
+    /// snapshot `threads` are the archive. Its sequence is the archive cursor
+    /// and must not move the active shell sequence.
+    static func applyArchived(_ item: Any, to current: T3ShellSnapshot?) -> Applied {
+        guard let object = T3JSON.object(item), let kind = T3JSON.string(object, "kind") else { return .ignored }
+        switch kind {
+        case "snapshot":
+            guard let raw = T3JSON.object(object["snapshot"]) else { return .ignored }
+            guard let threadsValue = raw["threads"], !(threadsValue is NSNull) else { return .ignored }
+            guard let sequence = T3JSON.int(raw["snapshotSequence"]) else { return .ignored }
+            if let current, sequence < current.archiveSequence { return .ignored }
+            let archived = T3JSON.array(threadsValue).compactMap { T3ShellMapper.thread(from: $0) }
+            var shell = current ?? T3ShellSnapshot(sequence: 0, threads: [], projects: [])
+            let ids = Set(archived.map(\.id))
+            shell.threads.removeAll { ids.contains($0.id) }
+            shell.storedArchivedThreads = archived
+            shell.archiveSequence = sequence
+            return .replaced(shell, isSnapshot: true)
+        case "thread.updated":
+            guard let thread = T3ShellMapper.thread(from: object["thread"] as Any) else { return .ignored }
+            return mutateArchive(object, current) { shell in
+                upsertArchive(&shell, thread)
+            }
+        case "thread.removed":
+            guard let threadID = T3JSON.string(object, "threadId") else { return .ignored }
+            return mutateArchive(object, current) { shell in
+                shell.storedArchivedThreads.removeAll { $0.id == threadID }
+            }
+        default:
+            return .ignored
+        }
+    }
+
+    /// The active shell snapshot leaves `archivedThreads` empty. Keep the archive list.
+    private static func preservingArchive(_ incoming: T3ShellSnapshot, current: T3ShellSnapshot?) -> T3ShellSnapshot {
+        var next = incoming
+        if next.storedArchivedThreads.isEmpty, let current {
+            next.storedArchivedThreads = current.storedArchivedThreads
+            next.archiveSequence = current.archiveSequence
+        }
+        let ids = Set(next.storedArchivedThreads.map(\.id))
+        if !ids.isEmpty {
+            next.threads.removeAll { ids.contains($0.id) }
+        }
+        return next
+    }
+
+    private static func upsertArchive(_ shell: inout T3ShellSnapshot, _ thread: T3Thread) {
+        shell.threads.removeAll { $0.id == thread.id }
+        shell.storedArchivedThreads.removeAll { $0.id == thread.id }
+        shell.storedArchivedThreads.append(thread)
+    }
+
+    /// Archive events share the server log but must not advance or stall the active cursor.
+    private static func mutateArchive(
+        _ object: [String: Any],
+        _ current: T3ShellSnapshot?,
+        _ transform: (inout T3ShellSnapshot) -> Void
+    ) -> Applied {
+        guard var shell = current, let sequence = T3JSON.int(object["sequence"]) else { return .ignored }
+        guard sequence > shell.archiveSequence else { return .ignored }
+        transform(&shell)
+        shell.archiveSequence = sequence
         return .replaced(shell, isSnapshot: false)
     }
 

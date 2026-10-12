@@ -22,6 +22,12 @@ protocol T3EngineClient: Sendable {
     /// Opens the environment socket in the background so the connection
     /// indicator shows connecting / connected before the first request.
     func warmConnection()
+    /// Moves `id` into the archive list. The archive command is accepted before
+    /// the shell stream catches up, and the active HTTP snapshot does not carry
+    /// archived threads. A no-op when the cache has no such thread.
+    func noteThreadArchived(id: String)
+    /// Moves `id` back to the active list and clears `archivedAt`.
+    func noteThreadUnarchived(id: String)
 }
 
 extension T3EngineClient {
@@ -34,6 +40,10 @@ extension T3EngineClient {
     }
 
     func warmConnection() {}
+
+    func noteThreadArchived(id _: String) {}
+
+    func noteThreadUnarchived(id _: String) {}
 }
 
 extension T3EnvironmentClient: T3EngineClient {}

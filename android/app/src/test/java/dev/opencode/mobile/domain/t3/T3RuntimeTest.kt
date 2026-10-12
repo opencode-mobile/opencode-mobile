@@ -136,6 +136,45 @@ class T3RuntimeTest {
         }
 
     @Test
+    fun archivedShellStaysSeparateFromTheActiveSnapshot() =
+        runTest {
+            val h = Harness(this).build()
+            h.http.shellJson = shellJson(threads = listOf(threadJson("A")), sequence = 3)
+
+            h.runtime.refreshShell()
+            settle()
+            val activeSub = h.socket.lastSubscribe(T3RpcCodec.SUBSCRIBE_SHELL)
+            val archiveSub = h.socket.lastSubscribe(T3RpcCodec.SUBSCRIBE_ARCHIVED_SHELL)
+
+            h.socket.chunk(
+                archiveSub.id,
+                archivedSnapshotItem(listOf(threadJson("Z", archivedAt = "2026-10-02T00:00:00Z")), sequence = 3),
+            )
+            settle()
+            assertEquals(listOf("A"), h.runtime.shell.value!!.threads.map { it.id })
+            assertEquals(listOf("Z"), h.runtime.shell.value!!.archivedThreads.map { it.id })
+            assertEquals("Z", h.runtime.thread("Z")?.id)
+
+            h.socket.chunk(activeSub.id, shellSnapshotItem(listOf(threadJson("A"), threadJson("B")), sequence = 4))
+            settle()
+            assertEquals(listOf("A", "B"), h.runtime.shell.value!!.threads.map { it.id })
+            assertEquals("an active snapshot does not clear the archive", listOf("Z"), h.runtime.shell.value!!.archivedThreads.map { it.id })
+
+            h.socket.chunk(activeSub.id, threadRemovedItem(5, "A"))
+            settle()
+            assertEquals(listOf("Z"), h.runtime.shell.value!!.archivedThreads.map { it.id })
+
+            h.socket.chunk(
+                archiveSub.id,
+                archivedThreadUpdatedItem(6, threadJson("B", archivedAt = "2026-10-02T00:00:00Z")),
+            )
+            settle()
+            assertEquals(emptyList<String>(), h.runtime.shell.value!!.threads.map { it.id })
+            assertEquals(listOf("Z", "B"), h.runtime.shell.value!!.archivedThreads.map { it.id })
+            assertEquals("the archive cursor does not move the active shell sequence", 5L, h.runtime.shell.value!!.snapshotSequence)
+        }
+
+    @Test
     fun stopOnProfileSwitchDisconnectsAndClearsCaches() =
         runTest {
             val h = Harness(this).build()

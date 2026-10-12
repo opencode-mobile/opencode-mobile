@@ -372,10 +372,11 @@ class T3QuestionsTest {
             assertEquals("uikit", answers["q-framework"]!!.jsonPrimitive.content)
             assertEquals(JsonArray(listOf(JsonPrimitive("iOS"))), answers["q-targets"])
 
-            // A stale request id is refused without a dispatch.
-            val before = h.socket.requests.size
+            // A stale request id is refused without a dispatch. A shell refresh may
+            // still ask for the archived snapshot; that is not a command.
+            val before = h.socket.requests.count { it.tag == T3RpcCodec.DISPATCH_COMMAND }
             assertFalse(h.repository.replyToQuestion("thr-a", "req-old", listOf(listOf("UIKit")), "/repos/a"))
-            assertEquals(before, h.socket.requests.size)
+            assertEquals(before, h.socket.requests.count { it.tag == T3RpcCodec.DISPATCH_COMMAND })
 
             // Rejecting without a session id finds the thread by its pending request.
             assertTrue(h.repository.rejectQuestion(requestId = "req-a", directory = "/repos/a"))

@@ -146,6 +146,9 @@ struct T3SessionControlsTests {
         #expect(command["threadId"] as? String == "thr-1")
         #expect((command["commandId"] as? String)?.isEmpty == false)
         #expect(session.id == "thr-1")
+        #expect(session.isArchived)
+        #expect(client.cachedThreadIDs.active.isEmpty)
+        #expect(client.cachedThreadIDs.archived == ["thr-1"])
     }
 
     @Test func unarchiveSession_dispatchesThreadUnarchiveAndClearsArchivedAt() async throws {
@@ -158,6 +161,8 @@ struct T3SessionControlsTests {
         #expect(command["type"] as? String == "thread.unarchive")
         #expect(command["threadId"] as? String == "thr-1")
         #expect(session.isArchived == false)
+        #expect(client.cachedThreadIDs.active == ["thr-1"])
+        #expect(client.cachedThreadIDs.archived.isEmpty)
     }
 
     @Test func settleAndUnsettle_dispatchContractCommands() async throws {

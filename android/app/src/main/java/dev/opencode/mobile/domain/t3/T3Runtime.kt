@@ -34,6 +34,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.longOrNull
+import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -84,6 +85,7 @@ class T3Runtime
         /** Guards subscription ids, the observed thread, and the debounce job. */
         private val subscriptionLock = Any()
         private var shellRequestId: String? = null
+        private var archiveRequestId: String? = null
         private var threadRequestId: String? = null
         private var subscribedThreadId: String? = null
 
@@ -198,12 +200,49 @@ class T3Runtime
             guarded {
                 val profile = requireProfile()
                 val snapshot = api.fetchShell(profile)
-                val applied = applyShell(snapshot, publishLifecycle = false)
+                // Apply before connecting so the shell subscription resumes after this sequence.
+                var applied = applyShell(mergeArchive(snapshot, null), publishLifecycle = false)
                 runCatching { ensureConnected(profile) }
+                val fromSocket = runCatching { archivedThreadsFromSocket() }.getOrNull()
+                if (fromSocket != null) {
+                    applied = applyShell(mergeArchive(applied, fromSocket), publishLifecycle = false)
+                }
                 applied
             }
 
-        suspend fun thread(id: String): T3Thread? = (_shell.value ?: refreshShell()).threads.firstOrNull { it.id == id }
+        /** Active list first, then the archive. */
+        suspend fun thread(id: String): T3Thread? = (_shell.value ?: refreshShell()).thread(id)
+
+        /**
+         * Moves [id] into the archive list. The archive command is accepted before
+         * the shell stream catches up, and the active HTTP snapshot does not carry
+         * archived threads.
+         */
+        fun noteArchived(id: String) {
+            val current = _shell.value ?: return
+            val thread = current.thread(id) ?: return
+            val archived = if (thread.archivedAt.isNullOrBlank()) thread.copy(archivedAt = Instant.now().toString()) else thread
+            applyShell(
+                current.copy(
+                    threads = current.threads.filterNot { it.id == id },
+                    archivedThreads = current.archivedThreads.filterNot { it.id == id } + archived,
+                ),
+                publishLifecycle = true,
+            )
+        }
+
+        /** Moves [id] back to the active list and clears `archivedAt`. */
+        fun noteUnarchived(id: String) {
+            val current = _shell.value ?: return
+            val thread = current.thread(id) ?: return
+            applyShell(
+                current.copy(
+                    threads = current.threads.filterNot { it.id == id } + thread.copy(archivedAt = null),
+                    archivedThreads = current.archivedThreads.filterNot { it.id == id },
+                ),
+                publishLifecycle = true,
+            )
+        }
 
         suspend fun loadThreadMessages(threadId: String): List<Message> =
             guarded {
@@ -392,6 +431,7 @@ class T3Runtime
         private fun resetSubscriptions() {
             synchronized(subscriptionLock) {
                 shellRequestId = null
+                archiveRequestId = null
                 threadRequestId = null
                 subscribedThreadId = null
             }
@@ -400,6 +440,7 @@ class T3Runtime
         /** Caller holds [connectMutex]; the socket is open. */
         private fun resubscribe() {
             subscribeShell()
+            subscribeArchivedShell()
             val threadId = synchronized(subscriptionLock) { observedThreadId } ?: return
             subscribeThread(threadId, sequences[threadId])
         }
@@ -411,6 +452,14 @@ class T3Runtime
                     socket.sendSubscribe(T3RpcCodec.SUBSCRIBE_SHELL, T3Commands.subscribeShell(after))
                 }.getOrNull()
             synchronized(subscriptionLock) { shellRequestId = id }
+        }
+
+        private fun subscribeArchivedShell() {
+            val id =
+                runCatching {
+                    socket.sendSubscribe(T3RpcCodec.SUBSCRIBE_ARCHIVED_SHELL, T3Commands.subscribeArchivedShell())
+                }.getOrNull()
+            synchronized(subscriptionLock) { archiveRequestId = id }
         }
 
         private fun subscribeThread(
@@ -445,13 +494,14 @@ class T3Runtime
         }
 
         private suspend fun handleChunk(frame: T3RpcFrame.Chunk) {
-            val (shellId, threadId) =
+            val (shellId, archiveId, threadId) =
                 synchronized(subscriptionLock) {
                     val forThread = if (frame.requestId == threadRequestId) subscribedThreadId else null
-                    shellRequestId to forThread
+                    Triple(shellRequestId, archiveRequestId, forThread)
                 }
             when {
                 frame.requestId == shellId -> frame.values.forEach { value -> applyShellStreamItem(value) }
+                frame.requestId == archiveId -> frame.values.forEach { value -> applyArchivedStreamItem(value) }
                 threadId != null -> frame.values.forEach { value -> applyThreadStreamItem(threadId, value) }
             }
         }
@@ -465,6 +515,10 @@ class T3Runtime
                     when (requestId) {
                         shellRequestId -> {
                             shellRequestId = null
+                            null
+                        }
+                        archiveRequestId -> {
+                            archiveRequestId = null
                             null
                         }
                         threadRequestId -> {
@@ -492,21 +546,38 @@ class T3Runtime
             when (obj.string("kind")) {
                 "snapshot" -> {
                     val snapshot = runCatching { T3Json.shellSnapshot(obj["snapshot"] ?: return) }.getOrNull() ?: return
-                    applyShell(snapshot, publishLifecycle = true)
+                    applyShell(preservingArchive(snapshot), publishLifecycle = true)
                 }
                 "thread.updated" -> {
                     val sequence = obj.long("sequence") ?: return
                     val thread = T3Json.thread(obj["thread"] ?: return) ?: return
-                    mutateShell(sequence) { current ->
-                        val others = current.threads.filterNot { it.id == thread.id }
-                        current.copy(threads = others + thread)
+                    if (obj.string("location") == "archive") {
+                        mutateArchive(sequence) { current ->
+                            current.copy(
+                                threads = current.threads.filterNot { it.id == thread.id },
+                                archivedThreads = current.archivedThreads.filterNot { it.id == thread.id } + thread,
+                            )
+                        }
+                    } else {
+                        mutateShell(sequence) { current ->
+                            current.copy(
+                                threads = current.threads.filterNot { it.id == thread.id } + thread,
+                                archivedThreads = current.archivedThreads.filterNot { it.id == thread.id },
+                            )
+                        }
                     }
                 }
                 "thread.removed" -> {
                     val sequence = obj.long("sequence") ?: return
                     val threadId = obj.string("threadId") ?: return
-                    mutateShell(sequence) { current ->
-                        current.copy(threads = current.threads.filterNot { it.id == threadId })
+                    if (obj.string("location") == "archive") {
+                        mutateArchive(sequence) { current ->
+                            current.copy(archivedThreads = current.archivedThreads.filterNot { it.id == threadId })
+                        }
+                    } else {
+                        mutateShell(sequence) { current ->
+                            current.copy(threads = current.threads.filterNot { it.id == threadId })
+                        }
                     }
                 }
                 "project.updated" -> {
@@ -527,6 +598,47 @@ class T3Runtime
             }
         }
 
+        private fun applyArchivedStreamItem(value: JsonElement) {
+            val obj = value as? JsonObject ?: return
+            when (obj.string("kind")) {
+                "snapshot" -> {
+                    val raw = obj["snapshot"] ?: return
+                    val threads = T3Json.optionalThreads(raw) ?: return
+                    val sequence = (raw as? JsonObject)?.long("snapshotSequence") ?: return
+                    val hadShell = _shell.value != null
+                    val current = _shell.value ?: T3ShellSnapshot(threads = emptyList(), projects = emptyList())
+                    if (sequence < current.archiveSequence) return
+                    val ids = threads.mapTo(HashSet()) { it.id }
+                    applyShell(
+                        current.copy(
+                            threads = current.threads.filterNot { it.id in ids },
+                            archivedThreads = threads,
+                            archiveSequence = sequence,
+                        ),
+                        publishLifecycle = hadShell,
+                    )
+                }
+                "thread.updated" -> {
+                    val sequence = obj.long("sequence") ?: return
+                    val thread = T3Json.thread(obj["thread"] ?: return) ?: return
+                    mutateArchive(sequence) { current ->
+                        current.copy(
+                            threads = current.threads.filterNot { it.id == thread.id },
+                            archivedThreads = current.archivedThreads.filterNot { it.id == thread.id } + thread,
+                        )
+                    }
+                }
+                "thread.removed" -> {
+                    val sequence = obj.long("sequence") ?: return
+                    val threadId = obj.string("threadId") ?: return
+                    mutateArchive(sequence) { current ->
+                        current.copy(archivedThreads = current.archivedThreads.filterNot { it.id == threadId })
+                    }
+                }
+                else -> Unit
+            }
+        }
+
         private fun mutateShell(
             sequence: Long,
             transform: (T3ShellSnapshot) -> T3ShellSnapshot,
@@ -534,6 +646,65 @@ class T3Runtime
             val current = _shell.value ?: return
             if (sequence <= current.snapshotSequence) return
             applyShell(transform(current).copy(snapshotSequence = sequence), publishLifecycle = true)
+        }
+
+        /** Archive events share the server log but must not advance or stall the active cursor. */
+        private fun mutateArchive(
+            sequence: Long,
+            transform: (T3ShellSnapshot) -> T3ShellSnapshot,
+        ) {
+            val current = _shell.value ?: return
+            if (sequence <= current.archiveSequence) return
+            applyShell(transform(current).copy(archiveSequence = sequence), publishLifecycle = true)
+        }
+
+        /** The active shell snapshot leaves `archivedThreads` empty. Keep the archive list. */
+        private fun preservingArchive(incoming: T3ShellSnapshot): T3ShellSnapshot {
+            val previous = _shell.value ?: return incoming
+            if (incoming.archivedThreads.isNotEmpty()) return incoming
+            return incoming.copy(
+                archivedThreads = previous.archivedThreads,
+                archiveSequence = previous.archiveSequence,
+            )
+        }
+
+        /**
+         * Prefers a real archived-shell snapshot. A payload without `threads` is not
+         * one, and must not replace the list the HTTP shell or a prior stream item holds.
+         */
+        private suspend fun archivedThreadsFromSocket(): List<T3Thread>? {
+            if (socket.state.value != T3SocketState.Connected) return null
+            val value =
+                socket.request(
+                    T3RpcCodec.GET_ARCHIVED_SHELL_SNAPSHOT,
+                    T3Commands.subscribeArchivedShell(),
+                )
+            return T3Json.optionalThreads(value)
+        }
+
+        private fun mergeArchive(
+            http: T3ShellSnapshot,
+            fromSocket: List<T3Thread>?,
+        ): T3ShellSnapshot {
+            val previous = _shell.value
+            val archive =
+                when {
+                    fromSocket != null -> fromSocket
+                    http.archivedThreads.isNotEmpty() -> http.archivedThreads
+                    else -> previous?.archivedThreads.orEmpty()
+                }
+            val ids = archive.mapTo(HashSet()) { it.id }
+            val sequence =
+                if (fromSocket != null) {
+                    previous?.archiveSequence ?: 0L
+                } else {
+                    previous?.archiveSequence ?: http.archiveSequence
+                }
+            return http.copy(
+                threads = http.threads.filterNot { it.id in ids },
+                archivedThreads = archive,
+                archiveSequence = sequence,
+            )
         }
 
         /**

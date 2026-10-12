@@ -9,11 +9,15 @@ nonisolated enum T3ShellMapper {
     static func snapshot(from json: Any) -> T3ShellSnapshot {
         let root = T3JSON.object(json) ?? [:]
         let sequence = T3JSON.int(root["snapshotSequence"] ?? root["sequence"]) ?? 0
-        var threads = T3JSON.array(root["threads"]).compactMap { thread(from: $0) }
+        let threads = T3JSON.array(root["threads"]).compactMap { thread(from: $0) }
         let archived = T3JSON.array(root["archivedThreads"]).compactMap { thread(from: $0) }
-        threads.append(contentsOf: archived)
         let projects = T3JSON.array(root["projects"]).compactMap { project(from: $0) }
-        return T3ShellSnapshot(sequence: sequence, threads: threads, projects: projects)
+        return T3ShellSnapshot(
+            sequence: sequence,
+            threads: threads,
+            projects: projects,
+            storedArchivedThreads: archived
+        )
     }
 
     static func sessions(from snapshot: T3ShellSnapshot, directory: String? = nil) -> [Session] {

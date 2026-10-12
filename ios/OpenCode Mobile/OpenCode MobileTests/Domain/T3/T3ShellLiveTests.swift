@@ -64,6 +64,66 @@ struct T3ShellLiveTests {
         #expect(await waitUntil { events.types == ["session.updated:A", "permission.replied:A"] })
     }
 
+    @Test func archivedShell_staysSeparateFromTheActiveSnapshot() async throws {
+        let harness = T3ClientHarness()
+        await harness.signals.emit(.start)
+        let socket = try await harness.connector.connection(at: 0)
+        socket.open()
+        let active = try await socket.firstRequest(tag: "orchestration.subscribeShell")
+        let archive = try await socket.firstRequest(tag: "orchestration.subscribeArchivedShell")
+        #expect(archive.payload.isEmpty)
+
+        socket.receive(Frames.chunk(requestID: active.id, values: [
+            ShellItems.snapshot(sequence: 3, threads: [ShellItems.thread("A")]),
+        ]))
+        #expect(await waitUntil { harness.client.cachedThread(id: "A") != nil })
+
+        socket.receive(Frames.chunk(requestID: archive.id, values: [
+            ShellItems.archivedSnapshot(sequence: 3, threads: [
+                ShellItems.thread("Z", archivedAt: "2026-10-02T00:00:00Z"),
+            ]),
+        ]))
+        #expect(await waitUntil { harness.client.cachedThread(id: "Z")?.isArchived == true })
+        var shell = try await harness.client.fetchShell(force: false)
+        #expect(shell.threads.map(\.id) == ["A"])
+        #expect(shell.archivedThreads.map(\.id) == ["Z"])
+        #expect(shell.sequence == 3)
+
+        socket.receive(Frames.chunk(requestID: active.id, values: [
+            ShellItems.snapshot(sequence: 4, threads: [ShellItems.thread("A"), ShellItems.thread("B")]),
+        ]))
+        #expect(await waitUntil { harness.client.cachedThread(id: "B") != nil })
+        shell = try await harness.client.fetchShell(force: false)
+        #expect(shell.threads.map(\.id) == ["A", "B"])
+        #expect(shell.archivedThreads.map(\.id) == ["Z"])
+        #expect(shell.sequence == 4)
+
+        socket.receive(Frames.chunk(requestID: active.id, values: [
+            ShellItems.threadRemoved(sequence: 5, "A"),
+        ]))
+        #expect(await waitUntil { harness.client.cachedThread(id: "A") == nil })
+        shell = try await harness.client.fetchShell(force: false)
+        #expect(shell.thread(id: "Z")?.id == "Z")
+        #expect(shell.sequence == 5)
+
+        socket.receive(Frames.chunk(requestID: archive.id, values: [
+            ShellItems.archivedThreadUpdated(sequence: 6, ShellItems.thread("B", archivedAt: "2026-10-02T00:00:00Z")),
+        ]))
+        #expect(await waitUntil { harness.client.cachedShellSnapshot?.threads.isEmpty == true })
+        shell = try await harness.client.fetchShell(force: false)
+        #expect(shell.threads.isEmpty)
+        #expect(shell.archivedThreads.map(\.id) == ["Z", "B"])
+        #expect(shell.sequence == 5)
+        #expect(shell.archiveSequence == 6)
+
+        harness.http.shell = T3ShellSnapshot(sequence: 7, threads: [Fixtures.thread(id: "C")], projects: [])
+        let refreshed = try await harness.client.fetchShell(force: true)
+        #expect(refreshed.threads.map(\.id) == ["C"])
+        #expect(refreshed.archivedThreads.map(\.id) == ["Z", "B"])
+        #expect(refreshed.sequence == 7)
+        #expect(refreshed.archiveSequence == 6)
+    }
+
     @Test func shellStream_firstSnapshotPublishesStatusAndRequestsButNoLifecycle() async throws {
         let harness = T3ClientHarness()
         let events = EventCollector(signals: harness.signals)
@@ -340,7 +400,8 @@ private enum ShellItems {
         title: String? = nil,
         activeRunID: String? = nil,
         pendingRequestID: String? = nil,
-        pendingRequestKind: String = "approval"
+        pendingRequestKind: String = "approval",
+        archivedAt: String? = nil
     ) -> [String: Any] {
         var object: [String: Any] = [
             "id": id,
@@ -353,6 +414,7 @@ private enum ShellItems {
         if let pendingRequestID {
             object["pendingRuntimeRequest"] = ["id": pendingRequestID, "kind": pendingRequestKind]
         }
+        if let archivedAt { object["archivedAt"] = archivedAt }
         return object
     }
 
@@ -375,6 +437,21 @@ private enum ShellItems {
 
     static func threadRemoved(sequence: Int, _ id: String) -> [String: Any] {
         ["kind": "thread.removed", "sequence": sequence, "location": "active", "threadId": id]
+    }
+
+    static func archivedSnapshot(sequence: Int, threads: [[String: Any]]) -> [String: Any] {
+        [
+            "kind": "snapshot",
+            "snapshot": [
+                "snapshotSequence": sequence,
+                "threads": threads,
+                "projects": [Any](),
+            ],
+        ]
+    }
+
+    static func archivedThreadUpdated(sequence: Int, _ thread: [String: Any]) -> [String: Any] {
+        ["kind": "thread.updated", "sequence": sequence, "thread": thread]
     }
 }
 
