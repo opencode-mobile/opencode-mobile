@@ -21,18 +21,21 @@ class HealthApi(
 
     suspend fun getApiInfo(): HealthDto = fetchHealth("api/info")
 
+    suspend fun getApiHealth(): HealthDto = fetchHealth("api/health")
+
     /** @deprecated Use [detectProtocol] for dual-stack probes. */
     suspend fun getHealth(): HealthDto = getGlobalHealth()
 
     /**
      * Probe health endpoints and return the detected protocol.
-     * Throws [ServerProbeError] when neither endpoint is usable.
+     * Throws [ServerProbeError] when no endpoint is usable.
      */
     suspend fun detectProtocol(): ServerProtocol =
         try {
             detector.detect(
                 fetchGlobalHealth = ::getGlobalHealth,
                 fetchApiInfo = ::getApiInfo,
+                fetchApiHealth = ::getApiHealth,
             )
         } catch (error: Throwable) {
             throw if (error is ServerProbeError) error else adapter.mapProbeError(error)

@@ -46,7 +46,7 @@ class ConnectionProbeServiceTest {
             val protocol = service.probe(connection)
 
             assertEquals(ServerProtocol.V1, protocol)
-            assertEquals(setOf("/global/health", "/api/info"), paths.toSet())
+            assertEquals(setOf("/global/health", "/api/info", "/api/health"), paths.toSet())
         }
 
     @Test
@@ -69,14 +69,14 @@ class ConnectionProbeServiceTest {
                                 status = HttpStatusCode.OK,
                                 headers = headersOf(HttpHeaders.ContentType, "application/json"),
                             )
-                        else -> error("unexpected path")
+                        else -> jsonNotFound()
                     }
                 }
 
             val protocol = service.probe(connection)
 
             assertEquals(ServerProtocol.V2, protocol)
-            assertEquals(setOf("/global/health", "/api/info"), paths.toSet())
+            assertEquals(setOf("/global/health", "/api/info", "/api/health"), paths.toSet())
         }
 
     @Test
@@ -99,12 +99,12 @@ class ConnectionProbeServiceTest {
                                 status = HttpStatusCode.OK,
                                 headers = headersOf(HttpHeaders.ContentType, "application/json"),
                             )
-                        else -> error("unexpected path")
+                        else -> jsonNotFound()
                     }
                 }
 
             assertEquals(ServerProtocol.V1, service.probe(connection))
-            assertEquals(setOf("/global/health", "/api/info"), paths.toSet())
+            assertEquals(setOf("/global/health", "/api/info", "/api/health"), paths.toSet())
         }
 
     @Test
@@ -160,7 +160,7 @@ class ConnectionProbeServiceTest {
                                 headers = headersOf(HttpHeaders.ContentType, "application/json"),
                             )
                         "/api/info" -> jsonNotFound()
-                        else -> error("unexpected path")
+                        else -> jsonNotFound()
                     }
                 }
 
@@ -185,7 +185,7 @@ class ConnectionProbeServiceTest {
                                 headers = headersOf(HttpHeaders.ContentType, "application/json"),
                             )
                         "/api/info" -> jsonNotFound()
-                        else -> error("unexpected path")
+                        else -> jsonNotFound()
                     }
                 }
 
@@ -210,12 +210,70 @@ class ConnectionProbeServiceTest {
                             jsonOk(
                                 """{"version":"2.0.7","pid":1481731,"urls":["http://192.168.0.160:4096"]}""",
                             )
-                        else -> error("unexpected path")
+                        else -> jsonNotFound()
                     }
                 }
 
             assertEquals(ServerProtocol.V2, service.probe(connection))
-            assertEquals(setOf("/global/health", "/api/info"), paths.toSet())
+            assertEquals(setOf("/global/health", "/api/info", "/api/health"), paths.toSet())
+        }
+
+    @Test
+    fun probe_detectsV2FromApiHealthWhenInfoIsMissing() =
+        runTest {
+            val paths = mutableListOf<String>()
+            val service =
+                service { request ->
+                    paths += request.url.encodedPath
+                    when (request.url.encodedPath) {
+                        "/global/health" -> spaHtml()
+                        "/api/info" -> jsonNotFound()
+                        "/api/health" ->
+                            jsonOk("""{"healthy":true,"version":"2.0.1","pid":2605231}""")
+                        else -> jsonNotFound()
+                    }
+                }
+
+            assertEquals(ServerProtocol.V2, service.probe(connection))
+            assertEquals(setOf("/global/health", "/api/info", "/api/health"), paths.toSet())
+        }
+
+    @Test
+    fun probe_prefersUsableApiHealthOverUnhealthyApiInfo() =
+        runTest {
+            val service =
+                service { request ->
+                    when (request.url.encodedPath) {
+                        "/global/health" -> jsonNotFound()
+                        "/api/info" ->
+                            jsonOk("""{"healthy":false,"version":"2.0.0","pid":1}""")
+                        "/api/health" ->
+                            jsonOk("""{"healthy":true,"version":"2.0.1","pid":2}""")
+                        else -> jsonNotFound()
+                    }
+                }
+
+            assertEquals(ServerProtocol.V2, service.probe(connection))
+        }
+
+    @Test
+    fun probe_reportsUnhealthyWhenOnlyApiHealthPidIsUnhealthy() =
+        runTest {
+            val service =
+                service { request ->
+                    when (request.url.encodedPath) {
+                        "/api/health" ->
+                            jsonOk("""{"healthy":false,"version":"2.0.1","pid":12}""")
+                        else -> jsonNotFound()
+                    }
+                }
+
+            try {
+                service.probe(connection)
+                fail("expected ServerProbeError.Unhealthy")
+            } catch (error: ServerProbeError.Unhealthy) {
+                assertEquals("2.0.1", error.version)
+            }
         }
 
     @Test
@@ -227,7 +285,7 @@ class ConnectionProbeServiceTest {
                         "/global/health" ->
                             jsonOk("""{"healthy":true,"version":"1.18.31"}""")
                         "/api/info" -> spaHtml()
-                        else -> error("unexpected path")
+                        else -> jsonNotFound()
                     }
                 }
 
@@ -242,7 +300,7 @@ class ConnectionProbeServiceTest {
                     when (request.url.encodedPath) {
                         "/global/health" -> spaHtml()
                         "/api/info" -> jsonNotFound()
-                        else -> error("unexpected path")
+                        else -> jsonNotFound()
                     }
                 }
 
@@ -268,7 +326,7 @@ class ConnectionProbeServiceTest {
                                 headers = headersOf(HttpHeaders.ContentType, "application/json"),
                             )
                         "/api/info" -> jsonNotFound()
-                        else -> error("unexpected path")
+                        else -> jsonNotFound()
                     }
                 }
 

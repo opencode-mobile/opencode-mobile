@@ -3,7 +3,7 @@ import Foundation
 /// OpenCode HTTP API generation for an active server connection.
 ///
 /// Detection prefers `/global/health` with `healthy: true` (v1), else
-/// `/api/info` with numeric `pid` (v2; `healthy` may be absent).
+/// `/api/info` or `/api/health` with numeric `pid` (v2; `healthy` may be absent).
 nonisolated enum ServerProtocol: String, Sendable, Equatable, Hashable {
     case v1
     case v2

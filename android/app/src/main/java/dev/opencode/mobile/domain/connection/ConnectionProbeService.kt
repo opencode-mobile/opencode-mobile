@@ -24,7 +24,7 @@ class ConnectionProbeService(
     /**
      * Probe health endpoints and return the detected [ServerProtocol].
      *
-     * Throws [ServerProbeError] when neither health endpoint is usable.
+     * Throws [ServerProbeError] when no health endpoint is usable.
      */
     override suspend fun probe(connection: ServerConnection): ServerProtocol {
         val client = clientFactory(connection)
@@ -32,6 +32,7 @@ class ConnectionProbeService(
             return detector.detect(
                 fetchGlobalHealth = { client.fetchHealth("global/health") },
                 fetchApiInfo = { client.fetchHealth("api/info") },
+                fetchApiHealth = { client.fetchHealth("api/health") },
             )
         } catch (error: Throwable) {
             throw if (error is ServerProbeError) error else adapter.mapProbeError(error)
