@@ -3,7 +3,9 @@ package dev.opencode.mobile.domain.t3
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogBuffer
 import dev.opencode.mobile.domain.event.EventStreamConnectionState
 import dev.opencode.mobile.domain.message.MessageContentPreparer
+import dev.opencode.mobile.domain.message.MessageError
 import dev.opencode.mobile.domain.message.MessageListUpdate
+import dev.opencode.mobile.domain.message.PromptSendOptions
 import dev.opencode.mobile.markdown.OpenCodeSyntaxHighlighter
 import dev.opencode.mobile.markdown.OpenCodeTextMateHighlightingEngine
 import dev.opencode.mobile.network.ActiveConnectionManager
@@ -441,4 +443,85 @@ class T3RuntimeTest {
             )
             DiagnosticLogBuffer.resetSharedForTests()
         }
+
+    @Test
+    fun sendPromptWithoutModelSelectionFailsBeforeDispatch() =
+        runTest {
+            val h = Harness(this).build()
+            h.http.shellJson =
+                shellJson(
+                    threads =
+                        listOf(
+                            buildJsonObject {
+                                put("id", "thr-1")
+                                put("title", "Thread")
+                                put("projectId", "proj-1")
+                                put("status", "idle")
+                                put("providerInstanceId", "codex-1")
+                            },
+                        ),
+                )
+            val repository = messages(h)
+
+            val error =
+                runCatching {
+                    repository.sendPromptAsync("thr-1", PromptSendOptions(text = "hi"), null)
+                }.exceptionOrNull()
+
+            assertTrue(error is MessageError.Http)
+            assertEquals("This thread has no model selection.", error!!.message)
+            assertTrue(h.socket.requests.none { it.tag == T3RpcCodec.DISPATCH_COMMAND })
+        }
+
+    @Test
+    fun clearMessageCacheDropsTranscriptAndResubscribesFromTheStart() =
+        runTest {
+            val h = Harness(this).build()
+            h.http.shellJson = shellJson(threads = listOf(threadJson("thr-1")), sequence = 3)
+            h.http.threadJson["thr-1"] = threadSnapshotJson(sequence = 5, "m1")
+            val repository = messages(h)
+
+            h.runtime.refreshShell()
+            settle()
+            h.runtime.loadThreadMessages("thr-1")
+            settle()
+            assertEquals(listOf("m1"), h.runtime.cachedMessages("thr-1").map { it.id })
+            val first = h.socket.lastSubscribe(T3RpcCodec.SUBSCRIBE_THREAD)
+            assertEquals(5L, first.afterSequence)
+
+            repository.clearMessageCache()
+            settle()
+
+            assertTrue(h.runtime.cachedMessages("thr-1").isEmpty())
+            assertTrue(h.runtime.messageLists.value["thr-1"].orEmpty().isEmpty())
+            assertEquals(listOf("thr-1"), h.runtime.shell.value!!.threads.map { it.id })
+            val again = h.socket.subscribes(T3RpcCodec.SUBSCRIBE_THREAD)
+            assertEquals(2, again.size)
+            assertEquals("thr-1", again.last().threadId)
+            assertNull(again.last().afterSequence)
+
+            h.socket.chunk(first.id, threadEventItem(6, messageUpdatedEvent("m2", "stale")))
+            settle()
+            assertTrue("a chunk on the dropped subscription does not restore the transcript", h.runtime.cachedMessages("thr-1").isEmpty())
+
+            h.socket.drop()
+            settle()
+            h.runtime.refreshShell()
+            settle()
+            val resubscribed = h.socket.subscribes(T3RpcCodec.SUBSCRIBE_THREAD).last()
+            assertEquals("thr-1", resubscribed.threadId)
+            assertNull(resubscribed.afterSequence)
+        }
+
+    private fun messages(h: Harness): T3MessageRepository {
+        val preparer =
+            MessageContentPreparer(OpenCodeTextMateHighlightingEngine(OpenCodeSyntaxHighlighter.default)).apply {
+                computationDispatcher = Dispatchers.Unconfined
+            }
+        return T3MessageRepository(
+            h.runtime,
+            preparer,
+            T3AttachmentUploader(h.socket, T3AttachmentTransport { _, _, _, _ -> 204 }),
+        )
+    }
 }

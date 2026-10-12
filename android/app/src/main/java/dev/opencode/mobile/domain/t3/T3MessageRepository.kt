@@ -4,6 +4,7 @@ import dev.opencode.mobile.domain.message.DisplayMessage
 import dev.opencode.mobile.domain.message.DisplayMessageListUpdate
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessageContentPreparer
+import dev.opencode.mobile.domain.message.MessageError
 import dev.opencode.mobile.domain.message.MessageListUpdate
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.PromptSendOptions
@@ -80,7 +81,9 @@ class T3MessageRepository
             text: String,
         ): DisplayMessage = contentPreparer.prepareOptimisticUserMessage(id, text)
 
-        override fun clearMessageCache() = Unit
+        override fun clearMessageCache() {
+            runtime.clearTranscript()
+        }
 
         override suspend fun listMessages(
             sessionId: String,
@@ -97,12 +100,11 @@ class T3MessageRepository
             directory: String?,
         ) {
             val thread = runtime.thread(sessionId)
-            val running = thread?.let(T3Activity::isRunning) == true
-            val model =
-                thread?.modelSelection
-                    ?: thread?.providerInstanceId?.takeIf { it.isNotBlank() }?.let { instanceId ->
-                        T3ModelSelection(instanceId = instanceId, model = thread.modelSelection?.model)
-                    }
+            val model = thread?.modelSelection
+            if (thread == null || model == null) {
+                throw MessageError.Http(400, "This thread has no model selection.")
+            }
+            val running = T3Activity.isRunning(thread)
             val attachments =
                 if (options.attachments.isEmpty()) {
                     emptyList()

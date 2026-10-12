@@ -571,6 +571,7 @@ class T3SessionControlsTest {
 
             assertEquals("claude-1" to "opus", launchSelection(h))
             assertEquals("full-access", launchPayload(h).str("runtimeMode"))
+            assertEquals("mobile", launchPayload(h).str("creationSource"))
         }
 
     @Test
@@ -594,6 +595,13 @@ class T3SessionControlsTest {
             }
 
             assertEquals("approval-required", launchPayload(h).str("runtimeMode"))
+        }
+
+    @Test
+    fun listChildSessions_returnsEmpty() =
+        runTest {
+            val h = Harness(this).build()
+            assertTrue(h.repository.listChildSessions("thr-1", "/repos/a").isEmpty())
         }
 
     @Test

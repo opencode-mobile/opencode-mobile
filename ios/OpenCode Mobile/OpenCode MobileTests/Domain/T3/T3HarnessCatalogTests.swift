@@ -329,6 +329,39 @@ struct T3HarnessCatalogTests {
         #expect(harness.client.cachedHarnessCatalog?.harnesses.count == 2)
     }
 
+    @Test func launchThread_clampsRuntimeModeToHarnessCatalogue() async throws {
+        let harness = T3ClientHarness()
+        harness.http.shell = Self.shell()
+        let call = Task {
+            try await harness.client.launchThread(
+                title: "Hi",
+                projectID: "p-alpha",
+                selection: nil,
+                runtimeMode: "full-access"
+            )
+        }
+        let socket = try await harness.connector.connection(at: 0)
+        socket.open()
+        let responder = T3ConfigResponder.start(socket, config: T3ConfigFixtures.config(
+            providers: [
+                T3ConfigFixtures.provider(
+                    "codex",
+                    models: [T3ConfigFixtures.model("gpt-5")],
+                    supportedRuntimeModes: ["approval-required", "auto"]
+                ),
+            ],
+            defaultSelection: ["instanceId": "codex", "model": "gpt-5"]
+        ))
+        defer { responder.cancel() }
+        let request = try await socket.firstRequest(tag: "orchestration.launchThread")
+        #expect(request.payload["runtimeMode"] as? String == "approval-required")
+        #expect(request.payload["creationSource"] as? String == "mobile")
+        socket.receive(Frames.exitSuccess(requestID: request.id, value: [
+            "thread": ["id": "t9", "title": "Hi", "projectId": "p-alpha", "status": "idle"],
+        ]))
+        _ = try await call.value
+    }
+
     @Test func launchThread_withoutUsableHarness_throwsNoHarnessMessage() async throws {
         let harness = T3ClientHarness()
         harness.http.shell = Self.shell()

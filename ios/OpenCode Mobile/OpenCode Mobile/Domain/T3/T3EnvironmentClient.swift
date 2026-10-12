@@ -578,8 +578,7 @@ nonisolated final class T3EnvironmentClient: @unchecked Sendable {
             throw T3ClientError.decoding("This T3 environment has no projects yet.")
         }
         let selection = try await launchSelection(explicit: explicitSelection, project: project, shell: shell)
-        let mode = runtimeMode.flatMap { T3RuntimeModeLabel.allModes.contains($0) ? $0 : nil }
-            ?? T3RuntimeModeLabel.defaultMode
+        let mode = clampedRuntimeMode(requested: runtimeMode, instanceID: selection.instanceID)
         let resolvedTitle = {
             let trimmed = title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             return trimmed.isEmpty ? "New thread" : trimmed
@@ -619,6 +618,22 @@ nonisolated final class T3EnvironmentClient: @unchecked Sendable {
             }
         }
         throw T3ClientError.decoding("T3 did not return the new thread.")
+    }
+
+    /// The requested mode when the harness accepts it, else supervised, else the
+    /// harness's first mode. A cold catalogue (an explicit selection, or a server
+    /// that never answered `server.getConfig`) uses the four known modes and does
+    /// not fetch: an explicit launch must not wait on the catalogue.
+    private func clampedRuntimeMode(requested: String?, instanceID: String) -> String {
+        let supported = cachedHarnessCatalog?.harness(instanceID: instanceID)?.supportedRuntimeModes ?? []
+        let allowed = T3RuntimeModeLabel.modes(supported: supported)
+        if let requested, allowed.contains(requested) {
+            return requested
+        }
+        if allowed.contains(T3RuntimeModeLabel.defaultMode) {
+            return T3RuntimeModeLabel.defaultMode
+        }
+        return allowed[0]
     }
 
     /// Live thread items after `afterSequence`. Throws when the socket cannot be

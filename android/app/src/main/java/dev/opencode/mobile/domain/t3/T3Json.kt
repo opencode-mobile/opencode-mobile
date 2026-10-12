@@ -135,7 +135,7 @@ object T3Json {
     }
 
     private fun parseTurnItem(obj: JsonObject): T3TurnItem? {
-        val type = obj.string("type")?.trim().orEmpty()
+        val type = obj.string("type")?.trim().orEmpty().lowercase()
         val id = obj.string("id")?.trim().orEmpty()
         if (type.isEmpty() || id.isEmpty()) return null
         val input = obj["input"]

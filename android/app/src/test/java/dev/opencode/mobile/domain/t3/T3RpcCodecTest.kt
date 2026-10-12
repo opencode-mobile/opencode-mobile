@@ -49,6 +49,22 @@ class T3RpcCodecTest {
     }
 
     @Test
+    fun launchThread_includesCreationSource() {
+        val payload =
+            T3Commands.launchThread(
+                projectId = "proj-1",
+                title = "New thread",
+                modelSelection = T3ModelSelection(instanceId = "inst-1", model = "gpt"),
+                runtimeMode = "full-access",
+                commandId = "cmd-1",
+            )
+        assertEquals("mobile", payload["creationSource"]!!.jsonPrimitive.content)
+        assertEquals("proj-1", payload["projectId"]!!.jsonPrimitive.content)
+        assertEquals("full-access", payload["runtimeMode"]!!.jsonPrimitive.content)
+        assertEquals("default", payload["interactionMode"]!!.jsonPrimitive.content)
+    }
+
+    @Test
     fun runtimeRequestRespond_mapsAllowOnceToAccept() {
         val payload =
             T3Commands.runtimeRequestRespond(

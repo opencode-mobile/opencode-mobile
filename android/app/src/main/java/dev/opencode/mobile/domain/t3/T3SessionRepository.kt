@@ -249,7 +249,7 @@ class T3SessionRepository
         override suspend fun listChildSessions(
             id: String,
             directory: String?,
-        ): List<Session> = unsupported("Child sessions")
+        ): List<Session> = emptyList()
 
         override suspend fun listSessionTodos(
             id: String,

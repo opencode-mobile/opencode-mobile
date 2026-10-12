@@ -259,6 +259,34 @@ class T3Runtime
 
         fun cachedMessages(threadId: String): List<Message> = messages[threadId].orEmpty()
 
+        /**
+         * Drops the open transcript and resubscribes the thread on screen from the
+         * start. The shell and provider catalogue stay; [clearCaches] would wipe those.
+         */
+        fun clearTranscript() {
+            scope.launch {
+                val threadId =
+                    synchronized(subscriptionLock) {
+                        threadRequestId = null
+                        subscribedThreadId = null
+                        observedThreadId
+                    }
+                messageMutex.withLock {
+                    conversationByThread.clear()
+                    turnItemsByThread.clear()
+                    messages.clear()
+                    sequences.clear()
+                    publishMessages()
+                }
+                imagePreviews.clear()
+                imageAttempts.clear()
+                imageInflight.clear()
+                if (threadId != null && socket.state.value == T3SocketState.Connected) {
+                    subscribeThread(threadId, null)
+                }
+            }
+        }
+
         suspend fun dispatch(command: JsonObject): JsonElement =
             try {
                 guarded {

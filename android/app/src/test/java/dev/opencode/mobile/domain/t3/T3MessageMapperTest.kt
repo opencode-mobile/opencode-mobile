@@ -289,6 +289,45 @@ class T3MessageMapperTest {
     }
 
     @Test
+    fun turnItemType_matchesRegardlessOfCase() {
+        val snapshot =
+            T3Json.threadSnapshot(
+                """
+                {
+                  "projection": {
+                    "messages": [
+                      { "id": "m-user", "role": "user", "text": "Hi" }
+                    ],
+                    "visibleTurnItems": [
+                      {
+                        "item": {
+                          "type": "User_Message",
+                          "id": "item-user",
+                          "messageId": "m-user",
+                          "text": "Hi"
+                        }
+                      },
+                      {
+                        "item": {
+                          "type": "Reasoning",
+                          "id": "item-reason",
+                          "text": "Need to look this up.",
+                          "streaming": false
+                        }
+                      }
+                    ]
+                  }
+                }
+                """.trimIndent(),
+            )
+        val messages = T3MessageMapper.toMessages(snapshot)
+        assertEquals(listOf("m-user", "activity:item-reason"), messages.map { it.id })
+        assertEquals("Hi", messages[0].text)
+        val reasoning = messages[1].parts.single() as MessagePart.Reasoning
+        assertEquals("Need to look this up.", reasoning.text)
+    }
+
+    @Test
     fun subagent_usesTitleAndChildThread() {
         val snapshot =
             T3Json.threadSnapshot(

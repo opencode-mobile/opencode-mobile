@@ -14,7 +14,10 @@ object T3Commands {
     /** `OrchestrationV2Actor` for commands the user typed; required on `message.dispatch`. */
     const val CREATED_BY_USER = "user"
 
-    /** `OrchestrationV2CreationSource` identifying this client; required on `message.dispatch`. */
+    /**
+     * `OrchestrationV2CreationSource` identifying this client.
+     * Required on `message.dispatch` and `orchestration.launchThread`.
+     */
     const val CREATION_SOURCE_MOBILE = "mobile"
 
     fun commandId(): String = UUID.randomUUID().toString()
@@ -182,6 +185,7 @@ object T3Commands {
     ): JsonObject =
         buildJsonObject {
             put("commandId", commandId)
+            put("creationSource", CREATION_SOURCE_MOBILE)
             put("projectId", projectId)
             put("title", title.ifBlank { "New thread" })
             put("modelSelection", encodeModelSelection(modelSelection))
