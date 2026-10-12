@@ -1255,7 +1255,7 @@ private struct HomeFeed {
 
 extension Array where Element == ProjectSectionItem {
     /// Active rows stay on the ladder. Settled rows move off it only when settle is on.
-    func homeFeed(showsSettle: Bool, nowEpochMs: Int64) -> HomeFeed {
+    fileprivate func homeFeed(showsSettle: Bool, nowEpochMs: Int64) -> HomeFeed {
         if !showsSettle {
             let ladder = crossProjectSessionListSessions()
             return HomeFeed(ladder: ladder, settled: [], activeCount: ladder.count)

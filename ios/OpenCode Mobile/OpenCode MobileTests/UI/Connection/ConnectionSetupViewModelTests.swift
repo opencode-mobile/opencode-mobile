@@ -1006,7 +1006,7 @@ struct ConnectionSetupViewModelTests {
         #expect(store.saved.last?.baseURL == "https://desk.tail1234.ts.net:3773/")
     }
 
-    @Test func applyPairingQR_t3DesktopLink_switchesEngineAndFillsHostAndToken() {
+    @Test func applyPairingQR_t3DesktopLink_switchesEngineAndFillsHostAndToken() async {
         let viewModel = ConnectionSetupViewModel(
             connectionProbeService: FakeConnectionProbeService(result: .success(.v1)),
             connectionSessionCoordinator: ConnectionSessionCoordinator(
@@ -1016,7 +1016,7 @@ struct ConnectionSetupViewModelTests {
             t3PairingClient: pairingClient(),
             mode: .add
         )
-        viewModel.applyPairingQR("http://192.168.0.160:3773/pair#token=pair-abc")
+        await viewModel.applyPairingQR("http://192.168.0.160:3773/pair#token=pair-abc")
         #expect(viewModel.engine == .t3)
         #expect(viewModel.baseURL == "http://192.168.0.160:3773/")
         #expect(viewModel.pairingToken == "pair-abc")
@@ -1024,7 +1024,7 @@ struct ConnectionSetupViewModelTests {
         #expect(viewModel.snackbar == nil)
     }
 
-    @Test func applyPairingQR_t3HostedLink_usesBackendHostAndLabel() {
+    @Test func applyPairingQR_t3HostedLink_usesBackendHostAndLabel() async {
         let viewModel = ConnectionSetupViewModel(
             connectionProbeService: FakeConnectionProbeService(result: .success(.v1)),
             connectionSessionCoordinator: ConnectionSessionCoordinator(
@@ -1034,7 +1034,7 @@ struct ConnectionSetupViewModelTests {
             t3PairingClient: pairingClient(),
             mode: .add
         )
-        viewModel.applyPairingQR(
+        await viewModel.applyPairingQR(
             "https://app.t3.codes/pair?host=https%3A%2F%2Fdesk.tail1234.ts.net&label=Desk#token=pair-hosted"
         )
         #expect(viewModel.engine == .t3)
@@ -1043,7 +1043,7 @@ struct ConnectionSetupViewModelTests {
         #expect(viewModel.name == "Desk")
     }
 
-    @Test func applyPairingQR_t3LoopbackLink_showsSnackbar() {
+    @Test func applyPairingQR_t3LoopbackLink_showsSnackbar() async {
         let viewModel = ConnectionSetupViewModel(
             connectionProbeService: FakeConnectionProbeService(result: .success(.v1)),
             connectionSessionCoordinator: ConnectionSessionCoordinator(
@@ -1053,12 +1053,12 @@ struct ConnectionSetupViewModelTests {
             t3PairingClient: pairingClient(),
             mode: .add
         )
-        viewModel.applyPairingQR("http://127.0.0.1:3773/pair#token=pair-abc")
+        await viewModel.applyPairingQR("http://127.0.0.1:3773/pair#token=pair-abc")
         #expect(viewModel.snackbar?.text == "That QR only has a localhost address")
         #expect(viewModel.baseURL.isEmpty)
     }
 
-    @Test func applyPairingQR_invalidWhileT3Selected_showsT3Message() {
+    @Test func applyPairingQR_invalidWhileT3Selected_showsT3Message() async {
         let viewModel = ConnectionSetupViewModel(
             connectionProbeService: FakeConnectionProbeService(result: .success(.v1)),
             connectionSessionCoordinator: ConnectionSessionCoordinator(
@@ -1069,7 +1069,7 @@ struct ConnectionSetupViewModelTests {
             mode: .add
         )
         viewModel.selectEngine(.t3)
-        viewModel.applyPairingQR("nope")
+        await viewModel.applyPairingQR("nope")
         #expect(viewModel.snackbar?.text == "This isn't a T3 pairing link")
     }
 
