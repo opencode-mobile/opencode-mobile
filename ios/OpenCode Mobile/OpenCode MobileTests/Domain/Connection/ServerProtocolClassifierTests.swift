@@ -19,6 +19,22 @@ struct ServerProtocolClassifierTests {
         #expect(detected == .v2)
     }
 
+    @Test func recognizesV2FromApiHealthPidWhenApiInfoIsMissing() {
+        let detected = ServerProtocolClassifier.classify(
+            globalHealth: nil,
+            apiHealth: HealthDTO(healthy: true, version: "2.0.1", pid: 2605231)
+        )
+        #expect(detected == .v2)
+    }
+
+    @Test func prefersLegacyHealthOverApiHealth() {
+        let detected = ServerProtocolClassifier.classify(
+            globalHealth: HealthDTO(healthy: true, version: "1.18.4", pid: nil),
+            apiHealth: HealthDTO(healthy: true, version: "2.0.1", pid: 12)
+        )
+        #expect(detected == .v1)
+    }
+
     @Test func recognizesV2WhenPidPresentAndHealthyMissing() {
         let fromApiInfo = ServerProtocolClassifier.classify(
             globalHealth: nil,

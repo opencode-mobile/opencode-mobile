@@ -10,7 +10,7 @@ import kotlinx.coroutines.coroutineScope
 
 /**
  * Shared health detection used by connection setup and home probe.
- * Probes /global/health and /api/info in parallel.
+ * Probes /global/health, /api/info, and /api/health in parallel.
  */
 class ServerProtocolDetector(
     private val adapter: ProjectDomainAdapter,
@@ -18,8 +18,9 @@ class ServerProtocolDetector(
     suspend fun detect(
         fetchGlobalHealth: suspend () -> HealthDto,
         fetchApiInfo: suspend () -> HealthDto,
+        fetchApiHealth: suspend () -> HealthDto,
     ): ServerProtocol {
-        val (globalHealth, apiInfo, lastError) =
+        val (globalHealth, apiInfo, apiHealth, lastError) =
             coroutineScope {
                 val global =
                     async {
@@ -29,29 +30,39 @@ class ServerProtocolDetector(
                     async {
                         probe("/api/info", fetchApiInfo)
                     }
+                val health =
+                    async {
+                        probe("/api/health", fetchApiHealth)
+                    }
                 val globalResult = global.await()
                 val infoResult = info.await()
+                val healthResult = health.await()
                 ProbeRound(
                     globalResult.getOrNull(),
                     infoResult.getOrNull(),
+                    healthResult.getOrNull(),
                     ServerProtocolProbeErrors.prefer(
-                        globalResult.exceptionOrNull(),
-                        infoResult.exceptionOrNull(),
+                        ServerProtocolProbeErrors.prefer(
+                            globalResult.exceptionOrNull(),
+                            infoResult.exceptionOrNull(),
+                        ),
+                        healthResult.exceptionOrNull(),
                     ),
                 )
             }
 
         val protocol =
-            ServerProtocolClassifier.classify(globalHealth, apiInfo)
+            ServerProtocolClassifier.classify(globalHealth, apiInfo, apiHealth)
                 ?: throw adapter.mapProbeError(
                     ServerProtocolProbeErrors.unresolved(globalHealth, lastError),
                 )
 
         when {
             globalHealth?.healthy == true -> adapter.requireHealthy(globalHealth)
-            apiInfo?.pid != null -> {
-                if (apiInfo.healthy == false) {
-                    throw ServerProbeError.Unhealthy(apiInfo.version)
+            else -> {
+                val payload = ServerProtocolClassifier.v2Health(apiInfo, apiHealth)
+                if (payload?.pid != null && payload.healthy == false) {
+                    throw ServerProbeError.Unhealthy(payload.version)
                 }
             }
         }
@@ -93,6 +104,7 @@ class ServerProtocolDetector(
     private data class ProbeRound(
         val globalHealth: HealthDto?,
         val apiInfo: HealthDto?,
+        val apiHealth: HealthDto?,
         val lastError: Throwable?,
     )
 }

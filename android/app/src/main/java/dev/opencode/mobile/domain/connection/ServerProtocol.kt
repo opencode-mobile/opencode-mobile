@@ -4,7 +4,7 @@ package dev.opencode.mobile.domain.connection
  * OpenCode HTTP API generation for an active server connection.
  *
  * Detection prefers `/global/health` with `healthy: true` (v1), else
- * `/api/info` with numeric `pid` (v2; `healthy` may be absent).
+ * `/api/info` or `/api/health` with numeric `pid` (v2; `healthy` may be absent).
  */
 enum class ServerProtocol(
     val wireValue: String,

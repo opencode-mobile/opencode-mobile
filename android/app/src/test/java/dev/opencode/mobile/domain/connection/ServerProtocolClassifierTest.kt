@@ -27,6 +27,28 @@ class ServerProtocolClassifierTest {
     }
 
     @Test
+    fun recognizesV2FromApiHealthPidWhenApiInfoIsMissing() {
+        assertEquals(
+            ServerProtocol.V2,
+            ServerProtocolClassifier.classify(
+                globalHealth = null,
+                apiHealth = HealthDto(healthy = true, version = "2.0.1", pid = 2605231),
+            ),
+        )
+    }
+
+    @Test
+    fun prefersLegacyHealthOverApiHealth() {
+        assertEquals(
+            ServerProtocol.V1,
+            ServerProtocolClassifier.classify(
+                globalHealth = HealthDto(healthy = true, version = "1.18.4"),
+                apiHealth = HealthDto(healthy = true, version = "2.0.1", pid = 12),
+            ),
+        )
+    }
+
+    @Test
     fun recognizesV2WhenPidPresentAndHealthyMissing() {
         assertEquals(
             ServerProtocol.V2,
