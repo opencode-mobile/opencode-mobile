@@ -178,7 +178,7 @@ final class T3MessageRepository: MessageRepository {
         }
         // Upload first: a failed transfer surfaces through the send-error path
         // and nothing is dispatched without its bytes stored server-side.
-        let attachments = try await uploader.upload(options.attachments)
+        let attachments = try await uploader.upload(options.attachments, maxFileBytes: client.fileAttachmentMaxBytes)
         try await client.dispatchCommand(
             T3RpcCodec.messageDispatchCommand(
                 commandID: UUID().uuidString,

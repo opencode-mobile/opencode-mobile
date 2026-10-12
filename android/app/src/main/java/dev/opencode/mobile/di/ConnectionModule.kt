@@ -14,6 +14,7 @@ import dev.opencode.mobile.domain.connection.PairingCodeRedeemService
 import dev.opencode.mobile.domain.connection.PairingCodeRedeeming
 import dev.opencode.mobile.domain.connection.SecureCredentialStore
 import dev.opencode.mobile.domain.project.ProjectDomainAdapter
+import dev.opencode.mobile.domain.t3.T3FileAttachmentLimit
 import dev.opencode.mobile.network.ActiveConnectionManager
 import javax.inject.Singleton
 
@@ -45,10 +46,12 @@ abstract class ConnectionModule {
         fun provideActiveConnectionManager(
             connectionProfileStore: ConnectionProfileStore,
             connectionProbing: ConnectionProbing,
+            fileAttachmentLimit: T3FileAttachmentLimit,
         ): ActiveConnectionManager =
             ActiveConnectionManager(
                 connectionProfileStore = connectionProfileStore,
                 connectionProbing = connectionProbing,
+                fileAttachmentLimit = fileAttachmentLimit,
             )
     }
 }

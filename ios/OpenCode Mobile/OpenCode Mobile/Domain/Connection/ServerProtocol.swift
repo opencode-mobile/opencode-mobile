@@ -43,6 +43,14 @@ nonisolated struct ServerCapabilities: Sendable, Equatable {
         supportsDocumentAttachments: false
     )
 
+    /// `supportsDocumentAttachments` is true only when this environment advertised `fileAttachments`.
+    static func t3(supportsDocumentAttachments: Bool) -> ServerCapabilities {
+        guard supportsDocumentAttachments else { return t3 }
+        var capabilities = t3
+        capabilities.supportsDocumentAttachments = true
+        return capabilities
+    }
+
     static func forProtocol(_ serverProtocol: ServerProtocol) -> ServerCapabilities {
         switch serverProtocol {
         case .v1:

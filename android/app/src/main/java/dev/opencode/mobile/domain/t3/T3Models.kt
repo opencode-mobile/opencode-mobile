@@ -4,6 +4,8 @@ data class T3EnvironmentDescriptor(
     val environmentId: String,
     val label: String,
     val orchestrationProtocolVersion: Int?,
+    /** `capabilities.fileAttachments.maxUploadBytes`, clamped to the protocol cap. Null when the server accepts images only. */
+    val maxFileUploadBytes: Long? = null,
 )
 
 data class T3Project(

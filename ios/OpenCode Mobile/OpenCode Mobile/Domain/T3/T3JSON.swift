@@ -219,6 +219,8 @@ struct T3EnvironmentDescriptor: Equatable, Sendable {
     var environmentID: String
     var label: String
     var orchestrationProtocolVersion: Int?
+    /// `capabilities.fileAttachments.maxUploadBytes`, clamped to the protocol cap. Nil when the server accepts images only.
+    var maxFileUploadBytes: Int64? = nil
 }
 
 struct T3ModelSelection: Equatable, Sendable {

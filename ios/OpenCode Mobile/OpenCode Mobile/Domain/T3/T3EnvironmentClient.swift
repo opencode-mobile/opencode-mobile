@@ -13,6 +13,7 @@ nonisolated final class T3EnvironmentClient: @unchecked Sendable {
 
     private let connectionProvider: @Sendable () -> ServerConnection?
     private let http: any T3HttpTransport
+    private let fileAttachmentLimit: T3FileAttachmentLimit
     private let makeSession: SessionFactory
     private let signals: T3LiveSignals
     private let lock = NSLock()
@@ -49,19 +50,25 @@ nonisolated final class T3EnvironmentClient: @unchecked Sendable {
 
     convenience init(
         connectionProvider: @escaping @Sendable () -> ServerConnection?,
-        urlSession: URLSession = OpenCodeURLSessions.rest
+        urlSession: URLSession = OpenCodeURLSessions.rest,
+        fileAttachmentLimit: T3FileAttachmentLimit = T3FileAttachmentLimit()
     ) {
         self.init(
             connectionProvider: connectionProvider,
-            http: T3HttpClient(urlSession: urlSession)
+            http: T3HttpClient(urlSession: urlSession),
+            fileAttachmentLimit: fileAttachmentLimit
         )
     }
+
+    /// The active environment's file cap, or nil when it accepts images only.
+    var fileAttachmentMaxBytes: Int64? { fileAttachmentLimit.maxBytes }
 
     init(
         connectionProvider: @escaping @Sendable () -> ServerConnection?,
         http: any T3HttpTransport,
         makeSession: @escaping SessionFactory = { onStateChange in T3RpcSession(onStateChange: onStateChange) },
         signals: T3LiveSignals = .shared,
+        fileAttachmentLimit: T3FileAttachmentLimit = T3FileAttachmentLimit(),
         shellRefreshDebounce: Duration = T3EnvironmentClient.defaultShellRefreshDebounce,
         shellResubscribeDelay: Duration = T3EnvironmentClient.defaultShellResubscribeDelay
     ) {
@@ -69,6 +76,7 @@ nonisolated final class T3EnvironmentClient: @unchecked Sendable {
         self.http = http
         self.makeSession = makeSession
         self.signals = signals
+        self.fileAttachmentLimit = fileAttachmentLimit
         self.shellRefreshDebounce = shellRefreshDebounce
         self.shellResubscribeDelay = shellResubscribeDelay
         lifecycleRegistration = signals.onLifecycle { [weak self] lifecycle in
@@ -728,15 +736,18 @@ nonisolated final class T3EnvironmentClient: @unchecked Sendable {
             signals.publish(.authFailed)
             throw failure
         }
+        fileAttachmentLimit.activate(identity)
         if locked({ validatedIdentities.contains(identity) }) { return }
         do {
             let descriptor = try await http.fetchDescriptor(baseURL: baseURL)
+            fileAttachmentLimit.note(identity, maxBytes: descriptor.maxFileUploadBytes)
             locked { _ = validatedIdentities.insert(identity) }
             DiagnosticLog.info(
                 .connection,
                 "T3 environment validated protocol=\(descriptor.orchestrationProtocolVersion ?? 0) env=\(descriptor.environmentID)"
             )
         } catch let error as T3ClientError where Self.isProtocolMismatch(error) {
+            fileAttachmentLimit.note(identity, maxBytes: nil)
             locked { protocolFailures[identity] = error }
             DiagnosticLog.error(.connection, "T3 protocol mismatch; not reconnecting", error: error)
             signals.publish(.authFailed)
@@ -744,6 +755,7 @@ nonisolated final class T3EnvironmentClient: @unchecked Sendable {
         } catch is CancellationError {
             throw CancellationError()
         } catch {
+            fileAttachmentLimit.note(identity, maxBytes: nil)
             DiagnosticLog.warning(.connection, "T3 environment check failed; connecting anyway", error: error)
         }
     }

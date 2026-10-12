@@ -66,7 +66,8 @@ class OkHttpT3AttachmentTransport
  * Outbound T3 attachment sequence: `attachments.createUploadUrl` over the RPC
  * socket, POST the exact bytes to the signed relative URL on the environment
  * origin, then reference the stored id as a `ChatAttachment` in
- * `message.dispatch`. T3 provider turns accept images only.
+ * `message.dispatch`. Images are `type: image`. A PDF or text file is `type: file`
+ * when the environment advertised `fileAttachments`; otherwise it is rejected.
  */
 @Singleton
 class T3AttachmentUploader internal constructor(
@@ -90,14 +91,15 @@ class T3AttachmentUploader internal constructor(
     suspend fun upload(
         profile: ConnectionProfile,
         attachments: List<Attachment>,
+        maxFileBytes: Long? = null,
     ): List<T3Attachment> {
         if (attachments.isEmpty()) return emptyList()
-        val prepared = attachments.map { attachment -> attachment to prepare(attachment) }
+        val prepared = attachments.map { attachment -> prepare(attachment, maxFileBytes) }
         awaitConnected()
         val uploaded = mutableListOf<T3Attachment>()
-        for ((attachment, bytes) in prepared) {
+        for (item in prepared) {
             val stored =
-                runCatching { uploadOne(profile, attachment, bytes) }.getOrElse { error ->
+                runCatching { uploadOne(profile, item) }.getOrElse { error ->
                     uploaded.forEach { discard(it.id) }
                     throw error
                 }
@@ -106,59 +108,92 @@ class T3AttachmentUploader internal constructor(
         return uploaded
     }
 
-    /** Validates one attachment against the T3 image contract and loads its bytes. */
-    private fun prepare(attachment: Attachment): ByteArray {
+    /**
+     * An image stays on the image contract. A PDF or text file uses the file
+     * contract when [maxFileBytes] is the server's advertised limit.
+     */
+    private fun prepare(
+        attachment: Attachment,
+        maxFileBytes: Long?,
+    ): PreparedUpload {
         val mime = attachment.mime.trim().lowercase()
-        if (attachment.kind != AttachmentKind.Image || mime !in T3Assets.SUPPORTED_IMAGE_MIMES) {
+        val image = attachment.kind == AttachmentKind.Image && mime in T3Assets.SUPPORTED_IMAGE_MIMES
+        if (image) {
+            if (attachment.byteCount > T3Assets.MAX_IMAGE_BYTES) {
+                throw T3AttachmentException(oversizeMessage(attachment.filename))
+            }
+            val bytes = read(attachment)
+            if (bytes.size > T3Assets.MAX_IMAGE_BYTES) throw T3AttachmentException(oversizeMessage(attachment.filename))
+            return PreparedUpload(attachment.filename.ifBlank { "image" }, mime, bytes, "image")
+        }
+        if (maxFileBytes == null || mime.isEmpty() ||
+            (attachment.kind != AttachmentKind.Pdf && attachment.kind != AttachmentKind.Text)
+        ) {
             throw T3AttachmentException(unsupportedMessage(attachment.filename))
         }
-        if (attachment.byteCount > T3Assets.MAX_IMAGE_BYTES) {
-            throw T3AttachmentException(oversizeMessage(attachment.filename))
+        if (attachment.byteCount > maxFileBytes) {
+            throw T3AttachmentException(fileOversizeMessage(attachment.filename, maxFileBytes))
         }
+        val bytes = read(attachment)
+        if (bytes.size.toLong() > maxFileBytes) {
+            throw T3AttachmentException(fileOversizeMessage(attachment.filename, maxFileBytes))
+        }
+        return PreparedUpload(attachment.filename.ifBlank { "file" }, mime, bytes, "file")
+    }
+
+    private fun read(attachment: Attachment): ByteArray {
         val bytes = readBytes(attachment) ?: throw T3AttachmentException("Could not read '${attachment.filename}'.")
         if (bytes.isEmpty()) throw T3AttachmentException("'${attachment.filename}' is empty.")
-        if (bytes.size > T3Assets.MAX_IMAGE_BYTES) throw T3AttachmentException(oversizeMessage(attachment.filename))
         return bytes
     }
 
     private suspend fun uploadOne(
         profile: ConnectionProfile,
-        attachment: Attachment,
-        bytes: ByteArray,
+        item: PreparedUpload,
     ): T3Attachment {
-        val mime = attachment.mime.trim().lowercase()
-        val name = attachment.filename.ifBlank { "image" }
         val reply =
             socket.request(
                 T3Assets.CREATE_UPLOAD_URL,
-                T3Assets.createUploadUrlPayload(name = name, mimeType = mime, sizeBytes = bytes.size.toLong()),
+                T3Assets.createUploadUrlPayload(
+                    name = item.name,
+                    mimeType = item.mimeType,
+                    sizeBytes = item.bytes.size.toLong(),
+                    type = item.type,
+                ),
             )
         val target = T3Assets.uploadTarget(reply) ?: throw T3RpcException("T3 did not return an upload URL.")
         val status =
             runCatching {
                 transport.upload(
                     url = T3Urls.join(profile.baseUrl, target.relativeUrl),
-                    bytes = bytes,
-                    mimeType = mime,
+                    bytes = item.bytes,
+                    mimeType = item.mimeType,
                     headers = mapOf("Authorization" to "Bearer ${profile.password}"),
                 )
             }.getOrElse { error ->
                 discard(target.attachmentId)
-                throw T3AttachmentException("Uploading '$name' failed: ${error.message ?: "network error"}")
+                throw T3AttachmentException("Uploading '${item.name}' failed: ${error.message ?: "network error"}")
             }
         if (status !in 200..299) {
             discard(target.attachmentId)
             if (status == 401 || status == 403) throw T3HttpException.from(status, "")
-            throw T3AttachmentException("Uploading '$name' failed ($status).")
+            throw T3AttachmentException("Uploading '${item.name}' failed ($status).")
         }
         return T3Attachment(
             id = target.attachmentId,
-            type = "image",
-            name = name,
-            mimeType = mime,
-            sizeBytes = bytes.size.toLong(),
+            type = item.type,
+            name = item.name,
+            mimeType = item.mimeType,
+            sizeBytes = item.bytes.size.toLong(),
         )
     }
+
+    private data class PreparedUpload(
+        val name: String,
+        val mimeType: String,
+        val bytes: ByteArray,
+        val type: String,
+    )
 
     private suspend fun discard(attachmentId: String) {
         runCatching { socket.request(T3Assets.DELETE_UPLOAD, T3Assets.deleteUploadPayload(attachmentId)) }
@@ -178,6 +213,11 @@ class T3AttachmentUploader internal constructor(
             "'$filename' is not a supported image. T3 threads accept PNG, JPEG, GIF, or WebP images only."
 
         fun oversizeMessage(filename: String): String = "'$filename' exceeds the 10 MB image limit."
+
+        fun fileOversizeMessage(
+            filename: String,
+            maxBytes: Long,
+        ): String = "'$filename' exceeds the ${T3Assets.fileLimitLabel(maxBytes)} file limit."
 
         private fun defaultBytes(attachment: Attachment): ByteArray? {
             attachment.localPath?.let { path ->

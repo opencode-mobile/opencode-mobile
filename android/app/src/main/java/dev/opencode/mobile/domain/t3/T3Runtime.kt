@@ -53,6 +53,7 @@ class T3Runtime
         private val socket: T3Socket,
         private val activeConnectionManager: ActiveConnectionManager,
         private val eventStream: ForegroundEventStream,
+        private val fileAttachmentLimit: T3FileAttachmentLimit,
     ) : T3LiveSession {
         internal constructor(
             api: T3Api,
@@ -61,7 +62,8 @@ class T3Runtime
             eventStream: ForegroundEventStream,
             scope: CoroutineScope,
             shellRefreshDebounceMs: Long = SHELL_REFRESH_DEBOUNCE_MS,
-        ) : this(api, socket, activeConnectionManager, eventStream) {
+            fileAttachmentLimit: T3FileAttachmentLimit = T3FileAttachmentLimit(),
+        ) : this(api, socket, activeConnectionManager, eventStream, fileAttachmentLimit) {
             this.scope = scope
             this.shellRefreshDebounceMs = shellRefreshDebounceMs
         }
@@ -121,6 +123,9 @@ class T3Runtime
         private val serverConfigCache = MutableStateFlow<T3ServerConfig?>(null)
         private var serverConfigProfileId: String? = null
         private val serverConfigMutex = Mutex()
+
+        /** The active environment's file cap, or null when it accepts images only. */
+        fun fileAttachmentMaxBytes(): Long? = fileAttachmentLimit.maxBytes
 
         fun activeProfile(): ConnectionProfile? {
             val profile = activeConnectionManager.currentProfile() ?: return null
@@ -360,6 +365,7 @@ class T3Runtime
         // region connection
 
         private suspend fun ensureConnected(profile: ConnectionProfile) {
+            fileAttachmentLimit.activate(profile.id)
             connectMutex.withLock {
                 synchronized(subscriptionLock) { protocolFailures[profile.id] }?.let { failure ->
                     publishLive(EventStreamConnectionState.AuthFailed)
@@ -400,12 +406,14 @@ class T3Runtime
             if (synchronized(subscriptionLock) { profile.id in validatedProfileIds }) return
             try {
                 val descriptor = api.validateEnvironment(profile.baseUrl)
+                fileAttachmentLimit.note(profile.id, descriptor.maxFileUploadBytes)
                 synchronized(subscriptionLock) { validatedProfileIds += profile.id }
                 DiagnosticLog.info(
                     DiagnosticLogArea.Connection,
                     "T3 environment validated protocol=${descriptor.orchestrationProtocolVersion} env=${descriptor.environmentId}",
                 )
             } catch (failure: T3ProtocolException) {
+                fileAttachmentLimit.note(profile.id, null)
                 synchronized(subscriptionLock) { protocolFailures[profile.id] = failure }
                 DiagnosticLog.error(DiagnosticLogArea.Connection, "T3 protocol mismatch; not reconnecting", failure)
                 publishLive(EventStreamConnectionState.AuthFailed)
@@ -413,6 +421,7 @@ class T3Runtime
             } catch (failure: CancellationException) {
                 throw failure
             } catch (failure: Exception) {
+                fileAttachmentLimit.note(profile.id, null)
                 DiagnosticLog.warning(DiagnosticLogArea.Connection, "T3 environment check failed; connecting anyway", failure)
             }
         }

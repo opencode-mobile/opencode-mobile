@@ -15,6 +15,20 @@ object T3Assets {
     const val PREVIEW_MIME = "image/jpeg"
     const val MAX_IMAGE_BYTES = 10 * 1024 * 1024
 
+    /** `PROVIDER_SEND_TURN_MAX_FILE_BYTES`. A server may advertise a smaller cap. */
+    const val MAX_FILE_BYTES = 50 * 1024 * 1024
+
+    /** Null when the server omitted `fileAttachments` or advertised a non-positive limit. */
+    fun clampFileBytes(raw: Long?): Long? {
+        if (raw == null || raw < 1) return null
+        return minOf(raw, MAX_FILE_BYTES.toLong())
+    }
+
+    fun fileLimitLabel(maxBytes: Long): String {
+        val unit = 1024L * 1024L
+        return if (maxBytes % unit == 0L) "${maxBytes / unit} MB" else "$maxBytes bytes"
+    }
+
     /** Image types a T3 provider turn accepts (`PROVIDER_SEND_TURN_SUPPORTED_IMAGE_MIME_TYPES`). */
     val SUPPORTED_IMAGE_MIMES: Set<String> = setOf("image/gif", "image/jpeg", "image/png", "image/webp")
 
@@ -33,14 +47,15 @@ object T3Assets {
             }
         }
 
-    /** `AttachmentCreateUploadUrlInput` for an image upload. */
+    /** `AttachmentCreateUploadUrlInput`. [type] is `image` or `file`. */
     fun createUploadUrlPayload(
         name: String,
         mimeType: String,
         sizeBytes: Long,
+        type: String = "image",
     ): JsonObject =
         buildJsonObject {
-            put("type", "image")
+            put("type", type)
             put("name", name)
             put("mimeType", mimeType)
             put("sizeBytes", sizeBytes)

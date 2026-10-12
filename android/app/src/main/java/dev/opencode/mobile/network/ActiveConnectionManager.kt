@@ -9,6 +9,7 @@ import dev.opencode.mobile.domain.connection.PairingQRPayload
 import dev.opencode.mobile.domain.connection.ProbeStatus
 import dev.opencode.mobile.domain.connection.ServerCapabilities
 import dev.opencode.mobile.domain.connection.ServerProtocol
+import dev.opencode.mobile.domain.t3.T3FileAttachmentLimit
 import dev.opencode.mobile.domain.connection.toProbeStatus
 import dev.opencode.mobile.domain.project.ServerProbeError
 import kotlinx.coroutines.CancellationException
@@ -24,6 +25,7 @@ import javax.inject.Singleton
 class ActiveConnectionManager(
     private val connectionProfileStore: ConnectionProfileStore,
     private val connectionProbing: ConnectionProbing? = null,
+    private val fileAttachmentLimit: T3FileAttachmentLimit? = null,
 ) {
     private val mutex = Mutex()
     private var connection: ServerConnection? = null
@@ -63,7 +65,7 @@ class ActiveConnectionManager(
     fun currentCapabilities(): ServerCapabilities =
         when {
             connection?.engine == ConnectionEngine.T3 || profile?.engine == ConnectionEngine.T3 ->
-                ServerCapabilities.t3
+                ServerCapabilities.t3(supportsDocumentAttachments = fileAttachmentLimit?.maxBytes != null)
             else -> connection?.capabilities ?: ServerCapabilities.forProtocol(ServerProtocol.V1)
         }
 

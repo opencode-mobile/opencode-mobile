@@ -50,6 +50,10 @@ data class ServerCapabilities(
                 supportsDocumentAttachments = false,
             )
 
+        /** [supportsDocumentAttachments] is true only when this environment advertised `fileAttachments`. */
+        fun t3(supportsDocumentAttachments: Boolean): ServerCapabilities =
+            if (supportsDocumentAttachments) t3.copy(supportsDocumentAttachments = true) else t3
+
         fun forProtocol(protocol: ServerProtocol): ServerCapabilities =
             when (protocol) {
                 ServerProtocol.V1 ->

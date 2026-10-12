@@ -110,7 +110,7 @@ class T3MessageRepository
                     emptyList()
                 } else {
                     val profile = runtime.activeProfile() ?: throw T3RpcException("No active T3 environment.")
-                    uploader.upload(profile, options.attachments)
+                    uploader.upload(profile, options.attachments, runtime.fileAttachmentMaxBytes())
                 }
             runtime.dispatch(
                 T3Commands.messageDispatch(

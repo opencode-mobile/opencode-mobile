@@ -4,6 +4,7 @@ import Foundation
 nonisolated enum T3AttachmentError: Error, Equatable, LocalizedError {
     case unsupported(filename: String)
     case oversize(filename: String)
+    case fileOversize(filename: String, limit: String)
     case unreadable(filename: String)
     case transfer(filename: String, detail: String)
 
@@ -13,6 +14,8 @@ nonisolated enum T3AttachmentError: Error, Equatable, LocalizedError {
             "'\(filename)' is not a supported image. T3 threads accept PNG, JPEG, GIF, or WebP images only."
         case let .oversize(filename):
             "'\(filename)' exceeds the 10 MB image limit."
+        case let .fileOversize(filename, limit):
+            "'\(filename)' exceeds the \(limit) file limit."
         case let .unreadable(filename):
             "Could not read '\(filename)'."
         case let .transfer(filename, detail):
@@ -33,8 +36,8 @@ nonisolated enum T3AttachmentUpload {
         let relativeURL: String
     }
 
-    static func createUploadURLPayload(name: String, mimeType: String, sizeBytes: Int) -> [String: Any] {
-        ["type": "image", "name": name, "mimeType": mimeType, "sizeBytes": sizeBytes]
+    static func createUploadURLPayload(name: String, mimeType: String, sizeBytes: Int, type: String = "image") -> [String: Any] {
+        ["type": type, "name": name, "mimeType": mimeType, "sizeBytes": sizeBytes]
     }
 
     static func deletePayload(attachmentID: String) -> [String: Any] {
@@ -88,7 +91,8 @@ nonisolated struct URLSessionT3AttachmentByteTransport: T3AttachmentByteTranspor
 /// Outbound T3 attachment sequence: `attachments.createUploadUrl` over the RPC
 /// socket, POST the exact bytes to the signed relative URL on the environment
 /// origin, then reference the stored id as a `ChatAttachment` in
-/// `message.dispatch`. T3 provider turns accept images only.
+/// `message.dispatch`. Images are `type: image`. A PDF or text file is `type: file`
+/// when the environment advertised `fileAttachments`; otherwise it is rejected.
 nonisolated struct T3AttachmentUploader: Sendable {
     private let client: any T3AttachmentUploadClient
     private let transport: any T3AttachmentByteTransport
@@ -104,15 +108,15 @@ nonisolated struct T3AttachmentUploader: Sendable {
         self.readBytes = readBytes
     }
 
-    func upload(_ attachments: [Attachment]) async throws -> [T3Attachment] {
+    func upload(_ attachments: [Attachment], maxFileBytes: Int64? = nil) async throws -> [T3Attachment] {
         guard !attachments.isEmpty else { return [] }
         // Validate everything first so a bad second file never leaves the first one stored.
-        let prepared = try attachments.map { ($0, try prepare($0)) }
+        let prepared = try attachments.map { try prepare($0, maxFileBytes: maxFileBytes) }
         let credentials = try client.credentials()
         var uploaded: [T3Attachment] = []
-        for (attachment, data) in prepared {
+        for item in prepared {
             do {
-                uploaded.append(try await uploadOne(attachment, data: data, credentials: credentials))
+                uploaded.append(try await uploadOne(item, credentials: credentials))
             } catch {
                 for stored in uploaded { await discard(stored.id) }
                 throw error
@@ -121,34 +125,63 @@ nonisolated struct T3AttachmentUploader: Sendable {
         return uploaded
     }
 
-    /// Validates one attachment against the T3 image contract and loads its bytes.
-    private func prepare(_ attachment: Attachment) throws -> Data {
+    /// An image stays on the image contract. A PDF or text file uses the file
+    /// contract when `maxFileBytes` is the server's advertised limit.
+    private func prepare(_ attachment: Attachment, maxFileBytes: Int64?) throws -> PreparedUpload {
         let mime = attachment.mime.trimmingCharacters(in: .whitespaces).lowercased()
-        guard attachment.kind == .image, T3AttachmentUpload.supportedImageMimes.contains(mime) else {
+        let image = attachment.kind == .image && T3AttachmentUpload.supportedImageMimes.contains(mime)
+        if image {
+            guard attachment.byteCount <= Int64(T3Assets.maxImageBytes) else {
+                throw T3AttachmentError.oversize(filename: attachment.filename)
+            }
+            let data = try read(attachment)
+            guard data.count <= T3Assets.maxImageBytes else {
+                throw T3AttachmentError.oversize(filename: attachment.filename)
+            }
+            return PreparedUpload(
+                name: attachment.filename.isEmpty ? "image" : attachment.filename,
+                mimeType: mime,
+                data: data,
+                type: "image"
+            )
+        }
+        guard let maxFileBytes, !mime.isEmpty, attachment.kind == .pdf || attachment.kind == .text else {
             throw T3AttachmentError.unsupported(filename: attachment.filename)
         }
-        guard attachment.byteCount <= Int64(T3Assets.maxImageBytes) else {
-            throw T3AttachmentError.oversize(filename: attachment.filename)
+        guard attachment.byteCount <= maxFileBytes else {
+            throw T3AttachmentError.fileOversize(filename: attachment.filename, limit: T3Assets.fileLimitLabel(maxFileBytes))
         }
+        let data = try read(attachment)
+        guard Int64(data.count) <= maxFileBytes else {
+            throw T3AttachmentError.fileOversize(filename: attachment.filename, limit: T3Assets.fileLimitLabel(maxFileBytes))
+        }
+        return PreparedUpload(
+            name: attachment.filename.isEmpty ? "file" : attachment.filename,
+            mimeType: mime,
+            data: data,
+            type: "file"
+        )
+    }
+
+    private func read(_ attachment: Attachment) throws -> Data {
         guard let data = readBytes(attachment), !data.isEmpty else {
             throw T3AttachmentError.unreadable(filename: attachment.filename)
-        }
-        guard data.count <= T3Assets.maxImageBytes else {
-            throw T3AttachmentError.oversize(filename: attachment.filename)
         }
         return data
     }
 
     private func uploadOne(
-        _ attachment: Attachment,
-        data: Data,
+        _ item: PreparedUpload,
         credentials: (baseURL: URL, bearer: String)
     ) async throws -> T3Attachment {
-        let mime = attachment.mime.trimmingCharacters(in: .whitespaces).lowercased()
-        let name = attachment.filename.isEmpty ? "image" : attachment.filename
         let reply = try await client.rpcRequest(
             tag: T3AttachmentUpload.createUploadURLTag,
-            payload: T3AttachmentUpload.createUploadURLPayload(name: name, mimeType: mime, sizeBytes: data.count)
+            payload: T3AttachmentUpload.createUploadURLPayload(
+                name: item.name,
+                mimeType: item.mimeType,
+                sizeBytes: item.data.count,
+                type: item.type
+            )
         )
         guard let target = T3AttachmentUpload.target(from: reply) else {
             throw T3ClientError.rpc("T3 did not return an upload URL.")
@@ -159,19 +192,32 @@ nonisolated struct T3AttachmentUploader: Sendable {
         }
         let status: Int
         do {
-            status = try await transport.upload(url: url, data: data, mimeType: mime, bearer: credentials.bearer)
+            status = try await transport.upload(url: url, data: item.data, mimeType: item.mimeType, bearer: credentials.bearer)
         } catch {
             await discard(target.attachmentID)
-            throw T3AttachmentError.transfer(filename: name, detail: error.localizedDescription)
+            throw T3AttachmentError.transfer(filename: item.name, detail: error.localizedDescription)
         }
         guard (200 ..< 300).contains(status) else {
             await discard(target.attachmentID)
             if status == 401 || status == 403 {
                 throw T3ClientError.accessRevoked(statusCode: status, body: nil)
             }
-            throw T3AttachmentError.transfer(filename: name, detail: "server replied \(status).")
+            throw T3AttachmentError.transfer(filename: item.name, detail: "server replied \(status).")
         }
-        return T3Attachment(id: target.attachmentID, type: "image", name: name, mimeType: mime, sizeBytes: Int64(data.count))
+        return T3Attachment(
+            id: target.attachmentID,
+            type: item.type,
+            name: item.name,
+            mimeType: item.mimeType,
+            sizeBytes: Int64(item.data.count)
+        )
+    }
+
+    private struct PreparedUpload {
+        let name: String
+        let mimeType: String
+        let data: Data
+        let type: String
     }
 
     /// Best-effort release of a pending upload the message will never reference.

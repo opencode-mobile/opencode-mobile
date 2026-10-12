@@ -255,7 +255,8 @@ nonisolated enum T3ShellMapper {
         return T3EnvironmentDescriptor(
             environmentID: environmentID,
             label: T3JSON.string(object, "label") ?? "T3",
-            orchestrationProtocolVersion: version
+            orchestrationProtocolVersion: version,
+            maxFileUploadBytes: T3Assets.clampedFileLimit(from: object)
         )
     }
 }
@@ -912,6 +913,27 @@ private nonisolated func replacingParts(_ message: Message, parts: [MessagePart]
 nonisolated enum T3Assets {
     static let createURLTag = "assets.createUrl"
     static let maxImageBytes = 10 * 1024 * 1024
+    /// `PROVIDER_SEND_TURN_MAX_FILE_BYTES`. A server may advertise a smaller cap.
+    static let maxFileBytes = 50 * 1024 * 1024
+
+    /// Nil when the server omitted `fileAttachments` or advertised a non-positive limit.
+    static func clampedFileLimit(from object: [String: Any]) -> Int64? {
+        guard let capabilities = T3JSON.object(object["capabilities"]),
+              let files = T3JSON.object(capabilities["fileAttachments"])
+        else { return nil }
+        return clampedFileLimit(T3JSON.int64(files["maxUploadBytes"]))
+    }
+
+    static func clampedFileLimit(_ raw: Int64?) -> Int64? {
+        guard let raw, raw >= 1 else { return nil }
+        return min(raw, Int64(maxFileBytes))
+    }
+
+    static func fileLimitLabel(_ maxBytes: Int64) -> String {
+        let unit: Int64 = 1024 * 1024
+        if maxBytes % unit == 0 { return "\(maxBytes / unit) MB" }
+        return "\(maxBytes) bytes"
+    }
 
     static func createURLPayload(id: String, fileName: String, mimeType: String) -> [String: Any] {
         [

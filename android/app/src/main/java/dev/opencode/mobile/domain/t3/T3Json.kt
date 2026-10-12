@@ -27,6 +27,10 @@ object T3Json {
             environmentId = obj.string("environmentId").orEmpty(),
             label = obj.string("label").orEmpty(),
             orchestrationProtocolVersion = obj.int("orchestrationProtocolVersion"),
+            maxFileUploadBytes =
+                T3Assets.clampFileBytes(
+                    obj.obj("capabilities")?.obj("fileAttachments")?.long("maxUploadBytes"),
+                ),
         )
     }
 

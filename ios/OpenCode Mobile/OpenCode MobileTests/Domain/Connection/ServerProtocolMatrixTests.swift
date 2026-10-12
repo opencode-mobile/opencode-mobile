@@ -35,4 +35,27 @@ struct ServerProtocolMatrixTests {
         #expect(ServerCapabilities.forProtocol(.v2).supportsDocumentAttachments == true)
         #expect(ServerCapabilities.forEngine(.opencode, protocol: nil).supportsMentions == true)
     }
+
+    @Test func filesPickerFollowsTheActiveEnvironmentLimit() throws {
+        let huge = #"{"environmentId":"env-1","label":"Desk","orchestrationProtocolVersion":2,"capabilities":{"fileAttachments":{"maxUploadBytes":104857600}}}"#
+        let descriptor = try T3ShellMapper.descriptor(from: Data(huge.utf8))
+        #expect(descriptor.maxFileUploadBytes == Int64(T3Assets.maxFileBytes))
+        let imagesOnly = try T3ShellMapper.descriptor(
+            from: Data(#"{"environmentId":"env-1","label":"Desk","orchestrationProtocolVersion":2}"#.utf8)
+        )
+        #expect(imagesOnly.maxFileUploadBytes == nil)
+
+        let limit = T3FileAttachmentLimit()
+        let manager = ActiveConnectionManager(fileAttachmentLimit: limit)
+        manager.apply(
+            ConnectionProfile(baseURL: "https://t3.example.com/", username: "t3", password: "token", serverProtocol: nil, engine: .t3)
+        )
+        #expect(manager.capabilities.supportsDocumentAttachments == false)
+        limit.note("env", maxBytes: 1024)
+        #expect(manager.capabilities.supportsDocumentAttachments == true)
+        limit.activate("other")
+        #expect(manager.capabilities.supportsDocumentAttachments == false)
+        limit.activate("env")
+        #expect(manager.capabilities.supportsDocumentAttachments == true)
+    }
 }

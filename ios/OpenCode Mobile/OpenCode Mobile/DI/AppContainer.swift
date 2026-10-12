@@ -6,7 +6,8 @@ extension Container {
         self {
             ActiveConnectionManager(
                 connectionProbing: self.connectionProbing(),
-                profileStore: self.connectionProfileStore()
+                profileStore: self.connectionProfileStore(),
+                fileAttachmentLimit: self.t3FileAttachmentLimit()
             )
         }.singleton
     }
@@ -126,9 +127,16 @@ extension Container {
         }.singleton
     }
 
+    var t3FileAttachmentLimit: Factory<T3FileAttachmentLimit> {
+        self { T3FileAttachmentLimit() }.singleton
+    }
+
     var t3EnvironmentClient: Factory<T3EnvironmentClient> {
         self {
-            T3EnvironmentClient(connectionProvider: self.connectionProvider())
+            T3EnvironmentClient(
+                connectionProvider: self.connectionProvider(),
+                fileAttachmentLimit: self.t3FileAttachmentLimit()
+            )
         }.singleton
     }
 

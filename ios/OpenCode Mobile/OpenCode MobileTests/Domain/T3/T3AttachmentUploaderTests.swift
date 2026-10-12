@@ -102,6 +102,33 @@ struct T3AttachmentUploaderTests {
     }
 
     @Test
+    func pdfUploadsAsFileWhenTheServerAllowsFiles() async throws {
+        let client = FakeUploadClient()
+        let transport = FakeByteTransport()
+        let pdf = Self.image(name: "spec.pdf", mime: "application/pdf", kind: .pdf)
+        let stored = try await Self.uploader(client: client, transport: transport)
+            .upload([pdf], maxFileBytes: 1024)
+        let mint = try #require(client.requests.first)
+        #expect(mint.payload["type"] as? String == "file")
+        #expect(mint.payload["name"] as? String == "spec.pdf")
+        #expect(mint.payload["mimeType"] as? String == "application/pdf")
+        #expect(stored.first?.type == "file")
+        #expect(transport.uploads.first?.mimeType == "application/pdf")
+    }
+
+    @Test
+    func oversizeFileIsRejectedBeforeAnyUpload() async {
+        let client = FakeUploadClient()
+        let transport = FakeByteTransport()
+        let pdf = Self.image(name: "spec.pdf", mime: "application/pdf", kind: .pdf, byteCount: 2048)
+        await #expect(throws: T3AttachmentError.fileOversize(filename: "spec.pdf", limit: T3Assets.fileLimitLabel(1024))) {
+            try await Self.uploader(client: client, transport: transport).upload([pdf], maxFileBytes: 1024)
+        }
+        #expect(client.requests.isEmpty)
+        #expect(transport.uploads.isEmpty)
+    }
+
+    @Test
     func unsupportedImageMimeIsRejected() async {
         await #expect(throws: T3AttachmentError.unsupported(filename: "icon.svg")) {
             try await Self.uploader(client: FakeUploadClient(), transport: FakeByteTransport())

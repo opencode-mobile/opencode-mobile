@@ -129,6 +129,55 @@ class T3AttachmentUploaderTest {
         }
 
     @Test
+    fun pdfUploadsAsFileWhenTheServerAllowsFiles() =
+        runTest {
+            val socket = RecordingSocket()
+            val transport = RecordingTransport()
+            val uploader = T3AttachmentUploader(socket, transport, readBytes = { png })
+            val pdf = image(name = "spec.pdf", mime = "application/pdf", kind = AttachmentKind.Pdf)
+
+            val stored = uploader.upload(profile, listOf(pdf), maxFileBytes = 1024)
+
+            val mint = socket.requests.single()
+            assertEquals("file", mint.second["type"]!!.jsonPrimitive.content)
+            assertEquals("spec.pdf", mint.second["name"]!!.jsonPrimitive.content)
+            assertEquals("application/pdf", mint.second["mimeType"]!!.jsonPrimitive.content)
+            assertEquals("file", stored.single().type)
+            assertEquals("application/pdf", transport.uploads.single().mimeType)
+        }
+
+    @Test
+    fun textFileUploadsAsFile() =
+        runTest {
+            val socket = RecordingSocket()
+            val uploader = T3AttachmentUploader(socket, RecordingTransport(), readBytes = { "hello".toByteArray() })
+            val note = image(name = "notes.txt", mime = "text/plain", kind = AttachmentKind.Text, byteCount = 5)
+
+            val stored = uploader.upload(profile, listOf(note), maxFileBytes = 1024)
+
+            assertEquals("file", stored.single().type)
+            assertEquals("text/plain", stored.single().mimeType)
+        }
+
+    @Test
+    fun oversizeFileIsRejectedBeforeAnyUpload() =
+        runTest {
+            val socket = RecordingSocket()
+            val transport = RecordingTransport()
+            val uploader = T3AttachmentUploader(socket, transport, readBytes = { png })
+            val pdf = image(name = "spec.pdf", mime = "application/pdf", kind = AttachmentKind.Pdf, byteCount = 2048)
+
+            try {
+                uploader.upload(profile, listOf(pdf), maxFileBytes = 1024)
+                fail("expected rejection")
+            } catch (error: T3AttachmentException) {
+                assertEquals(T3AttachmentUploader.fileOversizeMessage("spec.pdf", 1024), error.message)
+            }
+            assertTrue(socket.requests.isEmpty())
+            assertTrue(transport.uploads.isEmpty())
+        }
+
+    @Test
     fun unsupportedImageMimeIsRejected() =
         runTest {
             val uploader = T3AttachmentUploader(RecordingSocket(), RecordingTransport(), readBytes = { png })

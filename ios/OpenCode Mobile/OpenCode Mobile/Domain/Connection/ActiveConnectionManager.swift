@@ -5,6 +5,7 @@ final class ActiveConnectionManager: @unchecked Sendable {
     private let probeLock = NSLock()
     private let connectionProbing: (any ConnectionProbing)?
     private let profileStore: (any ConnectionProfileStore)?
+    private let fileAttachmentLimit: T3FileAttachmentLimit?
     private var _connection: ServerConnection?
     private var _profile: ConnectionProfile?
     private var inFlightProbe: Task<Result<ServerProtocol, Error>, Never>?
@@ -15,10 +16,12 @@ final class ActiveConnectionManager: @unchecked Sendable {
 
     init(
         connectionProbing: (any ConnectionProbing)? = nil,
-        profileStore: (any ConnectionProfileStore)? = nil
+        profileStore: (any ConnectionProfileStore)? = nil,
+        fileAttachmentLimit: T3FileAttachmentLimit? = nil
     ) {
         self.connectionProbing = connectionProbing
         self.profileStore = profileStore
+        self.fileAttachmentLimit = fileAttachmentLimit
     }
 
     var connection: ServerConnection? {
@@ -37,7 +40,7 @@ final class ActiveConnectionManager: @unchecked Sendable {
         let active = _connection
         lock.unlock()
         if engine == .t3 || active?.engine == .t3 {
-            return .t3
+            return .t3(supportsDocumentAttachments: fileAttachmentLimit?.maxBytes != nil)
         }
         return active?.capabilities ?? .forProtocol(.v1)
     }
