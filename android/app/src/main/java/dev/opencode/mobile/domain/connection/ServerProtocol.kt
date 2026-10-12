@@ -21,15 +21,35 @@ enum class ServerProtocol(
 }
 
 /**
- * Product capabilities derived from [ServerProtocol]. Screen Models read these
- * flags instead of branching on protocol themselves.
+ * Product capabilities for the active engine. OpenCode still derives them from
+ * [ServerProtocol]. T3 has its own preset: the protocol probe reports v1, and
+ * that fallback must not turn OpenCode-only controls back on.
+ *
+ * Screen Models read these flags instead of branching on protocol themselves.
  */
 data class ServerCapabilities(
     val supportsSessionMessageDiff: Boolean,
     val supportsSessionArchive: Boolean,
     val supportsFollowUpDelivery: Boolean,
+    val supportsTerminal: Boolean = true,
+    val supportsRevert: Boolean = true,
+    val supportsMentions: Boolean = true,
+    val supportsSlashCommands: Boolean = true,
+    val supportsDocumentAttachments: Boolean = true,
 ) {
     companion object {
+        val t3: ServerCapabilities =
+            ServerCapabilities(
+                supportsSessionMessageDiff = false,
+                supportsSessionArchive = true,
+                supportsFollowUpDelivery = false,
+                supportsTerminal = false,
+                supportsRevert = false,
+                supportsMentions = false,
+                supportsSlashCommands = false,
+                supportsDocumentAttachments = false,
+            )
+
         fun forProtocol(protocol: ServerProtocol): ServerCapabilities =
             when (protocol) {
                 ServerProtocol.V1 ->
@@ -44,6 +64,16 @@ data class ServerCapabilities(
                         supportsSessionArchive = false,
                         supportsFollowUpDelivery = true,
                     )
+            }
+
+        fun forEngine(
+            engine: ConnectionEngine,
+            protocol: ServerProtocol?,
+        ): ServerCapabilities =
+            if (engine == ConnectionEngine.T3) {
+                t3
+            } else {
+                forProtocol(protocol ?: ServerProtocol.V1)
             }
     }
 }

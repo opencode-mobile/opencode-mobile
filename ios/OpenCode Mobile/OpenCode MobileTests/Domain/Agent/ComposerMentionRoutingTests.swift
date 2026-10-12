@@ -44,6 +44,33 @@ struct ComposerMentionRoutingTests {
         #expect(ComposerMentionRouting.suggestionMode(text: "hello", cursor: 5) == .none)
     }
 
+    @Test func suggestionMode_closedWhenMentionsAndSlashAreOff() {
+        #expect(
+            ComposerMentionRouting.suggestionMode(text: "@ex", cursor: 3, allowsMentions: false) == .none
+        )
+        #expect(
+            ComposerMentionRouting.suggestionMode(text: "/in", cursor: 3, allowsSlashCommands: false) == .none
+        )
+        #expect(
+            ComposerMentionRouting.suggestionMode(text: "/in", cursor: 3, allowsMentions: false) == .slash(query: "in")
+        )
+    }
+
+    @Test func withoutMentionTokens_dropsMentionShapedTokensAndKeepsAddresses() {
+        #expect(ComposerMentionRouting.withoutMentionTokens(text: "hello @codex please") == "hello please")
+        #expect(ComposerMentionRouting.withoutMentionTokens(text: "email a@b.com") == "email a@b.com")
+        #expect(ComposerMentionRouting.withoutMentionTokens(text: "@codex") == "")
+        #expect(ComposerMentionRouting.withoutMentionTokens(text: "ping @") == "ping")
+        #expect(ComposerMentionRouting.withoutMentionTokens(text: "see @ later") == "see @ later")
+        #expect(ComposerMentionRouting.withoutMentionTokens(text: "@codex hello") == "hello")
+        #expect(
+            ComposerMentionRouting.withoutMentionTokens(
+                text: "ask @explore now",
+                mentions: [AgentMention(id: "1", name: "explore", start: 4, end: 12)]
+            ) == "ask now"
+        )
+    }
+
     @Test func filterAgents_matchesNameAndDescription() {
         #expect(ComposerMentionRouting.filterAgents(agents, query: "ex").map(\.name) == ["explore"])
         #expect(ComposerMentionRouting.filterAgents(agents, query: "helper").map(\.name) == ["general"])

@@ -157,6 +157,17 @@ class SessionListHomeChromeTest {
     }
 
     @Test
+    fun terminalAction_hiddenWhenTerminalIsUnsupported() {
+        assertEquals(
+            SessionListHomeChrome.TerminalAction.None,
+            SessionListHomeChrome.terminalAction(
+                projects = listOf(mobile),
+                showsTerminal = false,
+            ),
+        )
+    }
+
+    @Test
     fun terminalAction_twoProjectsOpensCatalog() {
         assertEquals(
             SessionListHomeChrome.TerminalAction.OpenCatalog,

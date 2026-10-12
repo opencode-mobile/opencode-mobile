@@ -75,6 +75,57 @@ class ComposerMentionRoutingTest {
     }
 
     @Test
+    fun suggestionMode_closedWhenMentionsAndSlashAreOff() {
+        assertEquals(
+            ComposerSuggestionMode.None,
+            ComposerMentionRouting.suggestionMode(
+                text = "@ex",
+                cursor = 3,
+                allowsMentions = false,
+            ),
+        )
+        assertEquals(
+            ComposerSuggestionMode.None,
+            ComposerMentionRouting.suggestionMode(
+                text = "/in",
+                cursor = 3,
+                allowsSlashCommands = false,
+            ),
+        )
+        assertEquals(
+            ComposerSuggestionMode.Slash(query = "in"),
+            ComposerMentionRouting.suggestionMode(
+                text = "/in",
+                cursor = 3,
+                allowsMentions = false,
+            ),
+        )
+    }
+
+    @Test
+    fun withoutMentionTokens_dropsMentionShapedTokensAndKeepsAddresses() {
+        assertEquals(
+            "hello please",
+            ComposerMentionRouting.withoutMentionTokens("hello @codex please"),
+        )
+        assertEquals(
+            "email a@b.com",
+            ComposerMentionRouting.withoutMentionTokens("email a@b.com"),
+        )
+        assertEquals("", ComposerMentionRouting.withoutMentionTokens("@codex"))
+        assertEquals("ping", ComposerMentionRouting.withoutMentionTokens("ping @"))
+        assertEquals("see @ later", ComposerMentionRouting.withoutMentionTokens("see @ later"))
+        assertEquals("hello", ComposerMentionRouting.withoutMentionTokens("@codex hello"))
+        assertEquals(
+            "ask now",
+            ComposerMentionRouting.withoutMentionTokens(
+                "ask @explore now",
+                listOf(AgentMention(id = "1", name = "explore", start = 4, end = 12)),
+            ),
+        )
+    }
+
+    @Test
     fun filterAgents_matchesNameAndDescription() {
         assertEquals(listOf("explore"), ComposerMentionRouting.filterAgents(agents, "ex").map { it.name })
         assertEquals(listOf("general"), ComposerMentionRouting.filterAgents(agents, "helper").map { it.name })

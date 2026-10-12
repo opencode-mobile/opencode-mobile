@@ -125,6 +125,9 @@ final class ProjectListHomeViewModel {
     var showsHomeSettle: Bool {
         SessionCapabilities.forEngine(activeConnectionManager.currentProfile()?.engine ?? .opencode).showsSettle
     }
+    var showsTerminal: Bool {
+        activeConnectionManager.capabilities.supportsTerminal
+    }
     var sessionRenameDialog: HomeSessionTitleDialogState { sessionActionsRegion.renameDialog }
     var sessionForkDialog: HomeSessionTitleDialogState { sessionActionsRegion.forkDialog }
     var sessionForkResult: HomeSessionForkResultState { sessionActionsRegion.forkResult }

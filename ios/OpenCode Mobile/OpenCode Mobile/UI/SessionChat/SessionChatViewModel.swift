@@ -1550,6 +1550,8 @@ final class SessionChatViewModel {
             reviewChangesSummary: reviewChangesState.summary,
             supportsSessionMessageDiff: activeConnectionManager.capabilities.supportsSessionMessageDiff,
             supportsSessionArchive: activeConnectionManager.capabilities.supportsSessionArchive,
+            supportsRevert: activeConnectionManager.capabilities.supportsRevert,
+            supportsDocumentAttachments: activeConnectionManager.capabilities.supportsDocumentAttachments,
             rename: infoState.rename,
             slashSuggestionsVisible: composerState.slashSuggestionsVisible,
             slashSuggestions: composerState.slashSuggestions,

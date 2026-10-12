@@ -780,6 +780,7 @@ struct ProjectListHomeView: View {
     }
 
     private var showsTerminalAction: Bool {
+        guard viewModel.showsTerminal else { return false }
         guard case let .loaded(sections, _, _, _) = viewModel.state else { return false }
         return SessionListHomeChrome.terminalAction(projects: sections.homeChromeProjects()) == .openCatalog
     }
@@ -810,7 +811,10 @@ struct ProjectListHomeView: View {
         )
         guard case let .loaded(sections, _, _, _) = viewModel.state else { return }
         let projects = sections.homeChromeProjects()
-        if case .openCatalog = SessionListHomeChrome.terminalAction(projects: projects) {
+        if case .openCatalog = SessionListHomeChrome.terminalAction(
+            projects: projects,
+            showsTerminal: viewModel.showsTerminal
+        ) {
             navigationPath.append(TerminalsCatalogRoute())
         }
     }

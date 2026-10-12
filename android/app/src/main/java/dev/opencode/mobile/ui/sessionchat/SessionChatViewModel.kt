@@ -1463,6 +1463,8 @@ class SessionChatViewModel
             val profile = activeConnectionManager.currentProfile()
             capabilities = SessionCapabilities.forProfile(profile)
             composer.capabilities = capabilities
+            composer.allowsMentions = activeConnectionManager.currentCapabilities().supportsMentions
+            composer.allowsSlashCommands = activeConnectionManager.currentCapabilities().supportsSlashCommands
             commands.capabilities = capabilities
             pendingRuntimeMode = null
             sessionProviderId = null
@@ -1812,6 +1814,8 @@ class SessionChatViewModel
                 reviewChangesSummary = reviewChangesState.summary,
                 supportsSessionMessageDiff = activeConnectionManager.currentCapabilities().supportsSessionMessageDiff,
                 supportsSessionArchive = activeConnectionManager.currentCapabilities().supportsSessionArchive,
+                supportsRevert = activeConnectionManager.currentCapabilities().supportsRevert,
+                supportsDocumentAttachments = activeConnectionManager.currentCapabilities().supportsDocumentAttachments,
                 rename = infoState.rename,
                 slashSuggestionsVisible = composerState.slashSuggestionsVisible,
                 slashSuggestions = composerState.slashSuggestions,

@@ -53,6 +53,9 @@ final class SessionChatComposer {
     private let catalogRetryDelaysMs: [Int]
     private(set) var requiresComposerModel = true
 
+    private var allowsMentions: Bool { activeConnectionManager.capabilities.supportsMentions }
+    private var allowsSlashCommands: Bool { activeConnectionManager.capabilities.supportsSlashCommands }
+
     init(
         sessionID: String,
         worktree: String,
@@ -260,6 +263,7 @@ final class SessionChatComposer {
     }
 
     func loadServerCommands(force: Bool = false) {
+        guard allowsSlashCommands else { return }
         if !force, !state.serverCommands.isEmpty { return }
         serverCommandsTask?.cancel()
         serverCommandsTask = Task {
@@ -302,6 +306,7 @@ final class SessionChatComposer {
     }
 
     func loadMentionableAgents(force: Bool = false) {
+        guard allowsMentions else { return }
         if !force, !state.mentionableAgents.isEmpty { return }
         mentionableAgentsTask?.cancel()
         mentionableAgentsTask = Task {
@@ -468,7 +473,7 @@ final class SessionChatComposer {
         let previous = state.composer
         if text == previous.text {
             ensureSuggestionCatalogLoaded(
-                for: ComposerMentionRouting.suggestionMode(
+                for: suggestionMode(
                     text: text,
                     cursor: cursor,
                     mentions: previous.agentMentions
@@ -489,7 +494,7 @@ final class SessionChatComposer {
             proposedCursor: cursor
         )
         ensureSuggestionCatalogLoaded(
-            for: ComposerMentionRouting.suggestionMode(
+            for: suggestionMode(
                 text: reconciled.text,
                 cursor: reconciled.cursor,
                 mentions: reconciled.mentions
@@ -725,9 +730,18 @@ final class SessionChatComposer {
     ) async {
         let submittedText = state.composer.text
         let submittedMentions = state.composer.agentMentions
+        let mentionText: String
+        let mentionList: [AgentMention]
+        if allowsMentions {
+            mentionText = submittedText
+            mentionList = submittedMentions
+        } else {
+            mentionText = ComposerMentionRouting.withoutMentionTokens(text: submittedText, mentions: submittedMentions)
+            mentionList = []
+        }
         let (trimmed, mentionsForSend) = ComposerMentionRouting.trimForSend(
-            text: submittedText,
-            mentions: state.composer.agentMentions
+            text: mentionText,
+            mentions: mentionList
         )
         let submittedAttachments = state.composer.attachments
         let submittedDraftRevision = draftRevision
@@ -740,6 +754,13 @@ final class SessionChatComposer {
         guard (!trimmed.isEmpty || !submittedAttachments.isEmpty), !state.isSending else { return }
         if requiresComposerModel {
             guard state.composer.selectedModel != nil, state.composer.isModelSelectionReady else { return }
+        }
+        if case .ignored = ComposerSubmitRouting.resolve(
+            text: trimmed,
+            commands: [],
+            allowsSlashCommands: allowsSlashCommands
+        ) {
+            return
         }
 
         let composer = state.composer
@@ -830,7 +851,8 @@ final class SessionChatComposer {
         do {
             let intent = ComposerSubmitRouting.resolve(
                 text: trimmed,
-                commands: state.serverCommands
+                commands: state.serverCommands,
+                allowsSlashCommands: allowsSlashCommands
             )
             let hasAttachments = !submittedAttachments.isEmpty
             try await PromptSendProgressReporting.$handler.withValue({ [weak self] sent, total in
@@ -939,6 +961,8 @@ final class SessionChatComposer {
                         model: selectedModel,
                         worktree: worktree
                     )
+                case .ignored:
+                    throw ComposerSubmitRefusal.slashUnavailable
                 }
             }
             persistCurrentSelection(updatePreference: false)
@@ -1352,13 +1376,27 @@ final class SessionChatComposer {
         notifyChange()
     }
 
+    private func suggestionMode(
+        text: String,
+        cursor: Int,
+        mentions: [AgentMention]
+    ) -> ComposerSuggestionMode {
+        ComposerMentionRouting.suggestionMode(
+            text: text,
+            cursor: cursor,
+            mentions: mentions,
+            allowsMentions: allowsMentions,
+            allowsSlashCommands: allowsSlashCommands
+        )
+    }
+
     private func refreshComposerSuggestions(
         for text: String,
         cursor: Int,
         mentions: [AgentMention]? = nil
     ) {
         let mentions = mentions ?? state.composer.agentMentions
-        switch ComposerMentionRouting.suggestionMode(text: text, cursor: cursor, mentions: mentions) {
+        switch suggestionMode(text: text, cursor: cursor, mentions: mentions) {
         case let .at(query):
             state.atSuggestionsVisible = true
             state.atSuggestions = ComposerMentionRouting
@@ -1505,4 +1543,8 @@ final class SessionChatComposer {
             }
         }
     }
+}
+
+private enum ComposerSubmitRefusal: Error {
+    case slashUnavailable
 }

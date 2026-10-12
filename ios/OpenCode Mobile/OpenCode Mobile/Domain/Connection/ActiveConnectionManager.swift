@@ -32,7 +32,14 @@ final class ActiveConnectionManager: @unchecked Sendable {
     }
 
     var capabilities: ServerCapabilities {
-        connection?.capabilities ?? .forProtocol(.v1)
+        lock.lock()
+        let engine = _profile?.engine
+        let active = _connection
+        lock.unlock()
+        if engine == .t3 || active?.engine == .t3 {
+            return .t3
+        }
+        return active?.capabilities ?? .forProtocol(.v1)
     }
 
     func ensureLoaded(from store: ConnectionProfileStore) async {

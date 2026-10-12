@@ -17,12 +17,31 @@ nonisolated enum ServerProtocol: String, Sendable, Equatable, Hashable {
     var reachableMessage: String { "Server reachable · API \(rawValue)" }
 }
 
-/// Product capabilities derived from `ServerProtocol`. Screen Models read these
-/// flags instead of branching on protocol themselves.
+/// Product capabilities for the active engine. OpenCode still derives them from
+/// `ServerProtocol`. T3 has its own preset: the protocol probe reports v1, and
+/// that fallback must not turn OpenCode-only controls back on.
+///
+/// Screen Models read these flags instead of branching on protocol themselves.
 nonisolated struct ServerCapabilities: Sendable, Equatable {
     let supportsSessionMessageDiff: Bool
     let supportsSessionArchive: Bool
     let supportsFollowUpDelivery: Bool
+    var supportsTerminal: Bool = true
+    var supportsRevert: Bool = true
+    var supportsMentions: Bool = true
+    var supportsSlashCommands: Bool = true
+    var supportsDocumentAttachments: Bool = true
+
+    static let t3 = ServerCapabilities(
+        supportsSessionMessageDiff: false,
+        supportsSessionArchive: true,
+        supportsFollowUpDelivery: false,
+        supportsTerminal: false,
+        supportsRevert: false,
+        supportsMentions: false,
+        supportsSlashCommands: false,
+        supportsDocumentAttachments: false
+    )
 
     static func forProtocol(_ serverProtocol: ServerProtocol) -> ServerCapabilities {
         switch serverProtocol {
@@ -39,5 +58,12 @@ nonisolated struct ServerCapabilities: Sendable, Equatable {
                 supportsFollowUpDelivery: true
             )
         }
+    }
+
+    static func forEngine(_ engine: ConnectionEngine, protocol serverProtocol: ServerProtocol?) -> ServerCapabilities {
+        if engine == .t3 {
+            return t3
+        }
+        return forProtocol(serverProtocol ?? .v1)
     }
 }

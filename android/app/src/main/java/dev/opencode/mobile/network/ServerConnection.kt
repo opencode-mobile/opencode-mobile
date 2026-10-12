@@ -17,7 +17,7 @@ data class ServerConnection(
         baseUrl.trimEnd('/') + '/'
 
     val capabilities: ServerCapabilities
-        get() = ServerCapabilities.forProtocol(serverProtocol ?: ServerProtocol.V1)
+        get() = ServerCapabilities.forEngine(engine, serverProtocol)
 
     fun hasSameIdentity(other: ServerConnection): Boolean = baseUrl == other.baseUrl && username == other.username
 

@@ -218,6 +218,7 @@ fun MainScreen(
             onManageServersClick()
         },
         showsHomeSettle = viewModel.showsHomeSettle(),
+        showsTerminal = viewModel.showsTerminal(),
         modifier = modifier,
         selectedSessionId = selectedSessionId,
         sessionKeyboardNavigationEnabled = sessionKeyboardNavigationEnabled,
@@ -266,6 +267,7 @@ internal fun MainScreen(
     selectedSessionId: String? = null,
     sessionKeyboardNavigationEnabled: Boolean = false,
     showsHomeSettle: Boolean = false,
+    showsTerminal: Boolean = true,
 ) {
     val pendingOpenSession = (uiState as? MainScreenUiState.Loaded)?.pendingOpenSession
     LaunchedEffect(pendingOpenSession) {
@@ -296,7 +298,8 @@ internal fun MainScreen(
     val loadedSections = (uiState as? MainScreenUiState.Loaded)?.sections.orEmpty()
     val chromeProjects = loadedSections.toHomeChromeProjects()
     val showTerminalAction =
-        SessionListHomeChrome.terminalAction(chromeProjects) is SessionListHomeChrome.TerminalAction.OpenCatalog
+        SessionListHomeChrome.terminalAction(chromeProjects, showsTerminal = showsTerminal) is
+            SessionListHomeChrome.TerminalAction.OpenCatalog
     val newSessionPickerProjects =
         when (uiState) {
             is MainScreenUiState.Loaded -> uiState.sections

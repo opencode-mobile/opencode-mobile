@@ -6,13 +6,18 @@ object ComposerSubmitRouting {
     fun resolve(
         text: String,
         serverCommandNames: Set<String>,
-    ): ComposerSubmitIntent = resolve(text, serverCommandNames.map { ServerCommand(name = it) })
+        allowsSlashCommands: Boolean = true,
+    ): ComposerSubmitIntent = resolve(text, serverCommandNames.map { ServerCommand(name = it) }, allowsSlashCommands)
 
     fun resolve(
         text: String,
         commands: List<ServerCommand>,
+        allowsSlashCommands: Boolean = true,
     ): ComposerSubmitIntent {
         val trimmed = text.trim()
+        if (!allowsSlashCommands && trimmed.startsWith("/")) {
+            return ComposerSubmitIntent.Ignored
+        }
         if (!trimmed.startsWith("/")) {
             return ComposerSubmitIntent.Prompt(text = trimmed)
         }

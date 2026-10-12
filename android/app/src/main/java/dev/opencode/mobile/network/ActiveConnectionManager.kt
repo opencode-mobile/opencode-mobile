@@ -60,7 +60,12 @@ class ActiveConnectionManager(
 
     fun protocolHint(): ServerProtocol = currentProtocol() ?: ServerProtocol.V1
 
-    fun currentCapabilities(): ServerCapabilities = connection?.capabilities ?: ServerCapabilities.forProtocol(ServerProtocol.V1)
+    fun currentCapabilities(): ServerCapabilities =
+        when {
+            connection?.engine == ConnectionEngine.T3 || profile?.engine == ConnectionEngine.T3 ->
+                ServerCapabilities.t3
+            else -> connection?.capabilities ?: ServerCapabilities.forProtocol(ServerProtocol.V1)
+        }
 
     fun currentProfile(): ConnectionProfile? =
         profile?.copy(

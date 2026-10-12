@@ -144,11 +144,11 @@ struct SessionChatComposerState: Equatable {
         selectedModel?.option.canAttachFiles == true
     }
 
-    func attachmentSources(developerToolsUnlocked: Bool) -> ComposerAttachmentSources {
+    func attachmentSources(developerToolsUnlocked: Bool, allowsDocuments: Bool = true) -> ComposerAttachmentSources {
         ComposerAttachmentSources(
             photos: canAttachPhotos,
-            files: canAttachFiles,
-            logFile: developerToolsUnlocked
+            files: canAttachFiles && allowsDocuments,
+            logFile: developerToolsUnlocked && allowsDocuments
         )
     }
 }
@@ -278,6 +278,8 @@ struct SessionChatUiState: Equatable {
     var reviewChangesSummary: ReviewChangesSummary?
     var supportsSessionMessageDiff: Bool = true
     var supportsSessionArchive: Bool = true
+    var supportsRevert: Bool = true
+    var supportsDocumentAttachments: Bool = true
     var rename = SessionRenameUiState()
     var slashSuggestionsVisible = false
     var slashSuggestions: [SessionChatSlashSuggestion] = []

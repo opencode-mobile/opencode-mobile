@@ -84,11 +84,14 @@ data class SessionChatComposerState(
     val canAttachFiles: Boolean
         get() = selectedModel?.option?.canAttachFiles == true
 
-    fun attachmentSources(developerToolsUnlocked: Boolean): ComposerAttachmentSources =
+    fun attachmentSources(
+        developerToolsUnlocked: Boolean,
+        allowsDocuments: Boolean = true,
+    ): ComposerAttachmentSources =
         ComposerAttachmentSources(
             photos = canAttachPhotos,
-            files = canAttachFiles,
-            logFile = developerToolsUnlocked,
+            files = canAttachFiles && allowsDocuments,
+            logFile = developerToolsUnlocked && allowsDocuments,
         )
 }
 
@@ -200,6 +203,8 @@ data class SessionChatUiState(
     val sessionBranchPill: SessionBranchPillUiState? = null,
     val supportsSessionMessageDiff: Boolean = true,
     val supportsSessionArchive: Boolean = true,
+    val supportsRevert: Boolean = true,
+    val supportsDocumentAttachments: Boolean = true,
     val rename: SessionRenameUiState = SessionRenameUiState(),
     val slashSuggestionsVisible: Boolean = false,
     val slashSuggestions: List<SessionChatSlashSuggestion> = emptyList(),

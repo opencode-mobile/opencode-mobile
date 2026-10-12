@@ -65,6 +65,8 @@ enum ComposerSubmitIntent: Equatable, Sendable {
     case serverCommand(command: String, arguments: String)
     /// A slash skill. Admitted on the prompt, not the command route.
     case skillPrompt(skillID: String, text: String)
+    /// Slash text on an engine that has no command catalogue. Nothing is sent.
+    case ignored
 }
 
 nonisolated enum CommandError: Error, Equatable {

@@ -3,12 +3,27 @@ import Foundation
 enum ComposerSubmitRouting {
     private static let slashSuggestionPattern = /^\/(\S*)$/
 
-    static func resolve(text: String, serverCommandNames: Set<String>) -> ComposerSubmitIntent {
-        resolve(text: text, commands: serverCommandNames.map { ServerCommand(name: $0) })
+    static func resolve(
+        text: String,
+        serverCommandNames: Set<String>,
+        allowsSlashCommands: Bool = true
+    ) -> ComposerSubmitIntent {
+        resolve(
+            text: text,
+            commands: serverCommandNames.map { ServerCommand(name: $0) },
+            allowsSlashCommands: allowsSlashCommands
+        )
     }
 
-    static func resolve(text: String, commands: [ServerCommand]) -> ComposerSubmitIntent {
+    static func resolve(
+        text: String,
+        commands: [ServerCommand],
+        allowsSlashCommands: Bool = true
+    ) -> ComposerSubmitIntent {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !allowsSlashCommands && trimmed.hasPrefix("/") {
+            return .ignored
+        }
         guard trimmed.hasPrefix("/") else {
             return .prompt(text: trimmed)
         }

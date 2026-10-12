@@ -27,15 +27,75 @@ enum ComposerMentionRouting {
     static func suggestionMode(
         text: String,
         cursor: Int,
-        mentions: [AgentMention] = []
+        mentions: [AgentMention] = [],
+        allowsMentions: Bool = true,
+        allowsSlashCommands: Bool = true
     ) -> ComposerSuggestionMode {
-        if let atQuery = atSuggestionQuery(text, cursor: cursor, mentions: mentions) {
+        if allowsMentions, let atQuery = atSuggestionQuery(text, cursor: cursor, mentions: mentions) {
             return .at(query: atQuery)
         }
-        if let slashQuery = ComposerSubmitRouting.slashSuggestionQuery(text) {
+        if allowsSlashCommands, let slashQuery = ComposerSubmitRouting.slashSuggestionQuery(text) {
             return .slash(query: slashQuery)
         }
         return .none
+    }
+
+    /// Drops structured mentions and unresolved `@tokens` (start, or after
+    /// whitespace, then a non-whitespace run). An address such as `a@b.com`
+    /// stays. A bare `@` stays unless it is the end of the text.
+    static func withoutMentionTokens(text: String, mentions: [AgentMention] = []) -> String {
+        var result = text
+        for mention in mentions.sorted(by: { $0.start > $1.start }) {
+            guard mention.start >= 0, mention.end <= result.count, mention.start <= mention.end else { continue }
+            let dropFollowingSpace =
+                mention.start > 0
+                && isWhitespace(result, at: mention.start - 1)
+                && mention.end < result.count
+                && isWhitespace(result, at: mention.end)
+            let end = dropFollowingSpace ? mention.end + 1 : mention.end
+            result = substring(result, start: 0, end: mention.start) + substring(result, start: end, end: result.count)
+        }
+        return stripUnresolvedAtTokens(result)
+    }
+
+    private static func stripUnresolvedAtTokens(_ text: String) -> String {
+        var out = ""
+        var index = 0
+        let characters = Array(text)
+        while index < characters.count {
+            let atBoundary = characters[index] == "@" && (index == 0 || characters[index - 1].isWhitespace)
+            if !atBoundary {
+                out.append(characters[index])
+                index += 1
+                continue
+            }
+            var end = index + 1
+            while end < characters.count && !characters[end].isWhitespace {
+                end += 1
+            }
+            let hasName = end > index + 1
+            let isTrailingBare = !hasName && end == characters.count
+            if !hasName && !isTrailingBare {
+                out.append(characters[index])
+                index += 1
+                continue
+            }
+            index = end
+            if index < characters.count && characters[index].isWhitespace && (out.isEmpty || out.last?.isWhitespace == true) {
+                index += 1
+            }
+            if out.isEmpty {
+                while index < characters.count && characters[index].isWhitespace {
+                    index += 1
+                }
+            }
+        }
+        return out.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func isWhitespace(_ text: String, at offset: Int) -> Bool {
+        let index = text.index(text.startIndex, offsetBy: offset)
+        return text[index].isWhitespace
     }
 
     static func filterAgents(_ agents: [MentionableAgent], query: String) -> [MentionableAgent] {

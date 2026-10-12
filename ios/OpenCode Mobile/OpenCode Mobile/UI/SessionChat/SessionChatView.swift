@@ -330,6 +330,7 @@ struct SessionChatView: View {
                         )
                     },
                     supportsSessionMessageDiff: viewModel.uiState.supportsSessionMessageDiff,
+                    supportsRevert: viewModel.uiState.supportsRevert,
                     expandedStepParagraphs: viewModel.uiState.expandedStepParagraphs,
                     onExpandStepParagraph: { paragraphID, chipCount in
                         viewModel.expandStepParagraph(paragraphID, chipCount: chipCount)
@@ -1544,7 +1545,8 @@ struct SessionChatView: View {
 
     private var composerAttachmentSources: ComposerAttachmentSources {
         viewModel.uiState.composer.attachmentSources(
-            developerToolsUnlocked: developerToolsPreferences.unlocked
+            developerToolsUnlocked: developerToolsPreferences.unlocked,
+            allowsDocuments: viewModel.uiState.supportsDocumentAttachments
         )
     }
 

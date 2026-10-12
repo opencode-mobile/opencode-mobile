@@ -55,8 +55,8 @@ enum SessionListHomeChrome {
         return .presentPicker
     }
 
-    static func terminalAction(projects: [Project]) -> TerminalAction {
-        if projects.isEmpty {
+    static func terminalAction(projects: [Project], showsTerminal: Bool = true) -> TerminalAction {
+        if !showsTerminal || projects.isEmpty {
             return .none
         }
         return .openCatalog

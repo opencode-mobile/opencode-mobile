@@ -173,7 +173,11 @@ fun SessionChatScreen(
     }
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val attachmentSources = uiState.composer.attachmentSources(DeveloperToolsPreferences.unlocked)
+    val attachmentSources =
+        uiState.composer.attachmentSources(
+            DeveloperToolsPreferences.unlocked,
+            allowsDocuments = uiState.supportsDocumentAttachments,
+        )
     var menuExpanded by rememberSaveable { mutableStateOf(false) }
     var showDeleteConfirmation by remember { mutableStateOf(false) }
     var showRuntimeModePicker by rememberSaveable { mutableStateOf(false) }
@@ -775,6 +779,7 @@ fun SessionChatScreen(
                                     )?.let(onReviewChangesClick)
                             },
                             supportsSessionMessageDiff = uiState.supportsSessionMessageDiff,
+                            supportsRevert = uiState.supportsRevert,
                             expandedStepParagraphs = uiState.expandedStepParagraphs,
                             onExpandStepParagraph = viewModel::expandStepParagraph,
                         ),

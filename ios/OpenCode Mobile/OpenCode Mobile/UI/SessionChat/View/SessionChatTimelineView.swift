@@ -36,6 +36,7 @@ struct SessionChatTimelineViewProps {
     let onChangesReviewTap: (String, String?) -> Void
     let onUserScrollDismissKeyboard: () -> Void
     let supportsSessionMessageDiff: Bool
+    let supportsRevert: Bool
     /// Chip-timeline step paragraphs expanded past `+N more`: paragraph id to
     /// the chip count at tap time (Screen Model state).
     let expandedStepParagraphs: [String: Int]
@@ -74,6 +75,7 @@ struct SessionChatTimelineViewProps {
         onChangesReviewTap: @escaping (String, String?) -> Void = { _, _ in },
         onUserScrollDismissKeyboard: @escaping () -> Void = {},
         supportsSessionMessageDiff: Bool = true,
+        supportsRevert: Bool = true,
         expandedStepParagraphs: [String: Int] = [:],
         onExpandStepParagraph: @escaping (String, Int) -> Void = { _, _ in }
     ) {
@@ -109,6 +111,7 @@ struct SessionChatTimelineViewProps {
         self.onChangesReviewTap = onChangesReviewTap
         self.onUserScrollDismissKeyboard = onUserScrollDismissKeyboard
         self.supportsSessionMessageDiff = supportsSessionMessageDiff
+        self.supportsRevert = supportsRevert
         self.expandedStepParagraphs = expandedStepParagraphs
         self.onExpandStepParagraph = onExpandStepParagraph
     }
@@ -268,6 +271,7 @@ private struct SessionChatTimelineReadyView: View {
                     onChildSessionTap: props.onChildSessionTap,
                     onChangesReviewTap: props.onChangesReviewTap,
                     supportsSessionMessageDiff: props.supportsSessionMessageDiff,
+                    supportsRevert: props.supportsRevert,
                     expandedStepParagraphs: props.expandedStepParagraphs,
                     onExpandStepParagraph: props.onExpandStepParagraph
                 )
@@ -455,6 +459,7 @@ private struct SessionChatTimelineHostRow: View {
     let onChildSessionTap: (String, String) -> Void
     let onChangesReviewTap: (String, String?) -> Void
     let supportsSessionMessageDiff: Bool
+    let supportsRevert: Bool
     let expandedStepParagraphs: [String: Int]
     let onExpandStepParagraph: (String, Int) -> Void
 
@@ -479,6 +484,7 @@ private struct SessionChatTimelineHostRow: View {
                         onChildSessionTap: onChildSessionTap,
                         onChangesReviewTap: onChangesReviewTap,
                         supportsSessionMessageDiff: supportsSessionMessageDiff,
+                        supportsRevert: supportsRevert,
                         expandedStepParagraphs: expandedStepParagraphs,
                         onExpandStepParagraph: onExpandStepParagraph
                     )
@@ -494,6 +500,7 @@ private struct SessionChatTimelineHostRow: View {
                         onChildSessionTap: onChildSessionTap,
                         onChangesReviewTap: onChangesReviewTap,
                         supportsSessionMessageDiff: supportsSessionMessageDiff,
+                        supportsRevert: supportsRevert,
                         expandedStepParagraphs: expandedStepParagraphs,
                         onExpandStepParagraph: onExpandStepParagraph
                     )
@@ -512,6 +519,7 @@ private struct SessionChatMessageRow: View {
     let onChildSessionTap: (String, String) -> Void
     let onChangesReviewTap: (String, String?) -> Void
     let supportsSessionMessageDiff: Bool
+    let supportsRevert: Bool
     let expandedStepParagraphs: [String: Int]
     let onExpandStepParagraph: (String, Int) -> Void
 
@@ -535,13 +543,13 @@ private struct SessionChatMessageRow: View {
                     metadataLabel: message.metadataLabel,
                     onTap: {
                         if message.renderedMarkdown == nil {
-                            return { openMessageActions(showsRevertMessage: true) }
+                            return { openMessageActions(showsRevertMessage: supportsRevert) }
                         }
                         return nil
                     }(),
                     onLongPress: {
                         guard message.renderedMarkdown != nil else { return nil }
-                        return { openMessageActions(showsRevertMessage: true) }
+                        return { openMessageActions(showsRevertMessage: supportsRevert) }
                     }()
                 )
                 .frame(maxWidth: .infinity, alignment: .trailing)

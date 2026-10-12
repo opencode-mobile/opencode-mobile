@@ -105,6 +105,12 @@ struct SessionListHomeChromeTests {
         #expect(SessionListHomeChrome.terminalAction(projects: [mobile]) == .openCatalog)
     }
 
+    @Test func terminalAction_hiddenWhenTerminalIsUnsupported() {
+        #expect(
+            SessionListHomeChrome.terminalAction(projects: [mobile], showsTerminal: false) == .none
+        )
+    }
+
     @Test func terminalAction_twoProjectsOpensCatalog() {
         #expect(
             SessionListHomeChrome.terminalAction(projects: [mobile, playground]) == .openCatalog

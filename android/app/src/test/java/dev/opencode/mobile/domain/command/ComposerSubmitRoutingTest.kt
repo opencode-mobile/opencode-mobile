@@ -62,6 +62,18 @@ class ComposerSubmitRoutingTest {
     }
 
     @Test
+    fun resolve_disabledSlash_isIgnored() {
+        val intent = ComposerSubmitRouting.resolve("/not-a-command please", catalog, allowsSlashCommands = false)
+        assertEquals(ComposerSubmitIntent.Ignored, intent)
+    }
+
+    @Test
+    fun resolve_disabledSlash_plainTextStillPrompts() {
+        val intent = ComposerSubmitRouting.resolve("email a@b.com", catalog, allowsSlashCommands = false)
+        assertEquals(ComposerSubmitIntent.Prompt(text = "email a@b.com"), intent)
+    }
+
+    @Test
     fun slashQuery_bareSlash_returnsEmptyFilter() {
         assertEquals("", ComposerSubmitRouting.slashSuggestionQuery("/"))
     }

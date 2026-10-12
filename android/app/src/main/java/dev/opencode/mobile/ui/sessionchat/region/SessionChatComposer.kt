@@ -88,6 +88,8 @@ class SessionChatComposer(
 ) {
     var ioDispatcher: CoroutineDispatcher = kotlinx.coroutines.Dispatchers.IO
     var capabilities: SessionCapabilities = SessionCapabilities.OpenCode
+    var allowsMentions: Boolean = true
+    var allowsSlashCommands: Boolean = true
 
     /** Backoff for refetching a catalog that came back empty (a server still loading providers). */
     var catalogRetryDelaysMs: List<Long> = DEFAULT_CATALOG_RETRY_DELAYS_MS
@@ -253,6 +255,7 @@ class SessionChatComposer(
     }
 
     fun loadServerCommands(force: Boolean = false) {
+        if (!allowsSlashCommands) return
         val worktree = boundWorktree ?: return
         if (!force && _state.value.serverCommands.isNotEmpty()) return
         scope.launch {
@@ -306,6 +309,7 @@ class SessionChatComposer(
     }
 
     fun loadMentionableAgents(force: Boolean = false) {
+        if (!allowsMentions) return
         val worktree = boundWorktree ?: return
         if (!force && _state.value.mentionableAgents.isNotEmpty()) return
         scope.launch {
@@ -620,7 +624,7 @@ class SessionChatComposer(
         val previous = _state.value.composer
         if (text == previous.text) {
             val mode =
-                ComposerMentionRouting.suggestionMode(
+                suggestionMode(
                     text = text,
                     cursor = cursor,
                     mentions = previous.agentMentions,
@@ -659,7 +663,7 @@ class SessionChatComposer(
                 proposedCursor = cursor,
             )
         val mode =
-            ComposerMentionRouting.suggestionMode(
+            suggestionMode(
                 text = reconciled.text,
                 cursor = reconciled.cursor,
                 mentions = reconciled.mentions,
@@ -895,8 +899,14 @@ class SessionChatComposer(
         val composer = _state.value.composer
         val submittedText = composer.text
         val submittedMentions = composer.agentMentions
+        val mentionPrepared =
+            if (allowsMentions) {
+                composer.text to composer.agentMentions
+            } else {
+                ComposerMentionRouting.withoutMentionTokens(composer.text, composer.agentMentions) to emptyList()
+            }
         val (prompt, mentionsForSend) =
-            ComposerMentionRouting.trimForSend(composer.text, composer.agentMentions)
+            ComposerMentionRouting.trimForSend(mentionPrepared.first, mentionPrepared.second)
         val attachments = composer.attachments
         val submittedDraftRevision = draftRevision
         val submittedAttachmentRevisions =
@@ -909,6 +919,15 @@ class SessionChatComposer(
         if (OptimisticSessionCreate.isPlaceholder(sessionId)) return
         if ((prompt.isEmpty() && attachments.isEmpty()) || _state.value.isSending) return
         if (capabilities.requiresComposerModel && !composer.isModelSelectionReady) return
+        if (
+            ComposerSubmitRouting.resolve(
+                text = prompt,
+                commands = emptyList(),
+                allowsSlashCommands = allowsSlashCommands,
+            ) is ComposerSubmitIntent.Ignored
+        ) {
+            return
+        }
 
         val collapsedDisplay =
             CommandInvocationCollapser.collapse(
@@ -994,6 +1013,7 @@ class SessionChatComposer(
                     ComposerSubmitRouting.resolve(
                         text = prompt,
                         commands = _state.value.serverCommands,
+                        allowsSlashCommands = allowsSlashCommands,
                     )
                 val hasAttachments = attachments.isNotEmpty()
                 val progress =
@@ -1082,6 +1102,8 @@ class SessionChatComposer(
                                 skillIds = listOf(intent.skillId),
                                 mentions = emptyList(),
                             )
+                        ComposerSubmitIntent.Ignored ->
+                            error("Slash commands are not available")
                     }
                     persistCurrentSelection(updatePreference = false)
                     _state.update { it.copy(sendProgressPercent = null) }
@@ -1577,7 +1599,7 @@ class SessionChatComposer(
         cursor: Int,
         mentions: List<dev.opencode.mobile.domain.agent.AgentMention> = emptyList(),
     ): SessionChatComposerRegionState =
-        when (val mode = ComposerMentionRouting.suggestionMode(text, cursor, mentions)) {
+        when (val mode = suggestionMode(text, cursor, mentions)) {
             is ComposerSuggestionMode.At ->
                 copy(
                     atSuggestionsVisible = true,
@@ -1606,6 +1628,19 @@ class SessionChatComposer(
                     atSuggestions = emptyList(),
                 )
         }
+
+    private fun suggestionMode(
+        text: String,
+        cursor: Int,
+        mentions: List<dev.opencode.mobile.domain.agent.AgentMention>,
+    ): ComposerSuggestionMode =
+        ComposerMentionRouting.suggestionMode(
+            text = text,
+            cursor = cursor,
+            mentions = mentions,
+            allowsMentions = allowsMentions,
+            allowsSlashCommands = allowsSlashCommands,
+        )
 
     private fun formatSentTime(epochMs: Long): String =
         Instant

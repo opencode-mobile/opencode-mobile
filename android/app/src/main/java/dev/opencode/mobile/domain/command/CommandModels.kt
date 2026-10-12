@@ -48,6 +48,9 @@ sealed class ComposerSubmitIntent {
         val skillId: String,
         val text: String,
     ) : ComposerSubmitIntent()
+
+    /** Slash text on an engine that has no command catalogue. Nothing is sent. */
+    data object Ignored : ComposerSubmitIntent()
 }
 
 sealed class CommandError : Exception() {

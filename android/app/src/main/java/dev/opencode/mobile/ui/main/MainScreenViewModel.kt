@@ -512,6 +512,8 @@ class MainScreenViewModel
 
         fun showsHomeSettle(): Boolean = SessionCapabilities.forProfile(activeConnectionManager.currentProfile()).showsSettle
 
+        fun showsTerminal(): Boolean = activeConnectionManager.currentCapabilities().supportsTerminal
+
         fun onSettleGesture(
             sessionId: String,
             title: String,
