@@ -17,6 +17,14 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -35,6 +43,7 @@ import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import kotlin.math.PI
 import kotlin.math.cos
+import kotlin.math.exp
 import kotlin.math.sin
 
 enum class OpenCodeDictationCardVariant {
@@ -62,8 +71,16 @@ data class ComposerDictationCardModel(
 )
 
 private const val DictationBarCount = 24
-private val DictationOrbCanvasSize = 132.dp
+private const val DictationOrbGrowth = 0.18f
+private const val DictationHaloGrowth = 0.6f
+private const val DictationHaloAlpha = 0.22f
+private const val DictationAttackSeconds = 0.05f
+private const val DictationReleaseSeconds = 0.22f
+private val DictationOrbCanvasSize = 148.dp
 private val DictationOrbSize = 64.dp
+private val DictationBarOrbit = 40.dp
+private val DictationBarMin = 4.dp
+private val DictationBarMax = 28.dp
 private val DictationTranscriptMaxHeight = 78.dp
 
 @Composable
@@ -155,8 +172,20 @@ private fun DictationOrb(
     level: Float,
     finishing: Boolean,
 ) {
-    val clamped = level.coerceIn(0f, 1f)
-    val scale = 1f + clamped * 0.08f
+    val target by rememberUpdatedState(if (finishing) 0f else level.coerceIn(0f, 1f))
+    var displayed by remember { mutableFloatStateOf(0f) }
+    var seconds by remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(Unit) {
+        var lastFrameNanos = 0L
+        while (true) {
+            withFrameNanos { now ->
+                val dt = if (lastFrameNanos == 0L) 0f else ((now - lastFrameNanos) / 1_000_000_000f).coerceIn(0f, 0.1f)
+                lastFrameNanos = now
+                seconds += dt
+                displayed = smoothDictationLevel(displayed, target, dt)
+            }
+        }
+    }
     val color = openCodeColor(if (finishing) "success" else "interactive")
     val glyph = openCodeColor("text-on-brand-base")
     Box(
@@ -165,14 +194,21 @@ private fun DictationOrb(
     ) {
         Canvas(modifier = Modifier.matchParentSize()) {
             val center = this.center
-            val inner = 40.dp.toPx()
-            val minBar = 4.dp.toPx()
-            val maxBar = 16.dp.toPx()
-            val stroke = 2.5.dp.toPx()
+            val current = displayed
+            val time = seconds
+            val orbRadius = DictationOrbSize.toPx() / 2f
+            drawCircle(
+                color = color.copy(alpha = DictationHaloAlpha * current),
+                radius = orbRadius * (1f + DictationHaloGrowth * current),
+                center = center,
+            )
+            val inner = DictationBarOrbit.toPx()
+            val minBar = DictationBarMin.toPx()
+            val maxBar = DictationBarMax.toPx()
+            val stroke = 3.dp.toPx()
             repeat(DictationBarCount) { index ->
                 val angle = (index.toFloat() / DictationBarCount) * (2f * PI.toFloat()) - (PI.toFloat() / 2f)
-                val envelope = 0.55f + 0.45f * ((sin(angle * 3f) + 1f) / 2f)
-                val length = minBar + (maxBar - minBar) * clamped * envelope
+                val length = minBar + (maxBar - minBar) * dictationBarExtent(index, current, time)
                 val cosAngle = cos(angle)
                 val sinAngle = sin(angle)
                 drawLine(
@@ -189,6 +225,7 @@ private fun DictationOrb(
                 Modifier
                     .size(DictationOrbSize)
                     .graphicsLayer {
+                        val scale = 1f + DictationOrbGrowth * displayed
                         scaleX = scale
                         scaleY = scale
                     }.clip(CircleShape)
@@ -205,6 +242,28 @@ private fun DictationOrb(
     }
 }
 
+/** Fast attack, slower release, so speech pops and pauses settle. */
+internal fun smoothDictationLevel(
+    current: Float,
+    target: Float,
+    dtSeconds: Float,
+): Float {
+    if (dtSeconds <= 0f) return current
+    val tau = if (target > current) DictationAttackSeconds else DictationReleaseSeconds
+    return current + (target - current) * (1f - exp(-dtSeconds / tau))
+}
+
+/** Bar length as a fraction of its range: a small idle breath plus a per-bar wave scaled by level. */
+internal fun dictationBarExtent(
+    index: Int,
+    level: Float,
+    seconds: Float,
+): Float {
+    val wave = 0.5f + 0.25f * sin(seconds * 7f + index * 0.9f) + 0.25f * sin(seconds * 11f - index * 1.3f)
+    val idle = 0.06f * (0.5f + 0.5f * sin(seconds * 2.4f + index * 0.5f))
+    return (idle + level * (0.35f + 0.65f * wave)).coerceIn(0f, 1f)
+}
+
 @Composable
 private fun DictationTranscript(
     committed: String,
@@ -212,12 +271,17 @@ private fun DictationTranscript(
 ) {
     val strong = openCodeColor("text-strong")
     val weak = openCodeColor("text-weak")
+    val scrollState = rememberScrollState()
+    // Follow the newest words as the transcript grows past the visible lines.
+    LaunchedEffect(scrollState) {
+        snapshotFlow { scrollState.maxValue }.collect { scrollState.animateScrollTo(it) }
+    }
     Box(
         modifier =
             Modifier
                 .fillMaxWidth()
                 .heightIn(max = DictationTranscriptMaxHeight)
-                .verticalScroll(rememberScrollState()),
+                .verticalScroll(scrollState),
         contentAlignment = Alignment.Center,
     ) {
         if (committed.isEmpty() && volatileTail.isEmpty()) {
