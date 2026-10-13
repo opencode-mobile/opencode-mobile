@@ -522,6 +522,17 @@ fun SessionChatScreen(
                         )
                         add(
                             OpenCodeOverflowMenuEntry(
+                                title = "Fork session",
+                                icon = OpenCodeIcons.CallSplit,
+                                enabled = sessionCreated,
+                                onClick = {
+                                    menuExpanded = false
+                                    viewModel.openForkSession()
+                                },
+                            ),
+                        )
+                        add(
+                            OpenCodeOverflowMenuEntry(
                                 title = "Browse files",
                                 icon = OpenCodeIcons.Folder,
                                 enabled = sessionCreated,
@@ -1107,6 +1118,7 @@ fun SessionChatScreen(
             target = messageActionsTarget,
             onDismiss = { messageActionsTarget = null },
             onRevertMessage = viewModel::revertMessage,
+            onForkFromMessage = viewModel::forkFromMessage,
         )
 
         SessionChatPendingPromptsSheet(

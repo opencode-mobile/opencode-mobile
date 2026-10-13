@@ -4,12 +4,14 @@ import UIKit
 struct SessionChatMessageActionsTarget: Equatable {
     let id: String
     let text: String
+    /// True for outgoing user messages: they offer "Revert message" and "Fork from here".
     let showsRevertMessage: Bool
 }
 
 struct SessionChatMessageActionsSheetModifier: ViewModifier {
     @Binding var target: SessionChatMessageActionsTarget?
     let onRevertMessage: (String) -> Void
+    let onForkFromMessage: (String) -> Void
 
     func body(content: Content) -> some View {
         content
@@ -46,6 +48,18 @@ struct SessionChatMessageActionsSheetModifier: ViewModifier {
                     self.target = nil
                 }
             )
+            OpenCodeBottomSheetEntry(
+                title: "Fork from here",
+                startDecorator: .icon(.callSplit, accessibilityLabel: "Fork from here"),
+                action: {
+                    logAction(ProductAnalytics.Action.messageActionsFork)
+                    let messageID = target?.id
+                    self.target = nil
+                    if let messageID {
+                        onForkFromMessage(messageID)
+                    }
+                }
+            )
         }
         OpenCodeBottomSheetEntry(
             title: "Copy message",
@@ -72,12 +86,14 @@ struct SessionChatMessageActionsSheetModifier: ViewModifier {
 extension View {
     func sessionChatMessageActionsSheet(
         target: Binding<SessionChatMessageActionsTarget?>,
-        onRevertMessage: @escaping (String) -> Void
+        onRevertMessage: @escaping (String) -> Void,
+        onForkFromMessage: @escaping (String) -> Void
     ) -> some View {
         modifier(
             SessionChatMessageActionsSheetModifier(
                 target: target,
-                onRevertMessage: onRevertMessage
+                onRevertMessage: onRevertMessage,
+                onForkFromMessage: onForkFromMessage
             )
         )
     }
