@@ -3965,6 +3965,15 @@ struct SessionChatViewModelTests {
         #expect(viewModel.uiState.dictation?.volatile == "ger")
     }
 
+    @Test func sessionChatFocusesAndReleasesViewReporter() {
+        let reporter = RecordingSessionViewReporter()
+        let viewModel = makeViewModel(sessionViewReporter: reporter)
+
+        #expect(reporter.calls == ["focus:ses-1"])
+        viewModel.stopObserving()
+        #expect(reporter.calls == ["focus:ses-1", "release:ses-1"])
+    }
+
     private func makeViewModel(
         messageRepository: (any MessageRepository)? = nil,
         eventStream: FakeForegroundEventStream? = nil,
@@ -3983,7 +3992,8 @@ struct SessionChatViewModelTests {
         serverProtocol: ServerProtocol = .v1,
         liveUpdates: any LiveUpdates = FixedLiveUpdates(),
         clock: any SyncClock = SystemSyncClock(),
-        catalogRetryDelaysMs: [Int] = []
+        catalogRetryDelaysMs: [Int] = [],
+        sessionViewReporter: (any SessionViewReporter)? = nil
     ) -> SessionChatViewModel {
         let eventStream = eventStream ?? FakeForegroundEventStream()
         // Mutations (send/rename/fork/new/permissions) require Connected; default fakes start Idle.
@@ -4025,6 +4035,7 @@ struct SessionChatViewModelTests {
             permissionLiveStore: permissionLiveStore,
             questionLiveStore: questionLiveStore,
             sessionReadyStore: EmptySessionReadyStore(),
+            sessionViewReporter: sessionViewReporter,
             sessionStatusLiveStore: sessionStatusLiveStore,
             foregroundEventStream: eventStream,
             sessionModelSelectionStore: selectionStore,
@@ -5285,4 +5296,13 @@ private struct EmptyConnectionProfileStore: ConnectionProfileStore {
     func removeWorktree(serverBaseURL: String, worktree: String) async {}
     func setAddedWorktrees(serverBaseURL: String, worktrees: [String]) async {}
     func clearAll() async {}
+}
+
+@MainActor
+private final class RecordingSessionViewReporter: SessionViewReporter {
+    private(set) var calls: [String] = []
+
+    func focus(sessionId: String) { calls.append("focus:\(sessionId)") }
+    func release(sessionId: String) { calls.append("release:\(sessionId)") }
+    func clearCache() { calls.append("clearCache") }
 }

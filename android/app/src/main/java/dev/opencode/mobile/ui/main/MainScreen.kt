@@ -29,6 +29,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
 import dev.opencode.mobile.domain.connection.ConnectionProfileIdentity
+import dev.opencode.mobile.domain.session.SessionIdleOutcome
 import dev.opencode.mobile.domain.session.SessionSummary
 import dev.opencode.mobile.domain.time.RelativeTimeFormatting
 import dev.opencode.mobile.theme.LetterAccent
@@ -1048,11 +1049,19 @@ internal fun List<ProjectSectionUi>.toHomeChromeProjects(): List<SessionListHome
 }
 
 @Suppress("UNUSED_PARAMETER")
-private fun SessionSummary.toSessionListStatus(hasPendingPermission: Boolean = false): SessionListStatus =
+internal fun SessionSummary.toSessionListStatus(hasPendingPermission: Boolean = false): SessionListStatus =
     when {
         statusLabel == "Working" -> SessionListStatus.Running
         statusLabel?.startsWith("Retrying") == true -> SessionListStatus.Retrying
-        else -> if (isReady) SessionListStatus.Ready else SessionListStatus.Idle
+        // v2: server read state. Only set on servers that track it, so v1 keeps Ready.
+        unreadOutcome != null ->
+            when (unreadOutcome) {
+                SessionIdleOutcome.Succeeded -> SessionListStatus.Done
+                SessionIdleOutcome.Failed -> SessionListStatus.Failed
+                SessionIdleOutcome.Interrupted -> SessionListStatus.Stopped
+            }
+        isReady -> SessionListStatus.Ready
+        else -> SessionListStatus.Idle
     }
 
 private fun SessionSummary.retryAttempt(): Int? =

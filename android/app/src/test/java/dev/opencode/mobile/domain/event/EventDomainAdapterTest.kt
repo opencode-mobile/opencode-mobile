@@ -1345,6 +1345,41 @@ class EventDomainAdapterTest {
     }
 
     @Test
+    fun sessionViewed_parsesV2PlainEvent() {
+        val event =
+            adapter.parseEvent(
+                """{"id":"evt_9","type":"session.viewed","data":{"sessionID":"ses-1","idle":1700000000123}}""",
+            )!!
+
+        assertEquals("session.viewed", event.type)
+        assertEquals("ses-1", event.sessionId)
+        assertFalse(event.triggersHomeRefresh)
+        assertEquals(SessionViewedUpdate("ses-1", 1_700_000_000_123L), adapter.sessionViewed(event))
+    }
+
+    @Test
+    fun sessionViewed_parsesSyncEnvelope() {
+        val event =
+            adapter.parseEvent(
+                """{"payload":{"type":"sync","syncEvent":{"id":"evt_10","type":"session.viewed.1","data":{"sessionID":"ses-2","idle":42}}}}""",
+            )!!
+
+        assertEquals("session.viewed", event.type)
+        assertEquals("ses-2", event.sessionId)
+        assertEquals("evt_10", event.id)
+        assertEquals(SessionViewedUpdate("ses-2", 42L), adapter.sessionViewed(event))
+    }
+
+    @Test
+    fun sessionViewed_ignoresOtherEventsAndMissingWatermark() {
+        val idle = adapter.parseEvent("""{"type":"session.execution.succeeded","data":{"sessionID":"ses-1"}}""")!!
+        val noIdle = adapter.parseEvent("""{"type":"session.viewed","data":{"sessionID":"ses-1"}}""")!!
+
+        assertNull(adapter.sessionViewed(idle))
+        assertNull(adapter.sessionViewed(noIdle))
+    }
+
+    @Test
     fun sessionTitleUpdate_ignoresNonUpdatedEvents() {
         val event =
             adapter.parseEvent(

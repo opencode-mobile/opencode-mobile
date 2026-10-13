@@ -144,6 +144,9 @@ nonisolated private struct CachedSessionPayload: Codable, Sendable {
     let updatedAtEpochMs: Int64?
     let archivedAtEpochMs: Int64?
     let revert: CachedSessionRevertPayload?
+    let idleAtEpochMs: Int64?
+    let viewedAtEpochMs: Int64?
+    let idleOutcome: String?
 }
 
 nonisolated private struct CachedSessionRevertPayload: Codable, Sendable {
@@ -416,7 +419,10 @@ private extension Session {
             createdAtEpochMs: createdAtEpochMs,
             updatedAtEpochMs: updatedAtEpochMs,
             archivedAtEpochMs: archivedAtEpochMs,
-            revert: revert?.toCachePayload()
+            revert: revert?.toCachePayload(),
+            idleAtEpochMs: idleAtEpochMs,
+            viewedAtEpochMs: viewedAtEpochMs,
+            idleOutcome: idleOutcome?.rawValue
         )
     }
 }
@@ -435,7 +441,10 @@ private extension CachedSessionPayload {
             createdAtEpochMs: createdAtEpochMs,
             updatedAtEpochMs: updatedAtEpochMs,
             archivedAtEpochMs: archivedAtEpochMs,
-            revert: revert?.toDomain()
+            revert: revert?.toDomain(),
+            idleAtEpochMs: idleAtEpochMs,
+            viewedAtEpochMs: viewedAtEpochMs,
+            idleOutcome: SessionIdleOutcome(wireValue: idleOutcome)
         )
     }
 }

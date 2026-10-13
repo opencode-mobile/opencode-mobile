@@ -22,6 +22,7 @@ final class SessionChatViewModel {
     private let inbox: SessionChatInbox
     private let sessionRepository: any SessionRepository
     private let sessionReadyStore: any SessionReadyStore
+    private let sessionViewReporter: any SessionViewReporter
     private let foregroundEventStream: any ForegroundEventStream
     /// Invalidates in-flight `withObservationTracking` for the collapse preference.
     private var collapsePreferenceGeneration = 0
@@ -81,6 +82,7 @@ final class SessionChatViewModel {
         questionLiveStore: (any QuestionLiveStore)? = nil,
         sessionTodoLiveStore: (any SessionTodoLiveStore)? = nil,
         sessionReadyStore: (any SessionReadyStore)? = nil,
+        sessionViewReporter: (any SessionViewReporter)? = nil,
         sessionStatusLiveStore: any SessionStatusLiveStore,
         foregroundEventStream: any ForegroundEventStream,
         sessionModelSelectionStore: any SessionModelSelectionStore,
@@ -111,6 +113,7 @@ final class SessionChatViewModel {
         )
         self.sessionRepository = sessionRepository
         self.sessionReadyStore = sessionReadyStore ?? EmptySessionReadyStore()
+        self.sessionViewReporter = sessionViewReporter ?? EmptySessionViewReporter()
         self.foregroundEventStream = foregroundEventStream
         self.timeline = SessionChatTimeline(
             sessionID: sessionID,
@@ -202,6 +205,7 @@ final class SessionChatViewModel {
         }
         OpenCodeLog.sessionChat.info("start observing session=\(self.sessionID)")
         sessionReadyStore.setFocusedSession(sessionID: sessionID, directory: worktree)
+        sessionViewReporter.focus(sessionId: sessionID)
         syncCoordinator?.markFocused(.transcript(directory: worktree, sessionID: sessionID))
         // Peers may have changed while the screen was away; re-resolve smart label.
         refreshProjectIdentity()
@@ -1102,6 +1106,7 @@ final class SessionChatViewModel {
         // Only release our own focus: the next Session Chat (child, parent, fork) may already
         // have focused itself before this screen disappears.
         sessionReadyStore.releaseFocusedSession(sessionID: sessionID)
+        sessionViewReporter.release(sessionId: sessionID)
         syncCoordinator?.markFocused(nil)
         reviewChanges.stop()
         repoStrip.stop()
@@ -1225,6 +1230,7 @@ final class SessionChatViewModel {
         expandedStepParagraphs = [:]
         resetWorkingFooter()
         sessionReadyStore.setFocusedSession(sessionID: id, directory: worktree)
+        sessionViewReporter.focus(sessionId: id)
         timeline.rebind(sessionID: id)
         composer.rebind(sessionID: id)
         reviewChanges.rebind(sessionID: id)

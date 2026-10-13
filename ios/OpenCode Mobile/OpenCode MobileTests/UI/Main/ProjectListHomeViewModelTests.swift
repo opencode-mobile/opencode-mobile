@@ -939,6 +939,139 @@ struct ProjectListHomeViewModelTests {
         }
         #expect(live)
     }
+
+    // MARK: - Server unread (v2 session.viewed)
+
+    @Test func v2_serverUnreadMapsOutcomeAndIgnoresReadyIds() async {
+        var done = Session(id: "ses-done", title: "Done", slug: nil, projectID: nil, directory: "/repo", parentID: nil, updatedAtEpochMs: 4)
+        done.idleAtEpochMs = 100
+        // Missing outcome (older v2 server) reads as succeeded → Done.
+        done.idleOutcome = nil
+        var failed = Session(id: "ses-failed", title: "Failed", slug: nil, projectID: nil, directory: "/repo", parentID: nil, updatedAtEpochMs: 3)
+        failed.idleAtEpochMs = 100
+        failed.viewedAtEpochMs = 50
+        failed.idleOutcome = .failed
+        var stopped = Session(id: "ses-stopped", title: "Stopped", slug: nil, projectID: nil, directory: "/repo", parentID: nil, updatedAtEpochMs: 2)
+        stopped.idleAtEpochMs = 100
+        stopped.idleOutcome = .interrupted
+        var read = Session(id: "ses-read", title: "Read", slug: nil, projectID: nil, directory: "/repo", parentID: nil, updatedAtEpochMs: 1)
+        read.idleAtEpochMs = 100
+        read.viewedAtEpochMs = 100
+        read.idleOutcome = .succeeded
+        let sessions = [done, failed, stopped, read]
+        let sessionLive = ControllableSessionLiveStore()
+        let statusLive = ControllableStatusLiveStore()
+        let readyLive = ControllableReadyStore()
+        sessionLive.emit(directory: "/repo", sessions: sessions)
+        // Local Ready ids are v1 only; v2 must ignore them.
+        readyLive.emit(directory: "/repo", ids: ["ses-read"])
+        statusLive.emit(directory: "/repo", statuses: [:])
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            sessionRepository: FakeSessionRepository(sessions: sessions),
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"]),
+            serverProtocol: .v2,
+            sessionLiveStoreOverride: sessionLive,
+            sessionStatusLiveStoreOverride: statusLive,
+            sessionReadyStoreOverride: readyLive
+        )
+
+        await viewModel.refresh()
+        let mapped = await waitUntil {
+            homeSession(viewModel, id: "ses-done")?.sessionListStatus() == .done
+        }
+        #expect(mapped)
+        #expect(homeSession(viewModel, id: "ses-done")?.unreadOutcome == .succeeded)
+        #expect(homeSession(viewModel, id: "ses-read")?.unreadOutcome == nil)
+        #expect(homeSession(viewModel, id: "ses-failed")?.sessionListStatus() == .failed)
+        #expect(homeSession(viewModel, id: "ses-stopped")?.sessionListStatus() == .stopped)
+        #expect(homeSession(viewModel, id: "ses-read")?.sessionListStatus() == .idle)
+        #expect(homeSession(viewModel, id: "ses-read")?.isReady == false)
+    }
+
+    @Test func v2_runningWinsOverServerUnread() async {
+        var session = Session(id: "ses-1", title: "Alpha", slug: nil, projectID: nil, directory: "/repo", parentID: nil, updatedAtEpochMs: 1)
+        session.idleAtEpochMs = 100
+        let sessionLive = ControllableSessionLiveStore()
+        let statusLive = ControllableStatusLiveStore()
+        sessionLive.emit(directory: "/repo", sessions: [session])
+        statusLive.emit(
+            directory: "/repo",
+            statuses: ["ses-1": SessionStatus(sessionID: "ses-1", raw: ["type": "busy"])]
+        )
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            sessionRepository: FakeSessionRepository(sessions: [session]),
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"]),
+            serverProtocol: .v2,
+            sessionLiveStoreOverride: sessionLive,
+            sessionStatusLiveStoreOverride: statusLive,
+            sessionReadyStoreOverride: ControllableReadyStore()
+        )
+
+        await viewModel.refresh()
+        let running = await waitUntil {
+            homeSession(viewModel, id: "ses-1")?.sessionListStatus() == .running
+        }
+        #expect(running)
+    }
+
+    @Test func v2_serverUnreadHiddenUntilStatusSeeded() async {
+        var session = Session(id: "ses-1", title: "Alpha", slug: nil, projectID: nil, directory: "/repo", parentID: nil, updatedAtEpochMs: 1)
+        session.idleAtEpochMs = 100
+        let sessionLive = ControllableSessionLiveStore()
+        let statusLive = ControllableStatusLiveStore()
+        sessionLive.emit(directory: "/repo", sessions: [session])
+        statusLive.emit(directory: "/repo", snapshot: SessionActivitySnapshot(entries: [:], seeded: false))
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            sessionRepository: FakeSessionRepository(sessions: [session]),
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"]),
+            serverProtocol: .v2,
+            sessionLiveStoreOverride: sessionLive,
+            sessionStatusLiveStoreOverride: statusLive,
+            sessionReadyStoreOverride: ControllableReadyStore()
+        )
+
+        await viewModel.refresh()
+        let listed = await waitUntil { homeSession(viewModel, id: "ses-1") != nil }
+        #expect(listed)
+        #expect(homeSession(viewModel, id: "ses-1")?.sessionListStatus() == .idle)
+
+        statusLive.emit(directory: "/repo", statuses: [:])
+        let done = await waitUntil {
+            homeSession(viewModel, id: "ses-1")?.sessionListStatus() == .done
+        }
+        #expect(done)
+    }
+
+    @Test func v1_keepsLocalReadyAndIgnoresServerFields() async {
+        var session = Session(id: "ses-1", title: "Alpha", slug: nil, projectID: nil, directory: "/repo", parentID: nil, updatedAtEpochMs: 1)
+        // A v1 session never carries these, but even if it did v1 must not read them.
+        session.idleAtEpochMs = 100
+        session.idleOutcome = .failed
+        let sessionLive = ControllableSessionLiveStore()
+        let statusLive = ControllableStatusLiveStore()
+        let readyLive = ControllableReadyStore()
+        sessionLive.emit(directory: "/repo", sessions: [session])
+        readyLive.emit(directory: "/repo", ids: ["ses-1"])
+        statusLive.emit(directory: "/repo", statuses: [:])
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            sessionRepository: FakeSessionRepository(sessions: [session]),
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"]),
+            sessionLiveStoreOverride: sessionLive,
+            sessionStatusLiveStoreOverride: statusLive,
+            sessionReadyStoreOverride: readyLive
+        )
+
+        await viewModel.refresh()
+        let ready = await waitUntil {
+            homeSession(viewModel, id: "ses-1")?.sessionListStatus() == .ready
+        }
+        #expect(ready)
+        #expect(homeSession(viewModel, id: "ses-1")?.unreadOutcome == nil)
+    }
 }
 
 @MainActor
@@ -955,6 +1088,7 @@ private func makeViewModel(
     messageRepository: any MessageRepository = FakeMessageRepository(),
     connectionProfileStore: FakeConnectionProfileStore = FakeConnectionProfileStore(),
     eventStream: FakeForegroundEventStream? = nil,
+    serverProtocol: ServerProtocol? = nil,
     invalidationAckTimeoutMs: Int = LiveStoreRefreshPolicy.invalidationAckTimeoutMs,
     sessionLiveStoreOverride: (any SessionLiveStore)? = nil,
     sessionStatusLiveStoreOverride: (any SessionStatusLiveStore)? = nil,
@@ -964,7 +1098,10 @@ private func makeViewModel(
     // Mutations (createSession) require Connected; default fakes start Idle.
     eventStream.setConnectionState(.connected)
     let manager = ActiveConnectionManager()
-    manager.apply(ConnectionProfile(baseURL: "http://127.0.0.1:4096/", username: "opencode", password: ""))
+    manager.apply(
+        ConnectionProfile(baseURL: "http://127.0.0.1:4096/", username: "opencode", password: ""),
+        serverProtocol: serverProtocol
+    )
     let coordinator = ConnectionSessionCoordinator(
         activeConnectionManager: manager,
         connectionProfileStore: connectionProfileStore

@@ -25,6 +25,14 @@ nonisolated struct OpencodeEvent: Sendable, Equatable {
         Self.statusRefreshTypes.contains(type)
     }
 
+    /// v2: the server-wide viewed watermark moved (`{ sessionID, idle }`).
+    static let sessionViewedType = "session.viewed"
+
+    /// A run ended (v1 native `session.idle`; v2 projects `session.execution.*` onto it).
+    var isSessionRunEnd: Bool {
+        type == "session.idle"
+    }
+
     var triggersMessagePartUpdate: Bool {
         type == "message.part.updated"
     }

@@ -1,5 +1,7 @@
 package dev.opencode.mobile.domain.live
 
+import dev.opencode.mobile.domain.connection.ServerCapabilities
+import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogBuffer
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogger
 import dev.opencode.mobile.domain.event.EventDomainAdapter
@@ -2790,6 +2792,126 @@ class SessionLiveStoreTest {
             assertEquals(1, emissions.size)
             assertEquals("First", emissions.single().single().title)
         }
+
+    @Test
+    fun sessionViewed_patchesViewedMonotonicallyWithoutRefetch() =
+        runTest(testDispatcher) {
+            val unread = testSession(id = "ses-1", title = "First").copy(idleAtEpochMs = 30L, viewedAtEpochMs = 10L)
+            val repository = FakeSessionRepository(sessions = listOf(unread))
+            val eventStream = FakeForegroundEventStream()
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
+            val store = sessionStore(repository, eventStream, ServerProtocol.V2)
+            val emissions = mutableListOf<List<Session>>()
+            val collectJob = launch { store.observeSessions("/repo").collect { emissions.add(it.sessions) } }
+            advanceUntilIdle()
+            val fetchesBefore = repository.listSessionsCallCount
+            assertTrue(emissions.last().single().isServerUnread)
+
+            eventStream.emit(viewedEvent("ses-1", idle = 30L))
+            advanceTimeBy(550)
+            advanceUntilIdle()
+            assertEquals(30L, emissions.last().single().viewedAtEpochMs)
+            assertFalse(emissions.last().single().isServerUnread)
+            val emissionsAfterPatch = emissions.size
+
+            eventStream.emit(viewedEvent("ses-1", idle = 20L))
+            advanceTimeBy(550)
+            advanceUntilIdle()
+            assertEquals(emissionsAfterPatch, emissions.size)
+            assertEquals(30L, emissions.last().single().viewedAtEpochMs)
+            assertEquals(fetchesBefore, repository.listSessionsCallCount)
+
+            // A REST list that has not caught up yet must not bring the unread state back.
+            eventStream.emit(OpencodeEvent(type = "session.updated", sessionId = "ses-1"))
+            advanceTimeBy(550)
+            advanceUntilIdle()
+            collectJob.cancel()
+
+            assertEquals(fetchesBefore + 1, repository.listSessionsCallCount)
+            assertEquals(30L, emissions.last().single().viewedAtEpochMs)
+        }
+
+    @Test
+    fun applySessionViewed_patchesListAndKnownSession() =
+        runTest(testDispatcher) {
+            val unread = testSession(id = "ses-1", title = "First").copy(idleAtEpochMs = 30L)
+            val repository = FakeSessionRepository(sessions = listOf(unread))
+            val eventStream = FakeForegroundEventStream()
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
+            val store = sessionStore(repository, eventStream, ServerProtocol.V2)
+            val emissions = mutableListOf<List<Session>>()
+            val known = mutableListOf<Session?>()
+            val collectJob = launch { store.observeSessions("/repo").collect { emissions.add(it.sessions) } }
+            val knownJob = launch { store.observeKnownSession("ses-1").collect { known.add(it) } }
+            advanceUntilIdle()
+
+            store.applySessionViewed("ses-1", 30L)
+            advanceUntilIdle()
+            collectJob.cancel()
+            knownJob.cancel()
+
+            assertEquals(30L, emissions.last().single().viewedAtEpochMs)
+            assertEquals(30L, known.last()?.viewedAtEpochMs)
+            assertEquals(1, repository.listSessionsCallCount)
+        }
+
+    @Test
+    fun runEnd_refetchesListOnV2Only() =
+        runTest(testDispatcher) {
+            for (protocol in listOf(ServerProtocol.V1, ServerProtocol.V2)) {
+                val repository = FakeSessionRepository(sessions = listOf(testSession(id = "ses-1", title = "First")))
+                val eventStream = FakeForegroundEventStream()
+                eventStream.setConnectionState(EventStreamConnectionState.Connected)
+                val store = sessionStore(repository, eventStream, protocol)
+                val collectJob = launch { store.observeSessions("/repo").collect { } }
+                advanceUntilIdle()
+                val fetchesBefore = repository.listSessionsCallCount
+
+                eventStream.emit(OpencodeEvent(type = "session.idle", sessionId = "ses-1"))
+                advanceTimeBy(550)
+                advanceUntilIdle()
+                collectJob.cancel()
+
+                val expected = if (protocol == ServerProtocol.V2) fetchesBefore + 1 else fetchesBefore
+                assertEquals("protocol=$protocol", expected, repository.listSessionsCallCount)
+            }
+        }
+
+    private fun sessionStore(
+        repository: FakeSessionRepository,
+        eventStream: FakeForegroundEventStream,
+        protocol: ServerProtocol,
+    ): DefaultSessionLiveStore =
+        DefaultSessionLiveStore(
+            repository,
+            eventStream,
+            LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher)),
+            sessionCache = NoOpSessionCache,
+            syncCoordinator =
+                testSyncCoordinator(
+                    eventStream = eventStream,
+                    worldSignals = SilentWorldSignals,
+                    scope = CoroutineScope(SupervisorJob() + testDispatcher),
+                    nowMs = { testDispatcher.scheduler.currentTime },
+                    wait = { delay(1) },
+                ),
+            eventDomainAdapter = EventDomainAdapter(Json { ignoreUnknownKeys = true }),
+            capabilities = { ServerCapabilities.forProtocol(protocol) },
+        )
+
+    private fun viewedEvent(
+        sessionId: String,
+        idle: Long,
+    ): OpencodeEvent =
+        OpencodeEvent(
+            type = "session.viewed",
+            sessionId = sessionId,
+            rawProperties =
+                buildJsonObject {
+                    put("sessionID", sessionId)
+                    put("idle", idle)
+                },
+        )
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)

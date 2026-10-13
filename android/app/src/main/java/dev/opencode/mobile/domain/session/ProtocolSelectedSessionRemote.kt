@@ -182,4 +182,9 @@ internal class ProtocolSelectedSessionRemote(
         inboxId: String,
         directory: String?,
     ): Boolean = selected().queuePendingPrompt(sessionId, inboxId, directory)
+
+    override suspend fun markSessionViewed(
+        sessionId: String,
+        idleAtEpochMs: Long,
+    ) = selected().markSessionViewed(sessionId, idleAtEpochMs)
 }

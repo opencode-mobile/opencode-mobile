@@ -13,8 +13,40 @@ struct Session: Sendable, Equatable {
     let updatedAtEpochMs: Int64?
     var archivedAtEpochMs: Int64? = nil
     var revert: SessionRevert? = nil
+    /// v2 only: when the latest run ended (strictly increasing per session).
+    var idleAtEpochMs: Int64? = nil
+    /// v2 only: server-wide "viewed up to" watermark for `idleAtEpochMs`.
+    var viewedAtEpochMs: Int64? = nil
+    /// v2 only: how the latest run ended.
+    var idleOutcome: SessionIdleOutcome? = nil
 
     var isArchived: Bool { archivedAtEpochMs != nil }
+
+    /// A finished run nobody has viewed yet (v2 server state; always false on v1).
+    var isServerUnread: Bool {
+        guard let idleAtEpochMs else { return false }
+        guard let viewedAtEpochMs else { return true }
+        return idleAtEpochMs > viewedAtEpochMs
+    }
+
+    /// Applies a `session.viewed` watermark; `viewedAtEpochMs` only moves forward.
+    func withViewed(idleAtEpochMs idle: Int64) -> Session {
+        var copy = self
+        copy.viewedAtEpochMs = max(viewedAtEpochMs ?? idle, idle)
+        return copy
+    }
+}
+
+/// How the latest run of a session ended, as reported by the v2 server.
+enum SessionIdleOutcome: String, Sendable, Equatable {
+    case succeeded
+    case failed
+    case interrupted
+
+    init?(wireValue: String?) {
+        guard let wireValue else { return nil }
+        self.init(rawValue: wireValue.lowercased())
+    }
 }
 
 struct SessionRevert: Sendable, Equatable {

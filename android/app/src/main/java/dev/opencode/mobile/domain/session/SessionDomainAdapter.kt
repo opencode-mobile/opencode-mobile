@@ -68,6 +68,9 @@ class SessionDomainAdapter {
             updatedAtEpochMs = dto.time?.updated,
             archivedAtEpochMs = dto.time?.archived,
             revert = dto.revert?.let(::toSessionRevert),
+            idleAtEpochMs = dto.time?.idle,
+            viewedAtEpochMs = dto.time?.viewed,
+            idleOutcome = SessionIdleOutcome.fromWire(dto.outcome),
         )
 
     fun toSessionStatusesFromActive(activeById: Map<String, ApiSessionActiveDto>): List<SessionStatus> =
@@ -108,6 +111,7 @@ class SessionDomainAdapter {
         statusLabel: String? = null,
         isReady: Boolean = false,
         statusStale: Boolean = false,
+        unreadOutcome: SessionIdleOutcome? = null,
     ): SessionSummary =
         SessionSummary(
             id = session.id,
@@ -117,6 +121,7 @@ class SessionDomainAdapter {
             updatedAtEpochMs = session.updatedAtEpochMs,
             isReady = isReady,
             statusStale = statusStale,
+            unreadOutcome = unreadOutcome,
         )
 
     fun toSessionStatus(

@@ -27,6 +27,7 @@ import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionActivitySnapshot
 import dev.opencode.mobile.domain.session.SessionDomainAdapter
+import dev.opencode.mobile.domain.session.SessionIdleOutcome
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionSummary
 import dev.opencode.mobile.domain.session.activeSessions
@@ -768,7 +769,10 @@ class MainScreenViewModel
                     .orEmpty()
             val summaries =
                 sessions.map { session ->
-                    sessionDomainAdapter.toSessionSummary(session)
+                    sessionDomainAdapter.toSessionSummary(
+                        session,
+                        unreadOutcome = session.homeUnreadOutcome(supportsSessionViewed()),
+                    )
                 }
             val displayName = ProjectDomainAdapter.displayNameFromWorktree(worktree)
             return ProjectSectionUi(
@@ -814,7 +818,10 @@ class MainScreenViewModel
                     .sortedByDescending { it.updatedAtEpochMs ?: 0L }
             val summaries =
                 sessions.map { session ->
-                    sessionDomainAdapter.toSessionSummary(session)
+                    sessionDomainAdapter.toSessionSummary(
+                        session,
+                        unreadOutcome = session.homeUnreadOutcome(supportsSessionViewed()),
+                    )
                 }
             return ProjectSectionUi(
                 worktree = worktree,
@@ -976,6 +983,8 @@ class MainScreenViewModel
         ) {
             val state = _uiState.value as? MainScreenUiState.Loaded ?: return
             val section = state.sections.firstOrNull { it.worktree == worktree } ?: return
+            // v2 servers own read state; the local per-device Ready ids stay a v1 fallback.
+            val serverReadState = supportsSessionViewed()
             val summaries =
                 sessions
                     .activeSessions()
@@ -990,8 +999,9 @@ class MainScreenViewModel
                                 } else {
                                     null
                                 },
-                            isReady = session.id in readyIds,
+                            isReady = !serverReadState && session.id in readyIds,
                             statusStale = snapshot.fromCache && !snapshot.seeded,
+                            unreadOutcome = session.homeUnreadOutcome(serverReadState),
                         )
                     }
             val updatedSection =
@@ -1005,6 +1015,8 @@ class MainScreenViewModel
                 }
             _uiState.value = state.copy(sections = updatedSections)
         }
+
+        private fun supportsSessionViewed(): Boolean = activeConnectionManager.currentCapabilities().supportsSessionViewed
 
         private fun clearProjectSessionCreateError() {
             setProjectSessionCreateError(null)
@@ -1137,3 +1149,7 @@ data class SessionOpenTarget(
     val worktree: String,
     val optimisticNavigationInstanceId: String? = null,
 )
+
+/** Unread finished-run outcome for Home; null when read or when the server has no read state. */
+internal fun Session.homeUnreadOutcome(serverReadState: Boolean): SessionIdleOutcome? =
+    if (serverReadState && isServerUnread) idleOutcome ?: SessionIdleOutcome.Succeeded else null

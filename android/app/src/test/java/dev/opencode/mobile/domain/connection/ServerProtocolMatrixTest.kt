@@ -13,12 +13,14 @@ class ServerProtocolMatrixTest {
                     supportsSessionMessageDiff = true,
                     supportsSessionArchive = true,
                     supportsFollowUpDelivery = false,
+                    supportsSessionViewed = false,
                 ),
                 Row(
                     ServerProtocol.V2,
                     supportsSessionMessageDiff = false,
                     supportsSessionArchive = false,
                     supportsFollowUpDelivery = true,
+                    supportsSessionViewed = true,
                 ),
             )
         for (row in rows) {
@@ -34,6 +36,10 @@ class ServerProtocolMatrixTest {
                 row.supportsFollowUpDelivery,
                 ServerCapabilities.forProtocol(row.protocol).supportsFollowUpDelivery,
             )
+            assertEquals(
+                row.supportsSessionViewed,
+                ServerCapabilities.forProtocol(row.protocol).supportsSessionViewed,
+            )
         }
     }
 
@@ -42,5 +48,6 @@ class ServerProtocolMatrixTest {
         val supportsSessionMessageDiff: Boolean,
         val supportsSessionArchive: Boolean,
         val supportsFollowUpDelivery: Boolean,
+        val supportsSessionViewed: Boolean,
     )
 }

@@ -23,6 +23,8 @@ nonisolated struct ServerCapabilities: Sendable, Equatable {
     let supportsSessionMessageDiff: Bool
     let supportsSessionArchive: Bool
     let supportsFollowUpDelivery: Bool
+    /// Server-tracked unread state (`time.idle` / `time.viewed`, `POST /view`, `session.viewed`).
+    let supportsSessionViewed: Bool
 
     static func forProtocol(_ serverProtocol: ServerProtocol) -> ServerCapabilities {
         switch serverProtocol {
@@ -30,13 +32,15 @@ nonisolated struct ServerCapabilities: Sendable, Equatable {
             return ServerCapabilities(
                 supportsSessionMessageDiff: true,
                 supportsSessionArchive: true,
-                supportsFollowUpDelivery: false
+                supportsFollowUpDelivery: false,
+                supportsSessionViewed: false
             )
         case .v2:
             return ServerCapabilities(
                 supportsSessionMessageDiff: false,
                 supportsSessionArchive: false,
-                supportsFollowUpDelivery: true
+                supportsFollowUpDelivery: true,
+                supportsSessionViewed: true
             )
         }
     }
