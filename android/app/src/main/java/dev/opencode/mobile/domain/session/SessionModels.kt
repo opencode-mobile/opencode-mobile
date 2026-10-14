@@ -15,9 +15,46 @@ data class Session(
     val updatedAtEpochMs: Long? = null,
     val archivedAtEpochMs: Long? = null,
     val revert: SessionRevert? = null,
+    /** v2 only: when the latest run ended. */
+    val idleAtEpochMs: Long? = null,
+    /** v2 only: server read watermark. */
+    val viewedAtEpochMs: Long? = null,
+    /** v2 only: how the latest run ended. */
+    val idleOutcome: SessionIdleOutcome? = null,
 ) {
     val isArchived: Boolean
         get() = archivedAtEpochMs != null
+
+    /** Server-tracked unread: a run ended after the last view acknowledgement. */
+    val isServerUnread: Boolean
+        get() {
+            val idle = idleAtEpochMs ?: return false
+            val viewed = viewedAtEpochMs ?: return true
+            return idle > viewed
+        }
+
+    /** Applies a view acknowledgement for [idleAtEpochMs]; the watermark only moves forward. */
+    fun withViewed(idleAtEpochMs: Long): Session {
+        val next = maxOf(viewedAtEpochMs ?: idleAtEpochMs, idleAtEpochMs)
+        return if (next == viewedAtEpochMs) this else copy(viewedAtEpochMs = next)
+    }
+}
+
+enum class SessionIdleOutcome {
+    Succeeded,
+    Failed,
+    Interrupted,
+    ;
+
+    companion object {
+        fun fromWire(value: String?): SessionIdleOutcome? =
+            when (value?.trim()?.lowercase()) {
+                "succeeded" -> Succeeded
+                "failed" -> Failed
+                "interrupted" -> Interrupted
+                else -> null
+            }
+    }
 }
 
 data class SessionRevert(
@@ -39,6 +76,8 @@ data class SessionSummary(
     val updatedAtEpochMs: Long? = null,
     val isReady: Boolean = false,
     val statusStale: Boolean = false,
+    /** v2 only: outcome of an unread finished run; null when read, running, or on v1. */
+    val unreadOutcome: SessionIdleOutcome? = null,
 )
 
 data class SessionStatus(

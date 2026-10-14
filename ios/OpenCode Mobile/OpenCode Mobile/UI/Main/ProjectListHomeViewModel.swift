@@ -910,6 +910,7 @@ final class ProjectListHomeViewModel {
                             directory: worktree,
                             readyIds: liveReadyIdsByWorktree[worktree] ?? []
                         ),
+                        unreadOutcome: unreadOutcome(for: session, directory: worktree),
                         statusIsStale: statusIsStale(for: session.id, directory: worktree)
                     )
                 }
@@ -1110,6 +1111,7 @@ final class ProjectListHomeViewModel {
                         worktree: worktree,
                         statusLabel: statusLabel(for: session.id, directory: worktree),
                         isReady: isReady(sessionID: session.id, directory: worktree, readyIds: readyIds),
+                        unreadOutcome: unreadOutcome(for: session, directory: worktree),
                         statusIsStale: statusIsStale(for: session.id, directory: worktree)
                     )
                 }
@@ -1144,9 +1146,21 @@ final class ProjectListHomeViewModel {
         liveStatusesByWorktree[directory]?.statusIsStale(for: sessionID) == true
     }
 
+    /// v1 only: the local per-device Ready ids. v2 reads unread state from the server instead.
     private func isReady(sessionID: String, directory: String, readyIds: Set<String>) -> Bool {
+        guard !activeConnectionManager.capabilities.supportsSessionViewed else { return false }
         guard liveStatusesByWorktree[directory]?.seeded == true else { return false }
         return readyIds.contains(sessionID)
+    }
+
+    /// v2 only: Done / Failed / Stopped for a finished run nobody has viewed. Same seeding gate as
+    /// Ready, so a session the status snapshot has not confirmed idle never flashes Done.
+    /// A missing outcome (older v2 server) reads as succeeded.
+    private func unreadOutcome(for session: Session, directory: String) -> SessionIdleOutcome? {
+        guard activeConnectionManager.capabilities.supportsSessionViewed else { return nil }
+        guard liveStatusesByWorktree[directory]?.seeded == true else { return nil }
+        guard session.isServerUnread else { return nil }
+        return session.idleOutcome ?? .succeeded
     }
 
     private func setProjectSessionCreateError(_ message: String?) {

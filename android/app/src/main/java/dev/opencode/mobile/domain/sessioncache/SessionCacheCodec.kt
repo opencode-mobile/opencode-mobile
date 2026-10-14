@@ -14,6 +14,7 @@ import dev.opencode.mobile.domain.message.MessageTokenUsage
 import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionActivity
+import dev.opencode.mobile.domain.session.SessionIdleOutcome
 import dev.opencode.mobile.domain.session.SessionRevert
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
@@ -138,6 +139,9 @@ internal data class CachedSessionPayload(
     val updatedAtEpochMs: Long? = null,
     val archivedAtEpochMs: Long? = null,
     val revert: CachedSessionRevertPayload? = null,
+    val idleAtEpochMs: Long? = null,
+    val viewedAtEpochMs: Long? = null,
+    val idleOutcome: String? = null,
 )
 
 @Serializable
@@ -248,6 +252,9 @@ private fun Session.toCachePayload(): CachedSessionPayload =
         updatedAtEpochMs = updatedAtEpochMs,
         archivedAtEpochMs = archivedAtEpochMs,
         revert = revert?.toCachePayload(),
+        idleAtEpochMs = idleAtEpochMs,
+        viewedAtEpochMs = viewedAtEpochMs,
+        idleOutcome = idleOutcome?.name,
     )
 
 private fun CachedSessionPayload.toDomain(): Session =
@@ -264,6 +271,9 @@ private fun CachedSessionPayload.toDomain(): Session =
         updatedAtEpochMs = updatedAtEpochMs,
         archivedAtEpochMs = archivedAtEpochMs,
         revert = revert?.toDomain(),
+        idleAtEpochMs = idleAtEpochMs,
+        viewedAtEpochMs = viewedAtEpochMs,
+        idleOutcome = SessionIdleOutcome.entries.firstOrNull { it.name == idleOutcome },
     )
 
 private fun SessionRevert.toCachePayload(): CachedSessionRevertPayload =

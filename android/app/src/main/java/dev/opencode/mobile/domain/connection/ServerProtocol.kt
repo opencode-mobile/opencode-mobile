@@ -28,6 +28,8 @@ data class ServerCapabilities(
     val supportsSessionMessageDiff: Boolean,
     val supportsSessionArchive: Boolean,
     val supportsFollowUpDelivery: Boolean,
+    /** Server tracks per-session read state (`time.idle`/`time.viewed`, `session.viewed`). */
+    val supportsSessionViewed: Boolean = false,
 ) {
     companion object {
         fun forProtocol(protocol: ServerProtocol): ServerCapabilities =
@@ -37,12 +39,14 @@ data class ServerCapabilities(
                         supportsSessionMessageDiff = true,
                         supportsSessionArchive = true,
                         supportsFollowUpDelivery = false,
+                        supportsSessionViewed = false,
                     )
                 ServerProtocol.V2 ->
                     ServerCapabilities(
                         supportsSessionMessageDiff = false,
                         supportsSessionArchive = false,
                         supportsFollowUpDelivery = true,
+                        supportsSessionViewed = true,
                     )
             }
     }

@@ -36,6 +36,8 @@ nonisolated struct V2SessionDTO: Decodable, Sendable {
     let time: SessionTimeDTO?
     let location: V2LocationDTO?
     let revert: SessionRevertDTO?
+    /// How the latest run ended: `succeeded` | `failed` | `interrupted`.
+    let outcome: String?
 
     private enum CodingKeys: String, CodingKey {
         case id
@@ -48,6 +50,7 @@ nonisolated struct V2SessionDTO: Decodable, Sendable {
         case time
         case location
         case revert
+        case outcome
     }
 
     init(from decoder: Decoder) throws {
@@ -62,7 +65,13 @@ nonisolated struct V2SessionDTO: Decodable, Sendable {
         time = try container.decodeIfPresent(SessionTimeDTO.self, forKey: .time)
         location = try container.decodeIfPresent(V2LocationDTO.self, forKey: .location)
         revert = try container.decodeIfPresent(SessionRevertDTO.self, forKey: .revert)
+        outcome = try? container.decodeIfPresent(String.self, forKey: .outcome)
     }
+}
+
+/// Body for `POST /api/session/{id}/view`.
+nonisolated struct V2ViewSessionRequestDTO: Encodable, Sendable {
+    let idle: Int64
 }
 
 nonisolated struct V2CreateSessionRequestDTO: Encodable, Sendable {

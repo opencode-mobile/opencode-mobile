@@ -27,6 +27,13 @@ data class V2SessionDto(
     val time: SessionTimeDto? = null,
     val location: V2LocationDto? = null,
     val revert: SessionRevertDto? = null,
+    /** `succeeded` | `failed` | `interrupted`; kept raw so unknown values never fail decoding. */
+    val outcome: String? = null,
+)
+
+@Serializable
+data class V2SessionViewRequestDto(
+    val idle: Long,
 )
 
 @Serializable

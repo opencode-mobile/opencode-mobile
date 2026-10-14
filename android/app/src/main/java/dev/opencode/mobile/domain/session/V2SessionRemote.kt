@@ -208,4 +208,11 @@ internal class V2SessionRemote(
         inboxId: String,
         directory: String?,
     ): Boolean = api.queueInboxV2(sessionId, inboxId)
+
+    override suspend fun markSessionViewed(
+        sessionId: String,
+        idleAtEpochMs: Long,
+    ) {
+        api.viewSessionV2(sessionId, idleAtEpochMs)
+    }
 }

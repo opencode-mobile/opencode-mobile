@@ -38,6 +38,8 @@ protocol SessionRepository: Sendable {
     func cancelPendingPrompt(sessionID: String, inboxID: String) async throws -> Bool
     func steerPendingPrompt(sessionID: String, inboxID: String) async throws -> Bool
     func queuePendingPrompt(sessionID: String, inboxID: String) async throws -> Bool
+    /// Acknowledges a finished run as viewed on the server (v2). No-op on v1.
+    func markSessionViewed(sessionId: String, idleAtEpochMs: Int64) async throws
 }
 
 /// How the server handled a compact request.
@@ -70,6 +72,7 @@ extension SessionRepository {
     func cancelPendingPrompt(sessionID _: String, inboxID _: String) async throws -> Bool { false }
     func steerPendingPrompt(sessionID _: String, inboxID _: String) async throws -> Bool { false }
     func queuePendingPrompt(sessionID _: String, inboxID _: String) async throws -> Bool { false }
+    func markSessionViewed(sessionId _: String, idleAtEpochMs _: Int64) async throws {}
 
     func getSession(id: String) async throws -> Session {
         try await getSession(id: id, directory: nil)
@@ -318,6 +321,10 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
 
     func queuePendingPrompt(sessionID: String, inboxID: String) async throws -> Bool {
         try await run { try await remote.queuePendingPrompt(sessionID: sessionID, inboxID: inboxID) }
+    }
+
+    func markSessionViewed(sessionId: String, idleAtEpochMs: Int64) async throws {
+        try await run { try await remote.markSessionViewed(sessionId: sessionId, idleAtEpochMs: idleAtEpochMs) }
     }
 
     private func run<T>(_ work: () async throws -> T) async throws -> T {

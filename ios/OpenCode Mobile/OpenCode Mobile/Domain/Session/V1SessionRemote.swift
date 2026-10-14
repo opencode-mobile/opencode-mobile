@@ -151,4 +151,7 @@ struct V1SessionRemote: SessionRemote, Sendable {
     func steerPendingPrompt(sessionID _: String, inboxID _: String) async throws -> Bool { false }
 
     func queuePendingPrompt(sessionID _: String, inboxID _: String) async throws -> Bool { false }
+
+    /// Classic servers have no viewed watermark; never touches the network.
+    func markSessionViewed(sessionId _: String, idleAtEpochMs _: Int64) async throws {}
 }

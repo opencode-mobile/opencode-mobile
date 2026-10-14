@@ -182,6 +182,16 @@ interface SessionRepository {
         inboxId: String,
         directory: String? = null,
     ): Boolean = false
+
+    /**
+     * Acknowledges that the run which ended at [idleAtEpochMs] was seen. Only
+     * servers with `supportsSessionViewed` track this; elsewhere it is a no-op.
+     * Throws on transport or HTTP failure.
+     */
+    suspend fun markSessionViewed(
+        sessionId: String,
+        idleAtEpochMs: Long,
+    ) = Unit
 }
 
 /** How the server handled a compact request. */

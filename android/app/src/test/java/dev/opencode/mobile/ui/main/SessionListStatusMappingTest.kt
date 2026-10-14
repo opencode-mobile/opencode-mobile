@@ -1,10 +1,15 @@
 package dev.opencode.mobile.ui.main
 
+import dev.opencode.mobile.domain.session.Session
+import dev.opencode.mobile.domain.session.SessionIdleOutcome
 import dev.opencode.mobile.domain.session.SessionSummary
 import dev.opencode.mobile.ui.components.OpenCodeListItemStatusTone
 import dev.opencode.mobile.ui.components.SessionListStatus
 import dev.opencode.mobile.ui.components.toListItemStatus
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SessionListStatusMappingTest {
@@ -97,12 +102,59 @@ class SessionListStatusMappingTest {
         assertEquals("Idle", status.text)
         assertEquals(OpenCodeListItemStatusTone.Stale, status.tone)
     }
+
+    @Test
+    fun serverUnreadOutcomesMapToDoneFailedStopped() {
+        fun unread(outcome: SessionIdleOutcome) =
+            SessionSummary(id = "ses-1", title = "Chat", unreadOutcome = outcome).toSessionListStatusForTest()
+
+        assertEquals(SessionListStatus.Done, unread(SessionIdleOutcome.Succeeded))
+        assertEquals(SessionListStatus.Failed, unread(SessionIdleOutcome.Failed))
+        assertEquals(SessionListStatus.Stopped, unread(SessionIdleOutcome.Interrupted))
+    }
+
+    @Test
+    fun runningAndRetryingOutrankServerUnread() {
+        val running =
+            SessionSummary(id = "ses-1", title = "Chat", statusLabel = "Working", unreadOutcome = SessionIdleOutcome.Failed)
+        val retrying =
+            SessionSummary(id = "ses-1", title = "Chat", statusLabel = "Retrying · 1", unreadOutcome = SessionIdleOutcome.Failed)
+
+        assertEquals(SessionListStatus.Running, running.toSessionListStatusForTest())
+        assertEquals(SessionListStatus.Retrying, retrying.toSessionListStatusForTest())
+    }
+
+    @Test
+    fun v2HomeMapping_unreadMissingOutcomeIsDoneAndReadIsIdle() {
+        val unreadNoOutcome = Session(id = "a", title = "A", idleAtEpochMs = 30L)
+        val read = Session(id = "b", title = "B", idleAtEpochMs = 30L, viewedAtEpochMs = 30L, idleOutcome = SessionIdleOutcome.Failed)
+
+        assertEquals(SessionIdleOutcome.Succeeded, unreadNoOutcome.homeUnreadOutcome(serverReadState = true))
+        assertNull(read.homeUnreadOutcome(serverReadState = true))
+        assertNull(unreadNoOutcome.homeUnreadOutcome(serverReadState = false))
+    }
+
+    @Test
+    fun unreadPillsUseOutcomeTones() {
+        val done = SessionListStatus.Done.toListItemStatus()
+        val failed = SessionListStatus.Failed.toListItemStatus()
+        val stopped = SessionListStatus.Stopped.toListItemStatus()
+
+        assertEquals("Done" to OpenCodeListItemStatusTone.Success, done.text to done.tone)
+        assertEquals("Failed" to OpenCodeListItemStatusTone.Error, failed.text to failed.tone)
+        assertEquals("Stopped" to OpenCodeListItemStatusTone.Warning, stopped.text to stopped.tone)
+    }
+
+    @Test
+    fun unreadStatusesBehaveLikeReadyForAttention() {
+        for (status in listOf(SessionListStatus.Ready, SessionListStatus.Done, SessionListStatus.Failed, SessionListStatus.Stopped)) {
+            assertTrue(status.isUnreadFinish)
+            assertTrue(status.needsAttention)
+        }
+        assertFalse(SessionListStatus.Idle.needsAttention)
+        assertFalse(SessionListStatus.Running.isUnreadFinish)
+        assertTrue(SessionListStatus.Running.needsAttention)
+    }
 }
 
-/** Mirrors MainScreen composite mapping for unit coverage. */
-private fun SessionSummary.toSessionListStatusForTest(): SessionListStatus =
-    when {
-        statusLabel == "Working" -> SessionListStatus.Running
-        statusLabel?.startsWith("Retrying") == true -> SessionListStatus.Retrying
-        else -> if (isReady) SessionListStatus.Ready else SessionListStatus.Idle
-    }
+private fun SessionSummary.toSessionListStatusForTest(): SessionListStatus = toSessionListStatus()

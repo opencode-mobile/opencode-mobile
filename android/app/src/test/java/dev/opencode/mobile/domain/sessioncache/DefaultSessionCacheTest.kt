@@ -6,6 +6,7 @@ import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionActivity
+import dev.opencode.mobile.domain.session.SessionIdleOutcome
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -175,6 +176,38 @@ class DefaultSessionCacheTest {
         assertEquals(messages, decoded)
         assertTrue(encoded.contains("\"schemaVersion\":1"))
         assertTrue(!encoded.contains("data:image/png"))
+    }
+
+    @Test
+    fun codecRoundTripsServerReadState() {
+        val sessions =
+            listOf(
+                Session(
+                    id = "ses-unread",
+                    title = "Unread",
+                    idleAtEpochMs = 30L,
+                    viewedAtEpochMs = 20L,
+                    idleOutcome = SessionIdleOutcome.Failed,
+                ),
+                Session(id = "ses-plain", title = "Plain"),
+            )
+
+        val decoded = SessionCacheCodec.decodeSessions(SessionCacheCodec.encodeSessions(sessions, json), json)
+
+        assertEquals(sessions, decoded)
+    }
+
+    @Test
+    fun codecDecodesPayloadWrittenBeforeReadStateExisted() {
+        val legacy =
+            """{"schemaVersion":${SessionCacheCodec.SCHEMA_VERSION},"sessions":{"sessions":[{"id":"ses-1","title":"Old","updatedAtEpochMs":5}]}}"""
+
+        val decoded = SessionCacheCodec.decodeSessions(legacy, json)?.single()
+
+        assertEquals("ses-1", decoded?.id)
+        assertNull(decoded?.idleAtEpochMs)
+        assertNull(decoded?.viewedAtEpochMs)
+        assertNull(decoded?.idleOutcome)
     }
 
     @Test

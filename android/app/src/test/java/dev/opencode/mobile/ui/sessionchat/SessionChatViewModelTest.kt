@@ -25,9 +25,11 @@ import dev.opencode.mobile.domain.live.DefaultSessionStatusLiveStore
 import dev.opencode.mobile.domain.live.EmptySessionReadyStore
 import dev.opencode.mobile.domain.live.LiveStoreRefreshPolicy
 import dev.opencode.mobile.domain.live.LiveStoreScope
+import dev.opencode.mobile.domain.live.NoOpSessionViewReporter
 import dev.opencode.mobile.domain.live.PermissionLiveStore
 import dev.opencode.mobile.domain.live.QuestionLiveStore
 import dev.opencode.mobile.domain.live.SessionReadyStore
+import dev.opencode.mobile.domain.live.SessionViewReporter
 import dev.opencode.mobile.domain.message.Attachment
 import dev.opencode.mobile.domain.message.AttachmentKind
 import dev.opencode.mobile.domain.message.AttachmentLimits
@@ -1329,6 +1331,44 @@ class SessionChatViewModelTest {
 
             assertEquals(listOf("ses-1"), readyStore.releaseCalls)
             assertTrue(readyStore.focusCalls.none { it.first == null })
+        }
+
+    @Test
+    fun sessionViewReporter_followsChatFocus() =
+        runTest(testDispatcher) {
+            val reporter = RecordingSessionViewReporter()
+            val viewModel = createViewModel(FakeMessageRepository(), sessionViewReporter = reporter)
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            viewModel.clearSessionReadyFocus()
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertEquals(listOf("ses-1", "ses-1"), reporter.focusCalls)
+            assertEquals(listOf("ses-1"), reporter.releaseCalls)
+        }
+
+    @Test
+    fun sessionViewReporter_focusesPromotedOptimisticSession() =
+        runTest(testDispatcher) {
+            val reporter = RecordingSessionViewReporter()
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository =
+                        FakeSessionRepository(
+                            createSessionResult = Session(id = "ses-new", title = "Created", directory = "/repo"),
+                        ),
+                    sessionViewReporter = reporter,
+                )
+
+            viewModel.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, "New Session", "/repo")
+            advanceUntilIdle()
+            viewModel.clearSessionReadyFocus()
+
+            assertEquals(listOf("ses-new"), reporter.focusCalls)
+            assertEquals(listOf("ses-new"), reporter.releaseCalls)
         }
 
     @Test
@@ -5737,6 +5777,7 @@ class SessionChatViewModelTest {
         liveUpdates: LiveUpdates = FixedLiveUpdates(),
         catalogRetryDelaysMs: List<Long> = emptyList(),
         modelCatalogStore: ModelCatalogStore? = null,
+        sessionViewReporter: SessionViewReporter = NoOpSessionViewReporter,
     ): SessionChatViewModel {
         val eventStream = repository.eventStream
         val liveStoreScope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
@@ -5808,6 +5849,7 @@ class SessionChatViewModelTest {
             connectionProfileStore = connectionProfileStore,
             activeConnectionManager = activeConnectionManager,
             liveUpdates = liveUpdates,
+            sessionViewReporter = sessionViewReporter,
         ).apply {
             ioDispatcher = testDispatcher
             nowMs = { testDispatcher.scheduler.currentTime }
@@ -5859,6 +5901,21 @@ class SessionChatViewModelTest {
             text = "Change it",
             metadataLabel = "Build",
         )
+}
+
+private class RecordingSessionViewReporter : SessionViewReporter {
+    val focusCalls = mutableListOf<String>()
+    val releaseCalls = mutableListOf<String>()
+
+    override fun focus(sessionId: String) {
+        focusCalls.add(sessionId)
+    }
+
+    override fun release(sessionId: String) {
+        releaseCalls.add(sessionId)
+    }
+
+    override fun clearCache() = Unit
 }
 
 private class RecordingSessionReadyStore : SessionReadyStore {

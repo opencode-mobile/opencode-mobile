@@ -52,6 +52,24 @@ enum class SessionListStatus {
     Running,
     Retrying,
     Ready,
+
+    /** Server-tracked unread run that succeeded (v2). */
+    Done,
+
+    /** Server-tracked unread run that failed (v2). */
+    Failed,
+
+    /** Server-tracked unread run that was interrupted (v2). */
+    Stopped,
+    ;
+
+    /** Finished work the user has not opened yet (local Ready or server unread). */
+    val isUnreadFinish: Boolean
+        get() = this == Ready || this == Done || this == Failed || this == Stopped
+
+    /** Rows that belong in the attention band: live work or unseen finished work. */
+    val needsAttention: Boolean
+        get() = this == Running || this == Retrying || isUnreadFinish
 }
 
 data class SessionListSession(
@@ -231,11 +249,7 @@ private fun SessionListFeedPage(
             HomeSessionLadder.group(
                 sessions = visibleSessions,
                 updatedAtEpochMs = { it.updatedAtEpochMs },
-                isAttention = {
-                    it.status == SessionListStatus.Running ||
-                        it.status == SessionListStatus.Retrying ||
-                        it.status == SessionListStatus.Ready
-                },
+                isAttention = { it.status.needsAttention },
                 recentWindowHours = recentWindowHours,
                 nowEpochMs = System.currentTimeMillis(),
             )
@@ -503,12 +517,8 @@ private fun rememberStabilizedLadder(
                     previousLastAppliedAtEpochMs = hold.lastAppliedAtEpochMs,
                     desired = desired,
                     itemId = SessionListSession::id,
-                    isAttention = {
-                        it.status == SessionListStatus.Running ||
-                            it.status == SessionListStatus.Retrying ||
-                            it.status == SessionListStatus.Ready
-                    },
-                    isReady = { it.status == SessionListStatus.Ready },
+                    isAttention = { it.status.needsAttention },
+                    isReady = { it.status.isUnreadFinish },
                     nowEpochMs = System.currentTimeMillis(),
                 )
             hold.sections = next.sections
@@ -544,6 +554,9 @@ internal fun SessionListStatus.toListItemStatus(
                 SessionListStatus.Running -> OpenCodeListItemStatusTone.Interactive
                 SessionListStatus.Retrying -> OpenCodeListItemStatusTone.Warning
                 SessionListStatus.Ready -> OpenCodeListItemStatusTone.Success
+                SessionListStatus.Done -> OpenCodeListItemStatusTone.Success
+                SessionListStatus.Failed -> OpenCodeListItemStatusTone.Error
+                SessionListStatus.Stopped -> OpenCodeListItemStatusTone.Warning
             }
         }
     return when (this) {
@@ -555,6 +568,9 @@ internal fun SessionListStatus.toListItemStatus(
                 tone = tone,
             )
         SessionListStatus.Ready -> OpenCodeListItemStatus(text = "Ready", tone = tone)
+        SessionListStatus.Done -> OpenCodeListItemStatus(text = "Done", tone = tone)
+        SessionListStatus.Failed -> OpenCodeListItemStatus(text = "Failed", tone = tone)
+        SessionListStatus.Stopped -> OpenCodeListItemStatus(text = "Stopped", tone = tone)
     }
 }
 

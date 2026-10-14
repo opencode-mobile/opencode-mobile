@@ -32,11 +32,23 @@ struct SessionTimeDTO: Codable, Sendable {
     let created: Int64?
     let updated: Int64?
     let archived: Int64?
+    /// v2 only.
+    let idle: Int64?
+    /// v2 only.
+    let viewed: Int64?
 
-    init(created: Int64? = nil, updated: Int64? = nil, archived: Int64? = nil) {
+    init(
+        created: Int64? = nil,
+        updated: Int64? = nil,
+        archived: Int64? = nil,
+        idle: Int64? = nil,
+        viewed: Int64? = nil
+    ) {
         self.created = created
         self.updated = updated
         self.archived = archived
+        self.idle = idle
+        self.viewed = viewed
     }
 }
 

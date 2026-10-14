@@ -17,6 +17,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -1144,7 +1145,29 @@ class EventDomainAdapter(
         return SessionTitleUpdate(sessionId = sessionId, title = title)
     }
 
+    /**
+     * v2 `session.viewed` read acknowledgement: the session was seen up to the run
+     * that ended at `idle`. Returns null for other events or a missing watermark.
+     */
+    fun sessionViewed(event: OpencodeEvent): SessionViewedUpdate? {
+        if (event.type != SESSION_VIEWED_EVENT) return null
+        val sessionId = event.sessionId ?: return null
+        val idle = event.rawProperties?.epochMs("idle") ?: return null
+        return SessionViewedUpdate(sessionId = sessionId, idleAtEpochMs = idle)
+    }
+
+    private fun JsonObject.epochMs(key: String): Long? {
+        val primitive = this[key] as? JsonPrimitive ?: return null
+        if (primitive is JsonNull) return null
+        return primitive.longOrNull
+            ?: primitive.doubleOrNull?.toLong()
+            ?: primitive.contentOrNull?.toLongOrNull()
+    }
+
     companion object {
+        /** v2 read acknowledgement broadcast after `POST /api/session/{id}/view`. */
+        const val SESSION_VIEWED_EVENT = "session.viewed"
+
         /** Client-only projection of a v2 agent/model switch for the message store. */
         const val MESSAGE_CONTEXT_EVENT = "message.context"
 
@@ -1188,4 +1211,9 @@ data class ParsedSessionActivity(
 data class SessionTitleUpdate(
     val sessionId: String,
     val title: String,
+)
+
+data class SessionViewedUpdate(
+    val sessionId: String,
+    val idleAtEpochMs: Long,
 )

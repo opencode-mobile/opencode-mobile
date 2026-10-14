@@ -1046,6 +1046,142 @@ class SessionProtocolRepositoryTest {
             assertEquals(401, http.statusCode)
         }
 
+    @Test
+    fun v2ListSessions_decodesIdleViewedAndOutcome() =
+        runTest {
+            val client =
+                testClient {
+                    respondJson(
+                        """
+                        {
+                          "data":[
+                            {"id":"ses_done","title":"Done","outcome":"succeeded","time":{"created":1,"updated":2,"idle":30,"viewed":20}},
+                            {"id":"ses_failed","title":"Failed","outcome":"failed","time":{"created":1,"updated":2,"idle":40}},
+                            {"id":"ses_stopped","title":"Stopped","outcome":"interrupted","time":{"created":1,"updated":2,"idle":50,"viewed":50}},
+                            {"id":"ses_future","title":"Future","outcome":"exploded","time":{"created":1,"updated":2,"idle":60}},
+                            {"id":"ses_fresh","title":"Fresh","time":{"created":1,"updated":2}}
+                          ],
+                          "cursor":{"previous":null,"next":null}
+                        }
+                        """.trimIndent(),
+                    )
+                }
+            val repository =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V2),
+                )
+
+            val byId = repository.listSessions("/repo").associateBy { it.id }
+
+            val done = byId.getValue("ses_done")
+            assertEquals(30L, done.idleAtEpochMs)
+            assertEquals(20L, done.viewedAtEpochMs)
+            assertEquals(SessionIdleOutcome.Succeeded, done.idleOutcome)
+            assertTrue(done.isServerUnread)
+            assertEquals(SessionIdleOutcome.Failed, byId.getValue("ses_failed").idleOutcome)
+            assertTrue(byId.getValue("ses_failed").isServerUnread)
+            assertEquals(SessionIdleOutcome.Interrupted, byId.getValue("ses_stopped").idleOutcome)
+            assertFalse(byId.getValue("ses_stopped").isServerUnread)
+            assertNull(byId.getValue("ses_future").idleOutcome)
+            assertEquals(60L, byId.getValue("ses_future").idleAtEpochMs)
+            val fresh = byId.getValue("ses_fresh")
+            assertNull(fresh.idleAtEpochMs)
+            assertNull(fresh.viewedAtEpochMs)
+            assertNull(fresh.idleOutcome)
+            assertFalse(fresh.isServerUnread)
+        }
+
+    @Test
+    fun v1ListSessions_neverCarriesServerReadState() =
+        runTest {
+            val client =
+                testClient {
+                    respondJson(
+                        """[{"id":"ses_1","title":"One","directory":"/repo","outcome":"failed","time":{"created":1,"updated":2,"idle":30,"viewed":10}}]""",
+                    )
+                }
+            val repository =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V1),
+                )
+
+            val session = repository.listSessions("/repo").single()
+
+            assertNull(session.idleAtEpochMs)
+            assertNull(session.viewedAtEpochMs)
+            assertNull(session.idleOutcome)
+            assertFalse(session.isServerUnread)
+        }
+
+    @Test
+    fun v2MarkSessionViewed_postsIdleWatermark() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respond("", HttpStatusCode.NoContent)
+                }
+            val repository =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V2),
+                )
+
+            repository.markSessionViewed("ses_1", 1_700_000_000_123L)
+
+            val request = requests.single()
+            assertEquals(HttpMethod.Post, request.method)
+            assertTrue(request.url.encodedPath.endsWith("/api/session/ses_1/view"))
+            assertEquals("""{"idle":1700000000123}""", request.requestBodyText())
+        }
+
+    @Test
+    fun v2MarkSessionViewed_mapsMissingSessionToHttp404() =
+        runTest {
+            val client =
+                testClient {
+                    // Live v2 404s can omit Content-Type.
+                    respond("", HttpStatusCode.NotFound)
+                }
+            val repository =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V2),
+                )
+
+            val error = runCatching { repository.markSessionViewed("ses_gone", 5L) }.exceptionOrNull()
+
+            assertEquals(404, (error as SessionError.Http).statusCode)
+        }
+
+    @Test
+    fun v1MarkSessionViewed_isNoOpWithoutNetwork() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respond("", HttpStatusCode.NoContent)
+                }
+            val repository =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V1),
+                )
+
+            repository.markSessionViewed("ses_1", 5L)
+
+            assertTrue(requests.isEmpty())
+        }
+
     private suspend fun manager(
         protocol: ServerProtocol?,
         probing: ConnectionProbing? = null,
