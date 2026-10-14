@@ -20,8 +20,10 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -471,6 +473,48 @@ class T3RuntimeTest {
             assertTrue(error is MessageError.Http)
             assertEquals("This thread has no model selection.", error!!.message)
             assertTrue(h.socket.requests.none { it.tag == T3RpcCodec.DISPATCH_COMMAND })
+        }
+
+    @Test
+    fun sendPrompt_seedsTitleUntilTheThreadHasMessages() =
+        runTest {
+            val h = Harness(this).build()
+            h.http.shellJson =
+                shellJson(
+                    threads =
+                        listOf(
+                            buildJsonObject {
+                                put("id", "thr-1")
+                                put("title", "New thread")
+                                put("projectId", "proj-1")
+                                put("status", "idle")
+                                put(
+                                    "modelSelection",
+                                    buildJsonObject {
+                                        put("instanceId", "codex-1")
+                                        put("model", "gpt-5")
+                                    },
+                                )
+                            },
+                        ),
+                )
+            h.http.threadJson["thr-1"] = threadSnapshotJson(sequence = 4, "m1")
+            val repository = messages(h)
+
+            repository.sendPromptAsync(
+                "thr-1",
+                PromptSendOptions(text = "  Fix   the login\nredirect  "),
+                null,
+            )
+            val first = h.socket.requests.last { it.tag == T3RpcCodec.DISPATCH_COMMAND }.payload
+            assertEquals("Fix the login redirect", first["titleSeed"]!!.jsonPrimitive.content)
+
+            h.runtime.loadThreadMessages("thr-1")
+            settle()
+            repository.sendPromptAsync("thr-1", PromptSendOptions(text = "Follow up"), null)
+            val second = h.socket.requests.last { it.tag == T3RpcCodec.DISPATCH_COMMAND }.payload
+            assertEquals("Follow up", second["text"]!!.jsonPrimitive.content)
+            assertFalse(second.containsKey("titleSeed"))
         }
 
     @Test

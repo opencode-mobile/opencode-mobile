@@ -14,6 +14,32 @@ struct T3DispatchFailureTests {
         )
         #expect(command["createdBy"] as? String == "user")
         #expect(command["creationSource"] as? String == "mobile")
+        #expect(command["titleSeed"] == nil)
+    }
+
+    @Test func titleSeed_collapsesTextThenUsesTheImageNameThenAFallback() {
+        #expect(T3RpcCodec.titleSeed(text: "  Fix   the login\nredirect  ", attachmentName: nil) == "Fix the login redirect")
+        #expect(T3RpcCodec.titleSeed(text: String(repeating: "a", count: 50), attachmentName: nil) == String(repeating: "a", count: 50))
+        #expect(T3RpcCodec.titleSeed(text: String(repeating: "a", count: 51), attachmentName: nil) == String(repeating: "a", count: 50) + "...")
+        #expect(T3RpcCodec.titleSeed(text: "   ", attachmentName: "shot.png") == "Image: shot.png")
+        #expect(
+            T3RpcCodec.titleSeed(text: "", attachmentName: String(repeating: "b", count: 50))
+                == "Image: " + String(repeating: "b", count: 43) + "..."
+        )
+        #expect(T3RpcCodec.titleSeed(text: "  ", attachmentName: nil) == "New thread")
+    }
+
+    @Test func messageDispatchCommand_includesTitleSeedWhenProvided() {
+        let command = T3RpcCodec.messageDispatchCommand(
+            commandID: "cmd-1",
+            threadID: "thread-1",
+            messageID: "msg-1",
+            text: "Hi",
+            selection: T3ModelSelection(instanceID: "inst-1", model: "gpt-5"),
+            isRunning: false,
+            titleSeed: "Hi"
+        )
+        #expect(command["titleSeed"] as? String == "Hi")
     }
 
     @Test func exitFailure_dieDefect_keepsSchemaIssueAsCause() throws {

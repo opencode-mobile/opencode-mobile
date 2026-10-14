@@ -265,6 +265,14 @@ class T3Runtime
         fun cachedMessages(threadId: String): List<Message> = messages[threadId].orEmpty()
 
         /**
+         * Conversation messages stored for [threadId], or null until a snapshot
+         * or live message has landed. The title seed is sent only while this is
+         * null or zero: the server ignores a seed once any message exists.
+         */
+        suspend fun conversationMessageCount(threadId: String): Int? =
+            messageMutex.withLock { conversationByThread[threadId]?.size }
+
+        /**
          * Drops the open transcript and resubscribes the thread on screen from the
          * start. The shell and provider catalogue stay; [clearCaches] would wipe those.
          */

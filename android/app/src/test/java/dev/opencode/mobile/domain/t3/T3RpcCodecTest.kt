@@ -4,6 +4,7 @@ import dev.opencode.mobile.domain.session.PermissionDecision
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -45,7 +46,33 @@ class T3RpcCodecTest {
         val dispatchMode = payload["dispatchMode"]!!.jsonObject
         assertEquals("start_immediately", dispatchMode["type"]!!.jsonPrimitive.content)
         assertTrue(payload.containsKey("attachments"))
-        assertTrue(!payload.containsKey("modelSelection"))
+        assertFalse(payload.containsKey("modelSelection"))
+        assertFalse(payload.containsKey("titleSeed"))
+    }
+
+    @Test
+    fun titleSeed_collapsesTextThenUsesTheImageNameThenAFallback() {
+        assertEquals("Fix the login redirect", T3Commands.titleSeed("  Fix   the login\nredirect  "))
+        assertEquals("a".repeat(50), T3Commands.titleSeed("a".repeat(50)))
+        assertEquals("a".repeat(50) + "...", T3Commands.titleSeed("a".repeat(51)))
+        assertEquals("Image: shot.png", T3Commands.titleSeed("   ", "shot.png"))
+        assertEquals("Image: " + "b".repeat(43) + "...", T3Commands.titleSeed("", "b".repeat(50)))
+        assertEquals("New thread", T3Commands.titleSeed("  ", null))
+    }
+
+    @Test
+    fun messageDispatch_includesTitleSeedWhenProvided() {
+        val payload =
+            T3Commands.messageDispatch(
+                threadId = "thr-1",
+                text = "Hello",
+                modelSelection = null,
+                running = false,
+                messageId = "msg-1",
+                commandId = "cmd-1",
+                titleSeed = "Hello",
+            )
+        assertEquals("Hello", payload["titleSeed"]!!.jsonPrimitive.content)
     }
 
     @Test

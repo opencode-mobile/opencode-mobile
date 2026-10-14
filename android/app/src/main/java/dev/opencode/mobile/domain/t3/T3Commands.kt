@@ -11,6 +11,9 @@ object T3Commands {
     /** Supervised: every tool call needs approval. The default for a new thread. */
     const val DEFAULT_RUNTIME_MODE = "approval-required"
 
+    /** Same cap as T3 `truncate` for a thread-title seed. */
+    private const val TITLE_SEED_MAX = 50
+
     /** `OrchestrationV2Actor` for commands the user typed; required on `message.dispatch`. */
     const val CREATED_BY_USER = "user"
 
@@ -22,6 +25,21 @@ object T3Commands {
 
     fun commandId(): String = UUID.randomUUID().toString()
 
+    /**
+     * Temporary title for the first [messageDispatch]. The server shows this at
+     * once, then replaces it with a generated title. A seed only arms that
+     * generation while the thread still has no messages, so later dispatches
+     * omit it. Matches T3's `deriveThreadTitleSeed`: collapsed text, else
+     * `Image: <name>`, else "New thread", cut at 50 characters.
+     */
+    fun titleSeed(text: String, attachmentName: String? = null): String {
+        val normalized = collapseWhitespace(text)
+        if (normalized.isNotEmpty()) return truncateSeed(normalized)
+        val name = attachmentName?.let(::collapseWhitespace).orEmpty()
+        if (name.isNotEmpty()) return truncateSeed("Image: $name")
+        return "New thread"
+    }
+
     fun messageDispatch(
         threadId: String,
         text: String,
@@ -30,6 +48,7 @@ object T3Commands {
         attachments: List<T3Attachment> = emptyList(),
         messageId: String = commandId(),
         commandId: String = commandId(),
+        titleSeed: String? = null,
     ): JsonObject =
         buildJsonObject {
             put("type", "message.dispatch")
@@ -49,7 +68,15 @@ object T3Commands {
             if (modelSelection != null) {
                 put("modelSelection", encodeModelSelection(modelSelection))
             }
+            titleSeed?.takeIf { it.isNotBlank() }?.let { put("titleSeed", it) }
         }
+
+    private val whitespace = Regex("\\s+")
+
+    private fun collapseWhitespace(value: String): String = value.trim().replace(whitespace, " ")
+
+    private fun truncateSeed(value: String): String =
+        if (value.length <= TITLE_SEED_MAX) value else value.take(TITLE_SEED_MAX) + "..."
 
     fun runInterrupt(
         threadId: String,

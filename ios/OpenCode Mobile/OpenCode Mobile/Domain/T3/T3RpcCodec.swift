@@ -154,6 +154,20 @@ nonisolated enum T3RpcCodec {
         ]
     }
 
+    /// Temporary title for the first `message.dispatch`. The server shows this at
+    /// once, then replaces it with a generated title. A seed only arms that
+    /// generation while the thread still has no messages. Matches T3's
+    /// `deriveThreadTitleSeed`: collapsed text, else `Image: <name>`, else
+    /// "New thread", cut at 50 characters.
+    static func titleSeed(text: String, attachmentName: String?) -> String {
+        let normalized = collapseWhitespace(text)
+        if !normalized.isEmpty { return truncateSeed(normalized) }
+        if let name = attachmentName.map(collapseWhitespace), !name.isEmpty {
+            return truncateSeed("Image: \(name)")
+        }
+        return "New thread"
+    }
+
     static func messageDispatchCommand(
         commandID: String,
         threadID: String,
@@ -161,9 +175,10 @@ nonisolated enum T3RpcCodec {
         text: String,
         selection: T3ModelSelection,
         isRunning: Bool,
-        attachments: [T3Attachment] = []
+        attachments: [T3Attachment] = [],
+        titleSeed: String? = nil
     ) -> [String: Any] {
-        [
+        var command: [String: Any] = [
             "type": "message.dispatch",
             // Required by `OrchestrationV2CreationFields`; the server rejects the
             // command at schema validation without them.
@@ -177,6 +192,23 @@ nonisolated enum T3RpcCodec {
             "dispatchMode": dispatchMode(isRunning: isRunning),
             "modelSelection": modelSelectionPayload(selection),
         ]
+        if let titleSeed, !titleSeed.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            command["titleSeed"] = titleSeed
+        }
+        return command
+    }
+
+    private static let titleSeedMaxLength = 50
+
+    private static func collapseWhitespace(_ value: String) -> String {
+        value.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func truncateSeed(_ value: String) -> String {
+        guard value.count > titleSeedMaxLength else { return value }
+        let end = value.index(value.startIndex, offsetBy: titleSeedMaxLength)
+        return String(value[..<end]) + "..."
     }
 
     /// `ChatAttachment` as persisted by the server: a stored id plus its metadata.

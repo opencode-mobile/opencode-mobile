@@ -179,6 +179,12 @@ final class T3MessageRepository: MessageRepository {
         // Upload first: a failed transfer surfaces through the send-error path
         // and nothing is dispatched without its bytes stored server-side.
         let attachments = try await uploader.upload(options.attachments, maxFileBytes: client.fileAttachmentMaxBytes)
+        // Null until a snapshot or live message has landed. The server ignores a
+        // seed once any message exists, so an unloaded thread still sends one.
+        let knownMessages = transcripts[sessionID]?.messages.count
+        let titleSeed = (knownMessages == nil || knownMessages == 0)
+            ? T3RpcCodec.titleSeed(text: options.text, attachmentName: attachments.first?.name)
+            : nil
         try await client.dispatchCommand(
             T3RpcCodec.messageDispatchCommand(
                 commandID: UUID().uuidString,
@@ -187,7 +193,8 @@ final class T3MessageRepository: MessageRepository {
                 text: options.text,
                 selection: selection,
                 isRunning: thread.isBusy,
-                attachments: attachments
+                attachments: attachments,
+                titleSeed: titleSeed
             )
         )
     }

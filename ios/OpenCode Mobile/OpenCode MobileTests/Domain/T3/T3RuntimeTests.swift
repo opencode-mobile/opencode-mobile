@@ -226,6 +226,61 @@ struct T3RuntimeTests {
         #expect(await waitOnMain { repository.subscribedSessionIDs.isEmpty })
     }
 
+    @MainActor
+    @Test func sendPrompt_seedsTitleUntilTheThreadHasMessages() async throws {
+        let harness = T3ClientHarness()
+        harness.http.shell = Fixtures.shell(threadID: "t1")
+        let repository = T3MessageRepository(client: harness.client, resubscribeDelay: .seconds(30))
+
+        let first = Task {
+            try await repository.sendPromptAsync(
+                sessionID: "t1",
+                options: PromptSendOptions(text: "  Fix   the login\nredirect  "),
+                directory: nil
+            )
+        }
+        let socket = try await harness.connector.connection(at: 0)
+        socket.open()
+        let request = try await socket.firstRequest(tag: "orchestration.dispatchCommand")
+        #expect(request.payload["titleSeed"] as? String == "Fix the login redirect")
+        socket.receive(Frames.exitSuccess(requestID: request.id, value: ["sequence": 1]))
+        try await first.value
+
+        harness.http.threadDetail = T3ThreadDetail(
+            sequence: 2,
+            thread: Fixtures.thread(id: "t1"),
+            messages: [T3ConversationMessage(id: "m1", role: "user", text: "Hello", streaming: false)]
+        )
+        _ = try await repository.listMessages(sessionID: "t1", directory: nil)
+
+        let before = Self.dispatchRequests(socket).count
+        let second = Task {
+            try await repository.sendPromptAsync(
+                sessionID: "t1",
+                options: PromptSendOptions(text: "Follow up"),
+                directory: nil
+            )
+        }
+        let appeared = await waitUntil { Self.dispatchRequests(socket).count > before }
+        #expect(appeared)
+        let followUp = try #require(Self.dispatchRequests(socket).last)
+        #expect(followUp.payload["text"] as? String == "Follow up")
+        #expect(followUp.payload["titleSeed"] == nil)
+        socket.receive(Frames.exitSuccess(requestID: followUp.id, value: ["sequence": 2]))
+        try await second.value
+    }
+
+    private static func dispatchRequests(_ socket: FakeSocketConnection) -> [FakeSocketConnection.Request] {
+        socket.frames(tag: "Request").compactMap { frame in
+            guard frame["tag"] as? String == "orchestration.dispatchCommand" else { return nil }
+            return FakeSocketConnection.Request(
+                id: frame["id"] as? String ?? "",
+                tag: "orchestration.dispatchCommand",
+                payload: frame["payload"] as? [String: Any] ?? [:]
+            )
+        }
+    }
+
     // MARK: - Protocol re-check on fresh sockets
 
     @Test func rpc_validatesProtocolOncePerIdentityAcrossReconnects() async throws {

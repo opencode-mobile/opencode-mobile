@@ -112,6 +112,13 @@ class T3MessageRepository
                     val profile = runtime.activeProfile() ?: throw T3RpcException("No active T3 environment.")
                     uploader.upload(profile, options.attachments, runtime.fileAttachmentMaxBytes())
                 }
+            val knownMessages = runtime.conversationMessageCount(sessionId)
+            val titleSeed =
+                if (knownMessages == null || knownMessages == 0) {
+                    T3Commands.titleSeed(options.text, attachments.firstOrNull()?.name)
+                } else {
+                    null
+                }
             runtime.dispatch(
                 T3Commands.messageDispatch(
                     threadId = sessionId,
@@ -119,6 +126,7 @@ class T3MessageRepository
                     modelSelection = model,
                     running = running,
                     attachments = attachments,
+                    titleSeed = titleSeed,
                 ),
             )
         }
