@@ -75,7 +75,9 @@ enum HomeSettleFeed {
         guard showsSettle, !isArchived else { return [] }
         if isSettled { return [.unsettle] }
         if isSnoozed { return [.wake] }
-        return snoozeBlocked ? [.settle] : [.settle, .snooze]
+        // A running or waiting thread can be neither settled nor snoozed; the server rejects both.
+        if snoozeBlocked { return [] }
+        return [.settle, .snooze]
     }
 
     static func isSnoozed(snoozedUntilEpochMs: Int64?, nowEpochMs: Int64, isSettled: Bool) -> Bool {

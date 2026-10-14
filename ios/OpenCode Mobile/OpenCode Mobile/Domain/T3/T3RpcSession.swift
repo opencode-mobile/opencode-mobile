@@ -48,6 +48,15 @@ nonisolated enum T3ErrorText {
         }
     }
 
+    /// True when T3 refused `thread.settle` because the thread has an active run or a
+    /// blocking runtime request (the orchestrator's "cannot be settled" cause).
+    static func isSettleBlocked(_ error: Error) -> Bool {
+        guard case let .rejected(cause) = error as? T3SocketError else { return false }
+        return cause.contains(settleBlockedCause)
+    }
+
+    private static let settleBlockedCause = "cannot be settled"
+
     static func detail(_ error: Error) -> String? {
         switch error {
         case let t3 as T3ClientError: t3.diagnosticBody

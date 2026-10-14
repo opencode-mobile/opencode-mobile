@@ -2,6 +2,7 @@ package dev.opencode.mobile.domain.t3
 
 import dev.opencode.mobile.domain.session.SessionCreateOptions
 import dev.opencode.mobile.domain.session.SessionError
+import dev.opencode.mobile.domain.session.SessionSettleBlockedException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
@@ -319,6 +320,36 @@ class T3SessionControlsTest {
             assertEquals("thr-1", unsettle.str("threadId"))
             assertEquals("user", unsettle.str("reason"))
             assertEquals(2, h.dispatched().size)
+        }
+
+    @Test
+    fun settleSession_busyThreadRejection_throwsSettleBlocked() =
+        runTest {
+            val h = Harness(this).build()
+            h.http.shellJson = shell(threads = listOf(thread("thr-1")))
+            h.socket.rejectNextRequestWith =
+                JsonPrimitive(
+                    "OrchestrationV2DispatchCommandError: Thread thr-1 has active or blocked work and cannot be settled.",
+                )
+
+            val error = runCatching { h.repository.settleSession("thr-1", directory = "/repos/a") }.exceptionOrNull()
+
+            assertTrue(error is SessionSettleBlockedException)
+            assertEquals(SessionSettleBlockedException.USER_MESSAGE, error?.message)
+        }
+
+    @Test
+    fun settleSession_otherRejection_staysT3RpcException() =
+        runTest {
+            val h = Harness(this).build()
+            h.http.shellJson = shell(threads = listOf(thread("thr-1")))
+            h.socket.rejectNextRequestWith = JsonPrimitive("OrchestrationV2DispatchCommandError: Thread thr-1 is archived.")
+
+            val error = runCatching { h.repository.settleSession("thr-1", directory = "/repos/a") }.exceptionOrNull()
+
+            assertTrue(error is T3RpcException)
+            assertFalse(T3Errors.isSettleBlocked(error!!))
+            assertEquals(T3RpcException.REJECTED_MESSAGE, error.message)
         }
 
     @Test

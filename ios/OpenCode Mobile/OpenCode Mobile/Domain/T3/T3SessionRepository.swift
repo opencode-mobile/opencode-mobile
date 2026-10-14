@@ -255,9 +255,13 @@ final class T3SessionRepository: SessionRepository, @unchecked Sendable {
     }
 
     func settleSession(id: String, directory _: String?) async throws -> Bool {
-        try await client.dispatchCommand(
-            T3RpcCodec.settleCommand(commandID: UUID().uuidString, threadID: id)
-        )
+        do {
+            try await client.dispatchCommand(
+                T3RpcCodec.settleCommand(commandID: UUID().uuidString, threadID: id)
+            )
+        } catch where T3ErrorText.isSettleBlocked(error) {
+            throw SessionSettleBlockedError()
+        }
         _ = try? await client.fetchShell(force: true)
         return true
     }

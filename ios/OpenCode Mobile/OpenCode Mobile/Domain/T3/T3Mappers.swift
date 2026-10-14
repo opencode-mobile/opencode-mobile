@@ -55,7 +55,8 @@ nonisolated enum T3ShellMapper {
         )
     }
 
-    /// Running wins over a pending prompt. Either one blocks a new snooze.
+    /// Running wins over a pending prompt. Either one blocks a new snooze and a settle
+    /// (the server refuses both), so this reason gates the settle actions too.
     static func snoozeBlockReason(for thread: T3Thread) -> String? {
         if thread.isBusy { return "Still running" }
         if let id = thread.pendingRequestID, !id.isEmpty { return "Waiting on you" }

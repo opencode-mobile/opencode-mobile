@@ -1072,6 +1072,57 @@ struct ProjectListHomeViewModelTests {
         #expect(ready)
         #expect(homeSession(viewModel, id: "ses-1")?.unreadOutcome == nil)
     }
+
+    @Test func homeSessionActions_chooseSettle_skipsBusyThread() async {
+        let repository = FakeSessionRepository()
+        let region = HomeSessionActions(sessionRepository: repository, messageRepository: FakeMessageRepository())
+        var errors: [String] = []
+        region.onLifecycleError = { errors.append($0) }
+        region.begin(
+            sessionId: "thr-1",
+            title: "Busy",
+            worktree: "/repo",
+            canArchive: true,
+            showsSettle: true,
+            snoozeBlockReason: "Waiting on you",
+            presentSheet: false
+        )
+
+        let settled = await region.chooseSettle()
+
+        #expect(!settled)
+        #expect(repository.settledIDs.isEmpty)
+        #expect(errors.isEmpty)
+        #expect(!region.actionInFlight)
+    }
+
+    @Test func homeSessionActions_settleBlockedByServer_explainsWhy() async {
+        let repository = FakeSessionRepository()
+        repository.settleError = SessionSettleBlockedError()
+        let region = HomeSessionActions(sessionRepository: repository, messageRepository: FakeMessageRepository())
+        var errors: [String] = []
+        region.onLifecycleError = { errors.append($0) }
+        region.begin(sessionId: "thr-1", title: "Idle", worktree: "/repo", canArchive: true, showsSettle: true)
+
+        let settled = await region.chooseSettle()
+
+        #expect(!settled)
+        #expect(repository.settledIDs == ["thr-1"])
+        #expect(errors == [SessionSettleBlockedError.message])
+    }
+
+    @Test func homeSessionActions_settleFailure_staysGenericForOtherErrors() async {
+        let repository = FakeSessionRepository()
+        repository.settleError = SessionError.transport("boom")
+        let region = HomeSessionActions(sessionRepository: repository, messageRepository: FakeMessageRepository())
+        var errors: [String] = []
+        region.onLifecycleError = { errors.append($0) }
+        region.begin(sessionId: "thr-1", title: "Idle", worktree: "/repo", canArchive: true, showsSettle: true)
+
+        _ = await region.chooseSettle()
+
+        #expect(errors == [HomeSessionActions.settleError])
+    }
 }
 
 @MainActor
@@ -1391,6 +1442,8 @@ private final class FakeSessionRepository: SessionRepository, @unchecked Sendabl
     private(set) var archivedIDs: [String] = []
     private(set) var deletedIDs: [String] = []
     private(set) var forkedIDs: [String] = []
+    private(set) var settledIDs: [String] = []
+    var settleError: Error?
 
     init(
         sessions: [Session] = [Session(id: "1", title: "Alpha", slug: nil, projectID: nil, directory: nil, parentID: nil, updatedAtEpochMs: 1)],
@@ -1458,6 +1511,12 @@ private final class FakeSessionRepository: SessionRepository, @unchecked Sendabl
             updatedAtEpochMs: 30,
             archivedAtEpochMs: 30
         )
+    }
+
+    func settleSession(id: String, directory: String?) async throws -> Bool {
+        settledIDs.append(id)
+        if let settleError { throw settleError }
+        return true
     }
 
     func deleteSession(id: String, directory: String?) async throws -> Bool {

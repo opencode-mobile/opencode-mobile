@@ -65,7 +65,7 @@ class HomeSettleFeedTest {
             HomeSettleFeed.gestures(true, isSettled = false, isSnoozed = false, snoozeBlocked = false),
         )
         assertEquals(
-            listOf(HomeSettleGesture.Settle),
+            emptyList<HomeSettleGesture>(),
             HomeSettleFeed.gestures(true, isSettled = false, isSnoozed = false, snoozeBlocked = true),
         )
         assertEquals(

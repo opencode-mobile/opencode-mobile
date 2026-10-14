@@ -85,11 +85,9 @@ object HomeSettleFeed {
         if (!showsSettle || isArchived) return emptyList()
         if (isSettled) return listOf(HomeSettleGesture.Unsettle)
         if (isSnoozed) return listOf(HomeSettleGesture.Wake)
-        return if (snoozeBlocked) {
-            listOf(HomeSettleGesture.Settle)
-        } else {
-            listOf(HomeSettleGesture.Settle, HomeSettleGesture.Snooze)
-        }
+        // A running or waiting thread can be neither settled nor snoozed; the server rejects both.
+        if (snoozeBlocked) return emptyList()
+        return listOf(HomeSettleGesture.Settle, HomeSettleGesture.Snooze)
     }
 
     fun isSnoozed(

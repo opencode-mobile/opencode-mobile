@@ -57,7 +57,7 @@ struct HomeSettleFeedTests {
     @Test func gestures_followTheRowAndStayEmptyWithoutSettle() {
         #expect(HomeSettleFeed.gestures(showsSettle: false, isSettled: false, isSnoozed: false, snoozeBlocked: false).isEmpty)
         #expect(HomeSettleFeed.gestures(showsSettle: true, isSettled: false, isSnoozed: false, snoozeBlocked: false) == [.settle, .snooze])
-        #expect(HomeSettleFeed.gestures(showsSettle: true, isSettled: false, isSnoozed: false, snoozeBlocked: true) == [.settle])
+        #expect(HomeSettleFeed.gestures(showsSettle: true, isSettled: false, isSnoozed: false, snoozeBlocked: true).isEmpty)
         #expect(HomeSettleFeed.gestures(showsSettle: true, isSettled: false, isSnoozed: true, snoozeBlocked: false) == [.wake])
         #expect(HomeSettleFeed.gestures(showsSettle: true, isSettled: true, isSnoozed: false, snoozeBlocked: false) == [.unsettle])
         #expect(HomeSettleFeed.gestures(showsSettle: true, isSettled: false, isSnoozed: false, snoozeBlocked: false, isArchived: true).isEmpty)

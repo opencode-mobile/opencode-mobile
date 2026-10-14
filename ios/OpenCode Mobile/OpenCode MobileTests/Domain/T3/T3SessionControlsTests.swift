@@ -183,6 +183,31 @@ struct T3SessionControlsTests {
         #expect(client.dispatched.count == 2)
     }
 
+    @Test func settleSession_busyThreadRejection_throwsSettleBlocked() async {
+        let client = FakeT3EngineClient(snapshot: Self.snapshot([Self.thread(id: "thr-1")]))
+        client.nextDispatchError = T3SocketError.rejected(
+            cause: "OrchestrationV2DispatchCommandError: Thread thr-1 has active or blocked work and cannot be settled."
+        )
+        let repository = T3SessionRepository(client: client)
+
+        await #expect(throws: SessionSettleBlockedError()) {
+            try await repository.settleSession(id: "thr-1", directory: "/repos/alpha")
+        }
+        #expect(SessionSettleBlockedError().localizedDescription == SessionSettleBlockedError.message)
+    }
+
+    @Test func settleSession_otherRejection_staysSocketError() async {
+        let client = FakeT3EngineClient(snapshot: Self.snapshot([Self.thread(id: "thr-1")]))
+        let rejection = T3SocketError.rejected(cause: "OrchestrationV2DispatchCommandError: Thread thr-1 is archived.")
+        client.nextDispatchError = rejection
+        let repository = T3SessionRepository(client: client)
+
+        await #expect(throws: rejection) {
+            try await repository.settleSession(id: "thr-1", directory: "/repos/alpha")
+        }
+        #expect(!T3ErrorText.isSettleBlocked(rejection))
+    }
+
     @Test func snoozeAndWake_dispatchContractCommands() async throws {
         let client = FakeT3EngineClient(snapshot: Self.snapshot([Self.thread(id: "thr-1")]))
         let repository = T3SessionRepository(client: client)

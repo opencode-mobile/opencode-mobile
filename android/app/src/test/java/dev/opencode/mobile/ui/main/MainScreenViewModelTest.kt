@@ -46,6 +46,7 @@ import dev.opencode.mobile.domain.session.SessionActivitySource
 import dev.opencode.mobile.domain.session.SessionDomainAdapter
 import dev.opencode.mobile.domain.session.SessionIdleOutcome
 import dev.opencode.mobile.domain.session.SessionRepository
+import dev.opencode.mobile.domain.session.SessionSettleBlockedException
 import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.domain.session.SessionSummary
 import dev.opencode.mobile.domain.sessioncache.NoOpSessionCache
@@ -56,6 +57,7 @@ import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.OpencodeSseHttpClient
 import dev.opencode.mobile.ui.components.SessionListScrollPin
 import dev.opencode.mobile.ui.components.SessionListStatus
+import dev.opencode.mobile.ui.main.region.HomeSessionActions
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -1286,6 +1288,59 @@ class MainScreenViewModelTest {
             Session(id = "ses-never-ran", title = "Never ran", updatedAtEpochMs = 1L),
         )
 
+    @Test
+    fun homeSessionActions_chooseSettle_skipsBusyThread() =
+        runTest(testDispatcher) {
+            val repository = FakeSessionRepository(mutableMapOf())
+            val errors = mutableListOf<String>()
+            val region = HomeSessionActions(repository, FakeMessageRepository(), this, onLifecycleError = { errors += it })
+            region.begin(
+                sessionId = "thr-1",
+                title = "Busy",
+                worktree = "/repo",
+                canArchive = true,
+                showsSettle = true,
+                snoozeBlockReason = "Waiting on you",
+                presentSheet = false,
+            )
+
+            region.chooseSettle()
+            advanceUntilIdle()
+
+            assertEquals(emptyList<String>(), repository.settledIds)
+            assertEquals(emptyList<String>(), errors)
+            assertFalse(region.state.value.lifecycleInFlight)
+        }
+
+    @Test
+    fun homeSessionActions_settleBlockedByServer_explainsWhy() =
+        runTest(testDispatcher) {
+            val repository = FakeSessionRepository(mutableMapOf(), settleError = SessionSettleBlockedException())
+            val errors = mutableListOf<String>()
+            val region = HomeSessionActions(repository, FakeMessageRepository(), this, onLifecycleError = { errors += it })
+            region.begin(sessionId = "thr-1", title = "Idle", worktree = "/repo", canArchive = true, showsSettle = true)
+
+            region.chooseSettle()
+            advanceUntilIdle()
+
+            assertEquals(listOf("thr-1"), repository.settledIds)
+            assertEquals(listOf(SessionSettleBlockedException.USER_MESSAGE), errors)
+        }
+
+    @Test
+    fun homeSessionActions_settleFailure_staysGenericForOtherErrors() =
+        runTest(testDispatcher) {
+            val repository = FakeSessionRepository(mutableMapOf(), settleError = IllegalStateException("boom"))
+            val errors = mutableListOf<String>()
+            val region = HomeSessionActions(repository, FakeMessageRepository(), this, onLifecycleError = { errors += it })
+            region.begin(sessionId = "thr-1", title = "Idle", worktree = "/repo", canArchive = true, showsSettle = true)
+
+            region.chooseSettle()
+            advanceUntilIdle()
+
+            assertEquals(listOf("Couldn't settle session."), errors)
+        }
+
     private fun createViewModel(
         shouldFailProbe: Boolean = false,
         connectionProfileStore: FakeConnectionProfileStore = FakeConnectionProfileStore(),
@@ -1426,7 +1481,9 @@ private class FakeSessionRepository(
     private val deleteError: Throwable? = null,
     private val forkError: Throwable? = null,
     private val deleteResult: Boolean = true,
+    private val settleError: Throwable? = null,
 ) : SessionRepository {
+    val settledIds = mutableListOf<String>()
     var listSessionsCallCount = 0
     var nextListGate: CompletableDeferred<Unit>? = null
     val createdDirectories = mutableListOf<String?>()
@@ -1488,6 +1545,15 @@ private class FakeSessionRepository(
             updatedAtEpochMs = 20L,
             archivedAtEpochMs = 20L,
         )
+    }
+
+    override suspend fun settleSession(
+        id: String,
+        directory: String?,
+    ): Boolean {
+        settledIds += id
+        settleError?.let { throw it }
+        return true
     }
 
     override suspend fun deleteSession(

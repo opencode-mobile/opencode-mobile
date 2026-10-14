@@ -8,6 +8,7 @@ import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionCreateOptions
 import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
+import dev.opencode.mobile.domain.session.SessionSettleBlockedException
 import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.domain.session.VcsInfo
 import javax.inject.Inject
@@ -222,7 +223,12 @@ class T3SessionRepository
             id: String,
             directory: String?,
         ): Boolean {
-            runtime.dispatch(T3Commands.threadSettle(id))
+            try {
+                runtime.dispatch(T3Commands.threadSettle(id))
+            } catch (error: T3RpcException) {
+                if (T3Errors.isSettleBlocked(error)) throw SessionSettleBlockedException(error)
+                throw error
+            }
             runCatching { runtime.refreshShell() }
             return true
         }

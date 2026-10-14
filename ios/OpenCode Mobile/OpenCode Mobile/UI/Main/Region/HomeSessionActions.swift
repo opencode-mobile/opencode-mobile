@@ -71,7 +71,8 @@ final class HomeSessionActions {
 
     /// Settles the armed session. True when the server accepted it.
     func chooseSettle() async -> Bool {
-        guard let target, lifecycle == .active, !actionInFlight else { return false }
+        // Same reason as snooze: the server refuses to settle a running or waiting thread.
+        guard let target, lifecycle == .active, !actionInFlight, snoozeBlockReason == nil else { return false }
         sheetVisible = false
         snoozeVisible = false
         actionInFlight = true
@@ -87,7 +88,7 @@ final class HomeSessionActions {
             OpenCodeLog.sessionChat.warning("home settle failed session=\(target.sessionId) error=\(error.localizedDescription)")
             actionInFlight = false
             clear()
-            onLifecycleError?(Self.settleError)
+            onLifecycleError?(Self.settleErrorMessage(for: error))
             return false
         }
     }
@@ -485,8 +486,13 @@ final class HomeSessionActions {
     private static let archiveError = "Couldn't archive session."
     private static let unarchiveError = "Couldn't unarchive session."
     private static let unsettleError = "Couldn't unsettle session."
-    private static let settleError = "Couldn't settle session."
+    static let settleError = "Couldn't settle session."
     private static let snoozeErrorMessage = "Couldn't snooze session."
     private static let wakeError = "Couldn't wake session."
     private static let deleteError = "Couldn't delete session."
+
+    /// Says why when the engine refused because the thread is busy; generic otherwise.
+    static func settleErrorMessage(for error: Error) -> String {
+        error is SessionSettleBlockedError ? SessionSettleBlockedError.message : settleError
+    }
 }

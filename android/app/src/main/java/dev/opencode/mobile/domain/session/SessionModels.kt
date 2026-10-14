@@ -22,7 +22,7 @@ data class Session(
     val settledAtEpochMs: Long? = null,
     /** T3: scheduled wake, whether or not the snooze is still in effect. */
     val snoozedUntilEpochMs: Long? = null,
-    /** Why snooze is unavailable: "Still running" or "Waiting on you". */
+    /** Why snooze and settle are unavailable: "Still running" or "Waiting on you". */
     val snoozeBlockReason: String? = null,
     /** v2 only: when the latest run ended. */
     val idleAtEpochMs: Long? = null,
@@ -362,4 +362,13 @@ sealed class SessionError : Exception() {
     data class Decoding(
         override val cause: Throwable,
     ) : SessionError()
+}
+
+/** The engine refused to settle: the session is still running or waiting on the user. */
+class SessionSettleBlockedException(
+    cause: Throwable? = null,
+) : Exception(USER_MESSAGE, cause) {
+    companion object {
+        const val USER_MESSAGE = "Can't settle while the thread is running or waiting on you."
+    }
 }

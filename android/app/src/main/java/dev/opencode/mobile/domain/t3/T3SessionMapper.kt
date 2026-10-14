@@ -37,7 +37,10 @@ object T3SessionMapper {
             snoozeBlockReason = snoozeBlockReason(thread),
         )
 
-    /** Running wins over a pending prompt. Either one blocks a new snooze. */
+    /**
+     * Running wins over a pending prompt. Either one blocks a new snooze and a settle
+     * (the server refuses both), so this reason gates the settle actions too.
+     */
     fun snoozeBlockReason(thread: T3Thread): String? {
         if (T3Activity.isRunning(thread)) return "Still running"
         if (!thread.pendingRequestId.isNullOrBlank()) return "Waiting on you"

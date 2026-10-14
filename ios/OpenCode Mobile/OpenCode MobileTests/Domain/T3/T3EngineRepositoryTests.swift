@@ -326,8 +326,15 @@ final class FakeT3EngineClient: T3EngineClient, @unchecked Sendable {
         return T3ThreadDetail(sequence: 0, thread: snapshot.thread(id: id), messages: [], turnItems: [])
     }
 
+    /// Thrown by the next `dispatchCommand`, which then records nothing.
+    var nextDispatchError: Error?
+
     func dispatchCommand(_ command: [String: Any]) async throws {
         lock.lock(); defer { lock.unlock() }
+        if let error = nextDispatchError {
+            nextDispatchError = nil
+            throw error
+        }
         dispatched.append(command)
     }
 

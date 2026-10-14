@@ -12,6 +12,7 @@ import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
+import dev.opencode.mobile.domain.session.SessionSettleBlockedException
 import dev.opencode.mobile.ui.main.HomeSessionActionTarget
 import dev.opencode.mobile.ui.main.HomeSessionActionsUiState
 import dev.opencode.mobile.ui.main.HomeSessionLifecycle
@@ -122,6 +123,8 @@ class HomeSessionActions(
         val target = snapshot.target ?: return
         if (snapshot.lifecycle != HomeSessionLifecycle.Active) return
         if (snapshot.lifecycleInFlight) return
+        // Same reason as snooze: the server refuses to settle a running or waiting thread.
+        if (snapshot.snoozeBlockReason != null) return
         _state.update { it.copy(sheetVisible = false, snoozeVisible = false, lifecycleInFlight = true) }
         logI("settle start session=${target.sessionId}")
         scope.launch {
@@ -133,7 +136,7 @@ class HomeSessionActions(
                 }.onFailure { error ->
                     logW("settle failed session=${target.sessionId} message=${error.message}")
                     clear(target.sessionId)
-                    onLifecycleError(SETTLE_ERROR)
+                    onLifecycleError(settleErrorMessage(error))
                 }
         }
     }
@@ -530,6 +533,10 @@ class HomeSessionActions(
         const val UNARCHIVE_ERROR = "Couldn't unarchive session."
         const val UNSETTLE_ERROR = "Couldn't unsettle session."
         const val SETTLE_ERROR = "Couldn't settle session."
+
+        /** Says why when the engine refused because the thread is busy; generic otherwise. */
+        fun settleErrorMessage(error: Throwable): String =
+            if (error is SessionSettleBlockedException) SessionSettleBlockedException.USER_MESSAGE else SETTLE_ERROR
         const val SNOOZE_ERROR = "Couldn't snooze session."
         const val WAKE_ERROR = "Couldn't wake session."
         const val DELETE_ERROR = "Couldn't delete session."

@@ -21,7 +21,7 @@ struct Session: Sendable, Equatable {
     var settledAtEpochMs: Int64? = nil
     /// T3: scheduled wake, whether or not the snooze is still in effect.
     var snoozedUntilEpochMs: Int64? = nil
-    /// Why snooze is unavailable: "Still running" or "Waiting on you".
+    /// Why snooze and settle are unavailable: "Still running" or "Waiting on you".
     var snoozeBlockReason: String? = nil
     /// v2 only: when the latest run ended (strictly increasing per session).
     var idleAtEpochMs: Int64? = nil
@@ -446,6 +446,13 @@ enum SessionError: Error, Equatable {
     case transport(String)
     case http(statusCode: Int, message: String?)
     case decoding(String)
+}
+
+/// The engine refused to settle: the session is still running or waiting on the user.
+nonisolated struct SessionSettleBlockedError: Error, Equatable, LocalizedError {
+    static let message = "Can't settle while the thread is running or waiting on you."
+
+    var errorDescription: String? { Self.message }
 }
 
 extension SessionError: LocalizedError {

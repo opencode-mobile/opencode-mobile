@@ -774,8 +774,13 @@ private fun HomeSessionActions(
             HomeSessionLifecycle.Active -> {
                 if (state.showsSettle) {
                     OpenCodeBottomSheetEntry(
-                        title = "Settle",
-                        enabled = !state.lifecycleInFlight,
+                        title =
+                            if (state.snoozeBlockReason != null) {
+                                "Settle · ${state.snoozeBlockReason}"
+                            } else {
+                                "Settle"
+                            },
+                        enabled = state.snoozeBlockReason == null && !state.lifecycleInFlight,
                         startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check, null),
                         onClick = callbacks.onChooseSettle,
                     )

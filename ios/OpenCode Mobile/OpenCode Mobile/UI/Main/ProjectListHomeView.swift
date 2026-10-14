@@ -334,8 +334,8 @@ struct ProjectListHomeView: View {
                 }
                 if viewModel.sessionActionsLifecycle == .active && viewModel.sessionActionsShowsSettle {
                     OpenCodeBottomSheetEntry(
-                        title: "Settle",
-                        enabled: !viewModel.sessionActionInFlight,
+                        title: viewModel.sessionActionsSnoozeBlockReason.map { "Settle · \($0)" } ?? "Settle",
+                        enabled: viewModel.sessionActionsSnoozeBlockReason == nil && !viewModel.sessionActionInFlight,
                         startDecorator: .icon(.check),
                         action: { Task { await viewModel.settleSessionAction() } }
                     )

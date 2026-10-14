@@ -124,6 +124,14 @@ object T3Errors {
         error: Throwable,
     ): String = detail(error)?.takeIf { it.isNotBlank() }?.let { "$message detail=$it" } ?: message
 
+    /**
+     * True when T3 refused `thread.settle` because the thread has an active run or a
+     * blocking runtime request (the orchestrator's "cannot be settled" cause).
+     */
+    fun isSettleBlocked(error: Throwable): Boolean = (error as? T3RpcException)?.detail?.contains(SETTLE_BLOCKED_CAUSE) == true
+
+    private const val SETTLE_BLOCKED_CAUSE = "cannot be settled"
+
     /** Diagnostic detail that must never be shown to the user, when the error carries one. */
     fun detail(error: Throwable): String? =
         when (error) {
