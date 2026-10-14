@@ -45,6 +45,21 @@ struct T3RuntimeTests {
         await #expect(throws: T3SocketError.connectionLost(detail: "T3 websocket closed.")) { try await call.value }
     }
 
+    @Test func pendingRequest_failsAsReleaseWhenAppResetsSocket() async throws {
+        let harness = T3ClientHarness()
+        let call = Task { try await harness.client.dispatchCommand(["type": "noop"]) }
+        let socket = try await harness.connector.connection(at: 0)
+        socket.open()
+        _ = try await socket.firstRequest(tag: "orchestration.dispatchCommand")
+        await harness.client.reset()
+        var thrown: Error?
+        do { _ = try await call.value } catch { thrown = error }
+        // A deliberate release is told apart from a drop so subscriptions log it as info.
+        #expect(thrown.map(T3SocketError.isRelease) == true)
+        #expect(thrown?.localizedDescription == "Lost connection to T3")
+        #expect(!T3SocketError.isRelease(T3SocketError.connectionLost(detail: "T3 websocket closed.")))
+    }
+
     @Test func subscribe_onDeadSessionThrowsImmediately() async throws {
         let session = T3RpcSession(connector: FakeSocketConnector())
         var thrown: Error?

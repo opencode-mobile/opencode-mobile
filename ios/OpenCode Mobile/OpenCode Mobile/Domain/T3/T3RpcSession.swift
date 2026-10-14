@@ -6,6 +6,9 @@ import Foundation
 nonisolated enum T3SocketError: Error, Equatable, LocalizedError {
     /// The socket is gone: closed by either side, replaced, never opened, or timed out.
     case connectionLost(detail: String?)
+    /// The app closed the socket on purpose (background stop, profile switch, a replaced
+    /// session). Callers treat it like a lost connection but do not report it as a fault.
+    case released
     /// The server answered an RPC with an `Exit` failure.
     case rejected(cause: String)
 
@@ -14,15 +17,21 @@ nonisolated enum T3SocketError: Error, Equatable, LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .connectionLost: Self.connectionLostMessage
+        case .connectionLost, .released: Self.connectionLostMessage
         case .rejected: Self.rejectedMessage
         }
+    }
+
+    /// True when `error` is the app's own deliberate socket release, not a drop or a server fault.
+    static func isRelease(_ error: Error) -> Bool {
+        (error as? T3SocketError) == .released
     }
 
     /// Diagnostic text; never user-facing.
     var detail: String? {
         switch self {
         case let .connectionLost(detail): detail
+        case .released: "T3 websocket released by the app."
         case let .rejected(cause): cause
         }
     }
@@ -257,8 +266,9 @@ nonisolated final class T3RpcSession: @unchecked Sendable {
         return stream
     }
 
+    /// The app's own close; every pending request and stream fails with `T3SocketError.released`.
     func close() async {
-        close(reason: nil)
+        close(reason: T3SocketError.released)
     }
 
     private func close(reason: Error?) {

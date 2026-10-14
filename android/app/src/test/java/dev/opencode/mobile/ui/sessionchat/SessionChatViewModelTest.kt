@@ -6120,6 +6120,82 @@ class SessionChatViewModelTest {
             assertNull(viewModel.uiState.value.modelChangeLock)
         }
 
+    @Test
+    fun t3Thread_composerRequestsNoOpenCodeCatalogs() =
+        runTest(testDispatcher) {
+            val commands = FakeCommandRepository()
+            val agents = FakeAgentRepository()
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(messages = emptyList()),
+                    modelRepository = FakeModelRepository(t3Catalog(requiresNewThread = false)),
+                    commandRepository = commands,
+                    agentRepository = agents,
+                    sessionRepository = FakeSessionRepository(getSessionResult = t3ThreadSession()),
+                    connectionProfileStore = FakeConnectionProfileStore(active = t3ChatProfile),
+                )
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            viewModel.bind("ses-1", "Title", "/repo")
+            viewModel.refreshMessages()
+            viewModel.updateComposerText("/")
+            viewModel.updateComposerText("@")
+            advanceUntilIdle()
+
+            assertEquals(0, commands.listCommandsCount)
+            assertEquals(0, agents.mentionableAgentsCount)
+            assertEquals(0, agents.selectableAgentsCount)
+            // The harness catalogue still resolves the thread's model without agents.
+            assertEquals(claudeOpus, selectedOption(viewModel))
+        }
+
+    @Test
+    fun t3NewThread_rebindRequestsNoOpenCodeCatalogs() =
+        runTest(testDispatcher) {
+            val commands = FakeCommandRepository()
+            val agents = FakeAgentRepository()
+            val sessionRepository = t3NewThreadRepository()
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(messages = emptyList()),
+                    modelRepository = FakeModelRepository(t3Catalog(requiresNewThread = false)),
+                    commandRepository = commands,
+                    agentRepository = agents,
+                    sessionRepository = sessionRepository,
+                    connectionProfileStore = FakeConnectionProfileStore(active = t3ChatProfile),
+                )
+
+            viewModel.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, "New Session", "/repo")
+            advanceUntilIdle()
+
+            assertEquals("ses-new", viewModel.uiState.value.sessionId)
+            assertEquals(0, commands.listCommandsCount)
+            assertEquals(0, agents.mentionableAgentsCount)
+            assertEquals(0, agents.selectableAgentsCount)
+            assertTrue(viewModel.uiState.value.composer.isModelSelectionReady)
+        }
+
+    @Test
+    fun openCodeThread_composerLoadsAgentAndCommandCatalogs() =
+        runTest(testDispatcher) {
+            val commands = FakeCommandRepository()
+            val agents = FakeAgentRepository()
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(messages = emptyList()),
+                    commandRepository = commands,
+                    agentRepository = agents,
+                )
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertTrue(commands.listCommandsCount > 0)
+            assertTrue(agents.mentionableAgentsCount > 0)
+            assertTrue(agents.selectableAgentsCount > 0)
+        }
+
     private val t3Identity = ModelSelectionConnectionIdentity(t3ChatProfile.baseUrl, t3ChatProfile.username)
 
     private fun t3NewThreadRepository() =
@@ -6483,8 +6559,12 @@ private class FakeCommandRepository(
     var runCommandCalled: Boolean = false
     var lastRunOptions: CommandRunOptions? = null
     var lastRunSessionId: String? = null
+    var listCommandsCount: Int = 0
 
-    override suspend fun listCommands(directory: String?): List<ServerCommand> = commands
+    override suspend fun listCommands(directory: String?): List<ServerCommand> {
+        listCommandsCount += 1
+        return commands
+    }
 
     override suspend fun runCommand(
         sessionId: String,
@@ -6511,12 +6591,19 @@ private class FakeAgentRepository(
         dev.opencode.mobile.domain.agent.SelectableAgent.Fallback,
     private val selectableAgentsGate: CompletableDeferred<Unit>? = null,
 ) : dev.opencode.mobile.domain.agent.AgentRepository {
+    var selectableAgentsCount: Int = 0
+    var mentionableAgentsCount: Int = 0
+
     override suspend fun listSelectableAgents(directory: String?): List<dev.opencode.mobile.domain.agent.SelectableAgent> {
+        selectableAgentsCount += 1
         selectableAgentsGate?.await()
         return selectableAgents
     }
 
-    override suspend fun listMentionableAgents(directory: String?): List<dev.opencode.mobile.domain.agent.MentionableAgent> = agents
+    override suspend fun listMentionableAgents(directory: String?): List<dev.opencode.mobile.domain.agent.MentionableAgent> {
+        mentionableAgentsCount += 1
+        return agents
+    }
 }
 
 private class FakeMessageRepository(

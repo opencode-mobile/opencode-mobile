@@ -130,9 +130,7 @@ final class SessionChatComposer {
             await self.loadCachedSelection()
             self.applyOrLoadDraft(preserve: preserve)
         }
-        loadServerCommands()
-        loadMentionableAgents()
-        loadSelectableAgents()
+        loadComposerCatalogs()
     }
 
     func setRequiresComposerModel(_ value: Bool) {
@@ -143,14 +141,22 @@ final class SessionChatComposer {
     }
 
     func startCatalogLoads() {
+        loadComposerCatalogs()
         if requiresComposerModel {
-            loadServerCommands()
-            loadMentionableAgents()
-            loadSelectableAgents()
             startCatalogEventRefresh()
-        } else {
-            updateComposer { $0.isModelSelectionReady = true }
         }
+    }
+
+    /// Server commands and agents are OpenCode catalogs. An engine without agents (T3) has
+    /// neither, and asking for them would send OpenCode requests and protocol probes to it.
+    private func loadComposerCatalogs() {
+        guard requiresComposerModel else {
+            updateComposer { $0.isModelSelectionReady = true }
+            return
+        }
+        loadServerCommands()
+        loadMentionableAgents()
+        loadSelectableAgents()
     }
 
     func stopCatalogEventRefresh() {
@@ -286,6 +292,12 @@ final class SessionChatComposer {
     }
 
     func loadSelectableAgents(force: Bool = false) {
+        // Selectable agents are an OpenCode catalog; an engine without agents has none to fetch.
+        guard requiresComposerModel else {
+            loadedSelectableAgents = true
+            applyInitialSelectionIfReady()
+            return
+        }
         if !force, loadedSelectableAgents { return }
         selectableAgentsTask?.cancel()
         selectableAgentsTask = Task {

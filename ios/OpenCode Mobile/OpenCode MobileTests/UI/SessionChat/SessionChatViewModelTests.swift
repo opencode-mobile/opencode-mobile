@@ -4444,6 +4444,81 @@ struct SessionChatViewModelTests {
         #expect(openCodeRepository.setRuntimeModeRequests.isEmpty)
     }
 
+    // MARK: - Agent-less engine catalogs
+
+    @Test func t3Composer_existingThreadRequestsNoOpenCodeCatalogs() async {
+        let client = FakeT3EngineClient(snapshot: T3HarnessCatalogTests.shell(), catalog: T3HarnessCatalogTests.catalog())
+        let commands = FakeCommandRepository()
+        let agents = FakeAgentRepository()
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(),
+            commandRepository: commands,
+            agentRepository: agents,
+            engine: .t3,
+            harnessRepository: DefaultT3HarnessRepository(client: client)
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        await viewModel.refreshMessages()
+        viewModel.updateComposerText("/")
+        viewModel.updateComposerText("@")
+        try? await Task.sleep(for: .milliseconds(50))
+
+        #expect(!commands.listCommandsCalled)
+        #expect(agents.mentionableAgentsCallCount == 0)
+        #expect(agents.selectableAgentsCallCount == 0)
+    }
+
+    @Test func t3Composer_rebindAfterOptimisticCreateRequestsNoOpenCodeCatalogs() async {
+        let client = FakeT3EngineClient(snapshot: T3HarnessCatalogTests.shell(), catalog: T3HarnessCatalogTests.catalog())
+        let commands = FakeCommandRepository()
+        let agents = FakeAgentRepository()
+        let sessionRepository = FakeChatSessionRepository(
+            createSessionResult: Session(
+                id: "ses-new", title: "Created", slug: nil, projectID: nil, directory: "/repo", parentID: nil,
+                updatedAtEpochMs: nil, providerInstanceID: "codex", runtimeMode: "approval-required", modelName: "gpt-5"
+            )
+        )
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(),
+            commandRepository: commands,
+            agentRepository: agents,
+            sessionRepository: sessionRepository,
+            sessionID: OptimisticSessionCreate.placeholderSessionID,
+            sessionTitle: "New Session",
+            engine: .t3,
+            harnessRepository: DefaultT3HarnessRepository(client: client)
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        try? await Task.sleep(for: .milliseconds(50))
+
+        #expect(viewModel.uiState.sessionID == "ses-new")
+        #expect(viewModel.uiState.composer.isModelSelectionReady)
+        #expect(!commands.listCommandsCalled)
+        #expect(agents.mentionableAgentsCallCount == 0)
+        #expect(agents.selectableAgentsCallCount == 0)
+    }
+
+    @Test func openCodeComposer_rebindAfterOptimisticCreateLoadsCatalogs() async {
+        let commands = FakeCommandRepository()
+        let agents = FakeAgentRepository()
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(),
+            commandRepository: commands,
+            agentRepository: agents,
+            sessionID: OptimisticSessionCreate.placeholderSessionID,
+            sessionTitle: "New Session"
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+
+        #expect(viewModel.uiState.sessionID == "new-ses")
+        #expect(await waitUntil { commands.listCommandsCalled })
+        #expect(await waitUntil { agents.mentionableAgentsCallCount > 0 })
+        #expect(await waitUntil { agents.selectableAgentsCallCount > 0 })
+    }
+
     @Test func sessionChatFocusesAndReleasesViewReporter() {
         let reporter = RecordingSessionViewReporter()
         let viewModel = makeViewModel(sessionViewReporter: reporter)
@@ -5094,6 +5169,8 @@ private final class FakeCommandRepository: CommandRepository, @unchecked Sendabl
 private final class FakeAgentRepository: AgentRepository, @unchecked Sendable {
     var agents: [MentionableAgent]
     var selectableAgents: [SelectableAgent]
+    private(set) var selectableAgentsCallCount = 0
+    private(set) var mentionableAgentsCallCount = 0
     private var blockSelectableAgents: Bool
 
     init(
@@ -5114,12 +5191,14 @@ private final class FakeAgentRepository: AgentRepository, @unchecked Sendable {
     }
 
     func listSelectableAgents(directory: String?) async throws -> [SelectableAgent] {
+        selectableAgentsCallCount += 1
         while blockSelectableAgents { await Task.yield() }
         return selectableAgents
     }
 
     func listMentionableAgents(directory: String?) async throws -> [MentionableAgent] {
-        agents
+        mentionableAgentsCallCount += 1
+        return agents
     }
 }
 
