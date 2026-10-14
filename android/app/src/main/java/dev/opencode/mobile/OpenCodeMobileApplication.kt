@@ -1,6 +1,7 @@
 package dev.opencode.mobile
 
 import android.app.Application
+import android.content.Context
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
@@ -18,10 +19,16 @@ import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.domain.preferences.SplitPanePreferences
 import dev.opencode.mobile.domain.textmate.TextMateProcessPressureObserver
 import dev.opencode.mobile.markdown.OpenCodeAndroidMarkdownAssets
+import dev.opencode.mobile.platform.FrameworkSdkLevel
 import dev.opencode.mobile.theme.ThemeManager
 
 @HiltAndroidApp
 class OpenCodeMobileApplication : Application() {
+    override fun attachBaseContext(base: Context) {
+        FrameworkSdkLevel.alignToFramework()
+        super.attachBaseContext(base)
+    }
+
     override fun onCreate() {
         super.onCreate()
         ThemeManager.initialize(this)
