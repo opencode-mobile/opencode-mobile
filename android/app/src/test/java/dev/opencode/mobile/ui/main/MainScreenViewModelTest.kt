@@ -49,6 +49,7 @@ import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.domain.session.SessionSummary
 import dev.opencode.mobile.domain.sessioncache.NoOpSessionCache
+import dev.opencode.mobile.domain.sessioncache.SessionCache
 import dev.opencode.mobile.domain.sync.testSyncCoordinator
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.network.OpencodeHttpClient
@@ -64,8 +65,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -1175,7 +1178,57 @@ class MainScreenViewModelTest {
             activity.value = SessionActivitySnapshot(entries = running, seeded = true)
             advanceUntilIdle()
 
-            assertEquals(SessionIdleOutcome.Succeeded, homeSummaries(viewModel).getValue("ses-1").unreadOutcome)
+            val summary = homeSummaries(viewModel).getValue("ses-1")
+            assertEquals(SessionIdleOutcome.Succeeded, summary.unreadOutcome)
+            // The label wins over the outcome once both are painted.
+            assertEquals(SessionListStatus.Running, summary.toSessionListStatus())
+        }
+
+    @Test
+    fun v2Home_addingProjectNeverPaintsRunningSessionAsDoneFromCache() =
+        runTest(testDispatcher) {
+            val sessions = listOf(Session(id = "ses-1", title = "Chat", updatedAtEpochMs = 1L, idleAtEpochMs = 30L))
+            val running =
+                mapOf(
+                    "ses-1" to
+                        SessionActivityEntry(
+                            activity = SessionActivity.Running,
+                            source = SessionActivitySource.Server,
+                            observedAtMs = 0L,
+                        ),
+                )
+            val sessionsByWorktree = mapOf("/repo" to sessions, "/two" to emptyList())
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo"), serverProtocol = ServerProtocol.V2),
+                    sessionsByWorktree = sessionsByWorktree,
+                    statusLiveStoreOverride =
+                        FakeHomeStatusLiveStore(MutableStateFlow(SessionActivitySnapshot(entries = running, seeded = true))),
+                    serverProtocol = ServerProtocol.V2,
+                    sessionCache =
+                        object : SessionCache by NoOpSessionCache {
+                            override suspend fun seedSessions(worktree: String): List<Session>? = sessionsByWorktree[worktree]
+                        },
+                )
+            advanceUntilIdle()
+            assertEquals(SessionListStatus.Running, homeSummaries(viewModel).getValue("ses-1").toSessionListStatus())
+
+            val painted = mutableListOf<SessionListStatus>()
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+                viewModel.uiState.collect { state ->
+                    (state as? MainScreenUiState.Loaded)
+                        ?.sections
+                        ?.flatMap { it.allSessions }
+                        ?.firstOrNull { it.id == "ses-1" }
+                        ?.let { painted += it.toSessionListStatus() }
+                }
+            }
+            // Changing the worktree list repaints from cache before live observations restart.
+            viewModel.addProject("/two")
+            advanceUntilIdle()
+
+            assertTrue("painted $painted", SessionListStatus.Done !in painted)
+            assertEquals(SessionListStatus.Running, painted.last())
         }
 
     @Test
@@ -1251,6 +1304,7 @@ class MainScreenViewModelTest {
         statusLiveStoreOverride: SessionStatusLiveStore? = null,
         readyStoreOverride: SessionReadyStore? = null,
         serverProtocol: ServerProtocol? = null,
+        sessionCache: SessionCache = NoOpSessionCache,
         modelRepository: ModelRepository =
             object : ModelRepository {
                 override suspend fun listModelOptions(directory: String?): ModelSelectionCatalog = ModelSelectionCatalog(emptyList(), null)
@@ -1326,7 +1380,7 @@ class MainScreenViewModelTest {
             sessionReadyStore = sessionReadyStore,
             activeConnectionManager = activeConnectionManager,
             connectionSessionCoordinator = coordinator,
-            sessionCache = NoOpSessionCache,
+            sessionCache = sessionCache,
         )
     }
 }
