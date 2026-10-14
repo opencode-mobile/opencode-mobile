@@ -13,6 +13,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -21,6 +22,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentWidth
@@ -940,12 +942,23 @@ private fun PermissionApprovalContent(
             )
         }
         Text(state.permission.replace('_', ' '), style = MaterialTheme.typography.bodyMedium)
-        SelectionContainer {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                if (state.files.isNotEmpty()) {
-                    state.files.forEach { file -> PermissionFileLine(file) }
-                } else {
-                    state.patterns.forEach { Text(it, style = PermissionCodeStyle) }
+        if (state.files.isNotEmpty() || state.patterns.isNotEmpty()) {
+            // Cap the command so Deny and Allow stay on screen. Shorter text hugs this height.
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = PermissionDetailMaxHeight)
+                        .verticalScroll(rememberScrollState()),
+            ) {
+                SelectionContainer {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        if (state.files.isNotEmpty()) {
+                            state.files.forEach { file -> PermissionFileLine(file) }
+                        } else {
+                            state.patterns.forEach { Text(it, style = PermissionCodeStyle) }
+                        }
+                    }
                 }
             }
         }
@@ -954,6 +967,8 @@ private fun PermissionApprovalContent(
                 text = "Always allows: ${state.alwaysPatterns.joinToString(", ")}",
                 style = MaterialTheme.typography.bodySmall,
                 color = openCodeColor("text-weak"),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
         }
         state.errorMessage?.let {
@@ -999,6 +1014,9 @@ private fun PermissionApprovalContent(
 
 /** Commands and paths read as code (iOS: `OpenCodeTypography.code`). */
 private val PermissionCodeStyle = CodeTextStyle.copy(fontSize = 13.sp, lineHeight = 18.sp)
+
+/** About eight lines of command text. Longer approvals scroll inside this. */
+private val PermissionDetailMaxHeight = 160.dp
 
 @Composable
 private fun PermissionFileLine(file: OpenCodeSessionComposerState.PermissionFile) {

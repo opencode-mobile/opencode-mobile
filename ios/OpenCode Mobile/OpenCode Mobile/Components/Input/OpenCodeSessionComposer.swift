@@ -666,21 +666,12 @@ struct OpenCodeSessionComposer: View {
             }
             Text(permission.permission.replacingOccurrences(of: "_", with: " "))
                 .font(OpenCodeTypography.bodySecondary)
-            if permission.files.isEmpty {
-                ForEach(Array(permission.patterns.enumerated()), id: \.offset) { _, pattern in
-                    Text(pattern)
-                        .font(OpenCodeTypography.code)
-                        .textSelection(.enabled)
-                }
-            } else {
-                ForEach(permission.files, id: \.self) { file in
-                    permissionFileLine(file)
-                }
-            }
+            permissionDetail(permission)
             if !permission.alwaysPatterns.isEmpty {
                 Text("Always allows: \(permission.alwaysPatterns.joined(separator: ", "))")
                     .font(OpenCodeTypography.caption)
                     .foregroundStyle(OpenCodeColors.textWeak)
+                    .lineLimit(2)
             }
             if let errorMessage = permission.errorMessage {
                 Text(errorMessage)
@@ -720,6 +711,36 @@ struct OpenCodeSessionComposer: View {
                     onAction(.allowPermissionOnce(requestID: permission.requestID, sessionID: permission.sessionID))
                 }
             )
+        }
+    }
+
+    /// Command or file list. A long approval scrolls here so Deny and Allow stay on screen.
+    @ViewBuilder
+    private func permissionDetail(_ permission: OpenCodeSessionComposerState.Permission) -> some View {
+        if permission.files.isEmpty, permission.patterns.isEmpty {
+            EmptyView()
+        } else {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 6) {
+                    if permission.files.isEmpty {
+                        ForEach(Array(permission.patterns.enumerated()), id: \.offset) { _, pattern in
+                            Text(pattern)
+                                .font(OpenCodeTypography.code)
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    } else {
+                        ForEach(permission.files, id: \.self) { file in
+                            permissionFileLine(file)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                }
+            }
+            .scrollBounceBehavior(.basedOnSize, axes: .vertical)
+            // Hug a short command, then clamp. frame-then-fixedSize reports the full height.
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxHeight: Self.permissionDetailMaxHeight, alignment: .top)
         }
     }
 
@@ -897,6 +918,8 @@ struct OpenCodeSessionComposer: View {
     }
 
     private static let shellCornerRadius: CGFloat = 26
+    /// About eight lines of 14pt command text. Longer approvals scroll inside this.
+    private static let permissionDetailMaxHeight: CGFloat = 160
 
     /// Send button label. Steer/Queue only describe what Send does while work is running;
     /// an idle session just sends.
