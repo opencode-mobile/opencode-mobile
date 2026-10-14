@@ -2889,6 +2889,37 @@ struct SessionChatViewModelTests {
         ) == nil)
     }
 
+    @Test func openForkDialog_whileOffline_opensButConfirmWaitsForLiveConnection() async {
+        let sessionRepository = FakeChatSessionRepository()
+        let liveUpdates = FixedLiveUpdates(
+            chrome: LiveUpdatesChrome(label: .offline, canMutate: false, composerEnabled: true)
+        )
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(),
+            sessionRepository: sessionRepository,
+            liveUpdates: liveUpdates
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+
+        // Opening is not gated on the connection; the dialog's Fork button follows canMutate.
+        viewModel.openForkDialog(atMessageID: "msg-3")
+        #expect(viewModel.uiState.forkDialogVisible)
+        #expect(viewModel.uiState.canMutate == false)
+
+        viewModel.confirmFork()
+        await Task.yield()
+        #expect(sessionRepository.forkSessionRequest == nil)
+        #expect(viewModel.uiState.forkDialogVisible)
+        #expect(viewModel.uiState.forkSubmitting == false)
+
+        liveUpdates.set(LiveUpdatesChrome(label: .live, canMutate: true, composerEnabled: true))
+        await waitUntil { viewModel.uiState.canMutate }
+        viewModel.confirmFork()
+        await waitUntil { viewModel.uiState.forkResultVisible }
+        #expect(sessionRepository.forkSessionRequest == .init(id: "ses-1", atMessageID: "msg-3"))
+    }
+
     @Test func forkTitlePrefill_trimsTitleAndFallsBackWhenBlank() {
         #expect(SessionChatCommands.forkTitlePrefill(currentTitle: "  Fix login  ") == "Fork of Fix login")
         #expect(SessionChatCommands.forkTitlePrefill(currentTitle: "") == "Forked session")

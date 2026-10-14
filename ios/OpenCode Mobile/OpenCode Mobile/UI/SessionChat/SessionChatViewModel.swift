@@ -537,8 +537,10 @@ final class SessionChatViewModel {
 
     /// One fork flow for the Commands sheet, the overflow menu (tip, `messageID == nil`) and
     /// message actions ("Fork from here", forks before that user message).
+    /// Opens while offline too (matching Android): the dialog's Fork button follows
+    /// `canMutate`, and `confirmFork` refuses to fork until the connection is live.
     func openForkDialog(atMessageID messageID: String? = nil) {
-        guard hasCreatedSession, isConnectionLive else { return }
+        guard hasCreatedSession else { return }
         ProductAnalytics.logScreenView(
             screenId: ProductAnalytics.Screen.sessionFork,
             presentation: ProductAnalytics.Presentation.dialog,
