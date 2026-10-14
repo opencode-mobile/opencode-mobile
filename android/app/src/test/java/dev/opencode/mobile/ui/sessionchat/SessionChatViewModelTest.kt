@@ -67,6 +67,7 @@ import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionRevert
+import dev.opencode.mobile.domain.session.SessionSettleBlockedException
 import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.domain.sync.testSyncCoordinator
 import dev.opencode.mobile.domain.t3.T3RuntimeModeLabels
@@ -266,6 +267,41 @@ class SessionChatViewModelTest {
             assertTrue(viewModel.uiState.value.shouldLeaveSession)
             assertEquals(false, viewModel.uiState.value.isLifecycleActionInFlight)
             assertEquals(null, viewModel.uiState.value.errorMessage)
+        }
+
+    @Test
+    fun settleSession_blockedByServer_explainsWhy() =
+        runTest(testDispatcher) {
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = FakeSessionRepository(settleError = SessionSettleBlockedException()),
+                )
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            viewModel.settleSession()
+            advanceUntilIdle()
+
+            assertEquals(false, viewModel.uiState.value.shouldLeaveSession)
+            assertEquals(SessionSettleBlockedException.USER_MESSAGE, viewModel.uiState.value.snackbar?.message)
+        }
+
+    @Test
+    fun settleSession_otherFailure_staysGeneric() =
+        runTest(testDispatcher) {
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = FakeSessionRepository(settleError = SessionError.Http(500, "boom")),
+                )
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            viewModel.settleSession()
+            advanceUntilIdle()
+
+            assertEquals("Couldn't settle session.", viewModel.uiState.value.snackbar?.message)
         }
 
     @Test
@@ -6697,6 +6733,7 @@ private class FakeSessionRepository(
     private val sessionStatusError: SessionError? = null,
     private val updateSessionError: SessionError? = null,
     private val archiveError: Throwable? = null,
+    private val settleError: Throwable? = null,
     private val deleteError: Throwable? = null,
     private val deleteResult: Boolean = true,
     private val archiveHoldUntil: CompletableDeferred<Unit>? = null,
@@ -6905,6 +6942,14 @@ private class FakeSessionRepository(
         archiveHoldUntil?.await()
         archiveError?.let { throw it }
         return Session(id = id, title = "Archived", archivedAtEpochMs = 1L)
+    }
+
+    override suspend fun settleSession(
+        id: String,
+        directory: String?,
+    ): Boolean {
+        settleError?.let { throw it }
+        return true
     }
 
     override suspend fun deleteSession(

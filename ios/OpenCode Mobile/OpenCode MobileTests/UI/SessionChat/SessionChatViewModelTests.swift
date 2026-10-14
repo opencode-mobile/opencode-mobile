@@ -40,6 +40,31 @@ struct SessionChatViewModelTests {
         #expect(viewModel.uiState.errorMessage == nil)
     }
 
+    @Test func settleSession_blockedByServer_explainsWhy() async {
+        let sessionRepository = FakeChatSessionRepository()
+        sessionRepository.settleError = SessionSettleBlockedError()
+        let viewModel = makeViewModel(sessionRepository: sessionRepository)
+        defer { viewModel.stopObserving() }
+
+        viewModel.settleSession()
+        await waitUntil { viewModel.uiState.snackbar?.message == SessionSettleBlockedError.message }
+
+        #expect(viewModel.uiState.snackbar?.message == SessionSettleBlockedError.message)
+        #expect(viewModel.uiState.shouldLeaveSession == false)
+    }
+
+    @Test func settleSession_otherFailure_staysGeneric() async {
+        let sessionRepository = FakeChatSessionRepository()
+        sessionRepository.settleError = SessionError.http(statusCode: 500, message: "boom")
+        let viewModel = makeViewModel(sessionRepository: sessionRepository)
+        defer { viewModel.stopObserving() }
+
+        viewModel.settleSession()
+        await waitUntil { viewModel.uiState.snackbar?.message == "Couldn't settle session." }
+
+        #expect(viewModel.uiState.snackbar?.message == "Couldn't settle session.")
+    }
+
     @Test func archiveSession_failureKeepsSessionWithError() async {
         let sessionRepository = FakeChatSessionRepository(
             archiveError: .http(statusCode: 500, message: "boom")
@@ -5517,6 +5542,13 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
             updatedAtEpochMs: nil
         )
     }
+    var settleError: Error?
+
+    func settleSession(id: String, directory: String?) async throws -> Bool {
+        if let settleError { throw settleError }
+        return true
+    }
+
     func archiveSession(id: String, directory: String?) async throws -> Session {
         archiveCallCount += 1
         archiveRequest = LifecycleRequest(id: id, directory: directory)

@@ -265,7 +265,9 @@ final class SessionInfo {
                     "settle failure session=\(sessionID) error=\(error.localizedDescription)"
                 )
                 state.isLifecycleActionInFlight = false
-                state.lifecycleErrorMessage = Self.settleError
+                state.lifecycleErrorMessage = error is SessionSettleBlockedError
+                    ? SessionSettleBlockedError.message
+                    : Self.settleError
                 notifyChange()
             }
         }

@@ -17,6 +17,7 @@ import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.SessionActivity
 import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
+import dev.opencode.mobile.domain.session.SessionSettleBlockedException
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import dev.opencode.mobile.ui.sessionchat.SessionInfoRegionState
 import dev.opencode.mobile.ui.sessionchat.SessionRenameUiState
@@ -269,7 +270,12 @@ class SessionInfo(
                     _state.update {
                         it.copy(
                             isLifecycleActionInFlight = false,
-                            lifecycleErrorMessage = SETTLE_ERROR,
+                            lifecycleErrorMessage =
+                                if (error is SessionSettleBlockedException) {
+                                    SessionSettleBlockedException.USER_MESSAGE
+                                } else {
+                                    SETTLE_ERROR
+                                },
                         )
                     }
                 }
