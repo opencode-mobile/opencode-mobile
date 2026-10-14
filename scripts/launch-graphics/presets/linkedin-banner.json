@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "name": "LinkedIn banner",
+  "description": "4:1 profile banner: diagonal phones, text right of the avatar.",
+  "format": "1584x396",
+  "mode": "dark",
+  "composition": "diagonal",
+  "moment": "sessions",
+  "copy": { "headline": "Every session,\nat a glance." }
+}

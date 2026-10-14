@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "name": "Feed portrait",
+  "description": "4:5 feed post: iPhone hangs from the top, copy below.",
+  "format": "1080x1350",
+  "mode": "dark",
+  "composition": "bottom",
+  "moment": "approval"
+}
