@@ -263,7 +263,12 @@ nonisolated final class T3EnvironmentClient: @unchecked Sendable {
                     locked { if shellTask?.isCancelled == false { shellTask = nil } }
                     return
                 }
-                DiagnosticLog.warning(.sse, "T3 shell subscription lost: \(T3ErrorText.detail(failure) ?? T3ErrorText.userMessage(failure))")
+                let lost = "T3 shell subscription lost: \(T3ErrorText.detail(failure) ?? T3ErrorText.userMessage(failure))"
+                if T3SocketError.isRelease(failure) {
+                    DiagnosticLog.info(.sse, lost)
+                } else {
+                    DiagnosticLog.warning(.sse, lost)
+                }
                 // The stream refused or died; a REST pass keeps home converging
                 // while the socket comes back.
                 Task { [weak self] in
@@ -324,7 +329,12 @@ nonisolated final class T3EnvironmentClient: @unchecked Sendable {
                     locked { if archiveTask?.isCancelled == false { archiveTask = nil } }
                     return
                 }
-                DiagnosticLog.warning(.sse, "T3 archived shell subscription lost: \(T3ErrorText.detail(failure) ?? T3ErrorText.userMessage(failure))")
+                let lost = "T3 archived shell subscription lost: \(T3ErrorText.detail(failure) ?? T3ErrorText.userMessage(failure))"
+                if T3SocketError.isRelease(failure) {
+                    DiagnosticLog.info(.sse, lost)
+                } else {
+                    DiagnosticLog.warning(.sse, lost)
+                }
                 Task { [weak self] in
                     _ = try? await self?.fetchShell(force: true)
                 }

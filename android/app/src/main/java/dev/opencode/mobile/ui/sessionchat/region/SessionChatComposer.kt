@@ -288,6 +288,12 @@ class SessionChatComposer(
     }
 
     fun loadSelectableAgents(force: Boolean = false) {
+        // Selectable agents are an OpenCode catalog; an engine without agents has none to fetch.
+        if (!capabilities.showsAgent) {
+            loadedSelectableAgents = true
+            applyInitialSelectionIfReady()
+            return
+        }
         val worktree = boundWorktree ?: return
         if (!force && loadedSelectableAgents) return
         scope.launch {

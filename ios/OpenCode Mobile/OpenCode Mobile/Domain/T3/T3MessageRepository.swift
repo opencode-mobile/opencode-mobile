@@ -243,10 +243,13 @@ final class T3MessageRepository: MessageRepository {
             }
             if Task.isCancelled { return }
             if let failure {
-                DiagnosticLog.warning(
-                    .sse,
-                    "T3 thread subscription lost session=\(sessionID): \(T3ErrorText.detail(failure) ?? T3ErrorText.userMessage(failure))"
-                )
+                let lost = "T3 thread subscription lost session=\(sessionID): \(T3ErrorText.detail(failure) ?? T3ErrorText.userMessage(failure))"
+                // The app's own socket release (backgrounding) is expected, not a fault.
+                if T3SocketError.isRelease(failure) {
+                    DiagnosticLog.info(.sse, lost)
+                } else {
+                    DiagnosticLog.warning(.sse, lost)
+                }
                 publishFailure(sessionID: sessionID, error: failure)
                 if T3EnvironmentClient.isProtocolMismatch(failure) {
                     // Terminal: the environment cannot be used until it is re-paired or upgraded.
