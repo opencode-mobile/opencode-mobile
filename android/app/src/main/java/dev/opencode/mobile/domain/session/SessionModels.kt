@@ -240,6 +240,21 @@ object SessionTodoList {
     /** Visible while non-empty and not fully finished, including after idle. */
     fun isVisible(todos: List<SessionTodo>): Boolean = todos.isNotEmpty() && !isFinished(todos)
 
+    /**
+     * T3 keeps the pill up for the whole run, including after every step is done.
+     * The list is emptied when the run settles, which hides the pill.
+     */
+    fun isPresented(
+        todos: List<SessionTodo>,
+        keepFinished: Boolean,
+    ): Boolean = if (keepFinished) todos.isNotEmpty() else isVisible(todos)
+
+    /** The finished-hold timer stays off while [keepFinished] is holding the pill itself. */
+    fun treatAsFinished(
+        todos: List<SessionTodo>,
+        keepFinished: Boolean,
+    ): Boolean = !keepFinished && isFinished(todos)
+
     /** Hold the all-done pill only after this presentation already showed an unfinished list. */
     fun shouldHoldFinished(
         sawUnfinished: Boolean,

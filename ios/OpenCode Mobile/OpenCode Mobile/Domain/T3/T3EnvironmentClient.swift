@@ -43,6 +43,8 @@ nonisolated final class T3EnvironmentClient: @unchecked Sendable {
     private var archiveTask: Task<Void, Never>?
     private var cachedCatalog: T3HarnessCatalog?
     private var cachedCatalogIdentity: String?
+    /// Latest Tasks list per thread, written by the message repository and read by `listSessionTodos`.
+    private var notedSessionTodos: [String: [SessionTodo]] = [:]
 
     static let defaultShellRefreshDebounce: Duration = .milliseconds(400)
     static let defaultShellResubscribeDelay: Duration = .seconds(1)
@@ -428,6 +430,18 @@ nonisolated final class T3EnvironmentClient: @unchecked Sendable {
         return locked { cachedShellIdentity == identity ? cachedShell : nil }
     }
 
+    func noteSessionTodos(id: String, todos: [SessionTodo]) {
+        locked { notedSessionTodos[id] = todos }
+    }
+
+    func sessionTodos(id: String) -> [SessionTodo] {
+        locked { notedSessionTodos[id] ?? [] }
+    }
+
+    func clearSessionTodos() {
+        locked { notedSessionTodos.removeAll() }
+    }
+
     func cachedThread(id: String) -> T3Thread? {
         guard let credentials = try? credentials() else { return nil }
         let identity = identity(of: credentials)
@@ -699,6 +713,7 @@ nonisolated final class T3EnvironmentClient: @unchecked Sendable {
             cachedShellIdentity = nil
             cachedCatalog = nil
             cachedCatalogIdentity = nil
+            notedSessionTodos.removeAll()
             shellLiveWanted = false
             // A re-pair or a server upgrade deserves one fresh check next time.
             protocolFailures = [:]

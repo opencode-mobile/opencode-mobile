@@ -1538,8 +1538,14 @@ final class SessionChatViewModel {
                 ? SessionMessageSyncChrome.statusLabel
                 : nil,
             sessionTodos: inboxState.sessionTodos,
-            sessionTodosVisible: SessionTodoList.isVisible(inboxState.sessionTodos),
-            sessionTodosFinished: SessionTodoList.isFinished(inboxState.sessionTodos),
+            sessionTodosVisible: SessionTodoList.isPresented(
+                inboxState.sessionTodos,
+                keepFinished: sessionCapabilities.keepsFinishedTodosVisible
+            ),
+            sessionTodosFinished: SessionTodoList.treatAsFinished(
+                inboxState.sessionTodos,
+                keepFinished: sessionCapabilities.keepsFinishedTodosVisible
+            ),
             sessionTodoActivePreview: SessionTodoList.activePreview(in: inboxState.sessionTodos),
             sessionTodoCompletedCount: SessionTodoList.completedCount(in: inboxState.sessionTodos),
             sessionTodoTotalCount: inboxState.sessionTodos.count,

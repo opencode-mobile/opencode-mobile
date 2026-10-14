@@ -317,13 +317,15 @@ nonisolated enum T3MessageMapper {
         let turnItems = turnItems(from: projection)
         let runtimeRequests = T3JSON.array(projection["runtimeRequests"]).compactMap { runtimeRequest(from: $0) }
         let runs = T3JSON.array(projection["runs"]).compactMap { run(from: $0) }
+        let plans = T3JSON.array(projection["plans"]).compactMap { plan(from: $0) }
         return T3ThreadDetail(
             sequence: sequence,
             thread: thread,
             messages: messages,
             turnItems: turnItems,
             runtimeRequests: runtimeRequests,
-            runs: runs
+            runs: runs,
+            plans: plans
         )
     }
 
@@ -441,31 +443,34 @@ nonisolated enum T3MessageMapper {
         let projection = T3JSON.object(object["projection"]) ?? object
         guard object["projection"] != nil || projection["messages"] != nil else { return nil }
         let parsed = detail(from: object)
-        return T3Transcript(messages: parsed.messages, turnItems: parsed.turnItems, runs: parsed.runs)
+        var transcript = T3Transcript(
+            messages: parsed.messages,
+            turnItems: parsed.turnItems,
+            runs: parsed.runs,
+            plans: parsed.plans
+        )
+        if let thread = parsed.thread {
+            transcript.activeRunID = thread.activeRunID
+            transcript.activityRunStatus = thread.activityRunStatus
+            transcript.activityIsKnown = true
+        }
+        return transcript
     }
 
     static func applyingLiveEvent(_ value: Any, to transcript: T3Transcript) -> T3Transcript? {
         guard let update = liveUpdate(from: value) else { return nil }
+        var next = transcript
         switch update {
         case .message(let message):
-            return T3Transcript(
-                messages: upserting(message, into: transcript.messages),
-                turnItems: transcript.turnItems,
-                runs: transcript.runs
-            )
+            next.messages = upserting(message, into: transcript.messages)
         case .turnItem(let item):
-            return T3Transcript(
-                messages: transcript.messages,
-                turnItems: upserting(item, into: transcript.turnItems),
-                runs: transcript.runs
-            )
+            next.turnItems = upserting(item, into: transcript.turnItems)
         case .run(let run):
-            return T3Transcript(
-                messages: transcript.messages,
-                turnItems: transcript.turnItems,
-                runs: upserting(run, into: transcript.runs)
-            )
+            next.runs = upserting(run, into: transcript.runs)
+        case .plan(let plan):
+            next.plans = upserting(plan, into: transcript.plans)
         }
+        return next
     }
 
     static func message(from value: Any) -> T3ConversationMessage? {
@@ -496,6 +501,19 @@ nonisolated enum T3MessageMapper {
             ordinal: T3JSON.int(object["ordinal"]) ?? 0,
             queuePosition: T3JSON.int(object["queuePosition"])
         )
+    }
+
+    /// One `todo_list` plan. `proposed_plan` and a row without an id are skipped.
+    static func plan(from value: Any) -> T3Plan? {
+        guard let object = T3JSON.object(value),
+              T3JSON.string(object, "kind")?.lowercased() == "todo_list",
+              let id = T3JSON.string(object, "id")
+        else { return nil }
+        let steps = T3JSON.array(object["steps"]).compactMap { item -> T3PlanStep? in
+            guard let step = T3JSON.object(item), let text = T3JSON.string(step, "text") else { return nil }
+            return T3PlanStep(text: text, status: T3JSON.string(step, "status") ?? "pending")
+        }
+        return T3Plan(id: id, runID: T3JSON.string(object, "runId"), steps: steps)
     }
 
     private static func present(_ value: Any?) -> Bool {
@@ -845,6 +863,8 @@ nonisolated enum T3MessageMapper {
                 return turnItem(from: payload).map(LiveUpdate.turnItem)
             case "run.created", "run.updated":
                 return run(from: payload).map(LiveUpdate.run)
+            case "plan.updated":
+                return plan(from: payload).map(LiveUpdate.plan)
             default:
                 return nil
             }
@@ -858,7 +878,7 @@ nonisolated enum T3MessageMapper {
     private static func typedEvent(from value: Any) -> [String: Any]? {
         guard let object = T3JSON.object(value) else { return nil }
         if let type = T3JSON.string(object, "type") {
-            if type == "message.updated" || type == "turn-item.updated" || type == "run.created" || type == "run.updated" {
+            if type == "message.updated" || type == "turn-item.updated" || type == "run.created" || type == "run.updated" || type == "plan.updated" {
                 return object
             }
             return nil
@@ -875,6 +895,16 @@ nonisolated enum T3MessageMapper {
             next[index] = message
         } else {
             next.append(message)
+        }
+        return next
+    }
+
+    private static func upserting(_ plan: T3Plan, into plans: [T3Plan]) -> [T3Plan] {
+        var next = plans
+        if let index = next.firstIndex(where: { $0.id == plan.id }) {
+            next[index] = plan
+        } else {
+            next.append(plan)
         }
         return next
     }
@@ -965,6 +995,7 @@ nonisolated enum T3MessageMapper {
         case message(T3ConversationMessage)
         case turnItem(T3TurnItem)
         case run(T3Run)
+        case plan(T3Plan)
     }
 
     private struct ActivityBuffer {

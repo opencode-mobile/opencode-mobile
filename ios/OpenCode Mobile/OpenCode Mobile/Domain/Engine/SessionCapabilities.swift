@@ -22,6 +22,8 @@ nonisolated struct SessionCapabilities: Equatable, Sendable {
     var showsModelSelection = false
     /// Home lists archived and settled sessions with restore actions.
     var showsArchivedSessions = false
+    /// The todo pill stays visible after every step is done, for as long as the engine keeps the list.
+    var keepsFinishedTodosVisible = false
 
     static let opencode = SessionCapabilities(
         showsAgent: true,
@@ -55,7 +57,8 @@ nonisolated struct SessionCapabilities: Equatable, Sendable {
         showsFiles: false,
         canSetRuntimeMode: true,
         showsModelSelection: true,
-        showsArchivedSessions: true
+        showsArchivedSessions: true,
+        keepsFinishedTodosVisible: true
     )
 
     static func forEngine(_ engine: ConnectionEngine) -> SessionCapabilities {

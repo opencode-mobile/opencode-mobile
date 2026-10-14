@@ -175,6 +175,22 @@ data class T3Run(
     val queuePosition: Long? = null,
 )
 
+/** One step of a `todo_list` plan. `running` is the step the Tasks bar names. */
+data class T3PlanStep(
+    val text: String,
+    val status: String,
+)
+
+/**
+ * A `todo_list` plan artifact. `proposed_plan` markdown is a different surface
+ * and is not stored here.
+ */
+data class T3Plan(
+    val id: String,
+    val runId: String?,
+    val steps: List<T3PlanStep>,
+)
+
 data class T3TurnItem(
     val id: String,
     val type: String,
@@ -237,6 +253,9 @@ data class T3ThreadSnapshot(
     val turnItems: List<T3TurnItem> = emptyList(),
     val runtimeRequests: List<T3RuntimeRequest> = emptyList(),
     val runs: List<T3Run> = emptyList(),
+    val plans: List<T3Plan> = emptyList(),
+    /** Projection thread, when the snapshot carried one. Activity for the Tasks bar. */
+    val thread: T3Thread? = null,
 )
 
 data class T3WsTicket(

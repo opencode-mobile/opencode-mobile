@@ -46,5 +46,7 @@ class SessionCapabilitiesTest {
         assertFalse(capabilities.showsReview)
         assertFalse(capabilities.showsFiles)
         assertFalse(capabilities.requiresComposerModel)
+        assertTrue(capabilities.keepsFinishedTodosVisible)
+        assertFalse(SessionCapabilities.OpenCode.keepsFinishedTodosVisible)
     }
 }

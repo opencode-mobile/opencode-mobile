@@ -23,6 +23,11 @@ data class SessionCapabilities(
     val showsModelSelection: Boolean = false,
     /** Home lists archived and settled sessions with restore actions. */
     val showsArchivedSessions: Boolean = false,
+    /**
+     * The todo pill stays visible after every step is done, for as long as the
+     * engine keeps the list. T3 clears the list when the run settles.
+     */
+    val keepsFinishedTodosVisible: Boolean = false,
     /** The composer shows the model chip and picker backed by the engine's catalogue. */
     val showsComposerModel: Boolean = !showsProvider,
     /** The model chip reads `<provider> · <model>` and replaces the read-only provider chip. */
@@ -71,6 +76,7 @@ data class SessionCapabilities(
                 canSetRuntimeMode = true,
                 showsModelSelection = true,
                 showsArchivedSessions = true,
+                keepsFinishedTodosVisible = true,
                 showsComposerModel = true,
                 labelsComposerModelWithProvider = true,
             )

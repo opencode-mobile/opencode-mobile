@@ -1817,8 +1817,16 @@ class SessionChatViewModel
                 workingIndicatorFading = workingIndicatorFading,
                 syncingIndicatorLabel = syncingIndicatorLabel,
                 sessionTodos = inboxSnapshot.sessionTodos,
-                sessionTodosVisible = SessionTodoList.isVisible(inboxSnapshot.sessionTodos),
-                sessionTodosFinished = SessionTodoList.isFinished(inboxSnapshot.sessionTodos),
+                sessionTodosVisible =
+                    SessionTodoList.isPresented(
+                        inboxSnapshot.sessionTodos,
+                        capabilities.keepsFinishedTodosVisible,
+                    ),
+                sessionTodosFinished =
+                    SessionTodoList.treatAsFinished(
+                        inboxSnapshot.sessionTodos,
+                        capabilities.keepsFinishedTodosVisible,
+                    ),
                 sessionTodoActivePreview = SessionTodoList.activePreview(inboxSnapshot.sessionTodos),
                 sessionTodoCompletedCount = SessionTodoList.completedCount(inboxSnapshot.sessionTodos),
                 sessionTodoTotalCount = inboxSnapshot.sessionTodos.size,

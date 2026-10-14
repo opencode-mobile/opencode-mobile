@@ -11,6 +11,7 @@ import dev.opencode.mobile.domain.message.AttachmentDataUrl
 import dev.opencode.mobile.domain.message.AttachmentThumbnailer
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessagePart
+import dev.opencode.mobile.domain.session.SessionTodo
 import dev.opencode.mobile.network.ActiveConnectionManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -107,6 +108,9 @@ class T3Runtime
         private val conversationByThread = mutableMapOf<String, List<T3ConversationMessage>>()
         private val turnItemsByThread = mutableMapOf<String, List<T3TurnItem>>()
         private val runsByThread = mutableMapOf<String, List<T3Run>>()
+        private val plansByThread = mutableMapOf<String, List<T3Plan>>()
+        private val planActivityByThread = mutableMapOf<String, PlanActivity>()
+        private val lastTodosByThread = mutableMapOf<String, List<SessionTodo>>()
         private val sequences = ConcurrentHashMap<String, Long>()
         private val messageMutex = Mutex()
         private val imagePreviews = ConcurrentHashMap<String, String>()
@@ -265,6 +269,10 @@ class T3Runtime
 
         fun cachedMessages(threadId: String): List<Message> = messages[threadId].orEmpty()
 
+        /** Tasks for the active run, or empty once that run has settled. */
+        suspend fun sessionTodos(threadId: String): List<SessionTodo> =
+            messageMutex.withLock { visibleTodosLocked(threadId) }
+
         /**
          * Conversation messages stored for [threadId], or null until a snapshot
          * or live message has landed. The title seed is sent only while this is
@@ -285,14 +293,20 @@ class T3Runtime
                         subscribedThreadId = null
                         observedThreadId
                     }
-                messageMutex.withLock {
-                    conversationByThread.clear()
-                    turnItemsByThread.clear()
-                    runsByThread.clear()
-                    messages.clear()
-                    sequences.clear()
-                    publishMessages()
-                }
+                val todoEvents =
+                    messageMutex.withLock {
+                        conversationByThread.clear()
+                        turnItemsByThread.clear()
+                        runsByThread.clear()
+                        val planned = plansByThread.keys.toList()
+                        plansByThread.clear()
+                        planActivityByThread.clear()
+                        messages.clear()
+                        sequences.clear()
+                        publishMessages()
+                        planned.mapNotNull { stageTodos(it) }
+                    }
+                todoEvents.forEach(::publishTodoEvent)
                 imagePreviews.clear()
                 imageAttempts.clear()
                 imageInflight.clear()
@@ -819,6 +833,15 @@ class T3Runtime
                     // The shell stream carries the resulting status; this is the REST backstop.
                     scheduleShellRefresh()
                 }
+                "plan.updated" -> {
+                    val plan = (event["payload"] as? JsonObject)?.let(T3Json::plan) ?: return
+                    val todoEvent =
+                        messageMutex.withLock {
+                            plansByThread[threadId] = upsertPlan(plansByThread[threadId].orEmpty(), plan)
+                            stageTodos(threadId)
+                        }
+                    publishTodoEvent(todoEvent)
+                }
                 "runtime-request.updated", "thread.status", "thread.updated" -> scheduleShellRefresh()
             }
         }
@@ -844,13 +867,19 @@ class T3Runtime
             threadId: String,
             snapshot: T3ThreadSnapshot,
         ): List<Message> {
-            val (shown, pending) =
+            val (shown, pending, todoEvent) =
                 messageMutex.withLock {
                     conversationByThread[threadId] = snapshot.messages
                     turnItemsByThread[threadId] = snapshot.turnItems
                     runsByThread[threadId] = snapshot.runs
-                    publishDerived(threadId, snapshot.snapshotSequence)
+                    plansByThread[threadId] = snapshot.plans
+                    snapshot.thread?.let { thread ->
+                        planActivityByThread[threadId] = PlanActivity(thread.activeRunId, thread.activityRunStatus)
+                    }
+                    val derived = publishDerived(threadId, snapshot.snapshotSequence)
+                    Triple(derived.first, derived.second, stageTodos(threadId))
                 }
+            publishTodoEvent(todoEvent)
             scheduleImagePreviews(threadId, pending)
             return shown
         }
@@ -877,7 +906,7 @@ class T3Runtime
             threadId: String,
             run: T3Run,
         ) {
-            val pending =
+            val (pending, todoEvent) =
                 messageMutex.withLock {
                     val current = runsByThread[threadId].orEmpty()
                     val index = current.indexOfFirst { it.id == run.id }
@@ -887,11 +916,49 @@ class T3Runtime
                         } else {
                             current.toMutableList().also { it[index] = run }
                         }
-                    if (next == current) return@withLock emptyList()
+                    if (next == current) return@withLock emptyList<MessagePart.File>() to null
                     runsByThread[threadId] = next
-                    publishDerived(threadId, sequence = null).second
+                    publishDerived(threadId, sequence = null).second to stageTodos(threadId)
                 }
+            publishTodoEvent(todoEvent)
             scheduleImagePreviews(threadId, pending)
+        }
+
+        /** Caller holds [messageMutex]. */
+        private fun visibleTodosLocked(threadId: String): List<SessionTodo> {
+            val activity = planActivityByThread[threadId]
+            return T3Plans.visibleTodos(
+                plansByThread[threadId].orEmpty(),
+                runsByThread[threadId].orEmpty(),
+                activity?.activeRunId,
+                activity?.activityRunStatus,
+            )
+        }
+
+        /**
+         * Caller holds [messageMutex]. Returns an event to publish after the lock
+         * is released. A synchronous collector can call [sessionTodos] back.
+         */
+        private fun stageTodos(threadId: String): OpencodeEvent? {
+            val next = visibleTodosLocked(threadId)
+            val previous = lastTodosByThread[threadId]
+            if (previous == next) return null
+            lastTodosByThread[threadId] = next
+            if (previous == null && next.isEmpty()) return null
+            return T3Plans.updatedEvent(threadId, next)
+        }
+
+        private fun publishTodoEvent(event: OpencodeEvent?) {
+            if (event != null) eventStream.publishSynthetic(event)
+        }
+
+        private fun upsertPlan(
+            plans: List<T3Plan>,
+            plan: T3Plan,
+        ): List<T3Plan> {
+            val index = plans.indexOfFirst { it.id == plan.id }
+            if (index < 0) return plans + plan
+            return plans.toMutableList().also { it[index] = plan }
         }
 
         /** Caller holds [messageMutex]. */
@@ -985,6 +1052,9 @@ class T3Runtime
                 conversationByThread.clear()
                 turnItemsByThread.clear()
                 runsByThread.clear()
+                plansByThread.clear()
+                planActivityByThread.clear()
+                lastTodosByThread.clear()
                 messages.clear()
                 sequences.clear()
             }
@@ -1005,10 +1075,23 @@ class T3Runtime
             val before = previous?.threads?.associateBy { it.id }.orEmpty()
             val after = next.threads.associateBy { it.id }
             val lifecycle = publishLifecycle && previous != null
+            val activityNotes = mutableListOf<PlanActivityNote>()
             for (threadId in before.keys + after.keys) {
                 val old = before[threadId]
                 val new = after[threadId]
                 if (old == new) continue
+                val activityChanged =
+                    (old == null) != (new == null) ||
+                        old?.activeRunId != new?.activeRunId ||
+                        old?.activityRunStatus != new?.activityRunStatus
+                if (activityChanged) {
+                    activityNotes +=
+                        PlanActivityNote(
+                            threadId = threadId,
+                            activeRunId = new?.activeRunId,
+                            activityRunStatus = new?.activityRunStatus,
+                        )
+                }
                 if (lifecycle) {
                     val type =
                         when {
@@ -1042,6 +1125,19 @@ class T3Runtime
                     eventStream.publishSynthetic(OpencodeEvent(type = type, sessionId = threadId))
                 }
             }
+            if (activityNotes.isNotEmpty()) {
+                scope.launch {
+                    val events =
+                        messageMutex.withLock {
+                            activityNotes.map { note ->
+                                planActivityByThread[note.threadId] =
+                                    PlanActivity(note.activeRunId, note.activityRunStatus)
+                                stageTodos(note.threadId)
+                            }
+                        }
+                    events.forEach(::publishTodoEvent)
+                }
+            }
         }
 
         private fun publishLive(state: EventStreamConnectionState) {
@@ -1065,6 +1161,17 @@ class T3Runtime
         private fun JsonObject.string(key: String): String? = (this[key] as? JsonPrimitive)?.contentOrNull
 
         private fun JsonObject.long(key: String): Long? = (this[key] as? JsonPrimitive)?.longOrNull
+
+        private data class PlanActivity(
+            val activeRunId: String?,
+            val activityRunStatus: String?,
+        )
+
+        private data class PlanActivityNote(
+            val threadId: String,
+            val activeRunId: String?,
+            val activityRunStatus: String?,
+        )
 
         companion object {
             const val SHELL_REFRESH_DEBOUNCE_MS = 400L

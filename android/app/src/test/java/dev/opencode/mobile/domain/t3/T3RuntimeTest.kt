@@ -1,6 +1,7 @@
 package dev.opencode.mobile.domain.t3
 
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogBuffer
+import dev.opencode.mobile.domain.session.SessionTodoStatus
 import dev.opencode.mobile.domain.event.EventStreamConnectionState
 import dev.opencode.mobile.domain.message.MessageContentPreparer
 import dev.opencode.mobile.domain.message.MessageError
@@ -19,6 +20,7 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
@@ -555,6 +557,157 @@ class T3RuntimeTest {
             val resubscribed = h.socket.subscribes(T3RpcCodec.SUBSCRIBE_THREAD).last()
             assertEquals("thr-1", resubscribed.threadId)
             assertNull(resubscribed.afterSequence)
+        }
+
+    @Test
+    fun todoListFollowsTheActiveRun() =
+        runTest {
+            val h = Harness(this).build()
+            h.http.threadJson["thr-1"] =
+                """
+                {
+                  "snapshotSequence": 3,
+                  "projection": {
+                    "thread": {
+                      "id": "thr-1",
+                      "title": "Tasks",
+                      "projectId": "p",
+                      "status": "busy",
+                      "activeRunId": "run-1",
+                      "activityRunStatus": "running"
+                    },
+                    "messages": [],
+                    "runs": [{"id": "run-1", "status": "running", "userMessageId": "m1"}],
+                    "plans": [
+                      {
+                        "id": "plan-old",
+                        "threadId": "thr-1",
+                        "runId": "run-0",
+                        "nodeId": "n",
+                        "kind": "todo_list",
+                        "status": "completed",
+                        "steps": [{"id": "s", "text": "Old", "status": "pending"}]
+                      },
+                      {
+                        "id": "plan-md",
+                        "threadId": "thr-1",
+                        "runId": "run-1",
+                        "nodeId": "n",
+                        "kind": "proposed_plan",
+                        "status": "active",
+                        "markdown": "# Plan"
+                      },
+                      {
+                        "id": "plan-1",
+                        "threadId": "thr-1",
+                        "runId": "run-1",
+                        "nodeId": "n",
+                        "kind": "todo_list",
+                        "status": "active",
+                        "steps": [
+                          {"id": "a", "text": "Parse queued runs", "status": "completed"},
+                          {"id": "b", "text": "Mark messages waiting", "status": "running"},
+                          {"id": "c", "text": "Leave the rest", "status": "pending"}
+                        ]
+                      }
+                    ]
+                  }
+                }
+                """.trimIndent()
+
+            h.runtime.loadThreadMessages("thr-1")
+            settle()
+
+            val todos = h.runtime.sessionTodos("thr-1")
+            assertEquals(
+                listOf("Parse queued runs", "Mark messages waiting", "Leave the rest"),
+                todos.map { it.content },
+            )
+            assertEquals(SessionTodoStatus.Completed, todos[0].status)
+            assertEquals(SessionTodoStatus.InProgress, todos[1].status)
+            assertEquals(SessionTodoStatus.Pending, todos[2].status)
+            assertEquals("thr-1", h.events.published.last { it.type == "todo.updated" }.sessionId)
+
+            val subscription = h.socket.lastSubscribe(T3RpcCodec.SUBSCRIBE_THREAD)
+            h.socket.chunk(
+                subscription.id,
+                threadEventItem(
+                    4,
+                    buildJsonObject {
+                        put("type", "plan.updated")
+                        put(
+                            "payload",
+                            buildJsonObject {
+                                put("id", "plan-1")
+                                put("kind", "todo_list")
+                                put("runId", "run-1")
+                                put("status", "active")
+                                put(
+                                    "steps",
+                                    buildJsonArray {
+                                        add(
+                                            buildJsonObject {
+                                                put("id", "b")
+                                                put("text", "Mark messages waiting")
+                                                put("status", "completed")
+                                            },
+                                        )
+                                    },
+                                )
+                            },
+                        )
+                    },
+                ),
+            )
+            settle()
+            val updated = h.runtime.sessionTodos("thr-1")
+            assertEquals(listOf("Mark messages waiting"), updated.map { it.content })
+            assertEquals(SessionTodoStatus.Completed, updated.single().status)
+
+            h.runtime.clearTranscript()
+            settle()
+            assertTrue(h.runtime.sessionTodos("thr-1").isEmpty())
+            h.http.threadJson["thr-1"] =
+                """
+                {
+                  "snapshotSequence": 6,
+                  "projection": {
+                    "messages": [],
+                    "runs": [{"id": "run-1", "status": "running", "userMessageId": "m1"}],
+                    "plans": [
+                      {
+                        "id": "plan-1",
+                        "kind": "todo_list",
+                        "runId": "run-1",
+                        "status": "active",
+                        "steps": [{"id": "b", "text": "Mark messages waiting", "status": "completed"}]
+                      }
+                    ]
+                  }
+                }
+                """.trimIndent()
+            h.runtime.loadThreadMessages("thr-1")
+            settle()
+            assertTrue(
+                "a snapshot that omits the thread does not revive tasks from the cleared run",
+                h.runtime.sessionTodos("thr-1").isEmpty(),
+            )
+
+            h.http.shellJson =
+                shellJson(
+                    threads =
+                        listOf(
+                            buildJsonObject {
+                                put("id", "thr-1")
+                                put("title", "Tasks")
+                                put("projectId", "p")
+                                put("status", "idle")
+                            },
+                        ),
+                )
+            h.runtime.refreshShell()
+            settle()
+            assertTrue(h.runtime.sessionTodos("thr-1").isEmpty())
         }
 
     private fun messages(h: Harness): T3MessageRepository {

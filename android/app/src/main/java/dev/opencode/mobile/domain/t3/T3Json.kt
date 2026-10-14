@@ -84,6 +84,34 @@ object T3Json {
             turnItems = turnItemsOf(projection),
             runtimeRequests = projection.array("runtimeRequests").mapNotNull(::runtimeRequest),
             runs = projection.array("runs").mapNotNull(::run),
+            plans = projection.array("plans").mapNotNull(::plan),
+            thread = projection.obj("thread")?.let(::thread),
+        )
+    }
+
+    /**
+     * One `todo_list` plan. `proposed_plan` and a row without an id are skipped.
+     * A `plan.updated` payload is the same object.
+     */
+    fun plan(element: JsonElement): T3Plan? {
+        val obj = element as? JsonObject ?: return null
+        if (obj.string("kind")?.trim()?.lowercase() != "todo_list") return null
+        val id = obj.string("id")?.trim().orEmpty()
+        if (id.isEmpty()) return null
+        return T3Plan(
+            id = id,
+            runId = obj.string("runId")?.trim()?.takeIf { it.isNotEmpty() },
+            steps = obj.array("steps").mapNotNull(::planStep),
+        )
+    }
+
+    private fun planStep(element: JsonElement): T3PlanStep? {
+        val obj = element as? JsonObject ?: return null
+        val text = obj.string("text")?.trim().orEmpty()
+        if (text.isEmpty()) return null
+        return T3PlanStep(
+            text = text,
+            status = obj.string("status")?.trim().orEmpty().ifEmpty { "pending" },
         )
     }
 

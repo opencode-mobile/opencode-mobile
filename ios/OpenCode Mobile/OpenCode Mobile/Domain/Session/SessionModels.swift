@@ -309,6 +309,16 @@ enum SessionTodoList {
         !todos.isEmpty && !isFinished(todos)
     }
 
+    /// T3 keeps the pill up for the whole run, including after every step is done.
+    static func isPresented(_ todos: [SessionTodo], keepFinished: Bool) -> Bool {
+        keepFinished ? !todos.isEmpty : isVisible(todos)
+    }
+
+    /// The finished-hold timer stays off while `keepFinished` is holding the pill itself.
+    static func treatAsFinished(_ todos: [SessionTodo], keepFinished: Bool) -> Bool {
+        !keepFinished && isFinished(todos)
+    }
+
     /// Hold the all-done pill only after this presentation already showed an unfinished list.
     static func shouldHoldFinished(sawUnfinished: Bool, todos: [SessionTodo]) -> Bool {
         sawUnfinished && isFinished(todos)

@@ -345,6 +345,19 @@ struct T3Run: Equatable, Sendable {
     var queuePosition: Int? = nil
 }
 
+/// One step of a `todo_list` plan. `running` is the step the Tasks bar names.
+struct T3PlanStep: Equatable, Sendable {
+    var text: String
+    var status: String
+}
+
+/// A `todo_list` plan artifact. `proposed_plan` markdown is a different surface.
+struct T3Plan: Equatable, Sendable {
+    var id: String
+    var runID: String?
+    var steps: [T3PlanStep]
+}
+
 struct T3TurnItem: Equatable, Sendable {
     var id: String
     var ordinal: Int = 0
@@ -405,6 +418,11 @@ struct T3Transcript: Equatable, Sendable {
     var messages: [T3ConversationMessage] = []
     var turnItems: [T3TurnItem] = []
     var runs: [T3Run] = []
+    var plans: [T3Plan] = []
+    var activeRunID: String? = nil
+    var activityRunStatus: String? = nil
+    /// False when the last snapshot omitted the thread, so a previous activity stands.
+    var activityIsKnown: Bool = false
 }
 
 struct T3ThreadDetail: Equatable, Sendable {
@@ -414,4 +432,5 @@ struct T3ThreadDetail: Equatable, Sendable {
     var turnItems: [T3TurnItem] = []
     var runtimeRequests: [T3RuntimeRequest] = []
     var runs: [T3Run] = []
+    var plans: [T3Plan] = []
 }

@@ -28,6 +28,8 @@ protocol T3EngineClient: Sendable {
     func noteThreadArchived(id: String)
     /// Moves `id` back to the active list and clears `archivedAt`.
     func noteThreadUnarchived(id: String)
+    /// Latest Tasks list for a thread. Empty until a snapshot or `plan.updated` lands.
+    func sessionTodos(id: String) -> [SessionTodo]
 }
 
 extension T3EngineClient {
@@ -44,6 +46,8 @@ extension T3EngineClient {
     func noteThreadArchived(id _: String) {}
 
     func noteThreadUnarchived(id _: String) {}
+
+    func sessionTodos(id _: String) -> [SessionTodo] { [] }
 }
 
 extension T3EnvironmentClient: T3EngineClient {}

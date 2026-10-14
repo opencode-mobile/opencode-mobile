@@ -187,7 +187,9 @@ final class T3SessionRepository: SessionRepository, @unchecked Sendable {
     }
 
     func listChildSessions(id _: String) async throws -> [Session] { [] }
-    func listSessionTodos(id _: String, directory _: String?) async throws -> [SessionTodo] { [] }
+    func listSessionTodos(id: String, directory _: String?) async throws -> [SessionTodo] {
+        client.sessionTodos(id: id)
+    }
 
     func initializeSessionAgents(id _: String, messageID _: String, providerID _: String, modelID _: String) async throws -> Bool {
         throw Self.unsupported("Agents")

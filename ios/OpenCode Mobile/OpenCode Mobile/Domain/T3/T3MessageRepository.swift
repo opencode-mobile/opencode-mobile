@@ -26,6 +26,7 @@ final class T3MessageRepository: MessageRepository {
     private var imagePreviews: [String: Data] = [:]
     private var imageAttempts: Set<String> = []
     private var imageLoads: Set<String> = []
+    private var lastTodos: [String: [SessionTodo]] = [:]
 
     private struct Observer<Update> {
         let sessionID: String
@@ -103,8 +104,23 @@ final class T3MessageRepository: MessageRepository {
 
     func refreshMessages(sessionID: String, directory _: String?) async throws -> [Message] {
         let detail = try await client.fetchThread(id: sessionID)
-        let transcript = T3Transcript(messages: detail.messages, turnItems: detail.turnItems)
+        var transcript = T3Transcript(
+            messages: detail.messages,
+            turnItems: detail.turnItems,
+            runs: detail.runs,
+            plans: detail.plans
+        )
+        if let thread = detail.thread {
+            transcript.activeRunID = thread.activeRunID
+            transcript.activityRunStatus = thread.activityRunStatus
+            transcript.activityIsKnown = true
+        } else if let previous = transcripts[sessionID] {
+            transcript.activeRunID = previous.activeRunID
+            transcript.activityRunStatus = previous.activityRunStatus
+            transcript.activityIsKnown = previous.activityIsKnown
+        }
         transcripts[sessionID] = transcript
+        publishTodos(sessionID: sessionID)
         let messages = T3MessageMapper.domainMessages(from: transcript)
         retryFailedImageLoads(in: messages)
         snapshots[sessionID] = messages
@@ -138,6 +154,12 @@ final class T3MessageRepository: MessageRepository {
         imagePreviews.removeAll()
         imageAttempts.removeAll()
         imageLoads.removeAll()
+        let planned = lastTodos.filter { !$0.value.isEmpty }.map(\.key)
+        lastTodos.removeAll()
+        client.clearSessionTodos()
+        for sessionID in planned {
+            eventStream?.publishSynthetic(T3Plans.updatedEvent(sessionID: sessionID, todos: []))
+        }
         // Sessions still on screen re-subscribe from sequence 0 and receive a
         // fresh snapshot instead of silently losing live updates.
         let observed = Set(continuations.values.map(\.sessionID))
@@ -287,11 +309,17 @@ final class T3MessageRepository: MessageRepository {
 
     private func applyLiveValue(_ value: Any, sessionID: String) {
         trackSequence(value, sessionID: sessionID)
-        if let transcript = T3MessageMapper.transcript(fromSnapshotItem: value) {
+        if var transcript = T3MessageMapper.transcript(fromSnapshotItem: value) {
+            if !transcript.activityIsKnown, let previous = transcripts[sessionID] {
+                transcript.activeRunID = previous.activeRunID
+                transcript.activityRunStatus = previous.activityRunStatus
+                transcript.activityIsKnown = previous.activityIsKnown
+            }
             transcripts[sessionID] = transcript
             let messages = T3MessageMapper.domainMessages(from: transcript)
             snapshots[sessionID] = messages
             publish(sessionID: sessionID, messages: messages)
+            publishTodos(sessionID: sessionID)
             return
         }
         if Self.isActivityEvent(value) {
@@ -302,6 +330,9 @@ final class T3MessageRepository: MessageRepository {
         let currentTranscript = transcripts[sessionID] ?? T3Transcript()
         guard let nextTranscript = T3MessageMapper.applyingLiveEvent(value, to: currentTranscript) else { return }
         transcripts[sessionID] = nextTranscript
+        if nextTranscript.plans != currentTranscript.plans || nextTranscript.runs != currentTranscript.runs {
+            publishTodos(sessionID: sessionID)
+        }
         let next = T3MessageMapper.domainMessages(from: nextTranscript)
         guard next != (snapshots[sessionID] ?? []) else { return }
         snapshots[sessionID] = next
@@ -332,6 +363,12 @@ final class T3MessageRepository: MessageRepository {
 
     private func refreshActivity(sessionID: String) async {
         guard let thread = try? await client.fetchShell(force: true).thread(id: sessionID) else { return }
+        var transcript = transcripts[sessionID] ?? T3Transcript()
+        transcript.activeRunID = thread.activeRunID
+        transcript.activityRunStatus = thread.activityRunStatus
+        transcript.activityIsKnown = true
+        transcripts[sessionID] = transcript
+        publishTodos(sessionID: sessionID)
         eventStream?.publishSynthetic(
             OpencodeEvent(
                 type: "session.status",
@@ -387,6 +424,22 @@ final class T3MessageRepository: MessageRepository {
         for observer in displayContinuations.values where observer.sessionID == sessionID {
             observer.continuation.yield(.loadFailed(error))
         }
+    }
+
+    private func publishTodos(sessionID: String) {
+        let transcript = transcripts[sessionID] ?? T3Transcript()
+        let todos = T3Plans.visibleTodos(
+            plans: transcript.plans,
+            runs: transcript.runs,
+            activeRunID: transcript.activeRunID,
+            activityRunStatus: transcript.activityRunStatus
+        )
+        if lastTodos[sessionID] == todos { return }
+        let hadPrevious = lastTodos[sessionID] != nil
+        lastTodos[sessionID] = todos
+        client.noteSessionTodos(id: sessionID, todos: todos)
+        guard hadPrevious || !todos.isEmpty else { return }
+        eventStream?.publishSynthetic(T3Plans.updatedEvent(sessionID: sessionID, todos: todos))
     }
 
     private func publish(sessionID: String, messages: [Message]) {

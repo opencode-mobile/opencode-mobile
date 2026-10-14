@@ -303,7 +303,7 @@ class T3SessionRepository
         override suspend fun listSessionTodos(
             id: String,
             directory: String?,
-        ) = emptyList<dev.opencode.mobile.domain.session.SessionTodo>()
+        ) = runtime.sessionTodos(id)
 
         override suspend fun initializeSessionAgents(
             id: String,
