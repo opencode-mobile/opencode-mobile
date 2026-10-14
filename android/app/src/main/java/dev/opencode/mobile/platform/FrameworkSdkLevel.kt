@@ -10,62 +10,66 @@ import java.lang.reflect.Modifier
 /**
  * Spoofed API 34 images report [Build.VERSION.SDK_INT] 34 but ship an Android 13
  * framework, so [WindowInsets.Type.systemOverlays] is missing. AndroidX calls it
- * whenever the reported level is at least 34. Drop to 33 only in that case.
+ * whenever the reported level is at least 34. Drop to 33 only when that method is
+ * confirmed missing. Any other probe result leaves the reported level unchanged.
  */
 object FrameworkSdkLevel {
     private const val TAG = "FrameworkSdkLevel"
     private const val SYSTEM_OVERLAYS_API = 34
     private const val LAST_API_WITHOUT_SYSTEM_OVERLAYS = 33
 
-    fun correctedSdkInt(
+    fun sdkIntToApply(
         reportedSdkInt: Int,
-        systemOverlaysAvailable: Boolean,
-    ): Int {
-        if (reportedSdkInt >= SYSTEM_OVERLAYS_API && !systemOverlaysAvailable) {
+        probe: SystemOverlaysProbe,
+    ): Int? {
+        if (reportedSdkInt >= SYSTEM_OVERLAYS_API && probe == SystemOverlaysProbe.Missing) {
             return LAST_API_WITHOUT_SYSTEM_OVERLAYS
         }
-        return reportedSdkInt
+        return null
     }
 
-    fun systemOverlaysAvailable(typeClass: Class<*>): Boolean =
+    fun probeSystemOverlays(typeClass: Class<*>): SystemOverlaysProbe =
+        classifyProbe { typeClass.getMethod("systemOverlays") }
+
+    fun classifyProbe(lookup: () -> Unit): SystemOverlaysProbe =
         try {
-            typeClass.getMethod("systemOverlays")
-            true
+            lookup()
+            SystemOverlaysProbe.Present
         } catch (_: NoSuchMethodException) {
-            false
+            SystemOverlaysProbe.Missing
+        } catch (_: Throwable) {
+            SystemOverlaysProbe.Unknown
         }
 
     fun alignToFramework() {
-        val reported = Build.VERSION.SDK_INT
-        val corrected =
-            correctedSdkInt(
-                reportedSdkInt = reported,
-                systemOverlaysAvailable = systemOverlaysAvailableOnDevice(reported),
-            )
-        if (corrected == reported) return
         try {
+            val reported = Build.VERSION.SDK_INT
+            if (reported < SYSTEM_OVERLAYS_API) return
+            val corrected =
+                sdkIntToApply(
+                    reportedSdkInt = reported,
+                    probe = probeSystemOverlays(WindowInsets.Type::class.java),
+                ) ?: return
             writeSdkInt(corrected)
-        } catch (error: Exception) {
-            Log.w(TAG, "Unable to align SDK_INT from $reported to $corrected", error)
-            return
-        }
-        Log.w(
-            TAG,
-            "Reported API $reported has no WindowInsets.Type.systemOverlays(); aligned SDK_INT to $corrected",
-        )
-    }
-
-    private fun systemOverlaysAvailableOnDevice(reportedSdkInt: Int): Boolean {
-        if (reportedSdkInt < SYSTEM_OVERLAYS_API) return false
-        return try {
-            systemOverlaysAvailable(WindowInsets.Type::class.java)
-        } catch (_: NoClassDefFoundError) {
-            false
+            Log.w(
+                TAG,
+                "Reported API $reported has no WindowInsets.Type.systemOverlays(); aligned SDK_INT to $corrected",
+            )
+        } catch (error: Throwable) {
+            Log.w(TAG, "Left Build.VERSION.SDK_INT unchanged", error)
         }
     }
 
     private fun writeSdkInt(value: Int) {
-        exemptReflectFieldHiddenApi()
+        try {
+            setSdkInt(value)
+        } catch (_: Throwable) {
+            exemptReflectFieldHiddenApi()
+            setSdkInt(value)
+        }
+    }
+
+    private fun setSdkInt(value: Int) {
         val sdkInt = Build.VERSION::class.java.getDeclaredField("SDK_INT")
         sdkInt.isAccessible = true
         val flags = reflectionFlagsField()
@@ -76,8 +80,7 @@ object FrameworkSdkLevel {
 
     /**
      * targetSdk 36 denies [Field.setAccessible] on the hidden `accessFlags` member.
-     * Exempt `java.lang.reflect.Field` only. A missing VMRuntime is ignored so the
-     * field write still runs on the host JVM.
+     * Exempt `java.lang.reflect.Field` only, and only after a plain write has failed.
      */
     private fun exemptReflectFieldHiddenApi() {
         try {
@@ -99,7 +102,7 @@ object FrameworkSdkLevel {
                 ) as Method
             val exemptions = arrayOf("Ljava/lang/reflect/Field;")
             setHiddenApiExemptions.invoke(getRuntime.invoke(null), exemptions as Any)
-        } catch (_: Exception) {
+        } catch (_: Throwable) {
             // Host JVM has no VMRuntime. alignToFramework logs only if the write fails.
         }
     }
@@ -110,4 +113,10 @@ object FrameworkSdkLevel {
         } catch (_: NoSuchFieldException) {
             Field::class.java.getDeclaredField("modifiers")
         }
+}
+
+enum class SystemOverlaysProbe {
+    Present,
+    Missing,
+    Unknown,
 }
