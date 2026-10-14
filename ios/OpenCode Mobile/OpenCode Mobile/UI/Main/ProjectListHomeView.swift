@@ -667,7 +667,7 @@ struct ProjectListHomeView: View {
                 OpenCodeTopBar(
                     title: "Settled",
                     subtitle: settledPageCount == 1 ? "1 thread" : "\(settledPageCount) threads",
-                    leading: .back { settledPageVisible = false }
+                    leading: .back(consumesInteractivePop: true) { settledPageVisible = false }
                 )
             } else {
                 OpenCodeTopBar(

@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.main
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -351,6 +352,11 @@ internal fun MainScreen(
                     0
                 }
             if (settledPageVisible) {
+                // Settled replaces the home list in place, so it is not on the nav back stack.
+                // A selected split-pane session keeps the pane BackHandler, which is registered first.
+                if (!sessionKeyboardNavigationEnabled || selectedSessionId == null) {
+                    BackHandler { settledPageVisible = false }
+                }
                 OpenCodeTopBar(
                     title = "Settled",
                     subtitle = if (settledCount == 1) "1 thread" else "$settledCount threads",
