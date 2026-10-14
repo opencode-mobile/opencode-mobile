@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "name": "X header",
+  "description": "3:1 profile header: matched iPhone + Android pair clear of the avatar.",
+  "format": "1500x500",
+  "mode": "dark",
+  "composition": "pair",
+  "moment": "code",
+  "copy": { "headline": "opencode,\nin your pocket." }
+}

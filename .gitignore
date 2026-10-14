@@ -86,3 +86,4 @@ shared/markdown-core/native/oniguruma-src/
 
 # Store screenshot capture output
 /store-screenshots/
+/launch-graphics/

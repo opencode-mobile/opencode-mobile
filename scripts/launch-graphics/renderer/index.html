@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Launch Graphics</title>
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<div id="stage"><div id="frame"></div></div>
+<aside id="panel"></aside>
+<script type="module">
+import { createScene, loadTokens } from "/scene.js";
+
+const raw = new URLSearchParams(location.search).get("raw") === "1";
+if (raw) document.body.classList.add("raw");
+await loadTokens();
+// load every face up front so the first text measurement uses the real fonts
+await Promise.all([
+  ...["400", "500", "600", "700"].map((w) => document.fonts.load(`${w} 16px "IBM Plex Sans"`)),
+  ...["400", "500", "600"].map((w) => document.fonts.load(`${w} 16px "IBM Plex Mono"`)),
+]);
+const frame = document.getElementById("frame");
+const scene = createScene(frame);
+const frames = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+window.launchGraphics = {
+  /** Render a spec on the raw canvas; resolves once fonts and screenshots are loaded. */
+  async render(spec) {
+    const { layout, ready } = scene.render(spec, { editor: false });
+    frame.style.width = `${layout.W}px`;
+    frame.style.height = `${layout.H}px`;
+    const { missing } = await ready;
+    await frames();
+    return { width: layout.W, height: layout.H, composition: layout.composition, notes: layout.notes, missing };
+  },
+};
+
+if (!raw) (await import("/editor.js")).startEditor(scene);
+document.documentElement.dataset.ready = "1";
+</script>
+</body>
+</html>
