@@ -1252,7 +1252,7 @@ class SessionChatViewModel
             optimistic: () -> Unit,
             call: suspend (sessionId: String, worktree: String) -> Boolean,
         ) {
-            if (!activeConnectionManager.currentCapabilities().supportsFollowUpDelivery) return
+            if (!activeConnectionManager.currentCapabilities().supportsPendingPrompts) return
             logAction(actionId)
             val sessionId = boundSessionId ?: return
             val worktree = boundWorktree ?: return

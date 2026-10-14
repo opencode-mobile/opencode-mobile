@@ -51,7 +51,8 @@ nonisolated enum T3ShellMapper {
             activeRunID: thread.activeRunID,
             settledAtEpochMs: thread.isSettled ? T3JSON.epochMs(thread.settledAt) : nil,
             snoozedUntilEpochMs: T3JSON.epochMs(thread.snoozedUntil),
-            snoozeBlockReason: snoozeBlockReason(for: thread)
+            snoozeBlockReason: snoozeBlockReason(for: thread),
+            needsApproval: approvalID(for: thread) != nil
         )
     }
 
@@ -262,6 +263,44 @@ nonisolated enum T3ShellMapper {
     }
 }
 
+/// The run Steer interrupts, and the queued run it promotes.
+nonisolated struct T3SteerTarget: Equatable, Sendable {
+    var queuedRunID: String
+    var activeRunID: String
+}
+
+/// Same queue the desktop composer shows. A `queued` run whose user message is
+/// not an automatic completion is waiting to be picked up. Steer needs a live
+/// turn (`preparing`, `starting`, `running`, or `waiting`) to interrupt.
+nonisolated enum T3Queue {
+    private static let activeStatuses: Set<String> = ["preparing", "starting", "running", "waiting"]
+
+    static func userQueuedRuns(_ runs: [T3Run], messages: [T3ConversationMessage]) -> [T3Run] {
+        let automatic = Set(messages.filter(\.automatic).map(\.id))
+        return runs
+            .filter { run in
+                run.status.lowercased() == "queued" && !automatic.contains(run.userMessageID)
+            }
+            .sorted { lhs, rhs in
+                let left = lhs.queuePosition ?? lhs.ordinal
+                let right = rhs.queuePosition ?? rhs.ordinal
+                if left != right { return left < right }
+                return lhs.ordinal < rhs.ordinal
+            }
+    }
+
+    static func activeRunID(_ runs: [T3Run]) -> String? {
+        runs.last { activeStatuses.contains($0.status.lowercased()) }?.id
+    }
+
+    static func steerTarget(runs: [T3Run], messages: [T3ConversationMessage], messageID: String) -> T3SteerTarget? {
+        guard let queued = userQueuedRuns(runs, messages: messages).first(where: { $0.userMessageID == messageID }),
+              let active = activeRunID(runs)
+        else { return nil }
+        return T3SteerTarget(queuedRunID: queued.id, activeRunID: active)
+    }
+}
+
 nonisolated enum T3MessageMapper {
     static func detail(from data: Data) throws -> T3ThreadDetail {
         let json = try JSONSerialization.jsonObject(with: data)
@@ -277,12 +316,14 @@ nonisolated enum T3MessageMapper {
         let messages = T3JSON.array(projection["messages"]).compactMap { message(from: $0) }
         let turnItems = turnItems(from: projection)
         let runtimeRequests = T3JSON.array(projection["runtimeRequests"]).compactMap { runtimeRequest(from: $0) }
+        let runs = T3JSON.array(projection["runs"]).compactMap { run(from: $0) }
         return T3ThreadDetail(
             sequence: sequence,
             thread: thread,
             messages: messages,
             turnItems: turnItems,
-            runtimeRequests: runtimeRequests
+            runtimeRequests: runtimeRequests,
+            runs: runs
         )
     }
 
@@ -320,11 +361,41 @@ nonisolated enum T3MessageMapper {
 
     static func messages(from json: Any) -> [Message] {
         let parsed = detail(from: json)
-        return domainMessages(messages: parsed.messages, turnItems: parsed.turnItems)
+        return applyingQueue(
+            domainMessages(messages: parsed.messages, turnItems: parsed.turnItems),
+            conversation: parsed.messages,
+            runs: parsed.runs
+        )
     }
 
     static func domainMessages(from transcript: T3Transcript) -> [Message] {
-        domainMessages(messages: transcript.messages, turnItems: transcript.turnItems)
+        applyingQueue(
+            domainMessages(messages: transcript.messages, turnItems: transcript.turnItems),
+            conversation: transcript.messages,
+            runs: transcript.runs
+        )
+    }
+
+    /// A user message whose run is still `queued` is waiting for the agent loop.
+    /// The timeline hides it and the pending-prompt strip offers Steer.
+    static func applyingQueue(
+        _ messages: [Message],
+        conversation: [T3ConversationMessage],
+        runs: [T3Run]
+    ) -> [Message] {
+        let waiting = Set(T3Queue.userQueuedRuns(runs, messages: conversation).map(\.userMessageID))
+        if waiting.isEmpty, messages.allSatisfy({ !$0.isWaitingForPickup }) { return messages }
+        return messages.map { message in
+            let queued = message.role == .user && waiting.contains(message.id)
+            if queued {
+                if message.isWaitingForPickup, message.followUpDelivery == .queue { return message }
+                return message.withPickupState(isWaitingForPickup: true, followUpDelivery: .queue)
+            }
+            if message.isWaitingForPickup || message.followUpDelivery != nil {
+                return message.withPickupState(isWaitingForPickup: false, followUpDelivery: nil)
+            }
+            return message
+        }
     }
 
     /// Places visible activity between the conversation messages it belongs to.
@@ -370,7 +441,7 @@ nonisolated enum T3MessageMapper {
         let projection = T3JSON.object(object["projection"]) ?? object
         guard object["projection"] != nil || projection["messages"] != nil else { return nil }
         let parsed = detail(from: object)
-        return T3Transcript(messages: parsed.messages, turnItems: parsed.turnItems)
+        return T3Transcript(messages: parsed.messages, turnItems: parsed.turnItems, runs: parsed.runs)
     }
 
     static func applyingLiveEvent(_ value: Any, to transcript: T3Transcript) -> T3Transcript? {
@@ -379,12 +450,20 @@ nonisolated enum T3MessageMapper {
         case .message(let message):
             return T3Transcript(
                 messages: upserting(message, into: transcript.messages),
-                turnItems: transcript.turnItems
+                turnItems: transcript.turnItems,
+                runs: transcript.runs
             )
         case .turnItem(let item):
             return T3Transcript(
                 messages: transcript.messages,
-                turnItems: upserting(item, into: transcript.turnItems)
+                turnItems: upserting(item, into: transcript.turnItems),
+                runs: transcript.runs
+            )
+        case .run(let run):
+            return T3Transcript(
+                messages: transcript.messages,
+                turnItems: transcript.turnItems,
+                runs: upserting(run, into: transcript.runs)
             )
         }
     }
@@ -399,8 +478,29 @@ nonisolated enum T3MessageMapper {
             text: T3JSON.string(object["text"]) ?? "",
             streaming: T3JSON.bool(object["streaming"]),
             createdAtEpochMs: T3JSON.epochMs(object["createdAt"]),
-            attachments: attachments(from: object["attachments"])
+            attachments: attachments(from: object["attachments"]),
+            automatic: present(object["notification"]) || present(object["delegatedCompletion"])
         )
+    }
+
+    /// One `OrchestrationV2Run`. A row without an id or user message is skipped.
+    static func run(from value: Any) -> T3Run? {
+        guard let object = T3JSON.object(value),
+              let id = T3JSON.string(object, "id"),
+              let userMessageID = T3JSON.string(object, "userMessageId")
+        else { return nil }
+        return T3Run(
+            id: id,
+            status: T3JSON.string(object, "status") ?? "",
+            userMessageID: userMessageID,
+            ordinal: T3JSON.int(object["ordinal"]) ?? 0,
+            queuePosition: T3JSON.int(object["queuePosition"])
+        )
+    }
+
+    private static func present(_ value: Any?) -> Bool {
+        guard let value else { return false }
+        return !(value is NSNull)
     }
 
     static func attachments(from value: Any?) -> [T3Attachment] {
@@ -743,6 +843,8 @@ nonisolated enum T3MessageMapper {
                 return message(from: payload).map(LiveUpdate.message)
             case "turn-item.updated":
                 return turnItem(from: payload).map(LiveUpdate.turnItem)
+            case "run.created", "run.updated":
+                return run(from: payload).map(LiveUpdate.run)
             default:
                 return nil
             }
@@ -756,7 +858,7 @@ nonisolated enum T3MessageMapper {
     private static func typedEvent(from value: Any) -> [String: Any]? {
         guard let object = T3JSON.object(value) else { return nil }
         if let type = T3JSON.string(object, "type") {
-            if type == "message.updated" || type == "turn-item.updated" {
+            if type == "message.updated" || type == "turn-item.updated" || type == "run.created" || type == "run.updated" {
                 return object
             }
             return nil
@@ -773,6 +875,16 @@ nonisolated enum T3MessageMapper {
             next[index] = message
         } else {
             next.append(message)
+        }
+        return next
+    }
+
+    private static func upserting(_ run: T3Run, into runs: [T3Run]) -> [T3Run] {
+        var next = runs
+        if let index = next.firstIndex(where: { $0.id == run.id }) {
+            next[index] = run
+        } else {
+            next.append(run)
         }
         return next
     }
@@ -852,6 +964,7 @@ nonisolated enum T3MessageMapper {
     private enum LiveUpdate {
         case message(T3ConversationMessage)
         case turnItem(T3TurnItem)
+        case run(T3Run)
     }
 
     private struct ActivityBuffer {

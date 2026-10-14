@@ -61,6 +61,24 @@ class T3RpcCodecTest {
     }
 
     @Test
+    fun promoteQueuedToSteer_namesTheQueuedRunAndTheActiveTurn() {
+        val payload =
+            T3Commands.promoteQueuedToSteer(
+                threadId = "thr-1",
+                queuedRunId = "run-q",
+                targetRunId = "run-active",
+                commandId = "cmd-1",
+            )
+        assertEquals("queued-message.promote-to-steer", payload["type"]!!.jsonPrimitive.content)
+        assertEquals("thr-1", payload["threadId"]!!.jsonPrimitive.content)
+        assertEquals("run-q", payload["queuedRunId"]!!.jsonPrimitive.content)
+        assertEquals("run-active", payload["targetRunId"]!!.jsonPrimitive.content)
+        val cancel = T3Commands.cancelQueuedRun(threadId = "thr-1", runId = "run-q", commandId = "cmd-2")
+        assertEquals("queued-run.cancel", cancel["type"]!!.jsonPrimitive.content)
+        assertEquals("run-q", cancel["runId"]!!.jsonPrimitive.content)
+    }
+
+    @Test
     fun messageDispatch_includesTitleSeedWhenProvided() {
         val payload =
             T3Commands.messageDispatch(

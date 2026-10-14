@@ -78,6 +78,36 @@ object T3Commands {
     private fun truncateSeed(value: String): String =
         if (value.length <= TITLE_SEED_MAX) value else value.take(TITLE_SEED_MAX) + "..."
 
+    /**
+     * Pulls a queued message into the active turn. Desktop's Steer button sends
+     * this; the server cancels the queued run and steers that text in.
+     */
+    fun promoteQueuedToSteer(
+        threadId: String,
+        queuedRunId: String,
+        targetRunId: String,
+        commandId: String = commandId(),
+    ): JsonObject =
+        buildJsonObject {
+            put("type", "queued-message.promote-to-steer")
+            put("commandId", commandId)
+            put("threadId", threadId)
+            put("queuedRunId", queuedRunId)
+            put("targetRunId", targetRunId)
+        }
+
+    fun cancelQueuedRun(
+        threadId: String,
+        runId: String,
+        commandId: String = commandId(),
+    ): JsonObject =
+        buildJsonObject {
+            put("type", "queued-run.cancel")
+            put("commandId", commandId)
+            put("threadId", threadId)
+            put("runId", runId)
+        }
+
     fun runInterrupt(
         threadId: String,
         runId: String,

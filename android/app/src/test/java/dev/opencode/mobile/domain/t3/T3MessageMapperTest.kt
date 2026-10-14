@@ -62,6 +62,63 @@ class T3MessageMapperTest {
     }
 
     @Test
+    fun queuedRun_marksTheUserMessageWaitingAndSkipsAutomaticDeliveries() {
+        val snapshot =
+            T3Json.threadSnapshot(
+                """
+                {
+                  "projection": {
+                    "messages": [
+                      {"id": "m-sent", "role": "user", "text": "First"},
+                      {"id": "m-later", "role": "user", "text": "Second queued"},
+                      {"id": "m-wait", "role": "user", "text": "Also check logs"},
+                      {
+                        "id": "m-auto",
+                        "role": "user",
+                        "text": "wake",
+                        "notification": {"summary": "done"}
+                      }
+                    ],
+                    "runs": [
+                      {"id": "run-active", "status": "running", "userMessageId": "m-sent", "ordinal": 1},
+                      {"id": "run-q2", "status": "queued", "userMessageId": "m-later", "ordinal": 4, "queuePosition": 2},
+                      {"id": "run-q1", "status": "queued", "userMessageId": "m-wait", "ordinal": 3, "queuePosition": 1},
+                      {"id": "run-auto", "status": "queued", "userMessageId": "m-auto", "ordinal": 5, "queuePosition": 3}
+                    ]
+                  }
+                }
+                """.trimIndent(),
+            )
+        val messages = T3MessageMapper.toMessages(snapshot)
+        assertFalse(messages.first { it.id == "m-sent" }.isWaitingForPickup)
+        assertFalse(messages.first { it.id == "m-auto" }.isWaitingForPickup)
+        val waiting = messages.filter { it.isWaitingForPickup }
+        assertEquals(listOf("m-later", "m-wait"), waiting.map { it.id })
+        assertTrue(waiting.all { it.followUpDelivery == dev.opencode.mobile.domain.message.FollowUpDelivery.Queue })
+        assertEquals(
+            listOf("run-q1", "run-q2"),
+            T3Queue.userQueuedRuns(snapshot.runs, snapshot.messages).map { it.id },
+        )
+        assertEquals(
+            T3SteerTarget(queuedRunId = "run-q1", activeRunId = "run-active"),
+            T3Queue.steerTarget(snapshot.runs, snapshot.messages, "m-wait"),
+        )
+        assertEquals(null, T3Queue.steerTarget(snapshot.runs, snapshot.messages, "m-auto"))
+        val started =
+            snapshot.runs.map { run ->
+                if (run.id == "run-q1") run.copy(status = "running") else run
+            }
+        val cleared =
+            T3MessageMapper.applyingQueue(
+                messages,
+                snapshot.messages,
+                started,
+            )
+        assertFalse(cleared.first { it.id == "m-wait" }.isWaitingForPickup)
+        assertTrue(cleared.first { it.id == "m-later" }.isWaitingForPickup)
+    }
+
+    @Test
     fun assistantMarkdown_preparesBoldAndInlineCode() =
         runBlocking {
             val message =

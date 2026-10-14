@@ -331,6 +331,18 @@ struct T3ConversationMessage: Equatable, Sendable {
     var streaming: Bool
     var createdAtEpochMs: Int64?
     var attachments: [T3Attachment] = []
+    /// Server-generated wake or completion. Those queued runs are not the user's queue.
+    var automatic: Bool = false
+}
+
+/// A thread run, trimmed to what the queue needs. `queued` means the message is
+/// waiting for the agent loop; an active status is the turn Steer can interrupt.
+struct T3Run: Equatable, Sendable {
+    var id: String
+    var status: String
+    var userMessageID: String
+    var ordinal: Int = 0
+    var queuePosition: Int? = nil
 }
 
 struct T3TurnItem: Equatable, Sendable {
@@ -392,6 +404,7 @@ struct T3RuntimeRequest: Equatable, Sendable {
 struct T3Transcript: Equatable, Sendable {
     var messages: [T3ConversationMessage] = []
     var turnItems: [T3TurnItem] = []
+    var runs: [T3Run] = []
 }
 
 struct T3ThreadDetail: Equatable, Sendable {
@@ -400,4 +413,5 @@ struct T3ThreadDetail: Equatable, Sendable {
     var messages: [T3ConversationMessage]
     var turnItems: [T3TurnItem] = []
     var runtimeRequests: [T3RuntimeRequest] = []
+    var runs: [T3Run] = []
 }

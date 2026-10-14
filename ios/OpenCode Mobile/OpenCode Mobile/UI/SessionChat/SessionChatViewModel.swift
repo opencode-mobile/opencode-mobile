@@ -891,7 +891,7 @@ final class SessionChatViewModel {
         optimistic: @escaping () -> Void,
         call: @escaping (String) async throws -> Bool
     ) {
-        guard activeConnectionManager.capabilities.supportsFollowUpDelivery else { return }
+        guard activeConnectionManager.capabilities.supportsPendingPrompts else { return }
         logChatAction(actionId)
         let sessionID = sessionID
         Task {

@@ -159,6 +159,20 @@ data class T3ConversationMessage(
     val streaming: Boolean,
     val createdAt: String?,
     val attachments: List<T3Attachment> = emptyList(),
+    /** Server-generated wake or completion. Those queued runs are not the user's queue. */
+    val automatic: Boolean = false,
+)
+
+/**
+ * A thread run, trimmed to what the queue needs. `queued` means the message is
+ * waiting for the agent loop; an active status is the turn Steer can interrupt.
+ */
+data class T3Run(
+    val id: String,
+    val status: String,
+    val userMessageId: String,
+    val ordinal: Long = 0,
+    val queuePosition: Long? = null,
 )
 
 data class T3TurnItem(
@@ -222,6 +236,7 @@ data class T3ThreadSnapshot(
     val snapshotSequence: Long = 0,
     val turnItems: List<T3TurnItem> = emptyList(),
     val runtimeRequests: List<T3RuntimeRequest> = emptyList(),
+    val runs: List<T3Run> = emptyList(),
 )
 
 data class T3WsTicket(

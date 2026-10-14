@@ -83,6 +83,7 @@ object T3Json {
             snapshotSequence = obj.long("snapshotSequence") ?: projection.long("snapshotSequence") ?: 0L,
             turnItems = turnItemsOf(projection),
             runtimeRequests = projection.array("runtimeRequests").mapNotNull(::runtimeRequest),
+            runs = projection.array("runs").mapNotNull(::run),
         )
     }
 
@@ -208,6 +209,22 @@ object T3Json {
             streaming = obj.boolean("streaming") ?: false,
             createdAt = obj.string("createdAt"),
             attachments = obj.array("attachments").mapNotNull(::attachment),
+            automatic = obj.hasValue("notification") || obj.hasValue("delegatedCompletion"),
+        )
+    }
+
+    /** One `OrchestrationV2Run`. A row without an id or user message is skipped. */
+    fun run(element: JsonElement): T3Run? {
+        val obj = element as? JsonObject ?: return null
+        val id = obj.string("id")?.trim().orEmpty()
+        val userMessageId = obj.string("userMessageId")?.trim().orEmpty()
+        if (id.isEmpty() || userMessageId.isEmpty()) return null
+        return T3Run(
+            id = id,
+            status = obj.string("status")?.trim().orEmpty(),
+            userMessageId = userMessageId,
+            ordinal = obj.long("ordinal") ?: 0L,
+            queuePosition = obj.long("queuePosition"),
         )
     }
 
@@ -400,6 +417,11 @@ object T3Json {
     private fun JsonObject.boolean(key: String): Boolean? {
         val primitive = this[key] as? JsonPrimitive ?: return null
         return primitive.contentOrNull?.toBooleanStrictOrNull() ?: primitive.contentOrNull?.toBoolean()
+    }
+
+    private fun JsonObject.hasValue(key: String): Boolean {
+        val value = this[key] ?: return false
+        return value !is JsonNull
     }
 
     private fun JsonObject.obj(key: String): JsonObject? = this[key] as? JsonObject

@@ -208,6 +208,39 @@ final class T3SessionRepository: SessionRepository, @unchecked Sendable {
         return true
     }
 
+    /// Steer forces a queued message into the active turn. The id is the user
+    /// message id the pending-prompt strip shows. A thread with nothing running
+    /// has no turn to interrupt, so Steer reports failure.
+    func steerPendingPrompt(sessionID: String, inboxID: String) async throws -> Bool {
+        let detail = try await client.fetchThread(id: sessionID)
+        guard let target = T3Queue.steerTarget(runs: detail.runs, messages: detail.messages, messageID: inboxID) else {
+            return false
+        }
+        try await client.dispatchCommand(
+            T3RpcCodec.promoteQueuedToSteerCommand(
+                commandID: UUID().uuidString,
+                threadID: sessionID,
+                queuedRunID: target.queuedRunID,
+                targetRunID: target.activeRunID
+            )
+        )
+        return true
+    }
+
+    func cancelPendingPrompt(sessionID: String, inboxID: String) async throws -> Bool {
+        let detail = try await client.fetchThread(id: sessionID)
+        guard let run = T3Queue.userQueuedRuns(detail.runs, messages: detail.messages).first(where: { $0.userMessageID == inboxID }) else {
+            return false
+        }
+        try await client.dispatchCommand(
+            T3RpcCodec.cancelQueuedRunCommand(commandID: UUID().uuidString, threadID: sessionID, runID: run.id)
+        )
+        return true
+    }
+
+    /// T3 already queues a follow-up sent during a turn. Queue is a no-op.
+    func queuePendingPrompt(sessionID _: String, inboxID _: String) async throws -> Bool { true }
+
     func shareSession(id _: String) async throws -> Session {
         throw Self.unsupported("Share")
     }

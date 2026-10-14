@@ -26,6 +26,11 @@ nonisolated struct ServerCapabilities: Sendable, Equatable {
     let supportsSessionMessageDiff: Bool
     let supportsSessionArchive: Bool
     let supportsFollowUpDelivery: Bool
+    /// The pending-prompt strip can steer or remove a message that is waiting
+    /// for the agent. OpenCode v2 does this through the inbox. T3 does it
+    /// through the queued-run commands. The composer follow-up toggle stays on
+    /// `supportsFollowUpDelivery`.
+    var supportsPendingPrompts: Bool = false
     /// Server-tracked unread state (`time.idle` / `time.viewed`, `POST /view`, `session.viewed`).
     var supportsSessionViewed: Bool = false
     var supportsTerminal: Bool = true
@@ -38,6 +43,7 @@ nonisolated struct ServerCapabilities: Sendable, Equatable {
         supportsSessionMessageDiff: false,
         supportsSessionArchive: true,
         supportsFollowUpDelivery: false,
+        supportsPendingPrompts: true,
         supportsTerminal: false,
         supportsRevert: false,
         supportsMentions: false,
@@ -67,6 +73,7 @@ nonisolated struct ServerCapabilities: Sendable, Equatable {
                 supportsSessionMessageDiff: false,
                 supportsSessionArchive: false,
                 supportsFollowUpDelivery: true,
+                supportsPendingPrompts: true,
                 supportsSessionViewed: true
             )
         }

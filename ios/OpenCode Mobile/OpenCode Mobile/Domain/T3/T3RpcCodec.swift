@@ -245,6 +245,32 @@ nonisolated enum T3RpcCodec {
         ]
     }
 
+    /// Pulls a queued message into the active turn. Desktop's Steer button sends
+    /// this; the server cancels the queued run and steers that text in.
+    static func promoteQueuedToSteerCommand(
+        commandID: String,
+        threadID: String,
+        queuedRunID: String,
+        targetRunID: String
+    ) -> [String: Any] {
+        [
+            "type": "queued-message.promote-to-steer",
+            "commandId": commandID,
+            "threadId": threadID,
+            "queuedRunId": queuedRunID,
+            "targetRunId": targetRunID,
+        ]
+    }
+
+    static func cancelQueuedRunCommand(commandID: String, threadID: String, runID: String) -> [String: Any] {
+        [
+            "type": "queued-run.cancel",
+            "commandId": commandID,
+            "threadId": threadID,
+            "runId": runID,
+        ]
+    }
+
     static func interruptCommand(commandID: String, threadID: String, runID: String) -> [String: Any] {
         [
             "type": "run.interrupt",

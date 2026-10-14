@@ -219,6 +219,49 @@ class T3SessionRepository
             return true
         }
 
+        /**
+         * Steer forces a queued message into the active turn. The id is the user
+         * message id the pending-prompt strip shows. A thread with nothing
+         * running has no turn to interrupt, so Steer reports failure.
+         */
+        override suspend fun steerPendingPrompt(
+            sessionId: String,
+            inboxId: String,
+            directory: String?,
+        ): Boolean {
+            val snapshot = fetchSnapshot(sessionId) ?: return false
+            val target = T3Queue.steerTarget(snapshot.runs, snapshot.messages, inboxId) ?: return false
+            runtime.dispatch(
+                T3Commands.promoteQueuedToSteer(
+                    threadId = sessionId,
+                    queuedRunId = target.queuedRunId,
+                    targetRunId = target.activeRunId,
+                ),
+            )
+            return true
+        }
+
+        override suspend fun cancelPendingPrompt(
+            sessionId: String,
+            inboxId: String,
+            directory: String?,
+        ): Boolean {
+            val snapshot = fetchSnapshot(sessionId) ?: return false
+            val run =
+                T3Queue.userQueuedRuns(snapshot.runs, snapshot.messages)
+                    .firstOrNull { it.userMessageId == inboxId }
+                    ?: return false
+            runtime.dispatch(T3Commands.cancelQueuedRun(sessionId, run.id))
+            return true
+        }
+
+        /** T3 already queues a follow-up sent during a turn. Queue is a no-op. */
+        override suspend fun queuePendingPrompt(
+            sessionId: String,
+            inboxId: String,
+            directory: String?,
+        ): Boolean = true
+
         override suspend fun settleSession(
             id: String,
             directory: String?,
@@ -426,6 +469,12 @@ class T3SessionRepository
                     snapshot.allThreads.firstOrNull { T3SessionMapper.questionId(it) == requestId }
                 }
             return thread?.takeIf { T3SessionMapper.questionId(it) == requestId }
+        }
+
+        /** The thread projection, or null when the environment cannot be read. */
+        private suspend fun fetchSnapshot(threadId: String): T3ThreadSnapshot? {
+            val profile = runtime.activeProfile() ?: return null
+            return runCatching { api.fetchThread(profile, threadId) }.getOrNull()
         }
 
         /** The thread projection's turn items; a failed fetch degrades to an empty list. */

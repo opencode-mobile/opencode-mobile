@@ -570,6 +570,67 @@ struct T3EngineTests {
         } == false)
     }
 
+    @Test func queuedRun_marksTheUserMessageWaitingAndSkipsAutomaticDeliveries() throws {
+        let json = Data("""
+        {
+          "projection": {
+            "messages": [
+              {"id": "m-sent", "role": "user", "text": "First"},
+              {"id": "m-later", "role": "user", "text": "Second queued"},
+              {"id": "m-wait", "role": "user", "text": "Also check logs"},
+              {"id": "m-auto", "role": "user", "text": "wake", "notification": {"summary": "done"}}
+            ],
+            "runs": [
+              {"id": "run-active", "status": "running", "userMessageId": "m-sent", "ordinal": 1},
+              {"id": "run-q2", "status": "queued", "userMessageId": "m-later", "ordinal": 4, "queuePosition": 2},
+              {"id": "run-q1", "status": "queued", "userMessageId": "m-wait", "ordinal": 3, "queuePosition": 1},
+              {"id": "run-auto", "status": "queued", "userMessageId": "m-auto", "ordinal": 5, "queuePosition": 3}
+            ]
+          }
+        }
+        """.utf8)
+        let object = try JSONSerialization.jsonObject(with: json)
+        let detail = T3MessageMapper.detail(from: object)
+        let messages = T3MessageMapper.messages(from: object)
+        #expect(messages.first { $0.id == "m-sent" }?.isWaitingForPickup == false)
+        #expect(messages.first { $0.id == "m-auto" }?.isWaitingForPickup == false)
+        let waiting = messages.filter(\.isWaitingForPickup)
+        #expect(waiting.map(\.id) == ["m-later", "m-wait"])
+        #expect(waiting.allSatisfy { $0.followUpDelivery == .queue })
+        #expect(T3Queue.userQueuedRuns(detail.runs, messages: detail.messages).map(\.id) == ["run-q1", "run-q2"])
+        #expect(T3Queue.steerTarget(runs: detail.runs, messages: detail.messages, messageID: "m-wait") == T3SteerTarget(queuedRunID: "run-q1", activeRunID: "run-active"))
+        #expect(T3Queue.steerTarget(runs: detail.runs, messages: detail.messages, messageID: "m-auto") == nil)
+
+        var transcript = T3Transcript(messages: detail.messages, turnItems: detail.turnItems, runs: detail.runs)
+        #expect(T3MessageMapper.domainMessages(from: transcript).first { $0.id == "m-wait" }?.isWaitingForPickup == true)
+        let started: [String: Any] = [
+            "kind": "event",
+            "event": [
+                "type": "run.updated",
+                "payload": [
+                    "id": "run-q1",
+                    "status": "cancelled",
+                    "userMessageId": "m-wait",
+                    "ordinal": 3,
+                ],
+            ],
+        ]
+        transcript = try #require(T3MessageMapper.applyingLiveEvent(started, to: transcript))
+        let cleared = T3MessageMapper.domainMessages(from: transcript)
+        #expect(cleared.first { $0.id == "m-wait" }?.isWaitingForPickup == false)
+        #expect(cleared.first { $0.id == "m-later" }?.isWaitingForPickup == true)
+
+        let command = T3RpcCodec.promoteQueuedToSteerCommand(
+            commandID: "cmd-1",
+            threadID: "thr-1",
+            queuedRunID: "run-q1",
+            targetRunID: "run-active"
+        )
+        #expect(command["type"] as? String == "queued-message.promote-to-steer")
+        #expect(command["queuedRunId"] as? String == "run-q1")
+        #expect(command["targetRunId"] as? String == "run-active")
+    }
+
     @Test func snapshotWithoutTurnItems_returnsConversationMessages() throws {
         let previous = try conversationTranscript(reasoning: true)
         let item: [String: Any] = [

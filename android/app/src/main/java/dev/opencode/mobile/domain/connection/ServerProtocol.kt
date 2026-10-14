@@ -31,6 +31,13 @@ data class ServerCapabilities(
     val supportsSessionMessageDiff: Boolean,
     val supportsSessionArchive: Boolean,
     val supportsFollowUpDelivery: Boolean,
+    /**
+     * The pending-prompt strip can steer or remove a message that is waiting
+     * for the agent. OpenCode v2 does this through the inbox. T3 does it
+     * through the queued-run commands. The composer follow-up toggle stays on
+     * [supportsFollowUpDelivery].
+     */
+    val supportsPendingPrompts: Boolean = false,
     val supportsTerminal: Boolean = true,
     val supportsRevert: Boolean = true,
     val supportsMentions: Boolean = true,
@@ -45,6 +52,7 @@ data class ServerCapabilities(
                 supportsSessionMessageDiff = false,
                 supportsSessionArchive = true,
                 supportsFollowUpDelivery = false,
+                supportsPendingPrompts = true,
                 supportsTerminal = false,
                 supportsRevert = false,
                 supportsMentions = false,
@@ -70,6 +78,7 @@ data class ServerCapabilities(
                         supportsSessionMessageDiff = false,
                         supportsSessionArchive = false,
                         supportsFollowUpDelivery = true,
+                        supportsPendingPrompts = true,
                         supportsSessionViewed = true,
                     )
             }

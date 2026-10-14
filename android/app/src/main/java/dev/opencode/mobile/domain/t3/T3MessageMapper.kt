@@ -1,6 +1,7 @@
 package dev.opencode.mobile.domain.t3
 
 import dev.opencode.mobile.domain.message.AttachmentKind
+import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRole
@@ -15,7 +16,12 @@ object T3MessageMapper {
     private const val REASONING_LIMIT = 32_000
     private const val DETAIL_LIMIT = 4_000
 
-    fun toMessages(snapshot: T3ThreadSnapshot): List<Message> = transcriptMessages(snapshot.messages, snapshot.turnItems)
+    fun toMessages(snapshot: T3ThreadSnapshot): List<Message> =
+        applyingQueue(
+            transcriptMessages(snapshot.messages, snapshot.turnItems),
+            snapshot.messages,
+            snapshot.runs,
+        )
 
     fun transcriptMessages(
         messages: List<T3ConversationMessage>,
@@ -104,6 +110,30 @@ object T3MessageMapper {
         val next = items.toMutableList()
         next.add(if (index < 0) next.size else index, item)
         return next
+    }
+
+    /**
+     * A user message whose run is still `queued` is waiting for the agent loop.
+     * The timeline hides it and the pending-prompt strip offers Steer.
+     * Automatic completion runs stay out of that strip.
+     */
+    fun applyingQueue(
+        messages: List<Message>,
+        conversation: List<T3ConversationMessage>,
+        runs: List<T3Run>,
+    ): List<Message> {
+        val waiting = T3Queue.userQueuedRuns(runs, conversation).mapTo(HashSet()) { it.userMessageId }
+        if (waiting.isEmpty() && messages.none { it.isWaitingForPickup }) return messages
+        return messages.map { message ->
+            val queued = message.role == MessageRole.User && message.id in waiting
+            when {
+                queued && message.isWaitingForPickup && message.followUpDelivery == FollowUpDelivery.Queue -> message
+                queued -> message.copy(isWaitingForPickup = true, followUpDelivery = FollowUpDelivery.Queue)
+                message.isWaitingForPickup || message.followUpDelivery != null ->
+                    message.copy(isWaitingForPickup = false, followUpDelivery = null)
+                else -> message
+            }
+        }
     }
 
     fun toMessage(message: T3ConversationMessage): Message {
@@ -430,5 +460,43 @@ object T3MessageMapper {
     fun epochMs(raw: String?): Long? {
         if (raw.isNullOrBlank()) return null
         return runCatching { Instant.parse(raw).toEpochMilli() }.getOrNull()
+    }
+}
+
+/** The run Steer interrupts, and the queued run it promotes. */
+data class T3SteerTarget(
+    val queuedRunId: String,
+    val activeRunId: String,
+)
+
+/**
+ * Same queue the desktop composer shows. A `queued` run whose user message is
+ * not an automatic completion is waiting to be picked up. Steer needs a live
+ * turn (`preparing`, `starting`, `running`, or `waiting`) to interrupt.
+ */
+object T3Queue {
+    private val activeStatuses = setOf("preparing", "starting", "running", "waiting")
+
+    fun userQueuedRuns(
+        runs: List<T3Run>,
+        messages: List<T3ConversationMessage>,
+    ): List<T3Run> {
+        val automatic = messages.filter { it.automatic }.mapTo(HashSet()) { it.id }
+        return runs
+            .filter { run ->
+                run.status.equals("queued", ignoreCase = true) && run.userMessageId !in automatic
+            }.sortedWith(compareBy<T3Run> { it.queuePosition ?: it.ordinal }.thenBy { it.ordinal })
+    }
+
+    fun activeRunId(runs: List<T3Run>): String? = runs.lastOrNull { it.status.lowercase() in activeStatuses }?.id
+
+    fun steerTarget(
+        runs: List<T3Run>,
+        messages: List<T3ConversationMessage>,
+        messageId: String,
+    ): T3SteerTarget? {
+        val queued = userQueuedRuns(runs, messages).firstOrNull { it.userMessageId == messageId } ?: return null
+        val active = activeRunId(runs) ?: return null
+        return T3SteerTarget(queuedRunId = queued.id, activeRunId = active)
     }
 }

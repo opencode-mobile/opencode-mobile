@@ -106,6 +106,7 @@ class T3Runtime
         private val messages = mutableMapOf<String, List<Message>>()
         private val conversationByThread = mutableMapOf<String, List<T3ConversationMessage>>()
         private val turnItemsByThread = mutableMapOf<String, List<T3TurnItem>>()
+        private val runsByThread = mutableMapOf<String, List<T3Run>>()
         private val sequences = ConcurrentHashMap<String, Long>()
         private val messageMutex = Mutex()
         private val imagePreviews = ConcurrentHashMap<String, String>()
@@ -287,6 +288,7 @@ class T3Runtime
                 messageMutex.withLock {
                     conversationByThread.clear()
                     turnItemsByThread.clear()
+                    runsByThread.clear()
                     messages.clear()
                     sequences.clear()
                     publishMessages()
@@ -811,10 +813,13 @@ class T3Runtime
                         conversation to T3MessageMapper.upsertTurnItem(items, item)
                     }
                 }
-                "run.created", "run.updated", "runtime-request.updated", "thread.status", "thread.updated" -> {
+                "run.created", "run.updated" -> {
+                    val run = (event["payload"] as? JsonObject)?.let(T3Json::run)
+                    if (run != null) updateRuns(threadId, run)
                     // The shell stream carries the resulting status; this is the REST backstop.
                     scheduleShellRefresh()
                 }
+                "runtime-request.updated", "thread.status", "thread.updated" -> scheduleShellRefresh()
             }
         }
 
@@ -843,6 +848,7 @@ class T3Runtime
                 messageMutex.withLock {
                     conversationByThread[threadId] = snapshot.messages
                     turnItemsByThread[threadId] = snapshot.turnItems
+                    runsByThread[threadId] = snapshot.runs
                     publishDerived(threadId, snapshot.snapshotSequence)
                 }
             scheduleImagePreviews(threadId, pending)
@@ -867,6 +873,27 @@ class T3Runtime
             scheduleImagePreviews(threadId, pending)
         }
 
+        private suspend fun updateRuns(
+            threadId: String,
+            run: T3Run,
+        ) {
+            val pending =
+                messageMutex.withLock {
+                    val current = runsByThread[threadId].orEmpty()
+                    val index = current.indexOfFirst { it.id == run.id }
+                    val next =
+                        if (index < 0) {
+                            current + run
+                        } else {
+                            current.toMutableList().also { it[index] = run }
+                        }
+                    if (next == current) return@withLock emptyList()
+                    runsByThread[threadId] = next
+                    publishDerived(threadId, sequence = null).second
+                }
+            scheduleImagePreviews(threadId, pending)
+        }
+
         /** Caller holds [messageMutex]. */
         private fun publishDerived(
             threadId: String,
@@ -874,9 +901,13 @@ class T3Runtime
         ): Pair<List<Message>, List<MessagePart.File>> {
             if (sequence != null) sequences[threadId] = sequence
             val derived =
-                T3MessageMapper.transcriptMessages(
+                T3MessageMapper.applyingQueue(
+                    T3MessageMapper.transcriptMessages(
+                        conversationByThread[threadId].orEmpty(),
+                        turnItemsByThread[threadId].orEmpty(),
+                    ),
                     conversationByThread[threadId].orEmpty(),
-                    turnItemsByThread[threadId].orEmpty(),
+                    runsByThread[threadId].orEmpty(),
                 )
             val decorated = T3MessageMapper.applyingImagePreviews(derived, imagePreviews)
             messages[threadId] = decorated
@@ -953,6 +984,7 @@ class T3Runtime
             messageMutex.withLock {
                 conversationByThread.clear()
                 turnItemsByThread.clear()
+                runsByThread.clear()
                 messages.clear()
                 sequences.clear()
             }
