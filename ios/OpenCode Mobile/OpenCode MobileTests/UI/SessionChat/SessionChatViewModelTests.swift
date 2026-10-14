@@ -4240,6 +4240,79 @@ struct SessionChatViewModelTests {
         #expect(client.warmCount == 1)
     }
 
+    @Test func t3Slash_offersHarnessSkillsAndInsertsMention() async {
+        let codex = T3Harness(
+            instanceID: "codex",
+            displayName: "Codex",
+            driver: "codex",
+            enabled: true,
+            available: true,
+            models: [T3HarnessModel(slug: "gpt-5", name: "GPT-5")],
+            skills: [
+                T3ProviderSkill(
+                    name: "prototype",
+                    description: "Build a throwaway",
+                    shortDescription: "Throwaway UI",
+                    path: "/skills/prototype/SKILL.md",
+                    enabled: true,
+                    userInvocable: true
+                ),
+                T3ProviderSkill(
+                    name: "secret",
+                    description: "Hidden from the menu",
+                    path: "/skills/secret/SKILL.md",
+                    enabled: true,
+                    userInvocable: false
+                ),
+            ]
+        )
+        let client = FakeT3EngineClient(
+            snapshot: T3HarnessCatalogTests.shell(),
+            catalog: T3HarnessCatalog(harnesses: [codex], defaultSelection: nil)
+        )
+        let repository = FakeMessageRepository()
+        let sessionRepository = FakeChatSessionRepository(
+            getSessionResult: Session(
+                id: "ses-1", title: "Title", slug: nil, projectID: nil, directory: "/repo", parentID: nil,
+                updatedAtEpochMs: nil, providerInstanceID: "codex", runtimeMode: "approval-required", modelName: "gpt-5"
+            )
+        )
+        let viewModel = makeViewModel(
+            messageRepository: repository,
+            sessionRepository: sessionRepository,
+            engine: .t3,
+            harnessRepository: DefaultT3HarnessRepository(client: client)
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+
+        let ready = await waitUntil { viewModel.uiState.harnessPicker?.chipLabel == "Codex · GPT-5" }
+        guard ready else {
+            Issue.record("Expected the T3 harness chip before slash suggestions")
+            return
+        }
+
+        viewModel.updateComposerText("/")
+        #expect(viewModel.uiState.slashSuggestionsVisible)
+        #expect(viewModel.uiState.slashSuggestions.map(\.title) == ["skill:prototype"])
+        #expect(viewModel.uiState.slashSuggestions.map(\.subtitle) == ["Throwaway UI"])
+
+        viewModel.updateComposerText("/sec")
+        #expect(viewModel.uiState.slashSuggestions.isEmpty)
+
+        viewModel.updateComposerText("/skill:throw")
+        #expect(viewModel.uiState.slashSuggestions.map(\.commandName) == ["prototype"])
+
+        viewModel.selectSlashSuggestion(commandName: "prototype")
+        #expect(viewModel.uiState.composer.text == "$prototype ")
+        #expect(viewModel.uiState.slashSuggestionsVisible == false)
+
+        await viewModel.sendPrompt()
+        #expect(repository.sendPromptAsyncCalled)
+        #expect(repository.sentOptions?.text == "$prototype")
+        #expect(repository.sentOptions?.skillIDs.isEmpty == true)
+    }
+
     @Test func t3HarnessPicker_absentOnOpenCode() async {
         let client = FakeT3EngineClient(snapshot: T3HarnessCatalogTests.shell(), catalog: T3HarnessCatalogTests.catalog())
         let viewModel = makeViewModel(

@@ -14,6 +14,7 @@ import dev.opencode.mobile.domain.message.Attachment
 import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.ToolStatus
+import dev.opencode.mobile.domain.model.ComposerSlashSkill
 import dev.opencode.mobile.domain.model.ModelChangeLock
 import dev.opencode.mobile.domain.model.ModelProviderTraits
 import dev.opencode.mobile.domain.model.ModelSelection
@@ -545,6 +546,15 @@ data class SessionChatComposerRegionState(
     val atSuggestions: List<SessionChatAtSuggestion> = emptyList(),
     val followUpNotice: String? = null,
 )
+
+fun ComposerSlashSkill.toSlashSuggestion(): SessionChatSlashSuggestion =
+    SessionChatSlashSuggestion(
+        id = name,
+        title = menuTitle,
+        subtitle = menuSubtitle,
+        badge = null,
+        commandName = name,
+    )
 
 fun ServerCommand.toSlashSuggestion(): SessionChatSlashSuggestion =
     SessionChatSlashSuggestion(

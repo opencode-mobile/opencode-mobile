@@ -27,6 +27,7 @@ import dev.opencode.mobile.domain.message.PromptModelSelection
 import dev.opencode.mobile.domain.message.PromptSendOptions
 import dev.opencode.mobile.domain.message.PromptSendProgress
 import dev.opencode.mobile.domain.message.PromptSendProgressReporter
+import dev.opencode.mobile.domain.model.ComposerSlashSkill
 import dev.opencode.mobile.domain.model.ModelCatalogStore
 import dev.opencode.mobile.domain.model.ModelSelection
 import dev.opencode.mobile.domain.model.ModelSelectionCatalog
@@ -724,7 +725,9 @@ class SessionChatComposer(
     }
 
     fun selectSlashSuggestion(commandName: String) {
-        val inserted = ComposerSubmitRouting.insertSelection(commandName)
+        val inserted =
+            _state.value.slashSkills().firstOrNull { it.name == commandName }?.insertion
+                ?: ComposerSubmitRouting.insertSelection(commandName)
         updateComposerText(inserted, cursor = inserted.length)
     }
 
@@ -1605,7 +1608,7 @@ class SessionChatComposer(
         cursor: Int,
         mentions: List<dev.opencode.mobile.domain.agent.AgentMention> = emptyList(),
     ): SessionChatComposerRegionState =
-        when (val mode = suggestionMode(text, cursor, mentions)) {
+        when (val mode = this.suggestionMode(text, cursor, mentions)) {
             is ComposerSuggestionMode.At ->
                 copy(
                     atSuggestionsVisible = true,
@@ -1620,9 +1623,13 @@ class SessionChatComposer(
                 copy(
                     slashSuggestionsVisible = true,
                     slashSuggestions =
-                        ComposerSubmitRouting
-                            .filterCommands(serverCommands, mode.query)
-                            .map { it.toSlashSuggestion() },
+                        if (allowsSlashCommands) {
+                            ComposerSubmitRouting
+                                .filterCommands(serverCommands, mode.query)
+                                .map { it.toSlashSuggestion() }
+                        } else {
+                            slashSkills().filter { it.matches(mode.query) }.map { it.toSlashSuggestion() }
+                        },
                     atSuggestionsVisible = false,
                     atSuggestions = emptyList(),
                 )
@@ -1639,14 +1646,25 @@ class SessionChatComposer(
         text: String,
         cursor: Int,
         mentions: List<dev.opencode.mobile.domain.agent.AgentMention>,
+    ): ComposerSuggestionMode = _state.value.suggestionMode(text, cursor, mentions)
+
+    private fun SessionChatComposerRegionState.suggestionMode(
+        text: String,
+        cursor: Int,
+        mentions: List<dev.opencode.mobile.domain.agent.AgentMention>,
     ): ComposerSuggestionMode =
         ComposerMentionRouting.suggestionMode(
             text = text,
             cursor = cursor,
             mentions = mentions,
             allowsMentions = allowsMentions,
-            allowsSlashCommands = allowsSlashCommands,
+            allowsSlashCommands = allowsSlashCommands || slashSkills().isNotEmpty(),
         )
+
+    private fun SessionChatComposerRegionState.slashSkills(): List<ComposerSlashSkill> {
+        val providerId = composer.selectedModel?.option?.providerId ?: return emptyList()
+        return composer.modelProviderTraits[providerId]?.slashSkills.orEmpty()
+    }
 
     private fun formatSentTime(epochMs: Long): String =
         Instant

@@ -189,6 +189,51 @@ class T3ModelSelectionTest {
     }
 
     @Test
+    fun serverConfig_parsesSlashSkillsAndPrefersTheWorktreeSnapshot() {
+        val config =
+            T3Json.serverConfig(
+                serverConfigJson(
+                    providers =
+                        listOf(
+                            harnessJson(
+                                "codex-1",
+                                skills =
+                                    listOf(
+                                        skillJson("prototype", description = "Build a throwaway", shortDescription = "Throwaway UI"),
+                                        skillJson("Prototype", description = "duplicate"),
+                                        skillJson("secret", userInvocable = false),
+                                        skillJson("off", enabled = false),
+                                    ),
+                                workspaceSnapshots =
+                                    listOf(
+                                        workspaceSnapshotJson("/repo", listOf(skillJson("local", description = "In this repo"))),
+                                    ),
+                            ),
+                        ),
+                ),
+            )
+
+        val harness = config.harness("codex-1")!!
+        val providerSkills = T3SlashSkills.visible(harness.skills)
+        assertEquals(listOf("prototype"), providerSkills.map { it.name })
+        assertEquals(listOf("local"), T3SlashSkills.visible(harness.skillsFor("/repo")).map { it.name })
+        assertEquals(listOf("prototype"), T3SlashSkills.visible(harness.skillsFor("/other")).map { it.name })
+
+        val prototype = providerSkills.single()
+        assertTrue(prototype.matches(""))
+        assertTrue(prototype.matches("skill"))
+        assertTrue(prototype.matches("skill:throw"))
+        assertTrue(prototype.matches("proto"))
+        assertFalse(prototype.matches("nope"))
+        assertEquals("\$prototype ", prototype.insertion)
+        assertEquals("skill:prototype", prototype.menuTitle)
+        assertEquals("Throwaway UI", prototype.menuSubtitle)
+
+        val catalog = T3ModelRepository.catalog(config, project = null, directory = "/repo")
+        assertEquals(listOf("local"), catalog.providerTraits["codex-1"]?.slashSkills?.map { it.name })
+    }
+
+    @Test
     fun serverConfig_nullGlobalDefaultAndMissingInstanceIdsAreTolerated() {
         val config =
             T3Json.serverConfig(

@@ -268,6 +268,18 @@ final class SessionChatComposer {
         }
     }
 
+    /// Replaces the T3 skill rows offered from `/`. A no-op when the list is unchanged.
+    func setSlashSkills(_ skills: [ComposerSlashSkill]) {
+        guard skills != state.slashSkills else { return }
+        state.slashSkills = skills
+        refreshComposerSuggestions(
+            for: state.composer.text,
+            cursor: state.composer.cursor,
+            mentions: state.composer.agentMentions
+        )
+        notifyChange()
+    }
+
     func loadServerCommands(force: Bool = false) {
         guard allowsSlashCommands else { return }
         if !force, !state.serverCommands.isEmpty { return }
@@ -525,7 +537,9 @@ final class SessionChatComposer {
     }
 
     func selectSlashSuggestion(commandName: String) {
-        let inserted = ComposerSubmitRouting.insertSelection(commandName: commandName)
+        let inserted =
+            state.slashSkills.first { $0.name == commandName }?.insertion
+            ?? ComposerSubmitRouting.insertSelection(commandName: commandName)
         updateComposerText(inserted, cursor: inserted.count)
     }
 
@@ -1398,7 +1412,7 @@ final class SessionChatComposer {
             cursor: cursor,
             mentions: mentions,
             allowsMentions: allowsMentions,
-            allowsSlashCommands: allowsSlashCommands
+            allowsSlashCommands: allowsSlashCommands || !state.slashSkills.isEmpty
         )
     }
 
@@ -1418,9 +1432,15 @@ final class SessionChatComposer {
             state.slashSuggestions = []
         case let .slash(query):
             state.slashSuggestionsVisible = true
-            state.slashSuggestions = ComposerSubmitRouting
-                .filterCommands(state.serverCommands, query: query)
-                .map { $0.toSlashSuggestion() }
+            if allowsSlashCommands {
+                state.slashSuggestions = ComposerSubmitRouting
+                    .filterCommands(state.serverCommands, query: query)
+                    .map { $0.toSlashSuggestion() }
+            } else {
+                state.slashSuggestions = state.slashSkills
+                    .filter { $0.matches(query: query) }
+                    .map { $0.toSlashSuggestion() }
+            }
             state.atSuggestionsVisible = false
             state.atSuggestions = []
         case .none:

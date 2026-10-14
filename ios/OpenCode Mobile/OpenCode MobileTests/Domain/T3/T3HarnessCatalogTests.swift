@@ -49,6 +49,38 @@ struct T3HarnessCatalogTests {
         #expect(catalog.defaultSelection == T3ModelSelection(instanceID: "codex", model: "gpt-5"))
     }
 
+    @Test func parsesSkillsAndPrefersTheWorktreeSnapshot() throws {
+        var provider = T3ConfigFixtures.provider("codex", models: [T3ConfigFixtures.model("gpt-5")])
+        provider["skills"] = [
+            Self.skill("prototype", description: "Build a throwaway", shortDescription: "Throwaway UI"),
+            Self.skill("Prototype", description: "duplicate"),
+            Self.skill("secret", userInvocable: false),
+            Self.skill("off", enabled: false),
+            ["description": "nameless"],
+        ]
+        provider["workspaceSnapshots"] = [[
+            "cwd": "/repo",
+            "skills": [Self.skill("local", description: "In this repo")],
+        ]]
+
+        let catalog = try #require(T3JSON.harnessCatalog(from: T3ConfigFixtures.config(providers: [provider])))
+        let harness = try #require(catalog.harness(instanceID: "codex"))
+        let providerSkills = T3SlashSkills.menuItems(harness.skills)
+        #expect(providerSkills.map(\.name) == ["prototype"])
+        #expect(T3SlashSkills.menuItems(harness.skills(forWorktree: "/repo")).map(\.name) == ["local"])
+        #expect(T3SlashSkills.menuItems(harness.skills(forWorktree: "/other")).map(\.name) == ["prototype"])
+
+        let prototype = try #require(providerSkills.first)
+        #expect(prototype.matches(query: ""))
+        #expect(prototype.matches(query: "skill"))
+        #expect(prototype.matches(query: "skill:throw"))
+        #expect(prototype.matches(query: "proto"))
+        #expect(prototype.matches(query: "nope") == false)
+        #expect(prototype.insertion == "$prototype ")
+        #expect(prototype.menuTitle == "skill:prototype")
+        #expect(prototype.menuSubtitle == "Throwaway UI")
+    }
+
     @Test func nullGlobalDefault_parsesAsNil() throws {
         let catalog = try #require(T3JSON.harnessCatalog(from: T3ConfigFixtures.config(providers: [])))
         #expect(catalog.harnesses.isEmpty)
@@ -434,6 +466,24 @@ struct T3HarnessCatalogTests {
             ),
         ]
         return T3HarnessCatalog(harnesses: order.compactMap { all[$0] }, defaultSelection: defaultSelection)
+    }
+
+    static func skill(
+        _ name: String,
+        description: String? = nil,
+        shortDescription: String? = nil,
+        enabled: Bool = true,
+        userInvocable: Bool = true
+    ) -> [String: Any] {
+        var skill: [String: Any] = [
+            "name": name,
+            "path": "/skills/\(name)/SKILL.md",
+            "enabled": enabled,
+            "userInvocable": userInvocable,
+        ]
+        if let description { skill["description"] = description }
+        if let shortDescription { skill["shortDescription"] = shortDescription }
+        return skill
     }
 
     static func shell() -> T3ShellSnapshot {

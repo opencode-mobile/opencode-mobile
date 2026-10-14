@@ -437,6 +437,8 @@ internal fun harnessJson(
     supportedRuntimeModes: List<String>? = null,
     requiresNewThreadForModelChange: Boolean? = null,
     models: List<JsonObject> = listOf(harnessModelJson("$instanceId-model", isDefault = true)),
+    skills: List<JsonObject> = emptyList(),
+    workspaceSnapshots: List<JsonObject> = emptyList(),
 ): JsonObject =
     buildJsonObject {
         put("instanceId", instanceId)
@@ -456,7 +458,35 @@ internal fun harnessJson(
         }
         put("models", JsonArray(models))
         put("slashCommands", JsonArray(emptyList()))
-        put("skills", JsonArray(emptyList()))
+        put("skills", JsonArray(skills))
+        if (workspaceSnapshots.isNotEmpty()) {
+            put("workspaceSnapshots", JsonArray(workspaceSnapshots))
+        }
+    }
+
+internal fun skillJson(
+    name: String,
+    description: String? = null,
+    shortDescription: String? = null,
+    enabled: Boolean = true,
+    userInvocable: Boolean = true,
+): JsonObject =
+    buildJsonObject {
+        put("name", name)
+        put("path", "/skills/$name/SKILL.md")
+        if (description != null) put("description", description)
+        if (shortDescription != null) put("shortDescription", shortDescription)
+        put("enabled", enabled)
+        put("userInvocable", userInvocable)
+    }
+
+internal fun workspaceSnapshotJson(
+    cwd: String,
+    skills: List<JsonObject>,
+): JsonObject =
+    buildJsonObject {
+        put("cwd", cwd)
+        put("skills", JsonArray(skills))
     }
 
 internal fun harnessModelJson(

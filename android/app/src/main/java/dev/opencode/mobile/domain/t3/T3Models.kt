@@ -21,6 +21,18 @@ data class T3ModelSelection(
     val model: String?,
 )
 
+/** One skill a T3 provider can run. The composer offers the ones the user may start. */
+data class T3ProviderSkill(
+    val name: String,
+    val description: String? = null,
+    val displayName: String? = null,
+    val shortDescription: String? = null,
+    val path: String = "",
+    val enabled: Boolean = true,
+    /** False when the provider reserves the skill for the agent (`user-invocable: false`). */
+    val userInvocable: Boolean = true,
+)
+
 /** One model a harness serves; [slug] is the wire value sent in a model selection. */
 data class T3HarnessModel(
     val slug: String,
@@ -50,7 +62,17 @@ data class T3Harness(
     val supportedRuntimeModes: List<String>? = null,
     val requiresNewThreadForModelChange: Boolean = false,
     val models: List<T3HarnessModel> = emptyList(),
+    /** Skills discovered for the provider as a whole. */
+    val skills: List<T3ProviderSkill> = emptyList(),
+    /** Skills discovered for one working directory. A matching entry replaces [skills]. */
+    val workspaceSkills: Map<String, List<T3ProviderSkill>> = emptyMap(),
 ) {
+    /** Skills for [cwd] when the provider published a snapshot for that directory. */
+    fun skillsFor(cwd: String?): List<T3ProviderSkill> {
+        val key = cwd?.takeIf { it.isNotBlank() } ?: return skills
+        return workspaceSkills[key] ?: skills
+    }
+
     /** Enabled and available: may be offered in the picker and chosen as a fallback. */
     val isUsable: Boolean get() = enabled && available && models.isNotEmpty()
 

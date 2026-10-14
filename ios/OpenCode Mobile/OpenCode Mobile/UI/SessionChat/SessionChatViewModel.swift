@@ -218,6 +218,15 @@ final class SessionChatViewModel {
         activeConnectionManager.currentProfile()?.engine == .t3 ? harnessPicker : nil
     }
 
+    /// Pushes the active harness's skills into the `/` menu. Unchanged lists do not republish.
+    private func syncT3SlashSkills() {
+        let skills = activeHarnessPicker?.slashSkills(
+            threadSelection: threadModelSelection,
+            hasStarted: threadHasStarted
+        ) ?? []
+        composer.setSlashSkills(skills)
+    }
+
     /// The thread's current harness + model as the session chrome reports it.
     private var threadModelSelection: T3ModelSelection? {
         let info = sessionInfo.state
@@ -1374,6 +1383,7 @@ final class SessionChatViewModel {
         publishUiState()
     }
     private func publishUiState() {
+        syncT3SlashSkills()
         inbox.refilterOrphans()
         let inboxState = inbox.state
         let timelineState = timeline.state

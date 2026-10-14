@@ -297,7 +297,35 @@ object T3Json {
             supportedRuntimeModes = runtimeModes,
             requiresNewThreadForModelChange = obj.boolean("requiresNewThreadForModelChange") ?: false,
             models = obj.array("models").mapNotNull(::harnessModel),
+            skills = obj.array("skills").mapNotNull(::providerSkill),
+            workspaceSkills = workspaceSkills(obj.array("workspaceSnapshots")),
         )
+    }
+
+    private fun providerSkill(element: JsonElement): T3ProviderSkill? {
+        val obj = element as? JsonObject ?: return null
+        val name = obj.string("name")?.trim().orEmpty()
+        if (name.isEmpty()) return null
+        return T3ProviderSkill(
+            name = name,
+            description = obj.string("description")?.trim()?.takeIf { it.isNotEmpty() },
+            displayName = obj.string("displayName")?.trim()?.takeIf { it.isNotEmpty() },
+            shortDescription = obj.string("shortDescription")?.trim()?.takeIf { it.isNotEmpty() },
+            path = obj.string("path")?.trim().orEmpty(),
+            enabled = obj.boolean("enabled") ?: true,
+            userInvocable = obj.boolean("userInvocable") ?: true,
+        )
+    }
+
+    private fun workspaceSkills(elements: List<JsonElement>): Map<String, List<T3ProviderSkill>> {
+        val snapshots = LinkedHashMap<String, List<T3ProviderSkill>>()
+        for (element in elements) {
+            val obj = element as? JsonObject ?: continue
+            val cwd = obj.string("cwd")?.trim().orEmpty()
+            if (cwd.isEmpty()) continue
+            snapshots[cwd] = obj.array("skills").mapNotNull(::providerSkill)
+        }
+        return snapshots
     }
 
     private fun harnessModel(element: JsonElement): T3HarnessModel? {

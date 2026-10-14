@@ -12,6 +12,18 @@ nonisolated struct T3HarnessModel: Equatable, Sendable {
     var label: String { shortName ?? name }
 }
 
+/// One skill a T3 provider can run. The composer offers the ones the user may start.
+nonisolated struct T3ProviderSkill: Equatable, Sendable {
+    var name: String
+    var description: String? = nil
+    var displayName: String? = nil
+    var shortDescription: String? = nil
+    var path: String = ""
+    var enabled: Bool = true
+    /// False when the provider reserves the skill for the agent (`user-invocable: false`).
+    var userInvocable: Bool = true
+}
+
 /// A configured provider instance of the T3 environment (`ServerProvider`).
 /// `instanceID` is the routing key every model selection carries.
 nonisolated struct T3Harness: Equatable, Sendable {
@@ -25,6 +37,18 @@ nonisolated struct T3Harness: Equatable, Sendable {
     var supportedRuntimeModes: [String] = []
     var requiresNewThreadForModelChange: Bool = false
     var models: [T3HarnessModel] = []
+    /// Skills discovered for the provider as a whole.
+    var skills: [T3ProviderSkill] = []
+    /// Skills discovered for one working directory. A matching entry replaces [skills].
+    var workspaceSkills: [String: [T3ProviderSkill]] = [:]
+
+    /// Skills for `worktree` when the provider published a snapshot for that directory.
+    func skills(forWorktree worktree: String?) -> [T3ProviderSkill] {
+        if let worktree, let snapshot = workspaceSkills[worktree] {
+            return snapshot
+        }
+        return skills
+    }
 
     /// Can start a new thread right now.
     var isUsable: Bool { enabled && available }
@@ -111,8 +135,32 @@ nonisolated extension T3JSON {
             available: available,
             supportedRuntimeModes: modes,
             requiresNewThreadForModelChange: bool(provider["requiresNewThreadForModelChange"]),
-            models: array(provider["models"]).compactMap(harnessModel(from:))
+            models: array(provider["models"]).compactMap(harnessModel(from:)),
+            skills: array(provider["skills"]).compactMap(providerSkill(from:)),
+            workspaceSkills: workspaceSkills(from: provider["workspaceSnapshots"])
         )
+    }
+
+    static func providerSkill(from value: Any?) -> T3ProviderSkill? {
+        guard let skill = object(value), let name = string(skill, "name") else { return nil }
+        return T3ProviderSkill(
+            name: name,
+            description: string(skill, "description"),
+            displayName: string(skill, "displayName"),
+            shortDescription: string(skill, "shortDescription"),
+            path: string(skill, "path") ?? "",
+            enabled: skill["enabled"] == nil ? true : bool(skill["enabled"]),
+            userInvocable: skill["userInvocable"] == nil ? true : bool(skill["userInvocable"])
+        )
+    }
+
+    static func workspaceSkills(from value: Any?) -> [String: [T3ProviderSkill]] {
+        var snapshots: [String: [T3ProviderSkill]] = [:]
+        for item in array(value) {
+            guard let snapshot = object(item), let cwd = string(snapshot, "cwd") else { continue }
+            snapshots[cwd] = array(snapshot["skills"]).compactMap(providerSkill(from:))
+        }
+        return snapshots
     }
 
     static func harnessModel(from value: Any?) -> T3HarnessModel? {
@@ -154,6 +202,28 @@ nonisolated enum T3ModelSelectionResolver {
             }
         }
         return nil
+    }
+}
+
+/// Skills a `/` menu may offer: enabled, user-invocable, and one row per name.
+nonisolated enum T3SlashSkills {
+    static func menuItems(_ skills: [T3ProviderSkill]) -> [ComposerSlashSkill] {
+        var seen: Set<String> = []
+        var items: [ComposerSlashSkill] = []
+        for skill in skills {
+            guard skill.enabled, skill.userInvocable else { continue }
+            let key = skill.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            guard !key.isEmpty, seen.insert(key).inserted else { continue }
+            items.append(
+                ComposerSlashSkill(
+                    name: skill.name,
+                    description: skill.description,
+                    displayName: skill.displayName,
+                    shortDescription: skill.shortDescription
+                )
+            )
+        }
+        return items
     }
 }
 

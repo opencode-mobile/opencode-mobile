@@ -45,6 +45,7 @@ import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.PromptSendOptions
 import dev.opencode.mobile.domain.message.PromptSendProgressReporter
 import dev.opencode.mobile.domain.message.ToolStatus
+import dev.opencode.mobile.domain.model.ComposerSlashSkill
 import dev.opencode.mobile.domain.model.ModelCatalogStore
 import dev.opencode.mobile.domain.model.ModelChangeLock
 import dev.opencode.mobile.domain.model.ModelProviderTraits
@@ -6023,6 +6024,59 @@ class SessionChatViewModelTest {
             assertEquals("Claude", state.providerLabel)
             assertEquals(listOf("approval-required", "full-access"), state.runtimeModeOptions)
             assertNull(state.modelChangeLock)
+        }
+
+    @Test
+    fun t3Slash_offersSelectedHarnessSkillsAndInsertsMention() =
+        runTest(testDispatcher) {
+            val prototype =
+                ComposerSlashSkill(
+                    name = "prototype",
+                    description = "Build a throwaway",
+                    shortDescription = "Throwaway UI",
+                )
+            val base = t3Catalog(requiresNewThread = false)
+            val catalog =
+                base.copy(
+                    providerTraits =
+                        base.providerTraits +
+                            (
+                                "claude-1" to
+                                    base.providerTraits.getValue("claude-1").copy(slashSkills = listOf(prototype))
+                            ),
+                )
+            val repository = FakeMessageRepository(messages = emptyList())
+            val viewModel =
+                createViewModel(
+                    repository,
+                    modelRepository = FakeModelRepository(catalog),
+                    sessionRepository = FakeSessionRepository(getSessionResult = t3ThreadSession()),
+                    connectionProfileStore = FakeConnectionProfileStore(active = t3ChatProfile),
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.updateComposerText("/")
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.slashSuggestionsVisible)
+            assertEquals(listOf("skill:prototype"), viewModel.uiState.value.slashSuggestions.map { it.title })
+            assertEquals(listOf("Throwaway UI"), viewModel.uiState.value.slashSuggestions.map { it.subtitle })
+
+            viewModel.updateComposerText("/nope")
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.slashSuggestions.isEmpty())
+
+            viewModel.updateComposerText("/")
+            viewModel.selectSlashSuggestion("prototype")
+            advanceUntilIdle()
+            assertEquals("\$prototype ", viewModel.uiState.value.composer.text)
+            assertFalse(viewModel.uiState.value.slashSuggestionsVisible)
+
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+            assertTrue(repository.sendPromptAsyncCalled)
+            assertEquals("\$prototype", repository.sentOptions?.text)
+            assertTrue(repository.sentOptions?.skillIds.isNullOrEmpty())
         }
 
     @Test

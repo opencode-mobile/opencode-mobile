@@ -638,6 +638,8 @@ struct SessionChatComposerRegionState: Equatable {
     var errorMessage: String?
     var abortErrorMessage: String?
     var serverCommands: [ServerCommand] = []
+    /// T3 skills offered from `/`. Empty on engines that use the command catalogue.
+    var slashSkills: [ComposerSlashSkill] = []
     var mentionableAgents: [MentionableAgent] = []
     var slashSuggestionsVisible = false
     var slashSuggestions: [SessionChatSlashSuggestion] = []
@@ -659,6 +661,18 @@ extension ServerCommand {
                 case .command: nil
                 }
             }(),
+            commandName: name
+        )
+    }
+}
+
+extension ComposerSlashSkill {
+    func toSlashSuggestion() -> SessionChatSlashSuggestion {
+        SessionChatSlashSuggestion(
+            id: name,
+            title: menuTitle,
+            subtitle: menuSubtitle,
+            badge: nil,
             commandName: name
         )
     }

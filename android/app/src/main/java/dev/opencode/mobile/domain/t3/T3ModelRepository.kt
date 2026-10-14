@@ -32,14 +32,16 @@ class T3ModelRepository
                 }
             val shell = runtime.shell.value ?: runCatching { runtime.refreshShell() }.getOrNull()
             val project = shell?.let { projectFor(it, directory) }
-            return catalog(config, project)
+            return catalog(config, project, directory)
         }
 
         companion object {
             fun catalog(
                 config: T3ServerConfig,
                 project: T3Project?,
+                directory: String? = null,
             ): ModelSelectionCatalog {
+                val cwd = directory?.takeIf { it.isNotBlank() } ?: project?.workspaceRoot
                 val usable = config.harnesses.filter { it.isUsable }
                 val options = usable.flatMap { harness -> harness.models.map { model -> option(harness, model) } }
                 val projectDefault =
@@ -61,6 +63,7 @@ class T3ModelRepository
                                 ModelProviderTraits(
                                     supportedRuntimeModes = harness.supportedRuntimeModes?.let { harness.runtimeModes },
                                     requiresNewSessionForModelChange = harness.requiresNewThreadForModelChange,
+                                    slashSkills = T3SlashSkills.visible(harness.skillsFor(cwd)),
                                 )
                         },
                 )

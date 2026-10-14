@@ -39,6 +39,8 @@ data class ModelProviderTraits(
     val supportedRuntimeModes: List<String>? = null,
     /** A started session cannot switch to another model of this provider. */
     val requiresNewSessionForModelChange: Boolean = false,
+    /** Skills the composer offers when the user types `/` on this provider. */
+    val slashSkills: List<ComposerSlashSkill> = emptyList(),
 )
 
 /**

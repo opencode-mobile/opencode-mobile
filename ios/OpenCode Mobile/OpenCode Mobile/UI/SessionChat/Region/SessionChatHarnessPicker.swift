@@ -235,6 +235,24 @@ final class SessionChatHarnessPicker {
         }
     }
 
+    /// Skills the composer offers from `/` for the harness this thread will run.
+    /// A started thread with no known harness offers none, so another harness's
+    /// skills do not appear while its selection is still loading.
+    func slashSkills(threadSelection: T3ModelSelection?, hasStarted: Bool) -> [ComposerSlashSkill] {
+        guard let catalog else { return [] }
+        let current = pendingSelection ?? threadSelection ?? (hasStarted ? nil : rememberedSelection)
+        let instanceID: String?
+        if let current {
+            instanceID = current.instanceID
+        } else if hasStarted {
+            return []
+        } else {
+            instanceID = catalog.defaultSelection?.instanceID ?? catalog.usableHarnesses.first?.instanceID
+        }
+        guard let instanceID, let harness = catalog.harness(instanceID: instanceID) else { return [] }
+        return T3SlashSkills.menuItems(harness.skills(forWorktree: worktree))
+    }
+
     func presentation(threadSelection: T3ModelSelection?, hasStarted: Bool) -> SessionChatHarnessPickerUiState {
         let current = pendingSelection ?? threadSelection ?? (hasStarted ? nil : rememberedSelection)
         let harness = current.flatMap { catalog?.harness(instanceID: $0.instanceID) }
