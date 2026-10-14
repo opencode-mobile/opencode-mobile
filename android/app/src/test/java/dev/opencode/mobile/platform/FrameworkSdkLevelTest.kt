@@ -117,6 +117,11 @@ class FrameworkSdkLevelTest {
         )
     }
 
+    @Test
+    fun `no aligned level is recorded before an alignment is applied`() {
+        assertNull(FrameworkSdkLevel.alignedFromSdkInt)
+    }
+
     @Suppress("unused")
     private class WithSystemOverlays {
         fun systemOverlays(): Int = 512

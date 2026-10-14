@@ -3,20 +3,23 @@ package dev.opencode.mobile.platform
 import android.os.Build
 import android.util.Log
 import android.view.WindowInsets
-import java.lang.reflect.Field
-import java.lang.reflect.Method
-import java.lang.reflect.Modifier
 
 /**
- * Spoofed API 34 images report [Build.VERSION.SDK_INT] 34 but ship an Android 13
- * framework, so [WindowInsets.Type.systemOverlays] is missing. AndroidX calls it
- * whenever the reported level is at least 34. Drop to 33 only when that method is
- * confirmed missing. Any other probe result leaves the reported level unchanged.
+ * Spoofed API 34 images report [Build.VERSION.SDK_INT] 34 but ship a framework that
+ * predates API 34. More than one API 34 method is missing (for example
+ * [WindowInsets.Type.systemOverlays] and `WindowMetrics.getDensity`), and libraries
+ * call them whenever the reported level is at least 34. Applying 33 sends every
+ * library down its API 33 paths. Drop to 33 only when systemOverlays is confirmed
+ * missing. Any other probe result leaves the reported level unchanged.
  */
 object FrameworkSdkLevel {
     private const val TAG = "FrameworkSdkLevel"
     private const val SYSTEM_OVERLAYS_API = 34
     private const val LAST_API_WITHOUT_SYSTEM_OVERLAYS = 33
+
+    /** Reported level before alignment, or null when SDK_INT was left unchanged. */
+    var alignedFromSdkInt: Int? = null
+        private set
 
     fun sdkIntToApply(
         reportedSdkInt: Int,
@@ -51,6 +54,7 @@ object FrameworkSdkLevel {
                     probe = probeSystemOverlays(WindowInsets.Type::class.java),
                 ) ?: return
             writeSdkInt(corrected)
+            alignedFromSdkInt = reported
             Log.w(
                 TAG,
                 "Reported API $reported has no WindowInsets.Type.systemOverlays(); aligned SDK_INT to $corrected",
@@ -60,59 +64,12 @@ object FrameworkSdkLevel {
         }
     }
 
+    /** ART skips the final check once the field is accessible. */
     private fun writeSdkInt(value: Int) {
-        try {
-            setSdkInt(value)
-        } catch (_: Throwable) {
-            exemptReflectFieldHiddenApi()
-            setSdkInt(value)
-        }
-    }
-
-    private fun setSdkInt(value: Int) {
         val sdkInt = Build.VERSION::class.java.getDeclaredField("SDK_INT")
         sdkInt.isAccessible = true
-        val flags = reflectionFlagsField()
-        flags.isAccessible = true
-        flags.setInt(sdkInt, flags.getInt(sdkInt) and Modifier.FINAL.inv())
         sdkInt.setInt(null, value)
     }
-
-    /**
-     * targetSdk 36 denies [Field.setAccessible] on the hidden `accessFlags` member.
-     * Exempt `java.lang.reflect.Field` only, and only after a plain write has failed.
-     */
-    private fun exemptReflectFieldHiddenApi() {
-        try {
-            val forName = Class::class.java.getDeclaredMethod("forName", String::class.java)
-            val getDeclaredMethod =
-                Class::class.java.getDeclaredMethod(
-                    "getDeclaredMethod",
-                    String::class.java,
-                    emptyArray<Class<*>>()::class.java,
-                )
-            val vmRuntimeClass = forName.invoke(null, "dalvik.system.VMRuntime") as Class<*>
-            val getRuntime = getDeclaredMethod.invoke(vmRuntimeClass, "getRuntime", null) as Method
-            val parameterTypes = arrayOf(Array<String>::class.java)
-            val setHiddenApiExemptions =
-                getDeclaredMethod.invoke(
-                    vmRuntimeClass,
-                    "setHiddenApiExemptions",
-                    parameterTypes,
-                ) as Method
-            val exemptions = arrayOf("Ljava/lang/reflect/Field;")
-            setHiddenApiExemptions.invoke(getRuntime.invoke(null), exemptions as Any)
-        } catch (_: Throwable) {
-            // Host JVM has no VMRuntime. alignToFramework logs only if the write fails.
-        }
-    }
-
-    private fun reflectionFlagsField(): Field =
-        try {
-            Field::class.java.getDeclaredField("accessFlags")
-        } catch (_: NoSuchFieldException) {
-            Field::class.java.getDeclaredField("modifiers")
-        }
 }
 
 enum class SystemOverlaysProbe {
