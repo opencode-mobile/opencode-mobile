@@ -599,10 +599,19 @@ class SessionChatViewModel
             publishUiState()
         }
 
+        /** Listening ended but the transcript stays on the card so Insert still works. */
+        fun dictationStopped() {
+            val current = dictation ?: return
+            if (current.phase != ComposerDictationPhase.Listening) return
+            dictation = current.copy(phase = ComposerDictationPhase.Stopped, level = 0f)
+            publishUiState()
+        }
+
         fun dictationInsert() {
             val current = dictation ?: return
             if (
                 current.phase != ComposerDictationPhase.Listening &&
+                current.phase != ComposerDictationPhase.Stopped &&
                 current.phase != ComposerDictationPhase.Finishing
             ) {
                 return

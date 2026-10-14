@@ -5406,6 +5406,54 @@ class SessionChatViewModelTest {
             assertEquals("ger", state.dictation?.volatile)
         }
 
+    @Test
+    fun dictationStopped_keepsTranscriptRestsOrbAndStillInserts() =
+        runTest(testDispatcher) {
+            val viewModel = dictationViewModel()
+            viewModel.updateComposerText("Hello there", cursor = 5)
+            advanceUntilIdle()
+            viewModel.beginDictation("English", onDevice = true)
+            viewModel.dictationPartial(committed = " big", volatile = "")
+            viewModel.dictationLevel(0.8f)
+            viewModel.dictationStopped()
+
+            val stopped = viewModel.uiState.value.dictation
+            assertEquals(ComposerDictationPhase.Stopped, stopped?.phase)
+            assertEquals(" big", stopped?.committed)
+            assertEquals(0f, stopped?.level)
+
+            // Nothing more arrives from a stopped recognizer, but stray callbacks are ignored.
+            viewModel.dictationPartial(committed = " big extra", volatile = "")
+            viewModel.dictationLevel(0.5f)
+            val afterStray = viewModel.uiState.value.dictation
+            assertEquals(" big", afterStray?.committed)
+            assertEquals(0f, afterStray?.level)
+
+            viewModel.dictationInsert()
+            advanceUntilIdle()
+
+            val composer = viewModel.uiState.value.composer
+            assertEquals("Hello big there", composer.text)
+            assertEquals(9, composer.cursor)
+            assertNull(viewModel.uiState.value.dictation)
+        }
+
+    @Test
+    fun dictationStopped_outsideListening_isIgnored() =
+        runTest(testDispatcher) {
+            val viewModel = dictationViewModel()
+            viewModel.dictationStopped()
+            assertNull(viewModel.uiState.value.dictation)
+
+            viewModel.dictationFinishDelayMs = 1_000
+            viewModel.beginDictation("English", onDevice = true)
+            viewModel.dictationPartial(committed = "big", volatile = "")
+            viewModel.dictationInsert()
+            viewModel.dictationStopped()
+            val finishing = viewModel.uiState.value.dictation
+            assertEquals(ComposerDictationPhase.Finishing, finishing?.phase)
+        }
+
     private fun TestScope.dictationViewModel(): SessionChatViewModel {
         val viewModel = createViewModel(FakeMessageRepository())
         viewModel.dictationFinishDelayMs = 0
