@@ -22,6 +22,7 @@ internal fun SessionChatMessageActionsSheet(
     target: SessionChatMessageActionsTarget?,
     onDismiss: () -> Unit,
     onRevertMessage: (String) -> Unit,
+    onForkFromMessage: (messageId: String, messageText: String) -> Unit,
 ) {
     val context = LocalContext.current
 
@@ -46,6 +47,15 @@ internal fun SessionChatMessageActionsSheet(
                 onClick = {
                     logMessageActionsAction(ProductAnalytics.Action.MESSAGE_ACTIONS_REVERT)
                     onRevertMessage(target.id)
+                    onDismiss()
+                },
+            )
+            OpenCodeBottomSheetEntry(
+                title = "Fork from here",
+                startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.CallSplit, "Fork from here"),
+                onClick = {
+                    logMessageActionsAction(ProductAnalytics.Action.MESSAGE_ACTIONS_FORK)
+                    onForkFromMessage(target.id, target.text)
                     onDismiss()
                 },
             )

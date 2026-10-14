@@ -427,9 +427,11 @@ private enum DictationAudioLevel {
             )
         }
         guard count > 0 else { return 0 }
-        let rms = sqrt(sum / Float(count))
-        // Typical speech RMS sits well below 1. Scale so a normal voice moves the bars.
-        return min(1, max(0, Double(rms) / 0.12))
+        let rms = Double(sqrt(sum / Float(count)))
+        guard rms > 0 else { return 0 }
+        // Loudness is logarithmic: map about -50 dB (room) to -20 dB (close speech) onto 0...1.
+        let decibels = 20 * log10(rms)
+        return min(1, max(0, (decibels + 50) / 30))
     }
 
     static func copy(_ buffer: AVAudioPCMBuffer) -> AVAudioPCMBuffer? {

@@ -291,6 +291,10 @@ fun SessionChatScreen(
                     viewModel.dictationLevel(level)
                 }
 
+                override fun onStopped() {
+                    viewModel.dictationStopped()
+                }
+
                 override fun onUnavailable(
                     phase: ComposerDictationPhase,
                     message: String?,
@@ -517,6 +521,17 @@ fun SessionChatScreen(
                                     logOverflowAction(ProductAnalytics.Action.CHAT_OVERFLOW_REVIEW_CHANGES)
                                     menuExpanded = false
                                     onReviewChangesClick(uiState.changesNavigationTarget(worktree))
+                                },
+                            ),
+                        )
+                        add(
+                            OpenCodeOverflowMenuEntry(
+                                title = "Fork session",
+                                icon = OpenCodeIcons.CallSplit,
+                                enabled = sessionCreated,
+                                onClick = {
+                                    menuExpanded = false
+                                    viewModel.openForkSession()
                                 },
                             ),
                         )
@@ -1107,6 +1122,7 @@ fun SessionChatScreen(
             target = messageActionsTarget,
             onDismiss = { messageActionsTarget = null },
             onRevertMessage = viewModel::revertMessage,
+            onForkFromMessage = viewModel::forkFromMessage,
         )
 
         SessionChatPendingPromptsSheet(
@@ -1405,6 +1421,7 @@ private fun ComposerDictationUiState.toCardModel(elapsedLabel: String): Composer
     val (variant, reason) =
         when (phase) {
             ComposerDictationPhase.Listening -> OpenCodeDictationCardVariant.Listening to null
+            ComposerDictationPhase.Stopped -> OpenCodeDictationCardVariant.Stopped to null
             ComposerDictationPhase.Finishing -> OpenCodeDictationCardVariant.Finishing to null
             ComposerDictationPhase.PermissionDenied ->
                 OpenCodeDictationCardVariant.Unavailable to OpenCodeDictationUnavailableReason.PermissionDenied
