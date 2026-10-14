@@ -182,6 +182,50 @@ struct T3RuntimeTests {
         observe.cancel()
     }
 
+    /// Background stop closes the socket on purpose. The transcript stays, and
+    /// the next socket resumes from the last sequence instead of painting
+    /// "Lost connection to T3" until some later event arrives.
+    @MainActor
+    @Test func subscription_appReleaseKeepsTranscriptAndResumes() async throws {
+        let harness = T3ClientHarness()
+        harness.http.threadDetail = T3ThreadDetail(
+            sequence: 5,
+            thread: Fixtures.thread(id: "t1"),
+            messages: [T3ConversationMessage(id: "m1", role: "user", text: "Hello", streaming: false)]
+        )
+        let repository = T3MessageRepository(
+            client: harness.client,
+            resubscribeDelay: .milliseconds(10)
+        )
+        let collector = UpdateCollector()
+        let observe = Task {
+            for await update in repository.observeMessages(sessionID: "t1", directory: nil) {
+                collector.append(update)
+            }
+        }
+
+        let socket1 = try await harness.connector.connection(at: 0)
+        socket1.open()
+        let subscribe1 = try await socket1.firstRequest(tag: "orchestration.subscribeThread")
+        socket1.receive(Frames.chunk(requestID: subscribe1.id, values: [
+            Fixtures.messageEvent(sequence: 7, id: "m2", text: "Reply"),
+        ]))
+        #expect(await waitUntil { collector.latestMessages()?.map(\.id) == ["m1", "m2"] })
+
+        await harness.client.reset()
+        try await Task.sleep(for: .milliseconds(200))
+        #expect(collector.failureCount == 0)
+        #expect(collector.latestMessages()?.map(\.id) == ["m1", "m2"])
+
+        let socket2 = try await harness.connector.connection(at: 1)
+        socket2.open()
+        let subscribe2 = try await socket2.firstRequest(tag: "orchestration.subscribeThread")
+        #expect(subscribe2.payload["afterSequence"] as? Int == 7)
+
+        observe.cancel()
+        #expect(await waitOnMain { repository.subscribedSessionIDs.isEmpty })
+    }
+
     // MARK: - Protocol re-check on fresh sockets
 
     @Test func rpc_validatesProtocolOncePerIdentityAcrossReconnects() async throws {

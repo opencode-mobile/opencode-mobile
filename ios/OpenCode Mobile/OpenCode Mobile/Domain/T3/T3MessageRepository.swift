@@ -244,13 +244,17 @@ final class T3MessageRepository: MessageRepository {
             if Task.isCancelled { return }
             if let failure {
                 let lost = "T3 thread subscription lost session=\(sessionID): \(T3ErrorText.detail(failure) ?? T3ErrorText.userMessage(failure))"
-                // The app's own socket release (backgrounding) is expected, not a fault.
+                // A deliberate release (background stop, profile switch) is not a
+                // failed load. Publishing it paints "Lost connection to T3" and
+                // hides the transcript. The retry below resumes from the last
+                // sequence, and an idle thread gets no snapshot, so that error
+                // would stay up after the socket is live again.
                 if T3SocketError.isRelease(failure) {
                     DiagnosticLog.info(.sse, lost)
                 } else {
                     DiagnosticLog.warning(.sse, lost)
+                    publishFailure(sessionID: sessionID, error: failure)
                 }
-                publishFailure(sessionID: sessionID, error: failure)
                 if T3EnvironmentClient.isProtocolMismatch(failure) {
                     // Terminal: the environment cannot be used until it is re-paired or upgraded.
                     subscriptions.removeValue(forKey: sessionID)
