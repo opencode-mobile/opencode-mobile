@@ -243,10 +243,22 @@ class DefaultForegroundEventStream
             _events.tryEmit(event)
         }
 
+        /**
+         * T3 has no SSE leases. A connected socket is the one live target, matching
+         * iOS `publishT3Snapshot`, so [canCatchUp] stays true after the first paint
+         * and home can reload when a thread is created or the user pulls to refresh.
+         */
         override fun publishExternalConnectionState(state: EventStreamConnectionState) {
             if (activeConnectionManager.currentProfile()?.engine != ConnectionEngine.T3) return
+            val live = state == EventStreamConnectionState.Connected
             _connectionState.value = state
-            _snapshot.value = _snapshot.value.copy(connectionState = state)
+            _snapshot.value =
+                LiveConnectionSnapshot(
+                    generation = streamGeneration.get(),
+                    connectionState = state,
+                    requiredTargets = listOf(T3_LIVE_TARGET),
+                    liveTargets = if (live) listOf(T3_LIVE_TARGET) else emptyList(),
+                )
         }
 
         override suspend fun stop() {
@@ -1054,5 +1066,6 @@ class DefaultForegroundEventStream
             const val DEFAULT_IDLE_TIMEOUT_MS = 45_000L
             const val FIRST_FRAME_TIMEOUT_MS = 3_000L
             const val FIRST_FRAME_FAILED = "SSE first frame failed"
+            const val T3_LIVE_TARGET = "t3"
         }
     }

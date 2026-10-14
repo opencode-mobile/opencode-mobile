@@ -1,6 +1,7 @@
 package dev.opencode.mobile.domain.event
 
 import dev.opencode.mobile.data.remote.EventsApi
+import dev.opencode.mobile.domain.connection.ConnectionEngine
 import dev.opencode.mobile.domain.connection.ConnectionProbing
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
@@ -25,6 +26,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.concurrent.atomic.AtomicInteger
@@ -669,6 +671,83 @@ class DefaultForegroundEventStreamTest {
                 assertTrue(evicted.get() >= 1)
             } finally {
                 stream.stop()
+                client.close()
+            }
+        }
+
+    @Test
+    fun t3Connected_marksTheSocketFullyLiveSoHomeCanCatchUp() =
+        runBlocking {
+            val store = FakeProfileStore()
+            val manager =
+                ActiveConnectionManager(
+                    store,
+                    ConnectionProbing { ServerProtocol.V1 },
+                )
+            manager.applyProfile(
+                ConnectionProfile(
+                    baseUrl = "https://t3.example/",
+                    username = ConnectionEngine.T3_USERNAME,
+                    engine = ConnectionEngine.T3,
+                ),
+            )
+            val client = HttpClient(MockEngine { respond("") })
+            val stream =
+                DefaultForegroundEventStream(
+                    eventsApi = EventsApi(client),
+                    eventDomainAdapter = EventDomainAdapter(Json { ignoreUnknownKeys = true }),
+                    diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
+                    activeConnectionManager = manager,
+                    connectionProfileStore = store,
+                )
+            try {
+                stream.publishExternalConnectionState(EventStreamConnectionState.Connecting)
+                val connecting = stream.snapshot.value
+                assertEquals(EventStreamConnectionState.Connecting, connecting.connectionState)
+                assertEquals(listOf("t3"), connecting.requiredTargets)
+                assertTrue(connecting.liveTargets.isEmpty())
+                assertFalse(canCatchUp(StreamOccupancy.Active, connecting))
+
+                stream.publishExternalConnectionState(EventStreamConnectionState.Connected)
+                val connected = stream.snapshot.value
+                assertEquals(listOf("t3"), connected.requiredTargets)
+                assertEquals(listOf("t3"), connected.liveTargets)
+                assertTrue(connected.isFullyLive())
+                assertTrue(canCatchUp(StreamOccupancy.Active, connected))
+
+                stream.publishExternalConnectionState(EventStreamConnectionState.Disconnected)
+                assertFalse(stream.snapshot.value.isFullyLive())
+                assertFalse(canCatchUp(StreamOccupancy.Active, stream.snapshot.value))
+            } finally {
+                client.close()
+            }
+        }
+
+    @Test
+    fun opencodeProfile_ignoresExternalT3ConnectionState() =
+        runBlocking {
+            val store = FakeProfileStore()
+            val manager =
+                ActiveConnectionManager(
+                    store,
+                    ConnectionProbing { ServerProtocol.V1 },
+                )
+            manager.applyProfile(sampleProfile, serverProtocol = ServerProtocol.V1)
+            val client = HttpClient(MockEngine { respond("") })
+            val stream =
+                DefaultForegroundEventStream(
+                    eventsApi = EventsApi(client),
+                    eventDomainAdapter = EventDomainAdapter(Json { ignoreUnknownKeys = true }),
+                    diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
+                    activeConnectionManager = manager,
+                    connectionProfileStore = store,
+                )
+            try {
+                stream.publishExternalConnectionState(EventStreamConnectionState.Connected)
+                assertEquals(EventStreamConnectionState.Idle, stream.connectionState.value)
+                assertTrue(stream.snapshot.value.requiredTargets.isEmpty())
+                assertFalse(canCatchUp(StreamOccupancy.Active, stream.snapshot.value))
+            } finally {
                 client.close()
             }
         }
