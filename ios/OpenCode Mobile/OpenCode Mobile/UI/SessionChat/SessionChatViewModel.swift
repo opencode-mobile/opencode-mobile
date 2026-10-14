@@ -157,6 +157,7 @@ final class SessionChatViewModel {
             sessionRepository: sessionRepository,
             newSessionModelSelectionResolver: newSessionModelSelectionResolver,
             activeConnectionManager: activeConnectionManager,
+            composerDraftStore: composerDraftStore,
             mcpRepository: mcpRepository ?? EmptyMcpRepository()
         )
         let boundSessionInfo = self.sessionInfo
@@ -465,14 +466,7 @@ final class SessionChatViewModel {
             guard isConnectionLive else { return }
             commands.runNew()
         case .fork:
-            guard isConnectionLive else { return }
-            ProductAnalytics.logScreenView(
-                screenId: ProductAnalytics.Screen.sessionFork,
-                presentation: ProductAnalytics.Presentation.dialog,
-                trigger: ProductAnalytics.Trigger.present
-            )
-            loggedForkTitleEdit = false
-            commands.openForkDialog(currentTitle: uiState.sessionTitle)
+            openForkDialog()
         case .undo:
             commands.runUndo(
                 isBusy: uiState.sessionStatusLabel != nil || effectiveCompacting(),
@@ -539,6 +533,21 @@ final class SessionChatViewModel {
             actionId: actionId,
             parameters: [ProductAnalytics.Param.clientSlash: action.rawValue]
         )
+    }
+
+    /// One fork flow for the Commands sheet, the overflow menu (tip, `messageID == nil`) and
+    /// message actions ("Fork from here", forks before that user message).
+    /// Opens while offline too (matching Android): the dialog's Fork button follows
+    /// `canMutate`, and `confirmFork` refuses to fork until the connection is live.
+    func openForkDialog(atMessageID messageID: String? = nil) {
+        guard hasCreatedSession else { return }
+        ProductAnalytics.logScreenView(
+            screenId: ProductAnalytics.Screen.sessionFork,
+            presentation: ProductAnalytics.Presentation.dialog,
+            trigger: ProductAnalytics.Trigger.present
+        )
+        loggedForkTitleEdit = false
+        commands.openForkDialog(currentTitle: uiState.sessionTitle, atMessageID: messageID)
     }
 
     func updateForkDraft(_ text: String) {

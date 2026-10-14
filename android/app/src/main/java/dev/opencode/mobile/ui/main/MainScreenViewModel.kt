@@ -27,6 +27,7 @@ import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionActivitySnapshot
 import dev.opencode.mobile.domain.session.SessionDomainAdapter
+import dev.opencode.mobile.domain.session.SessionForkTitle
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionSummary
 import dev.opencode.mobile.domain.session.activeSessions
@@ -1021,10 +1022,7 @@ class MainScreenViewModel
         }
     }
 
-fun suggestedHomeForkTitle(currentTitle: String): String {
-    val trimmed = currentTitle.trim()
-    return if (trimmed.isEmpty()) "Forked session" else "Fork of $trimmed"
-}
+fun suggestedHomeForkTitle(currentTitle: String): String = SessionForkTitle.suggested(currentTitle)
 
 data class HomeServersChrome(
     val title: String = "Sessions",

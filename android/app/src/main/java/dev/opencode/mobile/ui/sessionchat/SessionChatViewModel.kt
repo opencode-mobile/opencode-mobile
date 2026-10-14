@@ -171,6 +171,7 @@ class SessionChatViewModel
                 newSessionModelSelectionResolver = newSessionModelSelectionResolver,
                 connectionSessionCoordinator = connectionSessionCoordinator,
                 mcpRepository = mcpRepository,
+                composerDraftStore = composerDraftStore,
                 scope = viewModelScope,
             )
         private val inbox =
@@ -806,6 +807,34 @@ class SessionChatViewModel
                         selectedModel = composer.state.value.composer.selectedModel,
                     )
                 },
+            )
+        }
+
+        /** Overflow menu "Fork session": forks the whole session (no message id). */
+        fun openForkSession() {
+            if (!hasCreatedSession()) return
+            forkDraftEditReported = false
+            logAction(
+                actionId = ProductAnalytics.Action.CHAT_OVERFLOW_FORK,
+                screenId = ProductAnalytics.Screen.SESSION_OVERFLOW,
+            )
+            commands.openForkDialog(currentTitle = sessionInfo.state.value.sessionTitle)
+        }
+
+        /**
+         * Message actions "Fork from here": forks history before [messageId] and prefills the
+         * fork's composer with [messageText] (analytics are logged by the sheet).
+         */
+        fun forkFromMessage(
+            messageId: String,
+            messageText: String,
+        ) {
+            if (!hasCreatedSession()) return
+            forkDraftEditReported = false
+            commands.openForkDialog(
+                currentTitle = sessionInfo.state.value.sessionTitle,
+                atMessageId = messageId,
+                messageText = messageText,
             )
         }
 
