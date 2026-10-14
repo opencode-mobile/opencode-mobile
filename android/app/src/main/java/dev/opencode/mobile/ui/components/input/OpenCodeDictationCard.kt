@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.components
 
+import android.provider.Settings
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -31,6 +32,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
@@ -48,6 +50,9 @@ import kotlin.math.sin
 
 enum class OpenCodeDictationCardVariant {
     Listening,
+
+    /** Listening ended on its own; the orb rests and the transcript is ready to insert. */
+    Stopped,
     Finishing,
     Unavailable,
 }
@@ -124,9 +129,11 @@ fun OpenCodeDictationCard(
             DictationOrb(
                 level = level,
                 finishing = variant == OpenCodeDictationCardVariant.Finishing,
+                stopped = variant == OpenCodeDictationCardVariant.Stopped,
             )
             DictationTranscript(committed = committed, volatileTail = volatileTail)
             DictationStatusRow(
+                listening = variant != OpenCodeDictationCardVariant.Stopped,
                 languageLabel = languageLabel,
                 onDevice = onDevice,
                 elapsedLabel = elapsedLabel,
@@ -171,8 +178,11 @@ fun OpenCodeDictationCard(
 private fun DictationOrb(
     level: Float,
     finishing: Boolean,
+    stopped: Boolean,
 ) {
-    val target by rememberUpdatedState(if (finishing) 0f else level.coerceIn(0f, 1f))
+    val target by rememberUpdatedState(if (finishing || stopped) 0f else level.coerceIn(0f, 1f))
+    // Match iOS Reduce Motion: with system animations off, the bars hold still.
+    val stillBars = rememberAnimationsDisabled() || stopped
     var displayed by remember { mutableFloatStateOf(0f) }
     var seconds by remember { mutableFloatStateOf(0f) }
     LaunchedEffect(Unit) {
@@ -195,7 +205,7 @@ private fun DictationOrb(
         Canvas(modifier = Modifier.matchParentSize()) {
             val center = this.center
             val current = displayed
-            val time = seconds
+            val time = if (stillBars) 0f else seconds
             val orbRadius = DictationOrbSize.toPx() / 2f
             drawCircle(
                 color = color.copy(alpha = DictationHaloAlpha * current),
@@ -239,6 +249,15 @@ private fun DictationOrb(
                 modifier = Modifier.size(28.dp),
             )
         }
+    }
+}
+
+/** True when the user turned system animations off (animator duration scale 0). */
+@Composable
+private fun rememberAnimationsDisabled(): Boolean {
+    val context = LocalContext.current
+    return remember(context) {
+        Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
     }
 }
 
@@ -309,15 +328,17 @@ private fun DictationTranscript(
 
 @Composable
 private fun DictationStatusRow(
+    listening: Boolean,
     languageLabel: String,
     onDevice: Boolean,
     elapsedLabel: String,
 ) {
+    val state = if (listening) "Listening" else "Ready to insert"
     val status =
         if (onDevice) {
-            "Listening · $languageLabel · on-device"
+            "$state · $languageLabel · on-device"
         } else {
-            "Listening · $languageLabel"
+            "$state · $languageLabel"
         }
     val weak = openCodeColor("text-weak")
     Row(
@@ -325,13 +346,15 @@ private fun DictationStatusRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Box(
-            modifier =
-                Modifier
-                    .size(8.dp)
-                    .clip(CircleShape)
-                    .background(openCodeColor("error")),
-        )
+        if (listening) {
+            Box(
+                modifier =
+                    Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(openCodeColor("error")),
+            )
+        }
         Text(
             text = status,
             style = MaterialTheme.typography.bodySmall,

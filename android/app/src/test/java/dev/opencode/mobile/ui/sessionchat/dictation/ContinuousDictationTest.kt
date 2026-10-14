@@ -1,6 +1,7 @@
 package dev.opencode.mobile.ui.sessionchat.dictation
 
 import android.speech.SpeechRecognizer
+import dev.opencode.mobile.ui.sessionchat.ComposerDictationPhase
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -49,6 +50,39 @@ class ContinuousDictationTest {
             DictationErrorAction.PermissionDenied,
             dictationErrorAction(SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS, 0, hasTranscript = true),
         )
+    }
+
+    @Test
+    fun stoppedNotification_showsFinalTranscriptSettlesOrbThenStops() {
+        val events = mutableListOf<String>()
+        val listener =
+            object : ComposerDictationSession.Listener {
+                override fun onPartial(
+                    committed: String,
+                    volatile: String,
+                ) {
+                    events += "partial:$committed|$volatile"
+                }
+
+                override fun onLevel(level: Float) {
+                    events += "level:$level"
+                }
+
+                override fun onStopped() {
+                    events += "stopped"
+                }
+
+                override fun onUnavailable(
+                    phase: ComposerDictationPhase,
+                    message: String?,
+                ) {
+                    events += "unavailable:$phase"
+                }
+            }
+
+        notifyDictationStopped(listener, "hello there")
+
+        assertEquals(listOf("partial:hello there|", "level:0.0", "stopped"), events)
     }
 
     @Test

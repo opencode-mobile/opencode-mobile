@@ -23,6 +23,9 @@ interface ComposerDictationSession {
 
         fun onLevel(level: Float)
 
+        /** Listening ended on its own. The transcript stays on the card for Insert. */
+        fun onStopped()
+
         fun onUnavailable(
             phase: ComposerDictationPhase,
             message: String?,
@@ -119,12 +122,14 @@ class SystemComposerDictationSession(
 
     /** Stop listening but leave the transcript on the card so Insert still works. */
     private fun keepTranscript() {
+        val current = listener
         committed = appendDictationUtterance(committed, volatileHypothesis)
         volatileHypothesis = ""
-        listener?.onPartial(committed, "")
         acceptCallbacks = false
+        listener = null
         mainHandler.removeCallbacks(restartRunnable)
         releaseRecognizer()
+        current?.let { notifyDictationStopped(it, committed) }
     }
 
     private fun releaseRecognizer() {
@@ -232,6 +237,16 @@ internal fun dictationErrorAction(
             }
         else -> if (hasTranscript) DictationErrorAction.KeepTranscript else DictationErrorAction.Fail
     }
+
+/** Show the final transcript, settle the orb, then report that listening ended. */
+internal fun notifyDictationStopped(
+    listener: ComposerDictationSession.Listener,
+    committed: String,
+) {
+    listener.onPartial(committed, "")
+    listener.onLevel(0f)
+    listener.onStopped()
+}
 
 /** Append a finished utterance with one space between words. */
 internal fun appendDictationUtterance(

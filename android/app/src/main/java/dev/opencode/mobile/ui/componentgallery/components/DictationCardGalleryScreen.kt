@@ -26,6 +26,7 @@ private enum class DictationCardGalleryVariant(
     val label: String,
 ) {
     Listening("Listening"),
+    Stopped("Stopped"),
     Finishing("Finishing"),
     PermissionDenied("Permission denied"),
     ModelNotInstalled("Model not installed"),
@@ -42,6 +43,7 @@ fun DictationCardGalleryScreen(modifier: Modifier = Modifier) {
     val cardVariant =
         when (variant) {
             DictationCardGalleryVariant.Listening -> OpenCodeDictationCardVariant.Listening
+            DictationCardGalleryVariant.Stopped -> OpenCodeDictationCardVariant.Stopped
             DictationCardGalleryVariant.Finishing -> OpenCodeDictationCardVariant.Finishing
             DictationCardGalleryVariant.PermissionDenied,
             DictationCardGalleryVariant.ModelNotInstalled,
@@ -54,6 +56,7 @@ fun DictationCardGalleryScreen(modifier: Modifier = Modifier) {
             DictationCardGalleryVariant.ModelNotInstalled -> OpenCodeDictationUnavailableReason.ModelNotInstalled
             DictationCardGalleryVariant.RecognizerError -> OpenCodeDictationUnavailableReason.RecognizerError
             DictationCardGalleryVariant.Listening,
+            DictationCardGalleryVariant.Stopped,
             DictationCardGalleryVariant.Finishing,
             -> null
         }

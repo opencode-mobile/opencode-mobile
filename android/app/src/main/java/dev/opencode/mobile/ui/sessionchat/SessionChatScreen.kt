@@ -291,6 +291,10 @@ fun SessionChatScreen(
                     viewModel.dictationLevel(level)
                 }
 
+                override fun onStopped() {
+                    viewModel.dictationStopped()
+                }
+
                 override fun onUnavailable(
                     phase: ComposerDictationPhase,
                     message: String?,
@@ -1405,6 +1409,7 @@ private fun ComposerDictationUiState.toCardModel(elapsedLabel: String): Composer
     val (variant, reason) =
         when (phase) {
             ComposerDictationPhase.Listening -> OpenCodeDictationCardVariant.Listening to null
+            ComposerDictationPhase.Stopped -> OpenCodeDictationCardVariant.Stopped to null
             ComposerDictationPhase.Finishing -> OpenCodeDictationCardVariant.Finishing to null
             ComposerDictationPhase.PermissionDenied ->
                 OpenCodeDictationCardVariant.Unavailable to OpenCodeDictationUnavailableReason.PermissionDenied
