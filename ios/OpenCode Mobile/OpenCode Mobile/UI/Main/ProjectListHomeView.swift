@@ -1174,6 +1174,8 @@ struct SessionListItem: Identifiable, Hashable {
     var snoozedUntilEpochMs: Int64? = nil
     var snoozeBlockReason: String? = nil
     var settledAtEpochMs: Int64? = nil
+    /// Pending tool approval. Outranks Running and Snoozed on the home pill.
+    var needsApproval: Bool = false
 
     init(
         id: String,
@@ -1189,7 +1191,8 @@ struct SessionListItem: Identifiable, Hashable {
         parentID: String? = nil,
         snoozedUntilEpochMs: Int64? = nil,
         snoozeBlockReason: String? = nil,
-        settledAtEpochMs: Int64? = nil
+        settledAtEpochMs: Int64? = nil,
+        needsApproval: Bool = false
     ) {
         self.id = id
         self.title = title
@@ -1205,12 +1208,13 @@ struct SessionListItem: Identifiable, Hashable {
         self.snoozedUntilEpochMs = snoozedUntilEpochMs
         self.snoozeBlockReason = snoozeBlockReason
         self.settledAtEpochMs = settledAtEpochMs
+        self.needsApproval = needsApproval
     }
 }
 
 extension SessionListItem {
-    func sessionListStatus(hasPendingPermission: Bool = false) -> SessionListStatus {
-        _ = hasPendingPermission // Reserved for a future home Needs approval pill.
+    func sessionListStatus() -> SessionListStatus {
+        if needsApproval { return .needsApproval }
         switch statusLabel {
         case "Working":
             return SessionListStatus.running
@@ -1397,7 +1401,7 @@ extension Array where Element == ProjectSectionItem {
             letter: section.letter,
             letterAccent: section.letterAccent,
             subtitle: subtitle,
-            status: snoozed ? .snoozed : session.sessionListStatus(),
+            status: snoozed && !session.needsApproval ? .snoozed : session.sessionListStatus(),
             statusIsStale: session.statusIsStale,
             caption: caption,
             updatedAtEpochMs: session.updatedAtEpochMs,

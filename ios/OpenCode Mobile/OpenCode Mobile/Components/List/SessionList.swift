@@ -9,6 +9,8 @@ enum SessionListStatus: Hashable {
     /// v1: a run finished while this device was away (local, per device).
     case ready
     case snoozed
+    /// A tool call is waiting for Allow / Deny. Outranks Running.
+    case needsApproval
     /// v2: the latest run succeeded and nobody has viewed it yet (server unread).
     case done
     /// v2: the latest run failed and nobody has viewed it yet.
@@ -18,7 +20,7 @@ enum SessionListStatus: Hashable {
 
     var isAttention: Bool {
         switch self {
-        case .running, .retrying, .ready, .done, .failed, .stopped: true
+        case .running, .retrying, .needsApproval, .ready, .done, .failed, .stopped: true
         case .idle, .snoozed: false
         }
     }
@@ -27,7 +29,7 @@ enum SessionListStatus: Hashable {
     var isReady: Bool {
         switch self {
         case .ready, .done, .failed, .stopped: true
-        case .idle, .running, .retrying, .snoozed: false
+        case .idle, .running, .retrying, .snoozed, .needsApproval: false
         }
     }
 
@@ -47,6 +49,8 @@ enum SessionListStatus: Hashable {
             base = OpenCodeListItemStatus(text: "Ready", tone: .success)
         case .snoozed:
             base = OpenCodeListItemStatus(text: "Snoozed", tone: .warning)
+        case .needsApproval:
+            base = OpenCodeListItemStatus(text: "Needs approval", tone: .warning)
         case .done:
             base = OpenCodeListItemStatus(text: "Done", tone: .success)
         case .failed:

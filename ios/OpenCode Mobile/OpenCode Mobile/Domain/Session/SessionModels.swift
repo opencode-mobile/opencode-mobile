@@ -23,6 +23,8 @@ struct Session: Sendable, Equatable {
     var snoozedUntilEpochMs: Int64? = nil
     /// Why snooze and settle are unavailable: "Still running" or "Waiting on you".
     var snoozeBlockReason: String? = nil
+    /// T3: a pending approval (not a question) is waiting on this device.
+    var needsApproval: Bool = false
     /// v2 only: when the latest run ended (strictly increasing per session).
     var idleAtEpochMs: Int64? = nil
     /// v2 only: server-wide "viewed up to" watermark for `idleAtEpochMs`.

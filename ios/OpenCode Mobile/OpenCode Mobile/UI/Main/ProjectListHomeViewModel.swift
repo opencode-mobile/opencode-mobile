@@ -143,6 +143,7 @@ final class ProjectListHomeViewModel {
     private let sessionLiveStore: any SessionLiveStore
     private let sessionStatusLiveStore: any SessionStatusLiveStore
     private let sessionReadyStore: any SessionReadyStore
+    private let permissionLiveStore: any PermissionLiveStore
     private let liveUpdates: any LiveUpdates
     private let sessionCache: any SessionCache
     private let sessionAdapter = SessionDomainAdapter()
@@ -160,6 +161,7 @@ final class ProjectListHomeViewModel {
     private var liveSessionsByWorktree: [String: SessionListSnapshot] = [:]
     private var liveStatusesByWorktree: [String: SessionActivitySnapshot] = [:]
     private var liveReadyIdsByWorktree: [String: Set<String>] = [:]
+    private var livePermissionSessionIDsByWorktree: [String: Set<String>] = [:]
     private let sessionActionsRegion: HomeSessionActions
     /// Title-edit Analytics fires once per dialog so keystrokes are not events.
     private var loggedRenameTitleEdit = false
@@ -175,6 +177,7 @@ final class ProjectListHomeViewModel {
         sessionLiveStore: any SessionLiveStore,
         sessionStatusLiveStore: any SessionStatusLiveStore,
         sessionReadyStore: any SessionReadyStore,
+        permissionLiveStore: (any PermissionLiveStore)? = nil,
         connectionSessionCoordinator: ConnectionSessionCoordinator,
         sessionCache: any SessionCache = NoOpSessionCache.shared,
         liveUpdates: any LiveUpdates = FixedLiveUpdates()
@@ -188,6 +191,7 @@ final class ProjectListHomeViewModel {
         self.sessionLiveStore = sessionLiveStore
         self.sessionStatusLiveStore = sessionStatusLiveStore
         self.sessionReadyStore = sessionReadyStore
+        self.permissionLiveStore = permissionLiveStore ?? HomeEmptyPermissionLiveStore()
         self.liveUpdates = liveUpdates
         self.connectionSessionCoordinator = connectionSessionCoordinator
         self.sessionCache = sessionCache
@@ -1235,6 +1239,8 @@ final class ProjectListHomeViewModel {
         liveSessionsByWorktree = [:]
         liveStatusesByWorktree = [:]
         liveReadyIdsByWorktree = [:]
+        livePermissionSessionIDsByWorktree = [:]
+        permissionLiveStore.clearSessionIndex()
     }
 
     /// Settled and archived rows are not in the live session list. Keep the latest fetch.
@@ -1282,6 +1288,12 @@ final class ProjectListHomeViewModel {
             group.addTask { @MainActor in
                 for await snapshot in self.sessionLiveStore.observeSessions(directory: worktree) {
                     self.liveSessionsByWorktree[worktree] = snapshot
+                    if self.observesHomePermissions {
+                        self.permissionLiveStore.noteSessions(
+                            directory: worktree,
+                            sessionIDs: Set(snapshot.sessions.map(\.id))
+                        )
+                    }
                     self.applyLiveUpdate(worktree: worktree)
                 }
             }
@@ -1297,7 +1309,20 @@ final class ProjectListHomeViewModel {
                     self.applyLiveUpdate(worktree: worktree)
                 }
             }
+            if observesHomePermissions {
+                group.addTask { @MainActor in
+                    for await requests in self.permissionLiveStore.observePermissions(directory: worktree) {
+                        self.livePermissionSessionIDsByWorktree[worktree] = Set(requests.map(\.sessionID))
+                        self.applyLiveUpdate(worktree: worktree)
+                    }
+                }
+            }
         }
+    }
+
+    /// OpenCode pending approvals are GET /api/permission/request. T3 already flags them on the shell.
+    private var observesHomePermissions: Bool {
+        activeConnectionManager.currentProfile()?.engine != .t3
     }
 
     private func applyLiveUpdate(worktree: String) {
@@ -1326,7 +1351,7 @@ final class ProjectListHomeViewModel {
                 .rootSessions()
                 .sorted { ($0.updatedAtEpochMs ?? 0) > ($1.updatedAtEpochMs ?? 0) }
                 .map { session in
-                    sessionAdapter.listItem(
+                    var item = sessionAdapter.listItem(
                         from: session,
                         worktree: worktree,
                         statusLabel: statusLabel(for: session.id, directory: worktree),
@@ -1334,6 +1359,10 @@ final class ProjectListHomeViewModel {
                         unreadOutcome: unreadOutcome(for: session, directory: worktree),
                         statusIsStale: statusIsStale(for: session.id, directory: worktree)
                     )
+                    if livePermissionSessionIDsByWorktree[worktree]?.contains(session.id) == true {
+                        item.needsApproval = true
+                    }
+                    return item
                 }
         let updatedSection = ProjectSectionItem(
             id: section.id,
@@ -1400,4 +1429,16 @@ final class ProjectListHomeViewModel {
         }
     }
 
+}
+
+@MainActor
+private final class HomeEmptyPermissionLiveStore: PermissionLiveStore {
+    func observePermissions(directory: String) -> AsyncStream<[PermissionRequest]> {
+        AsyncStream { continuation in
+            continuation.yield([])
+            continuation.finish()
+        }
+    }
+
+    func clearCache() {}
 }

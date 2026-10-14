@@ -14,6 +14,33 @@ import org.junit.Test
 
 class SessionListStatusMappingTest {
     @Test
+    fun needsApprovalOutranksRunningRetryingAndSnoozeSignal() {
+        val running =
+            SessionSummary(
+                id = "ses-1",
+                title = "Chat",
+                statusLabel = "Working",
+                needsApproval = true,
+            )
+        val retrying =
+            SessionSummary(
+                id = "ses-1",
+                title = "Chat",
+                statusLabel = "Retrying · 2",
+                unreadOutcome = SessionIdleOutcome.Failed,
+                needsApproval = true,
+            )
+        val pill = SessionListStatus.NeedsApproval.toListItemStatus()
+
+        assertEquals(SessionListStatus.NeedsApproval, running.toSessionListStatusForTest())
+        assertEquals(SessionListStatus.NeedsApproval, retrying.toSessionListStatusForTest())
+        assertEquals("Needs approval", pill.text)
+        assertEquals(OpenCodeListItemStatusTone.Warning, pill.tone)
+        assertTrue(SessionListStatus.NeedsApproval.needsAttention)
+        assertFalse(SessionListStatus.NeedsApproval.isUnreadFinish)
+    }
+
+    @Test
     fun runningOutranksReady() {
         val summary =
             SessionSummary(

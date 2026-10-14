@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.opencode.mobile.ProductAnalytics
+import dev.opencode.mobile.domain.connection.ConnectionEngine
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.engine.SessionCapabilities
@@ -19,6 +20,8 @@ import dev.opencode.mobile.domain.event.LiveUpdates
 import dev.opencode.mobile.domain.filesystem.DirectoryListingPolicy
 import dev.opencode.mobile.domain.filesystem.FilesystemRepository
 import dev.opencode.mobile.domain.live.LiveStoreRefreshPolicy
+import dev.opencode.mobile.domain.live.NoOpPermissionLiveStore
+import dev.opencode.mobile.domain.live.PermissionLiveStore
 import dev.opencode.mobile.domain.live.SessionLiveStore
 import dev.opencode.mobile.domain.live.SessionReadyStore
 import dev.opencode.mobile.domain.live.SessionStatusLiveStore
@@ -77,6 +80,7 @@ class MainScreenViewModel
         private val sessionLiveStore: SessionLiveStore,
         private val sessionStatusLiveStore: SessionStatusLiveStore,
         private val sessionReadyStore: SessionReadyStore,
+        private val permissionLiveStore: PermissionLiveStore = NoOpPermissionLiveStore,
         private val activeConnectionManager: ActiveConnectionManager,
         private val connectionSessionCoordinator: ConnectionSessionCoordinator,
         private val sessionCache: SessionCache,
@@ -1107,24 +1111,44 @@ class MainScreenViewModel
             liveObservationJobs =
                 worktrees.map { worktree ->
                     viewModelScope.launch {
+                        val pendingApprovalIds = MutableStateFlow<Set<String>>(emptySet())
+                        if (observesHomePermissions) {
+                            launch {
+                                permissionLiveStore.observePermissions(worktree).collect { requests ->
+                                    pendingApprovalIds.value = requests.mapTo(mutableSetOf()) { it.sessionId }
+                                }
+                            }
+                        }
                         combine(
                             sessionLiveStore.observeSessions(worktree),
                             sessionStatusLiveStore.observeActivity(worktree),
                             sessionReadyStore.observeReadyIds(worktree),
-                        ) { snapshot, statuses, readyIds ->
-                            Triple(snapshot, statuses, readyIds)
-                        }.collect { (snapshot, statuses, readyIds) ->
+                            pendingApprovalIds,
+                        ) { snapshot, statuses, readyIds, approvalIds ->
+                            HomeLiveFrame(snapshot.sessions, snapshot.isFromCache, statuses, readyIds, approvalIds)
+                        }.collect { frame ->
+                            if (observesHomePermissions) {
+                                permissionLiveStore.noteSessions(
+                                    worktree,
+                                    frame.sessions.mapTo(mutableSetOf()) { it.id },
+                                )
+                            }
                             updateSectionFromLiveData(
                                 worktree,
-                                snapshot.sessions,
-                                statuses,
-                                readyIds,
-                                sessionsFromCache = snapshot.isFromCache,
+                                frame.sessions,
+                                frame.statuses,
+                                frame.readyIds,
+                                sessionsFromCache = frame.sessionsFromCache,
+                                pendingApprovalIds = frame.pendingApprovalIds,
                             )
                         }
                     }
                 }
         }
+
+        /** OpenCode pending approvals are GET /api/permission/request. T3 already flags them on the shell. */
+        private val observesHomePermissions: Boolean
+            get() = activeConnectionManager.currentProfile()?.engine != ConnectionEngine.T3
 
         private fun stopLiveObservations() {
             archivedGeneration += 1
@@ -1134,6 +1158,7 @@ class MainScreenViewModel
             liveObservationJobs.forEach { it.cancel() }
             liveObservationJobs = emptyList()
             observedWorktrees = emptyList()
+            permissionLiveStore.clearSessionIndex()
         }
 
         /** Settled and archived rows are not in the live session list. Keep the latest fetch. */
@@ -1169,6 +1194,7 @@ class MainScreenViewModel
             snapshot: SessionActivitySnapshot,
             readyIds: Set<String>,
             sessionsFromCache: Boolean,
+            pendingApprovalIds: Set<String> = emptySet(),
         ) {
             val state = _uiState.value as? MainScreenUiState.Loaded ?: return
             val section = state.sections.firstOrNull { it.worktree == worktree } ?: return
@@ -1193,7 +1219,9 @@ class MainScreenViewModel
                             // Waits for seeded status (iOS parity): a session running again with an
                             // older unviewed `time.idle` must not paint Done/Failed before its status is known.
                             unreadOutcome = if (snapshot.seeded) session.homeUnreadOutcome(serverReadState) else null,
-                        )
+                        ).let { summary ->
+                            if (session.id in pendingApprovalIds) summary.copy(needsApproval = true) else summary
+                        }
                     }
             val updatedSection =
                 section.copy(
@@ -1224,6 +1252,14 @@ class MainScreenViewModel
             }
         }
     }
+
+private data class HomeLiveFrame(
+    val sessions: List<Session>,
+    val sessionsFromCache: Boolean,
+    val statuses: SessionActivitySnapshot,
+    val readyIds: Set<String>,
+    val pendingApprovalIds: Set<String>,
+)
 
 fun suggestedHomeForkTitle(currentTitle: String): String = SessionForkTitle.suggested(currentTitle)
 

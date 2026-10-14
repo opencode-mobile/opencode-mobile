@@ -205,6 +205,30 @@ class T3SessionControlsTest {
                 T3Json.thread(thread("thr-w", pendingRequestId = "req", pendingRequestKind = "user_input"))!!,
             )
         assertEquals("Waiting on you", waiting.snoozeBlockReason)
+        assertFalse(waiting.needsApproval)
+    }
+
+    @Test
+    fun toSession_needsApprovalWhileTheRunIsStillActive() {
+        val approval =
+            T3SessionMapper.toSession(
+                T3Json.thread(
+                    thread(
+                        "thr-a",
+                        activeRunId = "run-1",
+                        pendingRequestId = "req",
+                        pendingRequestKind = "command",
+                    ),
+                )!!,
+            )
+        assertTrue(approval.needsApproval)
+        assertEquals("Still running", approval.snoozeBlockReason)
+
+        val question =
+            T3SessionMapper.toSession(
+                T3Json.thread(thread("thr-q", pendingRequestId = "req", pendingRequestKind = "user_input"))!!,
+            )
+        assertFalse(question.needsApproval)
     }
 
     @Test

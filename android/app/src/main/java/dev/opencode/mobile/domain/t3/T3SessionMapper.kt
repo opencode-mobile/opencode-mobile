@@ -35,6 +35,7 @@ object T3SessionMapper {
             settledAtEpochMs = if (T3Activity.isSettled(thread)) T3MessageMapper.epochMs(thread.settledAt) else null,
             snoozedUntilEpochMs = T3MessageMapper.epochMs(thread.snoozedUntil),
             snoozeBlockReason = snoozeBlockReason(thread),
+            needsApproval = approvalId(thread) != null,
         )
 
     /**

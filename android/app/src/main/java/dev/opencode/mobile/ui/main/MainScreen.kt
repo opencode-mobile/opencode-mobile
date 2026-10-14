@@ -1296,7 +1296,7 @@ private fun List<ProjectSectionUi>.crossProjectRows(
                         snoozed && until != null -> "Until ${HomeSettleFeed.untilLabel(until, nowEpochMs)}"
                         else -> section.pathSubtitle
                     },
-                status = if (snoozed) SessionListStatus.Snoozed else session.toSessionListStatus(),
+                status = if (snoozed && !session.needsApproval) SessionListStatus.Snoozed else session.toSessionListStatus(),
                 caption =
                     when {
                         settledPage -> session.settledAtEpochMs?.let(RelativeTimeFormatting::format).orEmpty()
@@ -1324,9 +1324,9 @@ internal fun List<ProjectSectionUi>.toHomeChromeProjects(): List<SessionListHome
     }
 }
 
-@Suppress("UNUSED_PARAMETER")
-internal fun SessionSummary.toSessionListStatus(hasPendingPermission: Boolean = false): SessionListStatus =
+internal fun SessionSummary.toSessionListStatus(): SessionListStatus =
     when {
+        needsApproval -> SessionListStatus.NeedsApproval
         statusLabel == "Working" -> SessionListStatus.Running
         statusLabel?.startsWith("Retrying") == true -> SessionListStatus.Retrying
         // v2: server read state. Only set on servers that track it, so v1 keeps Ready.

@@ -63,6 +63,9 @@ enum class SessionListStatus {
     Ready,
     Snoozed,
 
+    /** A tool call is waiting for Allow / Deny. Outranks Running. */
+    NeedsApproval,
+
     /** Server-tracked unread run that succeeded (v2). */
     Done,
 
@@ -77,9 +80,9 @@ enum class SessionListStatus {
     val isUnreadFinish: Boolean
         get() = this == Ready || this == Done || this == Failed || this == Stopped
 
-    /** Rows that belong in the attention band: live work or unseen finished work. */
+    /** Rows that belong in the attention band: live work, a pending approval, or unseen finished work. */
     val needsAttention: Boolean
-        get() = this == Running || this == Retrying || isUnreadFinish
+        get() = this == Running || this == Retrying || this == NeedsApproval || isUnreadFinish
 }
 
 data class SessionListSession(
@@ -626,6 +629,7 @@ internal fun SessionListStatus.toListItemStatus(
                 SessionListStatus.Retrying -> OpenCodeListItemStatusTone.Warning
                 SessionListStatus.Ready -> OpenCodeListItemStatusTone.Success
                 SessionListStatus.Snoozed -> OpenCodeListItemStatusTone.Warning
+                SessionListStatus.NeedsApproval -> OpenCodeListItemStatusTone.Warning
                 SessionListStatus.Done -> OpenCodeListItemStatusTone.Success
                 SessionListStatus.Failed -> OpenCodeListItemStatusTone.Error
                 SessionListStatus.Stopped -> OpenCodeListItemStatusTone.Warning
@@ -641,6 +645,7 @@ internal fun SessionListStatus.toListItemStatus(
             )
         SessionListStatus.Ready -> OpenCodeListItemStatus(text = "Ready", tone = tone)
         SessionListStatus.Snoozed -> OpenCodeListItemStatus(text = "Snoozed", tone = tone)
+        SessionListStatus.NeedsApproval -> OpenCodeListItemStatus(text = "Needs approval", tone = tone)
         SessionListStatus.Done -> OpenCodeListItemStatus(text = "Done", tone = tone)
         SessionListStatus.Failed -> OpenCodeListItemStatus(text = "Failed", tone = tone)
         SessionListStatus.Stopped -> OpenCodeListItemStatus(text = "Stopped", tone = tone)

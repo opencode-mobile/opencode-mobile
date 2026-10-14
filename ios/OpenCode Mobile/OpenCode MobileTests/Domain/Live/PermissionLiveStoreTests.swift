@@ -39,6 +39,68 @@ struct PermissionLiveStoreTests {
         #expect(repository.permissionFetchCount == 4)
     }
 
+    @Test func indexedPermissionEvent_refreshesOnlyTheOwningDirectory() async throws {
+        let approval = PermissionRequest(
+            id: "perm-a",
+            sessionID: "ses-a",
+            permission: "bash",
+            patterns: [],
+            metadata: [:],
+            always: [],
+            toolMessageID: nil,
+            toolCallID: nil
+        )
+        let repository = PermissionLiveStoreFakeSessionRepository(script: [[]])
+        repository.permissionsByDirectory = [
+            "/repo-a": [approval],
+            "/repo-b": [],
+        ]
+        let eventStream = FakeForegroundEventStream()
+        let store = DefaultPermissionLiveStore(
+            sessionRepository: repository,
+            eventStream: eventStream
+        )
+        store.noteSessions(directory: "/repo-a", sessionIDs: ["ses-a"])
+        store.noteSessions(directory: "/repo-b", sessionIDs: ["ses-b"])
+        let collectorA = PermissionCollector(store: store, directory: "/repo-a")
+        let collectorB = PermissionCollector(store: store, directory: "/repo-b")
+        defer {
+            collectorA.cancel()
+            collectorB.cancel()
+        }
+
+        _ = try await collectorA.awaitEmission { $0.map(\.id) == ["perm-a"] }
+        _ = try await collectorB.awaitEmission { $0.isEmpty }
+        #expect(repository.directories.filter { $0 == "/repo-a" }.count == 1)
+        #expect(repository.directories.filter { $0 == "/repo-b" }.count == 1)
+
+        eventStream.emit(OpencodeEvent(type: "permission.asked", sessionID: "ses-a"))
+        try await pollUntil { repository.directories.filter { $0 == "/repo-a" }.count == 2 }
+        #expect(repository.directories.filter { $0 == "/repo-b" }.count == 1)
+
+        store.noteSessions(directory: "/repo-a", sessionIDs: [])
+        eventStream.emit(OpencodeEvent(type: "permission.replied", sessionID: "ses-a"))
+        try await pollUntil { repository.directories.filter { $0 == "/repo-a" }.count == 3 }
+        #expect(repository.directories.filter { $0 == "/repo-b" }.count == 1)
+
+        let fetchesBeforeUnrelated = repository.permissionFetchCount
+        eventStream.emit(OpencodeEvent(type: "permission.asked", sessionID: "ses-other"))
+        try await Task.sleep(for: .milliseconds(80))
+        #expect(repository.permissionFetchCount == fetchesBeforeUnrelated)
+        #expect(repository.directories.filter { $0 == "/repo-a" }.count == 3)
+        #expect(repository.directories.filter { $0 == "/repo-b" }.count == 1)
+
+        let collectorC = PermissionCollector(store: store, directory: "/repo-c")
+        defer { collectorC.cancel() }
+        _ = try await collectorC.awaitEmission { $0.isEmpty }
+        #expect(repository.directories.filter { $0 == "/repo-c" }.count == 1)
+
+        eventStream.emit(OpencodeEvent(type: "permission.asked", sessionID: "ses-other"))
+        try await pollUntil { repository.directories.filter { $0 == "/repo-c" }.count == 2 }
+        #expect(repository.directories.filter { $0 == "/repo-a" }.count == 3)
+        #expect(repository.directories.filter { $0 == "/repo-b" }.count == 1)
+    }
+
     @Test func reconnectPair_coalescesIntoOneFetch() async throws {
         let repository = PermissionLiveStoreFakeSessionRepository(script: [[]])
         let eventStream = FakeForegroundEventStream()
@@ -271,12 +333,20 @@ private final class PermissionLiveStoreFakeSessionRepository: SessionRepository,
     private let lock = NSLock()
     private var index = 0
     private var _permissionFetchCount = 0
+    private var _directories: [String] = []
     var delayAfterFirstFetch: Duration?
+    var permissionsByDirectory: [String: [PermissionRequest]] = [:]
 
     var permissionFetchCount: Int {
         lock.lock()
         defer { lock.unlock() }
         return _permissionFetchCount
+    }
+
+    var directories: [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        return _directories
     }
 
     init(script: [[PermissionRequest]]) {
@@ -286,10 +356,13 @@ private final class PermissionLiveStoreFakeSessionRepository: SessionRepository,
     func listPendingPermissions(directory: String?) async throws -> [PermissionRequest] {
         lock.lock()
         _permissionFetchCount += 1
+        _directories.append(directory ?? "")
         let fetchNumber = _permissionFetchCount
         let delay = delayAfterFirstFetch
         let result: [PermissionRequest]
-        if script.isEmpty {
+        if let directory, let mapped = permissionsByDirectory[directory] {
+            result = mapped
+        } else if script.isEmpty {
             result = []
         } else if index < script.count {
             result = script[index]

@@ -241,7 +241,16 @@ struct T3SessionControlsTests {
         var waiting = Self.thread(id: "thr-w")
         waiting.pendingRequestID = "req"
         waiting.pendingRequestKind = "user_input"
-        #expect(T3ShellMapper.session(from: waiting).snoozeBlockReason == "Waiting on you")
+        let waitingSession = T3ShellMapper.session(from: waiting)
+        #expect(waitingSession.snoozeBlockReason == "Waiting on you")
+        #expect(waitingSession.needsApproval == false)
+
+        var approval = Self.thread(id: "thr-a", activeRunID: "run-1")
+        approval.pendingRequestID = "req"
+        approval.pendingRequestKind = "command"
+        let approvalSession = T3ShellMapper.session(from: approval)
+        #expect(approvalSession.needsApproval == true)
+        #expect(approvalSession.snoozeBlockReason == "Still running")
     }
 
     @Test func deleteSession_dispatchesThreadDelete() async throws {

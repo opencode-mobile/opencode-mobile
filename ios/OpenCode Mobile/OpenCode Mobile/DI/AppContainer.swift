@@ -648,6 +648,7 @@ extension Container {
                 sessionLiveStore: self.sessionLiveStore(),
                 sessionStatusLiveStore: self.sessionStatusLiveStore(),
                 sessionReadyStore: self.sessionReadyStore(),
+                permissionLiveStore: self.permissionLiveStore(),
                 connectionSessionCoordinator: self.connectionSessionCoordinator(),
                 sessionCache: self.sessionCache(),
                 liveUpdates: self.liveUpdates()

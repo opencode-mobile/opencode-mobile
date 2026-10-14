@@ -24,6 +24,8 @@ data class Session(
     val snoozedUntilEpochMs: Long? = null,
     /** Why snooze and settle are unavailable: "Still running" or "Waiting on you". */
     val snoozeBlockReason: String? = null,
+    /** T3: a pending approval (not a question) is waiting on this device. */
+    val needsApproval: Boolean = false,
     /** v2 only: when the latest run ended. */
     val idleAtEpochMs: Long? = null,
     /** v2 only: server read watermark. */
@@ -97,6 +99,8 @@ data class SessionSummary(
     val snoozedUntilEpochMs: Long? = null,
     val snoozeBlockReason: String? = null,
     val settledAtEpochMs: Long? = null,
+    /** Pending tool approval. Outranks Running on the home pill. */
+    val needsApproval: Boolean = false,
     /** v2 only: outcome of an unread finished run; null when read, running, or on v1. */
     val unreadOutcome: SessionIdleOutcome? = null,
 )

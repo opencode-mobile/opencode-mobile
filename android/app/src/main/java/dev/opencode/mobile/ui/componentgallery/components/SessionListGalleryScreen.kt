@@ -89,6 +89,17 @@ private val sessionListGallerySamples: List<SessionListSession>
         val now = System.currentTimeMillis()
         return listOf(
             SessionListSession(
+                id = "session-approval",
+                title = "Fix stale T3 disconnect error",
+                worktree = "/Users/demo/opencode-mobile",
+                letter = 'O',
+                letterAccent = LetterAccent.Violet,
+                subtitle = "/Users/demo/opencode-mobile",
+                status = SessionListStatus.NeedsApproval,
+                caption = "now",
+                updatedAtEpochMs = now,
+            ),
+            SessionListSession(
                 id = "session-1",
                 title = "Refactor Navigation",
                 worktree = "/Users/demo/opencode-mobile",
@@ -193,11 +204,11 @@ private val sessionListGallerySamples: List<SessionListSession>
 
 private val sessionListGalleryFilterTabs =
     listOf(
-        SessionListFilterTab.all(projectCount = 3, sessionCount = 9),
+        SessionListFilterTab.all(projectCount = 3, sessionCount = 10),
         SessionListFilterTab.project(
             worktree = "/Users/demo/opencode-mobile",
             title = "opencode-mobile",
-            count = 4,
+            count = 5,
         ),
         SessionListFilterTab.project(worktree = "/Users/demo/playground", title = "playground", count = 4),
         SessionListFilterTab.project(worktree = "/Users/demo/api-client", title = "api-client", count = 1),
@@ -208,6 +219,6 @@ private val sessionListGalleryOneProjectFilterTabs =
         SessionListFilterTab.project(
             worktree = "/Users/demo/opencode-mobile",
             title = "opencode-mobile",
-            count = 4,
+            count = 5,
         ),
     )
