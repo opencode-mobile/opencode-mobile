@@ -24,6 +24,7 @@ final class SessionChatViewModel {
     private let harnessPicker: SessionChatHarnessPicker?
     private let sessionRepository: any SessionRepository
     private let sessionReadyStore: any SessionReadyStore
+    private let sessionViewReporter: any SessionViewReporter
     private let foregroundEventStream: any ForegroundEventStream
     /// Invalidates in-flight `withObservationTracking` for the collapse preference.
     private var collapsePreferenceGeneration = 0
@@ -83,6 +84,7 @@ final class SessionChatViewModel {
         questionLiveStore: (any QuestionLiveStore)? = nil,
         sessionTodoLiveStore: (any SessionTodoLiveStore)? = nil,
         sessionReadyStore: (any SessionReadyStore)? = nil,
+        sessionViewReporter: (any SessionViewReporter)? = nil,
         sessionStatusLiveStore: any SessionStatusLiveStore,
         foregroundEventStream: any ForegroundEventStream,
         sessionModelSelectionStore: any SessionModelSelectionStore,
@@ -114,6 +116,7 @@ final class SessionChatViewModel {
         )
         self.sessionRepository = sessionRepository
         self.sessionReadyStore = sessionReadyStore ?? EmptySessionReadyStore()
+        self.sessionViewReporter = sessionViewReporter ?? EmptySessionViewReporter()
         self.foregroundEventStream = foregroundEventStream
         self.timeline = SessionChatTimeline(
             sessionID: sessionID,
@@ -160,6 +163,7 @@ final class SessionChatViewModel {
             sessionRepository: sessionRepository,
             newSessionModelSelectionResolver: newSessionModelSelectionResolver,
             activeConnectionManager: activeConnectionManager,
+            composerDraftStore: composerDraftStore,
             mcpRepository: mcpRepository ?? EmptyMcpRepository()
         )
         let boundSessionInfo = self.sessionInfo
@@ -241,6 +245,7 @@ final class SessionChatViewModel {
         }
         OpenCodeLog.sessionChat.info("start observing session=\(self.sessionID)")
         sessionReadyStore.setFocusedSession(sessionID: sessionID, directory: worktree)
+        sessionViewReporter.focus(sessionId: sessionID)
         syncCoordinator?.markFocused(.transcript(directory: worktree, sessionID: sessionID))
         // Peers may have changed while the screen was away; re-resolve smart label.
         refreshProjectIdentity()
@@ -556,14 +561,7 @@ final class SessionChatViewModel {
             guard isConnectionLive else { return }
             commands.runNew()
         case .fork:
-            guard isConnectionLive else { return }
-            ProductAnalytics.logScreenView(
-                screenId: ProductAnalytics.Screen.sessionFork,
-                presentation: ProductAnalytics.Presentation.dialog,
-                trigger: ProductAnalytics.Trigger.present
-            )
-            loggedForkTitleEdit = false
-            commands.openForkDialog(currentTitle: uiState.sessionTitle)
+            openForkDialog()
         case .undo:
             commands.runUndo(
                 isBusy: uiState.sessionStatusLabel != nil || effectiveCompacting(),
@@ -630,6 +628,21 @@ final class SessionChatViewModel {
             actionId: actionId,
             parameters: [ProductAnalytics.Param.clientSlash: action.rawValue]
         )
+    }
+
+    /// One fork flow for the Commands sheet, the overflow menu (tip, `messageID == nil`) and
+    /// message actions ("Fork from here", forks before that user message).
+    /// Opens while offline too (matching Android): the dialog's Fork button follows
+    /// `canMutate`, and `confirmFork` refuses to fork until the connection is live.
+    func openForkDialog(atMessageID messageID: String? = nil) {
+        guard hasCreatedSession else { return }
+        ProductAnalytics.logScreenView(
+            screenId: ProductAnalytics.Screen.sessionFork,
+            presentation: ProductAnalytics.Presentation.dialog,
+            trigger: ProductAnalytics.Trigger.present
+        )
+        loggedForkTitleEdit = false
+        commands.openForkDialog(currentTitle: uiState.sessionTitle, atMessageID: messageID)
     }
 
     func updateForkDraft(_ text: String) {
@@ -1193,6 +1206,7 @@ final class SessionChatViewModel {
         // Only release our own focus: the next Session Chat (child, parent, fork) may already
         // have focused itself before this screen disappears.
         sessionReadyStore.releaseFocusedSession(sessionID: sessionID)
+        sessionViewReporter.release(sessionId: sessionID)
         syncCoordinator?.markFocused(nil)
         reviewChanges.stop()
         repoStrip.stop()
@@ -1346,6 +1360,7 @@ final class SessionChatViewModel {
         expandedStepParagraphs = [:]
         resetWorkingFooter()
         sessionReadyStore.setFocusedSession(sessionID: id, directory: worktree)
+        sessionViewReporter.focus(sessionId: id)
         timeline.rebind(sessionID: id)
         composer.rebind(sessionID: id)
         reviewChanges.rebind(sessionID: id)

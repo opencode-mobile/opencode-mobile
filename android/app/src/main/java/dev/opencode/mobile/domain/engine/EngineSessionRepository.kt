@@ -272,4 +272,9 @@ class EngineSessionRepository private constructor(
             modelId: String,
             directory: String?,
         ): Session = delegate().setModelSelection(id, providerInstanceId, modelId, directory)
+
+        override suspend fun markSessionViewed(
+            sessionId: String,
+            idleAtEpochMs: Long,
+        ) = delegate().markSessionViewed(sessionId, idleAtEpochMs)
     }

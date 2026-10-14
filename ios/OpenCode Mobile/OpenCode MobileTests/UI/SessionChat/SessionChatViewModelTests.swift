@@ -2775,7 +2775,7 @@ struct SessionChatViewModelTests {
 
         viewModel.runClientSlashAction(.fork)
         #expect(viewModel.uiState.forkDialogVisible)
-        #expect(viewModel.uiState.forkDraftTitle == "Title")
+        #expect(viewModel.uiState.forkDraftTitle == "Fork of Title")
         #expect(viewModel.uiState.commandsSheetVisible == false)
 
         viewModel.updateForkDraft("Forked copy")
@@ -2858,6 +2858,226 @@ struct SessionChatViewModelTests {
         #expect(viewModel.uiState.forkDialogVisible)
         #expect(viewModel.uiState.forkSubmitting == false)
         #expect(viewModel.uiState.forkErrorMessage != nil)
+    }
+
+    @Test func openForkDialog_fromOverflow_forksAtTipWithFallbackTitlePrefill() async {
+        let sessionRepository = FakeChatSessionRepository()
+        let draftStore = InMemoryComposerDraftStore()
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(),
+            composerDraftStore: draftStore,
+            sessionRepository: sessionRepository,
+            sessionTitle: "   "
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+
+        viewModel.openForkDialog()
+        #expect(viewModel.uiState.forkDialogVisible)
+        #expect(viewModel.uiState.forkDraftTitle == "Forked session")
+
+        viewModel.confirmFork()
+        await waitUntil { viewModel.uiState.forkResultVisible }
+
+        #expect(sessionRepository.forkSessionRequest == .init(id: "ses-1", atMessageID: nil))
+        #expect(sessionRepository.updateRequest?.title == "Forked session")
+        // Tip forks start with an empty composer.
+        #expect(draftStore.load(
+            connectionIdentity: Self.testConnectionIdentity,
+            worktree: "/repo",
+            sessionID: "forked-ses"
+        ) == nil)
+    }
+
+    @Test func openForkDialog_whileOffline_opensButConfirmWaitsForLiveConnection() async {
+        let sessionRepository = FakeChatSessionRepository()
+        let liveUpdates = FixedLiveUpdates(
+            chrome: LiveUpdatesChrome(label: .offline, canMutate: false, composerEnabled: true)
+        )
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(),
+            sessionRepository: sessionRepository,
+            liveUpdates: liveUpdates
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+
+        // Opening is not gated on the connection; the dialog's Fork button follows canMutate.
+        viewModel.openForkDialog(atMessageID: "msg-3")
+        #expect(viewModel.uiState.forkDialogVisible)
+        #expect(viewModel.uiState.canMutate == false)
+
+        viewModel.confirmFork()
+        await Task.yield()
+        #expect(sessionRepository.forkSessionRequest == nil)
+        #expect(viewModel.uiState.forkDialogVisible)
+        #expect(viewModel.uiState.forkSubmitting == false)
+
+        liveUpdates.set(LiveUpdatesChrome(label: .live, canMutate: true, composerEnabled: true))
+        await waitUntil { viewModel.uiState.canMutate }
+        viewModel.confirmFork()
+        await waitUntil { viewModel.uiState.forkResultVisible }
+        #expect(sessionRepository.forkSessionRequest == .init(id: "ses-1", atMessageID: "msg-3"))
+    }
+
+    @Test func forkTitlePrefill_trimsTitleAndFallsBackWhenBlank() {
+        #expect(SessionChatCommands.forkTitlePrefill(currentTitle: "  Fix login  ") == "Fork of Fix login")
+        #expect(SessionChatCommands.forkTitlePrefill(currentTitle: "") == "Forked session")
+        #expect(SessionChatCommands.forkTitlePrefill(currentTitle: " \n ") == "Forked session")
+    }
+
+    @Test func openForkDialog_fromMessage_forksBeforeMessageAndPrefillsForkComposer() async {
+        let messages = [
+            Message(id: "msg-1", role: .user, text: "First", model: nil, mode: nil, sentAtEpochMs: 1),
+            Message(id: "msg-2", role: .assistant, text: "Reply", model: nil, mode: nil, sentAtEpochMs: 2),
+            Message(id: "msg-3", role: .user, text: "Try the other approach", model: nil, mode: nil, sentAtEpochMs: 3),
+        ]
+        let sessionRepository = FakeChatSessionRepository(
+            forkSessionResult: Session(
+                id: "ses-fork", title: "Title (fork #1)", slug: nil, projectID: nil,
+                directory: "/repo", parentID: nil, updatedAtEpochMs: nil
+            )
+        )
+        let draftStore = InMemoryComposerDraftStore()
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(messages: messages),
+            composerDraftStore: draftStore,
+            sessionRepository: sessionRepository
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+
+        viewModel.openForkDialog(atMessageID: "msg-3")
+        #expect(viewModel.uiState.forkDraftTitle == "Fork of Title")
+        viewModel.confirmFork()
+        await waitUntil { viewModel.uiState.forkResultVisible }
+
+        #expect(sessionRepository.forkSessionRequest == .init(id: "ses-1", atMessageID: "msg-3"))
+        #expect(sessionRepository.updateRequest == .init(id: "ses-fork", title: "Fork of Title", directory: "/repo"))
+        #expect(draftStore.load(
+            connectionIdentity: Self.testConnectionIdentity,
+            worktree: "/repo",
+            sessionID: "ses-fork"
+        )?.text == "Try the other approach")
+        // The source session's own composer is untouched.
+        #expect(viewModel.uiState.composer.text == "")
+
+        // Opening the fork restores the prefilled prompt in its composer.
+        let fork = makeViewModel(
+            messageRepository: FakeMessageRepository(),
+            composerDraftStore: draftStore,
+            sessionID: "ses-fork"
+        )
+        defer { fork.stopObserving() }
+        await fork.loadMessages()
+        await waitUntil { fork.uiState.composer.text == "Try the other approach" }
+        #expect(fork.uiState.composer.text == "Try the other approach")
+    }
+
+    @Test func confirmFork_renameFails_keepsForkShowsPromptAndNonBlockingError() async {
+        let messages = [
+            Message(id: "msg-1", role: .user, text: "Start here", model: nil, mode: nil, sentAtEpochMs: 1),
+        ]
+        let sessionRepository = FakeChatSessionRepository(
+            updateSessionError: .http(statusCode: 500, message: "rename boom"),
+            forkSessionResult: Session(
+                id: "ses-fork", title: "Title (fork #1)", slug: nil, projectID: nil,
+                directory: "/repo", parentID: nil, updatedAtEpochMs: nil
+            )
+        )
+        let draftStore = InMemoryComposerDraftStore()
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(messages: messages),
+            composerDraftStore: draftStore,
+            sessionRepository: sessionRepository
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+
+        viewModel.openForkDialog(atMessageID: "msg-1")
+        viewModel.updateForkDraft("My fork")
+        viewModel.confirmFork()
+        await waitUntil { viewModel.uiState.forkResultVisible }
+
+        #expect(viewModel.uiState.forkDialogVisible == false)
+        #expect(viewModel.uiState.forkSubmitting == false)
+        #expect(viewModel.uiState.forkErrorMessage == nil)
+        #expect(viewModel.uiState.forkedSessionTitle == "Title (fork #1)")
+        #expect(viewModel.uiState.snackbar?.message == "Fork created, but it couldn't be renamed.")
+        #expect(viewModel.uiState.snackbar?.tone == .error)
+        // The prefill still lands even though the rename failed.
+        #expect(draftStore.load(
+            connectionIdentity: Self.testConnectionIdentity,
+            worktree: "/repo",
+            sessionID: "ses-fork"
+        )?.text == "Start here")
+
+        // A second confirm for the same flow must not create another fork.
+        viewModel.confirmFork()
+        await Task.yield()
+        #expect(sessionRepository.forkSessionCallCount == 1)
+        #expect(sessionRepository.updateSessionCallCount == 1)
+
+        viewModel.chooseForkOpen()
+        #expect(viewModel.uiState.pendingSessionReplace == ChildSessionNavigationTarget(
+            sessionID: "ses-fork",
+            sessionTitle: "Title (fork #1)",
+            worktree: "/repo",
+            optimisticNavigationInstanceID: nil
+        ))
+    }
+
+    @Test func openForkDialog_fromMessage_forkFailureKeepsDialogOpenWithoutPrefill() async {
+        let messages = [
+            Message(id: "msg-1", role: .user, text: "Start here", model: nil, mode: nil, sentAtEpochMs: 1),
+        ]
+        let sessionRepository = FakeChatSessionRepository(forkSessionError: .http(statusCode: 500, message: "boom"))
+        let draftStore = InMemoryComposerDraftStore()
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(messages: messages),
+            composerDraftStore: draftStore,
+            sessionRepository: sessionRepository
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+
+        viewModel.openForkDialog(atMessageID: "msg-1")
+        viewModel.confirmFork()
+        await waitUntil { viewModel.uiState.forkErrorMessage != nil }
+
+        #expect(viewModel.uiState.forkDialogVisible)
+        #expect(viewModel.uiState.forkSubmitting == false)
+        #expect(viewModel.uiState.forkResultVisible == false)
+        #expect(sessionRepository.forkSessionRequest == .init(id: "ses-1", atMessageID: "msg-1"))
+        #expect(sessionRepository.updateSessionCallCount == 0)
+        #expect(draftStore.load(
+            connectionIdentity: Self.testConnectionIdentity,
+            worktree: "/repo",
+            sessionID: "forked-ses"
+        ) == nil)
+    }
+
+    @Test func forkDialog_cancelOrBlankTitle_makesNoRepositoryCalls() async {
+        let sessionRepository = FakeChatSessionRepository()
+        let viewModel = makeViewModel(messageRepository: FakeMessageRepository(), sessionRepository: sessionRepository)
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+
+        viewModel.openForkDialog()
+        viewModel.updateForkDraft("   ")
+        viewModel.confirmFork()
+        #expect(viewModel.uiState.forkErrorMessage == "Enter a session title")
+        #expect(viewModel.uiState.forkDialogVisible)
+
+        viewModel.cancelForkDialog()
+        #expect(viewModel.uiState.forkDialogVisible == false)
+        // Confirming after cancel is a no-op too.
+        viewModel.confirmFork()
+        await Task.yield()
+
+        #expect(sessionRepository.forkSessionCallCount == 0)
+        #expect(sessionRepository.updateSessionCallCount == 0)
+        #expect(viewModel.uiState.forkResultVisible == false)
     }
 
     @Test func runClientSlashAction_undo_revertsLastUndoableMessageAndRestoresComposer() async {
@@ -4199,6 +4419,15 @@ struct SessionChatViewModelTests {
         #expect(openCodeRepository.setRuntimeModeRequests.isEmpty)
     }
 
+    @Test func sessionChatFocusesAndReleasesViewReporter() {
+        let reporter = RecordingSessionViewReporter()
+        let viewModel = makeViewModel(sessionViewReporter: reporter)
+
+        #expect(reporter.calls == ["focus:ses-1"])
+        viewModel.stopObserving()
+        #expect(reporter.calls == ["focus:ses-1", "release:ses-1"])
+    }
+
     private func makeViewModel(
         messageRepository: (any MessageRepository)? = nil,
         eventStream: FakeForegroundEventStream? = nil,
@@ -4219,7 +4448,8 @@ struct SessionChatViewModelTests {
         clock: any SyncClock = SystemSyncClock(),
         catalogRetryDelaysMs: [Int] = [],
         engine: ConnectionEngine = .opencode,
-        harnessRepository: (any T3HarnessRepository)? = nil
+        harnessRepository: (any T3HarnessRepository)? = nil,
+        sessionViewReporter: (any SessionViewReporter)? = nil
     ) -> SessionChatViewModel {
         let eventStream = eventStream ?? FakeForegroundEventStream()
         // Mutations (send/rename/fork/new/permissions) require Connected; default fakes start Idle.
@@ -4264,6 +4494,7 @@ struct SessionChatViewModelTests {
             permissionLiveStore: permissionLiveStore,
             questionLiveStore: questionLiveStore,
             sessionReadyStore: EmptySessionReadyStore(),
+            sessionViewReporter: sessionViewReporter,
             sessionStatusLiveStore: sessionStatusLiveStore,
             foregroundEventStream: eventStream,
             sessionModelSelectionStore: selectionStore,
@@ -4318,6 +4549,11 @@ struct SessionChatViewModelTests {
         _ = try? await store.refreshSelectableAgents(worktree: "/repo")
         return (store, connection, agents)
     }
+
+    private static let testConnectionIdentity = ModelSelectionConnectionIdentity(
+        serverBaseURL: "http://127.0.0.1:4096/",
+        username: "opencode"
+    )
 
     private static func makeActiveConnectionManager(
         serverProtocol: ServerProtocol = .v1,
@@ -5116,6 +5352,8 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
     private var serverRuntimeMode: String?
     var forkSessionResult: Session?
     private(set) var forkSessionRequest: ForkRequest?
+    private(set) var forkSessionCallCount = 0
+    private(set) var updateSessionCallCount = 0
     private(set) var abortCallCount = 0
     private(set) var abortSessionIDs: [String] = []
     private(set) var revertRequest: RevertRequest?
@@ -5267,6 +5505,7 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
     }
     func updateSession(id: String, title: String?, directory: String?) async throws -> Session {
         updateRequest = UpdateRequest(id: id, title: title, directory: directory)
+        updateSessionCallCount += 1
         if let updateSessionError { throw updateSessionError }
         return Session(
             id: id,
@@ -5313,6 +5552,7 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
     func initializeSessionAgents(id: String, messageID: String, providerID: String, modelID: String) async throws -> Bool { fatalError() }
     func forkSession(id: String, atMessageID: String?) async throws -> Session {
         forkSessionRequest = ForkRequest(id: id, atMessageID: atMessageID)
+        forkSessionCallCount += 1
         if let forkSessionError { throw forkSessionError }
         return forkSessionResult ?? Session(
             id: "forked-ses",
@@ -5587,4 +5827,13 @@ private struct EmptyConnectionProfileStore: ConnectionProfileStore {
     func removeWorktree(serverBaseURL: String, worktree: String) async {}
     func setAddedWorktrees(serverBaseURL: String, worktrees: [String]) async {}
     func clearAll() async {}
+}
+
+@MainActor
+private final class RecordingSessionViewReporter: SessionViewReporter {
+    private(set) var calls: [String] = []
+
+    func focus(sessionId: String) { calls.append("focus:\(sessionId)") }
+    func release(sessionId: String) { calls.append("release:\(sessionId)") }
+    func clearCache() { calls.append("clearCache") }
 }

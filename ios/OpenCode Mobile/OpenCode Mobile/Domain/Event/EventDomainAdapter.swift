@@ -1107,6 +1107,15 @@ nonisolated struct EventDomainAdapter: Sendable {
         return SessionTitleUpdate(sessionID: sessionID, title: title)
     }
 
+    /// Viewed watermark carried by a v2 `session.viewed` event (`{ sessionID, idle }`).
+    /// Returns nil when the event is not a usable viewed update.
+    func sessionViewed(_ event: OpencodeEvent) -> SessionViewedUpdate? {
+        guard event.type == OpencodeEvent.sessionViewedType else { return nil }
+        guard let sessionID = event.sessionID, !sessionID.isEmpty else { return nil }
+        guard let idle = event.rawProperties?["idle"]?.int64Value else { return nil }
+        return SessionViewedUpdate(sessionID: sessionID, idleAtEpochMs: idle)
+    }
+
     /// Client-only projection of a v2 agent/model switch for the message store.
     static let messageContextEvent = "message.context"
 
@@ -1132,6 +1141,11 @@ nonisolated enum EventParseOutcome: Sendable {
     /// Frame was recognized but intentionally projected to no domain event.
     case dropped(type: String)
     case events([OpencodeEvent])
+}
+
+nonisolated struct SessionViewedUpdate: Equatable, Sendable {
+    let sessionID: String
+    let idleAtEpochMs: Int64
 }
 
 nonisolated struct SessionTitleUpdate: Equatable, Sendable {

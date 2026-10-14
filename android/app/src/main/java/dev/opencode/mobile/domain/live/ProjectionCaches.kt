@@ -28,6 +28,7 @@ class DefaultProjectionCaches
         private val questionLiveStore: QuestionLiveStore,
         private val sessionTodoLiveStore: SessionTodoLiveStore,
         private val sessionReadyStore: SessionReadyStore,
+        private val sessionViewReporter: SessionViewReporter,
         private val messageSync: MessageSync,
         private val modelCatalogStore: ModelCatalogStore,
     ) : ProjectionCaches {
@@ -42,6 +43,7 @@ class DefaultProjectionCaches
             permissionLiveStore.clearCache()
             questionLiveStore.clearCache()
             sessionTodoLiveStore.clearCache()
+            sessionViewReporter.clearCache()
             messageSync.clearCache()
             modelCatalogStore.clear()
         }

@@ -13,6 +13,7 @@ import dev.opencode.mobile.domain.live.DefaultSessionLiveStore
 import dev.opencode.mobile.domain.live.DefaultSessionReadyStore
 import dev.opencode.mobile.domain.live.DefaultSessionStatusLiveStore
 import dev.opencode.mobile.domain.live.DefaultSessionTodoLiveStore
+import dev.opencode.mobile.domain.live.DefaultSessionViewReporter
 import dev.opencode.mobile.domain.live.LiveStoreScope
 import dev.opencode.mobile.domain.live.PermissionLiveStore
 import dev.opencode.mobile.domain.live.ProjectionCaches
@@ -23,6 +24,7 @@ import dev.opencode.mobile.domain.live.SessionReadyPersistence
 import dev.opencode.mobile.domain.live.SessionReadyStore
 import dev.opencode.mobile.domain.live.SessionStatusLiveStore
 import dev.opencode.mobile.domain.live.SessionTodoLiveStore
+import dev.opencode.mobile.domain.live.SessionViewReporter
 import dev.opencode.mobile.domain.live.defaultLiveStoreScope
 import javax.inject.Singleton
 
@@ -52,6 +54,10 @@ abstract class LiveStoreModule {
     @Binds
     @Singleton
     abstract fun bindSessionReadyStore(impl: DefaultSessionReadyStore): SessionReadyStore
+
+    @Binds
+    @Singleton
+    abstract fun bindSessionViewReporter(impl: DefaultSessionViewReporter): SessionViewReporter
 
     @Binds
     @Singleton

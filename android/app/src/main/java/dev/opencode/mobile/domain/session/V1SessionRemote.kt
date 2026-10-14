@@ -203,4 +203,10 @@ internal class V1SessionRemote(
         inboxId: String,
         directory: String?,
     ): Boolean = false
+
+    /** v1 servers have no read state; never touches the network. */
+    override suspend fun markSessionViewed(
+        sessionId: String,
+        idleAtEpochMs: Long,
+    ) = Unit
 }

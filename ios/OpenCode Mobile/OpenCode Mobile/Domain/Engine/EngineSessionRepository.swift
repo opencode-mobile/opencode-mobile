@@ -233,4 +233,8 @@ struct EngineSessionRepository: SessionRepository, Sendable {
             directory: directory
         )
     }
+
+    func markSessionViewed(sessionId: String, idleAtEpochMs: Int64) async throws {
+        try await selected().markSessionViewed(sessionId: sessionId, idleAtEpochMs: idleAtEpochMs)
+    }
 }

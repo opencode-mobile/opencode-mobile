@@ -11,6 +11,7 @@ import com.google.firebase.remoteconfig.FirebaseRemoteConfig
 import dev.opencode.mobile.domain.featureflags.FeatureFlag
 import dev.opencode.mobile.domain.featureflags.FeatureFlags
 import dev.opencode.mobile.domain.preferences.AnalyticsConsentPreferences
+import dev.opencode.mobile.platform.FrameworkSdkLevel
 
 /**
  * Release half of the shared release-observability seam (OPE-123 / OPE-129).
@@ -23,6 +24,7 @@ internal object OpenCodeReleaseObservability {
 
     fun initialize(application: Application) {
         this.application = application
+        tagFrameworkSdkAlignment()
         activateFeatureFlags()
         val enabled =
             application.packageManager
@@ -50,6 +52,14 @@ internal object OpenCodeReleaseObservability {
             .getInstance()
             .recordException(OpenCodeMobileCrashlyticsVerification())
         preferences.edit().putBoolean(markerKey, true).commit()
+    }
+
+    /** #652: aligned launches may report API 33, so keep the original level visible. */
+    private fun tagFrameworkSdkAlignment() {
+        val alignedFrom = FrameworkSdkLevel.alignedFromSdkInt ?: return
+        val crashlytics = FirebaseCrashlytics.getInstance()
+        crashlytics.setCustomKey("framework_sdk_aligned_from", alignedFrom)
+        crashlytics.setCustomKey("framework_sdk_aligned_to", Build.VERSION.SDK_INT)
     }
 
     /**

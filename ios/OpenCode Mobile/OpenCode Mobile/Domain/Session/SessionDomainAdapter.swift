@@ -35,7 +35,10 @@ nonisolated struct SessionDomainAdapter: Sendable {
             createdAtEpochMs: dto.time?.created,
             updatedAtEpochMs: dto.time?.updated,
             archivedAtEpochMs: dto.time?.archived,
-            revert: dto.revert.map(sessionRevert)
+            revert: dto.revert.map(sessionRevert),
+            idleAtEpochMs: dto.time?.idle,
+            viewedAtEpochMs: dto.time?.viewed,
+            idleOutcome: SessionIdleOutcome(wireValue: dto.outcome)
         )
     }
 
@@ -74,6 +77,7 @@ nonisolated struct SessionDomainAdapter: Sendable {
         worktree: String,
         statusLabel: String? = nil,
         isReady: Bool = false,
+        unreadOutcome: SessionIdleOutcome? = nil,
         statusIsStale: Bool = false
     ) -> SessionListItem {
         SessionListItem(
@@ -84,6 +88,7 @@ nonisolated struct SessionDomainAdapter: Sendable {
             updatedAtLabel: session.updatedAtEpochMs.map(Self.updatedAtLabel),
             updatedAtEpochMs: session.updatedAtEpochMs,
             isReady: isReady,
+            unreadOutcome: unreadOutcome,
             statusIsStale: statusIsStale,
             parentID: session.parentID,
             snoozedUntilEpochMs: session.snoozedUntilEpochMs,

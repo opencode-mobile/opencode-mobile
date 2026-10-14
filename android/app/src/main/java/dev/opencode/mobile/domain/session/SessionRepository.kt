@@ -237,6 +237,15 @@ interface SessionRepository {
         modelId: String,
         directory: String? = null,
     ): Session = throw SessionError.Http(400, "Model selection is not available")
+    /**
+     * Acknowledges that the run which ended at [idleAtEpochMs] was seen. Only
+     * servers with `supportsSessionViewed` track this; elsewhere it is a no-op.
+     * Throws on transport or HTTP failure.
+     */
+    suspend fun markSessionViewed(
+        sessionId: String,
+        idleAtEpochMs: Long,
+    ) = Unit
 }
 
 /** Creation-time choices for a new session; null fields fall back to the server's defaults. */

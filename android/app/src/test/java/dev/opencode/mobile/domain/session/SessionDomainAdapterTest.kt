@@ -11,7 +11,9 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SessionDomainAdapterTest {
@@ -85,6 +87,49 @@ class SessionDomainAdapterTest {
 
         assertEquals("ses_1", child.parentId)
         assertEquals(emptyList<Session>(), listOf(child).rootSessions())
+    }
+
+    @Test
+    fun serverUnreadNeedsIdleNewerThanViewed() {
+        assertFalse(Session(id = "a", title = "Never ran").isServerUnread)
+        assertTrue(Session(id = "a", title = "Never viewed", idleAtEpochMs = 10L).isServerUnread)
+        assertTrue(Session(id = "a", title = "Ran again", idleAtEpochMs = 20L, viewedAtEpochMs = 10L).isServerUnread)
+        assertFalse(Session(id = "a", title = "Seen", idleAtEpochMs = 10L, viewedAtEpochMs = 10L).isServerUnread)
+        assertFalse(Session(id = "a", title = "Seen later", idleAtEpochMs = 10L, viewedAtEpochMs = 30L).isServerUnread)
+        assertFalse(Session(id = "a", title = "Viewed only", viewedAtEpochMs = 30L).isServerUnread)
+    }
+
+    @Test
+    fun withViewedOnlyMovesWatermarkForward() {
+        val unread = Session(id = "a", title = "A", idleAtEpochMs = 20L, viewedAtEpochMs = 10L)
+
+        assertEquals(20L, unread.withViewed(20L).viewedAtEpochMs)
+        assertEquals(15L, unread.withViewed(15L).viewedAtEpochMs)
+        assertEquals(10L, unread.withViewed(5L).viewedAtEpochMs)
+        assertEquals(7L, Session(id = "b", title = "B").withViewed(7L).viewedAtEpochMs)
+    }
+
+    @Test
+    fun outcomeWireValuesMapCaseInsensitivelyAndUnknownIsNull() {
+        assertEquals(SessionIdleOutcome.Succeeded, SessionIdleOutcome.fromWire("succeeded"))
+        assertEquals(SessionIdleOutcome.Failed, SessionIdleOutcome.fromWire("FAILED"))
+        assertEquals(SessionIdleOutcome.Interrupted, SessionIdleOutcome.fromWire("interrupted"))
+        assertNull(SessionIdleOutcome.fromWire("cancelled"))
+        assertNull(SessionIdleOutcome.fromWire(null))
+    }
+
+    @Test
+    fun v2DtoMapsReadStateAndV1DtoIgnoresIt() {
+        val time = SessionTimeDto(created = 1L, updated = 2L, idle = 30L, viewed = 20L)
+        val v2 = adapter.toSession(V2SessionDto(id = "ses_v2", title = "V2", time = time, outcome = "interrupted"))
+        val v1 = adapter.toSession(SessionDto(id = "ses_v1", title = "V1", time = time))
+
+        assertEquals(30L, v2.idleAtEpochMs)
+        assertEquals(20L, v2.viewedAtEpochMs)
+        assertEquals(SessionIdleOutcome.Interrupted, v2.idleOutcome)
+        assertNull(v1.idleAtEpochMs)
+        assertNull(v1.viewedAtEpochMs)
+        assertNull(v1.idleOutcome)
     }
 
     @Test

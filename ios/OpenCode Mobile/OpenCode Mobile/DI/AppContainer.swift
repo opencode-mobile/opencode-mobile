@@ -573,12 +573,26 @@ extension Container {
 
     var sessionLiveStore: Factory<DefaultSessionLiveStore> {
         self { @MainActor in
-            DefaultSessionLiveStore(
+            let manager = self.activeConnectionManager()
+            return DefaultSessionLiveStore(
                 sessionRepository: self.sessionRepository(),
                 eventStream: self.foregroundEventStream(),
                 sessionCache: self.sessionCache(),
                 worldSignals: self.worldSignals(),
-                syncCoordinator: self.syncCoordinator()
+                syncCoordinator: self.syncCoordinator(),
+                capabilities: { manager.capabilities }
+            )
+        }.singleton
+    }
+
+    var sessionViewReporter: Factory<DefaultSessionViewReporter> {
+        self { @MainActor in
+            let manager = self.activeConnectionManager()
+            return DefaultSessionViewReporter(
+                sessionRepository: self.sessionRepository(),
+                sessionLiveStore: self.sessionLiveStore(),
+                eventStream: self.foregroundEventStream(),
+                capabilities: { manager.capabilities }
             )
         }.singleton
     }
@@ -593,7 +607,8 @@ extension Container {
                 sessionTodoLiveStore: self.sessionTodoLiveStore(),
                 sessionReadyStore: self.sessionReadyStore(),
                 messageRepository: self.messageRepository(),
-                modelCatalogStore: self.modelCatalogStore()
+                modelCatalogStore: self.modelCatalogStore(),
+                sessionViewReporter: self.sessionViewReporter()
             )
         }.singleton
     }
@@ -659,6 +674,7 @@ extension Container {
                 questionLiveStore: self.questionLiveStore(),
                 sessionTodoLiveStore: self.sessionTodoLiveStore(),
                 sessionReadyStore: self.sessionReadyStore(),
+                sessionViewReporter: self.sessionViewReporter(),
                 sessionStatusLiveStore: self.sessionStatusLiveStore(),
                 foregroundEventStream: self.foregroundEventStream(),
                 sessionModelSelectionStore: self.sessionModelSelectionStore(),

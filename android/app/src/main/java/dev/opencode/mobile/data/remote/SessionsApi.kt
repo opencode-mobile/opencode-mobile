@@ -30,6 +30,7 @@ import dev.opencode.mobile.data.remote.dto.V2PermissionRequestDto
 import dev.opencode.mobile.data.remote.dto.V2RenameSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.V2RevertStageRequestDto
 import dev.opencode.mobile.data.remote.dto.V2SessionDto
+import dev.opencode.mobile.data.remote.dto.V2SessionViewRequestDto
 import dev.opencode.mobile.data.remote.dto.V2VcsInfoDto
 import dev.opencode.mobile.data.remote.dto.VcsFileStatusDto
 import dev.opencode.mobile.data.remote.dto.VcsInfoDto
@@ -230,6 +231,17 @@ class SessionsApi private constructor(
             .get()
             .patch("api/session/$sessionId/inbox/$inboxId") {
                 setJsonBody(json, V2InboxDeliveryRequestDto(delivery = "queue"))
+            }.ensureSuccess()
+
+    /** `POST /api/session/{id}/view` → 204; acknowledges the run that ended at [idle]. */
+    suspend fun viewSessionV2(
+        sessionId: String,
+        idle: Long,
+    ): Boolean =
+        httpClient
+            .get()
+            .post("api/session/$sessionId/view") {
+                setJsonBody(json, V2SessionViewRequestDto(idle = idle))
             }.ensureSuccess()
 
     suspend fun shareSession(

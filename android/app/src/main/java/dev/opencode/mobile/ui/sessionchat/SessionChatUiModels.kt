@@ -127,6 +127,9 @@ data class SessionChatSnackbar(
 
 enum class ComposerDictationPhase {
     Listening,
+
+    /** The recognizer stopped on its own; the transcript is ready to insert. */
+    Stopped,
     Finishing,
     PermissionDenied,
     ModelNotInstalled,

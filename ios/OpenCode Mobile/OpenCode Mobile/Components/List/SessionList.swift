@@ -6,19 +6,29 @@ enum SessionListStatus: Hashable {
     case idle
     case running
     case retrying(attempt: Int?)
+    /// v1: a run finished while this device was away (local, per device).
     case ready
     case snoozed
+    /// v2: the latest run succeeded and nobody has viewed it yet (server unread).
+    case done
+    /// v2: the latest run failed and nobody has viewed it yet.
+    case failed
+    /// v2: the latest run was interrupted and nobody has viewed it yet.
+    case stopped
 
     var isAttention: Bool {
         switch self {
-        case .running, .retrying, .ready: true
+        case .running, .retrying, .ready, .done, .failed, .stopped: true
         case .idle, .snoozed: false
         }
     }
 
+    /// A finished run the user has not seen yet: Ready (v1) or Done / Failed / Stopped (v2).
     var isReady: Bool {
-        if case .ready = self { return true }
-        return false
+        switch self {
+        case .ready, .done, .failed, .stopped: true
+        case .idle, .running, .retrying, .snoozed: false
+        }
     }
 
     func listItemStatus(isStale: Bool = false) -> OpenCodeListItemStatus {
@@ -37,6 +47,12 @@ enum SessionListStatus: Hashable {
             base = OpenCodeListItemStatus(text: "Ready", tone: .success)
         case .snoozed:
             base = OpenCodeListItemStatus(text: "Snoozed", tone: .warning)
+        case .done:
+            base = OpenCodeListItemStatus(text: "Done", tone: .success)
+        case .failed:
+            base = OpenCodeListItemStatus(text: "Failed", tone: .error)
+        case .stopped:
+            base = OpenCodeListItemStatus(text: "Stopped", tone: .warning)
         }
         if isStale {
             return OpenCodeListItemStatus(text: base.text, tone: .stale)

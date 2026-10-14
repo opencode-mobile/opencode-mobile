@@ -3,7 +3,7 @@ import Foundation
 /// OpenCode HTTP API generation for an active server connection.
 ///
 /// Detection prefers `/global/health` with `healthy: true` (v1), else
-/// `/api/info` with numeric `pid` (v2; `healthy` may be absent).
+/// `/api/info` or `/api/health` with numeric `pid` (v2; `healthy` may be absent).
 nonisolated enum ServerProtocol: String, Sendable, Equatable, Hashable {
     case v1
     case v2
@@ -26,6 +26,8 @@ nonisolated struct ServerCapabilities: Sendable, Equatable {
     let supportsSessionMessageDiff: Bool
     let supportsSessionArchive: Bool
     let supportsFollowUpDelivery: Bool
+    /// Server-tracked unread state (`time.idle` / `time.viewed`, `POST /view`, `session.viewed`).
+    var supportsSessionViewed: Bool = false
     var supportsTerminal: Bool = true
     var supportsRevert: Bool = true
     var supportsMentions: Bool = true
@@ -57,13 +59,15 @@ nonisolated struct ServerCapabilities: Sendable, Equatable {
             return ServerCapabilities(
                 supportsSessionMessageDiff: true,
                 supportsSessionArchive: true,
-                supportsFollowUpDelivery: false
+                supportsFollowUpDelivery: false,
+                supportsSessionViewed: false
             )
         case .v2:
             return ServerCapabilities(
                 supportsSessionMessageDiff: false,
                 supportsSessionArchive: false,
-                supportsFollowUpDelivery: true
+                supportsFollowUpDelivery: true,
+                supportsSessionViewed: true
             )
         }
     }

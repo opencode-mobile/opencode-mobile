@@ -131,6 +131,11 @@ nonisolated struct SessionsAPIClient: Sendable {
         try await postWithoutBody(path: "api/session/\(id)/interrupt")
     }
 
+    /// `POST /api/session/{id}/view` → 204. Moves the server-wide viewed watermark to `idle`.
+    func markSessionViewedV2(id: String, idle: Int64) async throws -> Bool {
+        try await postEmpty(path: "api/session/\(id)/view", body: V2ViewSessionRequestDTO(idle: idle))
+    }
+
     func cancelInboxV2(sessionID: String, inboxID: String) async throws -> Bool {
         try await delete(path: "api/session/\(sessionID)/inbox/\(inboxID)")
     }

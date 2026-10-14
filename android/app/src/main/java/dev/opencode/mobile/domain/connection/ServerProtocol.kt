@@ -4,7 +4,7 @@ package dev.opencode.mobile.domain.connection
  * OpenCode HTTP API generation for an active server connection.
  *
  * Detection prefers `/global/health` with `healthy: true` (v1), else
- * `/api/info` with numeric `pid` (v2; `healthy` may be absent).
+ * `/api/info` or `/api/health` with numeric `pid` (v2; `healthy` may be absent).
  */
 enum class ServerProtocol(
     val wireValue: String,
@@ -36,6 +36,8 @@ data class ServerCapabilities(
     val supportsMentions: Boolean = true,
     val supportsSlashCommands: Boolean = true,
     val supportsDocumentAttachments: Boolean = true,
+    /** Server tracks per-session read state (`time.idle`/`time.viewed`, `session.viewed`). */
+    val supportsSessionViewed: Boolean = false,
 ) {
     companion object {
         val t3: ServerCapabilities =
@@ -61,12 +63,14 @@ data class ServerCapabilities(
                         supportsSessionMessageDiff = true,
                         supportsSessionArchive = true,
                         supportsFollowUpDelivery = false,
+                        supportsSessionViewed = false,
                     )
                 ServerProtocol.V2 ->
                     ServerCapabilities(
                         supportsSessionMessageDiff = false,
                         supportsSessionArchive = false,
                         supportsFollowUpDelivery = true,
+                        supportsSessionViewed = true,
                     )
             }
 

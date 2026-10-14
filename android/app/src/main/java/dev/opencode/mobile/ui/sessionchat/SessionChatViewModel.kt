@@ -24,11 +24,13 @@ import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.event.LiveUpdates
 import dev.opencode.mobile.domain.live.EmptySessionReadyStore
 import dev.opencode.mobile.domain.live.EmptySessionTodoLiveStore
+import dev.opencode.mobile.domain.live.NoOpSessionViewReporter
 import dev.opencode.mobile.domain.live.PermissionLiveStore
 import dev.opencode.mobile.domain.live.QuestionLiveStore
 import dev.opencode.mobile.domain.live.SessionReadyStore
 import dev.opencode.mobile.domain.live.SessionStatusLiveStore
 import dev.opencode.mobile.domain.live.SessionTodoLiveStore
+import dev.opencode.mobile.domain.live.SessionViewReporter
 import dev.opencode.mobile.domain.mcp.McpRepository
 import dev.opencode.mobile.domain.mcp.McpServer
 import dev.opencode.mobile.domain.message.Attachment
@@ -113,6 +115,7 @@ class SessionChatViewModel
         liveUpdates: LiveUpdates = FixedLiveUpdates(),
         private val syncCoordinator: SyncCoordinator = NoOpSyncCoordinator,
         mcpRepository: McpRepository = EmptyMcpRepository,
+        private val sessionViewReporter: SessionViewReporter = NoOpSessionViewReporter,
     ) : ViewModel() {
         internal var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
             set(value) {
@@ -181,6 +184,7 @@ class SessionChatViewModel
                 newSessionModelSelectionResolver = newSessionModelSelectionResolver,
                 connectionSessionCoordinator = connectionSessionCoordinator,
                 mcpRepository = mcpRepository,
+                composerDraftStore = composerDraftStore,
                 scope = viewModelScope,
             )
         private val inbox =
@@ -354,6 +358,7 @@ class SessionChatViewModel
             // Always re-assert Ready focus: nav can dispose/clear focus then re-enter the same
             // bound ViewModel without a full reset, and Ready must clear on open.
             sessionReadyStore.setFocusedSession(sessionId, worktree)
+            sessionViewReporter.focus(sessionId)
             if (boundSessionId == sessionId && boundWorktree == worktree) {
                 bindTitleIfChanged(sessionId, sessionTitle, worktree)
                 // Peers may have changed while the screen was away; re-resolve smart label.
@@ -536,6 +541,7 @@ class SessionChatViewModel
             boundSessionTitle = sessionTitle
             resetWorkingFooter()
             sessionReadyStore.setFocusedSession(sessionId, worktree)
+            sessionViewReporter.focus(sessionId)
             timeline.bind(sessionId, worktree)
             composer.bind(sessionId, worktree)
             sessionInfo.bind(sessionId, sessionTitle, worktree)
@@ -562,7 +568,10 @@ class SessionChatViewModel
         fun clearSessionReadyFocus() {
             // Only release our own focus: the next Session Chat (child, parent, fork) may
             // already have focused itself before this screen leaves composition.
-            boundSessionId?.let { sessionReadyStore.releaseFocusedSession(it) }
+            boundSessionId?.let {
+                sessionReadyStore.releaseFocusedSession(it)
+                sessionViewReporter.release(it)
+            }
         }
 
         fun loadMessages() {
@@ -756,10 +765,19 @@ class SessionChatViewModel
             publishUiState()
         }
 
+        /** Listening ended but the transcript stays on the card so Insert still works. */
+        fun dictationStopped() {
+            val current = dictation ?: return
+            if (current.phase != ComposerDictationPhase.Listening) return
+            dictation = current.copy(phase = ComposerDictationPhase.Stopped, level = 0f)
+            publishUiState()
+        }
+
         fun dictationInsert() {
             val current = dictation ?: return
             if (
                 current.phase != ComposerDictationPhase.Listening &&
+                current.phase != ComposerDictationPhase.Stopped &&
                 current.phase != ComposerDictationPhase.Finishing
             ) {
                 return
@@ -987,6 +1005,34 @@ class SessionChatViewModel
                         selectedModel = composer.state.value.composer.selectedModel,
                     )
                 },
+            )
+        }
+
+        /** Overflow menu "Fork session": forks the whole session (no message id). */
+        fun openForkSession() {
+            if (!hasCreatedSession()) return
+            forkDraftEditReported = false
+            logAction(
+                actionId = ProductAnalytics.Action.CHAT_OVERFLOW_FORK,
+                screenId = ProductAnalytics.Screen.SESSION_OVERFLOW,
+            )
+            commands.openForkDialog(currentTitle = sessionInfo.state.value.sessionTitle)
+        }
+
+        /**
+         * Message actions "Fork from here": forks history before [messageId] and prefills the
+         * fork's composer with [messageText] (analytics are logged by the sheet).
+         */
+        fun forkFromMessage(
+            messageId: String,
+            messageText: String,
+        ) {
+            if (!hasCreatedSession()) return
+            forkDraftEditReported = false
+            commands.openForkDialog(
+                currentTitle = sessionInfo.state.value.sessionTitle,
+                atMessageId = messageId,
+                messageText = messageText,
             )
         }
 

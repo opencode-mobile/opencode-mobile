@@ -1162,6 +1162,9 @@ struct SessionListItem: Identifiable, Hashable {
     let updatedAtLabel: String?
     let updatedAtEpochMs: Int64?
     let isReady: Bool
+    /// v2 server unread: how the unseen run ended (Done / Failed / Stopped). Nil when read,
+    /// or on v1 (which uses `isReady`).
+    let unreadOutcome: SessionIdleOutcome?
     let statusIsStale: Bool
     /// Unique per optimistic new-session navigation so back-stack entries do not reuse a promoted chat.
     let optimisticNavigationInstanceID: UUID?
@@ -1180,6 +1183,7 @@ struct SessionListItem: Identifiable, Hashable {
         updatedAtLabel: String? = nil,
         updatedAtEpochMs: Int64? = nil,
         isReady: Bool = false,
+        unreadOutcome: SessionIdleOutcome? = nil,
         statusIsStale: Bool = false,
         optimisticNavigationInstanceID: UUID? = nil,
         parentID: String? = nil,
@@ -1194,6 +1198,7 @@ struct SessionListItem: Identifiable, Hashable {
         self.updatedAtLabel = updatedAtLabel
         self.updatedAtEpochMs = updatedAtEpochMs
         self.isReady = isReady
+        self.unreadOutcome = unreadOutcome
         self.statusIsStale = statusIsStale
         self.optimisticNavigationInstanceID = optimisticNavigationInstanceID
         self.parentID = parentID
@@ -1203,7 +1208,7 @@ struct SessionListItem: Identifiable, Hashable {
     }
 }
 
-private extension SessionListItem {
+extension SessionListItem {
     func sessionListStatus(hasPendingPermission: Bool = false) -> SessionListStatus {
         _ = hasPendingPermission // Reserved for a future home Needs approval pill.
         switch statusLabel {
@@ -1215,7 +1220,12 @@ private extension SessionListItem {
             let attempt = Int(label.dropFirst("Retrying · ".count))
             return SessionListStatus.retrying(attempt: attempt)
         default:
-            return isReady ? SessionListStatus.ready : SessionListStatus.idle
+            switch unreadOutcome {
+            case .succeeded: return SessionListStatus.done
+            case .failed: return SessionListStatus.failed
+            case .interrupted: return SessionListStatus.stopped
+            case nil: return isReady ? SessionListStatus.ready : SessionListStatus.idle
+            }
         }
     }
 }

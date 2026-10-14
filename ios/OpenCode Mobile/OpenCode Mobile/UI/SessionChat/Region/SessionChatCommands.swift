@@ -14,10 +14,14 @@ final class SessionChatCommands {
     private let newSessionModelSelectionResolver: NewSessionModelSelectionResolver
     private let activeConnectionManager: ActiveConnectionManager
     private let mcpRepository: any McpRepository
+    private let composerDraftStore: any ComposerDraftStore
     private var mcpTask: Task<Void, Never>?
 
     private var currentRevertMessageID: String?
     private var forkedTarget: ChildSessionNavigationTarget?
+    /// Message the open fork dialog forks before (nil = fork at the tip) and its text, which
+    /// prefills the new fork's composer like the opencode TUI does.
+    private var forkSource: ForkSource?
     private var lastMessages: [SessionChatRow] = []
     private var lastHasSelectedComposerModel = false
     private var lastCapabilities = SessionCapabilities.opencode
@@ -37,6 +41,7 @@ final class SessionChatCommands {
         sessionRepository: any SessionRepository,
         newSessionModelSelectionResolver: NewSessionModelSelectionResolver,
         activeConnectionManager: ActiveConnectionManager,
+        composerDraftStore: any ComposerDraftStore,
         mcpRepository: any McpRepository = EmptyMcpRepository()
     ) {
         self.sessionID = sessionID
@@ -45,6 +50,7 @@ final class SessionChatCommands {
         self.newSessionModelSelectionResolver = newSessionModelSelectionResolver
         self.activeConnectionManager = activeConnectionManager
         self.mcpRepository = mcpRepository
+        self.composerDraftStore = composerDraftStore
     }
 
     func rebind(sessionID: String) {
@@ -55,6 +61,7 @@ final class SessionChatCommands {
         self.sessionID = sessionID
         currentRevertMessageID = nil
         forkedTarget = nil
+        forkSource = nil
         lastDomainMessages = []
         completedCompactionIDsAtStart = []
         lastIsSessionBusy = false
@@ -251,14 +258,26 @@ final class SessionChatCommands {
         notifyChange()
     }
 
-    func openForkDialog(currentTitle: String) {
+    /// Opens the fork name dialog. `messageID` forks before that user message (the server
+    /// copies history strictly before it); nil forks at the tip.
+    func openForkDialog(currentTitle: String, atMessageID messageID: String? = nil) {
         dismissCommands()
+        forkSource = messageID.map { id in
+            ForkSource(messageID: id, prefillText: lastMessages.first(where: { $0.id == id })?.text)
+        }
         state.forkDialogVisible = true
-        state.forkDraftTitle = currentTitle
+        state.forkDraftTitle = Self.forkTitlePrefill(currentTitle: currentTitle)
         state.forkSubmitting = false
         state.forkErrorMessage = nil
         notifyChange()
     }
+
+    static func forkTitlePrefill(currentTitle: String) -> String {
+        let trimmed = currentTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "Forked session" : "Fork of \(trimmed)"
+    }
+
+    static let forkRenameFailedMessage = "Fork created, but it couldn't be renamed."
 
     func updateForkDraft(_ text: String) {
         state.forkDraftTitle = text
@@ -267,6 +286,7 @@ final class SessionChatCommands {
     }
 
     func cancelForkDialog() {
+        forkSource = nil
         state.forkDialogVisible = false
         state.forkSubmitting = false
         state.forkErrorMessage = nil
@@ -274,7 +294,7 @@ final class SessionChatCommands {
     }
 
     func confirmFork() {
-        guard !state.forkSubmitting else { return }
+        guard state.forkDialogVisible, !state.forkSubmitting else { return }
         let title = state.forkDraftTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         if title.isEmpty {
             state.forkErrorMessage = "Enter a session title"
@@ -283,27 +303,15 @@ final class SessionChatCommands {
         }
         let sessionID = sessionID
         let worktree = worktree
+        let source = forkSource
         state.forkSubmitting = true
         state.forkErrorMessage = nil
         notifyChange()
         forkTask?.cancel()
         forkTask = Task {
+            let forked: Session
             do {
-                let forked = try await sessionRepository.forkSession(id: sessionID, atMessageID: nil)
-                let updated = try await sessionRepository.updateSession(id: forked.id, title: title, directory: worktree)
-                guard !Task.isCancelled else { return }
-                OpenCodeLog.sessionChat.info("fork success sourceSession=\(sessionID) forkedSession=\(updated.id)")
-                forkedTarget = ChildSessionNavigationTarget(
-                    sessionID: updated.id,
-                    sessionTitle: updated.title,
-                    worktree: worktree,
-                    optimisticNavigationInstanceID: nil
-                )
-                state.forkDialogVisible = false
-                state.forkSubmitting = false
-                state.forkResultVisible = true
-                state.forkedSessionTitle = updated.title
-                notifyChange()
+                forked = try await sessionRepository.forkSession(id: sessionID, atMessageID: source?.messageID)
             } catch {
                 guard !Task.isCancelled else { return }
                 OpenCodeLog.sessionChat.warning(
@@ -312,8 +320,64 @@ final class SessionChatCommands {
                 state.forkSubmitting = false
                 state.forkErrorMessage = error.localizedDescription
                 notifyChange()
+                return
             }
+            // The fork exists from here on: whatever the rename does, the name dialog closes so
+            // one confirm can never create a second fork.
+            saveForkComposerPrefill(source, forkedSessionID: forked.id, worktree: worktree)
+            var resolvedTitle = forked.title
+            var renameFailed = false
+            do {
+                resolvedTitle = try await sessionRepository.updateSession(
+                    id: forked.id,
+                    title: title,
+                    directory: worktree
+                ).title
+            } catch {
+                renameFailed = true
+                OpenCodeLog.sessionChat.warning(
+                    "fork rename failed forkedSession=\(forked.id) error=\(error.localizedDescription)"
+                )
+            }
+            guard !Task.isCancelled else { return }
+            OpenCodeLog.sessionChat.info(
+                "fork success sourceSession=\(sessionID) forkedSession=\(forked.id) fromMessage=\(source != nil)"
+            )
+            forkSource = nil
+            forkedTarget = ChildSessionNavigationTarget(
+                sessionID: forked.id,
+                sessionTitle: resolvedTitle,
+                worktree: worktree,
+                optimisticNavigationInstanceID: nil
+            )
+            state.forkDialogVisible = false
+            state.forkSubmitting = false
+            state.forkResultVisible = true
+            state.forkedSessionTitle = resolvedTitle
+            if renameFailed {
+                state.actionErrorMessage = Self.forkRenameFailedMessage
+                state.actionSuccessMessage = nil
+            }
+            notifyChange()
         }
+    }
+
+    /// A message fork starts with that message's text in its composer, stored as the new
+    /// session's composer draft so it appears whenever the fork's Session Chat binds.
+    private func saveForkComposerPrefill(_ source: ForkSource?, forkedSessionID: String, worktree: String) {
+        guard let text = source?.prefillText,
+              !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              let profile = activeConnectionManager.currentProfile()
+        else { return }
+        composerDraftStore.save(
+            connectionIdentity: ModelSelectionConnectionIdentity(
+                serverBaseURL: profile.baseURL,
+                username: profile.username
+            ),
+            worktree: worktree,
+            sessionID: forkedSessionID,
+            draft: ComposerDraft(text: text)
+        )
     }
 
     func chooseForkOpen() {
@@ -558,6 +622,11 @@ final class SessionChatCommands {
     private func notifyChange() {
         onChange?()
     }
+}
+
+private struct ForkSource {
+    let messageID: String
+    let prefillText: String?
 }
 
 @MainActor

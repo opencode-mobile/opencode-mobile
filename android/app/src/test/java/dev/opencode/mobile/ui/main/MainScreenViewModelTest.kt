@@ -3,6 +3,7 @@ package dev.opencode.mobile.ui.main
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.SecureCredentialStore
+import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.connection.testConnectionSessionCoordinator
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.EventStreamConnectionState
@@ -19,6 +20,7 @@ import dev.opencode.mobile.domain.live.DefaultSessionStatusLiveStore
 import dev.opencode.mobile.domain.live.InMemorySessionReadyPersistence
 import dev.opencode.mobile.domain.live.LiveStoreScope
 import dev.opencode.mobile.domain.live.SessionReadyClock
+import dev.opencode.mobile.domain.live.SessionReadyStore
 import dev.opencode.mobile.domain.live.SessionStatusLiveStore
 import dev.opencode.mobile.domain.message.DisplayMessage
 import dev.opencode.mobile.domain.message.DisplayMessageListUpdate
@@ -42,14 +44,18 @@ import dev.opencode.mobile.domain.session.SessionActivityEntry
 import dev.opencode.mobile.domain.session.SessionActivitySnapshot
 import dev.opencode.mobile.domain.session.SessionActivitySource
 import dev.opencode.mobile.domain.session.SessionDomainAdapter
+import dev.opencode.mobile.domain.session.SessionIdleOutcome
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionStatus
+import dev.opencode.mobile.domain.session.SessionSummary
 import dev.opencode.mobile.domain.sessioncache.NoOpSessionCache
+import dev.opencode.mobile.domain.sessioncache.SessionCache
 import dev.opencode.mobile.domain.sync.testSyncCoordinator
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.OpencodeSseHttpClient
 import dev.opencode.mobile.ui.components.SessionListScrollPin
+import dev.opencode.mobile.ui.components.SessionListStatus
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -58,8 +64,11 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -1119,6 +1128,164 @@ class MainScreenViewModelTest {
             assertTrue(summary.statusStale)
         }
 
+    @Test
+    fun v2Home_usesServerUnreadAndIgnoresLocalReadyIds() =
+        runTest(testDispatcher) {
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo"), serverProtocol = ServerProtocol.V2),
+                    sessionsByWorktree = mapOf("/repo" to readStateSessions()),
+                    readyStoreOverride = FixedReadyStore(readStateSessions().map { it.id }.toSet()),
+                    serverProtocol = ServerProtocol.V2,
+                )
+            advanceUntilIdle()
+
+            val byId = homeSummaries(viewModel)
+            assertEquals(SessionListStatus.Done, byId.getValue("ses-done").toSessionListStatus())
+            assertEquals(SessionListStatus.Failed, byId.getValue("ses-failed").toSessionListStatus())
+            assertEquals(SessionListStatus.Stopped, byId.getValue("ses-stopped").toSessionListStatus())
+            assertEquals(SessionListStatus.Idle, byId.getValue("ses-read").toSessionListStatus())
+            assertEquals(SessionListStatus.Idle, byId.getValue("ses-never-ran").toSessionListStatus())
+            assertTrue(byId.values.none { it.isReady })
+        }
+
+    @Test
+    fun v2Home_unreadOutcomeWaitsForSeededStatus() =
+        runTest(testDispatcher) {
+            // Running again, but an older run's `time.idle` is still unviewed.
+            val sessions = listOf(Session(id = "ses-1", title = "Chat", updatedAtEpochMs = 1L, idleAtEpochMs = 30L))
+            val running =
+                mapOf(
+                    "ses-1" to
+                        SessionActivityEntry(
+                            activity = SessionActivity.Running,
+                            source = SessionActivitySource.Server,
+                            observedAtMs = 0L,
+                        ),
+                )
+            val activity = MutableStateFlow(SessionActivitySnapshot(entries = running, seeded = false))
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo"), serverProtocol = ServerProtocol.V2),
+                    sessionsByWorktree = mapOf("/repo" to sessions),
+                    statusLiveStoreOverride = FakeHomeStatusLiveStore(activity),
+                    serverProtocol = ServerProtocol.V2,
+                )
+            advanceUntilIdle()
+
+            assertNull(homeSummaries(viewModel).getValue("ses-1").unreadOutcome)
+
+            activity.value = SessionActivitySnapshot(entries = running, seeded = true)
+            advanceUntilIdle()
+
+            val summary = homeSummaries(viewModel).getValue("ses-1")
+            assertEquals(SessionIdleOutcome.Succeeded, summary.unreadOutcome)
+            // The label wins over the outcome once both are painted.
+            assertEquals(SessionListStatus.Running, summary.toSessionListStatus())
+        }
+
+    @Test
+    fun v2Home_addingProjectNeverPaintsRunningSessionAsDoneFromCache() =
+        runTest(testDispatcher) {
+            val sessions = listOf(Session(id = "ses-1", title = "Chat", updatedAtEpochMs = 1L, idleAtEpochMs = 30L))
+            val running =
+                mapOf(
+                    "ses-1" to
+                        SessionActivityEntry(
+                            activity = SessionActivity.Running,
+                            source = SessionActivitySource.Server,
+                            observedAtMs = 0L,
+                        ),
+                )
+            val sessionsByWorktree = mapOf("/repo" to sessions, "/two" to emptyList())
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo"), serverProtocol = ServerProtocol.V2),
+                    sessionsByWorktree = sessionsByWorktree,
+                    statusLiveStoreOverride =
+                        FakeHomeStatusLiveStore(MutableStateFlow(SessionActivitySnapshot(entries = running, seeded = true))),
+                    serverProtocol = ServerProtocol.V2,
+                    sessionCache =
+                        object : SessionCache by NoOpSessionCache {
+                            override suspend fun seedSessions(worktree: String): List<Session>? = sessionsByWorktree[worktree]
+                        },
+                )
+            advanceUntilIdle()
+            assertEquals(SessionListStatus.Running, homeSummaries(viewModel).getValue("ses-1").toSessionListStatus())
+
+            val painted = mutableListOf<SessionListStatus>()
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+                viewModel.uiState.collect { state ->
+                    (state as? MainScreenUiState.Loaded)
+                        ?.sections
+                        ?.flatMap { it.allSessions }
+                        ?.firstOrNull { it.id == "ses-1" }
+                        ?.let { painted += it.toSessionListStatus() }
+                }
+            }
+            // Changing the worktree list repaints from cache before live observations restart.
+            viewModel.addProject("/two")
+            advanceUntilIdle()
+
+            assertTrue("painted $painted", SessionListStatus.Done !in painted)
+            assertEquals(SessionListStatus.Running, painted.last())
+        }
+
+    @Test
+    fun v1Home_keepsLocalReadyAndNeverShowsServerUnread() =
+        runTest(testDispatcher) {
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo"), serverProtocol = ServerProtocol.V1),
+                    sessionsByWorktree = mapOf("/repo" to readStateSessions()),
+                    readyStoreOverride = FixedReadyStore(setOf("ses-read")),
+                    serverProtocol = ServerProtocol.V1,
+                )
+            advanceUntilIdle()
+
+            val byId = homeSummaries(viewModel)
+            assertEquals(SessionListStatus.Ready, byId.getValue("ses-read").toSessionListStatus())
+            assertEquals(SessionListStatus.Idle, byId.getValue("ses-done").toSessionListStatus())
+            assertEquals(SessionListStatus.Idle, byId.getValue("ses-failed").toSessionListStatus())
+            assertTrue(byId.values.all { it.unreadOutcome == null })
+        }
+
+    private fun homeSummaries(viewModel: MainScreenViewModel): Map<String, SessionSummary> =
+        (viewModel.uiState.value as MainScreenUiState.Loaded)
+            .sections
+            .single()
+            .allSessions
+            .associateBy { it.id }
+
+    private fun readStateSessions(): List<Session> =
+        listOf(
+            Session(id = "ses-done", title = "Done", updatedAtEpochMs = 5L, idleAtEpochMs = 30L),
+            Session(
+                id = "ses-failed",
+                title = "Failed",
+                updatedAtEpochMs = 4L,
+                idleAtEpochMs = 30L,
+                viewedAtEpochMs = 10L,
+                idleOutcome = SessionIdleOutcome.Failed,
+            ),
+            Session(
+                id = "ses-stopped",
+                title = "Stopped",
+                updatedAtEpochMs = 3L,
+                idleAtEpochMs = 30L,
+                idleOutcome = SessionIdleOutcome.Interrupted,
+            ),
+            Session(
+                id = "ses-read",
+                title = "Read",
+                updatedAtEpochMs = 2L,
+                idleAtEpochMs = 30L,
+                viewedAtEpochMs = 30L,
+                idleOutcome = SessionIdleOutcome.Failed,
+            ),
+            Session(id = "ses-never-ran", title = "Never ran", updatedAtEpochMs = 1L),
+        )
+
     private fun createViewModel(
         shouldFailProbe: Boolean = false,
         connectionProfileStore: FakeConnectionProfileStore = FakeConnectionProfileStore(),
@@ -1135,6 +1302,9 @@ class MainScreenViewModelTest {
         filesystemRepository: FilesystemRepository = FakeFilesystemRepository(),
         sessionStatuses: List<SessionStatus> = emptyList(),
         statusLiveStoreOverride: SessionStatusLiveStore? = null,
+        readyStoreOverride: SessionReadyStore? = null,
+        serverProtocol: ServerProtocol? = null,
+        sessionCache: SessionCache = NoOpSessionCache,
         modelRepository: ModelRepository =
             object : ModelRepository {
                 override suspend fun listModelOptions(directory: String?): ModelSelectionCatalog = ModelSelectionCatalog(emptyList(), null)
@@ -1144,6 +1314,7 @@ class MainScreenViewModelTest {
         runBlocking {
             activeConnectionManager.applyProfile(
                 ConnectionProfile(baseUrl = serverUrl, username = "opencode", password = ""),
+                serverProtocol = serverProtocol,
             )
         }
         val coordinator =
@@ -1190,7 +1361,7 @@ class MainScreenViewModelTest {
                 coordinatorSync,
             )
         val sessionReadyStore =
-            DefaultSessionReadyStore(
+            readyStoreOverride ?: DefaultSessionReadyStore(
                 sessionStatusLiveStore,
                 eventStream,
                 liveStoreScope,
@@ -1209,7 +1380,7 @@ class MainScreenViewModelTest {
             sessionReadyStore = sessionReadyStore,
             activeConnectionManager = activeConnectionManager,
             connectionSessionCoordinator = coordinator,
-            sessionCache = NoOpSessionCache,
+            sessionCache = sessionCache,
         )
     }
 }
@@ -1456,6 +1627,7 @@ private class FakeMessageRepository(
 
 private class FakeConnectionProfileStore(
     initial: List<String> = emptyList(),
+    private val serverProtocol: ServerProtocol? = null,
 ) : ConnectionProfileStore {
     private val data = mutableMapOf<String, List<String>>()
 
@@ -1468,7 +1640,7 @@ private class FakeConnectionProfileStore(
     fun added(serverBaseUrl: String): List<String> = data[serverBaseUrl].orEmpty()
 
     override suspend fun activeProfile(): ConnectionProfile? =
-        ConnectionProfile(baseUrl = serverUrlKey(), username = "opencode", password = "")
+        ConnectionProfile(baseUrl = serverUrlKey(), username = "opencode", password = "", serverProtocol = serverProtocol)
 
     override suspend fun saveProfile(profile: ConnectionProfile) = Unit
 
@@ -1594,6 +1766,28 @@ private class FakeHomeStatusLiveStore(
     private val snapshots: MutableStateFlow<SessionActivitySnapshot>,
 ) : SessionStatusLiveStore {
     override fun observeActivity(directory: String): Flow<SessionActivitySnapshot> = snapshots
+
+    override fun clearCache() = Unit
+}
+
+private class FixedReadyStore(
+    private val readyIds: Set<String>,
+) : SessionReadyStore {
+    override fun observeReadyIds(directory: String): Flow<Set<String>> = flowOf(readyIds)
+
+    override fun notifyPromptSent(
+        sessionId: String,
+        directory: String,
+    ) = Unit
+
+    override fun setFocusedSession(
+        sessionId: String?,
+        directory: String?,
+    ) = Unit
+
+    override fun releaseFocusedSession(sessionId: String) = Unit
+
+    override fun bindProfile(profileId: String?) = Unit
 
     override fun clearCache() = Unit
 }

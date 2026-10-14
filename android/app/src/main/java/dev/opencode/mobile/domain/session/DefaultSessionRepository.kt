@@ -270,4 +270,12 @@ class DefaultSessionRepository
         ): Boolean =
             runCatching { remote.queuePendingPrompt(sessionId, inboxId, directory) }
                 .getOrElse { throw adapter.mapError(it) }
+
+        override suspend fun markSessionViewed(
+            sessionId: String,
+            idleAtEpochMs: Long,
+        ) {
+            runCatching { remote.markSessionViewed(sessionId, idleAtEpochMs) }
+                .getOrElse { throw adapter.mapError(it) }
+        }
     }

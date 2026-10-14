@@ -448,7 +448,8 @@ struct SessionChatView: View {
         content
             .sessionChatMessageActionsSheet(
                 target: $messageActionsTarget,
-                onRevertMessage: { viewModel.revertMessage($0) }
+                onRevertMessage: { viewModel.revertMessage($0) },
+                onForkFromMessage: { viewModel.openForkDialog(atMessageID: $0) }
             )
             .sessionChatPendingPromptsSheet(
                 isPresented: $showPendingPromptsSheet,
@@ -1010,6 +1011,20 @@ struct SessionChatView: View {
                         logOverflowAction(ProductAnalytics.Action.chatOverflowReviewChanges)
                         menuExpanded = false
                         changesTarget = viewModel.uiState.changesNavigationTarget(worktree: session.worktree)
+                    }
+                )
+            )
+        }
+        if viewModel.uiState.capabilities.showsChildSessions {
+            entries.append(
+                OpenCodeOverflowMenuEntry(
+                    title: "Fork session",
+                    icon: .callSplit,
+                    enabled: sessionCreated,
+                    action: {
+                        logOverflowAction(ProductAnalytics.Action.chatOverflowFork)
+                        menuExpanded = false
+                        viewModel.openForkDialog()
                     }
                 )
             )

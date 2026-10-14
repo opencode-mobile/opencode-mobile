@@ -178,4 +178,8 @@ struct V2SessionRemote: SessionRemote, Sendable {
     func queuePendingPrompt(sessionID: String, inboxID: String) async throws -> Bool {
         try await api.queueInboxV2(sessionID: sessionID, inboxID: inboxID)
     }
+
+    func markSessionViewed(sessionId: String, idleAtEpochMs: Int64) async throws {
+        _ = try await api.markSessionViewedV2(id: sessionId, idle: idleAtEpochMs)
+    }
 }

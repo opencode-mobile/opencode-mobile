@@ -39,17 +39,50 @@ final class SessionListStatusMappingTests: XCTestCase {
         XCTAssertEqual(live.tone, .interactive)
     }
 
-    /// Mirrors `SessionListItem.sessionListStatus` in ProjectListHomeView.
-    private func sessionListStatus(statusLabel: String?, isReady: Bool) -> SessionListStatus {
-        switch statusLabel {
-        case "Working":
-            return .running
-        case "Retrying":
-            return .retrying(attempt: nil)
-        case let label? where label.hasPrefix("Retrying · "):
-            return .retrying(attempt: Int(label.dropFirst("Retrying · ".count)))
-        default:
-            return isReady ? .ready : .idle
+    func testServerUnreadMapsOutcomeToDoneFailedStopped() {
+        XCTAssertEqual(sessionListStatus(statusLabel: nil, isReady: false, unreadOutcome: .succeeded), .done)
+        XCTAssertEqual(sessionListStatus(statusLabel: nil, isReady: false, unreadOutcome: .failed), .failed)
+        XCTAssertEqual(sessionListStatus(statusLabel: nil, isReady: false, unreadOutcome: .interrupted), .stopped)
+    }
+
+    func testRunningOutranksServerUnread() {
+        XCTAssertEqual(sessionListStatus(statusLabel: "Working", isReady: false, unreadOutcome: .succeeded), .running)
+        XCTAssertEqual(
+            sessionListStatus(statusLabel: "Retrying · 3", isReady: false, unreadOutcome: .failed),
+            .retrying(attempt: 3)
+        )
+    }
+
+    func testUnreadStatusesCopyToneAndAttention() {
+        let done = SessionListStatus.done.listItemStatus()
+        XCTAssertEqual(done.text, "Done")
+        XCTAssertEqual(done.tone, .success)
+        let failed = SessionListStatus.failed.listItemStatus()
+        XCTAssertEqual(failed.text, "Failed")
+        XCTAssertEqual(failed.tone, .error)
+        let stopped = SessionListStatus.stopped.listItemStatus()
+        XCTAssertEqual(stopped.text, "Stopped")
+        XCTAssertEqual(stopped.tone, .warning)
+        for status in [SessionListStatus.ready, .done, .failed, .stopped] {
+            XCTAssertTrue(status.isAttention)
+            XCTAssertTrue(status.isReady)
         }
+        XCTAssertFalse(SessionListStatus.idle.isAttention)
+        XCTAssertFalse(SessionListStatus.running.isReady)
+    }
+
+    private func sessionListStatus(
+        statusLabel: String?,
+        isReady: Bool,
+        unreadOutcome: SessionIdleOutcome? = nil
+    ) -> SessionListStatus {
+        SessionListItem(
+            id: "ses-1",
+            title: "Session",
+            worktree: "/repo",
+            statusLabel: statusLabel,
+            isReady: isReady,
+            unreadOutcome: unreadOutcome
+        ).sessionListStatus()
     }
 }

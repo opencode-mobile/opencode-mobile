@@ -3,6 +3,8 @@ package dev.opencode.mobile.ui.sessionchat.region
 import dev.opencode.mobile.domain.command.ClientSlashActionCatalog
 import dev.opencode.mobile.domain.command.ClientSlashMessageRef
 import dev.opencode.mobile.domain.engine.SessionCapabilities
+import dev.opencode.mobile.domain.composer.ComposerDraft
+import dev.opencode.mobile.domain.composer.ComposerDraftStore
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
@@ -10,9 +12,12 @@ import dev.opencode.mobile.domain.mcp.McpRepository
 import dev.opencode.mobile.domain.mcp.McpServerCatalog
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.model.ModelSelectionConnectionIdentity
 import dev.opencode.mobile.domain.model.NewSessionModelSelectionResolver
 import dev.opencode.mobile.domain.session.CompactionStart
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
+import dev.opencode.mobile.domain.session.Session
+import dev.opencode.mobile.domain.session.SessionForkTitle
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.ui.sessionchat.ChildSessionNavigationTarget
 import dev.opencode.mobile.ui.sessionchat.PendingTerminalOpen
@@ -42,6 +47,7 @@ class SessionChatCommands(
     private val newSessionModelSelectionResolver: NewSessionModelSelectionResolver,
     private val connectionSessionCoordinator: ConnectionSessionCoordinator,
     private val mcpRepository: McpRepository,
+    private val composerDraftStore: ComposerDraftStore,
     private val scope: CoroutineScope,
 ) {
     var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
@@ -56,6 +62,12 @@ class SessionChatCommands(
     private var boundWorktree: String? = null
     private var currentRevertMessageId: String? = null
     private var forkedTarget: ChildSessionNavigationTarget? = null
+
+    /** Message the open fork dialog forks from (history strictly before it); null forks at the tip. */
+    private var forkAtMessageId: String? = null
+
+    /** Text of [forkAtMessageId], saved as the new fork's composer draft. */
+    private var forkComposerPrefill: String? = null
     private var lastMessages: List<SessionChatMessageItem> = emptyList()
     private var lastHasSelectedComposerModel: Boolean = false
     private var lastDomainMessages: List<Message> = emptyList()
@@ -89,6 +101,8 @@ class SessionChatCommands(
         boundWorktree = worktree
         currentRevertMessageId = null
         forkedTarget = null
+        forkAtMessageId = null
+        forkComposerPrefill = null
         lastMessages = emptyList()
         lastHasSelectedComposerModel = false
         lastDomainMessages = emptyList()
@@ -287,12 +301,24 @@ class SessionChatCommands(
         }
     }
 
-    fun openForkDialog(currentTitle: String) {
+    /**
+     * Opens the fork name dialog. [atMessageId] forks from that user message (the server copies
+     * history strictly before it) and [messageText] becomes the fork's composer draft; null forks
+     * the whole session.
+     */
+    fun openForkDialog(
+        currentTitle: String,
+        atMessageId: String? = null,
+        messageText: String? = null,
+    ) {
         dismissCommands()
+        if (_state.value.forkSubmitting) return
+        forkAtMessageId = atMessageId
+        forkComposerPrefill = if (atMessageId != null) messageText?.takeIf { it.isNotBlank() } else null
         _state.update {
             it.copy(
                 forkDialogVisible = true,
-                forkDraftTitle = currentTitle,
+                forkDraftTitle = SessionForkTitle.suggested(currentTitle),
                 forkSubmitting = false,
                 forkErrorMessage = null,
             )
@@ -304,48 +330,92 @@ class SessionChatCommands(
     }
 
     fun cancelForkDialog() {
+        if (_state.value.forkSubmitting) return
+        forkAtMessageId = null
+        forkComposerPrefill = null
         _state.update { it.copy(forkDialogVisible = false, forkSubmitting = false, forkErrorMessage = null) }
     }
 
+    /**
+     * Forks, then renames the fork. A failed fork keeps the dialog open with the error; a failed
+     * rename still offers the created fork (under its server title) and reports a snackbar error,
+     * so a retry never creates a second fork.
+     */
     fun confirmFork() {
-        if (_state.value.forkSubmitting) return
+        val snapshot = _state.value
+        if (snapshot.forkSubmitting || !snapshot.forkDialogVisible) return
         val sessionId = boundSessionId ?: return
         val worktree = boundWorktree ?: return
-        val title = _state.value.forkDraftTitle.trim()
+        val title = snapshot.forkDraftTitle.trim()
         if (title.isEmpty()) {
             _state.update { it.copy(forkErrorMessage = "Enter a session title") }
             return
         }
+        val atMessageId = forkAtMessageId
+        val composerPrefill = forkComposerPrefill
         _state.update { it.copy(forkSubmitting = true, forkErrorMessage = null) }
         scope.launch(ioDispatcher) {
-            runCatching {
-                val forked = sessionRepository.forkSession(id = sessionId, atMessageId = null, directory = worktree)
-                sessionRepository.updateSession(id = forked.id, title = title, directory = worktree)
-            }.onSuccess { updated ->
-                logI("fork success sourceSession=$sessionId forkedSession=${updated.id}")
-                forkedTarget =
-                    ChildSessionNavigationTarget(
-                        sessionId = updated.id,
-                        sessionTitle = updated.title,
-                        worktree = worktree,
-                    )
-                _state.update {
-                    it.copy(
-                        forkDialogVisible = false,
-                        forkSubmitting = false,
-                        forkResultVisible = true,
-                        forkedSessionTitle = updated.title,
-                    )
+            val forked =
+                runCatching {
+                    sessionRepository.forkSession(id = sessionId, atMessageId = atMessageId, directory = worktree)
+                }.getOrElse { error ->
+                    if (error is CancellationException) throw error
+                    logW("fork failed sourceSession=$sessionId error=${error.message}")
+                    _state.update {
+                        it.copy(
+                            forkSubmitting = false,
+                            forkErrorMessage = error.message ?: "Couldn't fork session.",
+                        )
+                    }
+                    return@launch
                 }
-            }.onFailure { error ->
-                logW("fork failed sourceSession=$sessionId error=${error.message}")
-                _state.update {
-                    it.copy(
-                        forkSubmitting = false,
-                        forkErrorMessage = error.message ?: "Couldn't fork session.",
-                    )
-                }
+            logI("fork success sourceSession=$sessionId forkedSession=${forked.id} fromMessage=${atMessageId != null}")
+            forkAtMessageId = null
+            forkComposerPrefill = null
+            if (composerPrefill != null) {
+                saveForkComposerDraft(forkedSessionId = forked.id, worktree = worktree, text = composerPrefill)
             }
+            val renamed: Session? =
+                runCatching {
+                    sessionRepository.updateSession(id = forked.id, title = title, directory = worktree)
+                }.onFailure { error ->
+                    if (error is CancellationException) throw error
+                    logW("fork rename failed forkedSession=${forked.id} error=${error.message}")
+                }.getOrNull()
+            val result = renamed ?: forked
+            forkedTarget =
+                ChildSessionNavigationTarget(
+                    sessionId = result.id,
+                    sessionTitle = result.title,
+                    worktree = worktree,
+                )
+            _state.update {
+                it.copy(
+                    forkDialogVisible = false,
+                    forkSubmitting = false,
+                    forkErrorMessage = null,
+                    forkResultVisible = true,
+                    forkedSessionTitle = result.title,
+                    actionErrorMessage = if (renamed == null) FORK_RENAME_FAILURE else it.actionErrorMessage,
+                    actionSuccessMessage = if (renamed == null) null else it.actionSuccessMessage,
+                )
+            }
+        }
+    }
+
+    /** Stores [text] as the fork's composer draft; Session Chat's composer loads it when the fork binds. */
+    private suspend fun saveForkComposerDraft(
+        forkedSessionId: String,
+        worktree: String,
+        text: String,
+    ) {
+        val profile = connectionSessionCoordinator.currentProfile() ?: return
+        val identity = ModelSelectionConnectionIdentity(profile.baseUrl, profile.username)
+        runCatching {
+            composerDraftStore.save(identity, worktree, forkedSessionId, ComposerDraft(text = text))
+        }.onFailure { error ->
+            if (error is CancellationException) throw error
+            logW("fork composer draft save failed forkedSession=$forkedSessionId error=${error.message}")
         }
     }
 
@@ -583,5 +653,9 @@ class SessionChatCommands(
 
     private fun logW(message: String) {
         DiagnosticLog.warning(DiagnosticLogArea.Chat, message)
+    }
+
+    companion object {
+        const val FORK_RENAME_FAILURE = "Fork created, but it couldn't be renamed."
     }
 }

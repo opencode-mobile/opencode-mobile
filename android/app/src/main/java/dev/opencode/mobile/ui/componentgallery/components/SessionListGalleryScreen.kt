@@ -122,6 +122,39 @@ private val sessionListGallerySamples: List<SessionListSession>
                 updatedAtEpochMs = now - 3 * 3_600_000L,
             ),
             SessionListSession(
+                id = "session-done",
+                title = "Server Unread: Done",
+                worktree = "/Users/demo/playground",
+                letter = 'P',
+                letterAccent = LetterAccent.Teal,
+                subtitle = "/Users/demo/playground",
+                status = SessionListStatus.Done,
+                caption = "5m ago",
+                updatedAtEpochMs = now - 5 * 60_000L,
+            ),
+            SessionListSession(
+                id = "session-failed",
+                title = "Server Unread: Failed",
+                worktree = "/Users/demo/playground",
+                letter = 'P',
+                letterAccent = LetterAccent.Teal,
+                subtitle = "/Users/demo/playground",
+                status = SessionListStatus.Failed,
+                caption = "8m ago",
+                updatedAtEpochMs = now - 8 * 60_000L,
+            ),
+            SessionListSession(
+                id = "session-stopped",
+                title = "Server Unread: Stopped",
+                worktree = "/Users/demo/playground",
+                letter = 'P',
+                letterAccent = LetterAccent.Teal,
+                subtitle = "/Users/demo/playground",
+                status = SessionListStatus.Stopped,
+                caption = "11m ago",
+                updatedAtEpochMs = now - 11 * 60_000L,
+            ),
+            SessionListSession(
                 id = "session-retry",
                 title = "Retry Provider Error",
                 worktree = "/Users/demo/opencode-mobile",
@@ -160,13 +193,13 @@ private val sessionListGallerySamples: List<SessionListSession>
 
 private val sessionListGalleryFilterTabs =
     listOf(
-        SessionListFilterTab.all(projectCount = 3, sessionCount = 6),
+        SessionListFilterTab.all(projectCount = 3, sessionCount = 9),
         SessionListFilterTab.project(
             worktree = "/Users/demo/opencode-mobile",
             title = "opencode-mobile",
             count = 4,
         ),
-        SessionListFilterTab.project(worktree = "/Users/demo/playground", title = "playground", count = 1),
+        SessionListFilterTab.project(worktree = "/Users/demo/playground", title = "playground", count = 4),
         SessionListFilterTab.project(worktree = "/Users/demo/api-client", title = "api-client", count = 1),
     )
 

@@ -54,26 +54,37 @@ nonisolated struct ProjectsAPIClient: Sendable {
         try await get(path: "api/info")
     }
 
+    func getApiHealth() async throws -> HealthDTO {
+        try await get(path: "api/health")
+    }
+
     func getHealth() async throws -> HealthDTO {
         try await getGlobalHealth()
     }
 
-    /// Dual-probe health endpoints and return the detected protocol.
+    /// Probe health endpoints and return the detected protocol.
     func detectProtocol() async throws -> ServerProtocol {
         async let globalFetch = fetchHealth(path: "global/health") { try await getGlobalHealth() }
         async let infoFetch = fetchHealth(path: "api/info") { try await getApiInfo() }
+        async let apiHealthFetch = fetchHealth(path: "api/health") { try await getApiHealth() }
         let globalResult = await globalFetch
         let infoResult = await infoFetch
+        let apiHealthResult = await apiHealthFetch
         let resolvedGlobal = globalResult.health
         let resolvedInfo = infoResult.health
+        let resolvedApiHealth = apiHealthResult.health
         let lastError = ServerProtocolProbeErrors.prefer(
-            previous: globalResult.error,
-            next: infoResult.error
+            previous: ServerProtocolProbeErrors.prefer(
+                previous: globalResult.error,
+                next: infoResult.error
+            ),
+            next: apiHealthResult.error
         )
 
         guard let detected = ServerProtocolClassifier.classify(
             globalHealth: resolvedGlobal,
-            apiInfo: resolvedInfo
+            apiInfo: resolvedInfo,
+            apiHealth: resolvedApiHealth
         ) else {
             throw adapter.mapProbeError(
                 ServerProtocolProbeErrors.unresolved(
@@ -89,8 +100,11 @@ nonisolated struct ProjectsAPIClient: Sendable {
                 try adapter.requireHealthy(resolvedGlobal)
             }
         case .v2:
-            if let resolvedInfo, resolvedInfo.pid != nil, resolvedInfo.healthy == false {
-                throw ServerProbeError.unhealthy(version: resolvedInfo.version)
+            if let payload = ServerProtocolClassifier.v2Health(
+                apiInfo: resolvedInfo,
+                apiHealth: resolvedApiHealth
+            ), payload.pid != nil, payload.healthy == false {
+                throw ServerProbeError.unhealthy(version: payload.version)
             }
         }
 

@@ -25,9 +25,11 @@ import dev.opencode.mobile.domain.live.DefaultSessionStatusLiveStore
 import dev.opencode.mobile.domain.live.EmptySessionReadyStore
 import dev.opencode.mobile.domain.live.LiveStoreRefreshPolicy
 import dev.opencode.mobile.domain.live.LiveStoreScope
+import dev.opencode.mobile.domain.live.NoOpSessionViewReporter
 import dev.opencode.mobile.domain.live.PermissionLiveStore
 import dev.opencode.mobile.domain.live.QuestionLiveStore
 import dev.opencode.mobile.domain.live.SessionReadyStore
+import dev.opencode.mobile.domain.live.SessionViewReporter
 import dev.opencode.mobile.domain.message.Attachment
 import dev.opencode.mobile.domain.message.AttachmentKind
 import dev.opencode.mobile.domain.message.AttachmentLimits
@@ -1332,6 +1334,44 @@ class SessionChatViewModelTest {
 
             assertEquals(listOf("ses-1"), readyStore.releaseCalls)
             assertTrue(readyStore.focusCalls.none { it.first == null })
+        }
+
+    @Test
+    fun sessionViewReporter_followsChatFocus() =
+        runTest(testDispatcher) {
+            val reporter = RecordingSessionViewReporter()
+            val viewModel = createViewModel(FakeMessageRepository(), sessionViewReporter = reporter)
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            viewModel.clearSessionReadyFocus()
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertEquals(listOf("ses-1", "ses-1"), reporter.focusCalls)
+            assertEquals(listOf("ses-1"), reporter.releaseCalls)
+        }
+
+    @Test
+    fun sessionViewReporter_focusesPromotedOptimisticSession() =
+        runTest(testDispatcher) {
+            val reporter = RecordingSessionViewReporter()
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository =
+                        FakeSessionRepository(
+                            createSessionResult = Session(id = "ses-new", title = "Created", directory = "/repo"),
+                        ),
+                    sessionViewReporter = reporter,
+                )
+
+            viewModel.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, "New Session", "/repo")
+            advanceUntilIdle()
+            viewModel.clearSessionReadyFocus()
+
+            assertEquals(listOf("ses-new"), reporter.focusCalls)
+            assertEquals(listOf("ses-new"), reporter.releaseCalls)
         }
 
     @Test
@@ -3894,7 +3934,7 @@ class SessionChatViewModelTest {
             viewModel.runClientSlashAction(ClientSlashAction.Fork)
             runCurrent()
             assertTrue(viewModel.uiState.value.forkDialogVisible)
-            assertEquals("Original", viewModel.uiState.value.forkDraftTitle)
+            assertEquals("Fork of Original", viewModel.uiState.value.forkDraftTitle)
             assertFalse(viewModel.uiState.value.commandsSheetVisible)
 
             viewModel.updateForkDraft("Forked copy")
@@ -3962,6 +4002,233 @@ class SessionChatViewModelTest {
             assertTrue(viewModel.uiState.value.forkDialogVisible)
             assertFalse(viewModel.uiState.value.forkSubmitting)
             assertNotNull(viewModel.uiState.value.forkErrorMessage)
+        }
+
+    @Test
+    fun openForkSession_overflow_forksAtTipWithPrefilledTitle() =
+        runTest(testDispatcher) {
+            val draftStore =
+                dev.opencode.mobile.domain.composer
+                    .InMemoryComposerDraftStore()
+            val sessionRepository =
+                FakeSessionRepository(
+                    forkSessionResult = Session(id = "ses-3", title = "Original", directory = "/repo"),
+                )
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                    composerDraftStore = draftStore,
+                )
+            viewModel.bind("ses-1", "  Original  ", "/repo")
+            advanceUntilIdle()
+
+            viewModel.openForkSession()
+            runCurrent()
+            assertTrue(viewModel.uiState.value.forkDialogVisible)
+            assertEquals("Fork of Original", viewModel.uiState.value.forkDraftTitle)
+
+            viewModel.confirmFork()
+            advanceUntilIdle()
+
+            assertEquals(
+                FakeSessionRepository.ForkRequest(id = "ses-1", atMessageId = null, directory = "/repo"),
+                sessionRepository.forkSessionRequest,
+            )
+            assertEquals(
+                FakeSessionRepository.UpdateRequest(id = "ses-3", title = "Fork of Original", directory = "/repo"),
+                sessionRepository.updateRequest,
+            )
+            assertTrue(viewModel.uiState.value.forkResultVisible)
+            assertEquals("Fork of Original", viewModel.uiState.value.forkedSessionTitle)
+            assertNull(viewModel.uiState.value.snackbar)
+            assertNull(
+                draftStore.load(
+                    ModelSelectionConnectionIdentity("http://127.0.0.1:4096/", "opencode"),
+                    "/repo",
+                    "ses-3",
+                ),
+            )
+        }
+
+    @Test
+    fun openForkSession_blankTitle_prefillsForkedSession() =
+        runTest(testDispatcher) {
+            val viewModel = createViewModel(repository = FakeMessageRepository())
+            viewModel.bind("ses-1", "   ", "/repo")
+            advanceUntilIdle()
+
+            viewModel.openForkSession()
+            runCurrent()
+
+            assertTrue(viewModel.uiState.value.forkDialogVisible)
+            assertEquals("Forked session", viewModel.uiState.value.forkDraftTitle)
+        }
+
+    @Test
+    fun forkFromMessage_passesMessageIdAndPrefillsForkComposer() =
+        runTest(testDispatcher) {
+            val draftStore =
+                dev.opencode.mobile.domain.composer
+                    .InMemoryComposerDraftStore()
+            val sessionRepository =
+                FakeSessionRepository(
+                    forkSessionResult = Session(id = "ses-3", title = "Original", directory = "/repo"),
+                )
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                    composerDraftStore = draftStore,
+                )
+            viewModel.bind("ses-1", "Original", "/repo")
+            advanceUntilIdle()
+
+            viewModel.forkFromMessage(messageId = "msg-2", messageText = "Try a different approach")
+            runCurrent()
+            assertTrue(viewModel.uiState.value.forkDialogVisible)
+            assertEquals("Fork of Original", viewModel.uiState.value.forkDraftTitle)
+
+            viewModel.confirmFork()
+            advanceUntilIdle()
+
+            assertEquals(
+                FakeSessionRepository.ForkRequest(id = "ses-1", atMessageId = "msg-2", directory = "/repo"),
+                sessionRepository.forkSessionRequest,
+            )
+            assertEquals(
+                "Try a different approach",
+                draftStore
+                    .load(
+                        ModelSelectionConnectionIdentity("http://127.0.0.1:4096/", "opencode"),
+                        "/repo",
+                        "ses-3",
+                    )?.text,
+            )
+            assertTrue(viewModel.uiState.value.forkResultVisible)
+
+            viewModel.chooseForkOpen()
+            runCurrent()
+            assertEquals(
+                "ses-3",
+                viewModel.uiState.value.pendingSessionReplace
+                    ?.sessionId,
+            )
+
+            val fork = createViewModel(FakeMessageRepository(), composerDraftStore = draftStore)
+            fork.bind("ses-3", "Fork of Original", "/repo")
+            advanceUntilIdle()
+            assertEquals("Try a different approach", fork.uiState.value.composer.text)
+        }
+
+    @Test
+    fun confirmFork_renameFailure_offersForkOnceAndShowsSnackbar() =
+        runTest(testDispatcher) {
+            val draftStore =
+                dev.opencode.mobile.domain.composer
+                    .InMemoryComposerDraftStore()
+            val sessionRepository =
+                FakeSessionRepository(
+                    forkSessionResult = Session(id = "ses-3", title = "Original (fork #1)", directory = "/repo"),
+                    updateSessionError = SessionError.Http(500, "boom"),
+                )
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                    composerDraftStore = draftStore,
+                )
+            viewModel.bind("ses-1", "Original", "/repo")
+            advanceUntilIdle()
+
+            viewModel.forkFromMessage(messageId = "msg-2", messageText = "Try again")
+            viewModel.confirmFork()
+            advanceUntilIdle()
+            viewModel.confirmFork()
+            advanceUntilIdle()
+
+            assertEquals(1, sessionRepository.forkSessionCallCount)
+            assertFalse(viewModel.uiState.value.forkDialogVisible)
+            assertFalse(viewModel.uiState.value.forkSubmitting)
+            assertTrue(viewModel.uiState.value.forkResultVisible)
+            assertEquals("Original (fork #1)", viewModel.uiState.value.forkedSessionTitle)
+            val snackbar = requireNotNull(viewModel.uiState.value.snackbar)
+            assertEquals("Fork created, but it couldn't be renamed.", snackbar.message)
+            assertEquals(SessionChatSnackbarTone.Error, snackbar.tone)
+            assertEquals(
+                "Try again",
+                draftStore
+                    .load(
+                        ModelSelectionConnectionIdentity("http://127.0.0.1:4096/", "opencode"),
+                        "/repo",
+                        "ses-3",
+                    )?.text,
+            )
+
+            viewModel.chooseForkOpen()
+            runCurrent()
+            assertEquals(
+                ChildSessionNavigationTarget(sessionId = "ses-3", sessionTitle = "Original (fork #1)", worktree = "/repo"),
+                viewModel.uiState.value.pendingSessionReplace,
+            )
+        }
+
+    @Test
+    fun forkFromMessage_forkFailure_keepsDialogOpenWithoutDraft() =
+        runTest(testDispatcher) {
+            val draftStore =
+                dev.opencode.mobile.domain.composer
+                    .InMemoryComposerDraftStore()
+            val sessionRepository = FakeSessionRepository(forkSessionError = SessionError.Http(500, "boom"))
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                    composerDraftStore = draftStore,
+                )
+            viewModel.bind("ses-1", "Original", "/repo")
+            advanceUntilIdle()
+
+            viewModel.forkFromMessage(messageId = "msg-2", messageText = "Try again")
+            viewModel.confirmFork()
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.forkDialogVisible)
+            assertFalse(viewModel.uiState.value.forkSubmitting)
+            assertFalse(viewModel.uiState.value.forkResultVisible)
+            assertNotNull(viewModel.uiState.value.forkErrorMessage)
+            assertNull(sessionRepository.updateRequest)
+            assertNull(
+                draftStore.load(
+                    ModelSelectionConnectionIdentity("http://127.0.0.1:4096/", "opencode"),
+                    "/repo",
+                    "forked-ses",
+                ),
+            )
+        }
+
+    @Test
+    fun forkDialog_cancelOrBlankTitle_makesNoRepositoryCalls() =
+        runTest(testDispatcher) {
+            val sessionRepository = FakeSessionRepository()
+            val viewModel = createViewModel(repository = FakeMessageRepository(), sessionRepository = sessionRepository)
+            viewModel.bind("ses-1", "Original", "/repo")
+            advanceUntilIdle()
+
+            viewModel.forkFromMessage(messageId = "msg-2", messageText = "Try again")
+            viewModel.cancelForkDialog()
+            advanceUntilIdle()
+            assertFalse(viewModel.uiState.value.forkDialogVisible)
+
+            viewModel.openForkSession()
+            viewModel.updateForkDraft("   ")
+            viewModel.confirmFork()
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.forkDialogVisible)
+            assertEquals("Enter a session title", viewModel.uiState.value.forkErrorMessage)
+            assertEquals(0, sessionRepository.forkSessionCallCount)
+            assertNull(sessionRepository.updateRequest)
         }
 
     @Test
@@ -5409,6 +5676,54 @@ class SessionChatViewModelTest {
             assertEquals("ger", state.dictation?.volatile)
         }
 
+    @Test
+    fun dictationStopped_keepsTranscriptRestsOrbAndStillInserts() =
+        runTest(testDispatcher) {
+            val viewModel = dictationViewModel()
+            viewModel.updateComposerText("Hello there", cursor = 5)
+            advanceUntilIdle()
+            viewModel.beginDictation("English", onDevice = true)
+            viewModel.dictationPartial(committed = " big", volatile = "")
+            viewModel.dictationLevel(0.8f)
+            viewModel.dictationStopped()
+
+            val stopped = viewModel.uiState.value.dictation
+            assertEquals(ComposerDictationPhase.Stopped, stopped?.phase)
+            assertEquals(" big", stopped?.committed)
+            assertEquals(0f, stopped?.level)
+
+            // Nothing more arrives from a stopped recognizer, but stray callbacks are ignored.
+            viewModel.dictationPartial(committed = " big extra", volatile = "")
+            viewModel.dictationLevel(0.5f)
+            val afterStray = viewModel.uiState.value.dictation
+            assertEquals(" big", afterStray?.committed)
+            assertEquals(0f, afterStray?.level)
+
+            viewModel.dictationInsert()
+            advanceUntilIdle()
+
+            val composer = viewModel.uiState.value.composer
+            assertEquals("Hello big there", composer.text)
+            assertEquals(9, composer.cursor)
+            assertNull(viewModel.uiState.value.dictation)
+        }
+
+    @Test
+    fun dictationStopped_outsideListening_isIgnored() =
+        runTest(testDispatcher) {
+            val viewModel = dictationViewModel()
+            viewModel.dictationStopped()
+            assertNull(viewModel.uiState.value.dictation)
+
+            viewModel.dictationFinishDelayMs = 1_000
+            viewModel.beginDictation("English", onDevice = true)
+            viewModel.dictationPartial(committed = "big", volatile = "")
+            viewModel.dictationInsert()
+            viewModel.dictationStopped()
+            val finishing = viewModel.uiState.value.dictation
+            assertEquals(ComposerDictationPhase.Finishing, finishing?.phase)
+        }
+
     private fun TestScope.dictationViewModel(): SessionChatViewModel {
         val viewModel = createViewModel(FakeMessageRepository())
         viewModel.dictationFinishDelayMs = 0
@@ -5465,6 +5780,7 @@ class SessionChatViewModelTest {
         liveUpdates: LiveUpdates = FixedLiveUpdates(),
         catalogRetryDelaysMs: List<Long> = emptyList(),
         modelCatalogStore: ModelCatalogStore? = null,
+        sessionViewReporter: SessionViewReporter = NoOpSessionViewReporter,
     ): SessionChatViewModel {
         val eventStream = repository.eventStream
         val liveStoreScope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
@@ -5536,6 +5852,7 @@ class SessionChatViewModelTest {
             connectionProfileStore = connectionProfileStore,
             activeConnectionManager = activeConnectionManager,
             liveUpdates = liveUpdates,
+            sessionViewReporter = sessionViewReporter,
         ).apply {
             ioDispatcher = testDispatcher
             nowMs = { testDispatcher.scheduler.currentTime }
@@ -5917,6 +6234,21 @@ class SessionChatViewModelTest {
 
     // endregion
 
+}
+
+private class RecordingSessionViewReporter : SessionViewReporter {
+    val focusCalls = mutableListOf<String>()
+    val releaseCalls = mutableListOf<String>()
+
+    override fun focus(sessionId: String) {
+        focusCalls.add(sessionId)
+    }
+
+    override fun release(sessionId: String) {
+        releaseCalls.add(sessionId)
+    }
+
+    override fun clearCache() = Unit
 }
 
 private class RecordingSessionReadyStore : SessionReadyStore {
@@ -6455,6 +6787,8 @@ private class FakeSessionRepository(
         private set
     var forkSessionRequest: ForkRequest? = null
         private set
+    var forkSessionCallCount: Int = 0
+        private set
     var revertRequest: RevertRequest? = null
         private set
     var unrevertRequest: LifecycleRequest? = null
@@ -6614,6 +6948,7 @@ private class FakeSessionRepository(
         atMessageId: String?,
         directory: String?,
     ): Session {
+        forkSessionCallCount += 1
         forkSessionRequest = ForkRequest(id = id, atMessageId = atMessageId, directory = directory)
         forkSessionError?.let { throw it }
         return forkSessionResult ?: Session(id = "forked-ses", title = "Untitled", directory = directory)
