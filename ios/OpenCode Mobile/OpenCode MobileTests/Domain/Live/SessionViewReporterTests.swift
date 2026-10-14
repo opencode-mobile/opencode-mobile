@@ -313,6 +313,32 @@ struct SessionLiveStoreViewedTests {
         #expect(collector.latest?.first?.isServerUnread == false)
     }
 
+    @Test func viewedDuringRefreshCacheWriteSurvivesPublish() async {
+        let repository = ViewedFakeSessionRepository(session: listedSession(idle: 100, viewed: nil))
+        let eventStream = FakeForegroundEventStream()
+        let cache = SuspendingSessionCache()
+        let store = makeStore(repository: repository, eventStream: eventStream, sessionCache: cache)
+        let collector = SnapshotCollector(stream: store.observeSessions(directory: "/repo"))
+        defer { collector.cancel() }
+        #expect(await viewedWaitUntil { collector.latest?.first?.isServerUnread == true })
+        #expect(await viewedWaitUntil { eventStream.eventSubscriberCount >= 2 })
+
+        // The refresh loads the stale (unviewed) list, then suspends in the cache write.
+        cache.suspendNextWrite()
+        eventStream.emit(OpencodeEvent(type: "session.updated", sessionID: "ses-1"))
+        #expect(await viewedWaitUntil(timeoutMs: 3_000) { cache.isSuspended })
+
+        store.applySessionViewed(sessionId: "ses-1", idleAtEpochMs: 100)
+        #expect(await viewedWaitUntil { collector.latest?.first?.isServerUnread == false })
+
+        let writes = cache.completedWrites
+        cache.resume()
+        #expect(await viewedWaitUntil { cache.completedWrites > writes })
+        try? await Task.sleep(for: .milliseconds(100))
+        #expect(collector.latest?.first?.viewedAtEpochMs == 100)
+        #expect(collector.latest?.first?.isServerUnread == false)
+    }
+
     @Test func v2RunEndRefetchesListForIdleAndOutcome() async {
         let repository = ViewedFakeSessionRepository(session: listedSession(idle: nil, viewed: nil))
         let eventStream = FakeForegroundEventStream()
@@ -353,12 +379,13 @@ struct SessionLiveStoreViewedTests {
     private func makeStore(
         repository: ViewedFakeSessionRepository,
         eventStream: FakeForegroundEventStream,
-        serverProtocol: ServerProtocol = .v2
+        serverProtocol: ServerProtocol = .v2,
+        sessionCache: any SessionCache = NoOpSessionCache.shared
     ) -> DefaultSessionLiveStore {
         DefaultSessionLiveStore(
             sessionRepository: repository,
             eventStream: eventStream,
-            sessionCache: NoOpSessionCache.shared,
+            sessionCache: sessionCache,
             capabilities: { .forProtocol(serverProtocol) }
         )
     }
@@ -495,6 +522,58 @@ private final class ViewedFakeSessionLiveStore: SessionLiveStore {
         if let known, known.id == sessionId {
             emitKnown(known.withViewed(idleAtEpochMs: idleAtEpochMs))
         }
+    }
+}
+
+/// Session cache whose next `rememberSessions` suspends until ``resume()``.
+private final class SuspendingSessionCache: SessionCache, @unchecked Sendable {
+    private let lock = NSLock()
+    private var suspendNext = false
+    private var waiter: CheckedContinuation<Void, Never>?
+    private var _completedWrites = 0
+
+    var isSuspended: Bool { locked { waiter != nil } }
+    var completedWrites: Int { locked { _completedWrites } }
+
+    func suspendNextWrite() {
+        locked { suspendNext = true }
+    }
+
+    func resume() {
+        let pending: CheckedContinuation<Void, Never>? = locked {
+            defer { waiter = nil }
+            return waiter
+        }
+        pending?.resume()
+    }
+
+    func seedSessions(worktree _: String) async -> [Session]? { nil }
+
+    func rememberSessions(worktree _: String, sessions _: [Session]) async {
+        let shouldSuspend: Bool = locked {
+            defer { suspendNext = false }
+            return suspendNext
+        }
+        if shouldSuspend {
+            await withCheckedContinuation { continuation in
+                locked { waiter = continuation }
+            }
+        }
+        locked { _completedWrites += 1 }
+    }
+
+    func openMessages(sessionID _: String, worktree _: String) -> any SessionMessageCacheHandle {
+        NoOpSessionCache.shared.openMessages(sessionID: "", worktree: "")
+    }
+
+    func purgeWorktree(serverBaseURL _: String, worktree _: String) async {}
+    func clearAll() async {}
+    func estimatedSizeBytes() async -> Int64 { 0 }
+
+    private func locked<T>(_ body: () -> T) -> T {
+        lock.lock()
+        defer { lock.unlock() }
+        return body()
     }
 }
 

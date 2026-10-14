@@ -147,7 +147,12 @@ final class DefaultSessionLiveStore: SessionLiveStore {
                     // REST can race a `session.viewed`; the viewed watermark only moves forward.
                     let sessions = viewedWatermarks.apply(to: loaded)
                     await sessionCache.rememberSessions(worktree: directory, sessions: sessions)
-                    loop.publish(SessionListSnapshot(sessions: sessions, isFromCache: false))
+                    // A view can land during the cache write; re-apply under the loop lock so the
+                    // publish cannot overwrite it with the pre-await list.
+                    loop.publish(
+                        SessionListSnapshot(sessions: sessions, isFromCache: false),
+                        applying: viewedWatermarks
+                    )
                     DiagnosticLog.info(
                         .session,
                         "sessionLiveStore refresh directory=\(directory) count=\(sessions.count)"
@@ -168,7 +173,7 @@ final class DefaultSessionLiveStore: SessionLiveStore {
 
         if let seeded = await sessionCache.seedSessions(worktree: directory) {
             ResumeTiming.shared.markCachePainted()
-            loop.publish(SessionListSnapshot(sessions: viewedWatermarks.apply(to: seeded), isFromCache: true))
+            loop.publish(SessionListSnapshot(sessions: seeded, isFromCache: true), applying: viewedWatermarks)
         }
         await syncCoordinator.ensureFresh(key)
 
@@ -261,12 +266,17 @@ nonisolated final class SessionListLoopState: @unchecked Sendable {
         self.onPublish = onPublish
     }
 
-    func publish(_ snapshot: SessionListSnapshot) {
+    /// Publishes `snapshot`. With `watermarks`, they are applied under the same lock as
+    /// ``applyViewed(sessionId:watermarks:)``, so a view raised before this call is never lost.
+    func publish(_ snapshot: SessionListSnapshot, applying watermarks: SessionViewedWatermarks? = nil) {
         lock.lock()
         defer { lock.unlock() }
-        latest = snapshot
-        yield(snapshot)
-        onPublish(snapshot.sessions)
+        let published = watermarks.map {
+            SessionListSnapshot(sessions: $0.apply(to: snapshot.sessions), isFromCache: snapshot.isFromCache)
+        } ?? snapshot
+        latest = published
+        yield(published)
+        onPublish(published.sessions)
     }
 
     func session(id: String) -> Session? {

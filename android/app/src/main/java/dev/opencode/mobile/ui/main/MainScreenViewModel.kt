@@ -119,6 +119,9 @@ class MainScreenViewModel
         private var liveObservationJobs: List<Job> = emptyList()
         private var observedWorktrees: List<String> = emptyList()
 
+        // Worktrees whose live status snapshot is seeded; unread outcomes wait for it (iOS parity).
+        private val statusSeededWorktrees = mutableSetOf<String>()
+
         // Title fields report one edit per dialog appearance instead of per keystroke.
         private var renameDraftEditReported = false
         private var forkDraftEditReported = false
@@ -771,7 +774,7 @@ class MainScreenViewModel
                 sessions.map { session ->
                     sessionDomainAdapter.toSessionSummary(
                         session,
-                        unreadOutcome = session.homeUnreadOutcome(supportsSessionViewed()),
+                        unreadOutcome = homeUnreadOutcome(session, worktree),
                     )
                 }
             val displayName = ProjectDomainAdapter.displayNameFromWorktree(worktree)
@@ -820,7 +823,7 @@ class MainScreenViewModel
                 sessions.map { session ->
                     sessionDomainAdapter.toSessionSummary(
                         session,
-                        unreadOutcome = session.homeUnreadOutcome(supportsSessionViewed()),
+                        unreadOutcome = homeUnreadOutcome(session, worktree),
                     )
                 }
             return ProjectSectionUi(
@@ -969,6 +972,7 @@ class MainScreenViewModel
             liveObservationJobs.forEach { it.cancel() }
             liveObservationJobs = emptyList()
             observedWorktrees = emptyList()
+            statusSeededWorktrees.clear()
         }
 
         private fun liveObservationsRunning(worktrees: List<String>): Boolean =
@@ -985,6 +989,7 @@ class MainScreenViewModel
             val section = state.sections.firstOrNull { it.worktree == worktree } ?: return
             // v2 servers own read state; the local per-device Ready ids stay a v1 fallback.
             val serverReadState = supportsSessionViewed()
+            if (snapshot.seeded) statusSeededWorktrees += worktree else statusSeededWorktrees -= worktree
             val summaries =
                 sessions
                     .activeSessions()
@@ -1001,7 +1006,7 @@ class MainScreenViewModel
                                 },
                             isReady = !serverReadState && session.id in readyIds,
                             statusStale = snapshot.fromCache && !snapshot.seeded,
-                            unreadOutcome = session.homeUnreadOutcome(serverReadState),
+                            unreadOutcome = homeUnreadOutcome(session, worktree),
                         )
                     }
             val updatedSection =
@@ -1017,6 +1022,18 @@ class MainScreenViewModel
         }
 
         private fun supportsSessionViewed(): Boolean = activeConnectionManager.currentCapabilities().supportsSessionViewed
+
+        /**
+         * Null until the worktree's status snapshot is seeded: a session running again with an
+         * older unviewed `time.idle` must not paint Done/Failed before its status is known.
+         */
+        private fun homeUnreadOutcome(
+            session: Session,
+            worktree: String,
+        ): SessionIdleOutcome? {
+            if (worktree !in statusSeededWorktrees) return null
+            return session.homeUnreadOutcome(supportsSessionViewed())
+        }
 
         private fun clearProjectSessionCreateError() {
             setProjectSessionCreateError(null)

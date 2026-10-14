@@ -1147,6 +1147,38 @@ class MainScreenViewModelTest {
         }
 
     @Test
+    fun v2Home_unreadOutcomeWaitsForSeededStatus() =
+        runTest(testDispatcher) {
+            // Running again, but an older run's `time.idle` is still unviewed.
+            val sessions = listOf(Session(id = "ses-1", title = "Chat", updatedAtEpochMs = 1L, idleAtEpochMs = 30L))
+            val running =
+                mapOf(
+                    "ses-1" to
+                        SessionActivityEntry(
+                            activity = SessionActivity.Running,
+                            source = SessionActivitySource.Server,
+                            observedAtMs = 0L,
+                        ),
+                )
+            val activity = MutableStateFlow(SessionActivitySnapshot(entries = running, seeded = false))
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo"), serverProtocol = ServerProtocol.V2),
+                    sessionsByWorktree = mapOf("/repo" to sessions),
+                    statusLiveStoreOverride = FakeHomeStatusLiveStore(activity),
+                    serverProtocol = ServerProtocol.V2,
+                )
+            advanceUntilIdle()
+
+            assertNull(homeSummaries(viewModel).getValue("ses-1").unreadOutcome)
+
+            activity.value = SessionActivitySnapshot(entries = running, seeded = true)
+            advanceUntilIdle()
+
+            assertEquals(SessionIdleOutcome.Succeeded, homeSummaries(viewModel).getValue("ses-1").unreadOutcome)
+        }
+
+    @Test
     fun v1Home_keepsLocalReadyAndNeverShowsServerUnread() =
         runTest(testDispatcher) {
             val viewModel =
