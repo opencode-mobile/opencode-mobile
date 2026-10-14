@@ -4,7 +4,7 @@
  *   /<file>           renderer/ static files
  *   /tokens           shared/theme-presets/porcelain.json
  *   /icon.png         play-listing/icon-512.png
- *   /shots/*          store screenshots dir (default <repo>/store-screenshots)
+ *   /shots/*          store screenshots dir (default <repo>/store-screenshots; nested or flat names)
  *   /fonts/<family>/* @fontsource/ibm-plex-sans | @fontsource/ibm-plex-mono
  *   /vendor/html-to-image.js  (editor download only)
  *   /api/presets      GET list · /api/presets/<name> GET one, PUT save (validated)
@@ -39,6 +39,27 @@ const FONT_PACKAGES = { "ibm-plex-sans": "@fontsource/ibm-plex-sans", "ibm-plex-
 function inside(root, rel) {
   const p = resolve(root, `.${sep}${normalizePath(decodeURIComponent(rel))}`);
   return p === root || p.startsWith(root + sep) ? p : null;
+}
+
+/**
+ * Flat screenshot names (`iphone-16-pro-max_02-chat-code_dark.png`, as in
+ * `.snapshot-evidence/out/`) by the store-screenshots device folder they stand in for.
+ */
+const FLAT_DEVICE_PREFIX = { "ios-6.9": "iphone", "android-phone": "android-phone", "ipad-13": "ipad", "android-tab10": "android-tablet" };
+
+/**
+ * Resolve `/shots/<device>/<mode>/<screen>.png` under `root`: the nested
+ * store-screenshots layout first, then a flat `<device…>_<screen>_<mode>.png` file.
+ */
+export function resolveShot(root, rel) {
+  const nested = inside(root, rel);
+  if (nested && existsSync(nested)) return nested;
+  const m = /^([^/]+)\/(dark|light)\/([^/]+)\.png$/.exec(decodeURIComponent(rel));
+  const prefix = m && FLAT_DEVICE_PREFIX[m[1]];
+  if (!prefix || !existsSync(root)) return nested;
+  const suffix = `_${m[3]}_${m[2]}.png`;
+  const flat = readdirSync(root).find((f) => f.startsWith(prefix) && f.endsWith(suffix) && !f.slice(prefix.length, -suffix.length).includes("_"));
+  return flat ? join(root, flat) : nested;
 }
 
 function sendFile(res, file, cache = "no-cache") {
@@ -107,7 +128,7 @@ export function startServer({ port = 0, host = "127.0.0.1", shotsDir = DEFAULT_S
       if (p === "/" || p === "/index.html") return sendFile(res, join(RENDERER_DIR, "index.html"));
       if (p === "/tokens") return sendFile(res, join(REPO_ROOT, "shared/theme-presets/porcelain.json"));
       if (p === "/icon.png" || p === "/favicon.ico") return sendFile(res, join(REPO_ROOT, "play-listing/icon-512.png"), "max-age=3600");
-      if (p.startsWith("/shots/")) return sendFile(res, inside(shotsRoot, p.slice(7)), "max-age=60");
+      if (p.startsWith("/shots/")) return sendFile(res, resolveShot(shotsRoot, p.slice(7)), "max-age=60");
       if (p.startsWith("/fonts/")) {
         const [, , family, ...rest] = p.split("/");
         const pkg = FONT_PACKAGES[family];

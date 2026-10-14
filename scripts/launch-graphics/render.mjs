@@ -9,7 +9,7 @@
  *   --set key=value        repeatable dot-path override, e.g. --set copy.headline="Ship it." --set composition=pair
  *   --out <dir>            default <repo>/launch-graphics/
  *   --scale <n>            device scale factor, default 2
- *   --shots <dir>          store screenshots (default <repo>/store-screenshots)
+ *   --shots <dir>          screenshots: store-screenshots layout or flat <device>_<screen>_<mode>.png (default <repo>/store-screenshots)
  *   --list [--json]        compositions, moments, formats, devices, presets
  * Chrome: /Applications/Google Chrome.app/... or CHROME_PATH.
  */

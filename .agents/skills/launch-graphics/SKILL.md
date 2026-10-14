@@ -11,8 +11,10 @@ from the real app screenshots in the Porcelain palette. Tooling lives in
 
 **Prerequisite.** Screenshots from `npm run store:screenshots`
 (`store-screenshots/{ios-6.9,android-phone,ipad-13,android-tab10}/{dark,light}/*.png`,
-gitignored). If they are missing, run that or pass `--shots <dir>`; renders
-with missing screenshots print a warning and show empty screens.
+gitignored). `--shots <dir>` also takes a flat folder of
+`<device>_<screen>_<mode>.png` files, such as `.snapshot-evidence/out/`
+(`iphone-16-pro-max_02-chat-code_dark.png`). Renders with missing screenshots
+print a warning and show empty screens.
 
 1. **Look up options:** `npm run graphics:render -- --list` (add `--json`)
    prints compositions, moments, formats, devices, screens, and presets.

@@ -2,7 +2,7 @@
 /**
  * `npm run graphics:editor` — serve the launch graphics editor and open it.
  *   --port <n>      default 8960
- *   --shots <dir>   store screenshots (default <repo>/store-screenshots, from `npm run store:screenshots`)
+ *   --shots <dir>   store-screenshots layout or flat <device>_<screen>_<mode>.png (default <repo>/store-screenshots)
  *   --preset <name> open a preset from scripts/launch-graphics/presets/
  *   --no-open       do not open a browser
  */
