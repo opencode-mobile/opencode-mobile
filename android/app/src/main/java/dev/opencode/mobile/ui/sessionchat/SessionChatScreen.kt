@@ -177,6 +177,7 @@ fun SessionChatScreen(
         uiState.composer.attachmentSources(
             DeveloperToolsPreferences.unlocked,
             allowsDocuments = uiState.supportsDocumentAttachments,
+            modelOwnedByEngine = !uiState.capabilities.requiresComposerModel,
         )
     var menuExpanded by rememberSaveable { mutableStateOf(false) }
     var showDeleteConfirmation by remember { mutableStateOf(false) }

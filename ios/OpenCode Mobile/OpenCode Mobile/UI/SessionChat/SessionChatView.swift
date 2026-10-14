@@ -1561,7 +1561,8 @@ struct SessionChatView: View {
     private var composerAttachmentSources: ComposerAttachmentSources {
         viewModel.uiState.composer.attachmentSources(
             developerToolsUnlocked: developerToolsPreferences.unlocked,
-            allowsDocuments: viewModel.uiState.supportsDocumentAttachments
+            allowsDocuments: viewModel.uiState.supportsDocumentAttachments,
+            modelOwnedByEngine: !viewModel.uiState.capabilities.requiresComposerModel
         )
     }
 

@@ -35,4 +35,18 @@ import Testing
         #expect(sources.photos)
         #expect(sources.logFile)
     }
+
+    @Test func engineOwnedModel_enablesPhotosWithoutComposerModel() {
+        // T3 keeps the model in the harness picker, so the composer has none selected.
+        let composer = SessionChatComposerState(text: "", modelOptions: [], selectedMode: "build")
+        let images = composer.attachmentSources(developerToolsUnlocked: false, allowsDocuments: false, modelOwnedByEngine: true)
+        #expect(images == ComposerAttachmentSources(photos: true, files: false, logFile: false))
+        let files = composer.attachmentSources(developerToolsUnlocked: false, allowsDocuments: true, modelOwnedByEngine: true)
+        #expect(files == ComposerAttachmentSources(photos: true, files: true, logFile: false))
+    }
+
+    @Test func composerOwnedModel_withoutSelection_disablesAttach() {
+        let sources = SessionChatComposerState(text: "", modelOptions: [], selectedMode: "build").attachmentSources(developerToolsUnlocked: false)
+        #expect(!sources.isAttachEnabled)
+    }
 }

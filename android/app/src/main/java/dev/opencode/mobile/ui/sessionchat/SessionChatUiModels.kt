@@ -84,13 +84,18 @@ data class SessionChatComposerState(
     val canAttachFiles: Boolean
         get() = selectedModel?.option?.canAttachFiles == true
 
+    /**
+     * [modelOwnedByEngine]: the engine keeps the model on the session (T3), so the
+     * composer's selection is not the gate and the server validates attachments.
+     */
     fun attachmentSources(
         developerToolsUnlocked: Boolean,
         allowsDocuments: Boolean = true,
+        modelOwnedByEngine: Boolean = false,
     ): ComposerAttachmentSources =
         ComposerAttachmentSources(
-            photos = canAttachPhotos,
-            files = canAttachFiles && allowsDocuments,
+            photos = modelOwnedByEngine || canAttachPhotos,
+            files = (modelOwnedByEngine || canAttachFiles) && allowsDocuments,
             logFile = developerToolsUnlocked && allowsDocuments,
         )
 }

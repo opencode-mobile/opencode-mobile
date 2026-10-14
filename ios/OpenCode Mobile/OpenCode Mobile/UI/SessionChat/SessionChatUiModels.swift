@@ -144,10 +144,16 @@ struct SessionChatComposerState: Equatable {
         selectedModel?.option.canAttachFiles == true
     }
 
-    func attachmentSources(developerToolsUnlocked: Bool, allowsDocuments: Bool = true) -> ComposerAttachmentSources {
+    /// `modelOwnedByEngine`: the engine keeps the model outside the composer (T3), so
+    /// there is no composer model to ask and the server validates attachments.
+    func attachmentSources(
+        developerToolsUnlocked: Bool,
+        allowsDocuments: Bool = true,
+        modelOwnedByEngine: Bool = false
+    ) -> ComposerAttachmentSources {
         ComposerAttachmentSources(
-            photos: canAttachPhotos,
-            files: canAttachFiles && allowsDocuments,
+            photos: modelOwnedByEngine || canAttachPhotos,
+            files: (modelOwnedByEngine || canAttachFiles) && allowsDocuments,
             logFile: developerToolsUnlocked && allowsDocuments
         )
     }
