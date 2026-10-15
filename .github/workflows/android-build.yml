@@ -5,6 +5,7 @@ on:
 
 jobs:
   build:
+    if: github.repository == 'opencode-mobile/opencode-mobile'
     runs-on: [self-hosted, Linux, X64, android]
     defaults:
       run:

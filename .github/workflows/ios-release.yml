@@ -22,7 +22,7 @@ concurrency:
 
 jobs:
   release:
-    if: github.ref == 'refs/heads/main'
+    if: github.repository == 'opencode-mobile/opencode-mobile' && github.ref == 'refs/heads/main'
     runs-on: [self-hosted, macOS, mac-mini]
     environment: ios-release
     defaults:

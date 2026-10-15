@@ -20,7 +20,7 @@ concurrency:
 
 jobs:
   distribute:
-    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    if: github.repository == 'opencode-mobile/opencode-mobile' && (github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main')
     runs-on: [self-hosted, Linux, X64, android]
     environment: android-release
     defaults:
