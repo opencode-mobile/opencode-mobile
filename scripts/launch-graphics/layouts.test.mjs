@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { DEVICE_IDS } from "./renderer/devices.js";
-import { computeLayout, contentColumn, metrics, screenRect } from "./renderer/layouts.js";
+import { NEAR_FULL, computeLayout, contentColumn, metrics, screenRect } from "./renderer/layouts.js";
 import { MOMENTS } from "./renderer/moments.js";
 import { COMPOSITION_IDS, FORMATS, normalize } from "./renderer/spec.js";
 
-const FORMAT_KEYS = [...FORMATS.map((f) => f.key), "1800x700", "900x1600"];
+const FORMAT_KEYS = [...FORMATS.map((f) => f.key), "1800x700", "900x1600", "1200x1000", "1440x1200"];
 const MOMENT_IDS = Object.keys(MOMENTS);
 const round = (v) => Math.round(v * 100) / 100;
 
@@ -50,6 +50,22 @@ test("no visible secondary device is a cut-off sliver", () => {
         const [x0, x1] = contentColumn(G);
         const tol = s.w * 0.03 + 0.5;
         assert.ok(s.x + s.w * x0 >= -tol && s.x + s.w * x1 <= L.W + tol, `${composition} @ ${format}: ${id} content is cut by a canvas edge`);
+      }
+    }
+  }
+});
+
+test("a cropped device is either fully on the canvas or clearly cropped, never almost whole", () => {
+  for (const format of FORMAT_KEYS) {
+    for (const composition of COMPOSITION_IDS) {
+      for (const text of [{}, { position: "left" }]) {
+        const L = computeLayout(normalize({ format, composition, text }));
+        for (const id of DEVICE_IDS) {
+          const G = L.devices[id];
+          if (!G.visible || (G.anchor !== "top" && G.anchor !== "bottom")) continue;
+          const shown = (Math.min(L.H, G.y + G.h) - Math.max(0, G.y)) / G.h;
+          assert.ok(shown >= 0.999 || shown < NEAR_FULL, `${composition} @ ${format} (text ${text.position || "default"}): ${id} shows ${round(shown * 100)}% of its frame`);
+        }
       }
     }
   }
