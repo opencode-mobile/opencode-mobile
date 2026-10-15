@@ -128,3 +128,25 @@ Skills live in `.agents/skills/` and are symlinked for Cursor and Claude:
 `AGENTS.md` and `CLAUDE.md` share the same content. Edit skills under `.agents/skills/<skill-name>/SKILL.md` only.
 
 See [AGENTS.md](AGENTS.md) for agent and documentation rules.
+
+## Contributing
+
+Issues and pull requests are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md)
+first; your first pull request asks you to accept the
+[Contributor License Agreement](CLA.md). Report security problems privately as
+described in [SECURITY.md](SECURITY.md).
+
+## License
+
+Copyright (C) 2026 Ivan Fenenko.
+
+The source code is licensed under the [GNU General Public License v3.0](LICENSE),
+with an additional permission to link with the Firebase SDKs and Google Play
+services libraries; see [NOTICE](NOTICE).
+
+The app icon and store graphics are not covered by the GPL; all rights
+reserved. A fork that you distribute must use its own icon, store graphics,
+application id, and bundle id.
+
+OpenCode Mobile is an unofficial client. It is not affiliated with or endorsed
+by the opencode project or its authors.
