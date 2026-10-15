@@ -103,4 +103,86 @@ struct ServerPathPolicyTests {
         #expect(ServerPathPolicy.resolveInput("code", currentPath: "", homePath: "") == nil)
         #expect(ServerPathPolicy.resolveInput("~", currentPath: "", homePath: "") == nil)
     }
+
+    @Test func root_returnsTheNativeRoot() {
+        #expect(ServerPathPolicy.root("/Users/me") == "/")
+        #expect(ServerPathPolicy.root("/") == "/")
+        #expect(ServerPathPolicy.root(#"C:\Users\me"#) == #"C:\"#)
+        #expect(ServerPathPolicy.root("d:") == #"D:\"#)
+        #expect(ServerPathPolicy.root(#"\\nas\share\code"#) == #"\\nas\share"#)
+        #expect(ServerPathPolicy.root("//nas/share/code") == #"\\nas\share"#)
+        #expect(ServerPathPolicy.root("code/app") == "")
+        #expect(ServerPathPolicy.root("") == "")
+    }
+
+    @Test func fieldText_appendsTheNativeSeparatorExceptOnRoots() {
+        #expect(ServerPathPolicy.fieldText("/Users/me") == "/Users/me/")
+        #expect(ServerPathPolicy.fieldText("/Users/me/") == "/Users/me/")
+        #expect(ServerPathPolicy.fieldText("/") == "/")
+        #expect(ServerPathPolicy.fieldText(#"C:\Users\me"#) == #"C:\Users\me\"#)
+        #expect(ServerPathPolicy.fieldText(#"C:\"#) == #"C:\"#)
+        #expect(ServerPathPolicy.fieldText("D:") == #"D:\"#)
+        #expect(ServerPathPolicy.fieldText(#"\\nas\share"#) == #"\\nas\share"#)
+        #expect(ServerPathPolicy.fieldText(#"\\nas\share\code"#) == #"\\nas\share\code\"#)
+    }
+
+    @Test func fieldParts_posix() {
+        let home = "/Users/me"
+        #expect(parts("/Users/me/", home) == Parts("/Users/me", ""))
+        #expect(parts("/Users/me/co", home) == Parts("/Users/me", "co"))
+        #expect(parts("/", home) == Parts("/", ""))
+        #expect(parts("/Users", home) == Parts("/", "Users"))
+        #expect(parts("code/", home) == Parts("/Users/me/code", ""))
+        #expect(parts(#"/srv/odd\"#, home) == Parts("/srv", #"odd\"#))
+    }
+
+    @Test func fieldParts_windowsDrives() {
+        let home = #"C:\Users\me"#
+        #expect(parts(#"C:\Users\me\"#, home) == Parts(#"C:\Users\me"#, ""))
+        #expect(parts("C:/Users/me/", home) == Parts(#"C:\Users\me"#, ""))
+        #expect(parts(#"C:\Users\me\pro"#, home) == Parts(#"C:\Users\me"#, "pro"))
+        #expect(parts("D:", home) == Parts(#"D:\"#, ""))
+        #expect(parts(#"D:\"#, home) == Parts(#"D:\"#, ""))
+        #expect(parts(#"D:\pro"#, home) == Parts(#"D:\"#, "pro"))
+        #expect(parts(#""D:\code\""#, home) == Parts(#"D:\code"#, ""))
+    }
+
+    @Test func fieldParts_unc() {
+        let home = #"C:\Users\me"#
+        #expect(parts(#"\\nas\share\"#, home) == Parts(#"\\nas\share"#, ""))
+        #expect(parts("//nas/share", home) == Parts(#"\\nas\share"#, ""))
+        #expect(parts(#"\\nas\share\co"#, home) == Parts(#"\\nas\share"#, "co"))
+    }
+
+    @Test func fieldParts_doubleSlashIsUncOnlyOnWindowsHomes() {
+        #expect(parts("//Volumes/", "/Users/me") == Parts("/Volumes", ""))
+        #expect(parts("//Volumes/O", "/Users/me") == Parts("/Volumes", "O"))
+        #expect(parts("/Users//me//", "/Users/me") == Parts("/Users/me", ""))
+        #expect(parts("//nas/share", #"C:\Users\me"#) == Parts(#"\\nas\share"#, ""))
+        #expect(parts("//nas/share/co", #"C:\Users\me"#) == Parts(#"\\nas\share"#, "co"))
+    }
+
+    @Test func fieldParts_homeAndBlank() {
+        let home = "/Users/me"
+        #expect(parts("~", home) == Parts("/Users", "me"))
+        #expect(parts("~/", home) == Parts("/Users/me", ""))
+        #expect(parts("~/co", home) == Parts("/Users/me", "co"))
+        #expect(parts("", home) == Parts(nil, ""))
+        #expect(parts("   ", home) == Parts(nil, ""))
+    }
+
+    private struct Parts: Equatable {
+        let directory: String?
+        let filter: String
+
+        init(_ directory: String?, _ filter: String) {
+            self.directory = directory
+            self.filter = filter
+        }
+    }
+
+    private func parts(_ text: String, _ home: String) -> Parts {
+        let result = ServerPathPolicy.fieldParts(text, home: home)
+        return Parts(result.directory, result.filter)
+    }
 }

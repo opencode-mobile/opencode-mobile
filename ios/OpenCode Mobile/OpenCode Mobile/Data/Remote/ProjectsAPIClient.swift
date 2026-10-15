@@ -31,7 +31,7 @@ nonisolated struct ProjectsAPIClient: Sendable {
 
     func listProjectsV2() async throws -> [ProjectDTO] {
         let projects: [V2ProjectDTO] = try await get(path: "api/project")
-        return projects.map { ProjectDTO(id: $0.id, directory: $0.canonical) }
+        return projects.map { ProjectDTO(id: $0.id, directory: $0.canonical, time: $0.time) }
     }
 
     func getCurrentProject(directory: String? = nil) async throws -> ProjectDTO {

@@ -22,22 +22,25 @@ nonisolated struct FilesystemAPIClient: Sendable {
         try await get(path: "path")
     }
 
-    // Lists absoluteDirectory via path=. + directory= so paths outside the boot worktree work.
-    func listFiles(absoluteDirectory: String) async throws -> [FileNodeDTO] {
-        try await get(path: "file", directory: absoluteDirectory, query: ["path": "."])
+    /// v1 `GET file?directory=<root>&path=<absolute dir>`. Using the path's root as the location
+    /// keeps browsing from creating server projects or starting watchers, and stays inside the
+    /// location on servers that refuse paths outside it.
+    func listFiles(absoluteDirectory: String, root: String) async throws -> [FileNodeDTO] {
+        try await get(path: "file", directory: root, query: ["path": absoluteDirectory])
     }
 
     func getLocationV2() async throws -> V2LocationInfoDTO {
         try await get(path: "api/location")
     }
 
-    func listFilesV2(absoluteDirectory: String) async throws -> [V2FsEntryDTO] {
-        let envelope: APILocatedEnvelope<[V2FsEntryDTO]> = try await get(
+    /// v2 `GET api/fs/list?location[directory]=<root>&path=<absolute dir>`. Entry paths come back
+    /// relative to the envelope's `location.directory` (or absolute across Windows drives).
+    func listFilesV2(absoluteDirectory: String, root: String) async throws -> APILocatedEnvelope<[V2FsEntryDTO]> {
+        try await get(
             path: "api/fs/list",
-            locationDirectory: absoluteDirectory,
-            query: ["path": "."]
+            locationDirectory: root,
+            query: ["path": absoluteDirectory]
         )
-        return envelope.data
     }
 
     // MARK: File Browser (worktree stays the directory; only `path` varies)

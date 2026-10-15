@@ -39,15 +39,52 @@ struct FilesystemProtocolRepositoryTests {
         #expect(url.path.hasSuffix("/api/location"))
     }
 
-    @Test func v2ListDirectoryJoinsRelativeEntries() async throws {
+    @Test func v1ListDirectoryUsesRootAsDirectoryAndAbsolutePath() async throws {
+        FilesystemRoutingURLProtocol.reset(responses: [
+            .json(#"""
+            [
+              {"name":"OpenChamber 2.3.3","path":"Volumes/OpenChamber 2.3.3/","absolute":"/Volumes/OpenChamber 2.3.3","type":"directory"},
+              {"name":"notes.txt","path":"Volumes/notes.txt","absolute":"/Volumes/notes.txt","type":"file"}
+            ]
+            """#)
+        ])
+        let repository = makeFilesystemRepository(serverProtocol: .v1)
+
+        let nodes = try await repository.listDirectory(path: "/Volumes")
+
+        #expect(nodes.map(\.name) == ["OpenChamber 2.3.3"])
+        #expect(nodes.map(\.absolutePath) == ["/Volumes/OpenChamber 2.3.3"])
+        let url = try #require(FilesystemRoutingURLProtocol.requests.first?.url)
+        #expect(url.path.hasSuffix("/file"))
+        #expect(queryValue(url, "directory") == "/")
+        #expect(queryValue(url, "path") == "/Volumes")
+    }
+
+    @Test func v1ListDirectoryUsesTheDriveRootOnWindows() async throws {
+        FilesystemRoutingURLProtocol.reset(responses: [
+            .json(#"""
+            [{"name":"code","path":"Users\\me\\code","absolute":"C:\\Users\\me\\code","type":"directory"}]
+            """#)
+        ])
+        let repository = makeFilesystemRepository(serverProtocol: .v1)
+
+        let nodes = try await repository.listDirectory(path: #"C:\Users\me"#)
+
+        #expect(nodes.map(\.absolutePath) == [#"C:\Users\me\code"#])
+        let url = try #require(FilesystemRoutingURLProtocol.requests.first?.url)
+        #expect(queryValue(url, "directory") == #"C:\"#)
+        #expect(queryValue(url, "path") == #"C:\Users\me"#)
+    }
+
+    @Test func v2ListDirectoryResolvesEntriesAgainstTheResponseLocation() async throws {
         FilesystemRoutingURLProtocol.reset(responses: [
             .json(#"""
             {
-              "location":{"directory":"/repo","project":{"id":"p","directory":"/repo","canonical":"/repo"}},
+              "location":{"directory":"/","project":{"id":"global","directory":"/","canonical":"/"}},
               "data":[
-                {"path":"src/","type":"directory"},
-                {"path":"docs","type":"directory"},
-                {"path":"README.md","type":"file"}
+                {"path":"repo/src/","type":"directory"},
+                {"path":"repo/docs","type":"directory"},
+                {"path":"repo/README.md","type":"file"}
               ]
             }
             """#)
@@ -61,8 +98,22 @@ struct FilesystemProtocolRepositoryTests {
         #expect(nodes.map(\.isDirectory) == [true, true])
         let url = try #require(FilesystemRoutingURLProtocol.requests.first?.url)
         #expect(url.path.hasSuffix("/api/fs/list"))
-        #expect(queryValue(url, "location[directory]") == "/repo")
-        #expect(queryValue(url, "path") == ".")
+        #expect(queryValue(url, "location[directory]") == "/")
+        #expect(queryValue(url, "path") == "/repo")
+    }
+
+    @Test func v2ListDirectoryMatchesTheVerifiedVolumesResponse() async throws {
+        FilesystemRoutingURLProtocol.reset(responses: [
+            .json(#"""
+            {"location":{"directory":"/"},"data":[{"path":"Volumes/OpenChamber 2.3.3/","type":"directory"}]}
+            """#)
+        ])
+        let repository = makeFilesystemRepository(serverProtocol: .v2)
+
+        let nodes = try await repository.listDirectory(path: "/Volumes")
+
+        #expect(nodes.map(\.name) == ["OpenChamber 2.3.3"])
+        #expect(nodes.map(\.absolutePath) == ["/Volumes/OpenChamber 2.3.3"])
     }
 
     @Test func v2ListDirectoryKeepsRootChildrenNamed() async throws {
@@ -83,18 +134,21 @@ struct FilesystemProtocolRepositoryTests {
 
         #expect(nodes.map(\.name) == ["etc", "home"])
         #expect(nodes.map(\.absolutePath) == ["/etc", "/home"])
+        let url = try #require(FilesystemRoutingURLProtocol.requests.first?.url)
+        #expect(queryValue(url, "location[directory]") == "/")
+        #expect(queryValue(url, "path") == "/")
     }
 
-    @Test func v2ListDirectoryJoinsWindowsEntriesWithBackslashes() async throws {
+    @Test func v2ListDirectoryResolvesWindowsRelativeAndCrossDriveEntries() async throws {
         FilesystemRoutingURLProtocol.reset(responses: [
             .json(#"""
             {
               "location":{
-                "directory":"C:\\Users\\me",
-                "project":{"id":"global","directory":"C:\\Users\\me","canonical":"C:\\Users\\me"}
+                "directory":"C:\\Users\\me\\work",
+                "project":{"id":"global","directory":"C:\\Users\\me\\work","canonical":"C:\\Users\\me\\work"}
               },
               "data":[
-                {"path":"code\\","type":"directory"},
+                {"path":"..\\code\\","type":"directory"},
                 {"path":"D:\\archive\\","type":"directory"}
               ]
             }
@@ -106,6 +160,22 @@ struct FilesystemProtocolRepositoryTests {
 
         #expect(nodes.map(\.name) == ["archive", "code"])
         #expect(nodes.map(\.absolutePath) == [#"D:\archive"#, #"C:\Users\me\code"#])
+        let url = try #require(FilesystemRoutingURLProtocol.requests.first?.url)
+        #expect(queryValue(url, "location[directory]") == #"C:\"#)
+        #expect(queryValue(url, "path") == #"C:\Users\me"#)
+    }
+
+    @Test func v2ListDirectoryFallsBackToTheRootWithoutALocation() async throws {
+        FilesystemRoutingURLProtocol.reset(responses: [
+            .json(#"""
+            {"data":[{"path":"Users\\me\\code\\","type":"directory"}]}
+            """#)
+        ])
+        let repository = makeFilesystemRepository(serverProtocol: .v2)
+
+        let nodes = try await repository.listDirectory(path: #"C:\Users\me"#)
+
+        #expect(nodes.map(\.absolutePath) == [#"C:\Users\me\code"#])
     }
 
     private func makeFilesystemRepository(serverProtocol: ServerProtocol) -> DefaultFilesystemRepository {
