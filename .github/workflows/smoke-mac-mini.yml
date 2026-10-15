@@ -9,6 +9,7 @@ on:
 
 jobs:
   smoke:
+    if: github.repository == 'opencode-mobile/opencode-mobile'
     runs-on: [self-hosted, macOS, mac-mini]
     steps:
       - name: Checkout

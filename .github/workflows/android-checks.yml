@@ -11,7 +11,8 @@ concurrency:
 
 jobs:
   android-checks:
-    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    # Self-hosted runner: never run pull requests from forks.
+    if: github.repository == 'opencode-mobile/opencode-mobile' && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && github.event.pull_request.head.repo.full_name == github.repository))
     runs-on: [self-hosted, Linux, X64, android]
     defaults:
       run:
