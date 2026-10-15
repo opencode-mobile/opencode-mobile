@@ -12,6 +12,7 @@ class ProjectDomainAdapter {
             id = dto.id,
             worktree = worktree,
             displayName = displayNameFromWorktree(worktree),
+            activityAtEpochMs = dto.time?.active ?: dto.time?.updated,
         )
     }
 

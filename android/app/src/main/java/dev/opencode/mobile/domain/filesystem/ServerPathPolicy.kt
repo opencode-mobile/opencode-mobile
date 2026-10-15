@@ -8,6 +8,7 @@ package dev.opencode.mobile.domain.filesystem
  */
 object ServerPathPolicy {
     private val driveRegex = Regex("^([A-Za-z]):")
+    private val repeatedSlashRegex = Regex("/{2,}")
 
     /** Parent directory, or null at a root or for a relative path. */
     fun parentPath(path: String): String? {
@@ -67,6 +68,58 @@ object ServerPathPolicy {
         if (!isAbsolute(currentPath)) return null
         return resolve(currentPath, value)
     }
+
+    /**
+     * The root of [path]: `/`, a drive root such as `C:\`, or a UNC share root such as
+     * `\\server\share`. Empty for a relative path.
+     */
+    fun root(path: String): String = parse(path)?.root.orEmpty()
+
+    /** True when [path] has Windows shape (a drive or UNC root). */
+    fun isWindows(path: String): Boolean = parse(path)?.windows == true
+
+    /**
+     * Path field text for [folder]: the folder plus its native separator, so the field lists its
+     * children. Roots are returned unchanged.
+     */
+    fun fieldText(folder: String): String {
+        val parsed = parse(folder) ?: return folder
+        val formatted = parsed.format()
+        if (parsed.segments.isEmpty() && parsed.root.isNotEmpty()) return formatted
+        return formatted + if (parsed.windows) "\\" else "/"
+    }
+
+    /**
+     * Splits path field [text] into the folder to list and the name prefix that filters it.
+     * Text ending in a separator, or naming a root, lists that folder with no filter; otherwise
+     * the last component filters its parent. `~` expands to [home]; relative text resolves
+     * against [home]. On a POSIX server (a home that is not Windows-shaped) repeated slashes
+     * collapse, so `//Volumes` is `/Volumes` rather than a UNC share. Null directory when
+     * nothing usable was typed.
+     */
+    fun fieldParts(
+        text: String,
+        home: String,
+    ): FieldParts {
+        val input = if (isWindows(home)) text else text.replace(repeatedSlashRegex, "/")
+        val resolved = resolveInput(input, home, home) ?: return FieldParts(directory = null, filter = "")
+        var trimmed = input.trim()
+        if (trimmed.length >= 2 && trimmed.startsWith('"') && trimmed.endsWith('"')) {
+            trimmed = trimmed.substring(1, trimmed.length - 1).trim()
+        }
+        val windows = isWindows(resolved)
+        val endsWithSeparator = trimmed.endsWith("/") || (windows && trimmed.endsWith("\\"))
+        if (endsWithSeparator || resolved == root(resolved)) {
+            return FieldParts(directory = resolved, filter = "")
+        }
+        val parent = parentPath(resolved) ?: return FieldParts(directory = resolved, filter = "")
+        return FieldParts(directory = parent, filter = name(resolved))
+    }
+
+    data class FieldParts(
+        val directory: String?,
+        val filter: String,
+    )
 
     private data class Parsed(
         val root: String,

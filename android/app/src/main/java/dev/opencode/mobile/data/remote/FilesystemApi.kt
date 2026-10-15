@@ -36,25 +36,37 @@ class FilesystemApi private constructor(
 
     suspend fun getPaths(): PathDto = httpClient.get().get("path").body()
 
-    // Lists absoluteDirectory via path=. + directory= so paths outside the boot worktree work.
-    suspend fun listFiles(absoluteDirectory: String): List<FileNodeDto> =
+    /**
+     * v1 `GET /file` for the Add project browser: [location] is the listed folder's root (`/`,
+     * `C:\`) so listing never creates a server project; [path] is the absolute folder.
+     */
+    suspend fun listFiles(
+        location: String,
+        path: String,
+    ): List<FileNodeDto> =
         httpClient
             .get()
             .get("file") {
-                parameter("path", ".")
-                applyDirectory(absoluteDirectory)
+                parameter("path", path)
+                applyDirectory(location)
             }.body()
 
     suspend fun getLocationV2(): V2LocationInfoDto = httpClient.get().get("api/location").body()
 
-    suspend fun listFilesV2(absoluteDirectory: String): List<V2FsEntryDto> =
+    /**
+     * v2 `GET /api/fs/list` for the Add project browser, located at [location] (the folder's
+     * root). Entry paths are relative to the envelope's `location.directory`.
+     */
+    suspend fun listFilesV2(
+        location: String,
+        path: String,
+    ): ApiLocatedEnvelope<List<V2FsEntryDto>> =
         httpClient
             .get()
             .get("api/fs/list") {
-                parameter("path", ".")
-                applyLocationDirectory(absoluteDirectory)
-            }.body<ApiLocatedEnvelope<List<V2FsEntryDto>>>()
-            .data
+                parameter("path", path)
+                applyLocationDirectory(location)
+            }.body()
 
     // File Browser: `directory`/location stays the worktree so the server keeps one instance;
     // only `path` varies.

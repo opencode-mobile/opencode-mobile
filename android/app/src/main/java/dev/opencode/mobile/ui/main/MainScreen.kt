@@ -1,14 +1,11 @@
 package dev.opencode.mobile.ui.main
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -19,7 +16,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -43,17 +39,15 @@ import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
 import dev.opencode.mobile.ui.components.OpenCodeDialog
 import dev.opencode.mobile.ui.components.OpenCodeDialogOption
 import dev.opencode.mobile.ui.components.OpenCodeDialogTextField
-import dev.opencode.mobile.ui.components.OpenCodeTextInputKind
+import dev.opencode.mobile.ui.components.OpenCodeEmptyState
+import dev.opencode.mobile.ui.components.OpenCodeEmptyStateAction
 import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeListItemStyle
 import dev.opencode.mobile.ui.components.OpenCodeSectionHeader
 import dev.opencode.mobile.ui.components.OpenCodeSessionConnectionStatus
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarHost
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarMessage
-import dev.opencode.mobile.ui.components.OpenCodeEmptyState
-import dev.opencode.mobile.ui.components.OpenCodeEmptyStateAction
 import dev.opencode.mobile.ui.components.OpenCodeStatusStack
-import dev.opencode.mobile.ui.components.OpenCodeStatusStackStyle
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarAction
 import dev.opencode.mobile.ui.components.OpenCodeTopBarSubtitleAccessory
@@ -165,14 +159,16 @@ fun MainScreen(
         onRefresh = viewModel::pullToRefresh,
         onAddProjectClick = viewModel::showAddProjectSheet,
         onDismissAddProject = viewModel::dismissAddProjectSheet,
-        onNavigateAddProjectUp = viewModel::navigateAddProjectUp,
-        onNavigateAddProjectInto = viewModel::navigateAddProjectInto,
-        onRetryAddProjectNavigator = viewModel::retryAddProjectNavigator,
-        onShowAddProjectGoToPath = viewModel::showAddProjectGoToPath,
-        onAddProjectGoToPathDraftChange = viewModel::updateAddProjectGoToPathDraft,
-        onCancelAddProjectGoToPath = viewModel::cancelAddProjectGoToPath,
-        onConfirmAddProjectGoToPath = viewModel::confirmAddProjectGoToPath,
-        onSelectCurrentDirectory = viewModel::selectCurrentDirectory,
+        addProjectCallbacks =
+            AddProjectSheetCallbacks(
+                onFieldChange = viewModel::updateAddProjectField,
+                onUp = viewModel::addProjectUp,
+                onSelectRoot = viewModel::selectAddProjectRoot,
+                onOpenFolder = viewModel::openAddProjectFolder,
+                onSelectSuggestion = viewModel::selectAddProjectSuggestion,
+                onRetry = viewModel::retryAddProjectListing,
+                onConfirm = viewModel::confirmAddProject,
+            ),
         onNewSession = viewModel::createSession,
         onConsumePendingOpenSession = viewModel::consumePendingOpenSession,
         onRemoveProject = viewModel::requestRemoveProject,
@@ -212,14 +208,6 @@ internal fun MainScreen(
     onRefresh: () -> Unit,
     onAddProjectClick: () -> Unit,
     onDismissAddProject: () -> Unit,
-    onNavigateAddProjectUp: () -> Unit,
-    onNavigateAddProjectInto: (String) -> Unit,
-    onRetryAddProjectNavigator: () -> Unit,
-    onShowAddProjectGoToPath: () -> Unit,
-    onAddProjectGoToPathDraftChange: (String) -> Unit,
-    onCancelAddProjectGoToPath: () -> Unit,
-    onConfirmAddProjectGoToPath: () -> Unit,
-    onSelectCurrentDirectory: () -> Unit,
     onNewSession: (String) -> Unit,
     onConsumePendingOpenSession: () -> Unit,
     onRemoveProject: (String) -> Unit,
@@ -228,6 +216,7 @@ internal fun MainScreen(
     onConsumeProjectRemovalSnackbar: () -> Unit,
     modifier: Modifier = Modifier,
     onReorderProjects: (List<String>) -> Unit = {},
+    addProjectCallbacks: AddProjectSheetCallbacks = AddProjectSheetCallbacks(),
     isRefreshing: Boolean = false,
     sessionActions: HomeSessionActionsUiState = HomeSessionActionsUiState(),
     sessionActionsCallbacks: HomeSessionActionsCallbacks = HomeSessionActionsCallbacks(),
@@ -256,10 +245,10 @@ internal fun MainScreen(
             is MainScreenUiState.Loaded -> uiState.showAddProjectSheet
             else -> false
         }
-    val addNavigator =
+    val addProjectSheet =
         when (uiState) {
-            is MainScreenUiState.Empty -> uiState.addProjectNavigator
-            is MainScreenUiState.Loaded -> uiState.addProjectNavigator
+            is MainScreenUiState.Empty -> uiState.addProjectSheet
+            is MainScreenUiState.Loaded -> uiState.addProjectSheet
             else -> null
         }
 
@@ -532,106 +521,10 @@ internal fun MainScreen(
     HomeSessionActions(state = sessionActions, callbacks = sessionActionsCallbacks)
 
     if (showAddSheet) {
-        val navigator = addNavigator ?: AddProjectNavigatorUi.empty()
-        OpenCodeBottomSheet(
-            visible = true,
-            title = "Add project",
-            onDismissRequest = {
-                ProductAnalytics.logUserAction(
-                    screenId = ProductAnalytics.Screen.HOME_ADD_PROJECT,
-                    actionId = ProductAnalytics.Action.ADD_PROJECT_DISMISS,
-                )
-                onDismissAddProject()
-            },
-            alwaysFixedHeight = true,
-            pinnedContent = {
-                OpenCodeBottomSheetEntry(
-                    title = "Go up",
-                    enabled = navigator.canGoUp && !navigator.isLoading && !navigator.isValidating,
-                    startDecorator =
-                        BottomSheetEntryDecorator.Icon(
-                            imageVector = OpenCodeIcons.ArrowUpward,
-                            contentDescription = null,
-                        ),
-                    onClick = onNavigateAddProjectUp,
-                )
-                OpenCodeBottomSheetEntry(
-                    title = "Go to path",
-                    enabled = !navigator.isLoading && !navigator.isValidating,
-                    startDecorator =
-                        BottomSheetEntryDecorator.Icon(
-                            imageVector = OpenCodeIcons.Edit,
-                            contentDescription = null,
-                        ),
-                    onClick = onShowAddProjectGoToPath,
-                )
-                val currentTitle =
-                    when {
-                        navigator.currentPath.isBlank() -> "Current directory"
-                        else -> navigator.currentPath
-                    }
-                OpenCodeBottomSheetEntry(
-                    title = currentTitle,
-                    enabled = navigator.currentPath.isNotBlank() && !navigator.isLoading && !navigator.isValidating,
-                    startDecorator =
-                        BottomSheetEntryDecorator.Icon(
-                            imageVector = OpenCodeIcons.FolderCheck,
-                            contentDescription = null,
-                        ),
-                    onClick = onSelectCurrentDirectory,
-                )
-            },
-        ) {
-            when {
-                navigator.isLoading || navigator.isValidating -> {
-                    OpenCodeStatusStack(
-                        title = "Loading folders",
-                        style = OpenCodeStatusStackStyle.Spinner,
-                        modifier = Modifier.fillMaxSize().padding(24.dp),
-                    )
-                }
-                navigator.errorMessage != null -> {
-                    OpenCodeEmptyState(
-                        title = "Unable to list this folder",
-                        message = navigator.errorMessage.ifBlank { "This folder couldn't be listed." },
-                        primaryAction = OpenCodeEmptyStateAction(title = "Retry", onClick = onRetryAddProjectNavigator),
-                        modifier = Modifier.padding(20.dp),
-                    )
-                }
-                navigator.entries.isEmpty() -> {
-                    OpenCodeBottomSheetEntry(title = "No subdirectories", enabled = false, onClick = {})
-                }
-                else -> {
-                    navigator.entries.forEach { entry ->
-                        OpenCodeBottomSheetEntry(
-                            title = entry.name,
-                            startDecorator =
-                                BottomSheetEntryDecorator.Icon(
-                                    imageVector = OpenCodeIcons.SubdirectoryArrowRight,
-                                    contentDescription = null,
-                                ),
-                            onClick = { onNavigateAddProjectInto(entry.absolutePath) },
-                        )
-                    }
-                }
-            }
-        }
-        val goToPath = navigator.goToPath
-        OpenCodeDialog(
-            visible = goToPath != null,
-            title = "Go to path",
-            subtitle = "A folder on the server, such as ~/code, /Volumes, or D:.",
-            primaryOption = OpenCodeDialogOption(title = "Go", onClick = onConfirmAddProjectGoToPath),
-            secondaryOption = OpenCodeDialogOption(title = "Cancel", onClick = onCancelAddProjectGoToPath),
-            onDismissRequest = onCancelAddProjectGoToPath,
-            textField =
-                OpenCodeDialogTextField(
-                    value = goToPath?.draft.orEmpty(),
-                    onValueChange = onAddProjectGoToPathDraftChange,
-                    hint = "Folder path",
-                    kind = OpenCodeTextInputKind.Filter,
-                    errorMessage = goToPath?.errorMessage,
-                ),
+        AddProjectSheet(
+            sheet = addProjectSheet ?: AddProjectSheetUi.empty(),
+            callbacks = addProjectCallbacks,
+            onDismiss = onDismissAddProject,
         )
     }
 
@@ -1054,8 +947,7 @@ internal fun List<ProjectSectionUi>.toCrossProjectSessionListSessions(): List<Se
             compareByDescending<Int> { index ->
                 flattened[index].second.updatedAtEpochMs ?: 0L
             }.thenBy { index -> index },
-        )
-        .map { index ->
+        ).map { index ->
             val (section, session) = flattened[index]
             SessionListSession(
                 id = session.id,
@@ -1154,14 +1046,6 @@ fun MainScreenPreview() {
             onRefresh = {},
             onAddProjectClick = {},
             onDismissAddProject = {},
-            onNavigateAddProjectUp = {},
-            onNavigateAddProjectInto = {},
-            onRetryAddProjectNavigator = {},
-            onShowAddProjectGoToPath = {},
-            onAddProjectGoToPathDraftChange = {},
-            onCancelAddProjectGoToPath = {},
-            onConfirmAddProjectGoToPath = {},
-            onSelectCurrentDirectory = {},
             onNewSession = {},
             onConsumePendingOpenSession = {},
             onRemoveProject = {},

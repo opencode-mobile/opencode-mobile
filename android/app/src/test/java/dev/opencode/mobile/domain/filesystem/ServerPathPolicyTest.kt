@@ -109,4 +109,92 @@ class ServerPathPolicyTest {
         assertNull(ServerPathPolicy.resolveInput("code", "", ""))
         assertNull(ServerPathPolicy.resolveInput("~", "", ""))
     }
+
+    @Test
+    fun root_namesPosixDriveAndUncRoots() {
+        assertEquals("/", ServerPathPolicy.root("/Users/me"))
+        assertEquals("/", ServerPathPolicy.root("/"))
+        assertEquals("C:\\", ServerPathPolicy.root("C:\\Users\\me"))
+        assertEquals("D:\\", ServerPathPolicy.root("d:"))
+        assertEquals("\\\\nas\\share", ServerPathPolicy.root("\\\\nas\\share\\code"))
+        assertEquals("\\\\nas\\share", ServerPathPolicy.root("//nas/share/code"))
+        assertEquals("", ServerPathPolicy.root("code"))
+        assertEquals("", ServerPathPolicy.root(""))
+    }
+
+    @Test
+    fun fieldText_addsNativeSeparatorExceptOnRoots() {
+        assertEquals("/Users/me/", ServerPathPolicy.fieldText("/Users/me"))
+        assertEquals("/", ServerPathPolicy.fieldText("/"))
+        assertEquals("C:\\Users\\me\\", ServerPathPolicy.fieldText("C:\\Users\\me"))
+        assertEquals("C:\\", ServerPathPolicy.fieldText("C:\\"))
+        assertEquals("\\\\nas\\share", ServerPathPolicy.fieldText("\\\\nas\\share"))
+        assertEquals("\\\\nas\\share\\code\\", ServerPathPolicy.fieldText("\\\\nas\\share\\code"))
+    }
+
+    @Test
+    fun fieldParts_posix() {
+        val home = "/Users/me"
+        assertEquals(ServerPathPolicy.FieldParts("/Users/me", ""), ServerPathPolicy.fieldParts("/Users/me/", home))
+        assertEquals(ServerPathPolicy.FieldParts("/Users/me", "co"), ServerPathPolicy.fieldParts("/Users/me/co", home))
+        assertEquals(ServerPathPolicy.FieldParts("/", ""), ServerPathPolicy.fieldParts("/", home))
+        assertEquals(ServerPathPolicy.FieldParts("/", "Vol"), ServerPathPolicy.fieldParts("/Vol", home))
+        assertEquals(ServerPathPolicy.FieldParts("/Users/me", "code"), ServerPathPolicy.fieldParts("code", home))
+        // A backslash is part of a POSIX name, not a separator.
+        assertEquals(ServerPathPolicy.FieldParts("/srv", "odd\\"), ServerPathPolicy.fieldParts("/srv/odd\\", home))
+    }
+
+    @Test
+    fun fieldParts_windowsDrive() {
+        val home = "C:\\Users\\me"
+        assertEquals(
+            ServerPathPolicy.FieldParts("C:\\Users\\me", ""),
+            ServerPathPolicy.fieldParts("C:\\Users\\me\\", home),
+        )
+        assertEquals(ServerPathPolicy.FieldParts("D:\\", ""), ServerPathPolicy.fieldParts("D:", home))
+        assertEquals(ServerPathPolicy.FieldParts("D:\\", "pro"), ServerPathPolicy.fieldParts("D:\\pro", home))
+        assertEquals(ServerPathPolicy.FieldParts("C:\\Users\\me", "co"), ServerPathPolicy.fieldParts("C:/Users/me/co", home))
+        assertEquals(
+            ServerPathPolicy.FieldParts("C:\\Program Files", ""),
+            ServerPathPolicy.fieldParts("\"C:\\Program Files\\\"", home),
+        )
+    }
+
+    @Test
+    fun fieldParts_unc() {
+        val home = "C:\\Users\\me"
+        val share = ServerPathPolicy.FieldParts("\\\\nas\\share", "")
+        assertEquals(share, ServerPathPolicy.fieldParts("\\\\nas\\share\\", home))
+        assertEquals(share, ServerPathPolicy.fieldParts("\\\\nas\\share", home))
+        assertEquals(share, ServerPathPolicy.fieldParts("//nas/share", home))
+        assertEquals(
+            ServerPathPolicy.FieldParts("\\\\nas\\share", "co"),
+            ServerPathPolicy.fieldParts("//nas/share/co", home),
+        )
+    }
+
+    @Test
+    fun fieldParts_posixHomeCollapsesRepeatedSlashes() {
+        val home = "/Users/me"
+        assertEquals(ServerPathPolicy.FieldParts("/Volumes", ""), ServerPathPolicy.fieldParts("//Volumes/", home))
+        assertEquals(ServerPathPolicy.FieldParts("/Volumes", "O"), ServerPathPolicy.fieldParts("//Volumes/O", home))
+        assertEquals(ServerPathPolicy.FieldParts("/Users/me", ""), ServerPathPolicy.fieldParts("/Users//me//", home))
+    }
+
+    @Test
+    fun fieldParts_windowsHomeKeepsLeadingDoubleSlashAsUnc() {
+        val home = "C:\\Users\\me"
+        assertEquals(ServerPathPolicy.FieldParts("\\\\nas\\share", ""), ServerPathPolicy.fieldParts("//nas/share", home))
+        assertEquals(ServerPathPolicy.FieldParts("\\\\nas\\share", ""), ServerPathPolicy.fieldParts("//nas/share", "\\\\nas\\home"))
+    }
+
+    @Test
+    fun fieldParts_homeShortcutAndBlank() {
+        val home = "/Users/me"
+        assertEquals(ServerPathPolicy.FieldParts("/Users", "me"), ServerPathPolicy.fieldParts("~", home))
+        assertEquals(ServerPathPolicy.FieldParts("/Users/me", ""), ServerPathPolicy.fieldParts("~/", home))
+        assertEquals(ServerPathPolicy.FieldParts("/Users/me", "co"), ServerPathPolicy.fieldParts("~/co", home))
+        assertEquals(ServerPathPolicy.FieldParts(null, ""), ServerPathPolicy.fieldParts("", home))
+        assertEquals(ServerPathPolicy.FieldParts(null, ""), ServerPathPolicy.fieldParts("   ", home))
+    }
 }
