@@ -13,11 +13,9 @@ not drop v1 servers.
 
 - [`android/`](../android/) — Compose, Material 3
 - [`ios/OpenCode Mobile/`](../ios/OpenCode%20Mobile/)
-- Checks and builds: [CI branch-protection rules](features/ci-pr-gating/ruleset.md)
-- Android Play internal + Firebase:
-  [operator runbook](features/android-release-distribution/operator-runbook.md)
-- iOS TestFlight internal + Firebase:
-  [operator runbook](features/ios-release-distribution/operator-runbook.md)
+- Release operations, CI rulesets, and runner setup: operator runbooks in the
+  private [`opencode-mobile/ops`](https://github.com/opencode-mobile/ops)
+  repository (maintainers only)
 
 ```mermaid
 flowchart TB

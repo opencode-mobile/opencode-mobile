@@ -10,7 +10,7 @@ This repository holds both app shells, shared product docs, design-system planni
 |---|---|
 | `android/` | Kotlin, Jetpack Compose, Material 3 app |
 | `ios/OpenCode Mobile/` | SwiftUI app |
-| `docs/` | Architecture, design-system references, operator runbooks |
+| `docs/` | Architecture and design-system references |
 | `.agents/` | Shared agent guidance and canonical skills under `.agents/skills/` |
 | `scripts/` | Icon sync, OpenAPI fetch/generate, agent symlink setup |
 | `AGENTS.md` | Agent and contributor guide |
@@ -77,8 +77,7 @@ Build and iOS Build stay manual.
 | iOS App Distribution | `push` to `main`, or `workflow_dispatch` | Mac mini (`self-hosted, macOS, mac-mini`) | Build and verify a signed Ad Hoc IPA, then distribute it to the private Firebase tester group |
 
 To block merges, require status checks `android-checks` and `ios-checks` on
-`main` (repository ruleset or branch protection, strict up-to-date). See
-[the CI branch-protection rules](docs/features/ci-pr-gating/ruleset.md).
+`main` (repository ruleset or branch protection, strict up-to-date).
 
 Manual runs:
 
@@ -94,13 +93,9 @@ gh workflow run "iOS App Distribution" --ref feature/ope-<number>-<slug>
 
 Android Release, Android App Distribution, and Android Test Lab use the
 protected `android-release` environment. iOS App Distribution uses the
-protected `ios-release` environment. See the
-[Android release operator runbook](docs/features/android-release-distribution/operator-runbook.md)
-and
-[iOS release operator runbook](docs/features/ios-release-distribution/operator-runbook.md)
-for secrets, artifacts, and recovery instructions. iOS runner setup, reboot
-recovery, and fallback are in
-[docs/mac-mini-runner.md](docs/mac-mini-runner.md).
+protected `ios-release` environment. Maintainers keep the release operator
+runbooks, branch-protection notes, and runner setup in the private
+[`opencode-mobile/ops`](https://github.com/opencode-mobile/ops) repository.
 
 After cloning, run `./scripts/sync-agent-links.sh` if agent symlinks are missing.
 
@@ -110,7 +105,6 @@ After cloning, run `./scripts/sync-agent-links.sh` if agent symlinks are missing
 - [AGENTS.md](AGENTS.md) — scope, architecture rules, skill usage
 - [docs/architecture.md](docs/architecture.md) — native app architecture
 - [docs/design-system/](docs/design-system/) — shared UI reference
-- [docs/features/](docs/features/) — CI and release operations references
 
 Repository documentation is not an implementation ledger. Feature planning,
 status, remaining work, and temporary platform gaps live on the GitHub issue.
