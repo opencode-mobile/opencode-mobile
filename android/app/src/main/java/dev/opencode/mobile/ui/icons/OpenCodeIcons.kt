@@ -52,6 +52,7 @@ private var _widgets: ImageVector? = null
 private var _slash: ImageVector? = null
 private var _mic: ImageVector? = null
 private var _plug: ImageVector? = null
+private var _code: ImageVector? = null
 
   val Add: ImageVector
     get() {
@@ -1606,5 +1607,37 @@ private var _plug: ImageVector? = null
     )
       }.build()
       return _plug!!
+    }
+
+  val Code: ImageVector
+    get() {
+      if (_code != null) return _code!!
+      _code = ImageVector.Builder(
+        name = "Code",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+      ).apply {
+    addPath(
+      pathData = PathParser().parsePathString("m16 18 6-6-6-6").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+    addPath(
+      pathData = PathParser().parsePathString("m8 6-6 6 6 6").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+      }.build()
+      return _code!!
     }
 }

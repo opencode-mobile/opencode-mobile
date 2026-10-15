@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.PrivacyPolicy
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
+import dev.opencode.mobile.SourceCode
 import dev.opencode.mobile.domain.home.HomeSessionLadder
 import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.preferences.DeveloperToolsPreferences
@@ -400,6 +401,18 @@ fun SettingsScreen(
                     style = OpenCodeListItemStyle.Card,
                     startDecorator = StartDecorator.Icon(OpenCodeIcons.Settings, "Build"),
                     onClick = { copyAboutValueToClipboard(context, label = "Build", value = build) },
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+
+                OpenCodeListItem(
+                    title = "Source Code",
+                    subtitle = "GPL-3.0 on GitHub",
+                    style = OpenCodeListItemStyle.Card,
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Code, "Source Code"),
+                    accessory = OpenCodeListItemAccessory.Disclosure,
+                    onClick = {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(SourceCode.URL)))
+                    },
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
 
