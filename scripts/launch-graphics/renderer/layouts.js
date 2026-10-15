@@ -79,6 +79,13 @@ export const zoomFor = (id, shot, maxZ = 1.45) => {
   const [x0, x1] = CONTENT[`${id}-${shot}`] || [0, 1];
   return +Math.min(maxZ, 0.98 / (x1 - x0)).toFixed(3);
 };
+/**
+ * A top/bottom crop showing at least this much of the device frame reads as an accident. Such a device is fitted
+ * whole (`nearFull: "fit"`, the default; devices sharing a `group` shrink together) or pushed further past the
+ * edge until DEEP_CROP of its frame shows (`nearFull: "deepen"`, for deliberately staggered compositions).
+ */
+export const NEAR_FULL = 0.85;
+const DEEP_CROP = 0.78;
 /** Compositions with a "crop shows top/bottom of screen" layout knob. */
 export const CROP_KNOB = ["pair", "phonetab", "diagonal", "triple"];
 
@@ -145,8 +152,8 @@ const IMPL = {
       const wi = pairW("iphone", "android", total);
       const wa = (wi * kOf("iphone")) / kOf("android");
       return {
-        iphone: { box: vbox(c, x0, wi, c.crop), anchor: c.crop, role: "shot", z: 3 },
-        android: { box: vbox(c, x0 + wi + gap, wa, c.crop), anchor: c.crop, role: "shot", z: 3 },
+        iphone: { box: vbox(c, x0, wi, c.crop), anchor: c.crop, role: "shot", z: 3, group: "pair" },
+        android: { box: vbox(c, x0 + wi + gap, wa, c.crop), anchor: c.crop, role: "shot", z: 3, group: "pair" },
       };
     },
   },
@@ -168,7 +175,7 @@ const IMPL = {
         pw = Math.min(A.w * 0.44, tw * 0.6);
         px = Math.min(A.x + A.w - pw - A.w * 0.03, tx + tw - pw * 0.55);
       }
-      return { tablet: tab, iphone: { box: vbox(c, px, pw, c.crop, span * 0.16), anchor: c.crop, role: "shot", z: 3 } };
+      return { tablet: tab, iphone: { box: vbox(c, px, pw, c.crop, span * 0.16), anchor: c.crop, role: "shot", z: 3, nearFull: "deepen" } };
     },
   },
   tablet: {
@@ -193,12 +200,13 @@ const IMPL = {
       const x0 = !c.band ? A.x + (A.w - w * (1 + step)) / 2 : (c.W - w * (1 + step)) / 2;
       const off = span * (c.land ? 0.2 : 0.14);
       return {
-        iphone: { box: vbox(c, x0, w, c.crop, c.crop === "top" ? off : 0), anchor: c.crop, role: "shot", z: 3 },
+        iphone: { box: vbox(c, x0, w, c.crop, c.crop === "top" ? off : 0), anchor: c.crop, role: "shot", z: 3, nearFull: "deepen" },
         android: {
           box: c.crop === "top" ? vbox(c, x0 + w * step, w, "top") : { x: x0 + w * step, y: y0, w, h: span - off },
           anchor: c.crop,
           role: "alt",
           z: 2,
+          nearFull: "deepen",
         },
       };
     },
@@ -216,8 +224,8 @@ const IMPL = {
       const wa = (pw * kOf("iphone")) / kOf("android");
       return {
         ipad: tabletSpec(c, tx, tw, "tab"),
-        iphone: { box: vbox(c, Math.max(R.x + R.w * 0.04, tx - pw * 0.78), pw, c.crop, span * 0.1), anchor: c.crop, role: "shot", z: 3 },
-        android: { box: vbox(c, Math.min(R.x + R.w * 0.96 - wa, tx + tw - wa * 0.22), wa, c.crop, span * 0.1), anchor: c.crop, role: "shot", z: 3 },
+        iphone: { box: vbox(c, Math.max(R.x + R.w * 0.04, tx - pw * 0.78), pw, c.crop, span * 0.1), anchor: c.crop, role: "shot", z: 3, nearFull: "deepen" },
+        android: { box: vbox(c, Math.min(R.x + R.w * 0.96 - wa, tx + tw - wa * 0.22), wa, c.crop, span * 0.1), anchor: c.crop, role: "shot", z: 3, nearFull: "deepen" },
       };
     },
   },
@@ -234,7 +242,8 @@ export function overridesFor(spec, formatKey) {
   return { text: { ...(spec.text || {}), ...(fo.text || {}) }, crop: fo.crop ?? spec.crop ?? null, devices };
 }
 
-function placeDevice(id, spec, o, ctx, mirror) {
+/** The composition's own geometry for a device, before near-full handling and the user's scale/offset edits. */
+function baseGeometry(id, spec, o, ctx) {
   const g = DEVICES[id];
   const e = g.rim + g.bz;
   const k = 1 - 2 * e;
@@ -261,11 +270,52 @@ function placeDevice(id, spec, o, ctx, mirror) {
     x = box.x + box.w / 2 - (sw * (x0 + x1)) / 2 - e * W;
     y = box.y + box.h / 2 - (sw * g.ar * (y0 + y1)) / 2 - e * W;
   }
-  let H = H_(W);
+  const H = H_(W);
   if (anchor === "custom" && ctx.band) { // never slide under the text band
     if (ctx.tpos === "top" && y < A.y) y = A.y;
     if (ctx.tpos === "bottom" && y + H > A.y + A.h) y = A.y + A.h - H;
   }
+  return { id, g, e, k, spec, inComp, shot, anchor, W, H, x, y };
+}
+
+/** Share of a device frame's height that is on the canvas. */
+const shownShare = (b, H) => (Math.min(H, b.y + b.H) - Math.max(0, b.y)) / b.H;
+
+/** Fit near-whole top/bottom crops fully (groups shrink together) or deepen them; see NEAR_FULL. Geometry only. */
+function avoidNearFull(bases, ctx) {
+  const cropped = (b) => b.inComp && (b.anchor === "top" || b.anchor === "bottom");
+  const near = (b) => {
+    const s = shownShare(b, ctx.H);
+    return cropped(b) && s < 0.999 && s >= NEAR_FULL;
+  };
+  const fitKeys = new Set();
+  for (const b of bases) {
+    if (!near(b)) continue;
+    if (b.spec.nearFull !== "deepen") fitKeys.add(b.spec.group || b.id);
+    else if (b.y + b.H > ctx.H) b.y = ctx.H - DEEP_CROP * b.H; // cut at the bottom: push further down
+    else b.y = -(1 - DEEP_CROP) * b.H; // cut at the top: push further up
+  }
+  const [y0, y1] = vspan(ctx);
+  const avail = y1 - y0;
+  for (const key of fitKeys) {
+    const members = bases.filter((b) => cropped(b) && (b.spec.group || b.id) === key);
+    const f = Math.min(1, ...members.map((b) => avail / b.H));
+    const gcx = (Math.min(...members.map((b) => b.x)) + Math.max(...members.map((b) => b.x + b.W))) / 2;
+    const slack = (avail - Math.max(...members.map((b) => b.H * f))) / 2;
+    for (const b of members) {
+      const cx = gcx + (b.x + b.W / 2 - gcx) * f;
+      b.W *= f;
+      b.H *= f;
+      b.x = cx - b.W / 2;
+      b.y = b.anchor === "bottom" ? y1 - slack - b.H : y0 + slack; // keep the anchored edges aligned
+    }
+  }
+}
+
+/** Content focus, mirroring and the user's scale/offset edits on top of the (adjusted) base geometry. */
+function finishDevice(b, o, ctx, mirror) {
+  const { id, g, e, k, spec, inComp, shot, anchor } = b;
+  let { W, H, x, y } = b;
   // content-only adjustment: tablets fill the screen with their content column and aim it at the visible window
   let focus = 1;
   let focusAt = 50;
@@ -426,8 +476,10 @@ export function computeLayout(spec, { format = spec.format, measure = estimateTe
   } else ctx.A = { x: 0, y: 0, w: W, h: box.y - gb };
 
   const specs = IMPL[comp].devices(ctx);
+  const bases = DEVICE_IDS.map((id) => baseGeometry(id, specs[id], ov.devices[id], ctx));
+  avoidNearFull(bases, ctx);
   const devices = {};
-  for (const id of DEVICE_IDS) devices[id] = placeDevice(id, specs[id], ov.devices[id], ctx, mirror);
+  for (const b of bases) devices[b.id] = finishDevice(b, ov.devices[b.id], ctx, mirror);
   const hidden = enforceVisibility(devices, box, T.band, W, H);
 
   const notes = [];
