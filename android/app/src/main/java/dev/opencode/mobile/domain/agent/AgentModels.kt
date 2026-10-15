@@ -34,8 +34,26 @@ data class AgentMention(
     val token: String get() = "@$name"
 }
 
+/** A project file referenced from the composer. Separate from an agent mention and from an Attachment. */
+data class FileMention(
+    val id: String,
+    val path: String,
+    val start: Int,
+    val end: Int,
+) {
+    val token: String get() = "@$path"
+}
+
 data class AgentPartPayload(
     val name: String,
+    val sourceValue: String,
+    val start: Int,
+    val end: Int,
+)
+
+data class FilePartPayload(
+    val path: String,
+    val filename: String,
     val sourceValue: String,
     val start: Int,
     val end: Int,
@@ -45,12 +63,20 @@ data class MentionInsertResult(
     val text: String,
     val cursor: Int,
     val mentions: List<AgentMention>,
+    val fileMentions: List<FileMention> = emptyList(),
 )
 
 data class MentionReconcileResult(
     val text: String,
     val cursor: Int,
     val mentions: List<AgentMention>,
+    val fileMentions: List<FileMention> = emptyList(),
+)
+
+data class TrimmedPrompt(
+    val text: String,
+    val agentMentions: List<AgentMention>,
+    val fileMentions: List<FileMention> = emptyList(),
 )
 
 sealed class ComposerSuggestionMode {

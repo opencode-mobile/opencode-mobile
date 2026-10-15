@@ -176,6 +176,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
                 source: AgentPartSourceDTO(value: part.sourceValue, start: part.start, end: part.end)
             )
         })
+        parts.append(contentsOf: fileReferenceParts(options))
         // Omit wire `id`: FilePartInput allows it only when it matches ^prt.
         // Local Attachment ids are UUIDs for composer chip identity.
         parts.append(contentsOf: options.attachments.map {
@@ -210,8 +211,39 @@ nonisolated struct MessageDomainAdapter: Sendable {
             files: files.isEmpty ? nil : files,
             agents: agents.isEmpty ? nil : agents,
             skills: skills.isEmpty ? nil : skills,
-            delivery: options.delivery.wireValue
+            delivery: options.delivery.wireValue,
+            fileMentions: v2FileMentions(options)
         )
+    }
+
+    private func fileReferenceParts(_ options: PromptSendOptions) -> [SendMessagePartDTO] {
+        guard let worktree = options.worktree else { return [] }
+        return ComposerMentionRouting.fileParts(text: options.text, mentions: options.fileMentions).map { part in
+            SendMessagePartDTO(
+                type: "file",
+                mime: "text/plain",
+                filename: part.filename,
+                url: ProjectPaths.fileURL(worktree: worktree, relativePath: part.path),
+                fileSource: FileReferenceSourceDTO(
+                    path: part.path,
+                    value: part.sourceValue,
+                    start: part.start,
+                    end: part.end
+                )
+            )
+        }
+    }
+
+    private func v2FileMentions(_ options: PromptSendOptions) -> [V2PromptFileMentionDTO]? {
+        guard let worktree = options.worktree else { return nil }
+        let mentions = ComposerMentionRouting.fileParts(text: options.text, mentions: options.fileMentions).map { part in
+            V2PromptFileMentionDTO(
+                uri: ProjectPaths.fileURL(worktree: worktree, relativePath: part.path),
+                name: part.filename,
+                mention: V2PromptSourceDTO(start: part.start, end: part.end, text: part.sourceValue)
+            )
+        }
+        return mentions.isEmpty ? nil : mentions
     }
 
     func v2SwitchModelRequest(options: PromptSendOptions) -> V2SwitchModelRequestDTO? {

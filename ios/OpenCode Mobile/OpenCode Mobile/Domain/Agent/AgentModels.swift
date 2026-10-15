@@ -44,8 +44,26 @@ struct AgentMention: Equatable, Sendable, Identifiable, Codable {
     var token: String { "@\(name)" }
 }
 
+/// A project file referenced from the composer. Separate from an agent mention and from an Attachment.
+struct FileMention: Equatable, Sendable, Identifiable, Codable {
+    let id: String
+    let path: String
+    let start: Int
+    let end: Int
+
+    var token: String { "@\(path)" }
+}
+
 struct AgentPartPayload: Equatable, Sendable {
     let name: String
+    let sourceValue: String
+    let start: Int
+    let end: Int
+}
+
+struct FilePartPayload: Equatable, Sendable {
+    let path: String
+    let filename: String
     let sourceValue: String
     let start: Int
     let end: Int
@@ -55,12 +73,54 @@ struct MentionInsertResult: Equatable, Sendable {
     let text: String
     let cursor: Int
     let mentions: [AgentMention]
+    let fileMentions: [FileMention]
+
+    init(
+        text: String,
+        cursor: Int,
+        mentions: [AgentMention],
+        fileMentions: [FileMention] = []
+    ) {
+        self.text = text
+        self.cursor = cursor
+        self.mentions = mentions
+        self.fileMentions = fileMentions
+    }
 }
 
 struct MentionReconcileResult: Equatable, Sendable {
     let text: String
     let cursor: Int
     let mentions: [AgentMention]
+    let fileMentions: [FileMention]
+
+    init(
+        text: String,
+        cursor: Int,
+        mentions: [AgentMention],
+        fileMentions: [FileMention] = []
+    ) {
+        self.text = text
+        self.cursor = cursor
+        self.mentions = mentions
+        self.fileMentions = fileMentions
+    }
+}
+
+struct TrimmedPrompt: Equatable, Sendable {
+    let text: String
+    let agentMentions: [AgentMention]
+    let fileMentions: [FileMention]
+
+    init(
+        text: String,
+        agentMentions: [AgentMention],
+        fileMentions: [FileMention] = []
+    ) {
+        self.text = text
+        self.agentMentions = agentMentions
+        self.fileMentions = fileMentions
+    }
 }
 
 enum ComposerSuggestionMode: Equatable, Sendable {
