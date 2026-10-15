@@ -32,7 +32,7 @@ struct ProjectDomainAdapter: Sendable {
     }
 
     static func displayName(from worktree: String) -> String {
-        let name = URL(fileURLWithPath: worktree).lastPathComponent
+        let name = ServerPathPolicy.name(worktree)
         return name.isEmpty ? worktree : name
     }
 }

@@ -334,6 +334,103 @@ class MainScreenViewModelTest {
         }
 
     @Test
+    fun windowsHome_goesUpToDriveRootAndStops() =
+        runTest(testDispatcher) {
+            val filesystem =
+                FakeFilesystemRepository(
+                    paths = ServerPaths(home = "C:\\Users\\me", directory = "C:\\Users\\me", worktree = "/"),
+                    listings =
+                        mapOf(
+                            "C:\\Users\\me" to emptyList(),
+                            "C:\\Users" to emptyList(),
+                            "C:\\" to listOf(DirectoryNode("Users", "C:\\Users", true)),
+                        ),
+                )
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/one")),
+                    filesystemRepository = filesystem,
+                )
+            advanceUntilIdle()
+            viewModel.showAddProjectSheet()
+            advanceUntilIdle()
+            viewModel.navigateAddProjectUp()
+            advanceUntilIdle()
+            viewModel.navigateAddProjectUp()
+            advanceUntilIdle()
+            val navigator = (viewModel.uiState.value as MainScreenUiState.Loaded).addProjectNavigator
+            assertEquals("C:\\", navigator?.currentPath)
+            assertEquals(listOf("Users"), navigator?.entries?.map { it.name })
+            assertTrue(navigator?.canGoUp == false)
+        }
+
+    @Test
+    fun goToPath_listsTypedDriveAndClosesDialog() =
+        runTest(testDispatcher) {
+            val filesystem =
+                FakeFilesystemRepository(
+                    paths = ServerPaths(home = "C:\\Users\\me", directory = "C:\\Users\\me", worktree = "/"),
+                    listings =
+                        mapOf(
+                            "C:\\Users\\me" to emptyList(),
+                            "D:\\" to listOf(DirectoryNode("code", "D:\\code", true)),
+                        ),
+                )
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/one")),
+                    filesystemRepository = filesystem,
+                )
+            advanceUntilIdle()
+            viewModel.showAddProjectSheet()
+            advanceUntilIdle()
+            viewModel.showAddProjectGoToPath()
+            assertEquals("C:\\Users\\me", currentNavigator(viewModel)?.goToPath?.draft)
+            viewModel.updateAddProjectGoToPathDraft("d:")
+            viewModel.confirmAddProjectGoToPath()
+            advanceUntilIdle()
+            val navigator = currentNavigator(viewModel)
+            assertEquals(null, navigator?.goToPath)
+            assertEquals("D:\\", navigator?.currentPath)
+            assertEquals(listOf("code"), navigator?.entries?.map { it.name })
+            assertTrue(navigator?.canGoUp == false)
+        }
+
+    @Test
+    fun goToPath_expandsHomeAndRejectsBlank() =
+        runTest(testDispatcher) {
+            val filesystem =
+                FakeFilesystemRepository(
+                    paths = ServerPaths(home = "/home", directory = "/home", worktree = "/"),
+                    listings =
+                        mapOf(
+                            "/home" to emptyList(),
+                            "/" to emptyList(),
+                            "/home/code" to emptyList(),
+                        ),
+                )
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/one")),
+                    filesystemRepository = filesystem,
+                )
+            advanceUntilIdle()
+            viewModel.showAddProjectSheet()
+            advanceUntilIdle()
+            viewModel.navigateAddProjectUp()
+            advanceUntilIdle()
+            viewModel.showAddProjectGoToPath()
+            viewModel.updateAddProjectGoToPathDraft("   ")
+            viewModel.confirmAddProjectGoToPath()
+            assertEquals(AddProjectGoToPathUi.EMPTY_ERROR, currentNavigator(viewModel)?.goToPath?.errorMessage)
+            viewModel.updateAddProjectGoToPathDraft("~/code")
+            assertEquals(null, currentNavigator(viewModel)?.goToPath?.errorMessage)
+            viewModel.confirmAddProjectGoToPath()
+            advanceUntilIdle()
+            assertEquals("/home/code", currentNavigator(viewModel)?.currentPath)
+        }
+
+    @Test
     fun selectCurrentDirectory_validatesAndAddsProject() =
         runTest(testDispatcher) {
             val store = FakeConnectionProfileStore(initial = listOf("/one"))
@@ -1285,6 +1382,13 @@ class MainScreenViewModelTest {
             ),
             Session(id = "ses-never-ran", title = "Never ran", updatedAtEpochMs = 1L),
         )
+
+    private fun currentNavigator(viewModel: MainScreenViewModel): AddProjectNavigatorUi? =
+        when (val state = viewModel.uiState.value) {
+            is MainScreenUiState.Loaded -> state.addProjectNavigator
+            is MainScreenUiState.Empty -> state.addProjectNavigator
+            else -> null
+        }
 
     private fun createViewModel(
         shouldFailProbe: Boolean = false,

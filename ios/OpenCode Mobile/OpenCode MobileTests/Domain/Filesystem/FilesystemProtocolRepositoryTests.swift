@@ -85,6 +85,29 @@ struct FilesystemProtocolRepositoryTests {
         #expect(nodes.map(\.absolutePath) == ["/etc", "/home"])
     }
 
+    @Test func v2ListDirectoryJoinsWindowsEntriesWithBackslashes() async throws {
+        FilesystemRoutingURLProtocol.reset(responses: [
+            .json(#"""
+            {
+              "location":{
+                "directory":"C:\\Users\\me",
+                "project":{"id":"global","directory":"C:\\Users\\me","canonical":"C:\\Users\\me"}
+              },
+              "data":[
+                {"path":"code\\","type":"directory"},
+                {"path":"D:\\archive\\","type":"directory"}
+              ]
+            }
+            """#)
+        ])
+        let repository = makeFilesystemRepository(serverProtocol: .v2)
+
+        let nodes = try await repository.listDirectory(path: #"C:\Users\me"#)
+
+        #expect(nodes.map(\.name) == ["archive", "code"])
+        #expect(nodes.map(\.absolutePath) == [#"D:\archive"#, #"C:\Users\me\code"#])
+    }
+
     private func makeFilesystemRepository(serverProtocol: ServerProtocol) -> DefaultFilesystemRepository {
         let manager = makeManager(serverProtocol: serverProtocol)
         return DefaultFilesystemRepository(

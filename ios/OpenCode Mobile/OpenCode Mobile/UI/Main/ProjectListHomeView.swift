@@ -173,6 +173,12 @@ struct ProjectListHomeView: View {
                         action: { Task { await viewModel.navigateAddProjectUp() } }
                     )
                     OpenCodeBottomSheetEntry(
+                        title: "Go to path",
+                        enabled: !navigator.isLoading && !navigator.isValidating,
+                        startDecorator: .icon(.edit),
+                        action: viewModel.showAddProjectGoToPath
+                    )
+                    OpenCodeBottomSheetEntry(
                         title: navigator.currentPath.isEmpty ? "Current directory" : navigator.currentPath,
                         enabled: !navigator.currentPath.isEmpty && !navigator.isLoading && !navigator.isValidating,
                         startDecorator: .icon(.folderCheck),
@@ -207,6 +213,24 @@ struct ProjectListHomeView: View {
                     }
                 }
             }
+            .openCodeDialog(
+                isPresented: addProjectGoToPathBinding,
+                title: "Go to path",
+                subtitle: "A folder on the server, such as ~/code, /Volumes, or D:.",
+                primaryOption: OpenCodeDialogOption(title: "Go") {
+                    Task { await viewModel.confirmAddProjectGoToPath() }
+                },
+                secondaryOption: OpenCodeDialogOption(title: "Cancel", action: viewModel.cancelAddProjectGoToPath),
+                textField: OpenCodeDialogTextField(
+                    text: Binding(
+                        get: { viewModel.addProjectNavigator.goToPath?.draft ?? "" },
+                        set: viewModel.updateAddProjectGoToPathDraft
+                    ),
+                    hint: "Folder path",
+                    kind: .filter,
+                    errorMessage: viewModel.addProjectNavigator.goToPath?.errorMessage
+                )
+            )
             .openCodeBottomSheet(
                 isPresented: projectPickerBinding,
                 title: "Filter by project",
@@ -758,6 +782,15 @@ struct ProjectListHomeView: View {
                     )
                     viewModel.dismissAddProjectSheet()
                 }
+            }
+        )
+    }
+
+    private var addProjectGoToPathBinding: Binding<Bool> {
+        Binding(
+            get: { viewModel.addProjectNavigator.goToPath != nil },
+            set: { visible in
+                if !visible { viewModel.cancelAddProjectGoToPath() }
             }
         )
     }

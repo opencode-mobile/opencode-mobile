@@ -19,6 +19,14 @@ struct AddProjectDirectoryItem: Identifiable, Equatable {
     let absolutePath: String
 }
 
+/// Go to path dialog: the typed path and its validation error.
+struct AddProjectGoToPathState: Equatable {
+    static let emptyError = "Enter a folder path"
+
+    var draft: String
+    var errorMessage: String?
+}
+
 struct AddProjectNavigatorState: Equatable {
     var currentPath: String
     var canGoUp: Bool
@@ -26,6 +34,9 @@ struct AddProjectNavigatorState: Equatable {
     var isLoading: Bool
     var isValidating: Bool
     var errorMessage: String?
+    /// The server's home, for `~` in Go to path.
+    var homePath = ""
+    var goToPath: AddProjectGoToPathState?
 
     static let empty = AddProjectNavigatorState(
         currentPath: "",
@@ -304,7 +315,7 @@ final class ProjectListHomeViewModel {
 
     func navigateAddProjectUp() async {
         guard let navigator = currentNavigator(),
-              let parent = DirectoryListingPolicy.parentPath(navigator.currentPath)
+              let parent = ServerPathPolicy.parentPath(navigator.currentPath)
         else { return }
         logAddProjectAction(ProductAnalytics.Action.addProjectGoUp)
         await loadDirectoryNavigator(path: parent)
@@ -312,6 +323,57 @@ final class ProjectListHomeViewModel {
 
     func navigateAddProjectInto(path: String) async {
         logAddProjectAction(ProductAnalytics.Action.addProjectEnterDirectory)
+        await loadDirectoryNavigator(path: path)
+    }
+
+    func showAddProjectGoToPath() {
+        guard let navigator = currentNavigator(), !navigator.isLoading, !navigator.isValidating else { return }
+        logAddProjectAction(ProductAnalytics.Action.addProjectGoToPath)
+        updateNavigator { current in
+            var next = current
+            next.goToPath = AddProjectGoToPathState(draft: navigator.currentPath)
+            return next
+        }
+    }
+
+    func updateAddProjectGoToPathDraft(_ text: String) {
+        guard currentNavigator()?.goToPath != nil else { return }
+        updateNavigator { current in
+            var next = current
+            next.goToPath?.draft = text
+            next.goToPath?.errorMessage = nil
+            return next
+        }
+    }
+
+    func cancelAddProjectGoToPath() {
+        guard currentNavigator()?.goToPath != nil else { return }
+        updateNavigator { current in
+            var next = current
+            next.goToPath = nil
+            return next
+        }
+    }
+
+    func confirmAddProjectGoToPath() async {
+        guard let navigator = currentNavigator(), let goToPath = navigator.goToPath else { return }
+        guard let path = ServerPathPolicy.resolveInput(
+            goToPath.draft,
+            currentPath: navigator.currentPath,
+            homePath: navigator.homePath
+        ) else {
+            updateNavigator { current in
+                var next = current
+                next.goToPath?.errorMessage = AddProjectGoToPathState.emptyError
+                return next
+            }
+            return
+        }
+        updateNavigator { current in
+            var next = current
+            next.goToPath = nil
+            return next
+        }
         await loadDirectoryNavigator(path: path)
     }
 
@@ -953,6 +1015,11 @@ final class ProjectListHomeViewModel {
         )
         do {
             let paths = try await filesystemRepository.getPaths()
+            updateNavigator { current in
+                var next = current
+                next.homePath = paths.home
+                return next
+            }
             await loadDirectoryNavigator(path: paths.home)
         } catch {
             setNavigator(
@@ -972,7 +1039,7 @@ final class ProjectListHomeViewModel {
         updateNavigator { current in
             var next = current
             next.currentPath = path
-            next.canGoUp = DirectoryListingPolicy.parentPath(path) != nil
+            next.canGoUp = ServerPathPolicy.parentPath(path) != nil
             next.isLoading = true
             next.isValidating = false
             next.errorMessage = nil
@@ -985,7 +1052,7 @@ final class ProjectListHomeViewModel {
             updateNavigator { current in
                 var next = current
                 next.currentPath = path
-                next.canGoUp = DirectoryListingPolicy.parentPath(path) != nil
+                next.canGoUp = ServerPathPolicy.parentPath(path) != nil
                 next.entries = entries
                 next.isLoading = false
                 next.isValidating = false
@@ -996,7 +1063,7 @@ final class ProjectListHomeViewModel {
             updateNavigator { current in
                 var next = current
                 next.currentPath = path
-                next.canGoUp = DirectoryListingPolicy.parentPath(path) != nil
+                next.canGoUp = ServerPathPolicy.parentPath(path) != nil
                 next.entries = []
                 next.isLoading = false
                 next.isValidating = false
