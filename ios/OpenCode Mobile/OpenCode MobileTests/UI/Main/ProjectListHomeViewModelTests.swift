@@ -367,6 +367,79 @@ struct ProjectListHomeViewModelTests {
         #expect(navigator?.canGoUp == true)
     }
 
+    @Test func windowsHome_goesUpToDriveRootAndStops() async {
+        let filesystem = FakeFilesystemRepository(
+            paths: ServerPaths(home: #"C:\Users\me"#, directory: #"C:\Users\me"#, worktree: "/"),
+            listings: [
+                #"C:\Users\me"#: [],
+                #"C:\Users"#: [],
+                #"C:\"#: [DirectoryNode(name: "Users", absolutePath: #"C:\Users"#, isDirectory: true)],
+            ]
+        )
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            filesystemRepository: filesystem,
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/one"])
+        )
+        await viewModel.refresh()
+        await viewModel.showAddProjectSheet()
+        await viewModel.navigateAddProjectUp()
+        await viewModel.navigateAddProjectUp()
+        let navigator = viewModel.addProjectNavigator
+        #expect(navigator.currentPath == #"C:\"#)
+        #expect(navigator.entries.map(\.name) == ["Users"])
+        #expect(navigator.canGoUp == false)
+    }
+
+    @Test func goToPath_listsTypedDriveAndClosesDialog() async {
+        let filesystem = FakeFilesystemRepository(
+            paths: ServerPaths(home: #"C:\Users\me"#, directory: #"C:\Users\me"#, worktree: "/"),
+            listings: [
+                #"C:\Users\me"#: [],
+                #"D:\"#: [DirectoryNode(name: "code", absolutePath: #"D:\code"#, isDirectory: true)],
+            ]
+        )
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            filesystemRepository: filesystem,
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/one"])
+        )
+        await viewModel.refresh()
+        await viewModel.showAddProjectSheet()
+        viewModel.showAddProjectGoToPath()
+        #expect(viewModel.addProjectNavigator.goToPath?.draft == #"C:\Users\me"#)
+        viewModel.updateAddProjectGoToPathDraft("d:")
+        await viewModel.confirmAddProjectGoToPath()
+        let navigator = viewModel.addProjectNavigator
+        #expect(navigator.goToPath == nil)
+        #expect(navigator.currentPath == #"D:\"#)
+        #expect(navigator.entries.map(\.name) == ["code"])
+        #expect(navigator.canGoUp == false)
+    }
+
+    @Test func goToPath_expandsHomeAndRejectsBlank() async {
+        let filesystem = FakeFilesystemRepository(
+            paths: ServerPaths(home: "/home", directory: "/home", worktree: "/"),
+            listings: ["/home": [], "/": [], "/home/code": []]
+        )
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            filesystemRepository: filesystem,
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/one"])
+        )
+        await viewModel.refresh()
+        await viewModel.showAddProjectSheet()
+        await viewModel.navigateAddProjectUp()
+        viewModel.showAddProjectGoToPath()
+        viewModel.updateAddProjectGoToPathDraft("   ")
+        await viewModel.confirmAddProjectGoToPath()
+        #expect(viewModel.addProjectNavigator.goToPath?.errorMessage == AddProjectGoToPathState.emptyError)
+        viewModel.updateAddProjectGoToPathDraft("~/code")
+        #expect(viewModel.addProjectNavigator.goToPath?.errorMessage == nil)
+        await viewModel.confirmAddProjectGoToPath()
+        #expect(viewModel.addProjectNavigator.currentPath == "/home/code")
+    }
+
     @Test func selectCurrentDirectory_validatesAndFocuses() async {
         let store = FakeConnectionProfileStore(initial: ["/one"])
         let projectRepository = FakeProjectRepository()

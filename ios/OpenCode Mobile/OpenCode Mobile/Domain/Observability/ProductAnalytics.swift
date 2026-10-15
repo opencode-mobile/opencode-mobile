@@ -120,6 +120,7 @@ enum ProductAnalytics {
 
         static let addProjectDismiss = "add_project_dismiss"
         static let addProjectGoUp = "add_project_go_up"
+        static let addProjectGoToPath = "add_project_go_to_path"
         static let addProjectEnterDirectory = "add_project_enter_directory"
         static let addProjectSelectCurrent = "add_project_select_current"
         static let addProjectRetryNavigator = "add_project_retry_navigator"

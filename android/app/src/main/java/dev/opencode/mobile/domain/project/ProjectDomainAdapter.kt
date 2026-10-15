@@ -2,8 +2,8 @@ package dev.opencode.mobile.domain.project
 
 import dev.opencode.mobile.data.remote.dto.HealthDto
 import dev.opencode.mobile.data.remote.dto.ProjectDto
+import dev.opencode.mobile.domain.filesystem.ServerPathPolicy
 import io.ktor.client.plugins.ResponseException
-import java.io.File
 
 class ProjectDomainAdapter {
     fun toProject(dto: ProjectDto): Project {
@@ -33,6 +33,6 @@ class ProjectDomainAdapter {
     }
 
     companion object {
-        fun displayNameFromWorktree(worktree: String): String = File(worktree).name.ifBlank { worktree }
+        fun displayNameFromWorktree(worktree: String): String = ServerPathPolicy.name(worktree).ifBlank { worktree }
     }
 }

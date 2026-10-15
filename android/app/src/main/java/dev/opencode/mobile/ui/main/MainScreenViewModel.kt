@@ -12,8 +12,8 @@ import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.event.FixedLiveUpdates
 import dev.opencode.mobile.domain.event.LiveUpdates
-import dev.opencode.mobile.domain.filesystem.DirectoryListingPolicy
 import dev.opencode.mobile.domain.filesystem.FilesystemRepository
+import dev.opencode.mobile.domain.filesystem.ServerPathPolicy
 import dev.opencode.mobile.domain.live.LiveStoreRefreshPolicy
 import dev.opencode.mobile.domain.live.SessionLiveStore
 import dev.opencode.mobile.domain.live.SessionReadyStore
@@ -245,7 +245,7 @@ class MainScreenViewModel
 
         fun navigateAddProjectUp() {
             val navigator = currentAddProjectNavigator() ?: return
-            val parent = DirectoryListingPolicy.parentPath(navigator.currentPath) ?: return
+            val parent = ServerPathPolicy.parentPath(navigator.currentPath) ?: return
             logAction(
                 ProductAnalytics.Screen.HOME_ADD_PROJECT,
                 ProductAnalytics.Action.ADD_PROJECT_GO_UP,
@@ -258,6 +258,49 @@ class MainScreenViewModel
                 ProductAnalytics.Screen.HOME_ADD_PROJECT,
                 ProductAnalytics.Action.ADD_PROJECT_ENTER_DIRECTORY,
             )
+            viewModelScope.launch { loadDirectoryNavigator(path) }
+        }
+
+        fun showAddProjectGoToPath() {
+            val navigator = currentAddProjectNavigator() ?: return
+            if (navigator.isLoading || navigator.isValidating) return
+            logAction(
+                ProductAnalytics.Screen.HOME_ADD_PROJECT,
+                ProductAnalytics.Action.ADD_PROJECT_GO_TO_PATH,
+            )
+            updateAddProjectNavigator {
+                it.copy(goToPath = AddProjectGoToPathUi(draft = navigator.currentPath))
+            }
+        }
+
+        fun updateAddProjectGoToPathDraft(text: String) {
+            updateAddProjectNavigator { current ->
+                val goToPath = current.goToPath ?: return@updateAddProjectNavigator current
+                current.copy(goToPath = goToPath.copy(draft = text, errorMessage = null))
+            }
+        }
+
+        fun cancelAddProjectGoToPath() {
+            if (currentAddProjectNavigator()?.goToPath == null) return
+            updateAddProjectNavigator { it.copy(goToPath = null) }
+        }
+
+        fun confirmAddProjectGoToPath() {
+            val navigator = currentAddProjectNavigator() ?: return
+            val goToPath = navigator.goToPath ?: return
+            val path =
+                ServerPathPolicy.resolveInput(
+                    input = goToPath.draft,
+                    currentPath = navigator.currentPath,
+                    homePath = navigator.homePath,
+                )
+            if (path == null) {
+                updateAddProjectNavigator {
+                    it.copy(goToPath = goToPath.copy(errorMessage = AddProjectGoToPathUi.EMPTY_ERROR))
+                }
+                return
+            }
+            updateAddProjectNavigator { it.copy(goToPath = null) }
             viewModelScope.launch { loadDirectoryNavigator(path) }
         }
 
@@ -838,6 +881,7 @@ class MainScreenViewModel
             )
             try {
                 val paths = filesystemRepository.getPaths()
+                updateAddProjectNavigator { it.copy(homePath = paths.home) }
                 loadDirectoryNavigator(paths.home)
             } catch (error: Throwable) {
                 updateAddProjectNavigator(
@@ -857,7 +901,7 @@ class MainScreenViewModel
             updateAddProjectNavigator { current ->
                 current.copy(
                     currentPath = path,
-                    canGoUp = DirectoryListingPolicy.parentPath(path) != null,
+                    canGoUp = ServerPathPolicy.parentPath(path) != null,
                     isLoading = true,
                     isValidating = false,
                     errorMessage = null,
@@ -871,7 +915,7 @@ class MainScreenViewModel
                 updateAddProjectNavigator { current ->
                     current.copy(
                         currentPath = path,
-                        canGoUp = DirectoryListingPolicy.parentPath(path) != null,
+                        canGoUp = ServerPathPolicy.parentPath(path) != null,
                         entries = entries,
                         isLoading = false,
                         isValidating = false,
@@ -882,7 +926,7 @@ class MainScreenViewModel
                 updateAddProjectNavigator { current ->
                     current.copy(
                         currentPath = path,
-                        canGoUp = DirectoryListingPolicy.parentPath(path) != null,
+                        canGoUp = ServerPathPolicy.parentPath(path) != null,
                         entries = emptyList(),
                         isLoading = false,
                         isValidating = false,
@@ -1112,6 +1156,16 @@ data class AddProjectDirectoryUi(
     val absolutePath: String,
 )
 
+/** Go to path dialog: the typed path and its validation error. */
+data class AddProjectGoToPathUi(
+    val draft: String,
+    val errorMessage: String? = null,
+) {
+    companion object {
+        const val EMPTY_ERROR = "Enter a folder path"
+    }
+}
+
 data class AddProjectNavigatorUi(
     val currentPath: String,
     val canGoUp: Boolean,
@@ -1119,6 +1173,9 @@ data class AddProjectNavigatorUi(
     val isLoading: Boolean,
     val isValidating: Boolean,
     val errorMessage: String?,
+    /** The server's home, for `~` in Go to path. */
+    val homePath: String = "",
+    val goToPath: AddProjectGoToPathUi? = null,
 ) {
     companion object {
         fun empty(): AddProjectNavigatorUi =

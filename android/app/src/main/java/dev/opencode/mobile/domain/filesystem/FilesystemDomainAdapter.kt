@@ -34,9 +34,11 @@ class FilesystemDomainAdapter {
         dto: V2FsEntryDto,
         listingDirectory: String,
     ): DirectoryNode {
-        val absolutePath = absolutePath(dto.path, listingDirectory)
+        // Entry paths are relative to the listing (or absolute across drives), in the
+        // server's separators: `src\` on Windows, `src/` elsewhere.
+        val absolutePath = ServerPathPolicy.resolve(listingDirectory, dto.path)
         return DirectoryNode(
-            name = nameFromPath(absolutePath, dto.path),
+            name = ServerPathPolicy.name(absolutePath),
             absolutePath = absolutePath,
             isDirectory = dto.type == "directory",
         )
@@ -78,31 +80,4 @@ class FilesystemDomainAdapter {
             .replace('\\', '/')
             .trim('/')
             .removePrefix("./")
-
-    private fun absolutePath(
-        path: String,
-        listingDirectory: String,
-    ): String {
-        val normalized = stripTrailingSlashes(path)
-        if (normalized.startsWith("/")) return normalized
-        val relative = normalized.trimStart('/')
-        val base = stripTrailingSlashes(listingDirectory)
-        if (relative.isEmpty() || relative == ".") return base
-        if (base == "/") return "/$relative"
-        return "$base/$relative"
-    }
-
-    private fun nameFromPath(
-        absolutePath: String,
-        fallback: String,
-    ): String =
-        stripTrailingSlashes(absolutePath).substringAfterLast('/').ifEmpty {
-            stripTrailingSlashes(fallback).substringAfterLast('/')
-        }
-
-    private fun stripTrailingSlashes(path: String): String {
-        if (path == "/") return path
-        val stripped = path.trimEnd('/')
-        return stripped.ifEmpty { "/" }
-    }
 }

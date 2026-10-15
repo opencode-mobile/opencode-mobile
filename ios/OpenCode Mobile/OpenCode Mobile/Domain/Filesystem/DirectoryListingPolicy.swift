@@ -12,15 +12,6 @@ enum DirectoryListingPolicy {
             .map { $0 }
     }
 
-    static func parentPath(_ path: String) -> String? {
-        if path.isEmpty || path == "/" { return nil }
-        let url = URL(fileURLWithPath: path)
-        let parent = url.deletingLastPathComponent().path
-        if parent.isEmpty { return "/" }
-        if parent == path { return nil }
-        return parent
-    }
-
     private static func isVisibleDirectoryName(_ name: String) -> Bool {
         if name.isEmpty || name == "." || name == ".." { return false }
         return !name.hasPrefix(".")

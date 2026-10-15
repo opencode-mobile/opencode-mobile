@@ -43,13 +43,4 @@ class DirectoryListingPolicyTest {
             prepared.last().absolutePath,
         )
     }
-
-    @Test
-    fun parentPath_returnsParentUntilRoot() {
-        assertEquals("/Users/ivan", DirectoryListingPolicy.parentPath("/Users/ivan/Projects"))
-        assertEquals("/Users", DirectoryListingPolicy.parentPath("/Users/ivan"))
-        assertEquals("/", DirectoryListingPolicy.parentPath("/Users"))
-        assertEquals(null, DirectoryListingPolicy.parentPath("/"))
-        assertEquals(null, DirectoryListingPolicy.parentPath(""))
-    }
 }

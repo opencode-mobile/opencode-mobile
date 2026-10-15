@@ -126,6 +126,7 @@ object ProductAnalytics {
         // Add project / see all / picker
         const val ADD_PROJECT_DISMISS = "add_project_dismiss"
         const val ADD_PROJECT_GO_UP = "add_project_go_up"
+        const val ADD_PROJECT_GO_TO_PATH = "add_project_go_to_path"
         const val ADD_PROJECT_ENTER_DIRECTORY = "add_project_enter_directory"
         const val ADD_PROJECT_SELECT_CURRENT = "add_project_select_current"
         const val ADD_PROJECT_RETRY_NAVIGATOR = "add_project_retry_navigator"

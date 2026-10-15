@@ -158,6 +158,39 @@ class FilesystemProtocolRepositoryTest {
             assertEquals(listOf("/etc", "/home"), nodes.map { it.absolutePath })
         }
 
+    @Test
+    fun v2ListDirectory_joinsWindowsEntriesWithBackslashes() =
+        runTest {
+            val client =
+                testClient {
+                    respondJson(
+                        """
+                        {
+                          "location":{
+                            "directory":"C:\\Users\\me",
+                            "project":{"id":"global","directory":"C:\\Users\\me","canonical":"C:\\Users\\me"}
+                          },
+                          "data":[
+                            {"path":"code\\","type":"directory"},
+                            {"path":"D:\\archive\\","type":"directory"}
+                          ]
+                        }
+                        """.trimIndent(),
+                    )
+                }
+            val repository =
+                DefaultFilesystemRepository(
+                    FilesystemApi(client),
+                    FilesystemDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V2),
+                )
+
+            val nodes = repository.listDirectory("C:\\Users\\me")
+
+            assertEquals(listOf("archive", "code"), nodes.map { it.name })
+            assertEquals(listOf("D:\\archive", "C:\\Users\\me\\code"), nodes.map { it.absolutePath })
+        }
+
     private suspend fun manager(protocol: ServerProtocol): ActiveConnectionManager {
         val manager = ActiveConnectionManager(FakeProfileStore())
         manager.applyProfile(

@@ -35,12 +35,4 @@ struct DirectoryListingPolicyTests {
                 String(format: "/home/dir-%03d", DirectoryListingPolicy.maxVisibleDirectories)
         )
     }
-
-    @Test func parentPath_returnsParentUntilRoot() {
-        #expect(DirectoryListingPolicy.parentPath("/Users/ivan/Projects") == "/Users/ivan")
-        #expect(DirectoryListingPolicy.parentPath("/Users/ivan") == "/Users")
-        #expect(DirectoryListingPolicy.parentPath("/Users") == "/")
-        #expect(DirectoryListingPolicy.parentPath("/") == nil)
-        #expect(DirectoryListingPolicy.parentPath("") == nil)
-    }
 }

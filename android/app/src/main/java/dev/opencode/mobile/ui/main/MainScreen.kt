@@ -43,6 +43,7 @@ import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
 import dev.opencode.mobile.ui.components.OpenCodeDialog
 import dev.opencode.mobile.ui.components.OpenCodeDialogOption
 import dev.opencode.mobile.ui.components.OpenCodeDialogTextField
+import dev.opencode.mobile.ui.components.OpenCodeTextInputKind
 import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeListItemStyle
 import dev.opencode.mobile.ui.components.OpenCodeSectionHeader
@@ -167,6 +168,10 @@ fun MainScreen(
         onNavigateAddProjectUp = viewModel::navigateAddProjectUp,
         onNavigateAddProjectInto = viewModel::navigateAddProjectInto,
         onRetryAddProjectNavigator = viewModel::retryAddProjectNavigator,
+        onShowAddProjectGoToPath = viewModel::showAddProjectGoToPath,
+        onAddProjectGoToPathDraftChange = viewModel::updateAddProjectGoToPathDraft,
+        onCancelAddProjectGoToPath = viewModel::cancelAddProjectGoToPath,
+        onConfirmAddProjectGoToPath = viewModel::confirmAddProjectGoToPath,
         onSelectCurrentDirectory = viewModel::selectCurrentDirectory,
         onNewSession = viewModel::createSession,
         onConsumePendingOpenSession = viewModel::consumePendingOpenSession,
@@ -210,6 +215,10 @@ internal fun MainScreen(
     onNavigateAddProjectUp: () -> Unit,
     onNavigateAddProjectInto: (String) -> Unit,
     onRetryAddProjectNavigator: () -> Unit,
+    onShowAddProjectGoToPath: () -> Unit,
+    onAddProjectGoToPathDraftChange: (String) -> Unit,
+    onCancelAddProjectGoToPath: () -> Unit,
+    onConfirmAddProjectGoToPath: () -> Unit,
     onSelectCurrentDirectory: () -> Unit,
     onNewSession: (String) -> Unit,
     onConsumePendingOpenSession: () -> Unit,
@@ -546,6 +555,16 @@ internal fun MainScreen(
                         ),
                     onClick = onNavigateAddProjectUp,
                 )
+                OpenCodeBottomSheetEntry(
+                    title = "Go to path",
+                    enabled = !navigator.isLoading && !navigator.isValidating,
+                    startDecorator =
+                        BottomSheetEntryDecorator.Icon(
+                            imageVector = OpenCodeIcons.Edit,
+                            contentDescription = null,
+                        ),
+                    onClick = onShowAddProjectGoToPath,
+                )
                 val currentTitle =
                     when {
                         navigator.currentPath.isBlank() -> "Current directory"
@@ -597,6 +616,23 @@ internal fun MainScreen(
                 }
             }
         }
+        val goToPath = navigator.goToPath
+        OpenCodeDialog(
+            visible = goToPath != null,
+            title = "Go to path",
+            subtitle = "A folder on the server, such as ~/code, /Volumes, or D:.",
+            primaryOption = OpenCodeDialogOption(title = "Go", onClick = onConfirmAddProjectGoToPath),
+            secondaryOption = OpenCodeDialogOption(title = "Cancel", onClick = onCancelAddProjectGoToPath),
+            onDismissRequest = onCancelAddProjectGoToPath,
+            textField =
+                OpenCodeDialogTextField(
+                    value = goToPath?.draft.orEmpty(),
+                    onValueChange = onAddProjectGoToPathDraftChange,
+                    hint = "Folder path",
+                    kind = OpenCodeTextInputKind.Filter,
+                    errorMessage = goToPath?.errorMessage,
+                ),
+        )
     }
 
     if (showNewSessionProjectPicker) {
@@ -1121,6 +1157,10 @@ fun MainScreenPreview() {
             onNavigateAddProjectUp = {},
             onNavigateAddProjectInto = {},
             onRetryAddProjectNavigator = {},
+            onShowAddProjectGoToPath = {},
+            onAddProjectGoToPathDraftChange = {},
+            onCancelAddProjectGoToPath = {},
+            onConfirmAddProjectGoToPath = {},
             onSelectCurrentDirectory = {},
             onNewSession = {},
             onConsumePendingOpenSession = {},
