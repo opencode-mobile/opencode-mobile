@@ -51,6 +51,10 @@ build/
 *.jks
 *.keystore
 
+# Firebase client config: release CI injects it from secrets
+google-services.json
+GoogleService-Info.plist
+
 # Logs
 *.log
 

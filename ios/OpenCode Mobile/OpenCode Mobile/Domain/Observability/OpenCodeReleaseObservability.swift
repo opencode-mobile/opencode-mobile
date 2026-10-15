@@ -47,6 +47,11 @@ import FirebaseRemoteConfig
 
 private enum ReleaseFirebaseBootstrap {
     static func start() {
+        // Release CI injects GoogleService-Info.plist. A Release build without
+        // it (a public clone) stays Firebase-free instead of failing configure.
+        guard Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil else {
+            return
+        }
         if FirebaseApp.app() == nil {
             FirebaseApp.configure()
         }
@@ -79,6 +84,9 @@ private enum ReleaseFirebaseBootstrap {
     }
 
     static func logProductEvent(name: String, parameters: [String: String]) {
+        guard FirebaseApp.app() != nil else {
+            return
+        }
         Analytics.logEvent(name, parameters: parameters.isEmpty ? nil : parameters)
     }
 

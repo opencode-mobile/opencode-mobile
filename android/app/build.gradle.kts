@@ -6,8 +6,14 @@ plugins {
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
     alias(libs.plugins.ktlint)
-    alias(libs.plugins.google.services)
-    alias(libs.plugins.firebase.crashlytics)
+    alias(libs.plugins.google.services) apply false
+    alias(libs.plugins.firebase.crashlytics) apply false
+}
+
+// Release CI injects google-services.json; a clone without it builds Firebase-free.
+if (file("google-services.json").isFile) {
+    apply(plugin = "com.google.gms.google-services")
+    apply(plugin = "com.google.firebase.crashlytics")
 }
 
 val releaseArtifactTaskRequested =
