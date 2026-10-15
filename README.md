@@ -1,28 +1,57 @@
-# opencode-mobile
+# OpenCode Mobile
 
-Native iOS and Android clients for remotely controlling [opencode](https://github.com/sst/opencode) sessions through a running opencode server.
+Native iOS and Android apps for driving [opencode](https://github.com/sst/opencode)
+sessions from your phone. Start a session, follow it live, answer permission
+prompts and questions, and review changes while opencode runs on your own
+machine.
 
-This repository holds both app shells, shared product docs, design-system planning, and agent guidance. The apps talk to the headless opencode server API over HTTP and SSE while foregrounded.
+OpenCode Mobile is an unofficial client. It is not affiliated with or endorsed
+by the opencode project or its authors.
 
-## Repository layout
-
-| Path | Purpose |
+| Android | iOS |
 |---|---|
-| `android/` | Kotlin, Jetpack Compose, Material 3 app |
-| `ios/OpenCode Mobile/` | SwiftUI app |
-| `docs/` | Architecture and design-system references |
-| `.agents/` | Shared agent guidance and canonical skills under `.agents/skills/` |
-| `scripts/` | Icon sync, OpenAPI fetch/generate, agent symlink setup |
-| `AGENTS.md` | Agent and contributor guide |
+| <img src="test-screenshots/android_1_1.jpg" width="240" alt="OpenCode Mobile on Android"> | <img src="test-screenshots/ios_1_1.jpg" width="240" alt="OpenCode Mobile on iOS"> |
 
-## Prerequisites
+## Get the app
 
-- **Android:** JDK 17, Android SDK (compile SDK 36). The optional `:screenshot`
-  Paparazzi module needs JDK 21; see [android/README.md](android/README.md).
-- **iOS:** Xcode with iOS 17.5+ simulator support
-- **Dev tooling:** Node.js for repo scripts (`npm install` at repo root)
+- **Android:** [Google Play](https://play.google.com/store/apps/details?id=dev.opencode.mobile)
+- **iOS:** not on the App Store yet. [Build it from source](#build-from-source).
 
-## Local development
+## Connect to your opencode server
+
+The app talks to an opencode server you run; it does not host anything for
+you. See the official [server docs](https://opencode.ai/docs/server/) for
+details.
+
+1. In your project, start the headless server with a password and keep it
+   running:
+
+   ```bash
+   OPENCODE_SERVER_PASSWORD=<your-password> opencode serve
+   ```
+
+   The username is `opencode` unless you set `OPENCODE_SERVER_USERNAME`.
+2. Make the server reachable from your phone. We recommend
+   [Tailscale](https://tailscale.com): install it on the machine and the
+   phone, then use the machine's Tailscale IP or MagicDNS name. A LAN, VPN,
+   HTTPS endpoint, or another tunnel you manage also works.
+3. In the app, enter the server URL and password. The app checks the server's
+   health before it saves the connection.
+
+Do not expose the server over plain HTTP on the public internet. The password is
+sent with every request, and the server can run commands on your machine.
+
+The app supports both current opencode server protocols and only keeps a live
+connection while it is open.
+
+## Build from source
+
+### Requirements
+
+- **Android:** JDK 17 and the Android SDK (compile SDK 36). The optional
+  `:screenshot` module needs JDK 21; see [android/README.md](android/README.md).
+- **iOS:** Xcode with the iOS 17.5+ simulator.
+- **Repo scripts:** Node.js (`npm install` at the repository root).
 
 ### Android
 
@@ -33,11 +62,10 @@ cd android
 ./gradlew ktlintCheck
 ```
 
-See [android/README.md](android/README.md) for code style details.
-
 ### iOS
 
-Open `ios/OpenCode Mobile/OpenCode Mobile.xcodeproj` in Xcode, or build from the CLI:
+Open `ios/OpenCode Mobile/OpenCode Mobile.xcodeproj` in Xcode, or build from the
+command line:
 
 ```bash
 cd "ios/OpenCode Mobile"
@@ -48,80 +76,33 @@ xcodebuild build \
   CODE_SIGNING_ALLOWED=NO
 ```
 
+Builds from source never include Firebase. Crash reporting and analytics are
+only in the store builds.
+
 ### Repo scripts
 
 ```bash
 npm install
-npm run icons:sync      # regenerate shared Lucide icons
-npm run themes:sync     # copy bundled theme presets into app bundles
-npm run themes:check    # verify shared/iOS/Android preset copies match
-npm run api:sync        # fetch OpenAPI spec and generate clients
+npm run icons:sync      # regenerate the shared Lucide icons
+npm run themes:sync     # copy bundled theme presets into the app bundles
+npm run themes:check    # verify the shared, iOS, and Android preset copies match
+npm run api:sync        # fetch the OpenAPI spec and regenerate the API clients
 ```
 
-## CI
+## Repository layout
 
-Checks run for every **ready-for-review** pull request (drafts are skipped).
-Android runs on the private Fedora box (`self-hosted, Linux, X64, android`);
-iOS runs on the private Mac mini (`self-hosted, macOS, mac-mini`). Android
-Build and iOS Build stay manual.
+| Path | Purpose |
+|---|---|
+| `android/` | Kotlin, Jetpack Compose, Material 3 app |
+| `ios/OpenCode Mobile/` | SwiftUI app |
+| `shared/` | Code and assets both apps use (Markdown core, themes, terminal) |
+| `docs/` | Architecture and design-system reference |
+| `scripts/` | Icon, theme, and OpenAPI tooling |
+| `.agents/skills/` | Skills for AI coding agents |
 
-| Workflow | Trigger | Runner | What it does |
-|---|---|---|---|
-| Android Checks | PR (non-draft) + dispatch | Fedora box (`self-hosted, Linux, X64, android`) | ktlint/lint (soft-fail) + unit tests |
-| iOS Checks | PR (non-draft) + dispatch | Mac mini (`self-hosted, macOS, mac-mini`) | Build, analyzer, unit tests |
-| Android Build | `workflow_dispatch` | Fedora box (`self-hosted, Linux, X64, android`) | Assemble debug APK |
-| Android Release | `workflow_dispatch` on `main` | Fedora box (`self-hosted, Linux, X64, android`) | Build and verify signed AAB + APK, then publish to Play internal |
-| Android App Distribution | `push` to `main`, or `workflow_dispatch` | Fedora box (`self-hosted, Linux, X64, android`) | Build and verify a signed APK, then distribute it to the private Firebase tester group |
-| Android Test Lab | `workflow_dispatch` on `main` | Fedora box (`self-hosted, Linux, X64, android`) | Run bounded Robo tests against a signed release APK |
-| iOS Build | `workflow_dispatch` | Mac mini (`self-hosted, macOS, mac-mini`) | Simulator build |
-| iOS App Distribution | `push` to `main`, or `workflow_dispatch` | Mac mini (`self-hosted, macOS, mac-mini`) | Build and verify a signed Ad Hoc IPA, then distribute it to the private Firebase tester group |
-
-To block merges, require status checks `android-checks` and `ios-checks` on
-`main` (repository ruleset or branch protection, strict up-to-date).
-
-Manual runs:
-
-```bash
-gh workflow run "Android Checks" --ref main
-gh workflow run "Android Release" --ref main -f version_name=0.1.0
-gh workflow run "Android Test Lab" --ref main -f release_run_id=<android-release-run-id>
-gh workflow run "Android App Distribution" --ref main
-gh workflow run "Android App Distribution" --ref feature/ope-<number>-<slug>
-gh workflow run "iOS App Distribution" --ref main
-gh workflow run "iOS App Distribution" --ref feature/ope-<number>-<slug>
-```
-
-Android Release, Android App Distribution, and Android Test Lab use the
-protected `android-release` environment. iOS App Distribution uses the
-protected `ios-release` environment. Maintainers keep the release operator
-runbooks, branch-protection notes, and runner setup in the private
-[`opencode-mobile/ops`](https://github.com/opencode-mobile/ops) repository.
-
-After cloning, run `./scripts/sync-agent-links.sh` if agent symlinks are missing.
-
-## Documentation
-
-- [CONTEXT.md](CONTEXT.md) — product terms and domain language
-- [AGENTS.md](AGENTS.md) — scope, architecture rules, skill usage
-- [docs/architecture.md](docs/architecture.md) — native app architecture
-- [docs/design-system/](docs/design-system/) — shared UI reference
-
-Repository documentation is not an implementation ledger. Feature planning,
-status, remaining work, and temporary platform gaps live on the GitHub issue.
-Code and tests own implemented behavior. Leave docs unchanged during
-implementation unless the user explicitly requests documentation.
-
-## Agent skills
-
-Skills live in `.agents/skills/` and are symlinked for Cursor and Claude:
-
-```bash
-./scripts/sync-agent-links.sh
-```
-
-`AGENTS.md` and `CLAUDE.md` share the same content. Edit skills under `.agents/skills/<skill-name>/SKILL.md` only.
-
-See [AGENTS.md](AGENTS.md) for agent and documentation rules.
+- [CONTEXT.md](CONTEXT.md): product vocabulary
+- [docs/architecture.md](docs/architecture.md): how the apps are structured
+- [docs/design-system/](docs/design-system/): the shared design system
 
 ## Contributing
 
@@ -130,17 +111,19 @@ first; your first pull request asks you to accept the
 [Contributor License Agreement](CLA.md). Report security problems privately as
 described in [SECURITY.md](SECURITY.md).
 
+If you work with an AI coding agent, point it at [AGENTS.md](AGENTS.md). Run
+`./scripts/sync-agent-links.sh` after cloning if the `.claude/` or `.cursor/`
+skill links are missing.
+
 ## License
 
 Copyright (C) 2026 Ivan Fenenko.
 
 The source code is licensed under the [GNU General Public License v3.0](LICENSE),
 with an additional permission to link with the Firebase SDKs and Google Play
-services libraries; see [NOTICE](NOTICE).
+services libraries; see [NOTICE](NOTICE). Third-party components keep their own
+licenses; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 The app icon and store graphics are not covered by the GPL; all rights
 reserved. A fork that you distribute must use its own icon, store graphics,
 application id, and bundle id.
-
-OpenCode Mobile is an unofficial client. It is not affiliated with or endorsed
-by the opencode project or its authors.
