@@ -258,7 +258,16 @@ nonisolated struct SessionsAPIClient: Sendable {
 
     // MARK: - V2 home / session CRUD
 
-    func listSessionsV2(directory: String? = nil, parentID: String? = nil) async throws -> [V2SessionDTO] {
+    func locationForSessionList(directory: String) async throws -> V2LocationInfoDTO {
+        try await get(path: "api/location", locationDirectory: directory)
+    }
+
+    /// `projectID` lists every worktree of that project. Passing `directory` as well would hide those sessions.
+    func listSessionsV2(
+        directory: String? = nil,
+        parentID: String? = nil,
+        projectID: String? = nil
+    ) async throws -> [V2SessionDTO] {
         var sessions: [V2SessionDTO] = []
         var cursor: String?
         var pages = 0
@@ -267,12 +276,15 @@ nonisolated struct SessionsAPIClient: Sendable {
             if let parentID {
                 query["parentID"] = parentID
             }
+            if let projectID {
+                query["project"] = projectID
+            }
             if let cursor {
                 query["cursor"] = cursor
             }
             let envelope: APIListEnvelope<V2SessionDTO> = try await get(
                 path: "api/session",
-                directory: directory,
+                directory: projectID == nil ? directory : nil,
                 query: query
             )
             sessions.append(contentsOf: envelope.data)

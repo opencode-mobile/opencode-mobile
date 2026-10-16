@@ -18,7 +18,25 @@ struct V2SessionRemote: SessionRemote, Sendable {
     }
 
     func listSessions(directory: String?) async throws -> [Session] {
-        try await api.listSessionsV2(directory: directory).map { adapter.session(from: $0) }
+        let projectID = await listableProjectID(directory: directory)
+        return try await api.listSessionsV2(
+            directory: projectID == nil ? directory : nil,
+            projectID: projectID
+        ).map { adapter.session(from: $0) }
+    }
+
+    private func listableProjectID(directory: String?) async -> String? {
+        guard let directory else { return nil }
+        guard let location = try? await api.locationForSessionList(directory: directory) else { return nil }
+        return Self.listableProjectID(location)
+    }
+
+    static func listableProjectID(_ location: V2LocationInfoDTO) -> String? {
+        guard let id = location.project?.id, !id.isEmpty else { return nil }
+        let root = location.project?.canonical ?? location.project?.directory
+        // Non-git directories resolve to the global "/" project, which is not this folder's sessions.
+        if root == nil || root?.isEmpty == true || root == "/" { return nil }
+        return id
     }
 
     func createSession(parentID _: String?, title: String?, directory: String?) async throws -> Session {

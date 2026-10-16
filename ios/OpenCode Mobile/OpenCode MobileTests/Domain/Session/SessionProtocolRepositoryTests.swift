@@ -19,19 +19,31 @@ struct SessionProtocolRepositoryTests {
         #expect(queryValue(url, "directory") == "/repo")
     }
 
-    @Test func v2ListSessionsUnwrapsEnvelopeAndKeepsDirectoryQuery() async throws {
+    @Test func v2ListSessionsIncludesWorktreeSessionsOfTheSameProject() async throws {
         ProtocolRoutingURLProtocol.reset(responses: [
+            .json(#"{"directory":"/repo","project":{"id":"proj","directory":"/repo","canonical":"/repo"}}"#),
             .json(#"""
             {
-              "data": [{
-                "id": "ses_2",
-                "title": "Two",
-                "projectID": "proj",
-                "cost": 0,
-                "tokens": {"input": 1, "output": 2, "reasoning": 0, "cache": {"read": 0, "write": 0}},
-                "time": {"created": 1, "updated": 2},
-                "location": {"directory": "/repo"}
-              }],
+              "data": [
+                {
+                  "id": "ses_worktree",
+                  "title": "Add project sheet prototype",
+                  "projectID": "proj",
+                  "cost": 0,
+                  "tokens": {"input": 0, "output": 0, "reasoning": 0, "cache": {"read": 0, "write": 0}},
+                  "time": {"created": 3, "updated": 9},
+                  "location": {"directory": "/worktrees/add-project-browse"}
+                },
+                {
+                  "id": "ses_2",
+                  "title": "Two",
+                  "projectID": "proj",
+                  "cost": 0,
+                  "tokens": {"input": 1, "output": 2, "reasoning": 0, "cache": {"read": 0, "write": 0}},
+                  "time": {"created": 1, "updated": 2},
+                  "location": {"directory": "/repo"}
+                }
+              ],
               "cursor": {"previous": null, "next": null}
             }
             """#)
@@ -40,17 +52,16 @@ struct SessionProtocolRepositoryTests {
 
         let sessions = try await repository.listSessions(directory: "/repo")
 
-        let session = try #require(sessions.first)
-        #expect(sessions.count == 1)
-        #expect(session.id == "ses_2")
-        #expect(session.directory == "/repo")
-        let url = try #require(ProtocolRoutingURLProtocol.requests.first?.url)
-        #expect(url.path.hasSuffix("/api/session"))
-        #expect(queryValue(url, "directory") == "/repo")
+        #expect(sessions.map(\.id) == ["ses_worktree", "ses_2"])
+        #expect(sessions.first?.directory == "/worktrees/add-project-browse")
+        let listed = try #require(ProtocolRoutingURLProtocol.requests.first { $0.url?.path.hasSuffix("/api/session") == true }?.url)
+        #expect(queryValue(listed, "project") == "proj")
+        #expect(queryValue(listed, "directory") == nil)
     }
 
     @Test func v2ListSessionsAcceptsUntitledSessions() async throws {
         ProtocolRoutingURLProtocol.reset(responses: [
+            .json(#"{"directory":"/home/ivan"}"#),
             .json(#"""
             {
               "data": [
@@ -343,6 +354,7 @@ struct SessionProtocolRepositoryTests {
 
     @Test func v2ListSessionsFollowsCursorPages() async throws {
         ProtocolRoutingURLProtocol.reset(responses: [
+            .json(#"{"directory":"/repo","project":{"id":"p","directory":"/repo","canonical":"/repo"}}"#),
             .json(#"""
             {"data":[{"id":"ses_a","title":"A","projectID":"p","cost":0,"tokens":{"input":0,"output":0,"reasoning":0,"cache":{"read":0,"write":0}},"time":{"created":1,"updated":2},"location":{"directory":"/repo"}}],"cursor":{"previous":null,"next":"page-2"}}
             """#),
@@ -354,14 +366,17 @@ struct SessionProtocolRepositoryTests {
 
         let sessions = try await repository.listSessions(directory: "/repo")
 
+        let listed = ProtocolRoutingURLProtocol.requests.filter { $0.url?.path.hasSuffix("/api/session") == true }
         #expect(sessions.map(\.id) == ["ses_a", "ses_b"])
-        #expect(ProtocolRoutingURLProtocol.requests.count == 2)
-        #expect(queryValue(try #require(ProtocolRoutingURLProtocol.requests[0].url), "cursor") == nil)
-        #expect(queryValue(try #require(ProtocolRoutingURLProtocol.requests[1].url), "cursor") == "page-2")
+        #expect(listed.count == 2)
+        #expect(queryValue(try #require(listed[0].url), "cursor") == nil)
+        #expect(queryValue(try #require(listed[1].url), "cursor") == "page-2")
+        #expect(queryValue(try #require(listed[0].url), "project") == "p")
     }
 
     @Test func unknownProtocolProbesBeforeRoutingToV2() async throws {
         ProtocolRoutingURLProtocol.reset(responses: [
+            .json(#"{"directory":"/repo"}"#),
             .json(#"""
             {"data":[{"id":"ses_2","title":"Two","projectID":"p","cost":0,"tokens":{"input":0,"output":0,"reasoning":0,"cache":{"read":0,"write":0}},"time":{"created":1,"updated":2},"location":{"directory":"/repo"}}],"cursor":{"next":null}}
             """#)
@@ -377,7 +392,7 @@ struct SessionProtocolRepositoryTests {
 
         #expect(sessions.map(\.id) == ["ses_2"])
         #expect(manager.serverProtocol == .v2)
-        let url = try #require(ProtocolRoutingURLProtocol.requests.first?.url)
+        let url = try #require(ProtocolRoutingURLProtocol.requests.first { $0.url?.path.hasSuffix("/api/session") == true }?.url)
         #expect(url.path.hasSuffix("/api/session"))
     }
 

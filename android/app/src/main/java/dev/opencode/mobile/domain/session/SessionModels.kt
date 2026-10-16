@@ -78,6 +78,8 @@ data class SessionSummary(
     val statusStale: Boolean = false,
     /** v2 only: outcome of an unread finished run; null when read, running, or on v1. */
     val unreadOutcome: SessionIdleOutcome? = null,
+    /** Directory the session runs in. Null when the row should use the added project path. */
+    val directory: String? = null,
 )
 
 data class SessionStatus(

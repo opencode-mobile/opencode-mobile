@@ -2,6 +2,7 @@ package dev.opencode.mobile.domain.session
 
 import dev.opencode.mobile.data.remote.SessionsApi
 import dev.opencode.mobile.data.remote.dto.V2FormReplyRequestDto
+import dev.opencode.mobile.data.remote.dto.V2LocationInfoDto
 import dev.opencode.mobile.data.remote.dto.V2PermissionReplyRequestDto
 
 internal class V2SessionRemote(
@@ -14,7 +15,17 @@ internal class V2SessionRemote(
     override suspend fun listPendingQuestions(directory: String?): List<QuestionRequest> =
         api.listPendingFormsV2(directory).map(adapter::toQuestionRequest)
 
-    override suspend fun listSessions(directory: String?): List<Session> = api.listSessionsV2(directory).map(adapter::toSession)
+    override suspend fun listSessions(directory: String?): List<Session> {
+        val projectId =
+            directory?.let { path ->
+                runCatching { listableProjectId(api.locationForSessionList(path)) }.getOrNull()
+            }
+        return api
+            .listSessionsV2(
+                directory = if (projectId == null) directory else null,
+                projectId = projectId,
+            ).map(adapter::toSession)
+    }
 
     override suspend fun createSession(
         parentId: String?,
@@ -215,4 +226,14 @@ internal class V2SessionRemote(
     ) {
         api.viewSessionV2(sessionId, idleAtEpochMs)
     }
+}
+
+/** Project id to list, or null when the directory should stay a directory-scoped list. */
+internal fun listableProjectId(location: V2LocationInfoDto): String? {
+    val project = location.project ?: return null
+    val id = project.id?.takeIf { it.isNotBlank() } ?: return null
+    val root = project.canonical ?: project.directory
+    // Non-git directories resolve to the global "/" project, which is not this folder's sessions.
+    if (root.isNullOrBlank() || root == "/") return null
+    return id
 }

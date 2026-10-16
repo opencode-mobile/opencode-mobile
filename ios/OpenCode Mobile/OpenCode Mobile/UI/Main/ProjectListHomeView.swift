@@ -666,7 +666,7 @@ struct ProjectListHomeView: View {
             SessionListItem(
                 id: session.id,
                 title: session.title,
-                worktree: session.worktree
+                worktree: session.directory
             )
         )
     }
@@ -929,7 +929,7 @@ struct ProjectListHomeView: View {
                 viewModel.onSessionLongPress(
                     sessionId: session.id,
                     title: session.title,
-                    worktree: session.worktree
+                    worktree: session.directory
                 )
             },
             onAddProject: { Task { await viewModel.showAddProjectSheet() } },
@@ -985,6 +985,8 @@ struct SessionListItem: Identifiable, Hashable {
     /// Unique per optimistic new-session navigation so back-stack entries do not reuse a promoted chat.
     let optimisticNavigationInstanceID: UUID?
     let parentID: String?
+    /// Directory the session runs in. Nil when the row should use the added project path.
+    let directory: String?
 
     init(
         id: String,
@@ -997,7 +999,8 @@ struct SessionListItem: Identifiable, Hashable {
         unreadOutcome: SessionIdleOutcome? = nil,
         statusIsStale: Bool = false,
         optimisticNavigationInstanceID: UUID? = nil,
-        parentID: String? = nil
+        parentID: String? = nil,
+        directory: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -1010,6 +1013,7 @@ struct SessionListItem: Identifiable, Hashable {
         self.statusIsStale = statusIsStale
         self.optimisticNavigationInstanceID = optimisticNavigationInstanceID
         self.parentID = parentID
+        self.directory = directory
     }
 }
 
@@ -1091,7 +1095,8 @@ extension Array where Element == ProjectSectionItem {
                 status: session.sessionListStatus(),
                 statusIsStale: session.statusIsStale,
                 caption: session.updatedAtEpochMs.map { RelativeTimeFormatting.format(epochMs: $0) } ?? "",
-                updatedAtEpochMs: session.updatedAtEpochMs
+                updatedAtEpochMs: session.updatedAtEpochMs,
+                directory: session.directory?.isEmpty == false ? session.directory : section.worktree
             )
         }
     }

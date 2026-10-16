@@ -97,6 +97,25 @@ class CrossProjectSessionListSessionsTest {
     }
 
     @Test
+    fun worktreeSession_staysInAddedProjectButOpensItsOwnDirectory() {
+        val sessions =
+            listOf(
+                section(
+                    worktree = "/repo",
+                    session(
+                        id = "ses_worktree",
+                        title = "Add project sheet prototype",
+                        updatedAtEpochMs = 20L,
+                        directory = "/worktrees/add-project-browse",
+                    ),
+                ),
+            ).toCrossProjectSessionListSessions()
+
+        assertEquals("/repo", sessions.single().worktree)
+        assertEquals("/worktrees/add-project-browse", sessions.single().directory)
+    }
+
+    @Test
     fun projectCounts_followTheWinningWorktree() {
         val sections =
             listOf(
@@ -132,10 +151,12 @@ class CrossProjectSessionListSessionsTest {
         id: String,
         title: String,
         updatedAtEpochMs: Long?,
+        directory: String? = null,
     ): SessionSummary =
         SessionSummary(
             id = id,
             title = title,
             updatedAtEpochMs = updatedAtEpochMs,
+            directory = directory,
         )
 }

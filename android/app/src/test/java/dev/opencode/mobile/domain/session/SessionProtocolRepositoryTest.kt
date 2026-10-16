@@ -56,43 +56,62 @@ class SessionProtocolRepositoryTest {
         }
 
     @Test
-    fun v2ListSessions_unwrapsEnvelopeAndKeepsDirectoryQuery() =
+    fun v2ListSessions_includesWorktreeSessionsOfTheSameProject() =
         runTest {
             val requests = mutableListOf<HttpRequestData>()
             val client =
                 testClient { request ->
                     requests += request
-                    respondJson(
-                        """
-                        {
-                          "data":[{
-                            "id":"ses_2",
-                            "title":"Two",
-                            "projectID":"proj",
-                            "cost":0,
-                            "tokens":{"input":1,"output":2,"reasoning":0,"cache":{"read":0,"write":0}},
-                            "time":{"created":1,"updated":2},
-                            "location":{"directory":"/repo"}
-                          }],
-                          "cursor":{"previous":null,"next":null}
-                        }
-                        """.trimIndent(),
-                    )
+                    val path = request.url.encodedPath
+                    when {
+                        path.endsWith("/api/location") ->
+                            respondJson(
+                                """{"directory":"/repo","project":{"id":"proj","directory":"/repo","canonical":"/repo"}}""",
+                            )
+                        else ->
+                            respondJson(
+                                """
+                                {
+                                  "data":[
+                                    {
+                                      "id":"ses_worktree",
+                                      "title":"Add project sheet prototype",
+                                      "projectID":"proj",
+                                      "cost":0,
+                                      "tokens":{"input":0,"output":0,"reasoning":0,"cache":{"read":0,"write":0}},
+                                      "time":{"created":3,"updated":9},
+                                      "location":{"directory":"/worktrees/add-project-browse"}
+                                    },
+                                    {
+                                      "id":"ses_root",
+                                      "title":"Two",
+                                      "projectID":"proj",
+                                      "cost":0,
+                                      "tokens":{"input":1,"output":2,"reasoning":0,"cache":{"read":0,"write":0}},
+                                      "time":{"created":1,"updated":2},
+                                      "location":{"directory":"/repo"}
+                                    }
+                                  ],
+                                  "cursor":{"previous":null,"next":null}
+                                }
+                                """.trimIndent(),
+                            )
+                    }
                 }
-            val manager = manager(ServerProtocol.V2)
-            val repository = DefaultSessionRepository(SessionsApi(client, json), SessionDomainAdapter(), activeConnectionManager = manager)
+            val repository =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V2),
+                )
 
             val sessions = repository.listSessions("/repo")
 
-            assertEquals("ses_2", sessions.single().id)
-            assertEquals("/repo", sessions.single().directory)
-            assertEquals("/repo", requests.single().url.parameters["directory"])
-            assertTrue(
-                requests
-                    .single()
-                    .url.encodedPath
-                    .contains("/api/session"),
-            )
+            assertEquals(listOf("ses_worktree", "ses_root"), sessions.map { it.id })
+            assertEquals("/worktrees/add-project-browse", sessions.first().directory)
+            val listed = requests.first { it.url.encodedPath.contains("/api/session") }
+            assertEquals("proj", listed.url.parameters["project"])
+            assertNull(listed.url.parameters["directory"])
         }
 
     @Test
@@ -343,7 +362,13 @@ class SessionProtocolRepositoryTest {
             val client =
                 testClient { request ->
                     requests += request
-                    respondJson(pages.removeFirst())
+                    if (request.url.encodedPath.endsWith("/api/location")) {
+                        respondJson(
+                            """{"directory":"/repo","project":{"id":"p","directory":"/repo","canonical":"/repo"}}""",
+                        )
+                    } else {
+                        respondJson(pages.removeFirst())
+                    }
                 }
             val repository =
                 DefaultSessionRepository(
@@ -354,10 +379,12 @@ class SessionProtocolRepositoryTest {
 
             val sessions = repository.listSessions("/repo")
 
+            val listed = requests.filter { it.url.encodedPath.contains("/api/session") }
             assertEquals(listOf("ses_a", "ses_b"), sessions.map { it.id })
-            assertEquals(2, requests.size)
-            assertEquals(null, requests[0].url.parameters["cursor"])
-            assertEquals("page-2", requests[1].url.parameters["cursor"])
+            assertEquals(2, listed.size)
+            assertEquals(null, listed[0].url.parameters["cursor"])
+            assertEquals("page-2", listed[1].url.parameters["cursor"])
+            assertEquals("p", listed[0].url.parameters["project"])
         }
 
     @Test
@@ -384,10 +411,7 @@ class SessionProtocolRepositoryTest {
             assertEquals("ses_2", sessions.single().id)
             assertEquals(ServerProtocol.V2, manager.currentProtocol())
             assertTrue(
-                requests
-                    .single()
-                    .url.encodedPath
-                    .contains("/api/session"),
+                requests.any { it.url.encodedPath.contains("/api/session") },
             )
         }
 
