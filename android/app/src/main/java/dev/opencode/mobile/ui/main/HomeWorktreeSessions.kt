@@ -60,14 +60,15 @@ internal class HomeWorktreeMarks(
 
     fun onConnection(key: String) = repository.onConnection(key)
 
+    fun knows(projectId: String): Boolean = projectIds.values.any { it == projectId }
+
     suspend fun load(addedPath: String): WorktreeMarkUpdate {
-        val projectId = runCatching { currentProjectId(addedPath) }.getOrNull()?.takeIf { it.isNotBlank() }
+        val projectId =
+            projectIds[addedPath]
+                ?: runCatching { currentProjectId(addedPath) }.getOrNull()?.takeIf { it.isNotBlank() }
+        // Record the id before refresh so a worktree.updated emitted by that call is not dropped.
         if (projectId != null) projectIds[addedPath] = projectId
-        val load = repository.load(addedPath, projectId)
-        if (load is WorktreeLoad.Loaded && !load.listsSessions && projectId != null) {
-            repository.refresh(projectId)
-        }
-        return update(addedPath, projectId, load)
+        return update(addedPath, projectId, repository.loadRefreshed(addedPath, projectId))
     }
 
     suspend fun refetch(projectId: String): WorktreeMarkUpdate? {

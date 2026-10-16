@@ -1112,7 +1112,7 @@ class MainScreenViewModel
                         foregroundEventStream.events.collect { event ->
                             val projectId = event.namedProjectId() ?: return@collect
                             if (event.type != "worktree.updated") return@collect
-                            if (worktreeProjectIds.values.none { it == projectId }) return@collect
+                            if (!worktreeMarks.knows(projectId)) return@collect
                             val update = worktreeMarks.refetch(projectId) ?: return@collect
                             applyWorktreeMark(update)
                         }

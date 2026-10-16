@@ -76,6 +76,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -1372,11 +1373,14 @@ class SessionChatViewModel
             projectLabel = displayName
             projectLetter = letterCharacterForProject(displayName)
             projectLetterAccent = letterAccentForWorktree(worktree)
+            worktreeCheckout = false
+            checkoutProjectIds.clear()
         }
 
         private fun scheduleProjectIdentityRefine(worktree: String) {
             if (worktree.isBlank()) return
             val displayName = ProjectDomainAdapter.displayNameFromWorktree(worktree)
+            projectIdentityJob?.cancel()
             projectIdentityJob =
                 viewModelScope.launch {
                     val peers =
@@ -1390,8 +1394,10 @@ class SessionChatViewModel
                                 connectionProfileStore.addedWorktrees(baseUrl)
                             }
                         }
+                    coroutineContext.ensureActive()
                     if (boundWorktree != worktree) return@launch
                     val checkout = resolveCheckoutName(worktree, peers)
+                    coroutineContext.ensureActive()
                     if (boundWorktree != worktree) return@launch
                     if (checkout != null) {
                         projectLabel = checkout
@@ -1425,10 +1431,7 @@ class SessionChatViewModel
                         .getOrNull()
                         ?.takeIf { it.isNotBlank() }
                 if (projectId != null) checkoutProjectIds += projectId
-                val load = worktreeRepository.load(added, projectId)
-                if (load is WorktreeLoad.Loaded && !load.listsSessions && projectId != null) {
-                    worktreeRepository.refresh(projectId)
-                }
+                val load = worktreeRepository.loadRefreshed(added, projectId)
                 inventories[added] =
                     when (load) {
                         is WorktreeLoad.Loaded -> WorktreeInventory.loaded(load.directories)

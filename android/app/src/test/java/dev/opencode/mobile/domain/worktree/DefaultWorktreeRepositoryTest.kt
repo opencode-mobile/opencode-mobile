@@ -101,6 +101,24 @@ class DefaultWorktreeRepositoryTest {
         }
 
     @Test
+    fun loadRefreshedRefetchesAfterRefreshAndKeepsTheFirstListWhenRefreshFails() =
+        runTest {
+            val remote = FakeWorktreeRemote()
+            val repository = repository(remote, ServerProtocol.V2)
+
+            val loaded = repository.loadRefreshed("/repo", "proj")
+
+            assertEquals(WorktreeLoad.Loaded(listOf("/worktrees/crisp-cactus"), listsSessions = false), loaded)
+            assertEquals(listOf("proj", "proj"), remote.v2Lists)
+            assertEquals(listOf("proj"), remote.v2Refreshes)
+
+            val failing = FakeWorktreeRemote(refreshError = IllegalStateException("down"))
+            val kept = repository(failing, ServerProtocol.V2).loadRefreshed("/repo", "proj")
+            assertEquals(WorktreeLoad.Loaded(listOf("/worktrees/crisp-cactus"), listsSessions = false), kept)
+            assertEquals(listOf("proj"), failing.v2Lists)
+        }
+
+    @Test
     fun refreshFailureDoesNotClearALoadedList() =
         runTest {
             val remote =

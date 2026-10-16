@@ -65,14 +65,21 @@ final class HomeWorktreeMarks {
         repository.onConnection(key: key)
     }
 
+    func knows(_ projectID: String) -> Bool {
+        projectIDs.values.contains(projectID)
+    }
+
     func load(addedPath: String) async -> WorktreeMarkUpdate {
-        let projectID = await currentProjectID(addedPath)?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let usable = (projectID?.isEmpty == false) ? projectID : nil
-        if let usable { projectIDs[addedPath] = usable }
-        let loaded = await repository.load(addedPath: addedPath, projectID: usable)
-        if case let .loaded(_, listsSessions) = loaded, !listsSessions, let usable {
-            _ = await repository.refresh(projectID: usable)
+        let lookedUp: String?
+        if let cached = projectIDs[addedPath] {
+            lookedUp = cached
+        } else {
+            lookedUp = await currentProjectID(addedPath)?.trimmingCharacters(in: .whitespacesAndNewlines)
         }
+        let usable = (lookedUp?.isEmpty == false) ? lookedUp : nil
+        // Record the id before refresh so a worktree.updated emitted by that call is not dropped.
+        if let usable { projectIDs[addedPath] = usable }
+        let loaded = await repository.loadRefreshed(addedPath: addedPath, projectID: usable)
         return await update(addedPath: addedPath, projectID: usable, load: loaded)
     }
 

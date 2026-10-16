@@ -1154,6 +1154,8 @@ final class SessionChatViewModel {
         projectLabel = displayName
         projectLetter = letterCharacter(for: displayName)
         projectLetterAccent = letterAccent(for: worktree)
+        worktreeCheckout = false
+        checkoutProjectIDs = []
         projectIdentityTask = Task { [worktree, connectionProfileStore, activeConnectionManager] in
             let baseURL: String?
             if let current = activeConnectionManager.currentProfile()?.baseURL, !current.isEmpty {
@@ -1198,13 +1200,14 @@ final class SessionChatViewModel {
         var inventories: [String: WorktreeInventory] = [:]
         var projectIDs: Set<String> = []
         for added in peers {
+            if Task.isCancelled { return nil }
             let projectID = try? await projectRepository.getCurrentProject(directory: added).id
             let usable = projectID?.trimmingCharacters(in: .whitespacesAndNewlines)
-            if let usable, !usable.isEmpty { projectIDs.insert(usable) }
-            let loaded = await worktreeRepository.load(addedPath: added, projectID: usable)
-            if case let .loaded(_, listsSessions) = loaded, !listsSessions, let usable, !usable.isEmpty {
-                _ = await worktreeRepository.refresh(projectID: usable)
+            if let usable, !usable.isEmpty {
+                projectIDs.insert(usable)
+                await MainActor.run { checkoutProjectIDs.insert(usable) }
             }
+            let loaded = await worktreeRepository.loadRefreshed(addedPath: added, projectID: usable)
             switch loaded {
             case let .loaded(directories, _):
                 inventories[added] = .loaded(directories)

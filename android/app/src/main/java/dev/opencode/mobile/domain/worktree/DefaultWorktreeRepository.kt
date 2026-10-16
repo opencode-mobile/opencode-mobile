@@ -32,6 +32,19 @@ class DefaultWorktreeRepository(
             ServerProtocol.V1 -> loadV1(addedPath)
         }
 
+    override suspend fun loadRefreshed(
+        addedPath: String,
+        projectId: String?,
+    ): WorktreeLoad {
+        val listed = load(addedPath, projectId)
+        if (listed !is WorktreeLoad.Loaded || listed.listsSessions || projectId.isNullOrBlank()) return listed
+        if (!refresh(projectId)) return listed
+        return when (val refreshed = refetch(projectId)) {
+            is WorktreeLoad.Loaded, is WorktreeLoad.Failed -> refreshed
+            WorktreeLoad.Unloaded, WorktreeLoad.Stopped -> listed
+        }
+    }
+
     override suspend fun refresh(projectId: String): Boolean {
         if (protocol() != ServerProtocol.V2 || projectId.isBlank()) return false
         return try {

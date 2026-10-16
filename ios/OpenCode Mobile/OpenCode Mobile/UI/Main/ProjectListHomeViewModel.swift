@@ -1414,7 +1414,7 @@ final class ProjectListHomeViewModel {
     }
 
     private func refetchWorktreeMark(_ projectID: String) async {
-        guard worktreeProjectIDs.values.contains(projectID) else { return }
+        guard worktreeMarks.knows(projectID) else { return }
         guard let update = await worktreeMarks.refetch(projectID: projectID) else { return }
         applyWorktreeMark(update)
     }

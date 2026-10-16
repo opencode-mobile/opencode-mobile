@@ -28,6 +28,16 @@ interface WorktreeRepository {
         projectId: String?,
     ): WorktreeLoad
 
+    /**
+     * V2 list, then refresh, then list again so a `worktree.updated` emitted during
+     * refresh is not required for the post-refresh inventory. A failed refresh keeps
+     * the first list. A failed second list replaces it.
+     */
+    suspend fun loadRefreshed(
+        addedPath: String,
+        projectId: String?,
+    ): WorktreeLoad
+
     /** V2 `POST /api/worktree/refresh`. Failure is reported and does not clear a list. */
     suspend fun refresh(projectId: String): Boolean
 
@@ -42,6 +52,11 @@ interface WorktreeRepository {
 /** Tests and previews: never calls the server, so nothing is badged. */
 object UnavailableWorktreeRepository : WorktreeRepository {
     override suspend fun load(
+        addedPath: String,
+        projectId: String?,
+    ): WorktreeLoad = WorktreeLoad.Unloaded
+
+    override suspend fun loadRefreshed(
         addedPath: String,
         projectId: String?,
     ): WorktreeLoad = WorktreeLoad.Unloaded

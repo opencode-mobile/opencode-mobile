@@ -24,6 +24,21 @@ struct DefaultWorktreeRepository: WorktreeRepository {
         return await loadV1(addedPath)
     }
 
+    func loadRefreshed(addedPath: String, projectID: String?) async -> WorktreeLoad {
+        let listed = await load(addedPath: addedPath, projectID: projectID)
+        guard case let .loaded(_, listsSessions) = listed, !listsSessions, let projectID, !projectID.isEmpty else {
+            return listed
+        }
+        guard await refresh(projectID: projectID) else { return listed }
+        let refreshed = await refetch(projectID: projectID)
+        switch refreshed {
+        case .loaded, .failed:
+            return refreshed
+        default:
+            return listed
+        }
+    }
+
     func refresh(projectID: String) async -> Bool {
         guard await protocolProvider() == .v2, !projectID.isEmpty else { return false }
         do {

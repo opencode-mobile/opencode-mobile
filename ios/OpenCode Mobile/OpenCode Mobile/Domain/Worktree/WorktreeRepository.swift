@@ -9,6 +9,8 @@ enum WorktreeLoad: Equatable, Sendable {
 
 protocol WorktreeRepository: Sendable {
     func load(addedPath: String, projectID: String?) async -> WorktreeLoad
+    /// V2 list, then refresh, then list again. A failed refresh keeps the first list.
+    func loadRefreshed(addedPath: String, projectID: String?) async -> WorktreeLoad
     func refresh(projectID: String) async -> Bool
     func refetch(projectID: String) async -> WorktreeLoad
     func onDisconnected()
@@ -18,6 +20,7 @@ protocol WorktreeRepository: Sendable {
 /// Tests and previews: never calls the server, so nothing is badged.
 struct UnavailableWorktreeRepository: WorktreeRepository {
     func load(addedPath: String, projectID: String?) async -> WorktreeLoad { .unloaded }
+    func loadRefreshed(addedPath: String, projectID: String?) async -> WorktreeLoad { .unloaded }
     func refresh(projectID: String) async -> Bool { false }
     func refetch(projectID: String) async -> WorktreeLoad { .unloaded }
     func onDisconnected() {}
