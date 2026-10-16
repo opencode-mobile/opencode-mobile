@@ -1,28 +1,28 @@
 [versions]
 androidGradlePlugin = "9.0.1"
-androidxCore = "1.18.0"
-androidxSplashscreen = "1.0.1"
+androidxCore = "1.19.1"
+androidxSplashscreen = "1.2.0"
 androidxLifecycle = "2.10.0"
 androidxActivity = "1.13.0"
-androidxComposeBom = "2026.03.01"
+androidxComposeBom = "2026.09.00"
 androidxTest = "1.7.0"
 androidxTestExt = "1.3.0"
 androidxTestRunner = "1.7.0"
 androidxTestEspresso = "3.7.0"
-androidxTestUiautomator = "2.3.0"
-coroutines = "1.10.2"
+androidxTestUiautomator = "2.4.0"
+coroutines = "1.11.0"
 junit = "4.13.2"
 joni = "2.2.7"
 kotlin = "2.2.21"
 nav3Core = "1.0.1"
 lifecycleViewmodelNav3 = "2.10.0"
 hilt = "2.57.1"
-ktor = "3.1.1"
-hiltNavigationCompose = "1.2.0"
+ktor = "3.6.0"
+hiltNavigationCompose = "1.4.0"
 ksp = "2.2.21-2.0.5"
 datastore = "1.1.7"
-securityCrypto = "1.1.0-alpha06"
-room = "2.7.2"
+securityCrypto = "1.1.0"
+room = "2.8.5"
 ktlintGradle = "14.2.0"
 firebaseBom = "34.16.0"
 firebaseCrashlyticsPlugin = "3.0.8"
@@ -67,8 +67,8 @@ ktor-serialization-kotlinx-json = { module = "io.ktor:ktor-serialization-kotlinx
 ktor-client-auth = { module = "io.ktor:ktor-client-auth", version.ref = "ktor" }
 ktor-client-logging = { module = "io.ktor:ktor-client-logging", version.ref = "ktor" }
 ktor-client-mock = { module = "io.ktor:ktor-client-mock", version.ref = "ktor" }
-kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version = "1.8.1" }
-jetbrains-markdown = { module = "org.jetbrains:markdown", version = "0.7.8" }
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version = "1.11.0" }
+jetbrains-markdown = { module = "org.jetbrains:markdown", version = "0.7.16" }
 androidx-datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }
 androidx-security-crypto = { module = "androidx.security:security-crypto", version.ref = "securityCrypto" }
 androidx-room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
