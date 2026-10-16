@@ -1,5 +1,5 @@
 #if DEBUG
-import Factory
+import FactoryKit
 import SwiftUI
 
 enum StoreScreenshotLaunchEnvironment {
