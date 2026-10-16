@@ -19,11 +19,14 @@ import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetContentMode
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetHeaderAction
+import dev.opencode.mobile.ui.components.OpenCodeBottomSheetKeyboardBehavior
 import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
+import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeTextInput
 import dev.opencode.mobile.ui.components.OpenCodeTextInputKind
+import dev.opencode.mobile.ui.components.StartDecorator
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 private enum class GalleryBottomSheetDecoratorKind {
@@ -42,6 +45,8 @@ fun BottomSheetGalleryScreen(modifier: Modifier = Modifier) {
     var formMode by rememberSaveable { mutableStateOf(false) }
     var alwaysFixedHeight by rememberSaveable { mutableStateOf(false) }
     var formValue by rememberSaveable { mutableStateOf("http://10.0.2.2:4096/") }
+    var keyboardExpandVisible by rememberSaveable { mutableStateOf(false) }
+    var keyboardExpandFilter by rememberSaveable { mutableStateOf("") }
 
     val startDecoratorKind = galleryDecoratorKind(startDecoratorName)
     val endDecoratorKind = galleryDecoratorKind(endDecoratorName)
@@ -87,7 +92,31 @@ fun BottomSheetGalleryScreen(modifier: Modifier = Modifier) {
             variant = OpenCodeButtonVariant.FullWidthText("Show bottom sheet"),
             onClick = { visible = true },
         )
+
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                text = "Keyboard expand",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = "Form sheet that grows to the top inset while the keyboard is visible.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            OpenCodeButton(
+                variant = OpenCodeButtonVariant.FullWidthText("Show keyboard expand sheet"),
+                onClick = { keyboardExpandVisible = true },
+            )
+        }
     }
+
+    KeyboardExpandBottomSheet(
+        visible = keyboardExpandVisible,
+        filter = keyboardExpandFilter,
+        onFilterChange = { keyboardExpandFilter = it },
+        onDismiss = { keyboardExpandVisible = false },
+    )
 
     OpenCodeBottomSheet(
         visible = visible,
@@ -142,6 +171,41 @@ fun BottomSheetGalleryScreen(modifier: Modifier = Modifier) {
                 endDecorator = endDecorator,
                 itemCount = itemCount,
                 onDismiss = { visible = false },
+            )
+        }
+    }
+}
+
+@Composable
+private fun KeyboardExpandBottomSheet(
+    visible: Boolean,
+    filter: String,
+    onFilterChange: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val folders = (1..20).map { index -> "Folder ${index.toString().padStart(2, '0')}" }
+    OpenCodeBottomSheet(
+        visible = visible,
+        title = "Keyboard expand",
+        onDismissRequest = onDismiss,
+        contentMode = OpenCodeBottomSheetContentMode.Form,
+        alwaysFixedHeight = true,
+        keyboardBehavior = OpenCodeBottomSheetKeyboardBehavior.Expand,
+        pinnedContent = {
+            OpenCodeTextInput(
+                value = filter,
+                onValueChange = onFilterChange,
+                hint = "Folder path",
+                kind = OpenCodeTextInputKind.Filter,
+                modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 8.dp),
+            )
+        },
+    ) {
+        folders.forEach { folder ->
+            OpenCodeListItem(
+                title = folder,
+                startDecorator = StartDecorator.Icon(OpenCodeIcons.Folder, contentDescription = null),
+                onClick = {},
             )
         }
     }

@@ -14,6 +14,7 @@ import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetContentMode
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
+import dev.opencode.mobile.ui.components.OpenCodeBottomSheetKeyboardBehavior
 import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonContrast
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
@@ -61,6 +62,8 @@ internal fun AddProjectSheet(
         // Form keeps the path field and Add above the keyboard.
         contentMode = OpenCodeBottomSheetContentMode.Form,
         alwaysFixedHeight = true,
+        // The pinned header is tall, so grow while typing to keep folder rows in view.
+        keyboardBehavior = OpenCodeBottomSheetKeyboardBehavior.Expand,
         pinnedContent = { AddProjectSheetPinned(sheet = sheet, callbacks = callbacks) },
     ) {
         AddProjectSheetBody(sheet = sheet, callbacks = callbacks)
