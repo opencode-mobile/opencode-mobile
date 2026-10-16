@@ -380,6 +380,7 @@ struct ProjectListHomeViewModelTests {
         #expect(sheet.addTarget == "/Users/me")
         #expect(sheet.addTitle == AddProjectSheetState.homeFolderTitle)
         #expect(sheet.addEnabled)
+        #expect(!sheet.isBrowsing)
         #expect(sheet.showSuggestions)
         #expect(sheet.suggestions.map(\.path) == ["/Users/me/app", "/Users/me/web"])
         #expect(sheet.suggestions.first?.activityLabel != nil)
@@ -387,6 +388,28 @@ struct ProjectListHomeViewModelTests {
         #expect(sheet.roots.map(\.label) == ["Home", "/", "Backup"])
         #expect(sheet.roots.map(\.path) == ["/Users/me", "/", "/Volumes/Backup"])
         #expect(sheet.roots.map(\.selected) == [true, false, false])
+    }
+
+    @Test func browseAddProjectFolders_opensTheBrowserAndBackReturnsToSuggestions() async {
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(projects: []),
+            filesystemRepository: FakeFilesystemRepository(
+                paths: ServerPaths(home: "/home", directory: "/home", worktree: "/"),
+                listings: ["/home": [folder("/home/code")]]
+            )
+        )
+        await viewModel.refresh()
+        await viewModel.showAddProjectSheet()
+
+        viewModel.browseAddProjectFolders()
+        #expect(viewModel.isAddProjectPresented)
+        #expect(viewModel.addProjectSheet.isBrowsing)
+        #expect(viewModel.addProjectSheet.fieldText == "/home/")
+
+        viewModel.closeAddProjectBrowser()
+        #expect(viewModel.isAddProjectPresented)
+        #expect(!viewModel.addProjectSheet.isBrowsing)
+        #expect(viewModel.addProjectSheet.fieldText == "/home/")
     }
 
     @Test func addProjectField_filtersLocallyWithoutRefetching() async {

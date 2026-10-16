@@ -295,6 +295,26 @@ class MainScreenViewModel
             addProject(path)
         }
 
+        /** Replaces the suggestion sheet with the full-screen folder browser. */
+        fun browseAddProjectFolders() {
+            if (addProjectSession == null || addProjectSession?.isValidating == true) return
+            logAction(
+                ProductAnalytics.Screen.HOME_ADD_PROJECT,
+                ProductAnalytics.Action.ADD_PROJECT_BROWSE,
+            )
+            updateAddProjectSession { it.copy(browsing = true) }
+        }
+
+        /** Back from the browser. The suggestion sheet stays open. */
+        fun closeAddProjectBrowser() {
+            if (addProjectSession?.browsing != true) return
+            logAction(
+                ProductAnalytics.Screen.HOME_ADD_PROJECT,
+                ProductAnalytics.Action.ADD_PROJECT_BROWSE_BACK,
+            )
+            updateAddProjectSession { it.copy(browsing = false) }
+        }
+
         fun retryAddProjectListing() {
             val session = addProjectSession ?: return
             logAction(

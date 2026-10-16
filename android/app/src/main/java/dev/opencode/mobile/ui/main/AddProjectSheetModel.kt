@@ -7,7 +7,10 @@ import dev.opencode.mobile.domain.project.Project
 import dev.opencode.mobile.domain.project.ServerProjectSuggestions
 import dev.opencode.mobile.domain.time.RelativeTimeFormatting
 
-/** Add project sheet: a path field over the folder it names, root chips, and server projects. */
+/**
+ * Add project: a short suggestion sheet, or the full-screen browser when [isBrowsing].
+ * The browser is a path field over the folder it names, root chips, and that folder's children.
+ */
 data class AddProjectSheetUi(
     val fieldText: String,
     /** The folder being listed, or null when the field names nothing usable. */
@@ -33,9 +36,12 @@ data class AddProjectSheetUi(
     val addEnabled: Boolean,
     val isValidating: Boolean,
     val fieldError: String?,
+    /** True while Browse folders has replaced the suggestion sheet with the full-screen browser. */
+    val isBrowsing: Boolean,
 ) {
     companion object {
         const val PICK_A_FOLDER = "Pick a folder"
+        const val BROWSE_FOLDERS = "Browse folders"
         const val ALREADY_ON_HOME = "Already on home"
         const val ADD_HOME_FOLDER = "Add home folder"
         const val NO_SUBFOLDERS = "No subfolders"
@@ -96,6 +102,7 @@ data class AddProjectSheetSession(
     val listedRoots: Set<String> = emptySet(),
     val isValidating: Boolean = false,
     val fieldError: String? = null,
+    val browsing: Boolean = false,
 ) {
     val parts: ServerPathPolicy.FieldParts
         get() = ServerPathPolicy.fieldParts(fieldText, home)
@@ -198,6 +205,7 @@ object AddProjectSheetModel {
             addEnabled = addTarget != null && !alreadyAdded && !session.isValidating,
             isValidating = session.isValidating,
             fieldError = session.fieldError,
+            isBrowsing = session.browsing,
         )
     }
 
