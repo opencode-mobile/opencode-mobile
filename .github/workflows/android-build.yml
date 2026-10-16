@@ -24,5 +24,9 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
+      - name: Install Android compile SDK 37
+        working-directory: .
+        run: ./scripts/ensure-android-platform.sh 37
+
       - name: Build debug APK
         run: ./gradlew :app:assembleDebug --stacktrace
