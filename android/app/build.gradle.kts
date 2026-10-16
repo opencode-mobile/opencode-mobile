@@ -194,6 +194,8 @@ dependencies {
 
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
+    // Hilt's transitive kotlin-metadata-jvm stops at metadata 2.2. Kotlin 2.4 needs 2.4.x on the processor classpath.
+    ksp(libs.kotlin.metadata.jvm)
     implementation(libs.hilt.navigation.compose)
 
     implementation(libs.ktor.client.core)
