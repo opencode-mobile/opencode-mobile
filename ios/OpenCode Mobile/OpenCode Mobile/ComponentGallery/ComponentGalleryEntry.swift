@@ -26,6 +26,7 @@ enum ComponentGalleryEntryID: String, Hashable {
     case toolCallCard
     case toolChip
     case messageNote
+    case timelineNotice
     case childSessionRow
     case workingIndicator
     case reasoningRow
@@ -331,6 +332,12 @@ let componentGalleryEntries = [
         id: .messageNote,
         title: "Message Note",
         description: "Muted note under a reply that was cut off or interrupted.",
+        category: .chat
+    ),
+    ComponentGalleryEntry(
+        id: .timelineNotice,
+        title: "Timeline Notice",
+        description: "Quiet line for a moved directory, agent or model change, instructions, or a restart.",
         category: .chat
     ),
     ComponentGalleryEntry(
