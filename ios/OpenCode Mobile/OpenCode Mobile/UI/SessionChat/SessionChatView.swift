@@ -1,6 +1,6 @@
 import AVFoundation
 import Combine
-import Factory
+import FactoryKit
 import PhotosUI
 import SwiftUI
 import UIKit

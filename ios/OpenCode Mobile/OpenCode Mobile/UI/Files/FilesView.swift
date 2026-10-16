@@ -1,4 +1,4 @@
-import Factory
+import FactoryKit
 import SwiftUI
 
 /// Navigation value for the Files screen pushed from Session Chat.
