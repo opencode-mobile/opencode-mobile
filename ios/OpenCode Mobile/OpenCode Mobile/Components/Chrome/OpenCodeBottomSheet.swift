@@ -42,6 +42,69 @@ enum OpenCodeBottomSheetContentMode {
     case form
 }
 
+/// How a sheet reacts while the software keyboard is visible.
+enum OpenCodeBottomSheetKeyboardBehavior: Equatable {
+    /// Keep the resting height (the 50% detent for forms) and lift the card
+    /// above the keyboard.
+    case keepHeight
+    /// Grow the card to fill the space between the top safe area and the top
+    /// of the keyboard; header and pinned content stay at the top and the body
+    /// scrolls in the rest. Returns to the resting height when the keyboard hides.
+    case expand
+}
+
+/// Card height math for `.openCodeBottomSheet`, kept pure so it can be tested.
+enum OpenCodeBottomSheetHeight {
+    /// Gap kept between the top safe area and an expanded card, matching the
+    /// side and bottom inset so it still reads as a sheet.
+    static let expandedTopGap: CGFloat = bottomSheetInset
+
+    /// Space the card may use: the container minus the bottom inset and the
+    /// part of it the keyboard covers.
+    static func availableHeight(containerHeight: CGFloat, keyboardOverlap: CGFloat) -> CGFloat {
+        max(0, containerHeight - bottomSheetInset - keyboardOverlap)
+    }
+
+    /// Forms always follow the keyboard; action lists only when they expand.
+    static func tracksKeyboard(
+        contentMode: OpenCodeBottomSheetContentMode,
+        behavior: OpenCodeBottomSheetKeyboardBehavior
+    ) -> Bool {
+        contentMode == .form || behavior == .expand
+    }
+
+    static func isKeyboardExpanded(
+        behavior: OpenCodeBottomSheetKeyboardBehavior,
+        keyboardOverlap: CGFloat
+    ) -> Bool {
+        behavior == .expand && keyboardOverlap > 0
+    }
+
+    /// Fixed card height, or `nil` when the card sizes to its content.
+    ///
+    /// - Parameters:
+    ///   - restingHeight: height without the keyboard (`nil` = content-sized).
+    ///   - availableHeight: space above the keyboard, from `availableHeight(containerHeight:keyboardOverlap:)`.
+    ///   - topSafeArea: top safe-area inset of the window.
+    ///   - keyboardOverlap: height of the container the keyboard covers.
+    ///   - behavior: the sheet's keyboard behavior.
+    static func cardHeight(
+        restingHeight: CGFloat?,
+        availableHeight: CGFloat,
+        topSafeArea: CGFloat,
+        keyboardOverlap: CGFloat,
+        behavior: OpenCodeBottomSheetKeyboardBehavior
+    ) -> CGFloat? {
+        let resting = restingHeight.map { min($0, availableHeight) }
+        guard isKeyboardExpanded(behavior: behavior, keyboardOverlap: keyboardOverlap) else {
+            return resting
+        }
+        let expanded = max(0, availableHeight - topSafeArea - expandedTopGap)
+        // Never shorter than the resting height: expand only grows the card.
+        return max(resting ?? 0, expanded)
+    }
+}
+
 struct OpenCodeBottomSheetHeaderAction {
     let icon: OpenCodeIcon
     let accessibilityLabel: String
@@ -93,7 +156,10 @@ private struct OpenCodeBottomSheetSheetBody<PinnedContent: View, SheetContent: V
     let scrollTargetID: String?
     let contentMode: OpenCodeBottomSheetContentMode
     let alwaysFixedHeight: Bool
+    let keyboardBehavior: OpenCodeBottomSheetKeyboardBehavior
     let availableHeight: CGFloat
+    let keyboardOverlap: CGFloat
+    let topSafeArea: CGFloat
     let usesFloatingCard: Bool
     let onDismiss: () -> Void
     @ViewBuilder let pinnedContent: () -> PinnedContent
@@ -113,7 +179,10 @@ private struct OpenCodeBottomSheetSheetBody<PinnedContent: View, SheetContent: V
         scrollTargetID: String?,
         contentMode: OpenCodeBottomSheetContentMode,
         alwaysFixedHeight: Bool,
+        keyboardBehavior: OpenCodeBottomSheetKeyboardBehavior,
         availableHeight: CGFloat,
+        keyboardOverlap: CGFloat,
+        topSafeArea: CGFloat,
         safeAreaBottom: CGFloat,
         usesFloatingCard: Bool,
         onDismiss: @escaping () -> Void,
@@ -125,7 +194,10 @@ private struct OpenCodeBottomSheetSheetBody<PinnedContent: View, SheetContent: V
         self.scrollTargetID = scrollTargetID
         self.contentMode = contentMode
         self.alwaysFixedHeight = alwaysFixedHeight
+        self.keyboardBehavior = keyboardBehavior
         self.availableHeight = availableHeight
+        self.keyboardOverlap = keyboardOverlap
+        self.topSafeArea = topSafeArea
         self.safeAreaBottom = safeAreaBottom
         self.usesFloatingCard = usesFloatingCard
         self.onDismiss = onDismiss
@@ -176,15 +248,30 @@ private struct OpenCodeBottomSheetSheetBody<PinnedContent: View, SheetContent: V
         // Forms keep the larger clearance so fields clear the home indicator /
         // keyboard. Do not stack safe-area + padding for action lists — that
         // left a tall empty band under Show all sessions.
-        let bottomClearance =
-            contentMode == .form
-                ? max(bottomSheetContentBottomPadding, safeAreaBottom)
-                : bottomSheetCompactContentBottomPadding
+        // An expanded card sits on the keyboard, so the home-indicator inset
+        // no longer applies and it fills the space above the keyboard.
+        let keyboardExpanded = OpenCodeBottomSheetHeight.isKeyboardExpanded(
+            behavior: keyboardBehavior,
+            keyboardOverlap: keyboardOverlap
+        )
+        let presentationMode: BottomSheetPresentationMode = keyboardExpanded ? .scrollable : resolvedMode
+        let bottomClearance: CGFloat =
+            contentMode != .form
+                ? bottomSheetCompactContentBottomPadding
+                : keyboardExpanded
+                    ? bottomSheetContentBottomPadding
+                    : max(bottomSheetContentBottomPadding, safeAreaBottom)
         let usesFixedCardHeight = resolvedMode == .scrollable || contentMode == .form || alwaysFixedHeight
-        let cardHeight = min(resolvedCardHeight, availableHeight)
+        let cardHeight = OpenCodeBottomSheetHeight.cardHeight(
+            restingHeight: usesFixedCardHeight ? resolvedCardHeight : nil,
+            availableHeight: availableHeight,
+            topSafeArea: topSafeArea,
+            keyboardOverlap: keyboardOverlap,
+            behavior: keyboardBehavior
+        )
         let scrollAreaHeight = max(
             bottomSheetEntryMinHeight,
-            cardHeight
+            (cardHeight ?? min(resolvedCardHeight, availableHeight))
                 - resolvedHeaderHeight
                 - pinnedContentHeight
                 - bottomClearance
@@ -194,7 +281,7 @@ private struct OpenCodeBottomSheetSheetBody<PinnedContent: View, SheetContent: V
             title: title,
             leadingAction: leadingAction,
             onDismiss: onDismiss,
-            mode: resolvedMode,
+            mode: presentationMode,
             contentMode: contentMode,
             scrollAreaHeight: scrollAreaHeight,
             scrollTargetID: scrollTargetID,
@@ -212,7 +299,7 @@ private struct OpenCodeBottomSheetSheetBody<PinnedContent: View, SheetContent: V
             onPinnedContentHeightChange: { pinnedContentHeight = $0 }
         )
         .frame(maxWidth: .infinity, alignment: .top)
-        .frame(height: usesFixedCardHeight ? cardHeight : nil, alignment: .top)
+        .frame(height: cardHeight, alignment: .top)
         .modifier(BottomSheetCardChrome(usesFloatingCard: usesFloatingCard))
         .onChange(of: contentHeight) { _, _ in
             updatePresentationMode()
@@ -356,6 +443,7 @@ struct OpenCodeBottomSheet<PinnedContent: View, SheetContent: View>: ViewModifie
     let scrollTargetID: String?
     let contentMode: OpenCodeBottomSheetContentMode
     let alwaysFixedHeight: Bool
+    let keyboardBehavior: OpenCodeBottomSheetKeyboardBehavior
     @ViewBuilder let pinnedContent: () -> PinnedContent
     @ViewBuilder let sheetContent: () -> SheetContent
 
@@ -373,6 +461,7 @@ struct OpenCodeBottomSheet<PinnedContent: View, SheetContent: View>: ViewModifie
                     scrollTargetID: scrollTargetID,
                     contentMode: contentMode,
                     alwaysFixedHeight: alwaysFixedHeight,
+                    keyboardBehavior: keyboardBehavior,
                     onDismiss: { isPresented = false },
                     pinnedContent: pinnedContent,
                     sheetContent: sheetContent
@@ -388,6 +477,7 @@ private struct OpenCodeBottomSheetOverlayHost<PinnedContent: View, SheetContent:
     var scrollTargetID: String?
     var contentMode: OpenCodeBottomSheetContentMode
     var alwaysFixedHeight: Bool
+    var keyboardBehavior: OpenCodeBottomSheetKeyboardBehavior
     var onDismiss: () -> Void
     @ViewBuilder var pinnedContent: () -> PinnedContent
     @ViewBuilder var sheetContent: () -> SheetContent
@@ -410,6 +500,7 @@ private struct OpenCodeBottomSheetOverlayHost<PinnedContent: View, SheetContent:
             scrollTargetID: scrollTargetID,
             contentMode: contentMode,
             alwaysFixedHeight: alwaysFixedHeight,
+            keyboardBehavior: keyboardBehavior,
             onDismiss: onDismiss,
             pinnedContent: pinnedContent,
             sheetContent: sheetContent,
@@ -435,6 +526,7 @@ private struct OpenCodeBottomSheetOverlayHost<PinnedContent: View, SheetContent:
             scrollTargetID: String?,
             contentMode: OpenCodeBottomSheetContentMode,
             alwaysFixedHeight: Bool,
+            keyboardBehavior: OpenCodeBottomSheetKeyboardBehavior,
             onDismiss: @escaping () -> Void,
             pinnedContent: @escaping () -> PinnedContent,
             sheetContent: @escaping () -> SheetContent,
@@ -455,8 +547,13 @@ private struct OpenCodeBottomSheetOverlayHost<PinnedContent: View, SheetContent:
                 scrollTargetID: scrollTargetID,
                 contentMode: contentMode,
                 alwaysFixedHeight: alwaysFixedHeight,
+                keyboardBehavior: keyboardBehavior,
+                displaySafeAreaTop: window.safeAreaInsets.top,
                 displaySafeAreaBottom: window.safeAreaInsets.bottom,
-                seededKeyboardOverlap: contentMode == .form
+                seededKeyboardOverlap: OpenCodeBottomSheetHeight.tracksKeyboard(
+                    contentMode: contentMode,
+                    behavior: keyboardBehavior
+                )
                     ? KeyboardOverlap.currentAmount(in: hostFrame)
                     : 0,
                 onDismiss: onDismiss,
@@ -569,6 +666,8 @@ private struct OpenCodeBottomSheetOverlayContent<PinnedContent: View, SheetConte
     let scrollTargetID: String?
     let contentMode: OpenCodeBottomSheetContentMode
     let alwaysFixedHeight: Bool
+    let keyboardBehavior: OpenCodeBottomSheetKeyboardBehavior
+    let displaySafeAreaTop: CGFloat
     let displaySafeAreaBottom: CGFloat
     let seededKeyboardOverlap: CGFloat
     let onDismiss: () -> Void
@@ -578,8 +677,12 @@ private struct OpenCodeBottomSheetOverlayContent<PinnedContent: View, SheetConte
     @State private var notifiedKeyboardOverlap: CGFloat = 0
     @State private var receivedKeyboardNotification = false
 
+    private var tracksKeyboard: Bool {
+        OpenCodeBottomSheetHeight.tracksKeyboard(contentMode: contentMode, behavior: keyboardBehavior)
+    }
+
     private var keyboardOverlap: CGFloat {
-        guard contentMode == .form else { return 0 }
+        guard tracksKeyboard else { return 0 }
         return receivedKeyboardNotification ? notifiedKeyboardOverlap : seededKeyboardOverlap
     }
 
@@ -587,7 +690,10 @@ private struct OpenCodeBottomSheetOverlayContent<PinnedContent: View, SheetConte
         GeometryReader { geometry in
             let displayFrame = geometry.frame(in: .global)
             let keyboardInset = keyboardOverlap
-            let availableHeight = max(0, geometry.size.height - bottomSheetInset - keyboardInset)
+            let availableHeight = OpenCodeBottomSheetHeight.availableHeight(
+                containerHeight: geometry.size.height,
+                keyboardOverlap: keyboardInset
+            )
             ZStack(alignment: .bottom) {
                 Color.black.opacity(revealed ? bottomSheetScrimAlpha : 0)
                     .contentShape(Rectangle())
@@ -599,7 +705,10 @@ private struct OpenCodeBottomSheetOverlayContent<PinnedContent: View, SheetConte
                     scrollTargetID: scrollTargetID,
                     contentMode: contentMode,
                     alwaysFixedHeight: alwaysFixedHeight,
+                    keyboardBehavior: keyboardBehavior,
                     availableHeight: availableHeight,
+                    keyboardOverlap: keyboardInset,
+                    topSafeArea: displaySafeAreaTop,
                     safeAreaBottom: max(0, displaySafeAreaBottom - bottomSheetInset),
                     usesFloatingCard: OpenCodeLayoutWidth.resolve(containerWidth: geometry.size.width) == .regular,
                     onDismiss: onDismiss,
@@ -621,7 +730,7 @@ private struct OpenCodeBottomSheetOverlayContent<PinnedContent: View, SheetConte
                 notifiedKeyboardOverlap = 0
             }
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { notification in
-                guard contentMode == .form else { return }
+                guard tracksKeyboard else { return }
                 receivedKeyboardNotification = true
                 notifiedKeyboardOverlap = KeyboardOverlap.amount(
                     from: notification,
@@ -915,6 +1024,7 @@ extension View {
         scrollTargetID: String? = nil,
         contentMode: OpenCodeBottomSheetContentMode = .actionList,
         alwaysFixedHeight: Bool = false,
+        keyboardBehavior: OpenCodeBottomSheetKeyboardBehavior = .keepHeight,
         @ViewBuilder content: @escaping () -> SheetContent
     ) -> some View {
         openCodeBottomSheet(
@@ -924,6 +1034,7 @@ extension View {
             scrollTargetID: scrollTargetID,
             contentMode: contentMode,
             alwaysFixedHeight: alwaysFixedHeight,
+            keyboardBehavior: keyboardBehavior,
             pinnedContent: { EmptyView() },
             content: content
         )
@@ -936,6 +1047,7 @@ extension View {
         scrollTargetID: String? = nil,
         contentMode: OpenCodeBottomSheetContentMode = .actionList,
         alwaysFixedHeight: Bool = false,
+        keyboardBehavior: OpenCodeBottomSheetKeyboardBehavior = .keepHeight,
         @ViewBuilder pinnedContent: @escaping () -> PinnedContent,
         @ViewBuilder content: @escaping () -> SheetContent
     ) -> some View {
@@ -947,6 +1059,7 @@ extension View {
                 scrollTargetID: scrollTargetID,
                 contentMode: contentMode,
                 alwaysFixedHeight: alwaysFixedHeight,
+                keyboardBehavior: keyboardBehavior,
                 pinnedContent: pinnedContent,
                 sheetContent: content
             )
@@ -960,6 +1073,7 @@ extension View {
         scrollTargetID: String? = nil,
         contentMode: OpenCodeBottomSheetContentMode = .actionList,
         alwaysFixedHeight: Bool = false,
+        keyboardBehavior: OpenCodeBottomSheetKeyboardBehavior = .keepHeight,
         @ViewBuilder content: @escaping (Item) -> SheetContent
     ) -> some View {
         modifier(BottomSheetKeyboardHostPolicy())
@@ -971,6 +1085,7 @@ extension View {
                     scrollTargetID: scrollTargetID,
                     contentMode: contentMode,
                     alwaysFixedHeight: alwaysFixedHeight,
+                    keyboardBehavior: keyboardBehavior,
                     onDismiss: { item.wrappedValue = nil },
                     pinnedContent: { EmptyView() },
                     sheetContent: {
@@ -989,6 +1104,7 @@ extension View {
         scrollTargetID: String? = nil,
         contentMode: OpenCodeBottomSheetContentMode = .actionList,
         alwaysFixedHeight: Bool = false,
+        keyboardBehavior: OpenCodeBottomSheetKeyboardBehavior = .keepHeight,
         @ViewBuilder pinnedContent: @escaping (Item) -> PinnedContent,
         @ViewBuilder content: @escaping (Item) -> SheetContent
     ) -> some View {
@@ -1001,6 +1117,7 @@ extension View {
                     scrollTargetID: scrollTargetID,
                     contentMode: contentMode,
                     alwaysFixedHeight: alwaysFixedHeight,
+                    keyboardBehavior: keyboardBehavior,
                     onDismiss: { item.wrappedValue = nil },
                     pinnedContent: {
                         if let value = item.wrappedValue {

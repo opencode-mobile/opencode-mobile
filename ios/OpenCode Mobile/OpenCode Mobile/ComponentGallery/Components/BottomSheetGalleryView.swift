@@ -24,6 +24,8 @@ struct BottomSheetGalleryView: View {
     @State private var formMode = false
     @State private var alwaysFixedHeight = false
     @State private var formValue = "http://127.0.0.1:4096/"
+    @State private var isExpandPresented = false
+    @State private var expandFilter = ""
 
     private var entryStartDecorator: BottomSheetEntryDecorator {
         switch startDecorator {
@@ -91,8 +93,46 @@ struct BottomSheetGalleryView: View {
                 variant: .fullWidthText(title: "Show bottom sheet"),
                 action: { isPresented = true }
             )
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Keyboard: expand")
+                    .font(OpenCodeTypography.button)
+                    .foregroundStyle(OpenCodeColors.textStrong)
+                Text("Form sheet that fills the space above the keyboard while the field is focused.")
+                    .font(OpenCodeTypography.caption)
+                    .foregroundStyle(OpenCodeColors.textWeak)
+                OpenCodeButton(
+                    variant: .fullWidthText(title: "Show expanding sheet"),
+                    action: { isExpandPresented = true }
+                )
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .openCodeBottomSheet(
+            isPresented: $isExpandPresented,
+            title: "Choose folder",
+            contentMode: .form,
+            alwaysFixedHeight: true,
+            keyboardBehavior: .expand,
+            pinnedContent: {
+                OpenCodeTextInput(
+                    text: $expandFilter,
+                    hint: "Folder path",
+                    kind: .filter
+                )
+                .padding(.horizontal, 20)
+                .padding(.bottom, 8)
+            }
+        ) {
+            ForEach(1 ... 20, id: \.self) { index in
+                OpenCodeBottomSheetEntry(
+                    title: "Folder \(index)",
+                    startDecorator: .icon(.folder),
+                    endDecorator: .icon(.chevronRight),
+                    action: {}
+                )
+            }
+        }
         .openCodeBottomSheet(
             isPresented: $isPresented,
             title: showsHeaderBack ? "Anthropic" : "Session actions",

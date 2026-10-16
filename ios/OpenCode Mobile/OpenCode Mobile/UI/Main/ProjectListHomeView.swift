@@ -165,6 +165,7 @@ struct ProjectListHomeView: View {
                 title: "Add project",
                 contentMode: .form,
                 alwaysFixedHeight: true,
+                keyboardBehavior: .expand,
                 pinnedContent: {
                     AddProjectSheetHeader(
                         sheet: viewModel.addProjectSheet,
