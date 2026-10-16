@@ -162,6 +162,18 @@ struct ServerPathPolicyTests {
         #expect(parts("//nas/share/co", #"C:\Users\me"#) == Parts(#"\\nas\share"#, "co"))
     }
 
+    @Test func fieldParts_loneDotFiltersHiddenFolders() {
+        #expect(parts("/Users/me/.", "/Users/me") == Parts("/Users/me", "."))
+        #expect(parts("/Users/me/.co", "/Users/me") == Parts("/Users/me", ".co"))
+        #expect(parts("/Users/me/./", "/Users/me") == Parts("/Users/me", ""))
+        #expect(parts("/.", "/Users/me") == Parts("/", "."))
+        #expect(parts(".", "/Users/me") == Parts("/Users/me", "."))
+        #expect(parts("~/.", "/Users/me") == Parts("/Users/me", "."))
+        #expect(parts(#"C:\Users\me\."#, #"C:\Users\me"#) == Parts(#"C:\Users\me"#, "."))
+        #expect(parts(#"C:\Users\me\.co"#, #"C:\Users\me"#) == Parts(#"C:\Users\me"#, ".co"))
+        #expect(parts(#"C:\Users\me\.\"#, #"C:\Users\me"#) == Parts(#"C:\Users\me"#, ""))
+    }
+
     @Test func fieldParts_homeAndBlank() {
         let home = "/Users/me"
         #expect(parts("~", home) == Parts("/Users", "me"))

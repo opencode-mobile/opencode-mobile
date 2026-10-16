@@ -28,7 +28,8 @@ struct DefaultFilesystemRepository: FilesystemRepository, Sendable {
     }
 
     /// Lists an absolute server folder with its root (`/`, `C:\`, `\\server\share`) as the
-    /// location, so browsing never makes the server open a project there.
+    /// location, so browsing never makes the server open a project there. Returns every child
+    /// folder, hidden ones included, uncapped (see `DirectoryListingPolicy`).
     func listDirectory(path: String) async throws -> [DirectoryNode] {
         let root = ServerPathPolicy.root(path).isEmpty ? path : ServerPathPolicy.root(path)
         let nodes: [DirectoryNode]
@@ -39,6 +40,6 @@ struct DefaultFilesystemRepository: FilesystemRepository, Sendable {
         } else {
             nodes = try await api.listFiles(absoluteDirectory: path, root: root).map(adapter.directoryNode(from:))
         }
-        return DirectoryListingPolicy.prepare(nodes)
+        return DirectoryListingPolicy.directories(nodes)
     }
 }

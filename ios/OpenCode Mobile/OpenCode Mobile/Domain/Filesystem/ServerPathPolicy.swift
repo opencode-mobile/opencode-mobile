@@ -66,12 +66,17 @@ nonisolated enum ServerPathPolicy {
     /// after its last separator. `~` and relative text resolve against `home`. Text ending in a
     /// separator, or resolving to a root, lists that folder with no filter. A leading `//` is a
     /// UNC share only when `home` is Windows-shaped; on a POSIX home repeated slashes collapse.
+    /// A lone `.` after the last separator is the start of a hidden folder's name, not "this
+    /// folder", so it filters that folder's listing.
     static func fieldParts(_ text: String, home: String) -> (directory: String?, filter: String) {
         var value = unquoted(text)
         if !isWindows(home) {
             value = value.replacingOccurrences(of: "/{2,}", with: "/", options: .regularExpression)
         }
         guard let resolved = resolveInput(value, currentPath: home, homePath: home) else { return (nil, "") }
+        if value == "." || value.hasSuffix("/.") || (isWindows(resolved) && value.hasSuffix("\\.")) {
+            return (resolved, ".")
+        }
         let endsWithSeparator = value.hasSuffix("/") || (isWindows(resolved) && value.hasSuffix("\\"))
         if endsWithSeparator || isRoot(resolved) {
             return (resolved, "")

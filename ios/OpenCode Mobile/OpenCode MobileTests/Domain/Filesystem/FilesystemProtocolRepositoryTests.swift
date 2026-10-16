@@ -84,6 +84,7 @@ struct FilesystemProtocolRepositoryTests {
               "data":[
                 {"path":"repo/src/","type":"directory"},
                 {"path":"repo/docs","type":"directory"},
+                {"path":"repo/.github/","type":"directory"},
                 {"path":"repo/README.md","type":"file"}
               ]
             }
@@ -93,9 +94,10 @@ struct FilesystemProtocolRepositoryTests {
 
         let nodes = try await repository.listDirectory(path: "/repo")
 
-        #expect(nodes.map(\.name) == ["docs", "src"])
-        #expect(nodes.map(\.absolutePath) == ["/repo/docs", "/repo/src"])
-        #expect(nodes.map(\.isDirectory) == [true, true])
+        // Hidden folders stay in the listing; the Add project sheet hides them until "." is typed.
+        #expect(nodes.filter { !DirectoryListingPolicy.isHidden($0.name) }.map(\.name) == ["docs", "src"])
+        #expect(Set(nodes.map(\.absolutePath)) == ["/repo/.github", "/repo/docs", "/repo/src"])
+        #expect(nodes.map(\.isDirectory) == [true, true, true])
         let url = try #require(FilesystemRoutingURLProtocol.requests.first?.url)
         #expect(url.path.hasSuffix("/api/fs/list"))
         #expect(queryValue(url, "location[directory]") == "/")

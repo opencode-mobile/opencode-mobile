@@ -348,7 +348,7 @@ struct ProjectListHomeViewModelTests {
                     DirectoryNode(name: ".cache", absolutePath: "/Users/me/.cache", isDirectory: true),
                     DirectoryNode(name: "readme", absolutePath: "/Users/me/readme", isDirectory: false),
                 ],
-                "/Volumes": [folder("/Volumes/Backup")],
+                "/Volumes": [folder("/Volumes/Backup"), folder("/Volumes/.timemachine")],
             ]
         )
         let projectRepository = FakeProjectRepository(projects: [
@@ -375,6 +375,7 @@ struct ProjectListHomeViewModelTests {
         #expect(sheet.directory == "/Users/me")
         #expect(sheet.filter == "")
         #expect(sheet.entries.map(\.name) == ["code"])
+        #expect(sheet.truncationHint == nil)
         #expect(sheet.upTarget == "/Users")
         #expect(sheet.addTarget == "/Users/me")
         #expect(sheet.addTitle == AddProjectSheetState.homeFolderTitle)
@@ -430,6 +431,67 @@ struct ProjectListHomeViewModelTests {
         #expect(sheet.addTarget == "/home/code")
         #expect(sheet.addTitle == "Add code")
         #expect(sheet.addEnabled)
+        #expect(filesystem.requestedPaths.filter { $0 == "/home" }.count == 1)
+    }
+
+    @Test func addProjectField_filtersTheFullListingBeforeTheCap() async {
+        let folders = (0 ..< 250).map { folder(String(format: "/home/f%03d", $0)) }
+        let filesystem = FakeFilesystemRepository(
+            paths: ServerPaths(home: "/home", directory: "/home", worktree: "/"),
+            listings: [
+                "/home": folders.reversed() + [folder("/home/.config"), folder("/home/.cache")],
+            ]
+        )
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            filesystemRepository: filesystem,
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/one"])
+        )
+        await viewModel.refresh()
+        await viewModel.showAddProjectSheet()
+
+        var sheet = viewModel.addProjectSheet
+        #expect(sheet.entries.count == DirectoryListingPolicy.maxVisibleDirectories)
+        #expect(sheet.entries.first?.name == "f000")
+        #expect(sheet.entries.last?.name == "f199")
+        #expect(sheet.truncationHint == "Showing the first 200 folders. Type more of the name to narrow the list.")
+        #expect(sheet.truncationHint == AddProjectSheetState.truncatedListingHint)
+        #expect(sheet.emptyMessage == nil)
+
+        viewModel.updateAddProjectField("/home/f24")
+        sheet = viewModel.addProjectSheet
+        #expect(sheet.entries.map(\.name) == (240 ... 249).map { "f\($0)" })
+        #expect(sheet.truncationHint == nil)
+        #expect(sheet.emptyMessage == nil)
+        #expect(sheet.addTarget == nil)
+        #expect(sheet.addEnabled == false)
+
+        viewModel.updateAddProjectField("/home/f249")
+        sheet = viewModel.addProjectSheet
+        #expect(sheet.entries.map(\.name) == ["f249"])
+        #expect(sheet.addTarget == "/home/f249")
+        #expect(sheet.addTitle == "Add f249")
+        #expect(sheet.addEnabled)
+
+        viewModel.updateAddProjectField("/home/.")
+        sheet = viewModel.addProjectSheet
+        #expect(sheet.directory == "/home")
+        #expect(sheet.filter == ".")
+        #expect(sheet.entries.map(\.name) == [".cache", ".config"])
+        #expect(sheet.addTarget == nil)
+
+        viewModel.updateAddProjectField("/home/.config")
+        sheet = viewModel.addProjectSheet
+        #expect(sheet.entries.map(\.name) == [".config"])
+        #expect(sheet.addTarget == "/home/.config")
+        #expect(sheet.addTitle == "Add .config")
+        #expect(sheet.addEnabled)
+
+        viewModel.updateAddProjectField("/home/f3")
+        sheet = viewModel.addProjectSheet
+        #expect(sheet.entries.isEmpty)
+        #expect(sheet.truncationHint == nil)
+        #expect(sheet.emptyMessage == "Nothing in home starts with \u{201C}f3\u{201D}")
         #expect(filesystem.requestedPaths.filter { $0 == "/home" }.count == 1)
     }
 
@@ -1649,7 +1711,7 @@ private final class FakeFilesystemRepository: FilesystemRepository, @unchecked S
     func listDirectory(path: String) async throws -> [DirectoryNode] {
         requestedPaths.append(path)
         if failingPaths.contains(path) { throw TestError.message("Listing failed") }
-        return DirectoryListingPolicy.prepare(listings[path] ?? [])
+        return DirectoryListingPolicy.directories(listings[path] ?? [])
     }
 }
 

@@ -46,6 +46,7 @@ struct AddProjectSheetState: Equatable {
     static let alreadyAddedTitle = "Already on home"
     static let homeFolderTitle = "Add home folder"
     static let noSubfoldersMessage = "No subfolders"
+    static let truncatedListingHint = "Showing the first \(DirectoryListingPolicy.maxVisibleDirectories) folders. Type more of the name to narrow the list."
     /// Listing failures never show server text, which can carry paths or HTML.
     static let listErrorMessage = "Check the path and try again."
 
@@ -56,8 +57,10 @@ struct AddProjectSheetState: Equatable {
     var directory: String?
     /// Name prefix typed after the field's last separator.
     var filter = ""
-    /// Subfolders of `directory` whose names start with `filter`.
+    /// Subfolders of `directory` whose names start with `filter`, capped after filtering.
     var entries: [AddProjectFolderItem] = []
+    /// Non-interactive row under `entries` when more folders match than are shown.
+    var truncationHint: String?
     var isLoading = false
     var listError: String?
     /// Shown when the listing loaded but no row matches.
@@ -122,8 +125,8 @@ struct AddProjectSheetState: Equatable {
         }
 
         if let listing {
-            sheet.entries = listing
-                .filter { filter.isEmpty || $0.name.range(of: filter, options: [.caseInsensitive, .anchored]) != nil }
+            let visible = DirectoryListingPolicy.visibleEntries(listing, filter: filter)
+            sheet.entries = visible.rows
                 .map { node in
                     AddProjectFolderItem(
                         name: node.name,
@@ -131,6 +134,9 @@ struct AddProjectSheetState: Equatable {
                         isAdded: added.contains(ServerPathPolicy.canonical(node.absolutePath))
                     )
                 }
+            if visible.truncated {
+                sheet.truncationHint = truncatedListingHint
+            }
             if sheet.entries.isEmpty {
                 sheet.emptyMessage = filter.isEmpty
                     ? noSubfoldersMessage
@@ -139,6 +145,7 @@ struct AddProjectSheetState: Equatable {
             if filter.isEmpty {
                 sheet.addTarget = directory
             } else {
+                // The full listing, hidden folders included, so a folder past the cap is addable.
                 let windows = ServerPathPolicy.isWindows(directory)
                 sheet.addTarget = listing.first { node in
                     windows ? node.name.caseInsensitiveCompare(filter) == .orderedSame : node.name == filter
@@ -210,7 +217,8 @@ struct AddProjectSheetInputs: Equatable {
     var fieldText = ""
     var pathsError: String?
     var added: [String] = []
-    /// Successful listings by canonical folder, kept for the sheet's lifetime.
+    /// Successful full listings (every child folder, hidden ones included, uncapped) by
+    /// canonical folder, kept for the sheet's lifetime.
     var listings: [String: [DirectoryNode]] = [:]
     var listErrors: [String: String] = [:]
     var serverProjects: [Project] = []
@@ -1204,7 +1212,7 @@ final class ProjectListHomeViewModel {
         let loadedVolumes = await volumes
         guard generation == addProjectGeneration else { return }
         addProjectInputs.serverProjects = loadedProjects
-        addProjectInputs.volumes = loadedVolumes
+        addProjectInputs.volumes = loadedVolumes.filter { !DirectoryListingPolicy.isHidden($0.name) }
         publishAddProjectSheet()
     }
 

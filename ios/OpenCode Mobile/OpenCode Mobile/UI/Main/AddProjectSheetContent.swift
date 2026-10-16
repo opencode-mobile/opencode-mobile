@@ -139,6 +139,9 @@ struct AddProjectSheetRows: View {
                     action: { onOpenFolder(entry.path) }
                 )
             }
+            if let truncationHint = sheet.truncationHint {
+                OpenCodeBottomSheetEntry(title: truncationHint, enabled: false, action: {})
+            }
         }
     }
 }
