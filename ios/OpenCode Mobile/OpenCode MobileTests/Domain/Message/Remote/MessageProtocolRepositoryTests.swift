@@ -370,6 +370,52 @@ struct MessageProtocolRepositoryTests {
         #expect(MessageProtocolURLProtocol.requests[2].url?.path.hasSuffix("/api/session/ses_2/prompt") == true)
     }
 
+    @Test func v1SendPrompt_mentionOnlyIncludesFileSource() async throws {
+        MessageProtocolURLProtocol.reset(responses: [
+            MessageStubResponse(statusCode: 204, body: "")
+        ])
+        let router = makeRouter(serverProtocol: .v1)
+
+        try await router.sendPromptAsync(
+            sessionID: "ses_1",
+            options: PromptSendOptions(
+                text: "see @src/App.kt",
+                fileMentions: [FileMention(id: "f1", path: "src/App.kt", start: 4, end: 15)],
+                worktree: "/repo"
+            ),
+            directory: "/repo"
+        )
+
+        let body = try #require(MessageProtocolURLProtocol.bodies.first ?? nil)
+        #expect(body.contains(#""url":"file:///repo/src/App.kt""#))
+        #expect(body.contains(#""path":"src/App.kt""#))
+        #expect(body.contains(#""value":"@src/App.kt""#))
+        #expect(!body.contains("data:"))
+    }
+
+    @Test func v2SendPrompt_mentionOnlyIncludesFileUri() async throws {
+        MessageProtocolURLProtocol.reset(responses: [
+            MessageStubResponse(statusCode: 200, body: #"{"data":{"id":"msg_1"}}"#)
+        ])
+        let router = makeRouter(serverProtocol: .v2)
+
+        try await router.sendPromptAsync(
+            sessionID: "ses_2",
+            options: PromptSendOptions(
+                text: "see @src/App.kt",
+                fileMentions: [FileMention(id: "f1", path: "src/App.kt", start: 4, end: 15)],
+                worktree: "/repo"
+            ),
+            directory: "/repo"
+        )
+
+        let body = try #require(MessageProtocolURLProtocol.bodies.first ?? nil)
+        #expect(body.contains(#""uri":"file:///repo/src/App.kt""#))
+        #expect(body.contains(#""mention""#))
+        #expect(body.contains(#""text":"@src/App.kt""#))
+        #expect(!body.contains("data:"))
+    }
+
     private func makeManager(serverProtocol: ServerProtocol?, probing: (any ConnectionProbing)? = nil) -> ActiveConnectionManager {
         let manager = ActiveConnectionManager(connectionProbing: probing)
         manager.applyConnection(
@@ -424,10 +470,12 @@ private struct MessageStubResponse {
 
 private final class MessageProtocolURLProtocol: URLProtocol {
     static var requests: [URLRequest] = []
+    static var bodies: [String?] = []
     static var responses: [MessageStubResponse] = []
 
     static func reset(responses: [MessageStubResponse]) {
         requests = []
+        bodies = []
         self.responses = responses
     }
 
@@ -437,6 +485,7 @@ private final class MessageProtocolURLProtocol: URLProtocol {
 
     override func startLoading() {
         Self.requests.append(request)
+        Self.bodies.append(request.readBodyText())
         let stub = Self.responses.isEmpty ? MessageStubResponse.json("{}") : Self.responses.removeFirst()
         var headers = ["Content-Type": "application/json"]
         stub.headers.forEach { headers[$0.key] = $0.value }
@@ -454,6 +503,27 @@ private final class MessageProtocolURLProtocol: URLProtocol {
     }
 
     override func stopLoading() {}
+}
+
+private extension URLRequest {
+    func readBodyText() -> String? {
+        if let httpBody {
+            return String(data: httpBody, encoding: .utf8)
+        }
+        guard let stream = httpBodyStream else { return nil }
+        stream.open()
+        defer { stream.close() }
+        var data = Data()
+        let bufferSize = 4096
+        let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
+        defer { buffer.deallocate() }
+        while stream.hasBytesAvailable {
+            let read = stream.read(buffer, maxLength: bufferSize)
+            if read <= 0 { break }
+            data.append(buffer, count: read)
+        }
+        return String(data: data, encoding: .utf8)
+    }
 }
 
 private struct StubV2Probe: ConnectionProbing {

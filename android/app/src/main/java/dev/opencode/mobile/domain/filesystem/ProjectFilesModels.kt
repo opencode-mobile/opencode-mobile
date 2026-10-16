@@ -99,7 +99,7 @@ object ProjectFileReference {
             }
         val encoded =
             absolute.split('/').joinToString("/") { segment ->
-                if (segment.isEmpty()) "" else URLEncoder.encode(segment, Charsets.UTF_8).replace("+", "%20")
+                if (segment.isEmpty()) "" else URLEncoder.encode(segment, "UTF-8").replace("+", "%20")
             }
         return "file://$encoded"
     }
