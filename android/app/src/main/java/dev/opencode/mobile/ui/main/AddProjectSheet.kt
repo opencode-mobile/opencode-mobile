@@ -201,6 +201,9 @@ private fun AddProjectSheetBody(
                     onClick = { callbacks.onOpenFolder(folder.path) },
                 )
             }
+            sheet.truncationHint?.let { hint ->
+                OpenCodeBottomSheetEntry(title = hint, enabled = false, onClick = {})
+            }
         }
     }
 }

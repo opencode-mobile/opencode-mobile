@@ -288,7 +288,11 @@ class MainScreenViewModelTest {
                                     DirectoryNode(name = ".cache", absolutePath = "/Users/me/.cache", isDirectory = true),
                                     DirectoryNode(name = "readme", absolutePath = "/Users/me/readme", isDirectory = false),
                                 ),
-                            "/Volumes" to listOf(DirectoryNode("Work SSD", "/Volumes/Work SSD", true)),
+                            "/Volumes" to
+                                listOf(
+                                    DirectoryNode("Work SSD", "/Volumes/Work SSD", true),
+                                    DirectoryNode(".timemachine", "/Volumes/.timemachine", true),
+                                ),
                         ),
                 )
             val projectRepository =
@@ -320,6 +324,7 @@ class MainScreenViewModelTest {
             assertEquals("/Users/me", sheet.directory)
             assertEquals("", sheet.filter)
             assertEquals(listOf("code"), sheet.entries.map { it.name })
+            assertNull(sheet.truncationHint)
             assertTrue(sheet.showSuggestions)
             assertEquals(listOf("/Users/me/web", "/Users/me/app"), sheet.suggestions.map { it.path })
             assertEquals("In me", sheet.folderSectionTitle)
@@ -402,6 +407,73 @@ class MainScreenViewModelTest {
             sheet = requireNotNull(currentSheet(viewModel))
             assertEquals(emptyList<AddProjectFolderUi>(), sheet.entries)
             assertEquals("Nothing in me starts with \u201Cx\u201D", sheet.emptyMessage)
+            assertEquals(1, filesystem.listCalls.count { it == "/Users/me" })
+        }
+
+    @Test
+    fun updateAddProjectField_filtersBeforeCappingLongListing() =
+        runTest(testDispatcher) {
+            val folders = (0 until 250).map { DirectoryNode("f%03d".format(it), "/Users/me/f%03d".format(it), true) }
+            val filesystem =
+                FakeFilesystemRepository(
+                    paths = ServerPaths(home = "/Users/me", directory = "/Users/me", worktree = "/"),
+                    listings =
+                        mapOf(
+                            "/Users/me" to
+                                folders.reversed() +
+                                listOf(
+                                    DirectoryNode(".config", "/Users/me/.config", true),
+                                    DirectoryNode(".cache", "/Users/me/.cache", true),
+                                ),
+                        ),
+                )
+            val viewModel = openSheet(filesystem = filesystem)
+
+            var sheet = requireNotNull(currentSheet(viewModel))
+            assertEquals(DirectoryListingPolicy.MAX_VISIBLE_DIRECTORIES, sheet.entries.size)
+            assertEquals("f000", sheet.entries.first().name)
+            assertEquals("f199", sheet.entries.last().name)
+            assertEquals(AddProjectSheetUi.TRUNCATION_HINT, sheet.truncationHint)
+            assertEquals(
+                "Showing the first 200 folders. Type more of the name to narrow the list.",
+                sheet.truncationHint,
+            )
+            assertNull(sheet.emptyMessage)
+
+            viewModel.updateAddProjectField("/Users/me/f24")
+            advanceUntilIdle()
+            sheet = requireNotNull(currentSheet(viewModel))
+            assertEquals((240..249).map { "f$it" }, sheet.entries.map { it.name })
+            assertNull(sheet.truncationHint)
+            assertNull(sheet.emptyMessage)
+            assertFalse(sheet.addEnabled)
+
+            viewModel.updateAddProjectField("/Users/me/f249")
+            advanceUntilIdle()
+            sheet = requireNotNull(currentSheet(viewModel))
+            assertEquals(listOf("f249"), sheet.entries.map { it.name })
+            assertEquals("/Users/me/f249", sheet.addTarget)
+            assertEquals("Add f249", sheet.addTitle)
+            assertTrue(sheet.addEnabled)
+
+            viewModel.updateAddProjectField("/Users/me/.")
+            advanceUntilIdle()
+            sheet = requireNotNull(currentSheet(viewModel))
+            assertEquals(listOf(".cache", ".config"), sheet.entries.map { it.name })
+            assertNull(sheet.addTarget)
+
+            viewModel.updateAddProjectField("/Users/me/.config")
+            advanceUntilIdle()
+            sheet = requireNotNull(currentSheet(viewModel))
+            assertEquals(listOf(".config"), sheet.entries.map { it.name })
+            assertEquals("/Users/me/.config", sheet.addTarget)
+            assertEquals("Add .config", sheet.addTitle)
+            assertTrue(sheet.addEnabled)
+
+            viewModel.updateAddProjectField("/Users/me/f3")
+            advanceUntilIdle()
+            sheet = requireNotNull(currentSheet(viewModel))
+            assertEquals("Nothing in me starts with \u201Cf3\u201D", sheet.emptyMessage)
             assertEquals(1, filesystem.listCalls.count { it == "/Users/me" })
         }
 
@@ -1834,7 +1906,7 @@ private class FakeFilesystemRepository(
     override suspend fun listDirectory(path: String): List<DirectoryNode> {
         listCalls += path
         errors[path]?.let { throw it }
-        return DirectoryListingPolicy.prepare(listings[path].orEmpty())
+        return DirectoryListingPolicy.directories(listings[path].orEmpty())
     }
 }
 

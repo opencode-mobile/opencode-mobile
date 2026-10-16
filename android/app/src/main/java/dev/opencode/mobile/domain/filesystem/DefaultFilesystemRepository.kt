@@ -31,6 +31,6 @@ class DefaultFilesystemRepository
                 } else {
                     api.listFiles(location = location, path = path).map(adapter::toDirectoryNode)
                 }
-            return DirectoryListingPolicy.prepare(nodes)
+            return DirectoryListingPolicy.directories(nodes)
         }
     }

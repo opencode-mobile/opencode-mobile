@@ -109,6 +109,9 @@ object ServerPathPolicy {
         }
         val windows = isWindows(resolved)
         val endsWithSeparator = trimmed.endsWith("/") || (windows && trimmed.endsWith("\\"))
+        // A lone "." starts a hidden-folder filter in the folder it follows.
+        val lastSegment = trimmed.substringAfterLast('/').let { if (windows) it.substringAfterLast('\\') else it }
+        if (!endsWithSeparator && lastSegment == ".") return FieldParts(directory = resolved, filter = ".")
         if (endsWithSeparator || resolved == root(resolved)) {
             return FieldParts(directory = resolved, filter = "")
         }

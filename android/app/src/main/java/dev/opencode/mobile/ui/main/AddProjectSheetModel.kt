@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.main
 
+import dev.opencode.mobile.domain.filesystem.DirectoryListingPolicy
 import dev.opencode.mobile.domain.filesystem.DirectoryNode
 import dev.opencode.mobile.domain.filesystem.ServerPathPolicy
 import dev.opencode.mobile.domain.project.Project
@@ -13,8 +14,10 @@ data class AddProjectSheetUi(
     val directory: String?,
     /** Name prefix filtering [directory]'s subfolders. */
     val filter: String,
-    /** Subfolders of [directory] matching [filter]. */
+    /** Subfolders of [directory] matching [filter], capped at the first 200. */
     val entries: List<AddProjectFolderUi>,
+    /** Non-interactive row under [entries] when more folders matched than are shown. */
+    val truncationHint: String?,
     val isLoading: Boolean,
     val listError: String?,
     /** "No subfolders" or the no-match message, when the listing is empty. */
@@ -36,6 +39,9 @@ data class AddProjectSheetUi(
         const val ALREADY_ON_HOME = "Already on home"
         const val ADD_HOME_FOLDER = "Add home folder"
         const val NO_SUBFOLDERS = "No subfolders"
+        const val TRUNCATION_HINT =
+            "Showing the first ${DirectoryListingPolicy.MAX_VISIBLE_DIRECTORIES} folders. " +
+                "Type more of the name to narrow the list."
         const val LIST_ERROR_TITLE = "Unable to list this folder"
         const val LIST_ERROR_MESSAGE = "Check the path and try again."
 
@@ -65,6 +71,7 @@ data class AddProjectSuggestionUi(
 sealed interface AddProjectListing {
     data object Loading : AddProjectListing
 
+    /** Every child folder, hidden ones included; the sheet filters, then caps. */
     data class Loaded(
         val entries: List<DirectoryNode>,
     ) : AddProjectListing
@@ -117,10 +124,9 @@ object AddProjectSheetModel {
         val listing = directory?.let { session.listings[it] }
         val loaded = (listing as? AddProjectListing.Loaded)?.entries
         val windows = directory?.let(ServerPathPolicy::isWindows) == true
+        val visible = DirectoryListingPolicy.visibleEntries(loaded.orEmpty(), filter)
         val entries =
-            loaded
-                .orEmpty()
-                .filter { filter.isEmpty() || it.name.startsWith(filter, ignoreCase = true) }
+            visible.rows
                 .map { node ->
                     AddProjectFolderUi(
                         name = node.name,
@@ -143,6 +149,7 @@ object AddProjectSheetModel {
                 filter.isEmpty() -> AddProjectSheetUi.NO_SUBFOLDERS
                 else -> "Nothing in ${ServerPathPolicy.name(directory.orEmpty())} starts with \u201C$filter\u201D"
             }
+        // The full listing, hidden folders and folders past the cap included.
         val addTarget =
             when {
                 loaded == null -> null
@@ -172,6 +179,7 @@ object AddProjectSheetModel {
             directory = directory,
             filter = filter,
             entries = entries,
+            truncationHint = if (visible.isTruncated) AddProjectSheetUi.TRUNCATION_HINT else null,
             isLoading = isLoading,
             listError = listError,
             emptyMessage = emptyMessage,
@@ -221,7 +229,9 @@ object AddProjectSheetModel {
             roots.forEach { root -> candidates += windowsRootLabel(root) to root }
         } else {
             candidates += "/" to "/"
-            session.volumes.forEach { volume -> candidates += volume.name to volume.absolutePath }
+            session.volumes
+                .filterNot(DirectoryListingPolicy::isHidden)
+                .forEach { volume -> candidates += volume.name to volume.absolutePath }
         }
         return candidates
             .distinctBy { (_, path) -> path }

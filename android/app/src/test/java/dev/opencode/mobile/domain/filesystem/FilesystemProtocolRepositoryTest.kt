@@ -100,6 +100,7 @@ class FilesystemProtocolRepositoryTest {
                           "data":[
                             {"path":"src/","type":"directory"},
                             {"path":"docs","type":"directory"},
+                            {"path":".github/","type":"directory"},
                             {"path":"README.md","type":"file"}
                           ]
                         }
@@ -115,8 +116,8 @@ class FilesystemProtocolRepositoryTest {
 
             val nodes = repository.listDirectory("/repo")
 
-            assertEquals(listOf("docs", "src"), nodes.map { it.name })
-            assertEquals(listOf("/repo/docs", "/repo/src"), nodes.map { it.absolutePath })
+            assertEquals(listOf(".github", "docs", "src"), nodes.map { it.name })
+            assertEquals(listOf("/repo/.github", "/repo/docs", "/repo/src"), nodes.map { it.absolutePath })
             assertTrue(nodes.all { it.isDirectory })
             assertTrue(
                 requests

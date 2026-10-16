@@ -142,6 +142,10 @@ class ServerPathPolicyTest {
         assertEquals(ServerPathPolicy.FieldParts("/Users/me", "code"), ServerPathPolicy.fieldParts("code", home))
         // A backslash is part of a POSIX name, not a separator.
         assertEquals(ServerPathPolicy.FieldParts("/srv", "odd\\"), ServerPathPolicy.fieldParts("/srv/odd\\", home))
+        assertEquals(ServerPathPolicy.FieldParts("/Users/me", "."), ServerPathPolicy.fieldParts("/Users/me/.", home))
+        assertEquals(ServerPathPolicy.FieldParts("/Users/me", ".co"), ServerPathPolicy.fieldParts("/Users/me/.co", home))
+        assertEquals(ServerPathPolicy.FieldParts("/", "."), ServerPathPolicy.fieldParts("/.", home))
+        assertEquals(ServerPathPolicy.FieldParts("/Users/me", ""), ServerPathPolicy.fieldParts("/Users/me/./", home))
     }
 
     @Test
@@ -154,6 +158,7 @@ class ServerPathPolicyTest {
         assertEquals(ServerPathPolicy.FieldParts("D:\\", ""), ServerPathPolicy.fieldParts("D:", home))
         assertEquals(ServerPathPolicy.FieldParts("D:\\", "pro"), ServerPathPolicy.fieldParts("D:\\pro", home))
         assertEquals(ServerPathPolicy.FieldParts("C:\\Users\\me", "co"), ServerPathPolicy.fieldParts("C:/Users/me/co", home))
+        assertEquals(ServerPathPolicy.FieldParts("C:\\Users\\me", "."), ServerPathPolicy.fieldParts("C:\\Users\\me\\.", home))
         assertEquals(
             ServerPathPolicy.FieldParts("C:\\Program Files", ""),
             ServerPathPolicy.fieldParts("\"C:\\Program Files\\\"", home),
