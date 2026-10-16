@@ -12,6 +12,14 @@ extension ManagedContainer {
         let make: () -> T = unsafeBitCast(body, to: (() -> T).self)
         return self(key: key, make)
     }
+
+    func onMainActor<P, T>(
+        key: StaticString = #function,
+        _ body: @MainActor @escaping (P) -> T
+    ) -> ParameterFactory<P, T> {
+        let make: (P) -> T = unsafeBitCast(body, to: ((P) -> T).self)
+        return self(key: key, make)
+    }
 }
 
 extension Container {
