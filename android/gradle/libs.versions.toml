@@ -29,7 +29,7 @@ firebaseCrashlyticsPlugin = "3.0.7"
 googleServicesPlugin = "4.5.0"
 camera = "1.4.2"
 zxing = "3.5.4"
-paparazzi = "2.0.0-alpha05"
+paparazzi = "2.0.0-alpha05.1"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidxCore" }
