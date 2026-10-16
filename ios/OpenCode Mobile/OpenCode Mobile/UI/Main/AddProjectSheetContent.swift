@@ -46,6 +46,14 @@ struct AddProjectSuggestions: View {
                     accessory: .disclosure,
                     action: onBrowse
                 )
+                if let fieldError = sheet.fieldError {
+                    Text(fieldError)
+                        .font(OpenCodeTypography.caption)
+                        .foregroundStyle(OpenCodeColors.error)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 12)
+                }
             }
         }
     }

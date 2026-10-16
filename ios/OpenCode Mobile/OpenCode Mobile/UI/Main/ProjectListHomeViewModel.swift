@@ -564,11 +564,17 @@ final class ProjectListHomeViewModel {
         publishAddProjectSheet()
     }
 
-    /// Back from the browser. The suggestion sheet stays open.
+    /// Back from the browser. Returns to the suggestion sheet at the server home, so
+    /// "On this server" is not lost because the field was left in a subfolder.
     func closeAddProjectBrowser() {
         guard isAddProjectPresented, addProjectInputs.isBrowsing else { return }
         logAddProjectAction(ProductAnalytics.Action.addProjectBrowseBack)
+        addProjectListingTask?.cancel()
         addProjectInputs.isBrowsing = false
+        if !addProjectInputs.home.isEmpty {
+            addProjectInputs.fieldText = ServerPathPolicy.fieldText(addProjectInputs.home)
+            addProjectInputs.fieldError = nil
+        }
         publishAddProjectSheet()
     }
 

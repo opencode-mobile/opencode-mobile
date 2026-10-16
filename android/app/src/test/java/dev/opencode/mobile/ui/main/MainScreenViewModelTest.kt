@@ -367,6 +367,52 @@ class MainScreenViewModelTest {
         }
 
     @Test
+    fun closeAddProjectBrowser_afterEnteringAFolder_restoresHomeSuggestions() =
+        runTest(testDispatcher) {
+            val filesystem =
+                FakeFilesystemRepository(
+                    paths = ServerPaths(home = "/Users/me", directory = "/Users/me", worktree = "/"),
+                    listings =
+                        mapOf(
+                            "/Users/me" to listOf(DirectoryNode("code", "/Users/me/code", true)),
+                            "/Users/me/code" to listOf(DirectoryNode("app", "/Users/me/code/app", true)),
+                        ),
+                )
+            val viewModel =
+                openSheet(
+                    filesystem = filesystem,
+                    projectRepository =
+                        FakeProjectRepository(
+                            bootWorktree = "/one",
+                            projects =
+                                listOf(
+                                    Project(
+                                        id = "web",
+                                        worktree = "/Users/me/web",
+                                        displayName = "web",
+                                        activityAtEpochMs = 5,
+                                    ),
+                                ),
+                        ),
+                )
+            assertTrue(currentSheet(viewModel)?.showSuggestions == true)
+
+            viewModel.browseAddProjectFolders()
+            viewModel.openAddProjectFolder("/Users/me/code")
+            advanceUntilIdle()
+            assertEquals("/Users/me/code", currentSheet(viewModel)?.directory)
+            assertFalse(currentSheet(viewModel)?.showSuggestions == true)
+
+            viewModel.closeAddProjectBrowser()
+            val sheet = requireNotNull(currentSheet(viewModel))
+            assertFalse(sheet.isBrowsing)
+            assertEquals("/Users/me/", sheet.fieldText)
+            assertEquals("/Users/me", sheet.directory)
+            assertTrue(sheet.showSuggestions)
+            assertEquals(listOf("/Users/me/web"), sheet.suggestions.map { it.path })
+        }
+
+    @Test
     fun showAddProjectSheet_showsAtMostFiveSuggestions() =
         runTest(testDispatcher) {
             val projectRepository =

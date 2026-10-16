@@ -412,6 +412,38 @@ struct ProjectListHomeViewModelTests {
         #expect(viewModel.addProjectSheet.fieldText == "/home/")
     }
 
+    @Test func closeAddProjectBrowser_afterEnteringAFolder_restoresHomeSuggestions() async {
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(projects: [
+                Project(id: "web", worktree: "/Users/me/web", displayName: "web", activityAtEpochMs: 5),
+            ]),
+            filesystemRepository: FakeFilesystemRepository(
+                paths: ServerPaths(home: "/Users/me", directory: "/Users/me", worktree: "/"),
+                listings: [
+                    "/Users/me": [folder("/Users/me/code")],
+                    "/Users/me/code": [folder("/Users/me/code/app")],
+                ]
+            ),
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/one"])
+        )
+        await viewModel.refresh()
+        await viewModel.showAddProjectSheet()
+        #expect(viewModel.addProjectSheet.showSuggestions)
+
+        viewModel.browseAddProjectFolders()
+        await viewModel.openAddProjectFolder(path: "/Users/me/code")
+        #expect(viewModel.addProjectSheet.directory == "/Users/me/code")
+        #expect(!viewModel.addProjectSheet.showSuggestions)
+
+        viewModel.closeAddProjectBrowser()
+        #expect(viewModel.isAddProjectPresented)
+        #expect(!viewModel.addProjectSheet.isBrowsing)
+        #expect(viewModel.addProjectSheet.fieldText == "/Users/me/")
+        #expect(viewModel.addProjectSheet.directory == "/Users/me")
+        #expect(viewModel.addProjectSheet.showSuggestions)
+        #expect(viewModel.addProjectSheet.suggestions.map(\.path) == ["/Users/me/web"])
+    }
+
     @Test func addProjectField_filtersLocallyWithoutRefetching() async {
         let filesystem = FakeFilesystemRepository(
             paths: ServerPaths(home: "/home", directory: "/home", worktree: "/"),

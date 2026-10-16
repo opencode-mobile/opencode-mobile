@@ -4,13 +4,14 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
@@ -23,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.domain.filesystem.ServerPathPolicy
 import dev.opencode.mobile.theme.openCodeColor
+import dev.opencode.mobile.ui.components.BottomSheetWindowOverlay
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetHeight
@@ -134,6 +136,18 @@ private fun AddProjectSuggestions(
         accessory = OpenCodeListItemAccessory.Disclosure,
         onClick = callbacks.onBrowse,
     )
+    sheet.fieldError?.let { message ->
+        Text(
+            text = message,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.error,
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = OpenCodeLayout.SheetContentHorizontalInset)
+                    .padding(bottom = 12.dp),
+        )
+    }
 }
 
 /**
@@ -144,15 +158,18 @@ private fun AddProjectBrowser(
     sheet: AddProjectSheetUi,
     callbacks: AddProjectSheetCallbacks,
 ) {
-    BackHandler(onBack = callbacks.onCloseBrowser)
     val title = sheet.directory?.let(ServerPathPolicy::name)?.takeIf { it.isNotEmpty() } ?: "Add project"
-    Box(
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background),
-    ) {
-        Column(modifier = Modifier.fillMaxSize().navigationBarsPadding()) {
+    BottomSheetWindowOverlay(paneTitle = title) {
+        BackHandler(onBack = callbacks.onCloseBrowser)
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background)
+                    .statusBarsPadding()
+                    .displayCutoutPadding()
+                    .navigationBarsPadding(),
+        ) {
             OpenCodeTopBar(
                 title = title,
                 leading = OpenCodeTopBarLeading.Back(onClick = callbacks.onCloseBrowser),

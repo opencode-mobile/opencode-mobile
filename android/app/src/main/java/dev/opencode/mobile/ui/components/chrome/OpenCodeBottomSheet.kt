@@ -814,8 +814,9 @@ private tailrec fun Context.findActivity(): Activity? =
         else -> null
     }
 
+/** Window-level surface so a sheet or full-screen cover is not clipped to a split pane. */
 @Composable
-private fun BottomSheetWindowOverlay(
+internal fun BottomSheetWindowOverlay(
     paneTitle: String,
     content: @Composable () -> Unit,
 ) {
