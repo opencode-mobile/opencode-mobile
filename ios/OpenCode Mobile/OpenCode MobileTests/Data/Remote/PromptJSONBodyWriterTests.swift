@@ -30,6 +30,80 @@ struct PromptJSONBodyWriterTests {
         #expect(json.contains("data:text/plain;base64,AQIDBA=="))
     }
 
+    @Test func writeV1Prompt_writesFileMentionURLLiterallyAndKeepsAttachmentIndex() throws {
+        let source = FileManager.default.temporaryDirectory.appendingPathComponent("prompt-writer-attachment.bin")
+        try Data([1, 2, 3, 4]).write(to: source)
+        let attachment = Attachment(
+            id: "a1",
+            filename: "note.txt",
+            mime: "text/plain",
+            kind: .text,
+            dataURL: "",
+            fileURL: source,
+            byteCount: 4
+        )
+        let body = SendMessageRequestDTO(
+            parts: [
+                SendMessagePartDTO(
+                    type: "file",
+                    mime: "text/plain",
+                    filename: "App.kt",
+                    url: "file:///repo/src/App.kt",
+                    fileSource: FileReferenceSourceDTO(
+                        path: "src/App.kt",
+                        value: "@src/App.kt",
+                        start: 4,
+                        end: 15
+                    )
+                ),
+                SendMessagePartDTO(type: "file", mime: "text/plain", filename: "note.txt", url: ""),
+            ]
+        )
+        let file = try PromptJSONBodyWriter.writeV1Prompt(body, attachments: [attachment])
+        let json = try String(contentsOf: file, encoding: .utf8)
+        #expect(json.contains("\"url\":\"file:///repo/src/App.kt\""))
+        #expect(json.contains("\"path\":\"src/App.kt\""))
+        #expect(json.contains("\"value\":\"@src/App.kt\""))
+        #expect(json.contains("data:text/plain;base64,AQIDBA=="))
+        let fileURL = json.range(of: "file:///repo/src/App.kt")
+        let dataURL = json.range(of: "data:text/plain;base64,AQIDBA==")
+        #expect(fileURL != nil && dataURL != nil && fileURL!.lowerBound < dataURL!.lowerBound)
+    }
+
+    @Test func writeV2Prompt_writesMentionURILiterallyAfterAttachment() throws {
+        let source = FileManager.default.temporaryDirectory.appendingPathComponent("prompt-writer-v2.bin")
+        try Data([1, 2, 3, 4]).write(to: source)
+        let attachment = Attachment(
+            id: "a1",
+            filename: "note.txt",
+            mime: "text/plain",
+            kind: .text,
+            dataURL: "",
+            fileURL: source,
+            byteCount: 4
+        )
+        let body = V2PromptRequestDTO(
+            text: "see @src/App.kt",
+            files: [V2PromptFileDTO(uri: "", name: "note.txt", mime: "text/plain")],
+            delivery: "steer",
+            fileMentions: [
+                V2PromptFileMentionDTO(
+                    uri: "file:///repo/src/App.kt",
+                    name: "App.kt",
+                    mention: V2PromptSourceDTO(start: 4, end: 15, text: "@src/App.kt")
+                ),
+            ]
+        )
+        let file = try PromptJSONBodyWriter.writeV2Prompt(body, attachments: [attachment])
+        let json = try String(contentsOf: file, encoding: .utf8)
+        #expect(json.contains("data:text/plain;base64,AQIDBA=="))
+        #expect(json.contains("\"uri\":\"file:///repo/src/App.kt\""))
+        #expect(json.contains("\"text\":\"@src/App.kt\""))
+        let dataURL = json.range(of: "data:text/plain;base64,AQIDBA==")
+        let fileURL = json.range(of: "file:///repo/src/App.kt")
+        #expect(dataURL != nil && fileURL != nil && dataURL!.lowerBound < fileURL!.lowerBound)
+    }
+
     @Test func load_rejectsDecodedBytesOverTwentyMebibytes() {
         let data = Data(count: Int(AttachmentLimits.maxDecodedBytes) + 1)
         #expect(throws: AttachmentLoadError.tooLarge) {

@@ -23,7 +23,7 @@ nonisolated enum PromptJSONBodyWriter {
                     try writer.key("filename")
                     try writer.writeString(filename)
                 }
-                if part.type == "file" {
+                if part.type == "file", part.fileSource == nil {
                     try writer.key("url")
                     try writeFileURL(attachments: attachments, index: &fileIndex, fallback: part.url, mime: part.mime, to: &writer)
                 } else if let url = part.url {
@@ -34,7 +34,24 @@ nonisolated enum PromptJSONBodyWriter {
                     try writer.key("name")
                     try writer.writeString(name)
                 }
-                if let source = part.source {
+                if let fileSource = part.fileSource {
+                    try writer.key("source")
+                    try writer.beginObject()
+                    try writer.key("type")
+                    try writer.writeString("file")
+                    try writer.key("path")
+                    try writer.writeString(fileSource.path)
+                    try writer.key("text")
+                    try writer.beginObject()
+                    try writer.key("value")
+                    try writer.writeString(fileSource.value)
+                    try writer.key("start")
+                    try writer.writeInt(fileSource.start)
+                    try writer.key("end")
+                    try writer.writeInt(fileSource.end)
+                    try writer.endObject()
+                    try writer.endObject()
+                } else if let source = part.source {
                     try writer.key("source")
                     try writer.beginObject()
                     try writer.key("value")
@@ -74,10 +91,12 @@ nonisolated enum PromptJSONBodyWriter {
             try writer.beginObject()
             try writer.key("text")
             try writer.writeString(body.text)
-            if let files = body.files, !files.isEmpty {
+            let mentionFiles = body.fileMentions ?? []
+            let attachmentFiles = body.files ?? []
+            if !attachmentFiles.isEmpty || !mentionFiles.isEmpty {
                 try writer.key("files")
                 try writer.beginArray()
-                for (index, file) in files.enumerated() {
+                for (index, file) in attachmentFiles.enumerated() {
                     try writer.beginObject()
                     try writer.key("uri")
                     try writeFileURI(attachments: attachments, index: index, fallback: file.uri, mime: file.mime, to: &writer)
@@ -85,6 +104,29 @@ nonisolated enum PromptJSONBodyWriter {
                         try writer.key("name")
                         try writer.writeString(name)
                     }
+                    try writer.endObject()
+                }
+                for file in mentionFiles {
+                    try writer.beginObject()
+                    try writer.key("uri")
+                    try writer.writeString(file.uri)
+                    try writer.key("name")
+                    try writer.writeString(file.name)
+                    try writer.key("mention")
+                    try writer.beginObject()
+                    if let start = file.mention.start {
+                        try writer.key("start")
+                        try writer.writeInt(start)
+                    }
+                    if let end = file.mention.end {
+                        try writer.key("end")
+                        try writer.writeInt(end)
+                    }
+                    if let text = file.mention.text {
+                        try writer.key("text")
+                        try writer.writeString(text)
+                    }
+                    try writer.endObject()
                     try writer.endObject()
                 }
                 try writer.endArray()

@@ -182,4 +182,61 @@ class ComposerMentionRoutingTest {
         assertEquals(13, parts[1].start)
         assertEquals(21, parts[1].end)
     }
+
+    @Test
+    fun insertFileMention_shiftsAgentMentionsAndKeepsThemSeparate() {
+        val agents = listOf(AgentMention(id = "m1", name = "explore", start = 0, end = 8))
+        val result =
+            ComposerMentionRouting.insertFileMention(
+                text = "@explore look at @App",
+                cursor = 22,
+                path = "src/App.kt",
+                mentionId = "f1",
+                existingMentions = agents,
+            )
+        assertEquals("@explore look at @src/App.kt ", result.text)
+        assertEquals(agents, result.mentions)
+        assertEquals(listOf(FileMention(id = "f1", path = "src/App.kt", start = 17, end = 28)), result.fileMentions)
+    }
+
+    @Test
+    fun reconcile_atomicDeleteOfFileMentionShiftsFollowingAgent() {
+        val result =
+            ComposerMentionRouting.reconcileAfterEdit(
+                previousText = "@src/App.kt @explore",
+                previousMentions = listOf(AgentMention(id = "m1", name = "explore", start = 12, end = 20)),
+                proposedText = "@src/App.k @explore",
+                proposedCursor = 9,
+                previousFileMentions = listOf(FileMention(id = "f1", path = "src/App.kt", start = 0, end = 11)),
+            )
+        assertEquals("@explore", result.text.trim())
+        assertTrue(result.fileMentions.isEmpty())
+        assertEquals(1, result.mentions.single().start)
+        assertEquals("@explore", result.text.substring(result.mentions.single().start, result.mentions.single().end))
+    }
+
+    @Test
+    fun fileParts_requireTheTokenToStillMatch() {
+        val parts =
+            ComposerMentionRouting.fileParts(
+                text = "see @src/App.kt",
+                mentions = listOf(FileMention(id = "f1", path = "src/App.kt", start = 4, end = 15)),
+            )
+        assertEquals("src/App.kt", parts.single().path)
+        assertEquals("App.kt", parts.single().filename)
+        assertEquals("@src/App.kt", parts.single().sourceValue)
+        assertTrue(
+            ComposerMentionRouting
+                .fileParts(
+                    text = "see @other",
+                    mentions = listOf(FileMention(id = "f1", path = "src/App.kt", start = 4, end = 10)),
+                ).isEmpty(),
+        )
+    }
+
+    @Test
+    fun atQuery_insideFileMentionStaysClosed() {
+        val files = listOf(FileMention(id = "f1", path = "my file.kt", start = 0, end = 11))
+        assertEquals(null, ComposerMentionRouting.atSuggestionQuery("@my file.kt", cursor = 4, fileMentions = files))
+    }
 }

@@ -48,7 +48,7 @@ connection while it is open.
 
 ### Requirements
 
-- **Android:** JDK 17 and the Android SDK (compile SDK 36). The optional
+- **Android:** JDK 17 and the Android SDK (compile SDK 37). The optional
   `:screenshot` module needs JDK 21; see [android/README.md](android/README.md).
 - **iOS:** Xcode with the iOS 17.5+ simulator.
 - **Repo scripts:** Node.js (`npm install` at the repository root).

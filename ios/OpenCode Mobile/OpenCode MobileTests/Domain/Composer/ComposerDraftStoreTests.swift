@@ -128,6 +128,26 @@ import Testing
         #expect(loaded?.savedAtEpochMs != nil)
     }
 
+    @Test func saveAndLoad_roundTripsFileMentions() {
+        let store = makeStore("ComposerDraftStoreTests.fileMentions")
+        let identity = ModelSelectionConnectionIdentity(serverBaseURL: "http://127.0.0.1:4096/", username: "alice")
+        let file = FileMention(id: "f1", path: "src/App.kt", start: 4, end: 15)
+        store.save(
+            connectionIdentity: identity,
+            worktree: "/repo",
+            sessionID: "ses-1",
+            draft: ComposerDraft(text: "see @src/App.kt", fileMentions: [file], savedAtEpochMs: 2_000)
+        )
+        #expect(store.load(connectionIdentity: identity, worktree: "/repo", sessionID: "ses-1")?.fileMentions == [file])
+    }
+
+    @Test func load_missingFileMentions_decodesAsEmpty() throws {
+        let json = #"{"text":"hello","agentMentions":[],"savedAtEpochMs":1}"#
+        let draft = try JSONDecoder().decode(ComposerDraft.self, from: Data(json.utf8))
+        #expect(draft.text == "hello")
+        #expect(draft.fileMentions.isEmpty)
+    }
+
     private func makeStore(_ suiteName: String) -> UserDefaultsComposerDraftStore {
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)

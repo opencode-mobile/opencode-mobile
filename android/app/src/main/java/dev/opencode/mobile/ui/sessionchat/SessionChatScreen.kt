@@ -785,7 +785,7 @@ fun SessionChatScreen(
                                     onSelect = { item ->
                                         viewModel.selectAtSuggestion(item.id)
                                     },
-                                    emptyMessage = "No agents",
+                                    emptyMessage = "No matches",
                                     modifier =
                                         Modifier
                                             .padding(horizontal = 12.dp)
@@ -937,7 +937,7 @@ fun SessionChatScreen(
                                 SessionChatComposerKind.Prompt ->
                                     OpenCodeSessionComposerState.Prompt(
                                         text = uiState.composer.text,
-                                        mentionRanges = uiState.composer.agentMentions.map { it.start until it.end },
+                                        mentionRanges = uiState.composer.mentionRanges,
                                         selectionStart = uiState.composer.cursor,
                                         selectionEnd = uiState.composer.cursor,
                                         selectionRevision = uiState.composer.selectionRevision,

@@ -102,6 +102,7 @@ struct SessionChatComposerState: Equatable {
     var isModelSelectionReady = false
     var modelCatalogError: String?
     var agentMentions: [AgentMention] = []
+    var fileMentions: [FileMention] = []
     var cursor: Int = 0
     var selectionRevision: Int = 0
     var followUpDelivery: FollowUpDelivery = .steer
@@ -126,6 +127,11 @@ struct SessionChatComposerState: Equatable {
 
     var canSelectVariant: Bool {
         selectedModel?.option.supportsVariants == true
+    }
+
+    var mentionRanges: [Range<Int>] {
+        (agentMentions.map { $0.start ..< $0.end } + fileMentions.map { $0.start ..< $0.end })
+            .sorted { $0.lowerBound < $1.lowerBound }
     }
 
     var hasSendableContent: Bool {
@@ -596,7 +602,22 @@ struct SessionChatAtSuggestion: Equatable, Identifiable {
     let id: String
     let title: String
     let subtitle: String?
-    let agentName: String
+    let agentName: String?
+    let filePath: String?
+
+    init(
+        id: String,
+        title: String,
+        subtitle: String?,
+        agentName: String? = nil,
+        filePath: String? = nil
+    ) {
+        self.id = id
+        self.title = title
+        self.subtitle = subtitle
+        self.agentName = agentName
+        self.filePath = filePath
+    }
 }
 
 struct SessionChatComposerRegionState: Equatable {
@@ -619,6 +640,8 @@ struct SessionChatComposerRegionState: Equatable {
     var slashSuggestions: [SessionChatSlashSuggestion] = []
     var atSuggestionsVisible = false
     var atSuggestions: [SessionChatAtSuggestion] = []
+    var fileSuggestions: [SessionChatAtSuggestion] = []
+    var fileSuggestionQuery: String?
     var followUpNotice: String?
 }
 
@@ -647,6 +670,17 @@ extension MentionableAgent {
             title: "@\(name)",
             subtitle: description,
             agentName: name
+        )
+    }
+}
+
+extension ProjectEntry {
+    func toFileSuggestion() -> SessionChatAtSuggestion {
+        SessionChatAtSuggestion(
+            id: "file:\(relativePath)",
+            title: relativePath,
+            subtitle: "File",
+            filePath: relativePath
         )
     }
 }

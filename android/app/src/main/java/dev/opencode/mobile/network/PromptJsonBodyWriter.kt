@@ -33,14 +33,14 @@ object PromptJsonBodyWriter {
                 }
                 part.url?.let {
                     writer.key("url")
-                    if (part.type == "file") {
+                    if (part.type == "file" && part.fileSource == null) {
                         writeFileUri(attachments, fileIndex, it, part.mime, writer)
                         fileIndex += 1
                     } else {
                         writer.writeString(it)
                     }
                 } ?: run {
-                    if (part.type == "file") {
+                    if (part.type == "file" && part.fileSource == null) {
                         writer.key("url")
                         writeFileUri(attachments, fileIndex, "", part.mime, writer)
                         fileIndex += 1
@@ -54,7 +54,24 @@ object PromptJsonBodyWriter {
                     writer.key("name")
                     writer.writeString(it)
                 }
-                part.source?.let { source ->
+                part.fileSource?.let { source ->
+                    writer.key("source")
+                    writer.beginObject()
+                    writer.key("type")
+                    writer.writeString("file")
+                    writer.key("path")
+                    writer.writeString(source.path)
+                    writer.key("text")
+                    writer.beginObject()
+                    writer.key("value")
+                    writer.writeString(source.value)
+                    writer.key("start")
+                    writer.writeInt(source.start)
+                    writer.key("end")
+                    writer.writeInt(source.end)
+                    writer.endObject()
+                    writer.endObject()
+                } ?: part.source?.let { source ->
                     writer.key("source")
                     writer.beginObject()
                     writer.key("value")
@@ -97,10 +114,12 @@ object PromptJsonBodyWriter {
             writer.beginObject()
             writer.key("text")
             writer.writeString(body.text)
-            body.files?.takeIf { it.isNotEmpty() }?.let { files ->
+            val mentionFiles = body.fileMentions.orEmpty()
+            val attachmentFiles = body.files.orEmpty()
+            if (attachmentFiles.isNotEmpty() || mentionFiles.isNotEmpty()) {
                 writer.key("files")
                 writer.beginArray()
-                files.forEachIndexed { index, file ->
+                attachmentFiles.forEachIndexed { index, file ->
                     writer.beginObject()
                     writer.key("uri")
                     writeFileUri(attachments, index, file.uri, file.mime, writer)
@@ -108,6 +127,29 @@ object PromptJsonBodyWriter {
                         writer.key("name")
                         writer.writeString(it)
                     }
+                    writer.endObject()
+                }
+                mentionFiles.forEach { file ->
+                    writer.beginObject()
+                    writer.key("uri")
+                    writer.writeString(file.uri)
+                    writer.key("name")
+                    writer.writeString(file.name)
+                    writer.key("mention")
+                    writer.beginObject()
+                    file.mention.start?.let {
+                        writer.key("start")
+                        writer.writeInt(it)
+                    }
+                    file.mention.end?.let {
+                        writer.key("end")
+                        writer.writeInt(it)
+                    }
+                    file.mention.text?.let {
+                        writer.key("text")
+                        writer.writeString(it)
+                    }
+                    writer.endObject()
                     writer.endObject()
                 }
                 writer.endArray()

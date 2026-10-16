@@ -718,7 +718,7 @@
 			repositoryURL = "https://github.com/hmlongco/Factory";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 2.4.3;
+				minimumVersion = 3.4.0;
 			};
 		};
 		63OCFIREPKG00100002BDFFC /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
@@ -726,16 +726,16 @@
 			repositoryURL = "https://github.com/firebase/firebase-ios-sdk.git";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 12.17.0;
+				minimumVersion = 12.19.2;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		63OC00022FA93400002BDFFC /* Factory */ = {
+		63OC00022FA93400002BDFFC /* FactoryKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 63OC00012FA93400002BDFFC /* XCRemoteSwiftPackageReference "Factory" */;
-			productName = Factory;
+			productName = FactoryKit;
 		};
 		63OCFIREPROD001002BDFFC /* FirebaseAnalytics */ = {
 			isa = XCSwiftPackageProductDependency;

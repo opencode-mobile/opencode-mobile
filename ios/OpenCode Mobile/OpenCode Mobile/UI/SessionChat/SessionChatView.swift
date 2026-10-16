@@ -1,6 +1,6 @@
 import AVFoundation
 import Combine
-import Factory
+import FactoryKit
 import PhotosUI
 import SwiftUI
 import UIKit
@@ -366,7 +366,7 @@ struct SessionChatView: View {
                                     subtitle: suggestion.subtitle
                                 )
                             },
-                            emptyMessage: "No agents",
+                            emptyMessage: "No matches",
                             onSelect: { item in
                                 viewModel.selectAtSuggestion(agentName: item.id)
                             }
@@ -1157,7 +1157,7 @@ struct SessionChatView: View {
             state = .prompt(
                 .init(
                     text: composer.text,
-                    mentionRanges: composer.agentMentions.map { $0.start ..< $0.end },
+                    mentionRanges: composer.mentionRanges,
                     selectionStart: composer.cursor,
                     selectionEnd: composer.cursor,
                     selectionRevision: composer.selectionRevision,

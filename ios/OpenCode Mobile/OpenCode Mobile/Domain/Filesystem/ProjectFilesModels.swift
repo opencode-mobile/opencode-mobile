@@ -88,6 +88,43 @@ nonisolated enum ProjectPaths {
         ["md", "markdown"].contains(fileExtension(of: name))
     }
 
+    /// `file://` URL for a project file on the connected server. The worktree is a server path,
+    /// so this joins with `/` and does not touch the device filesystem.
+    static func fileURL(worktree: String, relativePath: String) -> String {
+        var base = worktree.trimmingCharacters(in: .whitespacesAndNewlines)
+        while base.hasSuffix("/") { base.removeLast() }
+        var relative = relativePath.trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "\\", with: "/")
+        while relative.hasPrefix("/") { relative.removeFirst() }
+        while relative.hasSuffix("/") { relative.removeLast() }
+        let absolute: String
+        if base.isEmpty {
+            absolute = "/\(relative)"
+        } else if relative.isEmpty {
+            absolute = base
+        } else {
+            absolute = "\(base)/\(relative)"
+        }
+        let encoded = absolute.split(separator: "/", omittingEmptySubsequences: false).map { segment in
+            segment.isEmpty ? "" : percentEncodePathSegment(String(segment))
+        }.joined(separator: "/")
+        return "file://\(encoded)"
+    }
+
+    static func filename(of relativePath: String) -> String {
+        let trimmed = relativePath.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalized = trimmed.replacingOccurrences(of: "\\", with: "/")
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let name = normalized.split(separator: "/").last.map(String.init) ?? normalized
+        return name.isEmpty ? normalized : name
+    }
+
+    private static func percentEncodePathSegment(_ segment: String) -> String {
+        var allowed = CharacterSet.alphanumerics
+        allowed.insert(charactersIn: "-._~")
+        return segment.addingPercentEncoding(withAllowedCharacters: allowed) ?? segment
+    }
+
     /// Last path component of the worktree, used as the Files subtitle.
     static func projectName(worktree: String) -> String {
         let trimmed = worktree.trimmingCharacters(in: CharacterSet(charactersIn: "/"))

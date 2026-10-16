@@ -1,0 +1,85 @@
+version: 2
+
+updates:
+  # Android app, shared/markdown-core, version catalog, and Gradle wrapper.
+  - package-ecosystem: gradle
+    directory: /android
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+    groups:
+      # Kotlin, KSP, and the Compose compiler plugin must move together.
+      kotlin-toolchain:
+        patterns:
+          - "org.jetbrains.kotlin*"
+          - "com.google.devtools.ksp*"
+      android-gradle-plugin:
+        patterns:
+          - "com.android.*"
+      androidx:
+        patterns:
+          - "androidx.*"
+      firebase:
+        patterns:
+          - "com.google.firebase*"
+          - "com.google.gms*"
+      hilt:
+        patterns:
+          - "com.google.dagger*"
+      ktor:
+        patterns:
+          - "io.ktor*"
+      kotlinx:
+        patterns:
+          - "org.jetbrains.kotlinx*"
+
+  # iOS app: Xcode-managed Swift packages (Package.resolved in the .xcodeproj).
+  - package-ecosystem: swift
+    directory: /ios/OpenCode Mobile
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+    groups:
+      firebase:
+        patterns:
+          - "*firebase*"
+          - "*google*"
+          - "*abseil*"
+          - "*grpc*"
+          - "*leveldb*"
+          - "*nanopb*"
+          - "*promises*"
+          - "*gtm*"
+          - "*interop*"
+
+  # scripts/ Node tooling (API generation, icons, themes, screenshots).
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+    groups:
+      npm-tooling:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      github-actions:
+        patterns:
+          - "*"

@@ -1,5 +1,7 @@
 package dev.opencode.mobile.domain.filesystem
 
+import java.net.URLEncoder
+
 /** One File Browser row: a file or folder under the Session Chat worktree. */
 data class ProjectEntry(
     val name: String,
@@ -70,4 +72,35 @@ object ProjectFileLimits {
     const val BINARY_SNIFF_BYTES: Int = 8 * 1024
 
     const val FIND_LIMIT: Int = 50
+}
+
+/**
+ * `file://` URL for a project file on the connected server. The worktree is a server path,
+ * so this joins with `/` and does not touch the device filesystem.
+ */
+object ProjectFileReference {
+    fun filename(relativePath: String): String {
+        val trimmed = relativePath.trim().trim('/')
+        val name = trimmed.substringAfterLast('/')
+        return name.ifEmpty { trimmed }
+    }
+
+    fun url(
+        worktree: String,
+        relativePath: String,
+    ): String {
+        val base = worktree.trim().trimEnd('/')
+        val relative = relativePath.trim().replace('\\', '/').trim('/')
+        val absolute =
+            when {
+                base.isEmpty() -> "/$relative"
+                relative.isEmpty() -> base
+                else -> "$base/$relative"
+            }
+        val encoded =
+            absolute.split('/').joinToString("/") { segment ->
+                if (segment.isEmpty()) "" else URLEncoder.encode(segment, "UTF-8").replace("+", "%20")
+            }
+        return "file://$encoded"
+    }
 }

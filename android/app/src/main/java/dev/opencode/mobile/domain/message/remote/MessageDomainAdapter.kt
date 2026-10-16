@@ -1,6 +1,7 @@
 package dev.opencode.mobile.domain.message
 
 import dev.opencode.mobile.data.remote.dto.AgentPartSourceDto
+import dev.opencode.mobile.data.remote.dto.FileReferenceSourceDto
 import dev.opencode.mobile.data.remote.dto.MessageDto
 import dev.opencode.mobile.data.remote.dto.MessageErrorInfoDto
 import dev.opencode.mobile.data.remote.dto.MessageInfoDto
@@ -16,6 +17,7 @@ import dev.opencode.mobile.data.remote.dto.V2InboxItemDto
 import dev.opencode.mobile.data.remote.dto.V2ModelRefDto
 import dev.opencode.mobile.data.remote.dto.V2PromptAgentDto
 import dev.opencode.mobile.data.remote.dto.V2PromptFileDto
+import dev.opencode.mobile.data.remote.dto.V2PromptFileMentionDto
 import dev.opencode.mobile.data.remote.dto.V2PromptRequestDto
 import dev.opencode.mobile.data.remote.dto.V2PromptSkillDto
 import dev.opencode.mobile.data.remote.dto.V2PromptSourceDto
@@ -25,6 +27,7 @@ import dev.opencode.mobile.data.remote.HttpBodyResponseException
 import dev.opencode.mobile.data.remote.dto.V2ToolStateDto
 import dev.opencode.mobile.data.remote.dto.V2UnknownErrorDto
 import dev.opencode.mobile.domain.agent.ComposerMentionRouting
+import dev.opencode.mobile.domain.filesystem.ProjectFileReference
 import dev.opencode.mobile.domain.session.ServerErrorMessage
 import io.ktor.client.plugins.ResponseException
 import io.ktor.serialization.JsonConvertException
@@ -213,6 +216,7 @@ class MessageDomainAdapter {
                             ),
                         )
                     }
+                    fileReferenceParts(options).forEach { add(it) }
                     options.attachments.forEach { attachment ->
                         add(
                             SendMessagePartDto(
@@ -260,13 +264,52 @@ class MessageDomainAdapter {
                 .distinct()
                 .map { V2PromptSkillDto(id = it) }
                 .takeIf { it.isNotEmpty() }
+        val fileMentions = v2FileMentions(options)
         return V2PromptRequestDto(
             text = options.text,
             files = files,
             agents = agents,
             skills = skills,
             delivery = options.delivery.wireValue,
+            fileMentions = fileMentions,
         )
+    }
+
+    private fun fileReferenceParts(options: PromptSendOptions): List<SendMessagePartDto> {
+        val worktree = options.worktree ?: return emptyList()
+        return ComposerMentionRouting.fileParts(options.text, options.fileMentions).map { part ->
+            SendMessagePartDto(
+                type = "file",
+                mime = "text/plain",
+                filename = part.filename,
+                url = ProjectFileReference.url(worktree, part.path),
+                fileSource =
+                    FileReferenceSourceDto(
+                        path = part.path,
+                        value = part.sourceValue,
+                        start = part.start,
+                        end = part.end,
+                    ),
+            )
+        }
+    }
+
+    private fun v2FileMentions(options: PromptSendOptions): List<V2PromptFileMentionDto>? {
+        val worktree = options.worktree ?: return null
+        return ComposerMentionRouting
+            .fileParts(options.text, options.fileMentions)
+            .map { part ->
+                V2PromptFileMentionDto(
+                    uri = ProjectFileReference.url(worktree, part.path),
+                    name = part.filename,
+                    mention =
+                        V2PromptSourceDto(
+                            start = part.start,
+                            end = part.end,
+                            text = part.sourceValue,
+                        ),
+                )
+            }.takeIf { it.isNotEmpty() }
     }
 
     fun toV2SwitchModelRequest(options: PromptSendOptions): V2SwitchModelRequestDto? {

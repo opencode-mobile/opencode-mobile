@@ -1,11 +1,13 @@
 package dev.opencode.mobile.domain.composer
 
 import dev.opencode.mobile.domain.agent.AgentMention
+import dev.opencode.mobile.domain.agent.FileMention
 import dev.opencode.mobile.domain.model.ModelSelectionConnectionIdentity
 
 data class ComposerDraft(
     val text: String,
     val agentMentions: List<AgentMention> = emptyList(),
+    val fileMentions: List<FileMention> = emptyList(),
     val savedAtEpochMs: Long? = null,
 )
 
