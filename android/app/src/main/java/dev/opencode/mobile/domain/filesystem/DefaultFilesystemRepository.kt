@@ -19,13 +19,18 @@ class DefaultFilesystemRepository
                 adapter.toServerPaths(api.getPaths())
             }
 
+        // Locate at the folder's root so browsing never creates a server project or boots a
+        // watcher, and servers that refuse paths outside the location still answer.
         override suspend fun listDirectory(path: String): List<DirectoryNode> {
+            val location = ServerPathPolicy.root(path).ifEmpty { path }
             val nodes =
                 if (activeConnectionManager?.currentProtocolOrProbe() == ServerProtocol.V2) {
-                    api.listFilesV2(absoluteDirectory = path).map { adapter.toDirectoryNode(it, path) }
+                    val envelope = api.listFilesV2(location = location, path = path)
+                    val base = envelope.location?.directory?.takeIf { it.isNotBlank() } ?: location
+                    envelope.data.map { adapter.toDirectoryNode(it, base) }
                 } else {
-                    api.listFiles(absoluteDirectory = path).map(adapter::toDirectoryNode)
+                    api.listFiles(location = location, path = path).map(adapter::toDirectoryNode)
                 }
-            return DirectoryListingPolicy.prepare(nodes)
+            return DirectoryListingPolicy.directories(nodes)
         }
     }

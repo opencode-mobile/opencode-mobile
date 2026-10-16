@@ -243,6 +243,69 @@ struct SessionProtocolRepositoryTests {
         #expect(url.path.hasSuffix("/api/project"))
     }
 
+    @Test func v2ListProjectsCarriesActivityTime() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [
+            .json(#"""
+            [
+              {"id":"a","canonical":"/a","time":{"created":1,"updated":20,"active":30}},
+              {"id":"b","canonical":"/b","time":{"created":1,"updated":20}},
+              {"id":"c","canonical":"/c"}
+            ]
+            """#)
+        ])
+        let repository = makeProjectRepository(serverProtocol: .v2)
+
+        let projects = try await repository.listProjects()
+
+        #expect(projects.map(\.activityAtEpochMs) == [30, 20, nil])
+    }
+
+    @Test func v2ListProjectsFallsBackToProjectWhenApiProjectIsTheWebUI() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [
+            StubResponse(statusCode: 200, body: "<!doctype html><html><body>opencode</body></html>"),
+            .json(#"""
+            [
+              {"id":"global","worktree":"/","time":{"created":1,"updated":2}},
+              {"id":"proj_1","worktree":"/repo","vcs":"git","time":{"created":1,"updated":1712000000000,"initialized":3}}
+            ]
+            """#),
+        ])
+        let repository = makeProjectRepository(serverProtocol: .v2)
+
+        let projects = try await repository.listProjects()
+
+        #expect(projects.map(\.worktree) == ["/", "/repo"])
+        #expect(projects.map(\.activityAtEpochMs) == [2, 1_712_000_000_000])
+        #expect(ProtocolRoutingURLProtocol.requests.count == 2)
+        #expect(ProtocolRoutingURLProtocol.requests[0].url?.path.hasSuffix("/api/project") == true)
+        let fallback = try #require(ProtocolRoutingURLProtocol.requests[1].url)
+        #expect(fallback.path.hasSuffix("/project"))
+        #expect(!fallback.path.hasSuffix("/api/project"))
+    }
+
+    @Test func v2ListProjectsFallsBackToProjectOnNotFound() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [
+            StubResponse(statusCode: 404, body: "Not Found"),
+            .json(#"[{"id":"proj_1","worktree":"/repo"}]"#),
+        ])
+        let repository = makeProjectRepository(serverProtocol: .v2)
+
+        let projects = try await repository.listProjects()
+
+        #expect(projects.map(\.worktree) == ["/repo"])
+        #expect(projects.map(\.activityAtEpochMs) == [nil])
+        #expect(ProtocolRoutingURLProtocol.requests.count == 2)
+    }
+
+    private func makeProjectRepository(serverProtocol: ServerProtocol) -> DefaultProjectRepository {
+        let manager = makeManager(serverProtocol: serverProtocol)
+        return DefaultProjectRepository(
+            api: ProjectsAPIClient(fixedConnection: manager.connection!, urlSession: makeURLSession()),
+            adapter: ProjectDomainAdapter(),
+            activeConnectionManager: manager
+        )
+    }
+
     @Test func v1ListProjectsUsesProjectAndWorktree() async throws {
         ProtocolRoutingURLProtocol.reset(responses: [.json(#"[{"id":"proj_1","worktree":"/repo","vcs":"git"}]"#)])
         let manager = makeManager(serverProtocol: .v1)

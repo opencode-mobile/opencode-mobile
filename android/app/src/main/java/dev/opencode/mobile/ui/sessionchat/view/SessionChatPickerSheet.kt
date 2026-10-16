@@ -18,9 +18,10 @@ import dev.opencode.mobile.domain.model.ModelSelectionProvider
 import dev.opencode.mobile.domain.text.TitleCaseIdentifier
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
-import dev.opencode.mobile.ui.components.OpenCodeBottomSheetContentMode
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetHeaderAction
+import dev.opencode.mobile.ui.components.OpenCodeBottomSheetHeight
+import dev.opencode.mobile.ui.components.OpenCodeBottomSheetKeyboard
 import dev.opencode.mobile.ui.components.OpenCodeTextInput
 import dev.opencode.mobile.ui.components.OpenCodeTextInputKind
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
@@ -134,8 +135,10 @@ internal fun SessionChatPickerSheet(
             onDismiss()
         },
         headerLeadingAction = modelHeaderLeadingAction,
-        contentMode = if (showsModelFilter) OpenCodeBottomSheetContentMode.Form else OpenCodeBottomSheetContentMode.ActionList,
-        pinnedContent = {
+        // The model filter is a long list typed into: fixed height with the keyboard kept.
+        height = if (showsModelFilter) OpenCodeBottomSheetHeight.Half else OpenCodeBottomSheetHeight.FitContent,
+        keyboard = if (showsModelFilter) OpenCodeBottomSheetKeyboard.Keep else OpenCodeBottomSheetKeyboard.Dismiss,
+        pinnedTop = {
             if (showsModelFilter) {
                 ModelPickerFilterField(
                     value = modelFilterText,

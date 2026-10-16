@@ -44,10 +44,12 @@ import dev.opencode.mobile.ui.components.SessionListScrollPin
 import dev.opencode.mobile.ui.main.region.HomeSessionActions
 import dev.opencode.mobile.ui.sessionchat.SessionConnectionStatus
 import dev.opencode.mobile.ui.sessionchat.toSessionConnectionStatus
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -79,8 +81,8 @@ class MainScreenViewModel
     ) : ViewModel() {
         private val _uiState = MutableStateFlow<MainScreenUiState>(MainScreenUiState.Probing)
         val uiState: StateFlow<MainScreenUiState> = _uiState.asStateFlow()
-        private val _userRefreshing = MutableStateFlow(false)
-        val isRefreshing: StateFlow<Boolean> = _userRefreshing.asStateFlow()
+        private val _isRefreshing = MutableStateFlow(false)
+        val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
         private val _removalSnackbar = MutableStateFlow<OpenCodeSnackbarMessage?>(null)
         val removalSnackbar: StateFlow<OpenCodeSnackbarMessage?> = _removalSnackbar.asStateFlow()
         private val sessionActionsRegion =
@@ -123,6 +125,11 @@ class MainScreenViewModel
         // Title fields report one edit per dialog appearance instead of per keystroke.
         private var renameDraftEditReported = false
         private var forkDraftEditReported = false
+
+        // Add project sheet session; results from an earlier session are dropped by generation.
+        private var addProjectSession: AddProjectSheetSession? = null
+        private var addProjectGeneration = 0
+        private var addProjectDebounceJob: Job? = null
 
         init {
             refresh()
@@ -190,13 +197,13 @@ class MainScreenViewModel
                 is MainScreenUiState.Empty,
                 -> {
                     viewModelScope.launch {
-                        if (_userRefreshing.value) return@launch
-                        _userRefreshing.value = true
+                        if (_isRefreshing.value) return@launch
+                        _isRefreshing.value = true
                         try {
                             sessionLiveStore.invalidate(null)
                             sessionStatusLiveStore.invalidate(null)
                         } finally {
-                            _userRefreshing.value = false
+                            _isRefreshing.value = false
                         }
                     }
                 }
@@ -228,99 +235,90 @@ class MainScreenViewModel
 
         fun showAddProjectSheet() {
             logAction(ProductAnalytics.Screen.HOME, ProductAnalytics.Action.HOME_ADD_PROJECT)
-            viewModelScope.launch { openDirectoryNavigator() }
+            openAddProjectSheet()
         }
 
         fun dismissAddProjectSheet() {
+            endAddProjectSession()
             _uiState.update { state ->
                 when (state) {
                     is MainScreenUiState.Empty ->
-                        state.copy(showAddProjectSheet = false, addProjectNavigator = null)
+                        state.copy(showAddProjectSheet = false, addProjectSheet = null)
                     is MainScreenUiState.Loaded ->
-                        state.copy(showAddProjectSheet = false, addProjectNavigator = null)
+                        state.copy(showAddProjectSheet = false, addProjectSheet = null)
                     else -> state
                 }
             }
         }
 
-        fun navigateAddProjectUp() {
-            val navigator = currentAddProjectNavigator() ?: return
-            val parent = ServerPathPolicy.parentPath(navigator.currentPath) ?: return
+        /** Typing in the path field: filters locally, and lists a new folder after a pause. */
+        fun updateAddProjectField(text: String) {
+            val session = addProjectSession ?: return
+            if (session.fieldText == text) return
+            updateAddProjectSession { it.copy(fieldText = text, fieldError = null) }
+            scheduleAddProjectListing()
+        }
+
+        fun addProjectUp() {
+            val target = currentAddProjectSheet()?.upTarget ?: return
             logAction(
                 ProductAnalytics.Screen.HOME_ADD_PROJECT,
                 ProductAnalytics.Action.ADD_PROJECT_GO_UP,
             )
-            viewModelScope.launch { loadDirectoryNavigator(parent) }
+            setAddProjectFolder(target)
         }
 
-        fun navigateAddProjectInto(path: String) {
+        fun selectAddProjectRoot(path: String) {
+            if (addProjectSession == null) return
+            logAction(
+                ProductAnalytics.Screen.HOME_ADD_PROJECT,
+                ProductAnalytics.Action.ADD_PROJECT_SELECT_ROOT,
+            )
+            setAddProjectFolder(path)
+        }
+
+        fun openAddProjectFolder(path: String) {
+            if (addProjectSession == null) return
             logAction(
                 ProductAnalytics.Screen.HOME_ADD_PROJECT,
                 ProductAnalytics.Action.ADD_PROJECT_ENTER_DIRECTORY,
             )
-            viewModelScope.launch { loadDirectoryNavigator(path) }
+            setAddProjectFolder(path)
         }
 
-        fun showAddProjectGoToPath() {
-            val navigator = currentAddProjectNavigator() ?: return
-            if (navigator.isLoading || navigator.isValidating) return
+        fun selectAddProjectSuggestion(path: String) {
+            if (addProjectSession?.isValidating != false) return
             logAction(
                 ProductAnalytics.Screen.HOME_ADD_PROJECT,
-                ProductAnalytics.Action.ADD_PROJECT_GO_TO_PATH,
+                ProductAnalytics.Action.ADD_PROJECT_SELECT_SUGGESTION,
             )
-            updateAddProjectNavigator {
-                it.copy(goToPath = AddProjectGoToPathUi(draft = navigator.currentPath))
-            }
+            addProject(path)
         }
 
-        fun updateAddProjectGoToPathDraft(text: String) {
-            updateAddProjectNavigator { current ->
-                val goToPath = current.goToPath ?: return@updateAddProjectNavigator current
-                current.copy(goToPath = goToPath.copy(draft = text, errorMessage = null))
-            }
-        }
-
-        fun cancelAddProjectGoToPath() {
-            if (currentAddProjectNavigator()?.goToPath == null) return
-            updateAddProjectNavigator { it.copy(goToPath = null) }
-        }
-
-        fun confirmAddProjectGoToPath() {
-            val navigator = currentAddProjectNavigator() ?: return
-            val goToPath = navigator.goToPath ?: return
-            val path =
-                ServerPathPolicy.resolveInput(
-                    input = goToPath.draft,
-                    currentPath = navigator.currentPath,
-                    homePath = navigator.homePath,
-                )
-            if (path == null) {
-                updateAddProjectNavigator {
-                    it.copy(goToPath = goToPath.copy(errorMessage = AddProjectGoToPathUi.EMPTY_ERROR))
-                }
-                return
-            }
-            updateAddProjectNavigator { it.copy(goToPath = null) }
-            viewModelScope.launch { loadDirectoryNavigator(path) }
-        }
-
-        fun retryAddProjectNavigator() {
-            val navigator = currentAddProjectNavigator() ?: return
+        fun retryAddProjectListing() {
+            val session = addProjectSession ?: return
             logAction(
                 ProductAnalytics.Screen.HOME_ADD_PROJECT,
                 ProductAnalytics.Action.ADD_PROJECT_RETRY_NAVIGATOR,
             )
-            viewModelScope.launch { loadDirectoryNavigator(navigator.currentPath) }
+            if (session.openError != null) {
+                openAddProjectSheet()
+                return
+            }
+            val directory = session.parts.directory ?: return
+            updateAddProjectSession { it.copy(listings = it.listings - directory) }
+            loadAddProjectListing(directory)
         }
 
-        fun selectCurrentDirectory() {
-            val navigator = currentAddProjectNavigator() ?: return
-            if (navigator.currentPath.isBlank() || navigator.isLoading || navigator.isValidating) return
+        fun confirmAddProject() {
+            val sheet = currentAddProjectSheet() ?: return
+            val target = sheet.addTarget
+            if (!sheet.addEnabled || target == null) return
             logAction(
                 ProductAnalytics.Screen.HOME_ADD_PROJECT,
                 ProductAnalytics.Action.ADD_PROJECT_SELECT_CURRENT,
             )
-            viewModelScope.launch { addProject(navigator.currentPath) }
+            addProject(target)
         }
 
         fun addProject(worktree: String) {
@@ -337,7 +335,7 @@ class MainScreenViewModel
                         )
                     return@launch
                 }
-                updateAddProjectNavigator { it.copy(isValidating = true, errorMessage = null) }
+                updateAddProjectSession { it.copy(isValidating = true, fieldError = null) }
                 val result = runCatching { projectRepository.getCurrentProject(directory = worktree) }
                 result
                     .onSuccess {
@@ -348,10 +346,10 @@ class MainScreenViewModel
                         runHomeLoad(skipProbe = true)
                         _pendingSelectedFilterId.value = worktree
                     }.onFailure { error ->
-                        updateAddProjectNavigator {
+                        updateAddProjectSession {
                             it.copy(
                                 isValidating = false,
-                                errorMessage = error.message ?: "Unable to add this directory",
+                                fieldError = error.message ?: "Unable to add this directory",
                             )
                         }
                     }
@@ -868,111 +866,153 @@ class MainScreenViewModel
             )
         }
 
-        private suspend fun openDirectoryNavigator() {
-            updateAddProjectNavigator(
-                AddProjectNavigatorUi(
-                    currentPath = "",
-                    canGoUp = false,
-                    entries = emptyList(),
-                    isLoading = true,
-                    isValidating = false,
-                    errorMessage = null,
-                ),
-            )
-            try {
-                val paths = filesystemRepository.getPaths()
-                updateAddProjectNavigator { it.copy(homePath = paths.home) }
-                loadDirectoryNavigator(paths.home)
-            } catch (error: Throwable) {
-                updateAddProjectNavigator(
-                    AddProjectNavigatorUi(
-                        currentPath = "",
-                        canGoUp = false,
-                        entries = emptyList(),
-                        isLoading = false,
-                        isValidating = false,
-                        errorMessage = error.message ?: "Unable to open home directory",
-                    ),
-                )
-            }
-        }
-
-        private suspend fun loadDirectoryNavigator(path: String) {
-            updateAddProjectNavigator { current ->
-                current.copy(
-                    currentPath = path,
-                    canGoUp = ServerPathPolicy.parentPath(path) != null,
-                    isLoading = true,
-                    isValidating = false,
-                    errorMessage = null,
-                )
-            }
-            try {
-                val entries =
-                    filesystemRepository.listDirectory(path).map { node ->
-                        AddProjectDirectoryUi(name = node.name, absolutePath = node.absolutePath)
+        private fun openAddProjectSheet() {
+            endAddProjectSession()
+            val generation = addProjectGeneration
+            addProjectSession = AddProjectSheetSession()
+            publishAddProjectSheet()
+            viewModelScope.launch {
+                val paths =
+                    try {
+                        filesystemRepository.getPaths()
+                    } catch (cancellation: CancellationException) {
+                        throw cancellation
+                    } catch (error: Exception) {
+                        DiagnosticLog.warning(DiagnosticLogArea.Connection, "add project home lookup failed", error)
+                        if (generation != addProjectGeneration) return@launch
+                        updateAddProjectSession {
+                            it.copy(isOpening = false, openError = AddProjectSheetUi.LIST_ERROR_MESSAGE)
+                        }
+                        return@launch
                     }
-                updateAddProjectNavigator { current ->
-                    current.copy(
-                        currentPath = path,
-                        canGoUp = ServerPathPolicy.parentPath(path) != null,
-                        entries = entries,
-                        isLoading = false,
-                        isValidating = false,
-                        errorMessage = null,
+                val added = connectionProfileStore.addedWorktrees(serverBaseUrl)
+                if (generation != addProjectGeneration) return@launch
+                val home = ServerPathPolicy.canonical(paths.home)
+                updateAddProjectSession {
+                    it.copy(
+                        home = home,
+                        isOpening = false,
+                        openError = null,
+                        fieldText = ServerPathPolicy.fieldText(home),
+                        addedWorktrees = added,
                     )
                 }
-            } catch (error: Throwable) {
-                updateAddProjectNavigator { current ->
-                    current.copy(
-                        currentPath = path,
-                        canGoUp = ServerPathPolicy.parentPath(path) != null,
-                        entries = emptyList(),
-                        isLoading = false,
-                        isValidating = false,
-                        errorMessage = error.message ?: "Unable to list directory",
-                    )
+                loadAddProjectListing(home)
+                loadAddProjectServerProjects(generation)
+                if (ServerPathPolicy.root(home) == "/") loadAddProjectVolumes(generation)
+            }
+        }
+
+        private fun endAddProjectSession() {
+            addProjectGeneration++
+            addProjectDebounceJob?.cancel()
+            addProjectDebounceJob = null
+            addProjectSession = null
+        }
+
+        /** Chip, row, and Up taps list the folder right away. */
+        private fun setAddProjectFolder(path: String) {
+            addProjectDebounceJob?.cancel()
+            updateAddProjectSession {
+                it.copy(fieldText = ServerPathPolicy.fieldText(path), fieldError = null)
+            }
+            addProjectSession?.parts?.directory?.let(::loadAddProjectListing)
+        }
+
+        private fun scheduleAddProjectListing() {
+            addProjectDebounceJob?.cancel()
+            val directory = addProjectSession?.parts?.directory ?: return
+            if (addProjectSession?.listings?.containsKey(directory) == true) return
+            addProjectDebounceJob =
+                viewModelScope.launch {
+                    delay(AddProjectSheetModel.LISTING_DEBOUNCE_MS)
+                    loadAddProjectListing(directory)
+                }
+        }
+
+        /** Lists [directory] once per sheet session; a failure stays until Retry. */
+        private fun loadAddProjectListing(directory: String) {
+            val session = addProjectSession ?: return
+            if (session.listings.containsKey(directory)) return
+            val generation = addProjectGeneration
+            updateAddProjectSession { it.copy(listings = it.listings + (directory to AddProjectListing.Loading)) }
+            viewModelScope.launch {
+                val listing =
+                    try {
+                        AddProjectListing.Loaded(filesystemRepository.listDirectory(directory))
+                    } catch (cancellation: CancellationException) {
+                        throw cancellation
+                    } catch (error: Exception) {
+                        DiagnosticLog.warning(DiagnosticLogArea.Connection, "add project listing failed", error)
+                        AddProjectListing.Failed(AddProjectSheetUi.LIST_ERROR_MESSAGE)
+                    }
+                if (generation != addProjectGeneration) return@launch
+                updateAddProjectSession { session ->
+                    val updated = session.copy(listings = session.listings + (directory to listing))
+                    if (listing is AddProjectListing.Loaded) updated.withListedRoot(directory) else updated
                 }
             }
         }
 
-        private fun currentAddProjectNavigator(): AddProjectNavigatorUi? =
+        private fun loadAddProjectServerProjects(generation: Int) {
+            viewModelScope.launch {
+                val projects =
+                    try {
+                        projectRepository.listProjects()
+                    } catch (cancellation: CancellationException) {
+                        throw cancellation
+                    } catch (_: Exception) {
+                        // The section stays hidden.
+                        return@launch
+                    }
+                if (generation != addProjectGeneration) return@launch
+                updateAddProjectSession { it.copy(serverProjects = projects) }
+            }
+        }
+
+        private fun loadAddProjectVolumes(generation: Int) {
+            viewModelScope.launch {
+                val volumes =
+                    try {
+                        filesystemRepository.listDirectory(AddProjectSheetModel.VOLUMES_PATH)
+                    } catch (cancellation: CancellationException) {
+                        throw cancellation
+                    } catch (_: Exception) {
+                        // Linux has no /Volumes.
+                        return@launch
+                    }
+                if (generation != addProjectGeneration) return@launch
+                updateAddProjectSession { it.copy(volumes = volumes) }
+            }
+        }
+
+        private fun currentAddProjectSheet(): AddProjectSheetUi? =
             when (val state = _uiState.value) {
-                is MainScreenUiState.Empty -> state.addProjectNavigator
-                is MainScreenUiState.Loaded -> state.addProjectNavigator
+                is MainScreenUiState.Empty -> state.addProjectSheet
+                is MainScreenUiState.Loaded -> state.addProjectSheet
                 else -> null
             }
 
-        private fun updateAddProjectNavigator(navigator: AddProjectNavigatorUi) {
+        private fun updateAddProjectSession(transform: (AddProjectSheetSession) -> AddProjectSheetSession) {
+            val session = addProjectSession ?: return
+            addProjectSession = transform(session)
+            publishAddProjectSheet()
+        }
+
+        private fun publishAddProjectSheet() {
+            val sheet = addProjectSession?.let { AddProjectSheetModel.build(it) } ?: return
             _uiState.update { state ->
                 when (state) {
                     is MainScreenUiState.Empty ->
-                        state.copy(showAddProjectSheet = true, addProjectNavigator = navigator)
+                        state.copy(showAddProjectSheet = true, addProjectSheet = sheet)
                     is MainScreenUiState.Loaded ->
-                        state.copy(showAddProjectSheet = true, addProjectNavigator = navigator)
+                        state.copy(showAddProjectSheet = true, addProjectSheet = sheet)
                     else -> state
                 }
             }
         }
 
-        private fun updateAddProjectNavigator(transform: (AddProjectNavigatorUi) -> AddProjectNavigatorUi) {
-            _uiState.update { state ->
-                when (state) {
-                    is MainScreenUiState.Empty -> {
-                        val current = state.addProjectNavigator ?: AddProjectNavigatorUi.empty()
-                        state.copy(showAddProjectSheet = true, addProjectNavigator = transform(current))
-                    }
-                    is MainScreenUiState.Loaded -> {
-                        val current = state.addProjectNavigator ?: AddProjectNavigatorUi.empty()
-                        state.copy(showAddProjectSheet = true, addProjectNavigator = transform(current))
-                    }
-                    else -> state
-                }
-            }
-        }
-
-        private fun probeErrorMessage(error: ServerProbeError): String =
-            error.userMessage()
+        private fun probeErrorMessage(error: ServerProbeError): String = error.userMessage()
 
         private fun startLiveObservations(worktrees: List<String>) {
             if (liveObservationsRunning(worktrees)) return
@@ -1093,14 +1133,14 @@ sealed interface MainScreenUiState {
 
     data class Empty(
         val showAddProjectSheet: Boolean = false,
-        val addProjectNavigator: AddProjectNavigatorUi? = null,
+        val addProjectSheet: AddProjectSheetUi? = null,
         val projectSessionCreateError: String? = null,
     ) : MainScreenUiState
 
     data class Loaded(
         val sections: List<ProjectSectionUi>,
         val showAddProjectSheet: Boolean = false,
-        val addProjectNavigator: AddProjectNavigatorUi? = null,
+        val addProjectSheet: AddProjectSheetUi? = null,
         val pendingOpenSession: SessionOpenTarget? = null,
         val projectSessionCreateError: String? = null,
         val pendingProjectRemoval: ProjectRemovalUi? = null,
@@ -1150,45 +1190,6 @@ data class ProjectSectionUi(
     val loadError: String? = null,
     val sessionsFromCache: Boolean = false,
 )
-
-data class AddProjectDirectoryUi(
-    val name: String,
-    val absolutePath: String,
-)
-
-/** Go to path dialog: the typed path and its validation error. */
-data class AddProjectGoToPathUi(
-    val draft: String,
-    val errorMessage: String? = null,
-) {
-    companion object {
-        const val EMPTY_ERROR = "Enter a folder path"
-    }
-}
-
-data class AddProjectNavigatorUi(
-    val currentPath: String,
-    val canGoUp: Boolean,
-    val entries: List<AddProjectDirectoryUi>,
-    val isLoading: Boolean,
-    val isValidating: Boolean,
-    val errorMessage: String?,
-    /** The server's home, for `~` in Go to path. */
-    val homePath: String = "",
-    val goToPath: AddProjectGoToPathUi? = null,
-) {
-    companion object {
-        fun empty(): AddProjectNavigatorUi =
-            AddProjectNavigatorUi(
-                currentPath = "",
-                canGoUp = false,
-                entries = emptyList(),
-                isLoading = false,
-                isValidating = false,
-                errorMessage = null,
-            )
-    }
-}
 
 data class SessionOpenTarget(
     val sessionId: String,

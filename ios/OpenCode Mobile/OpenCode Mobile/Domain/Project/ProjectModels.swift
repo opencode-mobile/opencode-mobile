@@ -4,6 +4,8 @@ struct Project: Sendable, Equatable {
     let id: String
     let worktree: String
     let displayName: String
+    /// Last activity in epoch ms (v2 `time.active`, else `time.updated`), when the server sent it.
+    var activityAtEpochMs: Int64? = nil
 }
 
 enum ServerProbeError: Error, Equatable {

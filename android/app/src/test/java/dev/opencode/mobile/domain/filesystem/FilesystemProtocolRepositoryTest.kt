@@ -100,6 +100,7 @@ class FilesystemProtocolRepositoryTest {
                           "data":[
                             {"path":"src/","type":"directory"},
                             {"path":"docs","type":"directory"},
+                            {"path":".github/","type":"directory"},
                             {"path":"README.md","type":"file"}
                           ]
                         }
@@ -115,8 +116,8 @@ class FilesystemProtocolRepositoryTest {
 
             val nodes = repository.listDirectory("/repo")
 
-            assertEquals(listOf("docs", "src"), nodes.map { it.name })
-            assertEquals(listOf("/repo/docs", "/repo/src"), nodes.map { it.absolutePath })
+            assertEquals(listOf(".github", "docs", "src"), nodes.map { it.name })
+            assertEquals(listOf("/repo/.github", "/repo/docs", "/repo/src"), nodes.map { it.absolutePath })
             assertTrue(nodes.all { it.isDirectory })
             assertTrue(
                 requests
@@ -124,8 +125,146 @@ class FilesystemProtocolRepositoryTest {
                     .url.encodedPath
                     .contains("/api/fs/list"),
             )
-            assertEquals("/repo", requests.single().url.parameters["location[directory]"])
-            assertEquals(".", requests.single().url.parameters["path"])
+            assertEquals("/", requests.single().url.parameters["location[directory]"])
+            assertEquals("/repo", requests.single().url.parameters["path"])
+        }
+
+    @Test
+    fun v1ListDirectory_locatesAtRootAndPassesAbsolutePath() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respondJson(
+                        "[" +
+                            """{"name":"OpenChamber 2.3.3","path":"Volumes/OpenChamber 2.3.3/",""" +
+                            """"absolute":"/Volumes/OpenChamber 2.3.3","type":"directory"},""" +
+                            """{"name":"notes.txt","path":"Volumes/notes.txt","absolute":"/Volumes/notes.txt","type":"file"}""" +
+                            "]",
+                    )
+                }
+            val repository =
+                DefaultFilesystemRepository(
+                    FilesystemApi(client),
+                    FilesystemDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V1),
+                )
+
+            val nodes = repository.listDirectory("/Volumes")
+
+            assertEquals(listOf("OpenChamber 2.3.3"), nodes.map { it.name })
+            assertEquals(listOf("/Volumes/OpenChamber 2.3.3"), nodes.map { it.absolutePath })
+            val request = requests.single()
+            assertTrue(request.url.encodedPath.endsWith("/file"))
+            assertEquals("/", request.url.parameters["directory"])
+            assertEquals("/Volumes", request.url.parameters["path"])
+        }
+
+    @Test
+    fun v1ListDirectory_windowsLocatesAtDriveRoot() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respondJson("[]")
+                }
+            val repository =
+                DefaultFilesystemRepository(
+                    FilesystemApi(client),
+                    FilesystemDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V1),
+                )
+
+            repository.listDirectory("D:\\work\\code")
+
+            assertEquals("D:\\", requests.single().url.parameters["directory"])
+            assertEquals("D:\\work\\code", requests.single().url.parameters["path"])
+        }
+
+    @Test
+    fun v2ListDirectory_resolvesEntriesAgainstResponseLocation() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respondJson(
+                        """
+                        {
+                          "location":{"directory":"/","project":{"id":"global","directory":"/","canonical":"/"}},
+                          "data":[{"path":"Volumes/OpenChamber 2.3.3/","type":"directory"}]
+                        }
+                        """.trimIndent(),
+                    )
+                }
+            val repository =
+                DefaultFilesystemRepository(
+                    FilesystemApi(client),
+                    FilesystemDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V2),
+                )
+
+            val nodes = repository.listDirectory("/Volumes")
+
+            assertEquals(listOf("OpenChamber 2.3.3"), nodes.map { it.name })
+            assertEquals(listOf("/Volumes/OpenChamber 2.3.3"), nodes.map { it.absolutePath })
+            assertEquals("/", requests.single().url.parameters["location[directory]"])
+            assertEquals("/Volumes", requests.single().url.parameters["path"])
+        }
+
+    @Test
+    fun v2ListDirectory_windowsResolvesParentRelativeAndCrossDriveEntries() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respondJson(
+                        """
+                        {
+                          "location":{"directory":"C:\\Users\\me"},
+                          "data":[
+                            {"path":"..\\other\\code\\","type":"directory"},
+                            {"path":"E:\\backup\\","type":"directory"}
+                          ]
+                        }
+                        """.trimIndent(),
+                    )
+                }
+            val repository =
+                DefaultFilesystemRepository(
+                    FilesystemApi(client),
+                    FilesystemDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V2),
+                )
+
+            val nodes = repository.listDirectory("C:\\Users\\other")
+
+            assertEquals(listOf("backup", "code"), nodes.map { it.name })
+            assertEquals(listOf("E:\\backup", "C:\\Users\\other\\code"), nodes.map { it.absolutePath })
+            assertEquals("C:\\", requests.single().url.parameters["location[directory]"])
+            assertEquals("C:\\Users\\other", requests.single().url.parameters["path"])
+        }
+
+    @Test
+    fun v2ListDirectory_withoutLocationResolvesAgainstRoot() =
+        runTest {
+            val client =
+                testClient {
+                    respondJson("""{"data":[{"path":"Users\\me\\code\\","type":"directory"}]}""")
+                }
+            val repository =
+                DefaultFilesystemRepository(
+                    FilesystemApi(client),
+                    FilesystemDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V2),
+                )
+
+            val nodes = repository.listDirectory("C:\\Users\\me")
+
+            assertEquals(listOf("C:\\Users\\me\\code"), nodes.map { it.absolutePath })
         }
 
     @Test

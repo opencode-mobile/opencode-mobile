@@ -16,14 +16,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
-import dev.opencode.mobile.ui.components.OpenCodeBottomSheetContentMode
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetHeaderAction
+import dev.opencode.mobile.ui.components.OpenCodeBottomSheetHeight
+import dev.opencode.mobile.ui.components.OpenCodeBottomSheetKeyboard
 import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
+import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeTextInput
 import dev.opencode.mobile.ui.components.OpenCodeTextInputKind
+import dev.opencode.mobile.ui.components.StartDecorator
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 private enum class GalleryBottomSheetDecoratorKind {
@@ -39,10 +42,16 @@ fun BottomSheetGalleryScreen(modifier: Modifier = Modifier) {
     var itemCount by rememberSaveable { mutableStateOf(2) }
     var startDecoratorName by rememberSaveable { mutableStateOf(GalleryBottomSheetDecoratorKind.Icon.name) }
     var endDecoratorName by rememberSaveable { mutableStateOf(GalleryBottomSheetDecoratorKind.None.name) }
-    var formMode by rememberSaveable { mutableStateOf(false) }
-    var alwaysFixedHeight by rememberSaveable { mutableStateOf(false) }
+    var heightName by rememberSaveable { mutableStateOf(OpenCodeBottomSheetHeight.FitContent.name) }
+    var keyboardName by rememberSaveable { mutableStateOf(OpenCodeBottomSheetKeyboard.Dismiss.name) }
+    var showsPinnedTop by rememberSaveable { mutableStateOf(false) }
+    var showsPinnedBottom by rememberSaveable { mutableStateOf(false) }
     var formValue by rememberSaveable { mutableStateOf("http://10.0.2.2:4096/") }
+    var keyboardExpandVisible by rememberSaveable { mutableStateOf(false) }
+    var keyboardExpandFilter by rememberSaveable { mutableStateOf("") }
 
+    val height = galleryEnumValue(heightName, OpenCodeBottomSheetHeight.FitContent)
+    val keyboard = galleryEnumValue(keyboardName, OpenCodeBottomSheetKeyboard.Dismiss)
     val startDecoratorKind = galleryDecoratorKind(startDecoratorName)
     val endDecoratorKind = galleryDecoratorKind(endDecoratorName)
     val startDecorator =
@@ -62,14 +71,29 @@ fun BottomSheetGalleryScreen(modifier: Modifier = Modifier) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OpenCodeChoiceBadge(label = "Entry enabled", selected = enabled, onClick = { enabled = !enabled })
                 OpenCodeChoiceBadge(label = "Header back", selected = showsHeaderBack, onClick = { showsHeaderBack = !showsHeaderBack })
-                OpenCodeChoiceBadge(label = "Form mode", selected = formMode, onClick = { formMode = !formMode })
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OpenCodeChoiceBadge(label = "Pinned top", selected = showsPinnedTop, onClick = { showsPinnedTop = !showsPinnedTop })
                 OpenCodeChoiceBadge(
-                    label = "Fixed 50%",
-                    selected = alwaysFixedHeight,
-                    onClick = { alwaysFixedHeight = !alwaysFixedHeight },
+                    label = "Pinned bottom",
+                    selected = showsPinnedBottom,
+                    onClick = { showsPinnedBottom = !showsPinnedBottom },
                 )
             }
         }
+
+        ChoiceControls(
+            title = "Height",
+            options = OpenCodeBottomSheetHeight.entries,
+            selected = height,
+            onSelect = { heightName = it.name },
+        )
+        ChoiceControls(
+            title = "Keyboard",
+            options = OpenCodeBottomSheetKeyboard.entries,
+            selected = keyboard,
+            onSelect = { keyboardName = it.name },
+        )
 
         DecoratorControls(
             title = "Start decorator",
@@ -87,7 +111,31 @@ fun BottomSheetGalleryScreen(modifier: Modifier = Modifier) {
             variant = OpenCodeButtonVariant.FullWidthText("Show bottom sheet"),
             onClick = { visible = true },
         )
+
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                text = "Keyboard expand",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = "Half-height sheet that grows to the top inset while the keyboard is visible.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            OpenCodeButton(
+                variant = OpenCodeButtonVariant.FullWidthText("Show keyboard expand sheet"),
+                onClick = { keyboardExpandVisible = true },
+            )
+        }
     }
+
+    KeyboardExpandBottomSheet(
+        visible = keyboardExpandVisible,
+        filter = keyboardExpandFilter,
+        onFilterChange = { keyboardExpandFilter = it },
+        onDismiss = { keyboardExpandVisible = false },
+    )
 
     OpenCodeBottomSheet(
         visible = visible,
@@ -103,10 +151,10 @@ fun BottomSheetGalleryScreen(modifier: Modifier = Modifier) {
             } else {
                 null
             },
-        contentMode = if (formMode) OpenCodeBottomSheetContentMode.Form else OpenCodeBottomSheetContentMode.ActionList,
-        alwaysFixedHeight = alwaysFixedHeight,
-        pinnedContent = {
-            if (alwaysFixedHeight) {
+        height = height,
+        keyboard = keyboard,
+        pinnedTop = {
+            if (showsPinnedTop) {
                 OpenCodeBottomSheetEntry(
                     title = "Go up",
                     startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.ArrowUpward, null),
@@ -119,8 +167,20 @@ fun BottomSheetGalleryScreen(modifier: Modifier = Modifier) {
                 )
             }
         },
+        pinnedBottom =
+            if (showsPinnedBottom) {
+                {
+                    OpenCodeButton(
+                        variant = OpenCodeButtonVariant.FullWidthText("Add project"),
+                        onClick = { visible = false },
+                    )
+                }
+            } else {
+                null
+            },
     ) {
-        if (formMode) {
+        // Keyboard policies other than Dismiss need a field to type into.
+        if (keyboard != OpenCodeBottomSheetKeyboard.Dismiss) {
             OpenCodeTextInput(
                 value = formValue,
                 onValueChange = { formValue = it },
@@ -135,13 +195,46 @@ fun BottomSheetGalleryScreen(modifier: Modifier = Modifier) {
                 kind = OpenCodeTextInputKind.Password,
                 modifier = Modifier.padding(horizontal = 20.dp),
             )
-        } else {
-            ActionSheetEntries(
-                enabled = enabled,
-                startDecorator = startDecorator,
-                endDecorator = endDecorator,
-                itemCount = itemCount,
-                onDismiss = { visible = false },
+        }
+        ActionSheetEntries(
+            enabled = enabled,
+            startDecorator = startDecorator,
+            endDecorator = endDecorator,
+            itemCount = itemCount,
+            onDismiss = { visible = false },
+        )
+    }
+}
+
+@Composable
+private fun KeyboardExpandBottomSheet(
+    visible: Boolean,
+    filter: String,
+    onFilterChange: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val folders = (1..20).map { index -> "Folder ${index.toString().padStart(2, '0')}" }
+    OpenCodeBottomSheet(
+        visible = visible,
+        title = "Keyboard expand",
+        onDismissRequest = onDismiss,
+        height = OpenCodeBottomSheetHeight.Half,
+        keyboard = OpenCodeBottomSheetKeyboard.Expand,
+        pinnedTop = {
+            OpenCodeTextInput(
+                value = filter,
+                onValueChange = onFilterChange,
+                hint = "Folder path",
+                kind = OpenCodeTextInputKind.Filter,
+                modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 8.dp),
+            )
+        },
+    ) {
+        folders.forEach { folder ->
+            OpenCodeListItem(
+                title = folder,
+                startDecorator = StartDecorator.Icon(OpenCodeIcons.Folder, contentDescription = null),
+                onClick = {},
             )
         }
     }
@@ -214,6 +307,27 @@ private fun DecoratorControls(
 }
 
 @Composable
+private fun <T : Enum<T>> ChoiceControls(
+    title: String,
+    options: List<T>,
+    selected: T,
+    onSelect: (T) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(text = title, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            options.forEach { option ->
+                OpenCodeChoiceBadge(
+                    label = option.name,
+                    selected = selected == option,
+                    onClick = { onSelect(option) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun ItemCountControls(
     selected: Int,
     onSelect: (Int) -> Unit,
@@ -238,3 +352,8 @@ private fun galleryDecoratorKind(name: String): GalleryBottomSheetDecoratorKind 
     } catch (_: IllegalArgumentException) {
         GalleryBottomSheetDecoratorKind.None
     }
+
+private inline fun <reified T : Enum<T>> galleryEnumValue(
+    name: String,
+    fallback: T,
+): T = enumValues<T>().firstOrNull { it.name == name } ?: fallback

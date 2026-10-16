@@ -6,7 +6,8 @@ struct ProjectDomainAdapter: Sendable {
         return Project(
             id: dto.id,
             worktree: worktree,
-            displayName: Self.displayName(from: worktree)
+            displayName: Self.displayName(from: worktree),
+            activityAtEpochMs: dto.time?.activityEpochMs
         )
     }
 

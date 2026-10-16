@@ -32,11 +32,11 @@ class FilesystemDomainAdapter {
 
     fun toDirectoryNode(
         dto: V2FsEntryDto,
-        listingDirectory: String,
+        locationDirectory: String,
     ): DirectoryNode {
-        // Entry paths are relative to the listing (or absolute across drives), in the
-        // server's separators: `src\` on Windows, `src/` elsewhere.
-        val absolutePath = ServerPathPolicy.resolve(listingDirectory, dto.path)
+        // Entry paths are relative to the response location (`..\x\`, or absolute across
+        // drives), in the server's separators: `src\` on Windows, `src/` elsewhere.
+        val absolutePath = ServerPathPolicy.resolve(locationDirectory, dto.path)
         return DirectoryNode(
             name = ServerPathPolicy.name(absolutePath),
             absolutePath = absolutePath,

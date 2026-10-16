@@ -275,62 +275,309 @@ class MainScreenViewModelTest {
         }
 
     @Test
-    fun showAddProjectSheet_startsAtHomeAndListsDirectories() =
+    fun showAddProjectSheet_opensAtHomeWithSuggestionsAndRoots() =
         runTest(testDispatcher) {
             val filesystem =
                 FakeFilesystemRepository(
-                    paths = ServerPaths(home = "/home", directory = "/home/work", worktree = "/"),
+                    paths = ServerPaths(home = "/Users/me", directory = "/Users/me/work", worktree = "/"),
                     listings =
                         mapOf(
-                            "/home" to
+                            "/Users/me" to
                                 listOf(
-                                    DirectoryNode(name = "projects", absolutePath = "/home/projects", isDirectory = true),
-                                    DirectoryNode(name = ".cache", absolutePath = "/home/.cache", isDirectory = true),
-                                    DirectoryNode(name = "readme", absolutePath = "/home/readme", isDirectory = false),
+                                    DirectoryNode(name = "code", absolutePath = "/Users/me/code", isDirectory = true),
+                                    DirectoryNode(name = ".cache", absolutePath = "/Users/me/.cache", isDirectory = true),
+                                    DirectoryNode(name = "readme", absolutePath = "/Users/me/readme", isDirectory = false),
+                                ),
+                            "/Volumes" to
+                                listOf(
+                                    DirectoryNode("Work SSD", "/Volumes/Work SSD", true),
+                                    DirectoryNode(".timemachine", "/Volumes/.timemachine", true),
                                 ),
                         ),
                 )
-            val viewModel =
-                createViewModel(
-                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/one")),
-                    filesystemRepository = filesystem,
-                )
-            advanceUntilIdle()
-            viewModel.showAddProjectSheet()
-            advanceUntilIdle()
-            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
-            val navigator = loaded.addProjectNavigator
-            assertTrue(loaded.showAddProjectSheet)
-            assertEquals("/home", navigator?.currentPath)
-            assertEquals(listOf("projects"), navigator?.entries?.map { it.name })
-            assertTrue(navigator?.canGoUp == true)
-        }
-
-    @Test
-    fun navigateAddProjectInto_loadsChildDirectory() =
-        runTest(testDispatcher) {
-            val filesystem =
-                FakeFilesystemRepository(
-                    paths = ServerPaths(home = "/home", directory = "/home", worktree = "/"),
-                    listings =
-                        mapOf(
-                            "/home" to listOf(DirectoryNode("projects", "/home/projects", true)),
-                            "/home/projects" to listOf(DirectoryNode("app", "/home/projects/app", true)),
+            val projectRepository =
+                FakeProjectRepository(
+                    bootWorktree = "/one",
+                    projects =
+                        listOf(
+                            Project(id = "global", worktree = "/", displayName = "/", activityAtEpochMs = 9),
+                            Project(id = "old", worktree = "/Users/me/app", displayName = "app", activityAtEpochMs = 1),
+                            Project(id = "web", worktree = "/Users/me/web", displayName = "web", activityAtEpochMs = 5),
+                            Project(id = "app", worktree = "/Users/me/app", displayName = "app", activityAtEpochMs = 4),
+                            Project(id = "one", worktree = "/one", displayName = "one", activityAtEpochMs = 8),
                         ),
                 )
             val viewModel =
                 createViewModel(
                     connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/one")),
+                    projectRepository = projectRepository,
                     filesystemRepository = filesystem,
                 )
             advanceUntilIdle()
             viewModel.showAddProjectSheet()
             advanceUntilIdle()
-            viewModel.navigateAddProjectInto("/home/projects")
+
+            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            val sheet = requireNotNull(loaded.addProjectSheet)
+            assertTrue(loaded.showAddProjectSheet)
+            assertEquals("/Users/me/", sheet.fieldText)
+            assertEquals("/Users/me", sheet.directory)
+            assertEquals("", sheet.filter)
+            assertEquals(listOf("code"), sheet.entries.map { it.name })
+            assertNull(sheet.truncationHint)
+            assertTrue(sheet.showSuggestions)
+            assertEquals(listOf("/Users/me/web", "/Users/me/app"), sheet.suggestions.map { it.path })
+            assertEquals("In me", sheet.folderSectionTitle)
+            assertEquals(listOf("Home", "/", "Work SSD"), sheet.roots.map { it.label })
+            assertEquals(listOf("/Users/me", "/", "/Volumes/Work SSD"), sheet.roots.map { it.path })
+            assertEquals(listOf(true, false, false), sheet.roots.map { it.selected })
+            assertEquals("/Users", sheet.upTarget)
+            assertEquals("/Users/me", sheet.addTarget)
+            assertEquals(AddProjectSheetUi.ADD_HOME_FOLDER, sheet.addTitle)
+            assertTrue(sheet.addEnabled)
+        }
+
+    @Test
+    fun showAddProjectSheet_showsAtMostFiveSuggestions() =
+        runTest(testDispatcher) {
+            val projectRepository =
+                FakeProjectRepository(
+                    bootWorktree = "/one",
+                    projects =
+                        (1L..18L).map {
+                            Project(id = "p$it", worktree = "/srv/p$it", displayName = "p$it", activityAtEpochMs = it)
+                        },
+                )
+            val viewModel = openSheet(projectRepository = projectRepository)
+
+            val suggestions = requireNotNull(currentSheet(viewModel)).suggestions
+            assertEquals(listOf("p18", "p17", "p16", "p15", "p14"), suggestions.map { it.name })
+        }
+
+    @Test
+    fun posixHome_leadingDoubleSlashListsRootFolder() =
+        runTest(testDispatcher) {
+            val filesystem =
+                FakeFilesystemRepository(
+                    paths = ServerPaths(home = "/Users/me", directory = "/Users/me", worktree = "/"),
+                    listings = mapOf("/Volumes" to listOf(DirectoryNode("OpenChamber", "/Volumes/OpenChamber", true))),
+                )
+            val viewModel = openSheet(filesystem = filesystem)
+
+            viewModel.updateAddProjectField("//Volumes/O")
             advanceUntilIdle()
-            val navigator = (viewModel.uiState.value as MainScreenUiState.Loaded).addProjectNavigator
-            assertEquals("/home/projects", navigator?.currentPath)
-            assertEquals(listOf("app"), navigator?.entries?.map { it.name })
+
+            val sheet = requireNotNull(currentSheet(viewModel))
+            assertEquals("/Volumes", sheet.directory)
+            assertEquals(listOf("OpenChamber"), sheet.entries.map { it.name })
+        }
+
+    @Test
+    fun updateAddProjectField_filtersCachedListingWithoutRefetch() =
+        runTest(testDispatcher) {
+            val filesystem =
+                FakeFilesystemRepository(
+                    paths = ServerPaths(home = "/Users/me", directory = "/Users/me", worktree = "/"),
+                    listings =
+                        mapOf(
+                            "/Users/me" to
+                                listOf(
+                                    DirectoryNode("code", "/Users/me/code", true),
+                                    DirectoryNode("Courses", "/Users/me/Courses", true),
+                                    DirectoryNode("docs", "/Users/me/docs", true),
+                                ),
+                        ),
+                )
+            val viewModel = openSheet(filesystem = filesystem)
+
+            viewModel.updateAddProjectField("/Users/me/co")
+            advanceUntilIdle()
+            var sheet = requireNotNull(currentSheet(viewModel))
+            assertEquals("/Users/me", sheet.directory)
+            assertEquals("co", sheet.filter)
+            assertEquals(listOf("code", "Courses"), sheet.entries.map { it.name })
+            assertFalse(sheet.showSuggestions)
+            assertEquals("/Users/me", sheet.upTarget)
+            assertEquals(AddProjectSheetUi.PICK_A_FOLDER, sheet.addTitle)
+            assertFalse(sheet.addEnabled)
+            assertTrue(sheet.roots.none { it.selected })
+
+            viewModel.updateAddProjectField("/Users/me/x")
+            advanceUntilIdle()
+            sheet = requireNotNull(currentSheet(viewModel))
+            assertEquals(emptyList<AddProjectFolderUi>(), sheet.entries)
+            assertEquals("Nothing in me starts with \u201Cx\u201D", sheet.emptyMessage)
+            assertEquals(1, filesystem.listCalls.count { it == "/Users/me" })
+        }
+
+    @Test
+    fun updateAddProjectField_filtersBeforeCappingLongListing() =
+        runTest(testDispatcher) {
+            val folders = (0 until 250).map { DirectoryNode("f%03d".format(it), "/Users/me/f%03d".format(it), true) }
+            val filesystem =
+                FakeFilesystemRepository(
+                    paths = ServerPaths(home = "/Users/me", directory = "/Users/me", worktree = "/"),
+                    listings =
+                        mapOf(
+                            "/Users/me" to
+                                folders.reversed() +
+                                listOf(
+                                    DirectoryNode(".config", "/Users/me/.config", true),
+                                    DirectoryNode(".cache", "/Users/me/.cache", true),
+                                ),
+                        ),
+                )
+            val viewModel = openSheet(filesystem = filesystem)
+
+            var sheet = requireNotNull(currentSheet(viewModel))
+            assertEquals(DirectoryListingPolicy.MAX_VISIBLE_DIRECTORIES, sheet.entries.size)
+            assertEquals("f000", sheet.entries.first().name)
+            assertEquals("f199", sheet.entries.last().name)
+            assertEquals(AddProjectSheetUi.TRUNCATION_HINT, sheet.truncationHint)
+            assertEquals(
+                "Showing the first 200 folders. Type more of the name to narrow the list.",
+                sheet.truncationHint,
+            )
+            assertNull(sheet.emptyMessage)
+
+            viewModel.updateAddProjectField("/Users/me/f24")
+            advanceUntilIdle()
+            sheet = requireNotNull(currentSheet(viewModel))
+            assertEquals((240..249).map { "f$it" }, sheet.entries.map { it.name })
+            assertNull(sheet.truncationHint)
+            assertNull(sheet.emptyMessage)
+            assertFalse(sheet.addEnabled)
+
+            viewModel.updateAddProjectField("/Users/me/f249")
+            advanceUntilIdle()
+            sheet = requireNotNull(currentSheet(viewModel))
+            assertEquals(listOf("f249"), sheet.entries.map { it.name })
+            assertEquals("/Users/me/f249", sheet.addTarget)
+            assertEquals("Add f249", sheet.addTitle)
+            assertTrue(sheet.addEnabled)
+
+            viewModel.updateAddProjectField("/Users/me/.")
+            advanceUntilIdle()
+            sheet = requireNotNull(currentSheet(viewModel))
+            assertEquals(listOf(".cache", ".config"), sheet.entries.map { it.name })
+            assertNull(sheet.addTarget)
+
+            viewModel.updateAddProjectField("/Users/me/.config")
+            advanceUntilIdle()
+            sheet = requireNotNull(currentSheet(viewModel))
+            assertEquals(listOf(".config"), sheet.entries.map { it.name })
+            assertEquals("/Users/me/.config", sheet.addTarget)
+            assertEquals("Add .config", sheet.addTitle)
+            assertTrue(sheet.addEnabled)
+
+            viewModel.updateAddProjectField("/Users/me/f3")
+            advanceUntilIdle()
+            sheet = requireNotNull(currentSheet(viewModel))
+            assertEquals("Nothing in me starts with \u201Cf3\u201D", sheet.emptyMessage)
+            assertEquals(1, filesystem.listCalls.count { it == "/Users/me" })
+        }
+
+    @Test
+    fun updateAddProjectField_debouncesListingOfNewFolder() =
+        runTest(testDispatcher) {
+            val filesystem =
+                FakeFilesystemRepository(
+                    paths = ServerPaths(home = "/Users/me", directory = "/Users/me", worktree = "/"),
+                    listings =
+                        mapOf(
+                            "/Users/me" to listOf(DirectoryNode("code", "/Users/me/code", true)),
+                            "/Users/me/code" to listOf(DirectoryNode("app", "/Users/me/code/app", true)),
+                        ),
+                )
+            val viewModel = openSheet(filesystem = filesystem)
+
+            viewModel.updateAddProjectField("/Users/me/c/")
+            advanceTimeBy(100)
+            runCurrent()
+            viewModel.updateAddProjectField("/Users/me/code/")
+            advanceTimeBy(200)
+            runCurrent()
+            assertFalse(filesystem.listCalls.contains("/Users/me/code"))
+            assertTrue(currentSheet(viewModel)?.isLoading == true)
+
+            advanceTimeBy(100)
+            runCurrent()
+            advanceUntilIdle()
+            val sheet = requireNotNull(currentSheet(viewModel))
+            assertEquals(listOf("app"), sheet.entries.map { it.name })
+            assertFalse(sheet.isLoading)
+            assertFalse(filesystem.listCalls.contains("/Users/me/c"))
+            assertEquals(1, filesystem.listCalls.count { it == "/Users/me/code" })
+        }
+
+    @Test
+    fun openAddProjectFolder_listsTappedFolder() =
+        runTest(testDispatcher) {
+            val filesystem =
+                FakeFilesystemRepository(
+                    paths = ServerPaths(home = "/Users/me", directory = "/Users/me", worktree = "/"),
+                    listings =
+                        mapOf(
+                            "/Users/me" to listOf(DirectoryNode("code", "/Users/me/code", true)),
+                            "/Users/me/code" to listOf(DirectoryNode("app", "/Users/me/code/app", true)),
+                        ),
+                )
+            val viewModel = openSheet(filesystem = filesystem)
+
+            viewModel.openAddProjectFolder("/Users/me/code")
+            runCurrent()
+
+            val sheet = requireNotNull(currentSheet(viewModel))
+            assertEquals("/Users/me/code/", sheet.fieldText)
+            assertEquals("/Users/me/code", sheet.directory)
+            assertEquals(listOf("app"), sheet.entries.map { it.name })
+            assertEquals("Add code", sheet.addTitle)
+            assertNull(sheet.folderSectionTitle)
+        }
+
+    @Test
+    fun addProjectUp_fromHomeStopsAtRoot() =
+        runTest(testDispatcher) {
+            val filesystem =
+                FakeFilesystemRepository(
+                    paths = ServerPaths(home = "/Users/me", directory = "/Users/me", worktree = "/"),
+                    listings =
+                        mapOf(
+                            "/Users" to listOf(DirectoryNode("me", "/Users/me", true)),
+                            "/" to listOf(DirectoryNode("Users", "/Users", true)),
+                        ),
+                )
+            val viewModel = openSheet(filesystem = filesystem)
+
+            viewModel.addProjectUp()
+            advanceUntilIdle()
+            assertEquals("/Users/", currentSheet(viewModel)?.fieldText)
+            assertEquals(listOf("me"), currentSheet(viewModel)?.entries?.map { it.name })
+
+            viewModel.addProjectUp()
+            advanceUntilIdle()
+            val sheet = requireNotNull(currentSheet(viewModel))
+            assertEquals("/", sheet.fieldText)
+            assertEquals(listOf("Users"), sheet.entries.map { it.name })
+            assertNull(sheet.upTarget)
+            assertTrue(sheet.roots.single { it.path == "/" }.selected)
+
+            viewModel.addProjectUp()
+            advanceUntilIdle()
+            assertEquals("/", currentSheet(viewModel)?.fieldText)
+        }
+
+    @Test
+    fun addProjectUp_withFilterGoesToListedFolder() =
+        runTest(testDispatcher) {
+            val viewModel = openSheet()
+
+            viewModel.updateAddProjectField("/home/co")
+            advanceUntilIdle()
+            viewModel.addProjectUp()
+            advanceUntilIdle()
+
+            assertEquals("/home/", currentSheet(viewModel)?.fieldText)
         }
 
     @Test
@@ -339,99 +586,186 @@ class MainScreenViewModelTest {
             val filesystem =
                 FakeFilesystemRepository(
                     paths = ServerPaths(home = "C:\\Users\\me", directory = "C:\\Users\\me", worktree = "/"),
-                    listings =
-                        mapOf(
-                            "C:\\Users\\me" to emptyList(),
-                            "C:\\Users" to emptyList(),
-                            "C:\\" to listOf(DirectoryNode("Users", "C:\\Users", true)),
-                        ),
+                    listings = mapOf("C:\\" to listOf(DirectoryNode("Users", "C:\\Users", true))),
                 )
-            val viewModel =
-                createViewModel(
-                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/one")),
-                    filesystemRepository = filesystem,
-                )
+            val viewModel = openSheet(filesystem = filesystem)
+            assertEquals("C:\\Users\\me\\", currentSheet(viewModel)?.fieldText)
+            assertFalse(filesystem.listCalls.contains("/Volumes"))
+
+            viewModel.addProjectUp()
             advanceUntilIdle()
-            viewModel.showAddProjectSheet()
+            viewModel.addProjectUp()
             advanceUntilIdle()
-            viewModel.navigateAddProjectUp()
-            advanceUntilIdle()
-            viewModel.navigateAddProjectUp()
-            advanceUntilIdle()
-            val navigator = (viewModel.uiState.value as MainScreenUiState.Loaded).addProjectNavigator
-            assertEquals("C:\\", navigator?.currentPath)
-            assertEquals(listOf("Users"), navigator?.entries?.map { it.name })
-            assertTrue(navigator?.canGoUp == false)
+
+            val sheet = requireNotNull(currentSheet(viewModel))
+            assertEquals("C:\\", sheet.fieldText)
+            assertEquals("C:\\", sheet.directory)
+            assertEquals(listOf("Users"), sheet.entries.map { it.name })
+            assertNull(sheet.upTarget)
         }
 
     @Test
-    fun goToPath_listsTypedDriveAndClosesDialog() =
+    fun windowsRoots_comeFromHomeServerProjectsAndAddedProjects() =
         runTest(testDispatcher) {
             val filesystem =
                 FakeFilesystemRepository(
                     paths = ServerPaths(home = "C:\\Users\\me", directory = "C:\\Users\\me", worktree = "/"),
-                    listings =
-                        mapOf(
-                            "C:\\Users\\me" to emptyList(),
-                            "D:\\" to listOf(DirectoryNode("code", "D:\\code", true)),
+                )
+            val projectRepository =
+                FakeProjectRepository(
+                    bootWorktree = "/one",
+                    projects =
+                        listOf(
+                            Project(id = "d", worktree = "D:\\work\\app", displayName = "app"),
+                            Project(id = "c", worktree = "c:\\src\\tool", displayName = "tool"),
                         ),
                 )
             val viewModel =
-                createViewModel(
-                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/one")),
-                    filesystemRepository = filesystem,
+                openSheet(
+                    filesystem = filesystem,
+                    projectRepository = projectRepository,
+                    added = listOf("\\\\nas\\share\\repo"),
                 )
-            advanceUntilIdle()
-            viewModel.showAddProjectSheet()
-            advanceUntilIdle()
-            viewModel.showAddProjectGoToPath()
-            assertEquals("C:\\Users\\me", currentNavigator(viewModel)?.goToPath?.draft)
-            viewModel.updateAddProjectGoToPathDraft("d:")
-            viewModel.confirmAddProjectGoToPath()
-            advanceUntilIdle()
-            val navigator = currentNavigator(viewModel)
-            assertEquals(null, navigator?.goToPath)
-            assertEquals("D:\\", navigator?.currentPath)
-            assertEquals(listOf("code"), navigator?.entries?.map { it.name })
-            assertTrue(navigator?.canGoUp == false)
+
+            val roots = requireNotNull(currentSheet(viewModel)).roots
+            assertEquals(listOf("Home", "C:", "D:", "\\\\nas\\share"), roots.map { it.label })
+            assertEquals(listOf("C:\\Users\\me", "C:\\", "D:\\", "\\\\nas\\share"), roots.map { it.path })
         }
 
     @Test
-    fun goToPath_expandsHomeAndRejectsBlank() =
+    fun typingDriveLetter_listsDriveAndAddsChip() =
+        runTest(testDispatcher) {
+            val filesystem =
+                FakeFilesystemRepository(
+                    paths = ServerPaths(home = "C:\\Users\\me", directory = "C:\\Users\\me", worktree = "/"),
+                    listings = mapOf("E:\\" to listOf(DirectoryNode("code", "E:\\code", true))),
+                )
+            val viewModel = openSheet(filesystem = filesystem)
+
+            viewModel.updateAddProjectField("e:")
+            advanceUntilIdle()
+
+            val sheet = requireNotNull(currentSheet(viewModel))
+            assertEquals("E:\\", sheet.directory)
+            assertEquals(listOf("code"), sheet.entries.map { it.name })
+            assertTrue(sheet.roots.single { it.label == "E:" }.selected)
+
+            viewModel.selectAddProjectRoot("C:\\Users\\me")
+            advanceUntilIdle()
+            assertEquals("C:\\Users\\me\\", currentSheet(viewModel)?.fieldText)
+            assertTrue(currentSheet(viewModel)?.roots?.any { it.label == "E:" } == true)
+        }
+
+    @Test
+    fun typingMissingDrive_showsListingErrorWithoutAddingChip() =
+        runTest(testDispatcher) {
+            val filesystem =
+                FakeFilesystemRepository(
+                    paths = ServerPaths(home = "C:\\Users\\me", directory = "C:\\Users\\me", worktree = "/"),
+                    errors = mutableMapOf("X:\\" to IllegalStateException("No such drive")),
+                )
+            val viewModel = openSheet(filesystem = filesystem)
+
+            viewModel.updateAddProjectField("X:")
+            advanceUntilIdle()
+
+            var sheet = requireNotNull(currentSheet(viewModel))
+            assertEquals("X:\\", sheet.directory)
+            assertEquals(AddProjectSheetUi.LIST_ERROR_MESSAGE, sheet.listError)
+            assertEquals(listOf("Home", "C:"), sheet.roots.map { it.label })
+
+            viewModel.selectAddProjectRoot("C:\\Users\\me")
+            advanceUntilIdle()
+            sheet = requireNotNull(currentSheet(viewModel))
+            assertEquals(listOf("Home", "C:"), sheet.roots.map { it.label })
+        }
+
+    @Test
+    fun addTarget_matchesExactChildAndBlocksAlreadyAdded() =
+        runTest(testDispatcher) {
+            val filesystem =
+                FakeFilesystemRepository(
+                    paths = ServerPaths(home = "/Users/me", directory = "/Users/me", worktree = "/"),
+                    listings =
+                        mapOf(
+                            "/Users/me" to
+                                listOf(
+                                    DirectoryNode("app", "/Users/me/app", true),
+                                    DirectoryNode("code", "/Users/me/code", true),
+                                ),
+                        ),
+                )
+            val viewModel = openSheet(filesystem = filesystem, added = listOf("/one", "/Users/me/app"))
+
+            var sheet = requireNotNull(currentSheet(viewModel))
+            assertEquals(listOf(true, false), sheet.entries.map { it.isOnHome })
+
+            viewModel.updateAddProjectField("/Users/me/code")
+            advanceUntilIdle()
+            sheet = requireNotNull(currentSheet(viewModel))
+            assertEquals("/Users/me/code", sheet.addTarget)
+            assertEquals("Add code", sheet.addTitle)
+            assertTrue(sheet.addEnabled)
+
+            // POSIX names are case-sensitive.
+            viewModel.updateAddProjectField("/Users/me/Code")
+            advanceUntilIdle()
+            sheet = requireNotNull(currentSheet(viewModel))
+            assertEquals(listOf("code"), sheet.entries.map { it.name })
+            assertNull(sheet.addTarget)
+            assertEquals(AddProjectSheetUi.PICK_A_FOLDER, sheet.addTitle)
+
+            viewModel.updateAddProjectField("/Users/me/app")
+            advanceUntilIdle()
+            sheet = requireNotNull(currentSheet(viewModel))
+            assertEquals(AddProjectSheetUi.ALREADY_ON_HOME, sheet.addTitle)
+            assertFalse(sheet.addEnabled)
+        }
+
+    @Test
+    fun addTarget_windowsNamesMatchIgnoringCase() =
+        runTest(testDispatcher) {
+            val filesystem =
+                FakeFilesystemRepository(
+                    paths = ServerPaths(home = "C:\\Users\\me", directory = "C:\\Users\\me", worktree = "/"),
+                    listings = mapOf("C:\\Users\\me" to listOf(DirectoryNode("Code", "C:\\Users\\me\\Code", true))),
+                )
+            val viewModel = openSheet(filesystem = filesystem)
+
+            viewModel.updateAddProjectField("C:\\Users\\me\\code")
+            advanceUntilIdle()
+
+            assertEquals("C:\\Users\\me\\Code", currentSheet(viewModel)?.addTarget)
+            assertEquals("Add Code", currentSheet(viewModel)?.addTitle)
+        }
+
+    @Test
+    fun listingFailure_showsErrorAndRetryRefetches() =
         runTest(testDispatcher) {
             val filesystem =
                 FakeFilesystemRepository(
                     paths = ServerPaths(home = "/home", directory = "/home", worktree = "/"),
-                    listings =
-                        mapOf(
-                            "/home" to emptyList(),
-                            "/" to emptyList(),
-                            "/home/code" to emptyList(),
-                        ),
+                    listings = mapOf("/home/gone" to listOf(DirectoryNode("back", "/home/gone/back", true))),
+                    errors = mutableMapOf("/home/gone" to IllegalStateException("No such folder")),
                 )
-            val viewModel =
-                createViewModel(
-                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/one")),
-                    filesystemRepository = filesystem,
-                )
+            val viewModel = openSheet(filesystem = filesystem)
+
+            viewModel.updateAddProjectField("/home/gone/")
             advanceUntilIdle()
-            viewModel.showAddProjectSheet()
+            var sheet = requireNotNull(currentSheet(viewModel))
+            assertEquals(AddProjectSheetUi.LIST_ERROR_MESSAGE, sheet.listError)
+            assertFalse(sheet.addEnabled)
+
+            filesystem.errors.clear()
+            viewModel.retryAddProjectListing()
             advanceUntilIdle()
-            viewModel.navigateAddProjectUp()
-            advanceUntilIdle()
-            viewModel.showAddProjectGoToPath()
-            viewModel.updateAddProjectGoToPathDraft("   ")
-            viewModel.confirmAddProjectGoToPath()
-            assertEquals(AddProjectGoToPathUi.EMPTY_ERROR, currentNavigator(viewModel)?.goToPath?.errorMessage)
-            viewModel.updateAddProjectGoToPathDraft("~/code")
-            assertEquals(null, currentNavigator(viewModel)?.goToPath?.errorMessage)
-            viewModel.confirmAddProjectGoToPath()
-            advanceUntilIdle()
-            assertEquals("/home/code", currentNavigator(viewModel)?.currentPath)
+            sheet = requireNotNull(currentSheet(viewModel))
+            assertNull(sheet.listError)
+            assertEquals(listOf("back"), sheet.entries.map { it.name })
         }
 
     @Test
-    fun selectCurrentDirectory_validatesAndAddsProject() =
+    fun confirmAddProject_validatesAndAddsHome() =
         runTest(testDispatcher) {
             val store = FakeConnectionProfileStore(initial = listOf("/one"))
             val projectRepository = FakeProjectRepository(bootWorktree = "/one")
@@ -450,13 +784,40 @@ class MainScreenViewModelTest {
             advanceUntilIdle()
             viewModel.showAddProjectSheet()
             advanceUntilIdle()
-            viewModel.selectCurrentDirectory()
+            assertEquals(AddProjectSheetUi.NO_SUBFOLDERS, currentSheet(viewModel)?.emptyMessage)
+            viewModel.confirmAddProject()
             advanceUntilIdle()
             val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
             assertEquals(listOf("/one", "/home"), store.added(serverUrl))
             assertTrue(projectRepository.validatedDirectories.contains("/home"))
             assertTrue(!loaded.showAddProjectSheet)
+            assertNull(loaded.addProjectSheet)
             assertEquals("/home", viewModel.pendingSelectedFilterId.value)
+        }
+
+    @Test
+    fun selectAddProjectSuggestion_addsServerProject() =
+        runTest(testDispatcher) {
+            val store = FakeConnectionProfileStore(initial = listOf("/one"))
+            val projectRepository =
+                FakeProjectRepository(
+                    bootWorktree = "/one",
+                    projects = listOf(Project(id = "web", worktree = "/srv/web", displayName = "web", activityAtEpochMs = 1)),
+                )
+            val viewModel =
+                openSheet(
+                    store = store,
+                    projectRepository = projectRepository,
+                    sessionsByWorktree = mapOf("/one" to emptyList(), "/srv/web" to emptyList()),
+                )
+            assertEquals(listOf("/srv/web"), currentSheet(viewModel)?.suggestions?.map { it.path })
+
+            viewModel.selectAddProjectSuggestion("/srv/web")
+            advanceUntilIdle()
+
+            assertEquals(listOf("/one", "/srv/web"), store.added(serverUrl))
+            assertTrue(projectRepository.validatedDirectories.contains("/srv/web"))
+            assertEquals("/srv/web", viewModel.pendingSelectedFilterId.value)
         }
 
     @Test
@@ -484,7 +845,7 @@ class MainScreenViewModelTest {
         }
 
     @Test
-    fun selectCurrentDirectory_persistsSelectedPathEvenWhenCurrentResolvesGlobal() =
+    fun confirmAddProject_persistsSelectedPathEvenWhenCurrentResolvesGlobal() =
         runTest(testDispatcher) {
             val store = FakeConnectionProfileStore(initial = listOf("/one"))
             val projectRepository =
@@ -501,16 +862,13 @@ class MainScreenViewModelTest {
                     listings = mapOf("/home" to emptyList()),
                 )
             val viewModel =
-                createViewModel(
-                    connectionProfileStore = store,
+                openSheet(
+                    store = store,
                     projectRepository = projectRepository,
-                    filesystemRepository = filesystem,
+                    filesystem = filesystem,
                     sessionsByWorktree = mapOf("/one" to emptyList(), "/home" to emptyList()),
                 )
-            advanceUntilIdle()
-            viewModel.showAddProjectSheet()
-            advanceUntilIdle()
-            viewModel.selectCurrentDirectory()
+            viewModel.confirmAddProject()
             advanceUntilIdle()
             val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
             assertEquals(listOf("/one", "/home"), store.added(serverUrl))
@@ -518,7 +876,7 @@ class MainScreenViewModelTest {
         }
 
     @Test
-    fun selectCurrentDirectory_nestedPathPersistsSelectedDirectory() =
+    fun confirmAddProject_nestedPathPersistsSelectedDirectory() =
         runTest(testDispatcher) {
             val store = FakeConnectionProfileStore(initial = listOf("/one"))
             val projectRepository =
@@ -532,20 +890,24 @@ class MainScreenViewModelTest {
                 )
             val filesystem =
                 FakeFilesystemRepository(
-                    paths = ServerPaths(home = "/repo/android", directory = "/repo/android", worktree = "/"),
-                    listings = mapOf("/repo/android" to emptyList()),
+                    paths = ServerPaths(home = "/repo", directory = "/repo", worktree = "/"),
+                    listings =
+                        mapOf(
+                            "/repo" to listOf(DirectoryNode("android", "/repo/android", true)),
+                            "/repo/android" to emptyList(),
+                        ),
                 )
             val viewModel =
-                createViewModel(
-                    connectionProfileStore = store,
+                openSheet(
+                    store = store,
                     projectRepository = projectRepository,
-                    filesystemRepository = filesystem,
+                    filesystem = filesystem,
                     sessionsByWorktree = mapOf("/one" to emptyList(), "/repo/android" to emptyList()),
                 )
+            viewModel.openAddProjectFolder("/repo/android")
             advanceUntilIdle()
-            viewModel.showAddProjectSheet()
-            advanceUntilIdle()
-            viewModel.selectCurrentDirectory()
+            assertEquals("Add android", currentSheet(viewModel)?.addTitle)
+            viewModel.confirmAddProject()
             advanceUntilIdle()
             val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
             assertEquals(listOf("/one", "/repo/android"), store.added(serverUrl))
@@ -553,7 +915,7 @@ class MainScreenViewModelTest {
         }
 
     @Test
-    fun selectCurrentDirectory_validationFailureKeepsSheetOpen() =
+    fun confirmAddProject_validationFailureKeepsSheetOpenWithFieldError() =
         runTest(testDispatcher) {
             val projectRepository =
                 FakeProjectRepository(
@@ -565,21 +927,18 @@ class MainScreenViewModelTest {
                     paths = ServerPaths(home = "/home", directory = "/home", worktree = "/"),
                     listings = mapOf("/home" to emptyList()),
                 )
-            val viewModel =
-                createViewModel(
-                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/one")),
-                    projectRepository = projectRepository,
-                    filesystemRepository = filesystem,
-                )
-            advanceUntilIdle()
-            viewModel.showAddProjectSheet()
-            advanceUntilIdle()
-            viewModel.selectCurrentDirectory()
+            val viewModel = openSheet(projectRepository = projectRepository, filesystem = filesystem)
+            viewModel.confirmAddProject()
             advanceUntilIdle()
             val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
             assertTrue(loaded.showAddProjectSheet)
-            assertEquals("not a project", loaded.addProjectNavigator?.errorMessage)
+            assertEquals("not a project", loaded.addProjectSheet?.fieldError)
+            assertFalse(loaded.addProjectSheet?.isValidating == true)
+            assertTrue(loaded.addProjectSheet?.addEnabled == true)
             assertNull(viewModel.pendingSelectedFilterId.value)
+
+            viewModel.updateAddProjectField("/home/x")
+            assertNull(currentSheet(viewModel)?.fieldError)
         }
 
     @Test
@@ -1383,12 +1742,33 @@ class MainScreenViewModelTest {
             Session(id = "ses-never-ran", title = "Never ran", updatedAtEpochMs = 1L),
         )
 
-    private fun currentNavigator(viewModel: MainScreenViewModel): AddProjectNavigatorUi? =
+    private fun currentSheet(viewModel: MainScreenViewModel): AddProjectSheetUi? =
         when (val state = viewModel.uiState.value) {
-            is MainScreenUiState.Loaded -> state.addProjectNavigator
-            is MainScreenUiState.Empty -> state.addProjectNavigator
+            is MainScreenUiState.Loaded -> state.addProjectSheet
+            is MainScreenUiState.Empty -> state.addProjectSheet
             else -> null
         }
+
+    /** Home with one project, then the Add project sheet opened and settled. */
+    private fun kotlinx.coroutines.test.TestScope.openSheet(
+        filesystem: FakeFilesystemRepository = FakeFilesystemRepository(),
+        projectRepository: FakeProjectRepository = FakeProjectRepository(bootWorktree = "/one"),
+        added: List<String> = listOf("/one"),
+        store: FakeConnectionProfileStore = FakeConnectionProfileStore(initial = added),
+        sessionsByWorktree: Map<String, List<Session>> = emptyMap(),
+    ): MainScreenViewModel {
+        val viewModel =
+            createViewModel(
+                connectionProfileStore = store,
+                projectRepository = projectRepository,
+                filesystemRepository = filesystem,
+                sessionsByWorktree = sessionsByWorktree,
+            )
+        advanceUntilIdle()
+        viewModel.showAddProjectSheet()
+        advanceUntilIdle()
+        return viewModel
+    }
 
     private fun createViewModel(
         shouldFailProbe: Boolean = false,
@@ -1494,6 +1874,7 @@ private class FakeProjectRepository(
     private val bootWorktree: String = "/boot/project",
     private val currentProjectError: Throwable? = null,
     private val projectsByDirectory: Map<String, Project> = emptyMap(),
+    private val projects: List<Project> = emptyList(),
 ) : ProjectRepository {
     val validatedDirectories = mutableListOf<String?>()
 
@@ -1501,7 +1882,7 @@ private class FakeProjectRepository(
         if (shouldFailProbe) throw ServerProbeError.Transport(IllegalStateException("down"))
     }
 
-    override suspend fun listProjects(): List<Project> = emptyList()
+    override suspend fun listProjects(): List<Project> = projects
 
     override suspend fun getCurrentProject(directory: String?): Project {
         validatedDirectories += directory
@@ -1516,10 +1897,17 @@ private class FakeProjectRepository(
 private class FakeFilesystemRepository(
     private val paths: ServerPaths = ServerPaths(home = "/home", directory = "/home", worktree = "/"),
     private val listings: Map<String, List<DirectoryNode>> = emptyMap(),
+    val errors: MutableMap<String, Throwable> = mutableMapOf(),
 ) : FilesystemRepository {
+    val listCalls = mutableListOf<String>()
+
     override suspend fun getPaths(): ServerPaths = paths
 
-    override suspend fun listDirectory(path: String): List<DirectoryNode> = DirectoryListingPolicy.prepare(listings[path].orEmpty())
+    override suspend fun listDirectory(path: String): List<DirectoryNode> {
+        listCalls += path
+        errors[path]?.let { throw it }
+        return DirectoryListingPolicy.directories(listings[path].orEmpty())
+    }
 }
 
 private class FakeSessionRepository(

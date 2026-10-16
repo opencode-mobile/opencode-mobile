@@ -38,14 +38,57 @@ nonisolated enum ServerPathPolicy {
         return parsed.formatted
     }
 
+    /// Root of an absolute path: `/`, `C:\`, or `\\server\share`; empty for a relative path.
+    static func root(_ path: String) -> String {
+        parse(path)?.root ?? ""
+    }
+
+    /// True for `/`, a drive root, or a UNC share root.
+    static func isRoot(_ path: String) -> Bool {
+        guard let parsed = parse(path) else { return false }
+        return !parsed.root.isEmpty && parsed.segments.isEmpty
+    }
+
+    /// True for drive-letter and UNC paths, whose names compare case-insensitively.
+    static func isWindows(_ path: String) -> Bool {
+        parse(path)?.windows == true
+    }
+
+    /// Path field text for a folder: the canonical folder plus its native separator, so typing
+    /// continues inside it. Roots are returned as they format (`/`, `C:\`, `\\server\share`).
+    static func fieldText(_ folder: String) -> String {
+        guard let parsed = parse(folder), !parsed.root.isEmpty else { return folder }
+        if parsed.segments.isEmpty { return parsed.formatted }
+        return parsed.formatted + (parsed.windows ? "\\" : "/")
+    }
+
+    /// Splits Add project path field text into the folder to list and the name prefix typed
+    /// after its last separator. `~` and relative text resolve against `home`. Text ending in a
+    /// separator, or resolving to a root, lists that folder with no filter. A leading `//` is a
+    /// UNC share only when `home` is Windows-shaped; on a POSIX home repeated slashes collapse.
+    /// A lone `.` after the last separator is the start of a hidden folder's name, not "this
+    /// folder", so it filters that folder's listing.
+    static func fieldParts(_ text: String, home: String) -> (directory: String?, filter: String) {
+        var value = unquoted(text)
+        if !isWindows(home) {
+            value = value.replacingOccurrences(of: "/{2,}", with: "/", options: .regularExpression)
+        }
+        guard let resolved = resolveInput(value, currentPath: home, homePath: home) else { return (nil, "") }
+        if value == "." || value.hasSuffix("/.") || (isWindows(resolved) && value.hasSuffix("\\.")) {
+            return (resolved, ".")
+        }
+        let endsWithSeparator = value.hasSuffix("/") || (isWindows(resolved) && value.hasSuffix("\\"))
+        if endsWithSeparator || isRoot(resolved) {
+            return (resolved, "")
+        }
+        return (parentPath(resolved), name(resolved))
+    }
+
     /// Go to path input: an absolute path, `~` (the server's home), a bare drive (`D:`), a UNC
     /// share (`\\server\share` or `//server/share`), or a path relative to `currentPath`.
     /// Surrounding quotes from a Windows "Copy as path" are dropped. Nil when nothing usable.
     static func resolveInput(_ input: String, currentPath: String, homePath: String) -> String? {
-        var value = input.trimmingCharacters(in: .whitespacesAndNewlines)
-        if value.count >= 2, value.hasPrefix("\""), value.hasSuffix("\"") {
-            value = String(value.dropFirst().dropLast()).trimmingCharacters(in: .whitespacesAndNewlines)
-        }
+        let value = unquoted(input)
         if value.isEmpty { return nil }
         if value == "~" || value.hasPrefix("~/") || value.hasPrefix("~\\") {
             let home = homePath.trimmingCharacters(in: .whitespaces).isEmpty ? currentPath : homePath
@@ -56,6 +99,14 @@ nonisolated enum ServerPathPolicy {
         if isAbsolute(value) { return canonical(value) }
         guard isAbsolute(currentPath) else { return nil }
         return resolve(base: currentPath, child: value)
+    }
+
+    private static func unquoted(_ input: String) -> String {
+        var value = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        if value.count >= 2, value.hasPrefix("\""), value.hasSuffix("\"") {
+            value = String(value.dropFirst().dropLast()).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return value
     }
 
     private struct Parsed {

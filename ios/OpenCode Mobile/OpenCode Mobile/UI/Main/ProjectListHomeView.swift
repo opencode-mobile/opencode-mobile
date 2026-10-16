@@ -163,78 +163,39 @@ struct ProjectListHomeView: View {
             .openCodeBottomSheet(
                 isPresented: addProjectPresentedBinding,
                 title: "Add project",
-                alwaysFixedHeight: true,
-                pinnedContent: {
-                    let navigator = viewModel.addProjectNavigator
-                    OpenCodeBottomSheetEntry(
-                        title: "Go up",
-                        enabled: navigator.canGoUp && !navigator.isLoading && !navigator.isValidating,
-                        startDecorator: .icon(.arrowUpward),
-                        action: { Task { await viewModel.navigateAddProjectUp() } }
+                height: .half,
+                keyboard: .expand,
+                pinnedTop: {
+                    AddProjectSheetHeader(
+                        sheet: viewModel.addProjectSheet,
+                        onFieldChange: viewModel.updateAddProjectField,
+                        onUp: { Task { await viewModel.addProjectUp() } },
+                        onSelectRoot: { path in Task { await viewModel.selectAddProjectRoot(path: path) } },
+                        onAdd: { Task { await viewModel.confirmAddProject() } }
                     )
-                    OpenCodeBottomSheetEntry(
-                        title: "Go to path",
-                        enabled: !navigator.isLoading && !navigator.isValidating,
-                        startDecorator: .icon(.edit),
-                        action: viewModel.showAddProjectGoToPath
-                    )
-                    OpenCodeBottomSheetEntry(
-                        title: navigator.currentPath.isEmpty ? "Current directory" : navigator.currentPath,
-                        enabled: !navigator.currentPath.isEmpty && !navigator.isLoading && !navigator.isValidating,
-                        startDecorator: .icon(.folderCheck),
-                        action: { Task { await viewModel.selectCurrentDirectory() } }
-                    )
-                }
-            ) {
-                let navigator = viewModel.addProjectNavigator
-                if navigator.isLoading || navigator.isValidating {
-                    OpenCodeStatusStack(spinner: "Loading folders")
-                        .frame(maxWidth: .infinity)
-                        .padding(24)
-                } else if let errorMessage = navigator.errorMessage {
-                    OpenCodeEmptyState(
-                        title: "Unable to list this folder",
-                        message: openCodeNonBlank(errorMessage, fallback: "This folder couldn't be listed."),
-                        fillsAvailableSpace: false,
-                        primaryAction: OpenCodeEmptyStateAction(title: "Retry") {
-                            Task { await viewModel.retryAddProjectNavigator() }
-                        }
-                    )
-                    .padding(20)
-                } else if navigator.entries.isEmpty {
-                    OpenCodeBottomSheetEntry(title: "No subdirectories", enabled: false, action: {})
-                } else {
-                    ForEach(navigator.entries) { entry in
-                        OpenCodeBottomSheetEntry(
-                            title: entry.name,
-                            startDecorator: .icon(.subdirectoryArrowRight),
-                            action: { Task { await viewModel.navigateAddProjectInto(path: entry.absolutePath) } }
-                        )
-                    }
-                }
-            }
-            .openCodeDialog(
-                isPresented: addProjectGoToPathBinding,
-                title: "Go to path",
-                subtitle: "A folder on the server, such as ~/code, /Volumes, or D:.",
-                primaryOption: OpenCodeDialogOption(title: "Go") {
-                    Task { await viewModel.confirmAddProjectGoToPath() }
                 },
-                secondaryOption: OpenCodeDialogOption(title: "Cancel", action: viewModel.cancelAddProjectGoToPath),
-                textField: OpenCodeDialogTextField(
-                    text: Binding(
-                        get: { viewModel.addProjectNavigator.goToPath?.draft ?? "" },
-                        set: viewModel.updateAddProjectGoToPathDraft
-                    ),
-                    hint: "Folder path",
-                    kind: .filter,
-                    errorMessage: viewModel.addProjectNavigator.goToPath?.errorMessage
-                )
+                content: {
+                    AddProjectSheetRows(
+                        sheet: viewModel.addProjectSheet,
+                        onOpenFolder: { path in Task { await viewModel.openAddProjectFolder(path: path) } },
+                        onSelectSuggestion: { path in Task { await viewModel.selectAddProjectSuggestion(path: path) } },
+                        onRetry: { Task { await viewModel.retryAddProjectListing() } }
+                    )
+                },
+                pinnedBottom: {
+                    AddProjectSheetFooter(
+                        sheet: viewModel.addProjectSheet,
+                        onAdd: { Task { await viewModel.confirmAddProject() } }
+                    )
+                }
             )
+            // .dismiss would suit this list better; .keep preserves today's
+            // behavior until #680 revisits it.
             .openCodeBottomSheet(
                 isPresented: projectPickerBinding,
                 title: "Filter by project",
-                contentMode: .form
+                height: .half,
+                keyboard: .keep
             ) {
                 SessionListProjectPickerRows(
                     tabs: projectPickerTabs,
@@ -782,15 +743,6 @@ struct ProjectListHomeView: View {
                     )
                     viewModel.dismissAddProjectSheet()
                 }
-            }
-        )
-    }
-
-    private var addProjectGoToPathBinding: Binding<Bool> {
-        Binding(
-            get: { viewModel.addProjectNavigator.goToPath != nil },
-            set: { visible in
-                if !visible { viewModel.cancelAddProjectGoToPath() }
             }
         )
     }

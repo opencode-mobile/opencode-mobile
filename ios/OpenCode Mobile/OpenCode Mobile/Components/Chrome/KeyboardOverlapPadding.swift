@@ -36,20 +36,20 @@ enum KeyboardOverlap {
         lastEndFrame = nil
     }
 
-    /// Action lists dismiss on first present and when content mode becomes
-    /// `actionList` while already presented (Model picker Back to providers).
-    static func shouldDismissActionListKeyboard(
+    /// `.dismiss` sheets dismiss on first present and when the keyboard policy
+    /// becomes `.dismiss` while already presented (Model picker Back to providers).
+    static func shouldDismissSheetKeyboard(
         isPresented: Bool,
         wasPresented: Bool,
-        contentMode: OpenCodeBottomSheetContentMode,
-        presentedContentMode: OpenCodeBottomSheetContentMode?
+        keyboard: OpenCodeBottomSheetKeyboard,
+        presentedKeyboard: OpenCodeBottomSheetKeyboard?
     ) -> Bool {
         isPresented
-            && contentMode == .actionList
-            && (!wasPresented || presentedContentMode != .actionList)
+            && keyboard == .dismiss
+            && (!wasPresented || presentedKeyboard != .dismiss)
     }
 
-    /// Action-list sheets resign the current first responder so they are not
+    /// `.dismiss` bottom sheets resign the current first responder so they are not
     /// stacked over an already-visible software keyboard.
     static func dismissSoftwareKeyboard() {
         let keyWindow = UIApplication.shared.connectedScenes

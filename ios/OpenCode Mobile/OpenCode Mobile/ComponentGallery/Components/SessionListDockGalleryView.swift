@@ -58,7 +58,9 @@ struct SessionListDockGalleryView: View {
         .openCodeBottomSheet(
             isPresented: $showProjectPicker,
             title: "Filter by project",
-            contentMode: .form
+            // Matches the app's Filter by project sheet; .dismiss is tracked in #680.
+            height: .half,
+            keyboard: .keep
         ) {
             SessionListProjectPickerRows(
                 tabs: filterTabs,

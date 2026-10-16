@@ -58,13 +58,97 @@ class ProjectProtocolRepositoryTest {
 
             val projects = repository(client, ServerProtocol.V2).listProjects()
 
-            assertEquals(listOf(Project(id = "p2", worktree = "/Users/me/app", displayName = "app")), projects)
+            assertEquals(
+                listOf(Project(id = "p2", worktree = "/Users/me/app", displayName = "app", activityAtEpochMs = 1)),
+                projects,
+            )
             assertTrue(
                 requests
                     .single()
                     .url.encodedPath
                     .endsWith("/api/project"),
             )
+        }
+
+    @Test
+    fun v1ListProjects_decodesUpdatedTimeAsActivity() =
+        runTest {
+            val client =
+                testClient {
+                    respondJson(
+                        """[{"id":"p1","worktree":"/Users/me/repo","vcs":"git",""" +
+                            """"time":{"created":10,"updated":20,"initialized":15}},""" +
+                            """{"id":"global","worktree":"/","time":{"created":1}}]""",
+                    )
+                }
+
+            val projects = repository(client, ServerProtocol.V1).listProjects()
+
+            assertEquals(listOf(20L, null), projects.map { it.activityAtEpochMs })
+        }
+
+    @Test
+    fun v2ListProjects_prefersActiveTime() =
+        runTest {
+            val client =
+                testClient {
+                    respondJson("""[{"id":"p2","canonical":"/Users/me/app","time":{"created":1,"updated":2,"active":3}}]""")
+                }
+
+            val projects = repository(client, ServerProtocol.V2).listProjects()
+
+            assertEquals(listOf(3L), projects.map { it.activityAtEpochMs })
+        }
+
+    @Test
+    fun v2ListProjects_fallsBackToProjectWhenApiProjectServesHtml() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    if (request.url.encodedPath.endsWith("/api/project")) {
+                        respond(
+                            content = "<!doctype html><html></html>",
+                            status = HttpStatusCode.OK,
+                            headers = headersOf(HttpHeaders.ContentType, "text/html"),
+                        )
+                    } else {
+                        respondJson("""[{"id":"p1","worktree":"/Users/me/repo","time":{"updated":7}}]""")
+                    }
+                }
+
+            val projects = repository(client, ServerProtocol.V2).listProjects()
+
+            assertEquals(
+                listOf(Project(id = "p1", worktree = "/Users/me/repo", displayName = "repo", activityAtEpochMs = 7)),
+                projects,
+            )
+            assertEquals(listOf("/api/project", "/project"), requests.map { it.url.encodedPath })
+        }
+
+    @Test
+    fun v2ListProjects_fallsBackToProjectWhenApiProjectIsMissing() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    if (request.url.encodedPath.endsWith("/api/project")) {
+                        respond(
+                            content = "Not Found",
+                            status = HttpStatusCode.NotFound,
+                            headers = headersOf(HttpHeaders.ContentType, "text/plain"),
+                        )
+                    } else {
+                        respondJson("""[{"id":"p1","worktree":"/Users/me/repo"}]""")
+                    }
+                }
+
+            val projects = repository(client, ServerProtocol.V2).listProjects()
+
+            assertEquals(listOf("/Users/me/repo"), projects.map { it.worktree })
+            assertEquals(listOf("/api/project", "/project"), requests.map { it.url.encodedPath })
         }
 
     private suspend fun repository(

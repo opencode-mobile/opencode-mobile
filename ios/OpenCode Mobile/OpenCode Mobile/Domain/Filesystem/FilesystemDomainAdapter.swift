@@ -19,10 +19,10 @@ struct FilesystemDomainAdapter: Sendable {
         )
     }
 
-    func directoryNode(from dto: V2FsEntryDTO, listingDirectory: String) -> DirectoryNode {
-        // Entry paths are relative to the listing (or absolute across drives), in the
-        // server's separators: `src\` on Windows, `src/` elsewhere.
-        let absolutePath = ServerPathPolicy.resolve(base: listingDirectory, child: dto.path)
+    /// `base` is the listing envelope's location directory. Entry paths are relative to it (or
+    /// absolute across drives), in the server's separators: `src\` on Windows, `src/` elsewhere.
+    func directoryNode(from dto: V2FsEntryDTO, base: String) -> DirectoryNode {
+        let absolutePath = ServerPathPolicy.resolve(base: base, child: dto.path)
         return DirectoryNode(
             name: ServerPathPolicy.name(absolutePath),
             absolutePath: absolutePath,
