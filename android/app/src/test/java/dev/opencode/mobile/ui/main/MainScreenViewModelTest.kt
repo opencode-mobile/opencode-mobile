@@ -335,6 +335,81 @@ class MainScreenViewModelTest {
             assertEquals("/Users/me", sheet.addTarget)
             assertEquals(AddProjectSheetUi.ADD_HOME_FOLDER, sheet.addTitle)
             assertTrue(sheet.addEnabled)
+            assertFalse(sheet.isBrowsing)
+        }
+
+    @Test
+    fun browseAddProjectFolders_opensTheBrowserAndBackReturnsToSuggestions() =
+        runTest(testDispatcher) {
+            val viewModel =
+                createViewModel(
+                    filesystemRepository =
+                        FakeFilesystemRepository(
+                            paths = ServerPaths(home = "/home", directory = "/home", worktree = "/"),
+                            listings = mapOf("/home" to listOf(DirectoryNode("code", "/home/code", true))),
+                        ),
+                )
+            advanceUntilIdle()
+            viewModel.showAddProjectSheet()
+            advanceUntilIdle()
+
+            viewModel.browseAddProjectFolders()
+            val browsing = requireNotNull(currentSheet(viewModel))
+            assertTrue(browsing.isBrowsing)
+            assertTrue(addProjectSheetVisible(viewModel))
+            assertEquals("/home/", browsing.fieldText)
+
+            viewModel.closeAddProjectBrowser()
+            val suggestions = requireNotNull(currentSheet(viewModel))
+            assertFalse(suggestions.isBrowsing)
+            assertTrue(addProjectSheetVisible(viewModel))
+            assertEquals("/home/", suggestions.fieldText)
+        }
+
+    @Test
+    fun closeAddProjectBrowser_afterEnteringAFolder_restoresHomeSuggestions() =
+        runTest(testDispatcher) {
+            val filesystem =
+                FakeFilesystemRepository(
+                    paths = ServerPaths(home = "/Users/me", directory = "/Users/me", worktree = "/"),
+                    listings =
+                        mapOf(
+                            "/Users/me" to listOf(DirectoryNode("code", "/Users/me/code", true)),
+                            "/Users/me/code" to listOf(DirectoryNode("app", "/Users/me/code/app", true)),
+                        ),
+                )
+            val viewModel =
+                openSheet(
+                    filesystem = filesystem,
+                    projectRepository =
+                        FakeProjectRepository(
+                            bootWorktree = "/one",
+                            projects =
+                                listOf(
+                                    Project(
+                                        id = "web",
+                                        worktree = "/Users/me/web",
+                                        displayName = "web",
+                                        activityAtEpochMs = 5,
+                                    ),
+                                ),
+                        ),
+                )
+            assertTrue(currentSheet(viewModel)?.showSuggestions == true)
+
+            viewModel.browseAddProjectFolders()
+            viewModel.openAddProjectFolder("/Users/me/code")
+            advanceUntilIdle()
+            assertEquals("/Users/me/code", currentSheet(viewModel)?.directory)
+            assertFalse(currentSheet(viewModel)?.showSuggestions == true)
+
+            viewModel.closeAddProjectBrowser()
+            val sheet = requireNotNull(currentSheet(viewModel))
+            assertFalse(sheet.isBrowsing)
+            assertEquals("/Users/me/", sheet.fieldText)
+            assertEquals("/Users/me", sheet.directory)
+            assertTrue(sheet.showSuggestions)
+            assertEquals(listOf("/Users/me/web"), sheet.suggestions.map { it.path })
         }
 
     @Test
@@ -1741,6 +1816,13 @@ class MainScreenViewModelTest {
             ),
             Session(id = "ses-never-ran", title = "Never ran", updatedAtEpochMs = 1L),
         )
+
+    private fun addProjectSheetVisible(viewModel: MainScreenViewModel): Boolean =
+        when (val state = viewModel.uiState.value) {
+            is MainScreenUiState.Loaded -> state.showAddProjectSheet
+            is MainScreenUiState.Empty -> state.showAddProjectSheet
+            else -> false
+        }
 
     private fun currentSheet(viewModel: MainScreenViewModel): AddProjectSheetUi? =
         when (val state = viewModel.uiState.value) {

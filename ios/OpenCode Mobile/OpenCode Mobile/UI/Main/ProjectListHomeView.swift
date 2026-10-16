@@ -163,32 +163,28 @@ struct ProjectListHomeView: View {
             .openCodeBottomSheet(
                 isPresented: addProjectPresentedBinding,
                 title: "Add project",
-                height: .half,
-                keyboard: .expand,
-                pinnedTop: {
-                    AddProjectSheetHeader(
-                        sheet: viewModel.addProjectSheet,
-                        onFieldChange: viewModel.updateAddProjectField,
-                        onUp: { Task { await viewModel.addProjectUp() } },
-                        onSelectRoot: { path in Task { await viewModel.selectAddProjectRoot(path: path) } },
-                        onAdd: { Task { await viewModel.confirmAddProject() } }
-                    )
-                },
-                content: {
-                    AddProjectSheetRows(
-                        sheet: viewModel.addProjectSheet,
-                        onOpenFolder: { path in Task { await viewModel.openAddProjectFolder(path: path) } },
-                        onSelectSuggestion: { path in Task { await viewModel.selectAddProjectSuggestion(path: path) } },
-                        onRetry: { Task { await viewModel.retryAddProjectListing() } }
-                    )
-                },
-                pinnedBottom: {
-                    AddProjectSheetFooter(
-                        sheet: viewModel.addProjectSheet,
-                        onAdd: { Task { await viewModel.confirmAddProject() } }
-                    )
-                }
-            )
+                height: .fitContent
+            ) {
+                AddProjectSuggestions(
+                    sheet: viewModel.addProjectSheet,
+                    onSelectSuggestion: { path in Task { await viewModel.selectAddProjectSuggestion(path: path) } },
+                    onBrowse: viewModel.browseAddProjectFolders,
+                    onRetry: { Task { await viewModel.retryAddProjectListing() } }
+                )
+            }
+            .fullScreenCover(isPresented: addProjectBrowsingBinding) {
+                AddProjectBrowser(
+                    sheet: viewModel.addProjectSheet,
+                    onBack: viewModel.closeAddProjectBrowser,
+                    onFieldChange: viewModel.updateAddProjectField,
+                    onUp: { Task { await viewModel.addProjectUp() } },
+                    onSelectRoot: { path in Task { await viewModel.selectAddProjectRoot(path: path) } },
+                    onOpenFolder: { path in Task { await viewModel.openAddProjectFolder(path: path) } },
+                    onAddFolder: { path in Task { await viewModel.addProject(worktree: path) } },
+                    onAdd: { Task { await viewModel.confirmAddProject() } },
+                    onRetry: { Task { await viewModel.retryAddProjectListing() } }
+                )
+            }
             // .dismiss would suit this list better; .keep preserves today's
             // behavior until #680 revisits it.
             .openCodeBottomSheet(
@@ -730,6 +726,17 @@ struct ProjectListHomeView: View {
             trigger: ProductAnalytics.Trigger.present
         )
         showNewSessionProjectPicker = true
+    }
+
+    private var addProjectBrowsingBinding: Binding<Bool> {
+        Binding(
+            get: { viewModel.isAddProjectPresented && viewModel.addProjectSheet.isBrowsing },
+            set: { presented in
+                if !presented {
+                    viewModel.closeAddProjectBrowser()
+                }
+            }
+        )
     }
 
     private var addProjectPresentedBinding: Binding<Bool> {

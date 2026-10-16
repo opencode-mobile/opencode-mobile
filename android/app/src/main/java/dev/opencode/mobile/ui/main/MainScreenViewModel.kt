@@ -295,6 +295,43 @@ class MainScreenViewModel
             addProject(path)
         }
 
+        /** Replaces the suggestion sheet with the full-screen folder browser. */
+        fun browseAddProjectFolders() {
+            if (addProjectSession == null || addProjectSession?.isValidating == true) return
+            logAction(
+                ProductAnalytics.Screen.HOME_ADD_PROJECT,
+                ProductAnalytics.Action.ADD_PROJECT_BROWSE,
+            )
+            updateAddProjectSession { it.copy(browsing = true) }
+        }
+
+        /**
+         * Back from the browser. Returns to the suggestion sheet at the server home, so
+         * "On this server" is not lost because the field was left in a subfolder.
+         */
+        fun closeAddProjectBrowser() {
+            val session = addProjectSession ?: return
+            if (!session.browsing) return
+            logAction(
+                ProductAnalytics.Screen.HOME_ADD_PROJECT,
+                ProductAnalytics.Action.ADD_PROJECT_BROWSE_BACK,
+            )
+            val home = session.home
+            if (home.isEmpty()) {
+                updateAddProjectSession { it.copy(browsing = false) }
+                return
+            }
+            addProjectDebounceJob?.cancel()
+            updateAddProjectSession {
+                it.copy(
+                    browsing = false,
+                    fieldText = ServerPathPolicy.fieldText(home),
+                    fieldError = null,
+                )
+            }
+            loadAddProjectListing(home)
+        }
+
         fun retryAddProjectListing() {
             val session = addProjectSession ?: return
             logAction(

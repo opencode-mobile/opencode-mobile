@@ -76,6 +76,9 @@ struct AddProjectSheetState: Equatable {
     var addEnabled = false
     var isValidating = false
     var fieldError: String?
+    /// True while Browse folders has replaced the suggestion sheet with the full-screen browser.
+    var isBrowsing = false
+    static let browseFoldersTitle = "Browse folders"
 
     static let empty = AddProjectSheetState()
 
@@ -90,6 +93,7 @@ struct AddProjectSheetState: Equatable {
         sheet.homePath = inputs.home
         sheet.isValidating = inputs.isValidating
         sheet.fieldError = inputs.fieldError
+        sheet.isBrowsing = inputs.isBrowsing
         guard !inputs.home.isEmpty else {
             sheet.isLoading = inputs.pathsError == nil
             sheet.listError = inputs.pathsError
@@ -228,6 +232,7 @@ struct AddProjectSheetInputs: Equatable {
     var listedRoots: [String] = []
     var isValidating = false
     var fieldError: String?
+    var isBrowsing = false
 }
 
 struct ProjectRemovalItem: Equatable {
@@ -549,6 +554,28 @@ final class ProjectListHomeViewModel {
         guard isAddProjectPresented, !addProjectInputs.isValidating else { return }
         logAddProjectAction(ProductAnalytics.Action.addProjectSelectSuggestion)
         await addProject(worktree: path)
+    }
+
+    /// Replaces the suggestion sheet with the full-screen folder browser.
+    func browseAddProjectFolders() {
+        guard isAddProjectPresented, !addProjectInputs.isValidating else { return }
+        logAddProjectAction(ProductAnalytics.Action.addProjectBrowse)
+        addProjectInputs.isBrowsing = true
+        publishAddProjectSheet()
+    }
+
+    /// Back from the browser. Returns to the suggestion sheet at the server home, so
+    /// "On this server" is not lost because the field was left in a subfolder.
+    func closeAddProjectBrowser() {
+        guard isAddProjectPresented, addProjectInputs.isBrowsing else { return }
+        logAddProjectAction(ProductAnalytics.Action.addProjectBrowseBack)
+        addProjectListingTask?.cancel()
+        addProjectInputs.isBrowsing = false
+        if !addProjectInputs.home.isEmpty {
+            addProjectInputs.fieldText = ServerPathPolicy.fieldText(addProjectInputs.home)
+            addProjectInputs.fieldError = nil
+        }
+        publishAddProjectSheet()
     }
 
     func retryAddProjectListing() async {
