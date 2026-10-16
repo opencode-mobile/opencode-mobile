@@ -25,6 +25,7 @@ import dev.opencode.mobile.data.remote.dto.V2FormReplyRequestDto
 import dev.opencode.mobile.data.remote.dto.V2InboxDeliveryRequestDto
 import dev.opencode.mobile.data.remote.dto.V2InboxItemDto
 import dev.opencode.mobile.data.remote.dto.V2LocationDto
+import dev.opencode.mobile.data.remote.dto.V2LocationInfoDto
 import dev.opencode.mobile.data.remote.dto.V2PermissionReplyRequestDto
 import dev.opencode.mobile.data.remote.dto.V2PermissionRequestDto
 import dev.opencode.mobile.data.remote.dto.V2RenameSessionRequestDto
@@ -427,9 +428,21 @@ class SessionsApi private constructor(
 
     // --- V2 home / session CRUD ---
 
+    suspend fun locationForSessionList(directory: String): V2LocationInfoDto =
+        httpClient
+            .get()
+            .get("api/location") {
+                applyLocationDirectory(directory)
+            }.body()
+
+    /**
+     * [projectId] lists every worktree of that project. Passing [directory] as well would
+     * hide those worktree sessions, so a project list omits the directory query.
+     */
     suspend fun listSessionsV2(
         directory: String? = null,
         parentId: String? = null,
+        projectId: String? = null,
     ): List<V2SessionDto> {
         val sessions = mutableListOf<V2SessionDto>()
         var cursor: String? = null
@@ -439,7 +452,11 @@ class SessionsApi private constructor(
                 httpClient
                     .get()
                     .get("api/session") {
-                        applyDirectory(directory)
+                        if (projectId != null) {
+                            parameter("project", projectId)
+                        } else {
+                            applyDirectory(directory)
+                        }
                         parentId?.let { parameter("parentID", it) }
                         cursor?.let { parameter("cursor", it) }
                     }.body<ApiListEnvelope<V2SessionDto>>()

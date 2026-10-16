@@ -99,6 +99,23 @@ struct CrossProjectSessionListSessionsTests {
         #expect(counts["/empty-after-dedupe"] == 0)
     }
 
+    @Test func worktreeSessionStaysInAddedProjectButOpensItsOwnDirectory() {
+        let sessions = [
+            section(
+                worktree: "/repo",
+                session(
+                    id: "ses_worktree",
+                    title: "Add project sheet prototype",
+                    updatedAtEpochMs: 20,
+                    directory: "/worktrees/add-project-browse"
+                )
+            ),
+        ].crossProjectSessionListSessions()
+
+        #expect(sessions.first?.worktree == "/repo")
+        #expect(sessions.first?.directory == "/worktrees/add-project-browse")
+    }
+
     private func section(worktree: String, _ sessions: SessionListItem...) -> ProjectSectionItem {
         ProjectSectionItem(
             id: worktree,
@@ -112,12 +129,18 @@ struct CrossProjectSessionListSessionsTests {
         )
     }
 
-    private func session(id: String, title: String, updatedAtEpochMs: Int64?) -> SessionListItem {
+    private func session(
+        id: String,
+        title: String,
+        updatedAtEpochMs: Int64?,
+        directory: String? = nil
+    ) -> SessionListItem {
         SessionListItem(
             id: id,
             title: title,
             worktree: worktreePlaceholder,
-            updatedAtEpochMs: updatedAtEpochMs
+            updatedAtEpochMs: updatedAtEpochMs,
+            directory: directory
         )
     }
 

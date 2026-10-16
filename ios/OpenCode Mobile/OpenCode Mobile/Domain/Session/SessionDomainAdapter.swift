@@ -90,7 +90,8 @@ nonisolated struct SessionDomainAdapter: Sendable {
             isReady: isReady,
             unreadOutcome: unreadOutcome,
             statusIsStale: statusIsStale,
-            parentID: session.parentID
+            parentID: session.parentID,
+            directory: session.directory
         )
     }
 

@@ -69,6 +69,8 @@ struct SessionListSession: Identifiable, Hashable {
     let statusIsStale: Bool
     let caption: String
     let updatedAtEpochMs: Int64?
+    /// Directory the session runs in. `worktree` stays the added project path for filters and counts.
+    let directory: String
 
     init(
         id: String,
@@ -80,7 +82,8 @@ struct SessionListSession: Identifiable, Hashable {
         status: SessionListStatus,
         statusIsStale: Bool = false,
         caption: String,
-        updatedAtEpochMs: Int64? = nil
+        updatedAtEpochMs: Int64? = nil,
+        directory: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -92,6 +95,7 @@ struct SessionListSession: Identifiable, Hashable {
         self.statusIsStale = statusIsStale
         self.caption = caption
         self.updatedAtEpochMs = updatedAtEpochMs
+        self.directory = directory ?? worktree
     }
 }
 

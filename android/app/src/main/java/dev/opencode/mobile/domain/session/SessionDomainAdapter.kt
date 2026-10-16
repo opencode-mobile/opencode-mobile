@@ -122,6 +122,7 @@ class SessionDomainAdapter {
             isReady = isReady,
             statusStale = statusStale,
             unreadOutcome = unreadOutcome,
+            directory = session.directory,
         )
 
     fun toSessionStatus(

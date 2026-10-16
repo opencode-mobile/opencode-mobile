@@ -86,6 +86,11 @@ data class SessionListSession(
     val retryAttempt: Int? = null,
     /** Cached activity that has not been confirmed by REST yet. */
     val statusStale: Boolean = false,
+    /**
+     * Directory the session runs in. [worktree] stays the added project path so project
+     * filters and counts keep grouping worktree sessions with that project.
+     */
+    val directory: String = worktree,
 )
 
 data class SessionListFilterTab(

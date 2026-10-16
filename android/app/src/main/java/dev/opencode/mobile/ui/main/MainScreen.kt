@@ -132,7 +132,7 @@ fun MainScreen(
                     viewModel.onSessionLongPress(
                         sessionId = session.id,
                         title = session.title,
-                        worktree = session.worktree,
+                        worktree = session.directory,
                     )
                 },
                 onDismissSheet = viewModel::dismissSessionActionsSheet,
@@ -778,7 +778,7 @@ private fun HomeProjectsContent(
             SessionOpenTarget(
                 sessionId = session.id,
                 title = session.title,
-                worktree = session.worktree,
+                worktree = session.directory,
             ),
         )
     }
@@ -963,6 +963,7 @@ internal fun List<ProjectSectionUi>.toCrossProjectSessionListSessions(): List<Se
                 letter = section.letter,
                 letterAccent = section.letterAccent,
                 subtitle = section.pathSubtitle,
+                directory = session.directory?.takeIf { it.isNotEmpty() } ?: section.worktree,
                 status = session.toSessionListStatus(),
                 caption = session.updatedAtEpochMs?.let(RelativeTimeFormatting::format).orEmpty(),
                 updatedAtEpochMs = session.updatedAtEpochMs,
