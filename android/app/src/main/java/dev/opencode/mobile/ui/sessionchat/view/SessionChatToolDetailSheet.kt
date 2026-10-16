@@ -20,7 +20,6 @@ import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.markdown.OpenCodeMarkdownParser
 import dev.opencode.mobile.markdown.OpenCodeSemanticFallbackHighlighter
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
-import dev.opencode.mobile.ui.components.OpenCodeBottomSheetContentMode
 import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeRenderedMarkdown
@@ -109,7 +108,6 @@ internal fun SessionChatToolDetailSheet(
             )
             onDismiss()
         },
-        contentMode = OpenCodeBottomSheetContentMode.ActionList,
     ) {
         val body = target?.body.orEmpty()
         val bodyModifier =

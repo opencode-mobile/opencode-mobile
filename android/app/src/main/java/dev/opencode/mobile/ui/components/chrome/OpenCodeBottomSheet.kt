@@ -85,13 +85,13 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.semantics.dialog
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -129,12 +129,14 @@ private val BottomSheetDragDismissThreshold = 96.dp
 
 @Suppress("ktlint:standard:property-naming")
 private const val BottomSheetDragDismissVelocity = 1_200f
-private val BottomSheetHeaderHorizontalPadding = 20.dp
+private val BottomSheetHeaderHorizontalPadding = OpenCodeLayout.SheetContentHorizontalInset
 private val BottomSheetHeaderTopPadding = 12.dp
 private val BottomSheetHeaderBottomPadding = 8.dp
 private val BottomSheetContentBottomPadding = 20.dp
+private val BottomSheetFooterTopPadding = 8.dp
+private val BottomSheetFooterHorizontalPadding = OpenCodeLayout.SheetContentHorizontalInset
 private val BottomSheetEntryMinHeight = 48.dp
-private val BottomSheetEntryHorizontalPadding = 20.dp
+private val BottomSheetEntryHorizontalPadding = OpenCodeLayout.SheetContentHorizontalInset
 private val BottomSheetEntryVerticalPadding = 12.dp
 private val BottomSheetEntryDecoratorSize = 24.dp
 private val BottomSheetEntryIconSize = 20.dp
@@ -146,28 +148,36 @@ private val BottomSheetCompactMaxHeight = 360.dp
 private val BottomSheetEstimatedHeaderHeight =
     BottomSheetHeaderTopPadding + BottomSheetHeaderBottomPadding + 40.dp
 
-private enum class BottomSheetLayoutMode {
+internal enum class BottomSheetLayoutMode {
     Measuring,
     Compact,
     Scrollable,
 }
 
-enum class OpenCodeBottomSheetContentMode {
-    ActionList,
-    Form,
+/** Resting height of an [OpenCodeBottomSheet]. */
+enum class OpenCodeBottomSheetHeight {
+    /**
+     * Compact while the header, pinned slots, and body fit; otherwise the scrollable half height.
+     * Once a sheet reaches half height it stays there until it switches height.
+     */
+    FitContent,
+
+    /** Fixed at the scrollable half height from the first frame. */
+    Half,
 }
 
-/**
- * How a [OpenCodeBottomSheetContentMode.Form] sheet responds to the software keyboard.
- * ActionList sheets hide the keyboard when shown, so they always keep their height.
- */
-enum class OpenCodeBottomSheetKeyboardBehavior {
-    /** The sheet keeps its resting height and rides above the keyboard. */
-    KeepHeight,
+/** How an [OpenCodeBottomSheet] treats the software keyboard. */
+enum class OpenCodeBottomSheetKeyboard {
+    /** Clears focus and hides the keyboard when the sheet appears or switches to this policy. */
+    Dismiss,
+
+    /** Leaves the keyboard up; the sheet keeps its resting height and rides above it. */
+    Keep,
 
     /**
-     * While the keyboard is visible the sheet grows to fill the space between the top system
-     * inset and the keyboard. Header and pinned content stay on top; the body scrolls in the rest.
+     * Leaves the keyboard up; while it is visible the sheet fills the space between the top
+     * system inset and the keyboard, never shrinking below its resting height. Header and pinned
+     * slots stay fixed; the body scrolls in the rest.
      */
     Expand,
 }
@@ -187,6 +197,15 @@ data class OpenCodeBottomSheetHeaderAction(
     val onClick: () -> Unit,
 )
 
+/**
+ * Modal bottom sheet with a header, an optional [pinnedTop] slot under it, a scrolling body
+ * ([content]), and an optional [pinnedBottom] footer.
+ *
+ * [height] sets the resting height and [keyboard] the software keyboard policy; the two are
+ * independent. [pinnedBottom] is never scrolled and stays above the keyboard and the navigation
+ * bar. The sheet gives it its top spacing, horizontal inset, and bottom clearance, so callers do
+ * not pad it. Pass null (the default) for no footer.
+ */
 @Composable
 fun OpenCodeBottomSheet(
     visible: Boolean,
@@ -194,10 +213,10 @@ fun OpenCodeBottomSheet(
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
     headerLeadingAction: OpenCodeBottomSheetHeaderAction? = null,
-    contentMode: OpenCodeBottomSheetContentMode = OpenCodeBottomSheetContentMode.ActionList,
-    alwaysFixedHeight: Boolean = false,
-    keyboardBehavior: OpenCodeBottomSheetKeyboardBehavior = OpenCodeBottomSheetKeyboardBehavior.KeepHeight,
-    pinnedContent: @Composable ColumnScope.() -> Unit = {},
+    height: OpenCodeBottomSheetHeight = OpenCodeBottomSheetHeight.FitContent,
+    keyboard: OpenCodeBottomSheetKeyboard = OpenCodeBottomSheetKeyboard.Dismiss,
+    pinnedTop: @Composable ColumnScope.() -> Unit = {},
+    pinnedBottom: (@Composable ColumnScope.() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     var shouldRender by remember { mutableStateOf(visible) }
@@ -208,8 +227,8 @@ fun OpenCodeBottomSheet(
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
 
-    LaunchedEffect(visible, contentMode) {
-        if (visible && contentMode == OpenCodeBottomSheetContentMode.ActionList) {
+    LaunchedEffect(visible, keyboard) {
+        if (visible && keyboard == OpenCodeBottomSheetKeyboard.Dismiss) {
             focusManager.clearFocus(force = true)
             keyboardController?.hide()
         }
@@ -268,9 +287,6 @@ fun OpenCodeBottomSheet(
         } else {
             BottomSheetInset
         }
-    val expandsWithKeyboard =
-        keyboardBehavior == OpenCodeBottomSheetKeyboardBehavior.Expand &&
-            contentMode == OpenCodeBottomSheetContentMode.Form
     val imeInsets = WindowInsets.ime
 
     BackHandler(onBack = ::dismissWithAnimation)
@@ -301,9 +317,9 @@ fun OpenCodeBottomSheet(
                     Modifier
                         .align(Alignment.BottomCenter)
                         .then(
-                            when {
+                            when (keyboard) {
                                 // Lift by the raw keyboard height so the sheet rests one inset above it.
-                                expandsWithKeyboard ->
+                                OpenCodeBottomSheetKeyboard.Expand ->
                                     Modifier.bottomSheetKeyboardLift {
                                         openCodeBottomSheetKeyboardLift(
                                             imeHeight = imeInsets.getBottom(this).toDp(),
@@ -311,8 +327,8 @@ fun OpenCodeBottomSheet(
                                             threeButtonNavigation = threeButtonNav,
                                         )
                                     }
-                                contentMode == OpenCodeBottomSheetContentMode.Form -> Modifier.imePadding()
-                                else -> Modifier
+                                OpenCodeBottomSheetKeyboard.Keep -> Modifier.imePadding()
+                                OpenCodeBottomSheetKeyboard.Dismiss -> Modifier
                             },
                         ),
                 enter =
@@ -352,9 +368,8 @@ fun OpenCodeBottomSheet(
                     BottomSheetContent(
                         title = title,
                         headerLeadingAction = headerLeadingAction,
-                        contentMode = contentMode,
-                        alwaysFixedHeight = alwaysFixedHeight,
-                        keyboardBehavior = keyboardBehavior,
+                        height = height,
+                        keyboard = keyboard,
                         windowHeight = maxHeight,
                         onDismissRequest = ::dismissWithAnimation,
                         headerDragModifier =
@@ -369,7 +384,8 @@ fun OpenCodeBottomSheet(
                                     }
                                 },
                             ),
-                        pinnedContent = pinnedContent,
+                        pinnedTop = pinnedTop,
+                        pinnedBottom = pinnedBottom,
                         content = content,
                     )
                 }
@@ -383,77 +399,46 @@ fun OpenCodeBottomSheet(
 private fun BottomSheetContent(
     title: String,
     headerLeadingAction: OpenCodeBottomSheetHeaderAction?,
-    contentMode: OpenCodeBottomSheetContentMode,
-    alwaysFixedHeight: Boolean,
-    keyboardBehavior: OpenCodeBottomSheetKeyboardBehavior,
+    height: OpenCodeBottomSheetHeight,
+    keyboard: OpenCodeBottomSheetKeyboard,
     windowHeight: Dp,
     onDismissRequest: () -> Unit,
     headerDragModifier: Modifier,
-    pinnedContent: @Composable ColumnScope.() -> Unit,
+    pinnedTop: @Composable ColumnScope.() -> Unit,
+    pinnedBottom: (@Composable ColumnScope.() -> Unit)?,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val density = LocalDensity.current
-    val configuration = LocalConfiguration.current
-    val maxSheetHeight =
-        configuration.screenHeightDp.dp * BottomSheetScrollableHeightFraction - BottomSheetInset
+    val maxSheetHeight = openCodeBottomSheetHalfHeight(windowHeight)
     var contentHeight by remember { mutableStateOf(0.dp) }
     var headerHeight by remember { mutableStateOf(0.dp) }
-    var pinnedContentHeight by remember { mutableStateOf(0.dp) }
-    var lockedSheetHeight by remember { mutableStateOf<Dp?>(null) }
-    var committedToScrollable by remember {
-        mutableStateOf(alwaysFixedHeight || contentMode == OpenCodeBottomSheetContentMode.Form)
-    }
-    var previousContentMode by remember { mutableStateOf(contentMode) }
+    var pinnedTopHeight by remember { mutableStateOf(0.dp) }
+    var measuredPinnedBottomHeight by remember { mutableStateOf(0.dp) }
+    val pinnedBottomHeight = if (pinnedBottom == null) 0.dp else measuredPinnedBottomHeight
+    var committedToScrollable by remember { mutableStateOf(height == OpenCodeBottomSheetHeight.Half) }
+    var previousHeight by remember { mutableStateOf(height) }
     val scrollState = rememberScrollState()
 
-    if (alwaysFixedHeight && !committedToScrollable) {
-        committedToScrollable = true
-        lockedSheetHeight = maxSheetHeight
-    }
-
-    if (contentMode != previousContentMode) {
-        val switchingIntoForm =
-            previousContentMode == OpenCodeBottomSheetContentMode.ActionList &&
-                contentMode == OpenCodeBottomSheetContentMode.Form
-        previousContentMode = contentMode
+    if (height != previousHeight) {
+        previousHeight = height
         // Invalidate the previous body's measured height so layout mode is not chosen
-        // from stale provider-list metrics while the new model list is already rendering.
+        // from stale metrics while the new body is already rendering.
         contentHeight = 0.dp
-        if (switchingIntoForm || alwaysFixedHeight) {
-            // Filtered model lists are always the long-sheet case; lock immediately so the
-            // first frame does not expand unconstrained under Compact.
-            committedToScrollable = true
-            lockedSheetHeight = maxSheetHeight
-        } else {
-            lockedSheetHeight = null
-            committedToScrollable = false
-        }
+        // Half locks immediately so the first frame does not expand unconstrained under
+        // Compact; FitContent measures again.
+        committedToScrollable = height == OpenCodeBottomSheetHeight.Half
     }
 
     val layoutMode =
-        remember(
-            contentHeight,
-            headerHeight,
-            pinnedContentHeight,
-            committedToScrollable,
-            contentMode,
-            alwaysFixedHeight,
-        ) {
-            if (alwaysFixedHeight || committedToScrollable) {
-                BottomSheetLayoutMode.Scrollable
-            } else if (contentHeight == 0.dp) {
-                BottomSheetLayoutMode.Measuring
-            } else {
-                val resolvedHeader =
-                    if (headerHeight > 0.dp) headerHeight else BottomSheetEstimatedHeaderHeight
-                val total =
-                    resolvedHeader + pinnedContentHeight + contentHeight + BottomSheetContentBottomPadding
-                if (total > BottomSheetCompactMaxHeight) {
-                    BottomSheetLayoutMode.Scrollable
-                } else {
-                    BottomSheetLayoutMode.Compact
-                }
-            }
+        remember(height, committedToScrollable, contentHeight, headerHeight, pinnedTopHeight, pinnedBottomHeight) {
+            openCodeBottomSheetLayoutMode(
+                height = height,
+                committedToScrollable = committedToScrollable,
+                headerHeight = headerHeight,
+                pinnedTopHeight = pinnedTopHeight,
+                contentHeight = contentHeight,
+                pinnedBottomHeight = pinnedBottomHeight,
+            )
         }
 
     LaunchedEffect(layoutMode) {
@@ -462,49 +447,28 @@ private fun BottomSheetContent(
         }
     }
 
-    LaunchedEffect(contentHeight, headerHeight, pinnedContentHeight, contentMode, maxSheetHeight) {
-        if (contentMode != OpenCodeBottomSheetContentMode.Form || contentHeight == 0.dp) return@LaunchedEffect
-        val resolvedHeader =
-            if (headerHeight > 0.dp) headerHeight else BottomSheetEstimatedHeaderHeight
-        val total =
-            resolvedHeader + pinnedContentHeight + contentHeight + BottomSheetContentBottomPadding
-        val target =
-            if (total > BottomSheetCompactMaxHeight || committedToScrollable) {
-                maxSheetHeight
-            } else {
-                total.coerceAtLeast(BottomSheetEntryMinHeight)
-            }
-        lockedSheetHeight =
-            when (val current = lockedSheetHeight) {
-                null -> target
-                else -> maxOf(current, target)
-            }
-    }
-
-    val resolvedHeaderHeight =
-        if (headerHeight > 0.dp) headerHeight else BottomSheetEstimatedHeaderHeight
-    val resolvedSheetHeight =
-        when {
-            contentMode == OpenCodeBottomSheetContentMode.Form ->
-                lockedSheetHeight ?: maxSheetHeight
-            else -> maxSheetHeight
-        }
+    val resolvedHeaderHeight = openCodeBottomSheetResolvedHeaderHeight(headerHeight)
     val scrollBodyMaxHeight =
-        (resolvedSheetHeight - resolvedHeaderHeight - pinnedContentHeight - BottomSheetContentBottomPadding)
+        (maxSheetHeight - resolvedHeaderHeight - pinnedTopHeight - BottomSheetContentBottomPadding)
             .coerceAtLeast(BottomSheetEntryMinHeight)
 
     val contentView = LocalView.current
     val threeButtonNav = remember(contentView) { contentView.context.usesThreeButtonNavigation() }
+    val navigationBarsPaddingModifier = if (threeButtonNav) Modifier else Modifier.navigationBarsPadding()
 
-    val expandsWithKeyboard =
-        keyboardBehavior == OpenCodeBottomSheetKeyboardBehavior.Expand &&
-            contentMode == OpenCodeBottomSheetContentMode.Form &&
-            layoutMode == BottomSheetLayoutMode.Scrollable
+    // A measuring sheet has no resting height yet, so it does not expand until it settles.
+    val restingSheetHeight =
+        when (layoutMode) {
+            BottomSheetLayoutMode.Measuring -> null
+            BottomSheetLayoutMode.Compact ->
+                openCodeBottomSheetMeasuredHeight(headerHeight, pinnedTopHeight, contentHeight, pinnedBottomHeight)
+            BottomSheetLayoutMode.Scrollable -> maxSheetHeight
+        }
+    val expandsWithKeyboard = keyboard == OpenCodeBottomSheetKeyboard.Expand && restingSheetHeight != null
     val imeInsets = WindowInsets.ime
     val imeSourceInsets = WindowInsets.imeAnimationSource
     val imeTargetInsets = WindowInsets.imeAnimationTarget
     val topInsets = WindowInsets.systemBars.union(WindowInsets.displayCutout)
-    val restingSheetHeight = lockedSheetHeight ?: maxSheetHeight
 
     // Insets are read only from layout, so keyboard frames relayout the sheet without
     // recomposing its content, and nothing measured here feeds back into the insets.
@@ -513,28 +477,18 @@ private fun BottomSheetContent(
         val settledImeBottom =
             maxOf(imeBottom, imeSourceInsets.getBottom(this), imeTargetInsets.getBottom(this))
         openCodeBottomSheetKeyboardHeight(
-            restingHeight = restingSheetHeight,
+            restingHeight = restingSheetHeight ?: maxSheetHeight,
             availableHeight =
                 windowHeight - topInsets.getTop(this).toDp() - BottomSheetKeyboardChromeHeight,
             imeHeight = imeBottom.toDp(),
             settledImeHeight = settledImeBottom.toDp(),
-            contentMode = contentMode,
-            behavior = keyboardBehavior,
+            keyboard = keyboard,
         )
     }
     val bodyModifier =
         Modifier
             .fillMaxWidth()
             .padding(bottom = BottomSheetContentBottomPadding)
-
-    val scrollBodyHeightModifier =
-        if (expandsWithKeyboard) {
-            Modifier.bottomSheetMaxHeight {
-                keyboardSheetHeight() - resolvedHeaderHeight - pinnedContentHeight - BottomSheetContentBottomPadding
-            }
-        } else {
-            Modifier.heightIn(max = scrollBodyMaxHeight)
-        }
 
     Box(modifier = bodyModifier) {
         Column(
@@ -546,15 +500,17 @@ private fun BottomSheetContent(
                             // Cap Compact so a stale short contentHeight cannot let a newly
                             // swapped long body expand the sheet to full screen for a frame.
                             BottomSheetLayoutMode.Compact ->
-                                Modifier
-                                    .heightIn(max = BottomSheetCompactMaxHeight)
-                                    .wrapContentHeight()
+                                if (expandsWithKeyboard) {
+                                    Modifier.bottomSheetFixedHeight(keyboardSheetHeight)
+                                } else {
+                                    Modifier
+                                        .heightIn(max = BottomSheetCompactMaxHeight)
+                                        .wrapContentHeight()
+                                }
                             BottomSheetLayoutMode.Measuring -> Modifier.heightIn(max = maxSheetHeight)
                             BottomSheetLayoutMode.Scrollable ->
                                 if (expandsWithKeyboard) {
                                     Modifier.bottomSheetFixedHeight(keyboardSheetHeight)
-                                } else if (contentMode == OpenCodeBottomSheetContentMode.Form) {
-                                    Modifier.height(lockedSheetHeight ?: maxSheetHeight)
                                 } else {
                                     Modifier.height(maxSheetHeight)
                                 }
@@ -576,43 +532,77 @@ private fun BottomSheetContent(
                     Modifier
                         .fillMaxWidth()
                         .onSizeChanged {
-                            pinnedContentHeight = with(density) { it.height.toDp() }
+                            pinnedTopHeight = with(density) { it.height.toDp() }
                         },
             ) {
-                pinnedContent()
+                pinnedTop()
             }
 
-            when (layoutMode) {
-                BottomSheetLayoutMode.Compact -> {
-                    Column(
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .wrapContentHeight(),
-                    ) {
-                        content()
+            val bodyHeightModifier =
+                if (pinnedBottom != null) {
+                    // The footer sits under the body: a fixed-height sheet gives the body the
+                    // rest of its height, and a sizing sheet lets it shrink to keep the footer.
+                    Modifier.weight(
+                        1f,
+                        fill = layoutMode == BottomSheetLayoutMode.Scrollable || expandsWithKeyboard,
+                    )
+                } else {
+                    when (layoutMode) {
+                        BottomSheetLayoutMode.Compact -> Modifier.wrapContentHeight()
+                        BottomSheetLayoutMode.Measuring,
+                        BottomSheetLayoutMode.Scrollable,
+                        -> {
+                            val scrollBodyHeightModifier =
+                                if (expandsWithKeyboard) {
+                                    Modifier.bottomSheetMaxHeight {
+                                        keyboardSheetHeight() - resolvedHeaderHeight - pinnedTopHeight -
+                                            BottomSheetContentBottomPadding
+                                    }
+                                } else {
+                                    Modifier.heightIn(max = scrollBodyMaxHeight)
+                                }
+                            scrollBodyHeightModifier.then(navigationBarsPaddingModifier)
+                        }
                     }
                 }
-                BottomSheetLayoutMode.Measuring,
-                BottomSheetLayoutMode.Scrollable,
-                -> {
-                    Column(
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .then(scrollBodyHeightModifier)
-                                .then(if (threeButtonNav) Modifier else Modifier.navigationBarsPadding())
-                                .verticalScroll(scrollState),
-                    ) {
-                        content()
-                    }
+
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .then(bodyHeightModifier)
+                        .then(
+                            if (layoutMode == BottomSheetLayoutMode.Compact) {
+                                Modifier
+                            } else {
+                                Modifier.verticalScroll(scrollState)
+                            },
+                        ),
+            ) {
+                content()
+            }
+
+            if (pinnedBottom != null) {
+                Column(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .onSizeChanged {
+                                measuredPinnedBottomHeight = with(density) { it.height.toDp() }
+                            }.padding(
+                                start = BottomSheetFooterHorizontalPadding,
+                                end = BottomSheetFooterHorizontalPadding,
+                                top = BottomSheetFooterTopPadding,
+                            ).then(navigationBarsPaddingModifier),
+                ) {
+                    pinnedBottom()
                 }
             }
         }
 
         // A fixed-height sheet never reads the measured height. Skipping the second
         // composition keeps stateful content (a pager) bound to one visible instance.
-        if (!alwaysFixedHeight) {
+        if (height == OpenCodeBottomSheetHeight.FitContent) {
             Box(
                 modifier =
                     Modifier
@@ -660,7 +650,7 @@ private fun BottomSheetHeader(
         }
         Text(
             text = title,
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f).semantics { heading() },
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
@@ -674,26 +664,60 @@ private fun BottomSheetHeader(
     }
 }
 
+/** Scrollable half height: half the window, less the gap above the sheet. */
+internal fun openCodeBottomSheetHalfHeight(windowHeight: Dp): Dp = windowHeight * BottomSheetScrollableHeightFraction - BottomSheetInset
+
+/** The measured header height, or an estimate before the header has laid out. */
+internal fun openCodeBottomSheetResolvedHeaderHeight(headerHeight: Dp): Dp =
+    if (headerHeight > 0.dp) headerHeight else BottomSheetEstimatedHeaderHeight
+
+/** Natural sheet column height: header, pinned top, body, and footer (with its spacing). */
+internal fun openCodeBottomSheetMeasuredHeight(
+    headerHeight: Dp,
+    pinnedTopHeight: Dp,
+    contentHeight: Dp,
+    pinnedBottomHeight: Dp,
+): Dp = openCodeBottomSheetResolvedHeaderHeight(headerHeight) + pinnedTopHeight + contentHeight + pinnedBottomHeight
+
 /**
- * Sheet column height for [behavior]. [availableHeight] is the column space above the window
+ * Layout for a sheet of [height]. [OpenCodeBottomSheetHeight.Half] and a FitContent sheet that
+ * already reached half height are scrollable; otherwise FitContent stays compact while the
+ * measured column and bottom padding fit [BottomSheetCompactMaxHeight].
+ */
+internal fun openCodeBottomSheetLayoutMode(
+    height: OpenCodeBottomSheetHeight,
+    committedToScrollable: Boolean,
+    headerHeight: Dp,
+    pinnedTopHeight: Dp,
+    contentHeight: Dp,
+    pinnedBottomHeight: Dp,
+): BottomSheetLayoutMode {
+    if (height == OpenCodeBottomSheetHeight.Half || committedToScrollable) return BottomSheetLayoutMode.Scrollable
+    if (contentHeight == 0.dp) return BottomSheetLayoutMode.Measuring
+    val total =
+        openCodeBottomSheetMeasuredHeight(headerHeight, pinnedTopHeight, contentHeight, pinnedBottomHeight) +
+            BottomSheetContentBottomPadding
+    return if (total > BottomSheetCompactMaxHeight) BottomSheetLayoutMode.Scrollable else BottomSheetLayoutMode.Compact
+}
+
+/**
+ * Sheet column height for [keyboard]. [availableHeight] is the column space above the window
  * bottom once the top inset, the top gap, the gap above the keyboard, and the sheet's bottom
- * padding are removed. While the keyboard moves, the height follows its progress from
- * [restingHeight] to the space left above the settled keyboard.
+ * padding are removed. While the keyboard moves, an expanding sheet follows its progress from
+ * [restingHeight] to the space left above the settled keyboard, never below [restingHeight].
  */
 internal fun openCodeBottomSheetKeyboardHeight(
     restingHeight: Dp,
     availableHeight: Dp,
     imeHeight: Dp,
     settledImeHeight: Dp,
-    contentMode: OpenCodeBottomSheetContentMode,
-    behavior: OpenCodeBottomSheetKeyboardBehavior,
+    keyboard: OpenCodeBottomSheetKeyboard,
 ): Dp {
-    if (behavior != OpenCodeBottomSheetKeyboardBehavior.Expand) return restingHeight
-    if (contentMode != OpenCodeBottomSheetContentMode.Form) return restingHeight
+    if (keyboard != OpenCodeBottomSheetKeyboard.Expand) return restingHeight
     if (imeHeight <= 0.dp || settledImeHeight <= 0.dp) return restingHeight
     val progress = (imeHeight / settledImeHeight).coerceIn(0f, 1f)
-    val expandedHeight = (availableHeight - settledImeHeight).coerceAtLeast(0.dp)
-    return (restingHeight + (expandedHeight - restingHeight) * progress).coerceAtLeast(0.dp)
+    val expandedHeight = (availableHeight - settledImeHeight).coerceAtLeast(restingHeight)
+    return restingHeight + (expandedHeight - restingHeight) * progress
 }
 
 /**
@@ -776,6 +800,7 @@ private fun deviceBottomCornerRadiusPx(context: Context): Int? {
     return listOfNotNull(leading, trailing).maxOrNull()?.takeIf { it > 0 }
 }
 
+@Suppress("ktlint:standard:property-naming")
 private const val NavigationModeGestural = 2
 
 private fun Context.usesThreeButtonNavigation(): Boolean =
@@ -965,6 +990,26 @@ private fun OpenCodeBottomSheetScrollablePreview() {
                     title = "Model ${index + 1} · Provider",
                     onClick = {},
                 )
+            }
+        }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun OpenCodeBottomSheetPinnedBottomPreview() {
+    OpenCodeTheme(darkTheme = false) {
+        OpenCodeBottomSheet(
+            visible = true,
+            title = "Add project",
+            onDismissRequest = {},
+            height = OpenCodeBottomSheetHeight.Half,
+            pinnedBottom = {
+                OpenCodeButton(variant = OpenCodeButtonVariant.FullWidthText("Add project"), onClick = {})
+            },
+        ) {
+            repeat(12) { index ->
+                OpenCodeBottomSheetEntry(title = "Folder ${index + 1}", onClick = {})
             }
         }
     }

@@ -26,6 +26,9 @@ enum class OpenCodeLayoutWidth {
 object OpenCodeLayout {
     val ContentMaxWidth = 720.dp
     val SheetMaxWidth = 560.dp
+
+    /** Horizontal inset of bottom sheet content: header, entries, footer, and pinned slots. */
+    val SheetContentHorizontalInset = 20.dp
     val CompactMaxWidth = 600.dp
     val AssistantMessageMaxWidth = 720.dp
     val ActionTileGridGap = 10.dp

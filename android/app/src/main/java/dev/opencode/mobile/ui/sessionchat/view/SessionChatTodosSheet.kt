@@ -21,7 +21,6 @@ import dev.opencode.mobile.domain.session.SessionTodo
 import dev.opencode.mobile.domain.session.SessionTodoStatus
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
-import dev.opencode.mobile.ui.components.OpenCodeBottomSheetContentMode
 import dev.opencode.mobile.ui.components.OpenCodeSessionTodoItem
 import dev.opencode.mobile.ui.components.OpenCodeSessionTodoItemStatus
 
@@ -49,7 +48,6 @@ internal fun SessionChatTodosSheet(
             )
             onDismiss()
         },
-        contentMode = OpenCodeBottomSheetContentMode.ActionList,
     ) {
         Column(
             modifier =

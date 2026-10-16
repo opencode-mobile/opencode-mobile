@@ -34,8 +34,9 @@ import dev.opencode.mobile.theme.letterAccentForWorktree
 import dev.opencode.mobile.theme.letterCharacterForProject
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
-import dev.opencode.mobile.ui.components.OpenCodeBottomSheetContentMode
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
+import dev.opencode.mobile.ui.components.OpenCodeBottomSheetHeight
+import dev.opencode.mobile.ui.components.OpenCodeBottomSheetKeyboard
 import dev.opencode.mobile.ui.components.OpenCodeDialog
 import dev.opencode.mobile.ui.components.OpenCodeDialogOption
 import dev.opencode.mobile.ui.components.OpenCodeDialogTextField
@@ -897,7 +898,10 @@ private fun HomeProjectsContent(
         OpenCodeBottomSheet(
             visible = showProjectPicker,
             title = "Filter by project",
-            contentMode = OpenCodeBottomSheetContentMode.Form,
+            // Half + Keep keeps today's fixed height and keyboard policy; Dismiss would be more
+            // natural for this list (#680).
+            height = OpenCodeBottomSheetHeight.Half,
+            keyboard = OpenCodeBottomSheetKeyboard.Keep,
             onDismissRequest = {
                 ProductAnalytics.logUserAction(
                     screenId = ProductAnalytics.Screen.HOME_FILTER_PROJECT_PICKER,

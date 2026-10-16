@@ -14,8 +14,7 @@ class OpenCodeBottomSheetKeyboardHeightTest {
     private fun height(
         ime: Dp,
         settled: Dp = keyboard,
-        mode: OpenCodeBottomSheetContentMode = OpenCodeBottomSheetContentMode.Form,
-        behavior: OpenCodeBottomSheetKeyboardBehavior = OpenCodeBottomSheetKeyboardBehavior.Expand,
+        policy: OpenCodeBottomSheetKeyboard = OpenCodeBottomSheetKeyboard.Expand,
         restingHeight: Dp = resting,
     ): Dp =
         openCodeBottomSheetKeyboardHeight(
@@ -23,8 +22,7 @@ class OpenCodeBottomSheetKeyboardHeightTest {
             availableHeight = available,
             imeHeight = ime,
             settledImeHeight = settled,
-            contentMode = mode,
-            behavior = behavior,
+            keyboard = policy,
         )
 
     private fun assertDp(
@@ -33,9 +31,11 @@ class OpenCodeBottomSheetKeyboardHeightTest {
     ) = assertEquals(expected.value, actual.value, 0.01f)
 
     @Test
-    fun keepHeight_ignoresTheKeyboard() {
-        assertDp(resting, height(ime = keyboard, behavior = OpenCodeBottomSheetKeyboardBehavior.KeepHeight))
-        assertDp(resting, height(ime = 120.dp, behavior = OpenCodeBottomSheetKeyboardBehavior.KeepHeight))
+    fun keepAndDismiss_ignoreTheKeyboard() {
+        listOf(OpenCodeBottomSheetKeyboard.Keep, OpenCodeBottomSheetKeyboard.Dismiss).forEach { policy ->
+            assertDp(resting, height(ime = keyboard, policy = policy))
+            assertDp(resting, height(ime = 120.dp, policy = policy))
+        }
     }
 
     @Test
@@ -59,14 +59,18 @@ class OpenCodeBottomSheetKeyboardHeightTest {
     }
 
     @Test
-    fun expand_shrinksBelowRestingWhenTheKeyboardLeavesLessRoom() {
-        assertDp(available - 700.dp, height(ime = 700.dp, settled = 700.dp))
-        assertDp(0.dp, height(ime = 900.dp, settled = 900.dp))
+    fun expand_neverShrinksBelowResting() {
+        assertDp(resting, height(ime = 700.dp, settled = 700.dp))
+        assertDp(resting, height(ime = 900.dp, settled = 900.dp))
+        assertDp(resting, height(ime = 350.dp, settled = 700.dp))
+        val frames = (0..20).map { step -> height(ime = 700.dp * (step / 20f), settled = 700.dp) }
+        assertTrue(frames.all { it.value >= resting.value - 0.01f })
     }
 
     @Test
-    fun expand_appliesOnlyToFormSheets() {
-        assertDp(resting, height(ime = keyboard, mode = OpenCodeBottomSheetContentMode.ActionList))
+    fun expand_growsFromACompactRestingHeight() {
+        assertDp(180.dp, height(ime = 0.dp, restingHeight = 180.dp))
+        assertDp(available - keyboard, height(ime = keyboard, restingHeight = 180.dp))
     }
 
     @Test

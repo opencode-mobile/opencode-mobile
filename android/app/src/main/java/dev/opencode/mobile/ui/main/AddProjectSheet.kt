@@ -6,21 +6,26 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ProductAnalytics
+import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
-import dev.opencode.mobile.ui.components.OpenCodeBottomSheetContentMode
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
-import dev.opencode.mobile.ui.components.OpenCodeBottomSheetKeyboardBehavior
+import dev.opencode.mobile.ui.components.OpenCodeBottomSheetHeight
+import dev.opencode.mobile.ui.components.OpenCodeBottomSheetKeyboard
 import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonContrast
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
 import dev.opencode.mobile.ui.components.OpenCodeEmptyState
 import dev.opencode.mobile.ui.components.OpenCodeEmptyStateAction
+import dev.opencode.mobile.ui.components.OpenCodeLayout
 import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeSectionHeader
 import dev.opencode.mobile.ui.components.OpenCodeStatusStack
@@ -29,8 +34,6 @@ import dev.opencode.mobile.ui.components.OpenCodeTextInput
 import dev.opencode.mobile.ui.components.OpenCodeTextInputKind
 import dev.opencode.mobile.ui.components.StartDecorator
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
-
-private val AddProjectSheetHorizontalInset = 16.dp
 
 /** Add project sheet actions; each maps to one Screen Model action. */
 data class AddProjectSheetCallbacks(
@@ -59,19 +62,18 @@ internal fun AddProjectSheet(
             )
             onDismiss()
         },
-        // Form keeps the path field and Add above the keyboard.
-        contentMode = OpenCodeBottomSheetContentMode.Form,
-        alwaysFixedHeight = true,
-        // The pinned header is tall, so grow while typing to keep folder rows in view.
-        keyboardBehavior = OpenCodeBottomSheetKeyboardBehavior.Expand,
-        pinnedContent = { AddProjectSheetPinned(sheet = sheet, callbacks = callbacks) },
+        height = OpenCodeBottomSheetHeight.Half,
+        // The pinned field and footer are tall, so grow while typing to keep folder rows in view.
+        keyboard = OpenCodeBottomSheetKeyboard.Expand,
+        pinnedTop = { AddProjectSheetPinnedTop(sheet = sheet, callbacks = callbacks) },
+        pinnedBottom = { AddProjectSheetFooter(sheet = sheet, callbacks = callbacks) },
     ) {
         AddProjectSheetBody(sheet = sheet, callbacks = callbacks)
     }
 }
 
 @Composable
-private fun AddProjectSheetPinned(
+private fun AddProjectSheetPinnedTop(
     sheet: AddProjectSheetUi,
     callbacks: AddProjectSheetCallbacks,
 ) {
@@ -79,7 +81,7 @@ private fun AddProjectSheetPinned(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = AddProjectSheetHorizontalInset),
+                .padding(horizontal = OpenCodeLayout.SheetContentHorizontalInset),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.Top,
     ) {
@@ -105,7 +107,7 @@ private fun AddProjectSheetPinned(
                 Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = AddProjectSheetHorizontalInset, vertical = 8.dp),
+                    .padding(horizontal = OpenCodeLayout.SheetContentHorizontalInset, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -119,15 +121,29 @@ private fun AddProjectSheetPinned(
             }
         }
     }
+}
+
+/** The full target path over "Add <name>"; the sheet pads the footer. */
+@Composable
+private fun AddProjectSheetFooter(
+    sheet: AddProjectSheetUi,
+    callbacks: AddProjectSheetCallbacks,
+) {
+    sheet.addTarget?.let { target ->
+        Text(
+            text = target,
+            style = MaterialTheme.typography.labelMedium,
+            color = openCodeColor("text-base"),
+            maxLines = 1,
+            overflow = TextOverflow.MiddleEllipsis,
+            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+        )
+    }
     OpenCodeButton(
         variant = OpenCodeButtonVariant.FullWidthText(sheet.addTitle),
         onClick = callbacks.onConfirm,
         enabled = sheet.addEnabled,
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = AddProjectSheetHorizontalInset)
-                .padding(bottom = 8.dp),
+        modifier = Modifier.fillMaxWidth(),
     )
 }
 
