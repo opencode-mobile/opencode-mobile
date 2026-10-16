@@ -91,6 +91,8 @@ data class SessionListSession(
      * filters and counts keep grouping worktree sessions with that project.
      */
     val directory: String = worktree,
+    /** True when [directory] is a listed worktree other than the added path. */
+    val worktreeCheckout: Boolean = false,
 )
 
 data class SessionListFilterTab(
@@ -453,6 +455,7 @@ private fun SessionListRow(
                 character = session.letter,
                 accent = session.letterAccent,
                 statusDot = if (showStatusDot) status.tone else null,
+                worktree = session.worktreeCheckout,
             ),
         selected = selected,
         onClick = { onSessionSelected(session) },

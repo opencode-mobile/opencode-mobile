@@ -10,6 +10,8 @@ sealed class StartDecorator {
         val character: Char,
         val accent: LetterAccent,
         val statusDot: OpenCodeListItemStatusTone? = null,
+        /** Small worktree mark on the top-end corner. The status dot stays bottom-end. */
+        val worktree: Boolean = false,
     ) : StartDecorator()
 
     data class Icon(

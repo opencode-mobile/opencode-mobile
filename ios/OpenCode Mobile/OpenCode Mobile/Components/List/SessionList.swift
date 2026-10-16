@@ -71,6 +71,8 @@ struct SessionListSession: Identifiable, Hashable {
     let updatedAtEpochMs: Int64?
     /// Directory the session runs in. `worktree` stays the added project path for filters and counts.
     let directory: String
+    /// True when `directory` is a listed worktree other than the added path.
+    let worktreeCheckout: Bool
 
     init(
         id: String,
@@ -83,7 +85,8 @@ struct SessionListSession: Identifiable, Hashable {
         statusIsStale: Bool = false,
         caption: String,
         updatedAtEpochMs: Int64? = nil,
-        directory: String? = nil
+        directory: String? = nil,
+        worktreeCheckout: Bool = false
     ) {
         self.id = id
         self.title = title
@@ -96,6 +99,7 @@ struct SessionListSession: Identifiable, Hashable {
         self.caption = caption
         self.updatedAtEpochMs = updatedAtEpochMs
         self.directory = directory ?? worktree
+        self.worktreeCheckout = worktreeCheckout
     }
 }
 
@@ -367,7 +371,8 @@ struct SessionList<EmptyContent: View>: View {
             startDecorator: .letter(
                 session.letter,
                 session.letterAccent,
-                statusDot: showStatusDot ? listItemStatus(session.status, isStale: session.statusIsStale).tone : nil
+                statusDot: showStatusDot ? listItemStatus(session.status, isStale: session.statusIsStale).tone : nil,
+                worktree: session.worktreeCheckout
             ),
             action: { onSessionSelected(session) },
             onLongPress: onSessionLongPress.map { handler in { handler(session) } }

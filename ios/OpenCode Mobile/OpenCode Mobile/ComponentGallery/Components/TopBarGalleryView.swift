@@ -39,6 +39,7 @@ struct TopBarGalleryView: View {
     @State private var showTwoLine = false
     @State private var showStatusDot = false
     @State private var showProjectMeta = false
+    @State private var showWorktreeCheckout = false
     @State private var connectionStatus: OpenCodeSessionConnectionStatus = .live
     @State private var actionsEnabled = true
     @State private var titleSwitcher = false
@@ -56,17 +57,19 @@ struct TopBarGalleryView: View {
     }
 
     private var subtitle: String? {
+        if showWorktreeCheckout { return "crisp-cactus" }
         if showProjectMeta { return "opencode-mobile" }
         guard showTwoLine else { return nil }
         return "Importing icons explanation"
     }
 
     private var subtitleAccessory: OpenCodeTopBarSubtitleAccessory? {
-        (showStatusDot || showProjectMeta) ? .statusDot(connectionStatus) : nil
+        (showStatusDot || showProjectMeta || showWorktreeCheckout) ? .statusDot(connectionStatus) : nil
     }
 
     private var subtitleLeading: OpenCodeTopBarSubtitleLeading? {
-        showProjectMeta ? .letter("O", .blue) : nil
+        if showWorktreeCheckout { return .worktree }
+        return showProjectMeta ? .letter("O", .blue) : nil
     }
 
     private var leadingVariant: OpenCodeTopBarLeading {
@@ -145,6 +148,11 @@ struct TopBarGalleryView: View {
                             action: { showProjectMeta.toggle() }
                         )
                         OpenCodeChoiceBadge(
+                            label: "Worktree checkout",
+                            selected: showWorktreeCheckout,
+                            action: { showWorktreeCheckout.toggle() }
+                        )
+                        OpenCodeChoiceBadge(
                             label: "Divider",
                             selected: showDivider,
                             action: { showDivider.toggle() }
@@ -162,7 +170,7 @@ struct TopBarGalleryView: View {
                     }
                 }
 
-                if showStatusDot || showProjectMeta {
+                if showStatusDot || showProjectMeta || showWorktreeCheckout {
                     ControlGroup(title: "Connection") {
                         HStack(spacing: 8) {
                             ForEach(OpenCodeSessionConnectionStatus.allCases, id: \.self) { status in

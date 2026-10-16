@@ -30,6 +30,7 @@ import dev.opencode.mobile.ui.icons.OpenCodeIcons
 private enum class GalleryDecoratorKind {
     None,
     Letter,
+    LetterWorktree,
     Icon,
     IconCircle,
     ;
@@ -39,6 +40,7 @@ private enum class GalleryDecoratorKind {
             when (this) {
                 None -> "None"
                 Letter -> "Letter"
+                LetterWorktree -> "Letter + worktree"
                 Icon -> "Icon"
                 IconCircle -> "Icon circle"
             }
@@ -104,6 +106,8 @@ fun ListItemGalleryScreen(modifier: Modifier = Modifier) {
         when (decoratorKind) {
             GalleryDecoratorKind.None -> StartDecorator.None
             GalleryDecoratorKind.Letter -> StartDecorator.Letter('A', letterAccent)
+            GalleryDecoratorKind.LetterWorktree ->
+                StartDecorator.Letter('A', letterAccent, statusDot = statusTone, worktree = true)
             GalleryDecoratorKind.Icon ->
                 StartDecorator.Icon(imageVector = OpenCodeIcons.Folder, contentDescription = "Folder")
             GalleryDecoratorKind.IconCircle ->
@@ -218,7 +222,7 @@ fun ListItemGalleryScreen(modifier: Modifier = Modifier) {
             }
         }
 
-        if (decoratorKind == GalleryDecoratorKind.Letter) {
+        if (decoratorKind == GalleryDecoratorKind.Letter || decoratorKind == GalleryDecoratorKind.LetterWorktree) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(text = "Letter accent", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
                 Row(

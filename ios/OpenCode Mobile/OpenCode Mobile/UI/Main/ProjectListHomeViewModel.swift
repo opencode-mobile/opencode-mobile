@@ -11,6 +11,8 @@ struct ProjectSectionItem: Identifiable, Equatable {
     let allSessions: [SessionListItem]
     let loadError: String?
     var sessionsFromCache: Bool = false
+    var projectID: String? = nil
+    var worktreeInventory: WorktreeInventory = .unloaded
 }
 
 /// A subfolder row in the Add project sheet.
@@ -325,6 +327,8 @@ final class ProjectListHomeViewModel {
     private let sessionStatusLiveStore: any SessionStatusLiveStore
     private let sessionReadyStore: any SessionReadyStore
     private let liveUpdates: any LiveUpdates
+    private let worktreeRepository: any WorktreeRepository
+    private let foregroundEventStream: (any ForegroundEventStream)?
     private let sessionCache: any SessionCache
     private let sessionAdapter = SessionDomainAdapter()
     private var connectionStateObservationTask: Task<Void, Never>?
@@ -335,6 +339,11 @@ final class ProjectListHomeViewModel {
     }
     private var liveObservationTasks: [Task<Void, Never>] = []
     private var observedWorktrees: [String] = []
+    @ObservationIgnored private var worktreeMarks: HomeWorktreeMarks
+    private var worktreeInventories: [String: WorktreeInventory] = [:]
+    private var worktreeProjectIDs: [String: String] = [:]
+    private var worktreeMarkTask: Task<Void, Never>?
+    private var worktreeEventTask: Task<Void, Never>?
     private var liveSessionsByWorktree: [String: SessionListSnapshot] = [:]
     private var liveStatusesByWorktree: [String: SessionActivitySnapshot] = [:]
     private var liveReadyIdsByWorktree: [String: Set<String>] = [:]
@@ -356,7 +365,9 @@ final class ProjectListHomeViewModel {
         connectionSessionCoordinator: ConnectionSessionCoordinator,
         sessionCache: any SessionCache = NoOpSessionCache.shared,
         liveUpdates: any LiveUpdates = FixedLiveUpdates(),
-        addProjectListingDebounce: Duration = .milliseconds(250)
+        addProjectListingDebounce: Duration = .milliseconds(250),
+        worktreeRepository: any WorktreeRepository = UnavailableWorktreeRepository(),
+        foregroundEventStream: (any ForegroundEventStream)? = nil
     ) {
         self.addProjectListingDebounce = addProjectListingDebounce
         self.projectRepository = projectRepository
@@ -369,6 +380,37 @@ final class ProjectListHomeViewModel {
         self.sessionStatusLiveStore = sessionStatusLiveStore
         self.sessionReadyStore = sessionReadyStore
         self.liveUpdates = liveUpdates
+        self.worktreeRepository = worktreeRepository
+        self.foregroundEventStream = foregroundEventStream
+        let projects = projectRepository
+        let sessions = sessionRepository
+        let adapter = sessionAdapter
+        self.worktreeMarks = HomeWorktreeMarks(
+            repository: worktreeRepository,
+            currentProjectID: { directory in
+                try? await projects.getCurrentProject(directory: directory).id
+            },
+            listSessions: { directory in
+                let listed = (try? await sessions.listSessions(directory: directory)) ?? []
+                return listed.activeSessions().rootSessions().map { session in
+                    let item = adapter.listItem(from: session, worktree: directory)
+                    if item.directory?.isEmpty == false { return item }
+                    return SessionListItem(
+                        id: item.id,
+                        title: item.title,
+                        worktree: item.worktree,
+                        statusLabel: item.statusLabel,
+                        updatedAtLabel: item.updatedAtLabel,
+                        updatedAtEpochMs: item.updatedAtEpochMs,
+                        isReady: item.isReady,
+                        unreadOutcome: item.unreadOutcome,
+                        statusIsStale: item.statusIsStale,
+                        parentID: item.parentID,
+                        directory: directory
+                    )
+                }
+            }
+        )
         self.connectionSessionCoordinator = connectionSessionCoordinator
         self.sessionCache = sessionCache
         self.sessionActionsRegion = HomeSessionActions(
@@ -389,6 +431,9 @@ final class ProjectListHomeViewModel {
         connectionSessionCoordinator.onProfileCleared { [weak self] in
             Task { @MainActor in
                 self?.stopLiveObservations()
+                self?.worktreeMarks.onDisconnected()
+                self?.worktreeInventories.removeAll()
+                self?.worktreeProjectIDs.removeAll()
                 self?.state = .disconnected
                 self?.serversChrome = HomeServersChrome()
             }
@@ -988,6 +1033,7 @@ final class ProjectListHomeViewModel {
         // without .probing/.loading. Live store then SWR-refreshes.
         if !preserveContent, !worktrees.isEmpty {
             if case .loaded = state, liveObservationsRunning(for: worktrees) {
+                reloadWorktreeMarks(worktrees)
                 return
             }
             let sections = await loadSectionsFromCache(worktrees: worktrees)
@@ -1005,6 +1051,7 @@ final class ProjectListHomeViewModel {
                 }
             }
             startLiveObservations(worktrees: worktrees)
+            reloadWorktreeMarks(worktrees)
             return
         }
 
@@ -1089,6 +1136,7 @@ final class ProjectListHomeViewModel {
                 )
             }
             startLiveObservations(worktrees: worktrees)
+            reloadWorktreeMarks(worktrees)
         } catch {
             if preserveContent { return }
             stopLiveObservations()
@@ -1340,12 +1388,77 @@ final class ProjectListHomeViewModel {
                     await observeWorktree(worktree)
                 }
             }
+        worktreeEventTask?.cancel()
+        if let foregroundEventStream {
+            worktreeEventTask = Task { [weak self] in
+                for await event in foregroundEventStream.events() {
+                    guard event.type == "worktree.updated", let projectID = event.namedProjectID else { continue }
+                    await self?.refetchWorktreeMark(projectID)
+                }
+            }
+        }
+    }
+
+    private func reloadWorktreeMarks(_ worktrees: [String]) {
+        worktreeMarkTask?.cancel()
+        worktreeMarks.onConnection(serverBaseURL)
+        worktreeMarkTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            for worktree in worktrees {
+                guard !Task.isCancelled else { return }
+                let update = await self.worktreeMarks.load(addedPath: worktree)
+                guard !Task.isCancelled else { return }
+                self.applyWorktreeMark(update)
+            }
+        }
+    }
+
+    private func refetchWorktreeMark(_ projectID: String) async {
+        guard worktreeProjectIDs.values.contains(projectID) else { return }
+        guard let update = await worktreeMarks.refetch(projectID: projectID) else { return }
+        applyWorktreeMark(update)
+    }
+
+    private func applyWorktreeMark(_ update: WorktreeMarkUpdate) {
+        worktreeInventories[update.addedPath] = update.inventory
+        if let projectID = update.projectID {
+            worktreeProjectIDs[update.addedPath] = projectID
+        }
+        guard case let .loaded(sections, showAdd, addProjectSheet, createError) = state else { return }
+        guard let section = sections.first(where: { $0.worktree == update.addedPath }) else { return }
+        let updated = ProjectSectionItem(
+            id: section.id,
+            worktree: section.worktree,
+            displayName: section.displayName,
+            pathSubtitle: section.pathSubtitle,
+            letter: section.letter,
+            letterAccent: section.letterAccent,
+            allSessions: worktreeMarks.applyExtras(
+                addedPath: update.addedPath,
+                current: section.allSessions,
+                extras: update.extras
+            ),
+            loadError: section.loadError,
+            sessionsFromCache: section.sessionsFromCache,
+            projectID: worktreeProjectIDs[update.addedPath] ?? section.projectID,
+            worktreeInventory: update.inventory
+        )
+        state = .loaded(
+            sections: sections.map { $0.worktree == update.addedPath ? updated : $0 },
+            showAddProjectSheet: showAdd,
+            addProjectSheet: addProjectSheet,
+            projectSessionCreateError: createError
+        )
     }
 
     private func stopLiveObservations() {
         liveObservationTasks.forEach { $0.cancel() }
         liveObservationTasks = []
         observedWorktrees = []
+        worktreeMarkTask?.cancel()
+        worktreeMarkTask = nil
+        worktreeEventTask?.cancel()
+        worktreeEventTask = nil
         liveSessionsByWorktree = [:]
         liveStatusesByWorktree = [:]
         liveReadyIdsByWorktree = [:]
@@ -1420,9 +1533,11 @@ final class ProjectListHomeViewModel {
             pathSubtitle: section.pathSubtitle,
             letter: section.letter,
             letterAccent: section.letterAccent,
-            allSessions: items,
+            allSessions: worktreeMarks.withLive(addedPath: worktree, primary: items),
             loadError: section.loadError,
-            sessionsFromCache: sessionsFromCache
+            sessionsFromCache: sessionsFromCache,
+            projectID: worktreeProjectIDs[worktree] ?? section.projectID,
+            worktreeInventory: worktreeInventories[worktree] ?? section.worktreeInventory
         )
         let updatedSections =
             sections.map { current in

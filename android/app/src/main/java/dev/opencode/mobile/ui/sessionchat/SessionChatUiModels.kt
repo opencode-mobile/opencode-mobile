@@ -226,6 +226,8 @@ data class SessionChatUiState(
     val projectLabel: String? = null,
     val projectLetter: Char? = null,
     val projectLetterAccent: dev.opencode.mobile.theme.LetterAccent? = null,
+    /** True when the subtitle is a worktree checkout name instead of the project letter. */
+    val worktreeCheckout: Boolean = false,
     /**
      * Chip-timeline paragraphs expanded past `+N more`:
      * [SessionChatTimelineBlock.StepParagraph.expansionID] to the chip count at tap time.

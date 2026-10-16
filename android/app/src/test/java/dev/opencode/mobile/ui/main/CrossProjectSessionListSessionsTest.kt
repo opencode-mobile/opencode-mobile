@@ -1,6 +1,7 @@
 package dev.opencode.mobile.ui.main
 
 import dev.opencode.mobile.domain.session.SessionSummary
+import dev.opencode.mobile.domain.worktree.WorktreeInventory
 import dev.opencode.mobile.theme.LetterAccent
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -113,6 +114,27 @@ class CrossProjectSessionListSessionsTest {
 
         assertEquals("/repo", sessions.single().worktree)
         assertEquals("/worktrees/add-project-browse", sessions.single().directory)
+        assertEquals(false, sessions.single().worktreeCheckout)
+    }
+
+    @Test
+    fun worktreeSession_badgesOnlyWhenTheDirectoryIsAListedCheckout() {
+        val checkout = "/worktrees/add-project-browse"
+        val sessions =
+            listOf(
+                section(
+                    worktree = "/repo",
+                    inventory = WorktreeInventory.loaded(listOf("/repo", checkout)),
+                    session(id = "main", title = "Main", updatedAtEpochMs = 10L, directory = "/repo"),
+                    session(id = "wt", title = "Checkout", updatedAtEpochMs = 20L, directory = checkout),
+                    session(id = "sub", title = "Subpath", updatedAtEpochMs = 5L, directory = "/repo/packages/app"),
+                ),
+            ).toCrossProjectSessionListSessions()
+
+        assertEquals(false, sessions.first { it.id == "main" }.worktreeCheckout)
+        assertEquals(true, sessions.first { it.id == "wt" }.worktreeCheckout)
+        assertEquals(false, sessions.first { it.id == "sub" }.worktreeCheckout)
+        assertEquals("/repo", sessions.first { it.id == "wt" }.subtitle)
     }
 
     @Test
@@ -137,6 +159,12 @@ class CrossProjectSessionListSessionsTest {
     private fun section(
         worktree: String,
         vararg sessions: SessionSummary,
+    ): ProjectSectionUi = section(worktree, WorktreeInventory.Unloaded, *sessions)
+
+    private fun section(
+        worktree: String,
+        inventory: WorktreeInventory,
+        vararg sessions: SessionSummary,
     ): ProjectSectionUi =
         ProjectSectionUi(
             worktree = worktree,
@@ -145,6 +173,7 @@ class CrossProjectSessionListSessionsTest {
             letter = 'P',
             letterAccent = LetterAccent.Violet,
             allSessions = sessions.toList(),
+            worktreeInventory = inventory,
         )
 
     private fun session(

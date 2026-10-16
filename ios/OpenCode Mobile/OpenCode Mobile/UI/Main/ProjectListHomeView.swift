@@ -1096,7 +1096,12 @@ extension Array where Element == ProjectSectionItem {
                 statusIsStale: session.statusIsStale,
                 caption: session.updatedAtEpochMs.map { RelativeTimeFormatting.format(epochMs: $0) } ?? "",
                 updatedAtEpochMs: session.updatedAtEpochMs,
-                directory: session.directory?.isEmpty == false ? session.directory : section.worktree
+                directory: session.directory?.isEmpty == false ? session.directory : section.worktree,
+                worktreeCheckout: WorktreeMark.showsBadge(
+                    sessionDirectory: session.directory?.isEmpty == false ? session.directory : section.worktree,
+                    addedPath: section.worktree,
+                    inventory: section.worktreeInventory
+                )
             )
         }
     }

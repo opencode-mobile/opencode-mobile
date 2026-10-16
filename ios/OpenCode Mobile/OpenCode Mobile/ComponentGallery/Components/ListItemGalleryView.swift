@@ -3,6 +3,7 @@ import SwiftUI
 private enum GalleryDecoratorKind: String, CaseIterable, Identifiable {
     case none
     case letter
+    case letterWorktree
     case icon
     case iconCircle
 
@@ -12,6 +13,7 @@ private enum GalleryDecoratorKind: String, CaseIterable, Identifiable {
         switch self {
         case .none: "None"
         case .letter: "Letter"
+        case .letterWorktree: "Letter + worktree"
         case .icon: "Icon"
         case .iconCircle: "Icon circle"
         }
@@ -118,6 +120,8 @@ struct ListItemGalleryView: View {
             .none
         case .letter:
             .letter(Character("A"), letterAccent)
+        case .letterWorktree:
+            .letter(Character("A"), letterAccent, statusDot: statusTone.tone, worktree: true)
         case .icon:
             .icon(.folder, accessibilityLabel: "Folder")
         case .iconCircle:
@@ -213,7 +217,7 @@ struct ListItemGalleryView: View {
                 }
             }
 
-            if decoratorKind == .letter {
+            if decoratorKind == .letter || decoratorKind == .letterWorktree {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Letter accent")
                         .font(OpenCodeTypography.button)

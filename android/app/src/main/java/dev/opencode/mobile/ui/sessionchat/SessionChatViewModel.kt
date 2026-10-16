@@ -17,6 +17,7 @@ import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.FixedLiveUpdates
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.event.LiveUpdates
+import dev.opencode.mobile.domain.event.namedProjectId
 import dev.opencode.mobile.domain.live.EmptySessionReadyStore
 import dev.opencode.mobile.domain.live.EmptySessionTodoLiveStore
 import dev.opencode.mobile.domain.live.NoOpSessionViewReporter
@@ -40,7 +41,14 @@ import dev.opencode.mobile.domain.model.SessionModelSelectionStore
 import dev.opencode.mobile.domain.preferences.ChipTimelineIntro
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.domain.project.ProjectDomainAdapter
+import dev.opencode.mobile.domain.project.ProjectRepository
+import dev.opencode.mobile.domain.project.UnavailableProjectRepository
 import dev.opencode.mobile.domain.project.smartProjectLabel
+import dev.opencode.mobile.domain.worktree.UnavailableWorktreeRepository
+import dev.opencode.mobile.domain.worktree.WorktreeInventory
+import dev.opencode.mobile.domain.worktree.WorktreeLoad
+import dev.opencode.mobile.domain.worktree.WorktreeMark
+import dev.opencode.mobile.domain.worktree.WorktreeRepository
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.PermissionRequest
 import dev.opencode.mobile.domain.session.QuestionRequest
@@ -107,6 +115,8 @@ class SessionChatViewModel
         private val syncCoordinator: SyncCoordinator = NoOpSyncCoordinator,
         mcpRepository: McpRepository = EmptyMcpRepository,
         private val sessionViewReporter: SessionViewReporter = NoOpSessionViewReporter,
+        private val worktreeRepository: WorktreeRepository = UnavailableWorktreeRepository,
+        private val projectRepository: ProjectRepository = UnavailableProjectRepository,
     ) : ViewModel() {
         internal var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
             set(value) {
@@ -206,7 +216,9 @@ class SessionChatViewModel
         private var projectLabel: String? = null
         private var projectLetter: Char? = null
         private var projectLetterAccent: LetterAccent? = null
+        private var worktreeCheckout = false
         private var projectIdentityJob: kotlinx.coroutines.Job? = null
+        private val checkoutProjectIds = mutableSetOf<String>()
         private var lastSnackbarKey: String? = null
         private var loggedWorkingLamp = false
         private var lastWorkingLamp: String? = null
@@ -248,6 +260,14 @@ class SessionChatViewModel
         init {
             timeline.ioDispatcher = ioDispatcher
             composer.ioDispatcher = ioDispatcher
+            viewModelScope.launch {
+                foregroundEventStream.events.collect { event ->
+                    if (event.type != "worktree.updated") return@collect
+                    val projectId = event.namedProjectId() ?: return@collect
+                    if (projectId !in checkoutProjectIds) return@collect
+                    boundWorktree?.let { scheduleProjectIdentityRefine(it) }
+                }
+            }
             viewModelScope.launch {
                 combine(
                     combine(timeline.state, composer.state, sessionInfo.state, ::Triple),
@@ -1345,6 +1365,7 @@ class SessionChatViewModel
                 projectLabel = null
                 projectLetter = null
                 projectLetterAccent = null
+                worktreeCheckout = false
                 return
             }
             val displayName = ProjectDomainAdapter.displayNameFromWorktree(worktree)
@@ -1370,11 +1391,54 @@ class SessionChatViewModel
                             }
                         }
                     if (boundWorktree != worktree) return@launch
-                    projectLabel = smartProjectLabel(worktree, peers)
-                    projectLetter = letterCharacterForProject(displayName)
-                    projectLetterAccent = letterAccentForWorktree(worktree)
+                    val checkout = resolveCheckoutName(worktree, peers)
+                    if (boundWorktree != worktree) return@launch
+                    if (checkout != null) {
+                        projectLabel = checkout
+                        projectLetter = null
+                        projectLetterAccent = null
+                        worktreeCheckout = true
+                    } else {
+                        projectLabel = smartProjectLabel(worktree, peers)
+                        projectLetter = letterCharacterForProject(displayName)
+                        projectLetterAccent = letterAccentForWorktree(worktree)
+                        worktreeCheckout = false
+                    }
                     publishUiState()
                 }
+        }
+
+        private suspend fun resolveCheckoutName(
+            worktree: String,
+            peers: List<String>,
+        ): String? {
+            if (peers.isEmpty()) return null
+            val baseUrl =
+                connectionSessionCoordinator.currentProfile()?.baseUrl
+                    ?: connectionProfileStore.activeProfile()?.baseUrl
+            if (!baseUrl.isNullOrBlank()) worktreeRepository.onConnection(baseUrl)
+            val inventories = mutableMapOf<String, WorktreeInventory>()
+            checkoutProjectIds.clear()
+            for (added in peers) {
+                val projectId =
+                    runCatching { projectRepository.getCurrentProject(added).id }
+                        .getOrNull()
+                        ?.takeIf { it.isNotBlank() }
+                if (projectId != null) checkoutProjectIds += projectId
+                val load = worktreeRepository.load(added, projectId)
+                if (load is WorktreeLoad.Loaded && !load.listsSessions && projectId != null) {
+                    worktreeRepository.refresh(projectId)
+                }
+                inventories[added] =
+                    when (load) {
+                        is WorktreeLoad.Loaded -> WorktreeInventory.loaded(load.directories)
+                        is WorktreeLoad.Failed -> WorktreeInventory.Failed
+                        WorktreeLoad.Unloaded, WorktreeLoad.Stopped -> WorktreeInventory.Unloaded
+                    }
+            }
+            return WorktreeMark.checkoutNameIfMarked(worktree, peers) { added ->
+                inventories[added] ?: WorktreeInventory.Unloaded
+            }
         }
 
         private fun publishUiState(
@@ -1626,6 +1690,7 @@ class SessionChatViewModel
                 projectLabel = projectLabel,
                 projectLetter = projectLetter,
                 projectLetterAccent = projectLetterAccent,
+                worktreeCheckout = worktreeCheckout,
                 sessionBranchPill = repoStrip.state.value.toSessionBranchPill(),
                 composerDictationEnabled = composerDictationEnabled,
                 dictation = dictation,
