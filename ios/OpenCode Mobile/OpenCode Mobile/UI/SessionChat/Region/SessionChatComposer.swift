@@ -24,6 +24,7 @@ final class SessionChatComposer {
     private let sessionRepository: any SessionRepository
     private let sessionModelSelectionStore: any SessionModelSelectionStore
     private let composerDraftStore: any ComposerDraftStore
+    private let projectFilesRepository: (any ProjectFilesRepository)?
     private let activeConnectionManager: ActiveConnectionManager
     private let foregroundEventStream: (any ForegroundEventStream)?
     private let sentTimeFormatter: DateFormatter
@@ -52,6 +53,9 @@ final class SessionChatComposer {
     private var catalogRetryTask: Task<Void, Never>?
     private let catalogRetryDelaysMs: [Int]
     private(set) var requiresComposerModel = true
+    private var fileSearchTask: Task<Void, Never>?
+    private var fileSearchGeneration = 0
+    var fileSearchDelayMs = 200
 
     private var allowsMentions: Bool { activeConnectionManager.capabilities.supportsMentions }
     private var allowsSlashCommands: Bool { activeConnectionManager.capabilities.supportsSlashCommands }
@@ -68,6 +72,7 @@ final class SessionChatComposer {
         composerDraftStore: any ComposerDraftStore,
         activeConnectionManager: ActiveConnectionManager,
         foregroundEventStream: (any ForegroundEventStream)? = nil,
+        projectFilesRepository: (any ProjectFilesRepository)? = nil,
         catalogRetryDelaysMs: [Int] = SessionChatComposer.defaultCatalogRetryDelaysMs
     ) {
         self.sessionID = sessionID
@@ -79,6 +84,7 @@ final class SessionChatComposer {
         self.sessionRepository = sessionRepository
         self.sessionModelSelectionStore = sessionModelSelectionStore
         self.composerDraftStore = composerDraftStore
+        self.projectFilesRepository = projectFilesRepository
         self.activeConnectionManager = activeConnectionManager
         self.foregroundEventStream = foregroundEventStream
         self.catalogRetryDelaysMs = catalogRetryDelaysMs
@@ -500,13 +506,20 @@ final class SessionChatComposer {
                 for: suggestionMode(
                     text: text,
                     cursor: cursor,
-                    mentions: previous.agentMentions
+                    mentions: previous.agentMentions,
+                    fileMentions: previous.fileMentions
                 )
             )
             let clampedCursor = max(0, min(cursor, text.count))
             state.composer.cursor = clampedCursor
-            refreshComposerSuggestions(for: text, cursor: clampedCursor, mentions: previous.agentMentions)
+            refreshComposerSuggestions(
+                for: text,
+                cursor: clampedCursor,
+                mentions: previous.agentMentions,
+                fileMentions: previous.fileMentions
+            )
             notifyChange()
+            scheduleFileSearch()
             return
         }
 
@@ -515,24 +528,33 @@ final class SessionChatComposer {
             previousText: previous.text,
             previousMentions: previous.agentMentions,
             proposedText: text,
-            proposedCursor: cursor
+            proposedCursor: cursor,
+            previousFileMentions: previous.fileMentions
         )
         ensureSuggestionCatalogLoaded(
             for: suggestionMode(
                 text: reconciled.text,
                 cursor: reconciled.cursor,
-                mentions: reconciled.mentions
+                mentions: reconciled.mentions,
+                fileMentions: reconciled.fileMentions
             )
         )
         let selectionChanged = reconciled.text != text || reconciled.cursor != cursor
         state.composer.text = reconciled.text
         state.composer.agentMentions = reconciled.mentions
+        state.composer.fileMentions = reconciled.fileMentions
         state.composer.cursor = reconciled.cursor
         if selectionChanged {
             state.composer.selectionRevision += 1
         }
-        refreshComposerSuggestions(for: reconciled.text, cursor: reconciled.cursor, mentions: reconciled.mentions)
+        refreshComposerSuggestions(
+            for: reconciled.text,
+            cursor: reconciled.cursor,
+            mentions: reconciled.mentions,
+            fileMentions: reconciled.fileMentions
+        )
         notifyChange()
+        scheduleFileSearch()
         schedulePersistDraft()
     }
 
@@ -545,23 +567,43 @@ final class SessionChatComposer {
 
     func selectAtSuggestion(agentName: String) {
         let composer = state.composer
-        let result = ComposerMentionRouting.insertMention(
-            text: composer.text,
-            cursor: composer.cursor,
-            agentName: agentName,
-            mentionID: UUID().uuidString,
-            existingMentions: composer.agentMentions
-        )
+        let suggestion = state.atSuggestions.first { $0.id == agentName || $0.agentName == agentName }
+        let result: MentionInsertResult
+        if let filePath = suggestion?.filePath {
+            result = ComposerMentionRouting.insertFileMention(
+                text: composer.text,
+                cursor: composer.cursor,
+                path: filePath,
+                mentionID: UUID().uuidString,
+                existingMentions: composer.agentMentions,
+                existingFileMentions: composer.fileMentions
+            )
+        } else {
+            result = ComposerMentionRouting.insertMention(
+                text: composer.text,
+                cursor: composer.cursor,
+                agentName: suggestion?.agentName ?? agentName,
+                mentionID: UUID().uuidString,
+                existingMentions: composer.agentMentions,
+                existingFileMentions: composer.fileMentions
+            )
+        }
         draftRevision += 1
+        fileSearchTask?.cancel()
+        fileSearchGeneration += 1
+        fileSearchTask = nil
         state.composer.text = result.text
         state.composer.agentMentions = result.mentions
+        state.composer.fileMentions = result.fileMentions
         state.composer.cursor = result.cursor
         state.composer.selectionRevision += 1
-        // Close after select; `@name` would otherwise still match the at-trigger.
+        // Close after select; the inserted token would otherwise still match the at-trigger.
         state.atSuggestionsVisible = false
         state.atSuggestions = []
         state.slashSuggestionsVisible = false
         state.slashSuggestions = []
+        state.fileSuggestions = []
+        state.fileSuggestionQuery = nil
         notifyChange()
         schedulePersistDraft()
     }
@@ -722,6 +764,7 @@ final class SessionChatComposer {
         updateComposer {
             $0.text = text
             $0.agentMentions = []
+            $0.fileMentions = []
             $0.cursor = text.count
             $0.selectionRevision += 1
         }
@@ -756,19 +799,27 @@ final class SessionChatComposer {
     ) async {
         let submittedText = state.composer.text
         let submittedMentions = state.composer.agentMentions
+        let submittedFileMentions = state.composer.fileMentions
         let mentionText: String
         let mentionList: [AgentMention]
+        let fileList: [FileMention]
         if allowsMentions {
             mentionText = submittedText
             mentionList = submittedMentions
+            fileList = submittedFileMentions
         } else {
             mentionText = ComposerMentionRouting.withoutMentionTokens(text: submittedText, mentions: submittedMentions)
             mentionList = []
+            fileList = []
         }
-        let (trimmed, mentionsForSend) = ComposerMentionRouting.trimForSend(
+        let trimmedPrompt = ComposerMentionRouting.trimForSend(
             text: mentionText,
-            mentions: mentionList
+            mentions: mentionList,
+            fileMentions: fileList
         )
+        let trimmed = trimmedPrompt.text
+        let mentionsForSend = trimmedPrompt.agentMentions
+        let filesForSend = trimmedPrompt.fileMentions
         let submittedAttachments = state.composer.attachments
         let submittedDraftRevision = draftRevision
         let submittedAttachmentRevisions = Dictionary(
@@ -864,6 +915,7 @@ final class SessionChatComposer {
                     textRevision: submittedDraftRevision,
                     submittedText: submittedText,
                     submittedMentions: submittedMentions,
+                    submittedFileMentions: submittedFileMentions,
                     submittedAttachments: submittedAttachments,
                     submittedAttachmentRevisions: submittedAttachmentRevisions
                 )
@@ -891,6 +943,7 @@ final class SessionChatComposer {
                     text: String,
                     skillIDs: [String],
                     mentions: [AgentMention],
+                    fileMentions: [FileMention],
                     sessionID: String,
                     attachments: [Attachment],
                     model: ModelSelection?,
@@ -911,6 +964,8 @@ final class SessionChatComposer {
                                 variant: composer.selectedVariant,
                                 mode: composer.selectedMode,
                                 agentMentions: mentions,
+                                fileMentions: fileMentions,
+                                worktree: worktree,
                                 skillIDs: skillIDs,
                                 delivery: delivery
                             ),
@@ -929,8 +984,10 @@ final class SessionChatComposer {
                             throw error
                         }
                     }
-                    if !mentions.isEmpty {
-                        OpenCodeLog.sessionChat.info("prompt send agentParts=\(mentions.count)")
+                    if !mentions.isEmpty || !fileMentions.isEmpty {
+                        OpenCodeLog.sessionChat.info(
+                            "prompt send agentParts=\(mentions.count) fileParts=\(fileMentions.count)"
+                        )
                     }
                 }
                 switch intent {
@@ -972,6 +1029,7 @@ final class SessionChatComposer {
                         text: text,
                         skillIDs: [],
                         mentions: mentionsForSend,
+                        fileMentions: filesForSend,
                         sessionID: sessionID,
                         attachments: submittedAttachments,
                         model: selectedModel,
@@ -982,6 +1040,7 @@ final class SessionChatComposer {
                         text: text,
                         skillIDs: [skillID],
                         mentions: [],
+                        fileMentions: [],
                         sessionID: sessionID,
                         attachments: submittedAttachments,
                         model: selectedModel,
@@ -1012,6 +1071,7 @@ final class SessionChatComposer {
                 textRevision: submittedDraftRevision,
                 submittedText: submittedText,
                 submittedMentions: submittedMentions,
+                submittedFileMentions: submittedFileMentions,
                 submittedAttachments: submittedAttachments,
                 submittedAttachmentRevisions: submittedAttachmentRevisions
             )
@@ -1088,16 +1148,27 @@ final class SessionChatComposer {
     }
 
     private func currentDraft() -> ComposerDraft {
-        ComposerDraft(text: state.composer.text, agentMentions: state.composer.agentMentions)
+        ComposerDraft(
+            text: state.composer.text,
+            agentMentions: state.composer.agentMentions,
+            fileMentions: state.composer.fileMentions
+        )
     }
 
     private func applyDraft(_ draft: ComposerDraft) {
         state.composer.text = draft.text
         state.composer.agentMentions = draft.agentMentions
+        state.composer.fileMentions = draft.fileMentions
         state.composer.cursor = draft.text.count
         state.composer.selectionRevision += 1
-        refreshComposerSuggestions(for: draft.text, cursor: draft.text.count, mentions: draft.agentMentions)
+        refreshComposerSuggestions(
+            for: draft.text,
+            cursor: draft.text.count,
+            mentions: draft.agentMentions,
+            fileMentions: draft.fileMentions
+        )
         notifyChange()
+        scheduleFileSearch()
     }
 
     private func applyOrLoadDraft(preserve: ComposerDraft?) {
@@ -1397,20 +1468,24 @@ final class SessionChatComposer {
         refreshComposerSuggestions(
             for: composer.text,
             cursor: composer.cursor,
-            mentions: composer.agentMentions
+            mentions: composer.agentMentions,
+            fileMentions: composer.fileMentions
         )
         notifyChange()
+        scheduleFileSearch()
     }
 
     private func suggestionMode(
         text: String,
         cursor: Int,
-        mentions: [AgentMention]
+        mentions: [AgentMention],
+        fileMentions: [FileMention] = []
     ) -> ComposerSuggestionMode {
         ComposerMentionRouting.suggestionMode(
             text: text,
             cursor: cursor,
             mentions: mentions,
+            fileMentions: fileMentions,
             allowsMentions: allowsMentions,
             allowsSlashCommands: allowsSlashCommands || !state.slashSkills.isEmpty
         )
@@ -1419,15 +1494,18 @@ final class SessionChatComposer {
     private func refreshComposerSuggestions(
         for text: String,
         cursor: Int,
-        mentions: [AgentMention]? = nil
+        mentions: [AgentMention]? = nil,
+        fileMentions: [FileMention]? = nil
     ) {
         let mentions = mentions ?? state.composer.agentMentions
-        switch suggestionMode(text: text, cursor: cursor, mentions: mentions) {
+        let fileMentions = fileMentions ?? state.composer.fileMentions
+        switch suggestionMode(text: text, cursor: cursor, mentions: mentions, fileMentions: fileMentions) {
         case let .at(query):
+            let files = state.fileSuggestionQuery == query ? state.fileSuggestions : []
             state.atSuggestionsVisible = true
             state.atSuggestions = ComposerMentionRouting
                 .filterAgents(state.mentionableAgents, query: query)
-                .map { $0.toAtSuggestion() }
+                .map { $0.toAtSuggestion() } + files
             state.slashSuggestionsVisible = false
             state.slashSuggestions = []
         case let .slash(query):
@@ -1451,6 +1529,80 @@ final class SessionChatComposer {
         }
     }
 
+    private func scheduleFileSearch() {
+        let composer = state.composer
+        let mode = suggestionMode(
+            text: composer.text,
+            cursor: composer.cursor,
+            mentions: composer.agentMentions,
+            fileMentions: composer.fileMentions
+        )
+        let query: String?
+        if case let .at(value) = mode {
+            query = value
+        } else {
+            query = nil
+        }
+        guard let query else {
+            fileSearchTask?.cancel()
+            fileSearchGeneration += 1
+            fileSearchTask = nil
+            if state.fileSuggestionQuery != nil || !state.fileSuggestions.isEmpty {
+                state.fileSuggestions = []
+                state.fileSuggestionQuery = nil
+            }
+            return
+        }
+        if query == state.fileSuggestionQuery, fileSearchTask == nil {
+            return
+        }
+        guard let repository = projectFilesRepository else { return }
+        let worktree = worktree
+        fileSearchTask?.cancel()
+        fileSearchGeneration += 1
+        let generation = fileSearchGeneration
+        let delay = fileSearchDelayMs
+        fileSearchTask = Task { @MainActor [weak self] in
+            if delay > 0 {
+                try? await Task.sleep(for: .milliseconds(delay))
+            }
+            guard let self, !Task.isCancelled, generation == self.fileSearchGeneration else { return }
+            let results: [ProjectEntry]
+            do {
+                results = try await repository.findFiles(
+                    worktree: worktree,
+                    query: query,
+                    limit: ProjectFileLimits.findLimit
+                )
+            } catch is CancellationError {
+                return
+            } catch {
+                results = []
+            }
+            guard generation == self.fileSearchGeneration else { return }
+            let current = self.state.composer
+            let currentMode = suggestionMode(
+                text: current.text,
+                cursor: current.cursor,
+                mentions: current.agentMentions,
+                fileMentions: current.fileMentions
+            )
+            guard case let .at(currentQuery) = currentMode, currentQuery == query else { return }
+            self.state.fileSuggestions = results.map { $0.toFileSuggestion() }
+            self.state.fileSuggestionQuery = query
+            self.refreshComposerSuggestions(
+                for: current.text,
+                cursor: current.cursor,
+                mentions: current.agentMentions,
+                fileMentions: current.fileMentions
+            )
+            self.notifyChange()
+            if generation == self.fileSearchGeneration {
+                self.fileSearchTask = nil
+            }
+        }
+    }
+
     private func clearAcceptedSubmission(
         textRevision: Int,
         attachmentRevisions submittedAttachmentRevisions: [String: Int]
@@ -1459,6 +1611,7 @@ final class SessionChatComposer {
         if draftRevision == textRevision {
             composer.text = ""
             composer.agentMentions = []
+            composer.fileMentions = []
             composer.cursor = 0
             composer.selectionRevision += 1
         }
@@ -1470,8 +1623,14 @@ final class SessionChatComposer {
             attachmentRevisions[id] = nil
         }
         state.composer = composer
-        refreshComposerSuggestions(for: composer.text, cursor: composer.cursor)
+        refreshComposerSuggestions(
+            for: composer.text,
+            cursor: composer.cursor,
+            mentions: composer.agentMentions,
+            fileMentions: composer.fileMentions
+        )
         notifyChange()
+        scheduleFileSearch()
         persistDraftTask?.cancel()
         persistDraft(sessionID: sessionID, draft: currentDraft())
     }
@@ -1480,6 +1639,7 @@ final class SessionChatComposer {
         textRevision: Int,
         submittedText: String,
         submittedMentions: [AgentMention],
+        submittedFileMentions: [FileMention],
         submittedAttachments: [Attachment],
         submittedAttachmentRevisions: [String: Int]
     ) {
@@ -1490,14 +1650,21 @@ final class SessionChatComposer {
         if draftRevision == textRevision {
             composer.text = submittedText
             composer.agentMentions = submittedMentions
+            composer.fileMentions = submittedFileMentions
             composer.cursor = submittedText.count
             composer.selectionRevision += 1
         }
         let currentIDs = Set(composer.attachments.map(\.id))
         composer.attachments = submittedAttachments.filter { !currentIDs.contains($0.id) } + composer.attachments
         state.composer = composer
-        refreshComposerSuggestions(for: composer.text, cursor: composer.cursor, mentions: composer.agentMentions)
+        refreshComposerSuggestions(
+            for: composer.text,
+            cursor: composer.cursor,
+            mentions: composer.agentMentions,
+            fileMentions: composer.fileMentions
+        )
         notifyChange()
+        scheduleFileSearch()
         persistDraftTask?.cancel()
         persistDraft(sessionID: sessionID, draft: currentDraft())
     }

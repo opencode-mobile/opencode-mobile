@@ -19,10 +19,12 @@ struct FilesystemDomainAdapter: Sendable {
         )
     }
 
-    func directoryNode(from dto: V2FsEntryDTO, listingDirectory: String) -> DirectoryNode {
-        let absolutePath = Self.absolutePath(dto.path, listingDirectory: listingDirectory)
+    /// `base` is the listing envelope's location directory. Entry paths are relative to it (or
+    /// absolute across drives), in the server's separators: `src\` on Windows, `src/` elsewhere.
+    func directoryNode(from dto: V2FsEntryDTO, base: String) -> DirectoryNode {
+        let absolutePath = ServerPathPolicy.resolve(base: base, child: dto.path)
         return DirectoryNode(
-            name: Self.name(from: absolutePath, fallback: dto.path),
+            name: ServerPathPolicy.name(absolutePath),
             absolutePath: absolutePath,
             isDirectory: dto.type == "directory"
         )
@@ -66,32 +68,5 @@ struct FilesystemDomainAdapter: Sendable {
 
     nonisolated private static func join(_ directory: String, _ name: String) -> String {
         directory.isEmpty ? name : "\(directory)/\(name)"
-    }
-
-    private static func absolutePath(_ path: String, listingDirectory: String) -> String {
-        let normalized = stripTrailingSlashes(path)
-        if normalized.hasPrefix("/") { return normalized }
-        let relative = normalized.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        let base = stripTrailingSlashes(listingDirectory)
-        if relative.isEmpty || relative == "." { return base }
-        if base == "/" { return "/\(relative)" }
-        return "\(base)/\(relative)"
-    }
-
-    private static func name(from absolutePath: String, fallback: String) -> String {
-        let name = URL(fileURLWithPath: absolutePath).lastPathComponent
-        if name.isEmpty {
-            return URL(fileURLWithPath: fallback).lastPathComponent
-        }
-        return name
-    }
-
-    private static func stripTrailingSlashes(_ path: String) -> String {
-        if path == "/" { return path }
-        var stripped = path
-        while stripped.count > 1, stripped.hasSuffix("/") {
-            stripped.removeLast()
-        }
-        return stripped.isEmpty ? "/" : stripped
     }
 }

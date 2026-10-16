@@ -33,7 +33,7 @@ struct ProjectFilesListingPolicyTests {
             DirectoryNode(name: "b", absolutePath: "/b", isDirectory: true),
             DirectoryNode(name: "file.txt", absolutePath: "/file.txt", isDirectory: false),
         ]
-        #expect(DirectoryListingPolicy.prepare(nodes).map(\.name) == ["b"])
+        #expect(DirectoryListingPolicy.directories(nodes).map(\.name) == ["b"])
     }
 }
 

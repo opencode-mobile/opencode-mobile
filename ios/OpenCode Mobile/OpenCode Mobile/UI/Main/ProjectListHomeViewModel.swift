@@ -23,28 +23,221 @@ enum HomeSessionLifecycle: Equatable {
     case snoozed
 }
 
-struct AddProjectDirectoryItem: Identifiable, Equatable {
-    var id: String { absolutePath }
+/// A subfolder row in the Add project sheet.
+struct AddProjectFolderItem: Identifiable, Equatable {
+    var id: String { path }
     let name: String
-    let absolutePath: String
+    let path: String
+    /// Already added to home on this server.
+    let isAdded: Bool
 }
 
-struct AddProjectNavigatorState: Equatable {
-    var currentPath: String
-    var canGoUp: Bool
-    var entries: [AddProjectDirectoryItem]
-    var isLoading: Bool
-    var isValidating: Bool
-    var errorMessage: String?
+/// A chip that jumps the path field to a root the server cannot enumerate (Home, `/`, a
+/// mounted volume, a Windows drive or share).
+struct AddProjectRoot: Identifiable, Equatable {
+    var id: String { path }
+    let label: String
+    let path: String
+    let selected: Bool
+}
 
-    static let empty = AddProjectNavigatorState(
-        currentPath: "",
-        canGoUp: false,
-        entries: [],
-        isLoading: false,
-        isValidating: false,
-        errorMessage: nil
-    )
+/// A project the server already knows that is not on home yet.
+struct AddProjectSuggestion: Identifiable, Equatable {
+    var id: String { path }
+    let name: String
+    let path: String
+    let activityLabel: String?
+}
+
+/// Add project sheet: a path field over the server's folders, root chips, and the server's own
+/// projects. Everything here is derived from the field text and the listings loaded so far.
+struct AddProjectSheetState: Equatable {
+    static let pickFolderTitle = "Pick a folder"
+    static let alreadyAddedTitle = "Already on home"
+    static let homeFolderTitle = "Add home folder"
+    static let noSubfoldersMessage = "No subfolders"
+    static let truncatedListingHint = "Showing the first \(DirectoryListingPolicy.maxVisibleDirectories) folders. Type more of the name to narrow the list."
+    /// Listing failures never show server text, which can carry paths or HTML.
+    static let listErrorMessage = "Check the path and try again."
+
+    var fieldText = ""
+    /// The server's home (on v2, its working directory) in native form.
+    var homePath = ""
+    /// Folder whose subfolders are listed; nil while the field resolves to nothing.
+    var directory: String?
+    /// Name prefix typed after the field's last separator.
+    var filter = ""
+    /// Subfolders of `directory` whose names start with `filter`, capped after filtering.
+    var entries: [AddProjectFolderItem] = []
+    /// Non-interactive row under `entries` when more folders match than are shown.
+    var truncationHint: String?
+    var isLoading = false
+    var listError: String?
+    /// Shown when the listing loaded but no row matches.
+    var emptyMessage: String?
+    var roots: [AddProjectRoot] = []
+    var suggestions: [AddProjectSuggestion] = []
+    var showSuggestions = false
+    /// Header over the folder rows while suggestions are shown above them.
+    var folderSectionTitle: String?
+    var upTarget: String?
+    var addTarget: String?
+    var addTitle = pickFolderTitle
+    var addEnabled = false
+    var isValidating = false
+    var fieldError: String?
+
+    static let empty = AddProjectSheetState()
+
+    static func emptyFilterMessage(directory: String, filter: String) -> String {
+        "Nothing in \(ServerPathPolicy.name(directory)) starts with \u{201C}\(filter)\u{201D}"
+    }
+
+    /// Builds the sheet from what the Screen Model has loaded for this presentation.
+    static func make(_ inputs: AddProjectSheetInputs) -> AddProjectSheetState {
+        var sheet = AddProjectSheetState()
+        sheet.fieldText = inputs.fieldText
+        sheet.homePath = inputs.home
+        sheet.isValidating = inputs.isValidating
+        sheet.fieldError = inputs.fieldError
+        guard !inputs.home.isEmpty else {
+            sheet.isLoading = inputs.pathsError == nil
+            sheet.listError = inputs.pathsError
+            return sheet
+        }
+        let added = Set(inputs.added.map(ServerPathPolicy.canonical))
+        let parts = ServerPathPolicy.fieldParts(inputs.fieldText, home: inputs.home)
+        sheet.directory = parts.directory
+        sheet.filter = parts.filter
+        sheet.roots = roots(inputs, directory: parts.directory, filter: parts.filter)
+        sheet.suggestions = ServerProjectSuggestions
+            .suggestions(from: inputs.serverProjects, excluding: inputs.added)
+            .map { project in
+                AddProjectSuggestion(
+                    name: project.displayName,
+                    path: project.worktree,
+                    activityLabel: project.activityAtEpochMs.map { RelativeTimeFormatting.format(epochMs: $0) }
+                )
+            }
+
+        guard let directory = parts.directory else { return sheet }
+        let filter = parts.filter
+        sheet.upTarget = filter.isEmpty ? ServerPathPolicy.parentPath(directory) : directory
+        let listing = inputs.listings[directory]
+        if let error = inputs.listErrors[directory] {
+            sheet.listError = error
+        } else if listing == nil {
+            sheet.isLoading = true
+        }
+        sheet.showSuggestions = directory == inputs.home && filter.isEmpty && !sheet.suggestions.isEmpty
+        if sheet.showSuggestions {
+            sheet.folderSectionTitle = "In \(ServerPathPolicy.name(directory))"
+        }
+
+        if let listing {
+            let visible = DirectoryListingPolicy.visibleEntries(listing, filter: filter)
+            sheet.entries = visible.rows
+                .map { node in
+                    AddProjectFolderItem(
+                        name: node.name,
+                        path: node.absolutePath,
+                        isAdded: added.contains(ServerPathPolicy.canonical(node.absolutePath))
+                    )
+                }
+            if visible.truncated {
+                sheet.truncationHint = truncatedListingHint
+            }
+            if sheet.entries.isEmpty {
+                sheet.emptyMessage = filter.isEmpty
+                    ? noSubfoldersMessage
+                    : emptyFilterMessage(directory: directory, filter: filter)
+            }
+            if filter.isEmpty {
+                sheet.addTarget = directory
+            } else {
+                // The full listing, hidden folders included, so a folder past the cap is addable.
+                let windows = ServerPathPolicy.isWindows(directory)
+                sheet.addTarget = listing.first { node in
+                    windows ? node.name.caseInsensitiveCompare(filter) == .orderedSame : node.name == filter
+                }?.absolutePath
+            }
+        }
+
+        if let target = sheet.addTarget {
+            if added.contains(ServerPathPolicy.canonical(target)) {
+                sheet.addTitle = alreadyAddedTitle
+            } else {
+                sheet.addTitle = ServerPathPolicy.canonical(target) == inputs.home
+                    ? homeFolderTitle
+                    : "Add \(ServerPathPolicy.name(target))"
+                sheet.addEnabled = !inputs.isValidating
+            }
+        }
+        return sheet
+    }
+
+    /// Home first, then `/` and mounted volumes on POSIX servers, or every Windows drive and share
+    /// seen in home, the server's projects, home's projects, and folders listed this session.
+    private static func roots(
+        _ inputs: AddProjectSheetInputs,
+        directory: String?,
+        filter: String
+    ) -> [AddProjectRoot] {
+        var chips: [(label: String, path: String)] = [("Home", inputs.home)]
+        if ServerPathPolicy.isWindows(inputs.home) {
+            var seen: [String] = []
+            let candidates = [inputs.home]
+                + inputs.serverProjects.map(\.worktree)
+                + inputs.added
+                + inputs.listedRoots
+            for path in candidates where ServerPathPolicy.isWindows(path) {
+                let root = ServerPathPolicy.root(path)
+                if !root.isEmpty, !seen.contains(root) { seen.append(root) }
+            }
+            let homeRoot = ServerPathPolicy.root(inputs.home)
+            let others = seen.filter { $0 != homeRoot }.sorted {
+                $0.localizedCaseInsensitiveCompare($1) == .orderedAscending
+            }
+            chips += ([homeRoot] + others).map { (rootLabel($0), $0) }
+        } else if ServerPathPolicy.root(inputs.home) == "/" {
+            chips.append(("/", "/"))
+            chips += inputs.volumes.map { ($0.name, $0.absolutePath) }
+        }
+        var seenPaths = Set<String>()
+        return chips.compactMap { chip in
+            guard seenPaths.insert(chip.path).inserted else { return nil }
+            return AddProjectRoot(
+                label: chip.label,
+                path: chip.path,
+                selected: filter.isEmpty && directory == chip.path
+            )
+        }
+    }
+
+    /// `C:` for a drive root; shares and `/` read as themselves.
+    static func rootLabel(_ root: String) -> String {
+        if root.count == 3, root.hasSuffix(":\\") { return String(root.dropLast()) }
+        return root
+    }
+}
+
+/// What the Screen Model has loaded for one Add project presentation.
+struct AddProjectSheetInputs: Equatable {
+    var home = ""
+    var fieldText = ""
+    var pathsError: String?
+    var added: [String] = []
+    /// Successful full listings (every child folder, hidden ones included, uncapped) by
+    /// canonical folder, kept for the sheet's lifetime.
+    var listings: [String: [DirectoryNode]] = [:]
+    var listErrors: [String: String] = [:]
+    var serverProjects: [Project] = []
+    /// Folders in `/Volumes` on a POSIX server.
+    var volumes: [DirectoryNode] = []
+    /// Roots of folders the field listed this session (Windows drives and shares).
+    var listedRoots: [String] = []
+    var isValidating = false
+    var fieldError: String?
 }
 
 struct ProjectRemovalItem: Equatable {
@@ -86,13 +279,13 @@ enum ProjectListHomeState: Equatable {
     case loading
     case empty(
         showAddProjectSheet: Bool,
-        navigator: AddProjectNavigatorState?,
+        addProjectSheet: AddProjectSheetState?,
         projectSessionCreateError: String?
     )
     case loaded(
         sections: [ProjectSectionItem],
         showAddProjectSheet: Bool,
-        navigator: AddProjectNavigatorState?,
+        addProjectSheet: AddProjectSheetState?,
         projectSessionCreateError: String?
     )
 }
@@ -106,7 +299,13 @@ final class ProjectListHomeViewModel {
     private(set) var isRefreshing = false
     /// Sheet presentation is tracked here so SwiftUI `.sheet` can observe it directly.
     private(set) var isAddProjectPresented = false
-    private(set) var addProjectNavigator = AddProjectNavigatorState.empty
+    private(set) var addProjectSheet = AddProjectSheetState.empty
+    private var addProjectInputs = AddProjectSheetInputs()
+    /// Bumped per presentation so a late listing from a closed sheet is dropped.
+    private var addProjectGeneration = 0
+    private var addProjectListingTask: Task<Void, Never>?
+    private var addProjectListingsInFlight: Set<String> = []
+    private let addProjectListingDebounce: Duration
     private(set) var pendingProjectRemoval: ProjectRemovalItem?
     /// Shared home snackbar: project removal plus archive / delete failures.
     private(set) var removalSnackbar: OpenCodeSnackbarMessage?
@@ -180,8 +379,10 @@ final class ProjectListHomeViewModel {
         permissionLiveStore: (any PermissionLiveStore)? = nil,
         connectionSessionCoordinator: ConnectionSessionCoordinator,
         sessionCache: any SessionCache = NoOpSessionCache.shared,
-        liveUpdates: any LiveUpdates = FixedLiveUpdates()
+        liveUpdates: any LiveUpdates = FixedLiveUpdates(),
+        addProjectListingDebounce: Duration = .milliseconds(250)
     ) {
+        self.addProjectListingDebounce = addProjectListingDebounce
         self.projectRepository = projectRepository
         self.filesystemRepository = filesystemRepository
         self.sessionRepository = sessionRepository
@@ -327,20 +528,31 @@ final class ProjectListHomeViewModel {
             presentation: ProductAnalytics.Presentation.sheet,
             trigger: ProductAnalytics.Trigger.present
         )
-        await openDirectoryNavigator()
+        addProjectGeneration += 1
+        addProjectListingTask?.cancel()
+        addProjectListingsInFlight = []
+        addProjectInputs = AddProjectSheetInputs()
+        isAddProjectPresented = true
+        publishAddProjectSheet()
+        await loadAddProjectSheet(generation: addProjectGeneration)
     }
 
     func dismissAddProjectSheet() {
         isAddProjectPresented = false
-        addProjectNavigator = .empty
+        addProjectGeneration += 1
+        addProjectListingTask?.cancel()
+        addProjectListingTask = nil
+        addProjectListingsInFlight = []
+        addProjectInputs = AddProjectSheetInputs()
+        addProjectSheet = .empty
         switch state {
         case let .empty(_, _, createError):
-            state = .empty(showAddProjectSheet: false, navigator: nil, projectSessionCreateError: createError)
+            state = .empty(showAddProjectSheet: false, addProjectSheet: nil, projectSessionCreateError: createError)
         case let .loaded(sections, _, _, createError):
             state = .loaded(
                 sections: sections,
                 showAddProjectSheet: false,
-                navigator: nil,
+                addProjectSheet: nil,
                 projectSessionCreateError: createError
             )
         default:
@@ -348,33 +560,62 @@ final class ProjectListHomeViewModel {
         }
     }
 
-    func navigateAddProjectUp() async {
-        guard let navigator = currentNavigator(),
-              let parent = DirectoryListingPolicy.parentPath(navigator.currentPath)
+    /// Path field edits. Filtering is local; a new folder is listed after a short pause.
+    func updateAddProjectField(_ text: String) {
+        guard isAddProjectPresented, !addProjectInputs.isValidating,
+              text != addProjectInputs.fieldText
+        else { return }
+        addProjectInputs.fieldText = text
+        addProjectInputs.fieldError = nil
+        publishAddProjectSheet()
+        scheduleAddProjectListing()
+    }
+
+    func addProjectUp() async {
+        guard isAddProjectPresented, !addProjectInputs.isValidating,
+              let target = addProjectSheet.upTarget
         else { return }
         logAddProjectAction(ProductAnalytics.Action.addProjectGoUp)
-        await loadDirectoryNavigator(path: parent)
+        await showAddProjectFolder(target)
     }
 
-    func navigateAddProjectInto(path: String) async {
+    func selectAddProjectRoot(path: String) async {
+        guard isAddProjectPresented, !addProjectInputs.isValidating else { return }
+        logAddProjectAction(ProductAnalytics.Action.addProjectSelectRoot)
+        await showAddProjectFolder(path)
+    }
+
+    func openAddProjectFolder(path: String) async {
+        guard isAddProjectPresented, !addProjectInputs.isValidating else { return }
         logAddProjectAction(ProductAnalytics.Action.addProjectEnterDirectory)
-        await loadDirectoryNavigator(path: path)
+        await showAddProjectFolder(path)
     }
 
-    func retryAddProjectNavigator() async {
-        guard let navigator = currentNavigator() else { return }
+    func selectAddProjectSuggestion(path: String) async {
+        guard isAddProjectPresented, !addProjectInputs.isValidating else { return }
+        logAddProjectAction(ProductAnalytics.Action.addProjectSelectSuggestion)
+        await addProject(worktree: path)
+    }
+
+    func retryAddProjectListing() async {
+        guard isAddProjectPresented, !addProjectInputs.isValidating else { return }
         logAddProjectAction(ProductAnalytics.Action.addProjectRetryNavigator)
-        await loadDirectoryNavigator(path: navigator.currentPath)
+        let generation = addProjectGeneration
+        if addProjectInputs.home.isEmpty {
+            await loadAddProjectSheet(generation: generation)
+            return
+        }
+        guard let directory = addProjectSheet.directory else { return }
+        addProjectInputs.listErrors[directory] = nil
+        await loadAddProjectListing(directory, generation: generation)
     }
 
-    func selectCurrentDirectory() async {
-        guard let navigator = currentNavigator(),
-              !navigator.currentPath.isEmpty,
-              !navigator.isLoading,
-              !navigator.isValidating
+    func confirmAddProject() async {
+        guard isAddProjectPresented, addProjectSheet.addEnabled,
+              let target = addProjectSheet.addTarget
         else { return }
         logAddProjectAction(ProductAnalytics.Action.addProjectSelectCurrent)
-        await addProject(worktree: navigator.currentPath)
+        await addProject(worktree: target)
     }
 
     /// Add-project navigation never carries the browsed path into Analytics.
@@ -396,12 +637,9 @@ final class ProjectListHomeViewModel {
             )
             return
         }
-        updateNavigator { current in
-            var next = current
-            next.isValidating = true
-            next.errorMessage = nil
-            return next
-        }
+        addProjectInputs.isValidating = true
+        addProjectInputs.fieldError = nil
+        publishAddProjectSheet()
         do {
             // Validate the path is usable, then persist the selected directory (web
             // open-project behavior). Non-git dirs resolve /project/current to "/".
@@ -411,12 +649,9 @@ final class ProjectListHomeViewModel {
             await runHomeLoad(skipProbe: true)
             pendingSelectedFilterId = worktree
         } catch {
-            updateNavigator { current in
-                var next = current
-                next.isValidating = false
-                next.errorMessage = error.localizedDescription
-                return next
-            }
+            addProjectInputs.isValidating = false
+            addProjectInputs.fieldError = error.localizedDescription
+            publishAddProjectSheet()
         }
     }
 
@@ -483,7 +718,7 @@ final class ProjectListHomeViewModel {
     /// is shown immediately and persisted to the Connection Profile; the dock,
     /// home sections, and new-session picker all derive from it.
     func reorderProjects(worktrees: [String]) {
-        guard case let .loaded(sections, showAdd, navigator, createError) = state else { return }
+        guard case let .loaded(sections, showAdd, addProjectSheet, createError) = state else { return }
         let current = sections.map(\.worktree)
         guard current != worktrees,
               current.count == worktrees.count,
@@ -493,7 +728,7 @@ final class ProjectListHomeViewModel {
         state = .loaded(
             sections: worktrees.compactMap { byWorktree[$0] },
             showAddProjectSheet: showAdd,
-            navigator: navigator,
+            addProjectSheet: addProjectSheet,
             projectSessionCreateError: createError
         )
         if !observedWorktrees.isEmpty {
@@ -813,7 +1048,7 @@ final class ProjectListHomeViewModel {
             state = .loaded(
                 sections: sections,
                 showAddProjectSheet: false,
-                navigator: nil,
+                addProjectSheet: nil,
                 projectSessionCreateError: nil
             )
             if !skipProbe {
@@ -829,7 +1064,7 @@ final class ProjectListHomeViewModel {
 
         if worktrees.isEmpty, !preserveContent {
             stopLiveObservations()
-            state = .empty(showAddProjectSheet: false, navigator: nil, projectSessionCreateError: nil)
+            state = .empty(showAddProjectSheet: false, addProjectSheet: nil, projectSessionCreateError: nil)
             if !skipProbe {
                 do {
                     try await projectRepository.probeServer()
@@ -872,14 +1107,14 @@ final class ProjectListHomeViewModel {
         do {
             if worktrees.isEmpty {
                 stopLiveObservations()
-                if case let .empty(showAdd, navigator, createError) = previous, preserveContent {
+                if case let .empty(showAdd, addProjectSheet, createError) = previous, preserveContent {
                     state = .empty(
                         showAddProjectSheet: showAdd,
-                        navigator: navigator,
+                        addProjectSheet: addProjectSheet,
                         projectSessionCreateError: createError
                     )
                 } else {
-                    state = .empty(showAddProjectSheet: false, navigator: nil, projectSessionCreateError: nil)
+                    state = .empty(showAddProjectSheet: false, addProjectSheet: nil, projectSessionCreateError: nil)
                 }
                 return
             }
@@ -887,29 +1122,29 @@ final class ProjectListHomeViewModel {
             let sections = await loadSections(worktrees: worktrees)
             if sections.isEmpty {
                 stopLiveObservations()
-                if case let .empty(showAdd, navigator, createError) = previous, preserveContent {
+                if case let .empty(showAdd, addProjectSheet, createError) = previous, preserveContent {
                     state = .empty(
                         showAddProjectSheet: showAdd,
-                        navigator: navigator,
+                        addProjectSheet: addProjectSheet,
                         projectSessionCreateError: createError
                     )
                 } else {
-                    state = .empty(showAddProjectSheet: false, navigator: nil, projectSessionCreateError: nil)
+                    state = .empty(showAddProjectSheet: false, addProjectSheet: nil, projectSessionCreateError: nil)
                 }
                 return
             }
-            if case let .loaded(_, showAdd, navigator, createError) = previous, preserveContent {
+            if case let .loaded(_, showAdd, addProjectSheet, createError) = previous, preserveContent {
                 state = .loaded(
                     sections: sections,
                     showAddProjectSheet: showAdd,
-                    navigator: navigator,
+                    addProjectSheet: addProjectSheet,
                     projectSessionCreateError: createError
                 )
             } else {
                 state = .loaded(
                     sections: sections,
                     showAddProjectSheet: false,
-                    navigator: nil,
+                    addProjectSheet: nil,
                     projectSessionCreateError: nil
                 )
             }
@@ -1122,96 +1357,132 @@ final class ProjectListHomeViewModel {
         }
     }
 
-    private func openDirectoryNavigator() async {
-        setNavigator(
-            AddProjectNavigatorState(
-                currentPath: "",
-                canGoUp: false,
-                entries: [],
-                isLoading: true,
-                isValidating: false,
-                errorMessage: nil
-            )
-        )
+    /// Loads home, the added projects, the server's projects, and `/Volumes` for one presentation.
+    private func loadAddProjectSheet(generation: Int) async {
+        addProjectInputs.pathsError = nil
+        publishAddProjectSheet()
+        let added = await connectionProfileStore.addedWorktrees(serverBaseURL: serverBaseURL)
+        let paths: ServerPaths
         do {
-            let paths = try await filesystemRepository.getPaths()
-            await loadDirectoryNavigator(path: paths.home)
+            paths = try await filesystemRepository.getPaths()
         } catch {
-            setNavigator(
-                AddProjectNavigatorState(
-                    currentPath: "",
-                    canGoUp: false,
-                    entries: [],
-                    isLoading: false,
-                    isValidating: false,
-                    errorMessage: error.localizedDescription
-                )
-            )
+            guard generation == addProjectGeneration else { return }
+            DiagnosticLog.warning(.connection, "add project: server paths failed", error: error)
+            addProjectInputs.added = added
+            addProjectInputs.pathsError = AddProjectSheetState.listErrorMessage
+            publishAddProjectSheet()
+            return
+        }
+        guard generation == addProjectGeneration else { return }
+        let home = ServerPathPolicy.canonical(paths.home)
+        addProjectInputs.added = added
+        addProjectInputs.home = home
+        addProjectInputs.fieldText = ServerPathPolicy.fieldText(home)
+        publishAddProjectSheet()
+
+        let projectRepository = projectRepository
+        let filesystemRepository = filesystemRepository
+        // Suggestions and volumes are optional: failures hide them.
+        async let projects = (try? await projectRepository.listProjects()) ?? []
+        async let volumes: [DirectoryNode] = ServerPathPolicy.root(home) == "/" && !ServerPathPolicy.isWindows(home)
+            ? (try? await filesystemRepository.listDirectory(path: "/Volumes")) ?? []
+            : []
+        if let directory = addProjectSheet.directory {
+            await loadAddProjectListing(directory, generation: generation)
+        }
+        let loadedProjects = await projects
+        let loadedVolumes = await volumes
+        guard generation == addProjectGeneration else { return }
+        addProjectInputs.serverProjects = loadedProjects
+        addProjectInputs.volumes = loadedVolumes.filter { !DirectoryListingPolicy.isHidden($0.name) }
+        publishAddProjectSheet()
+    }
+
+    /// Points the field at `folder` and lists it now (taps skip the typing pause).
+    private func showAddProjectFolder(_ folder: String) async {
+        addProjectListingTask?.cancel()
+        addProjectInputs.fieldText = ServerPathPolicy.fieldText(folder)
+        addProjectInputs.fieldError = nil
+        publishAddProjectSheet()
+        if let directory = addProjectSheet.directory {
+            await loadAddProjectListing(directory, generation: addProjectGeneration)
         }
     }
 
-    private func loadDirectoryNavigator(path: String) async {
-        updateNavigator { current in
-            var next = current
-            next.currentPath = path
-            next.canGoUp = DirectoryListingPolicy.parentPath(path) != nil
-            next.isLoading = true
-            next.isValidating = false
-            next.errorMessage = nil
-            return next
+    /// Lists the field's folder after the typing pause unless it is cached or already loading.
+    private func scheduleAddProjectListing() {
+        addProjectListingTask?.cancel()
+        addProjectListingTask = nil
+        guard let directory = addProjectSheet.directory,
+              addProjectInputs.listings[directory] == nil,
+              addProjectInputs.listErrors[directory] == nil,
+              !addProjectListingsInFlight.contains(directory)
+        else { return }
+        let generation = addProjectGeneration
+        let debounce = addProjectListingDebounce
+        addProjectListingTask = Task { [weak self] in
+            if debounce > .zero {
+                try? await Task.sleep(for: debounce)
+            }
+            guard !Task.isCancelled, let self else { return }
+            // The fetch outlives later keystrokes so its listing still lands in the cache.
+            Task { await self.loadAddProjectListing(directory, generation: generation) }
         }
+    }
+
+    private func loadAddProjectListing(_ directory: String, generation: Int) async {
+        guard generation == addProjectGeneration,
+              addProjectInputs.listings[directory] == nil,
+              !addProjectListingsInFlight.contains(directory)
+        else { return }
+        addProjectListingsInFlight.insert(directory)
+        addProjectInputs.listErrors[directory] = nil
+        publishAddProjectSheet()
+        let result: Result<[DirectoryNode], Error>
         do {
-            let entries = try await filesystemRepository.listDirectory(path: path).map {
-                AddProjectDirectoryItem(name: $0.name, absolutePath: $0.absolutePath)
-            }
-            updateNavigator { current in
-                var next = current
-                next.currentPath = path
-                next.canGoUp = DirectoryListingPolicy.parentPath(path) != nil
-                next.entries = entries
-                next.isLoading = false
-                next.isValidating = false
-                next.errorMessage = nil
-                return next
-            }
+            result = .success(try await filesystemRepository.listDirectory(path: directory))
         } catch {
-            updateNavigator { current in
-                var next = current
-                next.currentPath = path
-                next.canGoUp = DirectoryListingPolicy.parentPath(path) != nil
-                next.entries = []
-                next.isLoading = false
-                next.isValidating = false
-                next.errorMessage = error.localizedDescription
-                return next
-            }
+            result = .failure(error)
         }
+        guard generation == addProjectGeneration else { return }
+        addProjectListingsInFlight.remove(directory)
+        switch result {
+        case let .success(nodes):
+            addProjectInputs.listings[directory] = nodes
+            if ServerPathPolicy.isWindows(directory) {
+                let root = ServerPathPolicy.root(directory)
+                if !addProjectInputs.listedRoots.contains(root) {
+                    addProjectInputs.listedRoots.append(root)
+                }
+            }
+        case let .failure(error):
+            DiagnosticLog.warning(.connection, "add project: folder listing failed", error: error)
+            addProjectInputs.listErrors[directory] = AddProjectSheetState.listErrorMessage
+        }
+        publishAddProjectSheet()
     }
 
-    private func currentNavigator() -> AddProjectNavigatorState? {
-        isAddProjectPresented ? addProjectNavigator : nil
-    }
-
-    private func setNavigator(_ navigator: AddProjectNavigatorState) {
-        addProjectNavigator = navigator
-        isAddProjectPresented = true
+    private func publishAddProjectSheet() {
+        guard isAddProjectPresented else { return }
+        let sheet = AddProjectSheetState.make(addProjectInputs)
+        if sheet != addProjectSheet {
+            addProjectSheet = sheet
+        }
         switch state {
-        case let .empty(_, _, createError):
-            state = .empty(showAddProjectSheet: true, navigator: navigator, projectSessionCreateError: createError)
-        case let .loaded(sections, _, _, createError):
+        case let .empty(showAdd, current, createError):
+            guard !showAdd || current != sheet else { return }
+            state = .empty(showAddProjectSheet: true, addProjectSheet: sheet, projectSessionCreateError: createError)
+        case let .loaded(sections, showAdd, current, createError):
+            guard !showAdd || current != sheet else { return }
             state = .loaded(
                 sections: sections,
                 showAddProjectSheet: true,
-                navigator: navigator,
+                addProjectSheet: sheet,
                 projectSessionCreateError: createError
             )
         default:
             break
         }
-    }
-
-    private func updateNavigator(_ transform: (AddProjectNavigatorState) -> AddProjectNavigatorState) {
-        setNavigator(transform(addProjectNavigator))
     }
 
     private func startLiveObservations(worktrees: [String]) {
@@ -1259,7 +1530,7 @@ final class ProjectListHomeViewModel {
     }
 
     private func applyArchivedSessions() {
-        guard case let .loaded(sections, showAdd, navigator, createError) = state else { return }
+        guard case let .loaded(sections, showAdd, addProjectSheet, createError) = state else { return }
         var changed = false
         let updated = sections.map { section -> ProjectSectionItem in
             guard let archived = archivedByWorktree[section.worktree], archived != section.archivedSessions else {
@@ -1274,7 +1545,7 @@ final class ProjectListHomeViewModel {
         state = .loaded(
             sections: updated,
             showAddProjectSheet: showAdd,
-            navigator: navigator,
+            addProjectSheet: addProjectSheet,
             projectSessionCreateError: createError
         )
     }
@@ -1343,7 +1614,7 @@ final class ProjectListHomeViewModel {
         readyIds: Set<String>,
         sessionsFromCache: Bool
     ) {
-        guard case let .loaded(sections, showAdd, navigator, createError) = state else { return }
+        guard case let .loaded(sections, showAdd, addProjectSheet, createError) = state else { return }
         guard let section = sections.first(where: { $0.worktree == worktree }) else { return }
         let items =
             sessions
@@ -1383,7 +1654,7 @@ final class ProjectListHomeViewModel {
         state = .loaded(
             sections: updatedSections,
             showAddProjectSheet: showAdd,
-            navigator: navigator,
+            addProjectSheet: addProjectSheet,
             projectSessionCreateError: createError
         )
     }
@@ -1415,13 +1686,13 @@ final class ProjectListHomeViewModel {
 
     private func setProjectSessionCreateError(_ message: String?) {
         switch state {
-        case let .empty(showAdd, navigator, _):
-            state = .empty(showAddProjectSheet: showAdd, navigator: navigator, projectSessionCreateError: message)
-        case let .loaded(sections, showAdd, navigator, _):
+        case let .empty(showAdd, addProjectSheet, _):
+            state = .empty(showAddProjectSheet: showAdd, addProjectSheet: addProjectSheet, projectSessionCreateError: message)
+        case let .loaded(sections, showAdd, addProjectSheet, _):
             state = .loaded(
                 sections: sections,
                 showAddProjectSheet: showAdd,
-                navigator: navigator,
+                addProjectSheet: addProjectSheet,
                 projectSessionCreateError: message
             )
         default:

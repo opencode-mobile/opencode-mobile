@@ -21,9 +21,13 @@ struct BottomSheetGalleryView: View {
     @State private var itemCount = 2
     @State private var startDecorator: GalleryBottomSheetDecoratorKind = .icon
     @State private var endDecorator: GalleryBottomSheetDecoratorKind = .none
-    @State private var formMode = false
-    @State private var alwaysFixedHeight = false
+    @State private var height: OpenCodeBottomSheetHeight = .fitContent
+    @State private var keyboard: OpenCodeBottomSheetKeyboard = .dismiss
+    @State private var showsPinnedTop = false
+    @State private var showsPinnedBottom = false
     @State private var formValue = "http://127.0.0.1:4096/"
+    @State private var isExpandPresented = false
+    @State private var expandFilter = ""
 
     private var entryStartDecorator: BottomSheetEntryDecorator {
         switch startDecorator {
@@ -61,15 +65,43 @@ struct BottomSheetGalleryView: View {
                         selected: showsHeaderBack,
                         action: { showsHeaderBack.toggle() }
                     )
+                }
+            }
+
+            GalleryChoiceRow(
+                title: "Height",
+                options: [
+                    ("Fit content", OpenCodeBottomSheetHeight.fitContent),
+                    ("Half", .half),
+                ],
+                selected: height,
+                onSelect: { height = $0 }
+            )
+            GalleryChoiceRow(
+                title: "Keyboard",
+                options: [
+                    ("Dismiss", OpenCodeBottomSheetKeyboard.dismiss),
+                    ("Keep", .keep),
+                    ("Expand", .expand),
+                ],
+                selected: keyboard,
+                onSelect: { keyboard = $0 }
+            )
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Pinned")
+                    .font(OpenCodeTypography.button)
+                    .foregroundStyle(OpenCodeColors.textStrong)
+                HStack(spacing: 8) {
                     OpenCodeChoiceBadge(
-                        label: "Form mode",
-                        selected: formMode,
-                        action: { formMode.toggle() }
+                        label: "Pinned top",
+                        selected: showsPinnedTop,
+                        action: { showsPinnedTop.toggle() }
                     )
                     OpenCodeChoiceBadge(
-                        label: "Fixed 50%",
-                        selected: alwaysFixedHeight,
-                        action: { alwaysFixedHeight.toggle() }
+                        label: "Pinned bottom",
+                        selected: showsPinnedBottom,
+                        action: { showsPinnedBottom.toggle() }
                     )
                 }
             }
@@ -91,8 +123,45 @@ struct BottomSheetGalleryView: View {
                 variant: .fullWidthText(title: "Show bottom sheet"),
                 action: { isPresented = true }
             )
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Keyboard: expand")
+                    .font(OpenCodeTypography.button)
+                    .foregroundStyle(OpenCodeColors.textStrong)
+                Text("Half-height sheet that fills the space above the keyboard while the field is focused.")
+                    .font(OpenCodeTypography.caption)
+                    .foregroundStyle(OpenCodeColors.textWeak)
+                OpenCodeButton(
+                    variant: .fullWidthText(title: "Show expanding sheet"),
+                    action: { isExpandPresented = true }
+                )
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .openCodeBottomSheet(
+            isPresented: $isExpandPresented,
+            title: "Choose folder",
+            height: .half,
+            keyboard: .expand,
+            pinnedTop: {
+                OpenCodeTextInput(
+                    text: $expandFilter,
+                    hint: "Folder path",
+                    kind: .filter
+                )
+                .padding(.horizontal, 20)
+                .padding(.bottom, 8)
+            }
+        ) {
+            ForEach(1 ... 20, id: \.self) { index in
+                OpenCodeBottomSheetEntry(
+                    title: "Folder \(index)",
+                    startDecorator: .icon(.folder),
+                    endDecorator: .icon(.chevronRight),
+                    action: {}
+                )
+            }
+        }
         .openCodeBottomSheet(
             isPresented: $isPresented,
             title: showsHeaderBack ? "Anthropic" : "Session actions",
@@ -103,10 +172,10 @@ struct BottomSheetGalleryView: View {
                     action: { showsHeaderBack = false }
                 )
                 : nil,
-            contentMode: formMode ? .form : .actionList,
-            alwaysFixedHeight: alwaysFixedHeight,
-            pinnedContent: {
-                if alwaysFixedHeight {
+            height: height,
+            keyboard: keyboard,
+            pinnedTop: {
+                if showsPinnedTop {
                     OpenCodeBottomSheetEntry(
                         title: "Go up",
                         startDecorator: .icon(.arrowUpward),
@@ -118,25 +187,34 @@ struct BottomSheetGalleryView: View {
                         action: {}
                     )
                 }
+            },
+            content: {
+                if keyboard == .dismiss {
+                    actionEntries
+                } else {
+                    OpenCodeTextInput(
+                        text: $formValue,
+                        hint: "Server URL",
+                        kind: .url
+                    )
+                    .padding(.horizontal, 20)
+                    OpenCodeTextInput(
+                        text: .constant("gallery password"),
+                        hint: "Password",
+                        kind: .password
+                    )
+                    .padding(.horizontal, 20)
+                }
+            },
+            pinnedBottom: {
+                if showsPinnedBottom {
+                    OpenCodeButton(
+                        variant: .fullWidthText(title: "Done"),
+                        action: { isPresented = false }
+                    )
+                }
             }
-        ) {
-            if formMode {
-                OpenCodeTextInput(
-                    text: $formValue,
-                    hint: "Server URL",
-                    kind: .url
-                )
-                .padding(.horizontal, 20)
-                OpenCodeTextInput(
-                    text: .constant("gallery password"),
-                    hint: "Password",
-                    kind: .password
-                )
-                .padding(.horizontal, 20)
-            } else {
-                actionEntries
-            }
-        }
+        )
     }
 
     @ViewBuilder
@@ -197,6 +275,31 @@ private struct DecoratorControls: View {
                         label: kind.label,
                         selected: selected == kind,
                         action: { onSelect(kind) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+private struct GalleryChoiceRow<Value: Equatable>: View {
+    let title: String
+    let options: [(label: String, value: Value)]
+    let selected: Value
+    let onSelect: (Value) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(OpenCodeTypography.button)
+                .foregroundStyle(OpenCodeColors.textStrong)
+
+            HStack(spacing: 8) {
+                ForEach(options.indices, id: \.self) { index in
+                    OpenCodeChoiceBadge(
+                        label: options[index].label,
+                        selected: options[index].value == selected,
+                        action: { onSelect(options[index].value) }
                     )
                 }
             }

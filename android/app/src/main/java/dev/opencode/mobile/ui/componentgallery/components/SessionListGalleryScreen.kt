@@ -15,7 +15,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
-import dev.opencode.mobile.ui.components.OpenCodeBottomSheetContentMode
+import dev.opencode.mobile.ui.components.OpenCodeBottomSheetHeight
+import dev.opencode.mobile.ui.components.OpenCodeBottomSheetKeyboard
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
 import dev.opencode.mobile.ui.components.SessionList
 import dev.opencode.mobile.ui.components.SessionListFilterTab
@@ -71,7 +72,10 @@ fun SessionListGalleryScreen(modifier: Modifier = Modifier) {
     OpenCodeBottomSheet(
         visible = showProjectPicker,
         title = "Filter by project",
-        contentMode = OpenCodeBottomSheetContentMode.Form,
+        // Half + Keep keeps today's fixed height and keyboard policy; Dismiss would be more
+        // natural for this list (#680).
+        height = OpenCodeBottomSheetHeight.Half,
+        keyboard = OpenCodeBottomSheetKeyboard.Keep,
         onDismissRequest = { showProjectPicker = false },
     ) {
         SessionListProjectPickerRows(

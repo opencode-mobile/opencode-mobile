@@ -4,6 +4,8 @@ data class Project(
     val id: String,
     val worktree: String,
     val displayName: String,
+    /** Last activity on the server (v2 `time.active`, else `time.updated`), epoch ms. */
+    val activityAtEpochMs: Long? = null,
 )
 
 sealed class ServerProbeError : Exception() {

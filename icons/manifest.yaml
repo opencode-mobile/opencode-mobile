@@ -116,3 +116,6 @@ icons:
   - name: plug
     lucide: plug
     notes: MCP servers tile in Commands sheet
+  - name: code
+    lucide: code
+    notes: Source Code row in Settings About

@@ -11,7 +11,8 @@ concurrency:
 
 jobs:
   android-checks:
-    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    # Self-hosted runner: never run pull requests from forks.
+    if: github.repository == 'opencode-mobile/opencode-mobile' && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && github.event.pull_request.head.repo.full_name == github.repository))
     runs-on: [self-hosted, Linux, X64, android]
     defaults:
       run:
@@ -19,20 +20,24 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Validate app VERSION
         working-directory: .
         run: ./scripts/read-app-version.sh
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 17
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Install Android compile SDK 37
+        working-directory: .
+        run: ./scripts/ensure-android-platform.sh 37
 
       # Pre-existing style/lint debt; keep visible but do not block PR merge yet.
       - name: Run ktlint and Android Lint

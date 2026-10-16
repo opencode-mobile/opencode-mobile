@@ -1,4 +1,4 @@
-import Factory
+import FactoryKit
 import SwiftUI
 
 struct ProjectListHomeView: View {
@@ -35,7 +35,12 @@ struct ProjectListHomeView: View {
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
-            Group {
+            sessionPresentations(projectPresentations(homeChrome))
+        }
+    }
+
+    private var homeChrome: some View {
+        Group {
                 if isSplitLayout {
                     OpenCodeSplitPane(
                         screen: .home,
@@ -164,57 +169,46 @@ struct ProjectListHomeView: View {
                     viewModel.onHomeRevealed()
                 }
             }
+    }
+
+    private func projectPresentations<Content: View>(_ content: Content) -> some View {
+        content
             .openCodeBottomSheet(
                 isPresented: addProjectPresentedBinding,
                 title: "Add project",
-                alwaysFixedHeight: true,
-                pinnedContent: {
-                    let navigator = viewModel.addProjectNavigator
-                    OpenCodeBottomSheetEntry(
-                        title: "Go up",
-                        enabled: navigator.canGoUp && !navigator.isLoading && !navigator.isValidating,
-                        startDecorator: .icon(.arrowUpward),
-                        action: { Task { await viewModel.navigateAddProjectUp() } }
+                height: .half,
+                keyboard: .expand,
+                pinnedTop: {
+                    AddProjectSheetHeader(
+                        sheet: viewModel.addProjectSheet,
+                        onFieldChange: viewModel.updateAddProjectField,
+                        onUp: { Task { await viewModel.addProjectUp() } },
+                        onSelectRoot: { path in Task { await viewModel.selectAddProjectRoot(path: path) } },
+                        onAdd: { Task { await viewModel.confirmAddProject() } }
                     )
-                    OpenCodeBottomSheetEntry(
-                        title: navigator.currentPath.isEmpty ? "Current directory" : navigator.currentPath,
-                        enabled: !navigator.currentPath.isEmpty && !navigator.isLoading && !navigator.isValidating,
-                        startDecorator: .icon(.folderCheck),
-                        action: { Task { await viewModel.selectCurrentDirectory() } }
+                },
+                content: {
+                    AddProjectSheetRows(
+                        sheet: viewModel.addProjectSheet,
+                        onOpenFolder: { path in Task { await viewModel.openAddProjectFolder(path: path) } },
+                        onSelectSuggestion: { path in Task { await viewModel.selectAddProjectSuggestion(path: path) } },
+                        onRetry: { Task { await viewModel.retryAddProjectListing() } }
+                    )
+                },
+                pinnedBottom: {
+                    AddProjectSheetFooter(
+                        sheet: viewModel.addProjectSheet,
+                        onAdd: { Task { await viewModel.confirmAddProject() } }
                     )
                 }
-            ) {
-                let navigator = viewModel.addProjectNavigator
-                if navigator.isLoading || navigator.isValidating {
-                    OpenCodeStatusStack(spinner: "Loading folders")
-                        .frame(maxWidth: .infinity)
-                        .padding(24)
-                } else if let errorMessage = navigator.errorMessage {
-                    OpenCodeEmptyState(
-                        title: "Unable to list this folder",
-                        message: openCodeNonBlank(errorMessage, fallback: "This folder couldn't be listed."),
-                        fillsAvailableSpace: false,
-                        primaryAction: OpenCodeEmptyStateAction(title: "Retry") {
-                            Task { await viewModel.retryAddProjectNavigator() }
-                        }
-                    )
-                    .padding(20)
-                } else if navigator.entries.isEmpty {
-                    OpenCodeBottomSheetEntry(title: "No subdirectories", enabled: false, action: {})
-                } else {
-                    ForEach(navigator.entries) { entry in
-                        OpenCodeBottomSheetEntry(
-                            title: entry.name,
-                            startDecorator: .icon(.subdirectoryArrowRight),
-                            action: { Task { await viewModel.navigateAddProjectInto(path: entry.absolutePath) } }
-                        )
-                    }
-                }
-            }
+            )
+            // .dismiss would suit this list better; .keep preserves today's
+            // behavior until #680 revisits it.
             .openCodeBottomSheet(
                 isPresented: projectPickerBinding,
                 title: "Filter by project",
-                contentMode: .form
+                height: .half,
+                keyboard: .keep
             ) {
                 SessionListProjectPickerRows(
                     tabs: projectPickerTabs,
@@ -320,106 +314,23 @@ struct ProjectListHomeView: View {
                 .padding(.horizontal, 16)
                 .padding(.bottom, 8)
             }
+    }
+
+    private func sessionPresentations<Content: View>(_ content: Content) -> some View {
+        content
             .openCodeBottomSheet(
                 isPresented: sessionActionsSheetBinding,
                 title: "Session actions"
             ) {
-                if viewModel.sessionActionsLifecycle == .snoozed {
-                    OpenCodeBottomSheetEntry(
-                        title: "Wake",
-                        enabled: !viewModel.sessionActionInFlight,
-                        startDecorator: .icon(.check),
-                        action: { Task { await viewModel.wakeSessionAction() } }
-                    )
-                }
-                if viewModel.sessionActionsLifecycle == .active && viewModel.sessionActionsShowsSettle {
-                    OpenCodeBottomSheetEntry(
-                        title: viewModel.sessionActionsSnoozeBlockReason.map { "Settle · \($0)" } ?? "Settle",
-                        enabled: viewModel.sessionActionsSnoozeBlockReason == nil && !viewModel.sessionActionInFlight,
-                        startDecorator: .icon(.check),
-                        action: { Task { await viewModel.settleSessionAction() } }
-                    )
-                    OpenCodeBottomSheetEntry(
-                        title: viewModel.sessionActionsSnoozeBlockReason.map { "Snooze · \($0)" } ?? "Snooze",
-                        enabled: viewModel.sessionActionsSnoozeBlockReason == nil && !viewModel.sessionActionInFlight,
-                        startDecorator: .icon(.check),
-                        action: { viewModel.openSnooze() }
-                    )
-                }
-                if viewModel.sessionActionsLifecycle == .active || viewModel.sessionActionsLifecycle == .snoozed {
-                    OpenCodeBottomSheetEntry(
-                        title: "Rename session",
-                        startDecorator: .icon(.edit),
-                        action: { viewModel.openSessionRename() }
-                    )
-                }
-                if viewModel.sessionActionsCanFork {
-                    OpenCodeBottomSheetEntry(
-                        title: "Fork session",
-                        startDecorator: .icon(.contentCopy),
-                        action: { viewModel.openSessionFork() }
-                    )
-                }
-                if viewModel.sessionActionsCanArchive {
-                    OpenCodeBottomSheetEntry(
-                        title: "Archive",
-                        enabled: !viewModel.sessionActionInFlight,
-                        startDecorator: .icon(.archive),
-                        action: { Task { await viewModel.archiveSessionAction() } }
-                    )
-                }
-                if viewModel.sessionActionsLifecycle == .archived {
-                    OpenCodeBottomSheetEntry(
-                        title: "Unarchive",
-                        enabled: !viewModel.sessionActionInFlight,
-                        startDecorator: .icon(.archive),
-                        action: { Task { await viewModel.unarchiveSessionAction() } }
-                    )
-                }
-                if viewModel.sessionActionsLifecycle == .settled {
-                    OpenCodeBottomSheetEntry(
-                        title: "Unsettle",
-                        enabled: !viewModel.sessionActionInFlight,
-                        startDecorator: .icon(.check),
-                        action: { Task { await viewModel.unsettleSessionAction() } }
-                    )
-                }
-                OpenCodeBottomSheetEntry(
-                    title: "Delete",
-                    enabled: !viewModel.sessionActionInFlight,
-                    destructive: true,
-                    startDecorator: .icon(.close),
-                    action: { viewModel.requestDeleteSessionAction() }
-                )
+                sessionActionsSheetContent
             }
             .openCodeBottomSheet(
                 isPresented: snoozeSheetBinding,
                 title: "Snooze until",
-                contentMode: .form
+                height: .half,
+                keyboard: .expand
             ) {
-                ForEach(HomeSettleFeed.snoozePresets(nowEpochMs: homeNowEpochMs), id: \.id) { preset in
-                    OpenCodeBottomSheetEntry(
-                        title: "\(preset.label) · \(preset.whenLabel)",
-                        action: { Task { await viewModel.chooseSnoozePreset(untilEpochMs: preset.atEpochMs) } }
-                    )
-                }
-                OpenCodeTextInput(
-                    text: snoozeAmountBinding,
-                    hint: "Amount",
-                    accessibilityLabel: "Snooze amount",
-                    errorMessage: viewModel.snoozeError
-                )
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                OpenCodeBottomSheetEntry(
-                    title: viewModel.snoozeUnit.label,
-                    action: { viewModel.cycleSnoozeUnit() }
-                )
-                OpenCodeButton(variant: .compactText(title: "Snooze")) {
-                    Task { await viewModel.confirmCustomSnooze() }
-                }
-                .frame(maxWidth: .infinity)
-                .padding(16)
+                snoozeSheetContent
             }
             .fullScreenCover(item: $connectionSetupPresentation) { presentation in
                 ConnectionSetupView(
@@ -529,7 +440,118 @@ struct ProjectListHomeView: View {
                     action: viewModel.cancelDeleteSessionAction
                 )
             )
+    }
+
+    @ViewBuilder
+    private var sessionActionsSheetContent: some View {
+        if viewModel.sessionActionsLifecycle == .snoozed {
+            OpenCodeBottomSheetEntry(
+                title: "Wake",
+                enabled: !viewModel.sessionActionInFlight,
+                startDecorator: .icon(.check),
+                action: { Task { await viewModel.wakeSessionAction() } }
+            )
         }
+        if viewModel.sessionActionsLifecycle == .active && viewModel.sessionActionsShowsSettle {
+            OpenCodeBottomSheetEntry(
+                title: settleActionTitle,
+                enabled: viewModel.sessionActionsSnoozeBlockReason == nil && !viewModel.sessionActionInFlight,
+                startDecorator: .icon(.check),
+                action: { Task { await viewModel.settleSessionAction() } }
+            )
+            OpenCodeBottomSheetEntry(
+                title: snoozeActionTitle,
+                enabled: viewModel.sessionActionsSnoozeBlockReason == nil && !viewModel.sessionActionInFlight,
+                startDecorator: .icon(.check),
+                action: { viewModel.openSnooze() }
+            )
+        }
+        if viewModel.sessionActionsLifecycle == .active || viewModel.sessionActionsLifecycle == .snoozed {
+            OpenCodeBottomSheetEntry(
+                title: "Rename session",
+                startDecorator: .icon(.edit),
+                action: { viewModel.openSessionRename() }
+            )
+        }
+        if viewModel.sessionActionsCanFork {
+            OpenCodeBottomSheetEntry(
+                title: "Fork session",
+                startDecorator: .icon(.contentCopy),
+                action: { viewModel.openSessionFork() }
+            )
+        }
+        if viewModel.sessionActionsCanArchive {
+            OpenCodeBottomSheetEntry(
+                title: "Archive",
+                enabled: !viewModel.sessionActionInFlight,
+                startDecorator: .icon(.archive),
+                action: { Task { await viewModel.archiveSessionAction() } }
+            )
+        }
+        if viewModel.sessionActionsLifecycle == .archived {
+            OpenCodeBottomSheetEntry(
+                title: "Unarchive",
+                enabled: !viewModel.sessionActionInFlight,
+                startDecorator: .icon(.archive),
+                action: { Task { await viewModel.unarchiveSessionAction() } }
+            )
+        }
+        if viewModel.sessionActionsLifecycle == .settled {
+            OpenCodeBottomSheetEntry(
+                title: "Unsettle",
+                enabled: !viewModel.sessionActionInFlight,
+                startDecorator: .icon(.check),
+                action: { Task { await viewModel.unsettleSessionAction() } }
+            )
+        }
+        OpenCodeBottomSheetEntry(
+            title: "Delete",
+            enabled: !viewModel.sessionActionInFlight,
+            destructive: true,
+            startDecorator: .icon(.close),
+            action: { viewModel.requestDeleteSessionAction() }
+        )
+    }
+
+    private var settleActionTitle: String {
+        if let reason = viewModel.sessionActionsSnoozeBlockReason {
+            return "Settle · \(reason)"
+        }
+        return "Settle"
+    }
+
+    private var snoozeActionTitle: String {
+        if let reason = viewModel.sessionActionsSnoozeBlockReason {
+            return "Snooze · \(reason)"
+        }
+        return "Snooze"
+    }
+
+    @ViewBuilder
+    private var snoozeSheetContent: some View {
+        ForEach(HomeSettleFeed.snoozePresets(nowEpochMs: homeNowEpochMs), id: \.id) { preset in
+            OpenCodeBottomSheetEntry(
+                title: "\(preset.label) · \(preset.whenLabel)",
+                action: { Task { await viewModel.chooseSnoozePreset(untilEpochMs: preset.atEpochMs) } }
+            )
+        }
+        OpenCodeTextInput(
+            text: snoozeAmountBinding,
+            hint: "Amount",
+            accessibilityLabel: "Snooze amount",
+            errorMessage: viewModel.snoozeError
+        )
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        OpenCodeBottomSheetEntry(
+            title: viewModel.snoozeUnit.label,
+            action: { viewModel.cycleSnoozeUnit() }
+        )
+        OpenCodeButton(variant: .compactText(title: "Snooze")) {
+            Task { await viewModel.confirmCustomSnooze() }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(16)
     }
 
     private var serversSheetBinding: Binding<Bool> {

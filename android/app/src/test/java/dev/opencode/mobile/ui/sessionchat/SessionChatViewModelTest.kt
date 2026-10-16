@@ -1915,6 +1915,56 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun atSuggestion_selectsProjectFileAndSendsReferenceNotAttachment() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val files =
+                object : dev.opencode.mobile.domain.filesystem.ProjectFilesRepository {
+                    override suspend fun listEntries(
+                        worktree: String,
+                        relativeDirectory: String,
+                    ) = emptyList<dev.opencode.mobile.domain.filesystem.ProjectEntry>()
+
+                    override suspend fun findFiles(
+                        worktree: String,
+                        query: String,
+                        limit: Int,
+                    ) = listOf(dev.opencode.mobile.domain.filesystem.ProjectEntry("App.kt", "src/App.kt", isDirectory = false))
+
+                    override suspend fun readFile(
+                        worktree: String,
+                        relativePath: String,
+                    ): dev.opencode.mobile.domain.filesystem.ProjectFileContent =
+                        throw dev.opencode.mobile.domain.filesystem.ProjectFilesException("unused", detail = "unused")
+                }
+            val viewModel =
+                createViewModel(repository = repository, projectFilesRepository = files).apply {
+                    fileSearchDelayMs = 0
+                }
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.updateComposerText("see @App", cursor = 8)
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.atSuggestions.any { it.filePath == "src/App.kt" })
+            viewModel.selectAtSuggestion("file:src/App.kt")
+            runCurrent()
+            assertEquals("see @src/App.kt ", viewModel.uiState.value.composer.text)
+            assertEquals(1, viewModel.uiState.value.composer.fileMentions.size)
+            assertTrue(viewModel.uiState.value.composer.agentMentions.isEmpty())
+            assertTrue(viewModel.uiState.value.composer.attachments.isEmpty())
+
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+
+            assertEquals("see @src/App.kt", repository.sentOptions?.text)
+            assertEquals("src/App.kt", repository.sentOptions?.fileMentions?.single()?.path)
+            assertTrue(repository.sentOptions?.attachments.orEmpty().isEmpty())
+            assertEquals("/repo", repository.sentOptions?.worktree)
+        }
+
+    @Test
     fun sendPrompt_success_reloadsMessages() =
         runTest(testDispatcher) {
             val repository = FakeMessageRepository()
@@ -5818,6 +5868,8 @@ class SessionChatViewModelTest {
         catalogRetryDelaysMs: List<Long> = emptyList(),
         modelCatalogStore: ModelCatalogStore? = null,
         sessionViewReporter: SessionViewReporter = NoOpSessionViewReporter,
+        projectFilesRepository: dev.opencode.mobile.domain.filesystem.ProjectFilesRepository =
+            dev.opencode.mobile.ui.sessionchat.EmptyProjectFilesRepository,
     ): SessionChatViewModel {
         val eventStream = repository.eventStream
         val liveStoreScope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
@@ -5890,6 +5942,7 @@ class SessionChatViewModelTest {
             activeConnectionManager = activeConnectionManager,
             liveUpdates = liveUpdates,
             sessionViewReporter = sessionViewReporter,
+            projectFilesRepository = projectFilesRepository,
         ).apply {
             ioDispatcher = testDispatcher
             nowMs = { testDispatcher.scheduler.currentTime }

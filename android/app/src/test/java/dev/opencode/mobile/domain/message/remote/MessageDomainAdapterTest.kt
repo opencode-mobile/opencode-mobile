@@ -6,6 +6,7 @@ import dev.opencode.mobile.data.remote.dto.MessagePartDto
 import dev.opencode.mobile.data.remote.dto.V2InboxItemDto
 import dev.opencode.mobile.data.remote.dto.V2InboxUserPayloadDto
 import dev.opencode.mobile.domain.agent.AgentMention
+import dev.opencode.mobile.domain.agent.FileMention
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.int
@@ -255,6 +256,71 @@ class MessageDomainAdapterTest {
         assertEquals(0, body.parts[1].source?.start)
         assertEquals(8, body.parts[1].source?.end)
         assertEquals("build", body.agent)
+    }
+
+    @Test
+    fun toSendRequest_includesFileReferencePartsWithoutAttachmentBytes() {
+        val body =
+            adapter.toSendRequest(
+                PromptSendOptions(
+                    text = "see @src/App.kt",
+                    fileMentions = listOf(FileMention(id = "f1", path = "src/App.kt", start = 4, end = 15)),
+                    worktree = "/repo",
+                    attachments =
+                        listOf(
+                            Attachment(
+                                id = "attachment-1",
+                                filename = "notes.txt",
+                                mime = "text/plain",
+                                kind = AttachmentKind.Text,
+                                dataUrl = "data:text/plain;base64,SGk=",
+                                byteCount = 2,
+                            ),
+                        ),
+                ),
+            )
+        assertEquals(listOf("text", "file", "file"), body.parts.map { it.type })
+        val reference = body.parts[1]
+        assertEquals("file:///repo/src/App.kt", reference.url)
+        assertEquals("App.kt", reference.filename)
+        assertEquals("text/plain", reference.mime)
+        assertEquals("src/App.kt", reference.fileSource?.path)
+        assertEquals("@src/App.kt", reference.fileSource?.value)
+        assertEquals(4, reference.fileSource?.start)
+        assertEquals(15, reference.fileSource?.end)
+        assertEquals(null, reference.source)
+        assertEquals("data:text/plain;base64,SGk=", body.parts[2].url)
+        assertEquals(null, body.parts[2].fileSource)
+    }
+
+    @Test
+    fun toV2PromptRequest_appendsFileMentionsAfterAttachments() {
+        val body =
+            adapter.toV2PromptRequest(
+                PromptSendOptions(
+                    text = "see @src/App.kt",
+                    fileMentions = listOf(FileMention(id = "f1", path = "src/App.kt", start = 4, end = 15)),
+                    worktree = "/repo",
+                    attachments =
+                        listOf(
+                            Attachment(
+                                id = "attachment-1",
+                                filename = "notes.txt",
+                                mime = "text/plain",
+                                kind = AttachmentKind.Text,
+                                dataUrl = "data:text/plain;base64,SGk=",
+                                byteCount = 2,
+                            ),
+                        ),
+                ),
+            )
+        assertEquals("data:text/plain;base64,SGk=", body.files?.single()?.uri)
+        val mention = body.fileMentions?.single()
+        assertEquals("file:///repo/src/App.kt", mention?.uri)
+        assertEquals("App.kt", mention?.name)
+        assertEquals("@src/App.kt", mention?.mention?.text)
+        assertEquals(4, mention?.mention?.start)
+        assertEquals(15, mention?.mention?.end)
     }
 
     @Test

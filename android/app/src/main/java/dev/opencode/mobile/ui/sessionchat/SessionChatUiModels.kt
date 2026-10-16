@@ -1,6 +1,7 @@
 package dev.opencode.mobile.ui.sessionchat
 
 import dev.opencode.mobile.domain.agent.AgentMention
+import dev.opencode.mobile.domain.agent.FileMention
 import dev.opencode.mobile.domain.agent.MentionableAgent
 import dev.opencode.mobile.domain.agent.SelectableAgent
 import dev.opencode.mobile.domain.command.ClientSlashAction
@@ -43,6 +44,7 @@ data class SessionChatComposerState(
     val isModelSelectionReady: Boolean = false,
     val modelCatalogError: String? = null,
     val agentMentions: List<AgentMention> = emptyList(),
+    val fileMentions: List<FileMention> = emptyList(),
     val cursor: Int = 0,
     val selectionRevision: Int = 0,
     val followUpDelivery: FollowUpDelivery = FollowUpDelivery.Steer,
@@ -78,6 +80,11 @@ data class SessionChatComposerState(
 
     val canAttach: Boolean
         get() = selectedModel?.option?.canAttach == true
+
+    val mentionRanges: List<IntRange>
+        get() =
+            (agentMentions.map { it.start until it.end } + fileMentions.map { it.start until it.end })
+                .sortedBy { it.first }
 
     val canAttachPhotos: Boolean
         get() = selectedModel?.option?.canAttachPhotos == true
@@ -528,7 +535,8 @@ data class SessionChatAtSuggestion(
     val id: String,
     val title: String,
     val subtitle: String?,
-    val agentName: String,
+    val agentName: String? = null,
+    val filePath: String? = null,
 )
 
 data class SessionChatComposerRegionState(
@@ -544,6 +552,8 @@ data class SessionChatComposerRegionState(
     val slashSuggestions: List<SessionChatSlashSuggestion> = emptyList(),
     val atSuggestionsVisible: Boolean = false,
     val atSuggestions: List<SessionChatAtSuggestion> = emptyList(),
+    val fileSuggestions: List<SessionChatAtSuggestion> = emptyList(),
+    val fileSuggestionQuery: String? = null,
     val followUpNotice: String? = null,
 )
 
@@ -576,6 +586,14 @@ fun MentionableAgent.toAtSuggestion(): SessionChatAtSuggestion =
         title = "@$name",
         subtitle = description,
         agentName = name,
+    )
+
+fun dev.opencode.mobile.domain.filesystem.ProjectEntry.toFileSuggestion(): SessionChatAtSuggestion =
+    SessionChatAtSuggestion(
+        id = "file:$relativePath",
+        title = relativePath,
+        subtitle = "File",
+        filePath = relativePath,
     )
 
 data class PendingSend(

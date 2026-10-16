@@ -198,7 +198,7 @@ nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
         var request = try requireConnection().authorizedRequest(path: "session/\(sessionID)/prompt_async", method: "POST", directory: directory)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         _ = try await sendPromptBody(request, encoded: {
-            if attachments.contains(where: \.usesFileBackedBody) {
+            if attachments.contains(where: \.usesFileBackedBody) || body.parts.contains(where: { $0.fileSource != nil }) {
                 try PromptJSONBodyWriter.writeV1Prompt(body, attachments: attachments)
             } else {
                 nil
@@ -235,7 +235,7 @@ nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
         var request = try requireConnection().authorizedRequest(path: path, method: "POST", directory: directory)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         _ = try await sendPromptBody(request, encoded: {
-            if attachments.contains(where: \.usesFileBackedBody) {
+            if attachments.contains(where: \.usesFileBackedBody) || body.fileMentions?.isEmpty == false {
                 try PromptJSONBodyWriter.writeV2Prompt(body, attachments: attachments)
             } else {
                 nil

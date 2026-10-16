@@ -125,7 +125,11 @@ class MessagesApi private constructor(
         attachments: List<Attachment> = emptyList(),
     ) {
         val progress = coroutineContext[PromptSendProgressReporter]
-        val file = promptFile(attachments) { PromptJsonBodyWriter.writeV1Prompt(body, attachments, promptTempDir()) }
+        val file =
+            promptFile(
+                attachments,
+                needsCustomBody = body.parts.any { it.fileSource != null },
+            ) { PromptJsonBodyWriter.writeV1Prompt(body, attachments, promptTempDir()) }
         val response =
             try {
                 httpClient.get().post("session/$sessionId/prompt_async") {
@@ -149,7 +153,12 @@ class MessagesApi private constructor(
         directory: String? = null,
         attachments: List<Attachment> = emptyList(),
     ) {
-        postSuccess(path = "api/session/$sessionId/prompt", body = body, attachments = attachments) {
+        postSuccess(
+            path = "api/session/$sessionId/prompt",
+            body = body,
+            attachments = attachments,
+            needsCustomBody = !body.fileMentions.isNullOrEmpty(),
+        ) {
             PromptJsonBodyWriter.writeV2Prompt(body, attachments, promptTempDir())
         }
     }
@@ -175,10 +184,11 @@ class MessagesApi private constructor(
         body: T,
         directory: String? = null,
         attachments: List<Attachment> = emptyList(),
+        needsCustomBody: Boolean = false,
         noinline fileBody: () -> File? = { null },
     ) {
         val progress = coroutineContext[PromptSendProgressReporter]
-        val file = promptFile(attachments, fileBody)
+        val file = promptFile(attachments, needsCustomBody, fileBody)
         val response =
             try {
                 httpClient.get().post(path) {
@@ -201,8 +211,9 @@ class MessagesApi private constructor(
 
     private fun promptFile(
         attachments: List<Attachment>,
+        needsCustomBody: Boolean = false,
         fileBody: () -> File?,
-    ): File? = if (attachments.any { it.usesFileBackedBody }) fileBody() else null
+    ): File? = if (needsCustomBody || attachments.any { it.usesFileBackedBody }) fileBody() else null
 
     private fun promptTempDir(): File = File(System.getProperty("java.io.tmpdir"), "opencode-prompt-send")
 

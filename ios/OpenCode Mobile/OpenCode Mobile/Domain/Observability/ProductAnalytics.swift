@@ -123,6 +123,8 @@ enum ProductAnalytics {
         static let addProjectEnterDirectory = "add_project_enter_directory"
         static let addProjectSelectCurrent = "add_project_select_current"
         static let addProjectRetryNavigator = "add_project_retry_navigator"
+        static let addProjectSelectRoot = "add_project_select_root"
+        static let addProjectSelectSuggestion = "add_project_select_suggestion"
         static let newSessionPickerDismiss = "new_session_picker_dismiss"
         static let projectPickerDismiss = "project_picker_dismiss"
         static let newSessionPickerSelectProject = "new_session_picker_select_project"

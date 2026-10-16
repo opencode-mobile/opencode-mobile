@@ -2,6 +2,7 @@ package dev.opencode.mobile.data.local
 
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import dev.opencode.mobile.domain.agent.AgentMention
+import dev.opencode.mobile.domain.agent.FileMention
 import dev.opencode.mobile.domain.composer.ComposerDraft
 import dev.opencode.mobile.domain.model.ModelSelectionConnectionIdentity
 import kotlinx.coroutines.CoroutineScope
@@ -99,6 +100,20 @@ class DataStoreComposerDraftStoreTest {
                 )
             assertEquals("normalized", loaded?.text)
             assertTrue(loaded?.savedAtEpochMs != null)
+        }
+
+    @Test
+    fun saveAndLoad_roundTripsFileMentions() =
+        runTest {
+            val store = store(backgroundScope)
+            val file = FileMention(id = "f1", path = "src/App.kt", start = 4, end = 15)
+            store.save(
+                identity("alice"),
+                "/repo",
+                "ses-1",
+                ComposerDraft(text = "see @src/App.kt", fileMentions = listOf(file), savedAtEpochMs = 2_000),
+            )
+            assertEquals(listOf(file), store.load(identity("alice"), "/repo", "ses-1")?.fileMentions)
         }
 
     private fun store(scope: CoroutineScope) = DataStoreComposerDraftStore(dataStore(scope), Json { ignoreUnknownKeys = true })

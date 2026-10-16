@@ -612,6 +612,9 @@ nonisolated struct PromptSendOptions: Equatable, Sendable {
     let variant: String?
     let mode: String?
     let agentMentions: [AgentMention]
+    let fileMentions: [FileMention]
+    /// Server worktree used to build `file://` URLs for file mentions.
+    let worktree: String?
     let skillIDs: [String]
     let delivery: FollowUpDelivery
 
@@ -622,6 +625,8 @@ nonisolated struct PromptSendOptions: Equatable, Sendable {
         variant: String? = nil,
         mode: String? = nil,
         agentMentions: [AgentMention] = [],
+        fileMentions: [FileMention] = [],
+        worktree: String? = nil,
         skillIDs: [String] = [],
         delivery: FollowUpDelivery = .steer
     ) {
@@ -631,6 +636,8 @@ nonisolated struct PromptSendOptions: Equatable, Sendable {
         self.variant = variant
         self.mode = mode
         self.agentMentions = agentMentions
+        self.fileMentions = fileMentions
+        self.worktree = worktree
         self.skillIDs = skillIDs
         self.delivery = delivery
     }

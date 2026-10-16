@@ -1,9 +1,30 @@
-import Factory
+import FactoryKit
 import Foundation
+
+extension ManagedContainer {
+    /// Factory 3 registrations take a nonisolated `() -> T`. Factory 2.5 took
+    /// `@isolated(any)` and invoked it on the resolving thread. This app's default
+    /// isolation is MainActor, so keep that same call and do not hop.
+    func onMainActor<T>(
+        key: StaticString = #function,
+        _ body: @MainActor @escaping () -> T
+    ) -> Factory<T> {
+        let make: () -> T = unsafeBitCast(body, to: (() -> T).self)
+        return self(key: key, make)
+    }
+
+    func onMainActor<P, T>(
+        key: StaticString = #function,
+        _ body: @MainActor @escaping (P) -> T
+    ) -> ParameterFactory<P, T> {
+        let make: (P) -> T = unsafeBitCast(body, to: ((P) -> T).self)
+        return self(key: key, make)
+    }
+}
 
 extension Container {
     var activeConnectionManager: Factory<ActiveConnectionManager> {
-        self {
+        onMainActor {
             ActiveConnectionManager(
                 connectionProbing: self.connectionProbing(),
                 profileStore: self.connectionProfileStore(),
@@ -13,19 +34,19 @@ extension Container {
     }
 
     var connectionProfileStore: Factory<any ConnectionProfileStore> {
-        self { UserDefaultsConnectionProfileStore() }.singleton
+        onMainActor { UserDefaultsConnectionProfileStore() }.singleton
     }
 
     var sessionModelSelectionStore: Factory<any SessionModelSelectionStore> {
-        self { UserDefaultsSessionModelSelectionStore() }.singleton
+        onMainActor { UserDefaultsSessionModelSelectionStore() }.singleton
     }
 
     var composerDraftStore: Factory<any ComposerDraftStore> {
-        self { UserDefaultsComposerDraftStore() }.singleton
+        onMainActor { UserDefaultsComposerDraftStore() }.singleton
     }
 
     var connectionSessionCoordinator: Factory<ConnectionSessionCoordinator> {
-        self { @MainActor in
+        onMainActor {
             ConnectionSessionCoordinator(
                 activeConnectionManager: self.activeConnectionManager(),
                 connectionProfileStore: self.connectionProfileStore(),
@@ -51,46 +72,46 @@ extension Container {
     }
 
     var secureCredentialStore: Factory<any SecureCredentialStore> {
-        self { KeychainCredentialStore() }.singleton
+        onMainActor { KeychainCredentialStore() }.singleton
     }
 
     var connectionProbeService: Factory<ConnectionProbeService> {
-        self { ConnectionProbeService() }.singleton
+        onMainActor { ConnectionProbeService() }.singleton
     }
 
     var connectionProbing: Factory<any ConnectionProbing> {
-        self { self.connectionProbeService() }.singleton
+        onMainActor { self.connectionProbeService() }.singleton
     }
 
     private var connectionProvider: Factory<@Sendable () -> ServerConnection?> {
-        self {
+        onMainActor {
             let manager = self.activeConnectionManager()
             return { manager.connection }
         }.singleton
     }
 
     var sessionsAPIClient: Factory<SessionsAPIClient> {
-        self { SessionsAPIClient(connectionProvider: self.connectionProvider()) }.singleton
+        onMainActor { SessionsAPIClient(connectionProvider: self.connectionProvider()) }.singleton
     }
 
     var sessionDomainAdapter: Factory<SessionDomainAdapter> {
-        self { SessionDomainAdapter() }.singleton
+        onMainActor { SessionDomainAdapter() }.singleton
     }
 
     var projectsAPIClient: Factory<ProjectsAPIClient> {
-        self { ProjectsAPIClient(connectionProvider: self.connectionProvider()) }.singleton
+        onMainActor { ProjectsAPIClient(connectionProvider: self.connectionProvider()) }.singleton
     }
 
     var filesystemAPIClient: Factory<FilesystemAPIClient> {
-        self { FilesystemAPIClient(connectionProvider: self.connectionProvider()) }.singleton
+        onMainActor { FilesystemAPIClient(connectionProvider: self.connectionProvider()) }.singleton
     }
 
     var projectDomainAdapter: Factory<ProjectDomainAdapter> {
-        self { ProjectDomainAdapter() }.singleton
+        onMainActor { ProjectDomainAdapter() }.singleton
     }
 
     var projectRepository: Factory<any ProjectRepository> {
-        self {
+        onMainActor {
             EngineProjectRepository(
                 opencode: DefaultProjectRepository(
                     api: self.projectsAPIClient(),
@@ -108,7 +129,7 @@ extension Container {
     }
 
     var filesystemRepository: Factory<any FilesystemRepository> {
-        self {
+        onMainActor {
             DefaultFilesystemRepository(
                 api: self.filesystemAPIClient(),
                 adapter: FilesystemDomainAdapter(),
@@ -118,7 +139,7 @@ extension Container {
     }
 
     var projectFilesRepository: Factory<any ProjectFilesRepository> {
-        self {
+        onMainActor {
             DefaultProjectFilesRepository(
                 api: self.filesystemAPIClient(),
                 adapter: FilesystemDomainAdapter(),
@@ -128,11 +149,11 @@ extension Container {
     }
 
     var t3FileAttachmentLimit: Factory<T3FileAttachmentLimit> {
-        self { T3FileAttachmentLimit() }.singleton
+        onMainActor { T3FileAttachmentLimit() }.singleton
     }
 
     var t3EnvironmentClient: Factory<T3EnvironmentClient> {
-        self {
+        onMainActor {
             T3EnvironmentClient(
                 connectionProvider: self.connectionProvider(),
                 fileAttachmentLimit: self.t3FileAttachmentLimit()
@@ -141,11 +162,11 @@ extension Container {
     }
 
     var t3PairingClient: Factory<any T3PairingClient> {
-        self { T3PairingService() }.singleton
+        onMainActor { T3PairingService() }.singleton
     }
 
     var sessionRepository: Factory<any SessionRepository> {
-        self {
+        onMainActor {
             EngineSessionRepository(
                 opencode: DefaultSessionRepository(
                     api: self.sessionsAPIClient(),
@@ -161,7 +182,7 @@ extension Container {
     }
 
     var messagesAPIClient: Factory<MessagesAPIClient> {
-        self {
+        onMainActor {
             MessagesAPIClient(
                 connectionProvider: self.connectionProvider(),
                 bodyUploader: DurableJSONUploader.shared
@@ -170,11 +191,11 @@ extension Container {
     }
 
     var messageDomainAdapter: Factory<MessageDomainAdapter> {
-        self { MessageDomainAdapter() }.singleton
+        onMainActor { MessageDomainAdapter() }.singleton
     }
 
     var messageRemote: Factory<any MessageRemote> {
-        self {
+        onMainActor {
             ProtocolSelectedMessageRemote(
                 api: self.messagesAPIClient(),
                 adapter: self.messageDomainAdapter(),
@@ -184,11 +205,11 @@ extension Container {
     }
 
     var messageStore: Factory<InMemoryMessageStore> {
-        self { InMemoryMessageStore() }.singleton
+        onMainActor { InMemoryMessageStore() }.singleton
     }
 
     var sessionCacheStore: Factory<any SessionCacheStore> {
-        self {
+        onMainActor {
             do {
                 let container = try SwiftDataSessionCacheStore.makePersistentContainer()
                 return SwiftDataSessionCacheStore(container: container)
@@ -206,7 +227,7 @@ extension Container {
     }
 
     var sessionCache: Factory<any SessionCache> {
-        self {
+        onMainActor {
             let manager = self.activeConnectionManager()
             return DefaultSessionCache(
                 store: self.sessionCacheStore(),
@@ -225,11 +246,11 @@ extension Container {
     }
 
     var sessionMessageEngine: Factory<SessionMessageEngine> {
-        self { SessionMessageEngine(store: self.messageStore()) }.singleton
+        onMainActor { SessionMessageEngine(store: self.messageStore()) }.singleton
     }
 
     var syncCoordinator: Factory<DefaultSyncCoordinator> {
-        self { @MainActor in
+        onMainActor {
             DefaultSyncCoordinator(
                 connection: self.foregroundEventStream(),
                 worldSignals: self.worldSignals(),
@@ -239,7 +260,7 @@ extension Container {
     }
 
     var messageSync: Factory<MessageSync> {
-        self { @MainActor in
+        onMainActor {
             let router = self.messageRemote()
             let adapter = self.messageDomainAdapter()
             let manager = self.activeConnectionManager()
@@ -282,11 +303,11 @@ extension Container {
     }
 
     var messageContentPreparer: Factory<MessageContentPreparer> {
-        self { MessageContentPreparer.shared }.singleton
+        onMainActor { MessageContentPreparer.shared }.singleton
     }
 
     var displayMessagePipeline: Factory<DisplayMessagePipeline> {
-        self { @MainActor in
+        onMainActor {
             let manager = self.activeConnectionManager()
             return DisplayMessagePipeline(
                 messageSync: self.messageSync(),
@@ -306,7 +327,7 @@ extension Container {
     }
 
     var messageRepository: Factory<any MessageRepository> {
-        self { @MainActor in
+        onMainActor {
             EngineMessageRepository(
                 opencode: DefaultMessageRepository(
                     api: self.messagesAPIClient(),
@@ -327,15 +348,15 @@ extension Container {
     }
 
     var modelsAPIClient: Factory<ModelsAPIClient> {
-        self { ModelsAPIClient(connectionProvider: self.connectionProvider()) }.singleton
+        onMainActor { ModelsAPIClient(connectionProvider: self.connectionProvider()) }.singleton
     }
 
     var modelDomainAdapter: Factory<ModelDomainAdapter> {
-        self { ModelDomainAdapter() }.singleton
+        onMainActor { ModelDomainAdapter() }.singleton
     }
 
     var modelRepository: Factory<any ModelRepository> {
-        self {
+        onMainActor {
             DefaultModelRepository(
                 api: self.modelsAPIClient(),
                 adapter: self.modelDomainAdapter(),
@@ -345,7 +366,7 @@ extension Container {
     }
 
     var modelCatalogStore: Factory<ModelCatalogStore> {
-        self { @MainActor in
+        onMainActor {
             ModelCatalogStore(
                 modelRepository: self.modelRepository(),
                 agentRepository: self.agentRepository(),
@@ -355,7 +376,7 @@ extension Container {
     }
 
     var commandsAPIClient: Factory<CommandsAPIClient> {
-        self {
+        onMainActor {
             CommandsAPIClient(
                 connectionProvider: self.connectionProvider(),
                 bodyUploader: DurableJSONUploader.shared
@@ -364,11 +385,11 @@ extension Container {
     }
 
     var commandDomainAdapter: Factory<CommandDomainAdapter> {
-        self { CommandDomainAdapter() }.singleton
+        onMainActor { CommandDomainAdapter() }.singleton
     }
 
     var commandRepository: Factory<any CommandRepository> {
-        self {
+        onMainActor {
             DefaultCommandRepository(
                 api: self.commandsAPIClient(),
                 adapter: self.commandDomainAdapter(),
@@ -379,15 +400,15 @@ extension Container {
     }
 
     var ptyAPIClient: Factory<PtyAPIClient> {
-        self { PtyAPIClient(connectionProvider: self.connectionProvider()) }.singleton
+        onMainActor { PtyAPIClient(connectionProvider: self.connectionProvider()) }.singleton
     }
 
     var terminalDomainAdapter: Factory<TerminalDomainAdapter> {
-        self { TerminalDomainAdapter() }.singleton
+        onMainActor { TerminalDomainAdapter() }.singleton
     }
 
     var terminalRepository: Factory<any TerminalRepository> {
-        self {
+        onMainActor {
             DefaultTerminalRepository(
                 api: self.ptyAPIClient(),
                 adapter: self.terminalDomainAdapter(),
@@ -397,15 +418,15 @@ extension Container {
     }
 
     var agentsAPIClient: Factory<AgentsAPIClient> {
-        self { AgentsAPIClient(connectionProvider: self.connectionProvider()) }.singleton
+        onMainActor { AgentsAPIClient(connectionProvider: self.connectionProvider()) }.singleton
     }
 
     var agentDomainAdapter: Factory<AgentDomainAdapter> {
-        self { AgentDomainAdapter() }.singleton
+        onMainActor { AgentDomainAdapter() }.singleton
     }
 
     var agentRepository: Factory<any AgentRepository> {
-        self {
+        onMainActor {
             DefaultAgentRepository(
                 api: self.agentsAPIClient(),
                 adapter: self.agentDomainAdapter(),
@@ -415,15 +436,15 @@ extension Container {
     }
 
     var mcpAPIClient: Factory<McpAPIClient> {
-        self { McpAPIClient(connectionProvider: self.connectionProvider()) }.singleton
+        onMainActor { McpAPIClient(connectionProvider: self.connectionProvider()) }.singleton
     }
 
     var mcpDomainAdapter: Factory<McpDomainAdapter> {
-        self { McpDomainAdapter() }.singleton
+        onMainActor { McpDomainAdapter() }.singleton
     }
 
     var mcpRepository: Factory<any McpRepository> {
-        self {
+        onMainActor {
             DefaultMcpRepository(
                 api: self.mcpAPIClient(),
                 adapter: self.mcpDomainAdapter(),
@@ -433,7 +454,7 @@ extension Container {
     }
 
     var eventsAPIClient: Factory<EventsAPIClient> {
-        self {
+        onMainActor {
             EventsAPIClient(
                 connectionProvider: self.connectionProvider()
             )
@@ -441,15 +462,15 @@ extension Container {
     }
 
     var eventDomainAdapter: Factory<EventDomainAdapter> {
-        self { EventDomainAdapter() }.singleton
+        onMainActor { EventDomainAdapter() }.singleton
     }
 
     var deviceNetworkPath: Factory<any DeviceNetworkPath> {
-        self { SystemDeviceNetworkPath() }.singleton
+        onMainActor { SystemDeviceNetworkPath() }.singleton
     }
 
     var foregroundEventStream: Factory<DefaultForegroundEventStream> {
-        self { @MainActor in
+        onMainActor {
             let store = self.connectionProfileStore()
             let manager = self.activeConnectionManager()
             return DefaultForegroundEventStream(
@@ -488,7 +509,7 @@ extension Container {
     }
 
     var worldSignals: Factory<SceneWorldSignals> {
-        self { @MainActor in
+        onMainActor {
             let manager = self.activeConnectionManager()
             return SceneWorldSignals(
                 stream: self.foregroundEventStream(),
@@ -502,7 +523,7 @@ extension Container {
     }
 
     var liveUpdates: Factory<any LiveUpdates> {
-        self { @MainActor in
+        onMainActor {
             let manager = self.activeConnectionManager()
             return DefaultLiveUpdates(
                 worldSignals: self.worldSignals(),
@@ -516,7 +537,7 @@ extension Container {
     }
 
     var sessionStatusLiveStore: Factory<DefaultSessionStatusLiveStore> {
-        self { @MainActor in
+        onMainActor {
             DefaultSessionStatusLiveStore(
                 sessionRepository: self.sessionRepository(),
                 eventStream: self.foregroundEventStream(),
@@ -529,7 +550,7 @@ extension Container {
     }
 
     var permissionLiveStore: Factory<DefaultPermissionLiveStore> {
-        self { @MainActor in
+        onMainActor {
             DefaultPermissionLiveStore(
                 sessionRepository: self.sessionRepository(),
                 eventStream: self.foregroundEventStream(),
@@ -540,7 +561,7 @@ extension Container {
     }
 
     var questionLiveStore: Factory<DefaultQuestionLiveStore> {
-        self { @MainActor in
+        onMainActor {
             DefaultQuestionLiveStore(
                 sessionRepository: self.sessionRepository(),
                 eventStream: self.foregroundEventStream(),
@@ -551,7 +572,7 @@ extension Container {
     }
 
     var sessionTodoLiveStore: Factory<DefaultSessionTodoLiveStore> {
-        self { @MainActor in
+        onMainActor {
             DefaultSessionTodoLiveStore(
                 sessionRepository: self.sessionRepository(),
                 eventStream: self.foregroundEventStream(),
@@ -562,7 +583,7 @@ extension Container {
     }
 
     var sessionReadyStore: Factory<DefaultSessionReadyStore> {
-        self { @MainActor in
+        onMainActor {
             DefaultSessionReadyStore(
                 sessionStatusLiveStore: self.sessionStatusLiveStore(),
                 eventStream: self.foregroundEventStream(),
@@ -572,7 +593,7 @@ extension Container {
     }
 
     var sessionLiveStore: Factory<DefaultSessionLiveStore> {
-        self { @MainActor in
+        onMainActor {
             let manager = self.activeConnectionManager()
             return DefaultSessionLiveStore(
                 sessionRepository: self.sessionRepository(),
@@ -586,7 +607,7 @@ extension Container {
     }
 
     var sessionViewReporter: Factory<DefaultSessionViewReporter> {
-        self { @MainActor in
+        onMainActor {
             let manager = self.activeConnectionManager()
             return DefaultSessionViewReporter(
                 sessionRepository: self.sessionRepository(),
@@ -598,7 +619,7 @@ extension Container {
     }
 
     var projectionCaches: Factory<ProjectionCaches> {
-        self { @MainActor in
+        onMainActor {
             ProjectionCaches(
                 sessionLiveStore: self.sessionLiveStore(),
                 sessionStatusLiveStore: self.sessionStatusLiveStore(),
@@ -614,7 +635,7 @@ extension Container {
     }
 
     var sessionContextRepository: Factory<any SessionContextRepository> {
-        self {
+        onMainActor {
             DefaultSessionContextRepository(
                 sessionRepository: self.sessionRepository(),
                 messageRepository: self.messageRepository(),
@@ -624,7 +645,7 @@ extension Container {
     }
 
     var appRootViewModel: Factory<AppRootViewModel> {
-        self { @MainActor in
+        onMainActor {
             AppRootViewModel(
                 connectionProfileStore: self.connectionProfileStore(),
                 activeConnectionManager: self.activeConnectionManager(),
@@ -637,7 +658,7 @@ extension Container {
     }
 
     var projectListHomeViewModel: Factory<ProjectListHomeViewModel> {
-        self { @MainActor in
+        onMainActor {
             ProjectListHomeViewModel(
                 projectRepository: self.projectRepository(),
                 filesystemRepository: self.filesystemRepository(),
@@ -657,11 +678,11 @@ extension Container {
     }
 
     var lastTurnReviewChangesStore: Factory<LastTurnReviewChangesStore> {
-        self { @MainActor in LastTurnReviewChangesStore() }.singleton
+        onMainActor { LastTurnReviewChangesStore() }.singleton
     }
 
     var sessionChatViewModel: ParameterFactory<(sessionID: String, sessionTitle: String, worktree: String), SessionChatViewModel> {
-        self { @MainActor in
+        onMainActor {
             SessionChatViewModel(
                 sessionID: $0.sessionID,
                 sessionTitle: $0.sessionTitle,
@@ -690,13 +711,14 @@ extension Container {
                 lastTurnReviewChangesStore: self.lastTurnReviewChangesStore(),
                 syncCoordinator: self.syncCoordinator(),
                 mcpRepository: self.mcpRepository(),
-                harnessRepository: DefaultT3HarnessRepository(client: self.t3EnvironmentClient())
+                harnessRepository: DefaultT3HarnessRepository(client: self.t3EnvironmentClient()),
+                projectFilesRepository: self.projectFilesRepository()
             )
         }
     }
 
     var sessionContextViewModel: ParameterFactory<(sessionID: String, worktree: String), SessionContextViewModel> {
-        self { @MainActor in
+        onMainActor {
             SessionContextViewModel(
                 sessionID: $0.sessionID,
                 worktree: $0.worktree,
@@ -706,7 +728,7 @@ extension Container {
     }
 
     var terminalViewModel: ParameterFactory<(worktree: String, ptyId: String?), TerminalViewModel> {
-        self { @MainActor in
+        onMainActor {
             TerminalViewModel(
                 worktree: $0.worktree,
                 ptyId: $0.ptyId,
@@ -718,7 +740,7 @@ extension Container {
     }
 
     var terminalsCatalogViewModel: Factory<TerminalsCatalogViewModel> {
-        self { @MainActor in
+        onMainActor {
             TerminalsCatalogViewModel(
                 repository: self.terminalRepository(),
                 activeConnectionManager: self.activeConnectionManager(),

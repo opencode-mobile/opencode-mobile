@@ -27,8 +27,8 @@ ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
 ENV ANDROID_HOME=/opt/android-sdk
 ENV ANDROID_SDK_ROOT=/opt/android-sdk
 
-# Android SDK: command-line tools + platform 36 / build-tools 36.0.0 (matches
-# android/app/build.gradle.kts compileSdk = 36). NDK matches app ndkVersion for
+# Android SDK: command-line tools + platform 37 / build-tools 36.0.0 (matches
+# android/app/build.gradle.kts compileSdk = 37). NDK matches app ndkVersion for
 # packaging native debug symbols into release AABs.
 ARG ANDROID_CMDLINE_TOOLS_VERSION=14742923
 ARG ANDROID_NDK_VERSION=27.2.12479018
@@ -41,7 +41,7 @@ RUN mkdir -p "${ANDROID_HOME}/cmdline-tools" \
     && yes | "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null \
     && "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" \
         "platform-tools" \
-        "platforms;android-36" \
+        "platforms;android-37.0" \
         "build-tools;36.0.0" \
         "ndk;${ANDROID_NDK_VERSION}" > /dev/null \
     && chmod -R a+rX "${ANDROID_HOME}"

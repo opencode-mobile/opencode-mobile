@@ -98,6 +98,7 @@ final class SessionChatViewModel {
         clock: any SyncClock = SystemSyncClock(),
         mcpRepository: (any McpRepository)? = nil,
         harnessRepository: (any T3HarnessRepository)? = nil,
+        projectFilesRepository: (any ProjectFilesRepository)? = nil,
         catalogRetryDelaysMs: [Int] = SessionChatComposer.defaultCatalogRetryDelaysMs
     ) {
         self.sessionID = sessionID
@@ -136,6 +137,7 @@ final class SessionChatViewModel {
             composerDraftStore: composerDraftStore,
             activeConnectionManager: activeConnectionManager,
             foregroundEventStream: foregroundEventStream,
+            projectFilesRepository: projectFilesRepository,
             catalogRetryDelaysMs: catalogRetryDelaysMs
         )
         self.sessionInfo = SessionInfo(
@@ -419,6 +421,11 @@ final class SessionChatViewModel {
     func selectSlashSuggestion(commandName: String) {
         logChatAction(ProductAnalytics.Action.composerSelectSlashSuggestion)
         composer.selectSlashSuggestion(commandName: commandName)
+    }
+
+    var fileSearchDelayMs: Int {
+        get { composer.fileSearchDelayMs }
+        set { composer.fileSearchDelayMs = newValue }
     }
 
     func selectAtSuggestion(agentName: String) {

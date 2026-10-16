@@ -129,6 +129,8 @@ object ProductAnalytics {
         const val ADD_PROJECT_ENTER_DIRECTORY = "add_project_enter_directory"
         const val ADD_PROJECT_SELECT_CURRENT = "add_project_select_current"
         const val ADD_PROJECT_RETRY_NAVIGATOR = "add_project_retry_navigator"
+        const val ADD_PROJECT_SELECT_ROOT = "add_project_select_root"
+        const val ADD_PROJECT_SELECT_SUGGESTION = "add_project_select_suggestion"
         const val NEW_SESSION_PICKER_DISMISS = "new_session_picker_dismiss"
         const val PROJECT_PICKER_DISMISS = "project_picker_dismiss"
         const val NEW_SESSION_PICKER_SELECT_PROJECT = "new_session_picker_select_project"

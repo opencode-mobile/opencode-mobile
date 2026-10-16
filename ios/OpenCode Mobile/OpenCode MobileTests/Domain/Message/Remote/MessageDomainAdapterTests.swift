@@ -153,6 +153,61 @@ struct MessageDomainAdapterTests {
         #expect(body.skills == nil)
     }
 
+    @Test func sendRequest_includesFileReferencePartsWithoutAttachmentBytes() {
+        let attachment = Attachment(
+            id: "attachment-1",
+            filename: "notes.txt",
+            mime: "text/plain",
+            kind: .text,
+            dataURL: "data:text/plain;base64,SGk="
+        )
+        let body = adapter.sendRequest(
+            options: PromptSendOptions(
+                text: "see @src/App.kt",
+                attachments: [attachment],
+                fileMentions: [FileMention(id: "f1", path: "src/App.kt", start: 4, end: 15)],
+                worktree: "/repo"
+            )
+        )
+        #expect(body.parts.map(\.type) == ["text", "file", "file"])
+        let reference = body.parts[1]
+        #expect(reference.url == "file:///repo/src/App.kt")
+        #expect(reference.filename == "App.kt")
+        #expect(reference.mime == "text/plain")
+        #expect(reference.fileSource?.path == "src/App.kt")
+        #expect(reference.fileSource?.value == "@src/App.kt")
+        #expect(reference.fileSource?.start == 4)
+        #expect(reference.fileSource?.end == 15)
+        #expect(reference.source == nil)
+        #expect(body.parts[2].url == "data:text/plain;base64,SGk=")
+        #expect(body.parts[2].fileSource == nil)
+    }
+
+    @Test func v2PromptRequest_appendsFileMentionsAfterAttachments() {
+        let attachment = Attachment(
+            id: "attachment-1",
+            filename: "notes.txt",
+            mime: "text/plain",
+            kind: .text,
+            dataURL: "data:text/plain;base64,SGk="
+        )
+        let body = adapter.v2PromptRequest(
+            options: PromptSendOptions(
+                text: "see @src/App.kt",
+                attachments: [attachment],
+                fileMentions: [FileMention(id: "f1", path: "src/App.kt", start: 4, end: 15)],
+                worktree: "/repo"
+            )
+        )
+        #expect(body.files?.first?.uri == "data:text/plain;base64,SGk=")
+        #expect(body.fileMentions?.count == 1)
+        #expect(body.fileMentions?.first?.uri == "file:///repo/src/App.kt")
+        #expect(body.fileMentions?.first?.name == "App.kt")
+        #expect(body.fileMentions?.first?.mention.text == "@src/App.kt")
+        #expect(body.fileMentions?.first?.mention.start == 4)
+        #expect(body.fileMentions?.first?.mention.end == 15)
+    }
+
     @Test func v2PromptRequest_mapsSkillIds() {
         let body = adapter.v2PromptRequest(
             options: PromptSendOptions(

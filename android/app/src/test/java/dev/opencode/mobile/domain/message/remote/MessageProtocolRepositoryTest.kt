@@ -1,6 +1,7 @@
 package dev.opencode.mobile.domain.message
 
 import dev.opencode.mobile.data.remote.MessagesApi
+import dev.opencode.mobile.domain.agent.FileMention
 import dev.opencode.mobile.domain.connection.ConnectionProbing
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
@@ -16,7 +17,11 @@ import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.HttpRequestData
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.content.OutgoingContent
 import io.ktor.http.headersOf
+import io.ktor.utils.io.ByteChannel
+import io.ktor.utils.io.readRemaining
+import kotlinx.io.readByteArray
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
@@ -163,6 +168,60 @@ class MessageProtocolRepositoryTest {
             assertTrue(!promptBody.contains("\"mime\""))
             assertTrue(!promptBody.contains("\"parts\""))
             assertTrue(!promptBody.contains("\"prompt\""))
+        }
+
+    @Test
+    fun v1SendPrompt_mentionOnlyIncludesFileSource() =
+        runTest {
+            var body = ""
+            val client =
+                testClient { request ->
+                    body = request.body.readText()
+                    respond("", HttpStatusCode.NoContent)
+                }
+            val router = router(client, ServerProtocol.V1)
+
+            router.sendPromptAsync(
+                "ses_1",
+                PromptSendOptions(
+                    text = "see @src/App.kt",
+                    fileMentions = listOf(FileMention(id = "f1", path = "src/App.kt", start = 4, end = 15)),
+                    worktree = "/repo",
+                ),
+                "/repo",
+            )
+
+            assertTrue(body.contains("\"url\":\"file:///repo/src/App.kt\""))
+            assertTrue(body.contains("\"path\":\"src/App.kt\""))
+            assertTrue(body.contains("\"value\":\"@src/App.kt\""))
+            assertTrue(!body.contains("data:"))
+        }
+
+    @Test
+    fun v2SendPrompt_mentionOnlyIncludesFileUri() =
+        runTest {
+            var body = ""
+            val client =
+                testClient { request ->
+                    body = request.body.readText()
+                    respond("", HttpStatusCode.OK)
+                }
+            val router = router(client, ServerProtocol.V2)
+
+            router.sendPromptAsync(
+                "ses_2",
+                PromptSendOptions(
+                    text = "see @src/App.kt",
+                    fileMentions = listOf(FileMention(id = "f1", path = "src/App.kt", start = 4, end = 15)),
+                    worktree = "/repo",
+                ),
+                "/repo",
+            )
+
+            assertTrue(body.contains("\"uri\":\"file:///repo/src/App.kt\""))
+            assertTrue(body.contains("\"mention\""))
+            assertTrue(body.contains("\"text\":\"@src/App.kt\""))
+            assertTrue(!body.contains("data:"))
         }
 
     @Test
@@ -448,6 +507,18 @@ private fun MockRequestHandleScope.respondMessagesOrEmptyInbox(
 }
 
 private fun List<HttpRequestData>.messageRequests(): List<HttpRequestData> = filter { !it.url.encodedPath.contains("/inbox") }
+
+private suspend fun OutgoingContent.readText(): String =
+    when (this) {
+        is OutgoingContent.ByteArrayContent -> String(bytes())
+        is OutgoingContent.WriteChannelContent -> {
+            val channel = ByteChannel(autoFlush = true)
+            writeTo(channel)
+            channel.close()
+            channel.readRemaining().readByteArray().decodeToString()
+        }
+        else -> error("Unexpected prompt body ${this::class.simpleName}")
+    }
 
 private class FakeProfileStore : ConnectionProfileStore {
     private var profile: ConnectionProfile? = null

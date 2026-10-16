@@ -6,7 +6,8 @@ struct ProjectDomainAdapter: Sendable {
         return Project(
             id: dto.id,
             worktree: worktree,
-            displayName: Self.displayName(from: worktree)
+            displayName: Self.displayName(from: worktree),
+            activityAtEpochMs: dto.time?.activityEpochMs
         )
     }
 
@@ -32,7 +33,7 @@ struct ProjectDomainAdapter: Sendable {
     }
 
     static func displayName(from worktree: String) -> String {
-        let name = URL(fileURLWithPath: worktree).lastPathComponent
+        let name = ServerPathPolicy.name(worktree)
         return name.isEmpty ? worktree : name
     }
 }

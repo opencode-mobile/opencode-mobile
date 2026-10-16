@@ -20,7 +20,10 @@ struct ConnectionSetupView: View {
     @State private var loggedBaseURLEdit = false
     @State private var loggedUsernameEdit = false
     @State private var loggedPasswordEdit = false
-    @State private var isKeyboardVisible = false
+    /// Software-keyboard overlap. Connect is pinned only while this is zero so it
+    /// is not trapped under the keys. No keyboard toolbar: iOS 26 draws that Done
+    /// control as a floating pill over the primary action.
+    @State private var keyboardOverlap: CGFloat = 0
 
     var body: some View {
         NavigationStack {
@@ -40,66 +43,58 @@ struct ConnectionSetupView: View {
                 )
 
                 VStack(spacing: 0) {
-                GeometryReader { geo in
-                    ScrollView {
-                        ZStack(alignment: .topLeading) {
-                            Color.clear
-                                .frame(minWidth: geo.size.width, minHeight: geo.size.height)
-                                .contentShape(Rectangle())
-                                .onTapGesture(perform: dismissKeyboard)
-                            VStack(alignment: .leading, spacing: 12) {
-                        if viewModel.engine == .t3, !viewModel.usesQRLayout {
-                            enginePicker
-                            t3ManualFields
-                        } else if viewModel.usesQRLayout {
-                            savedAddressContent
-                            connectionNameField
-                        } else if viewModel.showsInstructionEssay {
-                            enginePicker
-                            instructionEssay
-                        } else {
-                            enginePicker
-                            manualHostField
-                            connectionNameField
-                            manualCredentials
-                        }
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 16)
-                    .padding(.bottom, 16)
-                        }
-                    }
-                    .scrollDismissesKeyboard(.immediately)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                Group {
-                    if viewModel.engine == .t3 {
-                        if !isKeyboardVisible {
-                            OpenCodeButton(
-                                variant: .link(title: "Scan a T3 pairing QR"),
-                                enabled: !viewModel.isBusy,
-                                action: openPairingScanner
-                            )
-                        }
-                        if viewModel.showsPrimaryAction {
-                            OpenCodeButton(
-                                variant: .fullWidthText(title: viewModel.primaryActionLabel),
-                                enabled: viewModel.primaryEnabled
-                            ) {
-                                Task {
-                                    if await viewModel.submit() {
-                                        onDismiss()
+                    ScrollViewReader { proxy in
+                        GeometryReader { geo in
+                            ScrollView {
+                                ZStack(alignment: .topLeading) {
+                                    Color.clear
+                                        .frame(minWidth: geo.size.width, minHeight: geo.size.height)
+                                        .contentShape(Rectangle())
+                                        .onTapGesture(perform: dismissKeyboard)
+                                    VStack(alignment: .leading, spacing: 12) {
+                                        if viewModel.engine == .t3, !viewModel.usesQRLayout {
+                                            enginePicker
+                                            t3ManualFields
+                                        } else if viewModel.usesQRLayout {
+                                            savedAddressContent
+                                            connectionNameField
+                                        } else if viewModel.showsInstructionEssay {
+                                            enginePicker
+                                            instructionEssay
+                                        } else {
+                                            enginePicker
+                                            manualHostField
+                                            connectionNameField
+                                            manualCredentials
+                                        }
+                                        if !pinsPrimaryActions {
+                                            connectionSetupActions
+                                                .padding(.top, 4)
+                                                .id(ConnectionSetupKeyboardLayout.actionsScrollID)
+                                        }
                                     }
+                                    .padding(.horizontal, 20)
+                                    .padding(.top, 16)
+                                    .padding(.bottom, 16)
                                 }
                             }
+                            .scrollDismissesKeyboard(.interactively)
+                            .onChange(of: focusToken) { _, token in
+                                scrollFocusedField(proxy, token: token)
+                            }
+                            .onChange(of: isKeyboardVisible) { _, visible in
+                                guard visible else { return }
+                                scrollFocusedField(proxy, token: focusToken)
+                            }
                         }
-                    } else {
-                        connectionSetupActions
                     }
-                }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 24)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                    if pinsPrimaryActions {
+                        connectionSetupActions
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, 24)
+                    }
                 }
                 .openCodeReadableColumn()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -165,28 +160,22 @@ struct ConnectionSetupView: View {
             )
         }
         .toolbar(.hidden, for: .navigationBar)
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button("Done", action: dismissKeyboard)
-            }
-        }
         .background {
             GeometryReader { geo in
                 Color.clear
                     .onReceive(
                         NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)
                     ) { notification in
-                        isKeyboardVisible = KeyboardOverlap.amount(
+                        keyboardOverlap = KeyboardOverlap.amount(
                             from: notification,
                             in: geo.frame(in: .global)
-                        ) > 0
+                        )
                     }
                     .onReceive(
                         NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)
                     ) { _ in
                         KeyboardOverlap.noteHidden()
-                        isKeyboardVisible = false
+                        keyboardOverlap = 0
                     }
             }
         }
@@ -264,6 +253,7 @@ struct ConnectionSetupView: View {
                 isFocused: $pairingTokenFocused,
                 onSubmit: { pairingTokenFocused = false }
             )
+            .id(ConnectionSetupKeyboardLayout.pairingFieldID)
             Text(
                 viewModel.hasStoredT3Token
                     ? "This environment is already paired. Leave blank to keep the current access, or paste a new pairing token to re-pair."
@@ -320,6 +310,7 @@ struct ConnectionSetupView: View {
                     }
                 }
             )
+            .id(ConnectionSetupKeyboardLayout.urlFieldID)
             Text("LAN, Tailscale MagicDNS, or tunnel — not localhost on a phone.")
                 .font(OpenCodeTypography.bodySecondary)
                 .foregroundStyle(OpenCodeColors.textBase)
@@ -348,6 +339,7 @@ struct ConnectionSetupView: View {
                 }
             }
         )
+        .id(ConnectionSetupKeyboardLayout.nameFieldID)
     }
 
     private var manualCredentials: some View {
@@ -364,6 +356,7 @@ struct ConnectionSetupView: View {
                     isFocused: $usernameFocused,
                     onSubmit: { passwordFocused = true }
                 )
+                .id(ConnectionSetupKeyboardLayout.usernameFieldID)
                 OpenCodeTextInput(
                     text: $viewModel.password,
                     hint: "Password, optional",
@@ -372,6 +365,7 @@ struct ConnectionSetupView: View {
                     isFocused: $passwordFocused,
                     onSubmit: { passwordFocused = false }
                 )
+                .id(ConnectionSetupKeyboardLayout.passwordFieldID)
                 Text("Default user is opencode. Password is optional.")
                     .font(OpenCodeTypography.bodySecondary)
                     .foregroundStyle(OpenCodeColors.textBase)
@@ -383,6 +377,7 @@ struct ConnectionSetupView: View {
                     isFocused: $pairingCodeFocused,
                     onSubmit: { pairingCodeFocused = false }
                 )
+                .id(ConnectionSetupKeyboardLayout.pairingFieldID)
                 Text("From the pair link. Works once and expires in 5 minutes.")
                     .font(OpenCodeTypography.bodySecondary)
                     .foregroundStyle(OpenCodeColors.textBase)
@@ -393,7 +388,27 @@ struct ConnectionSetupView: View {
 
     private var connectionSetupActions: some View {
         VStack(spacing: 12) {
-            if viewModel.addressRecovery != nil {
+            if viewModel.engine == .t3, !viewModel.usesQRLayout {
+                if !isKeyboardVisible {
+                    OpenCodeButton(
+                        variant: .link(title: "Scan a T3 pairing QR"),
+                        enabled: !viewModel.isBusy,
+                        action: openPairingScanner
+                    )
+                }
+                if viewModel.showsPrimaryAction {
+                    OpenCodeButton(
+                        variant: .fullWidthText(title: viewModel.primaryActionLabel),
+                        enabled: viewModel.primaryEnabled
+                    ) {
+                        Task {
+                            if await viewModel.submit() {
+                                onDismiss()
+                            }
+                        }
+                    }
+                }
+            } else if viewModel.addressRecovery != nil {
                 OpenCodeCodeSnippet("opencode pair --remote")
                 OpenCodeButton(
                     variant: .fullWidthText(title: viewModel.primaryActionLabel),
@@ -478,6 +493,36 @@ struct ConnectionSetupView: View {
 
     private var segmentSelectedText: Color {
         colorScheme == .dark ? OpenCodeColors.backgroundBase : OpenCodeColors.textStrong
+    }
+
+    private var isKeyboardVisible: Bool {
+        keyboardOverlap > 0
+    }
+
+    private var pinsPrimaryActions: Bool {
+        ConnectionSetupKeyboardLayout.pinsPrimaryActions(keyboardVisible: isKeyboardVisible)
+    }
+
+    private var focusToken: String {
+        if passwordFocused { return ConnectionSetupKeyboardLayout.passwordFieldID }
+        if pairingCodeFocused || pairingTokenFocused { return ConnectionSetupKeyboardLayout.pairingFieldID }
+        if usernameFocused { return ConnectionSetupKeyboardLayout.usernameFieldID }
+        if nameFocused { return ConnectionSetupKeyboardLayout.nameFieldID }
+        if urlFocused { return ConnectionSetupKeyboardLayout.urlFieldID }
+        return ""
+    }
+
+    private func scrollFocusedField(_ proxy: ScrollViewProxy, token: String) {
+        guard !token.isEmpty else { return }
+        let target = ConnectionSetupKeyboardLayout.scrollTarget(
+            fieldID: token,
+            keyboardVisible: isKeyboardVisible
+        )
+        DispatchQueue.main.async {
+            withAnimation(.easeOut(duration: 0.2)) {
+                proxy.scrollTo(target.id, anchor: UnitPoint(x: 0.5, y: CGFloat(target.anchorY)))
+            }
+        }
     }
 
     private func dismissKeyboard() {

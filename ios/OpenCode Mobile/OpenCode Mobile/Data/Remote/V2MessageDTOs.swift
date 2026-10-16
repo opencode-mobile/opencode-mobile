@@ -160,7 +160,7 @@ nonisolated struct V2AgentAttachmentDTO: Decodable, Sendable {
     }
 }
 
-nonisolated struct V2PromptSourceDTO: Codable, Sendable {
+nonisolated struct V2PromptSourceDTO: Codable, Sendable, Equatable {
     let start: Int?
     let end: Int?
     let text: String?

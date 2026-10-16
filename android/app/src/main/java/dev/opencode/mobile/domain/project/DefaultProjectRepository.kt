@@ -1,8 +1,10 @@
 package dev.opencode.mobile.domain.project
 
 import dev.opencode.mobile.data.remote.ProjectsApi
+import dev.opencode.mobile.data.remote.dto.ProjectDto
 import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.network.ActiveConnectionManager
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
@@ -28,12 +30,23 @@ class DefaultProjectRepository
             runCatching {
                 val dtos =
                     if (activeConnectionManager.currentProtocolOrProbe() == ServerProtocol.V2) {
-                        projectsApi.listProjectsV2()
+                        listProjectsV2OrV1()
                     } else {
                         projectsApi.listProjects()
                     }
                 dtos.map(adapter::toProject)
             }.getOrElse { throw adapter.mapProbeError(it) }
+
+        // Servers detected as v2 may not serve `/api/project` (the web UI answers with HTML);
+        // the unprefixed `/project` list is still there.
+        private suspend fun listProjectsV2OrV1(): List<ProjectDto> =
+            try {
+                projectsApi.listProjectsV2()
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (_: Exception) {
+                projectsApi.listProjects()
+            }
 
         override suspend fun getCurrentProject(directory: String?): Project =
             runCatching {

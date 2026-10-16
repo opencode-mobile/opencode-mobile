@@ -1,6 +1,7 @@
 package dev.opencode.mobile.domain.message
 
 import dev.opencode.mobile.domain.agent.AgentMention
+import dev.opencode.mobile.domain.agent.FileMention
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -168,6 +169,9 @@ data class PromptSendOptions(
     val variant: String? = null,
     val mode: String? = null,
     val agentMentions: List<AgentMention> = emptyList(),
+    val fileMentions: List<FileMention> = emptyList(),
+    /** Server worktree used to build `file://` URLs for [fileMentions]. */
+    val worktree: String? = null,
     val skillIds: List<String> = emptyList(),
     val delivery: FollowUpDelivery = FollowUpDelivery.Steer,
 )

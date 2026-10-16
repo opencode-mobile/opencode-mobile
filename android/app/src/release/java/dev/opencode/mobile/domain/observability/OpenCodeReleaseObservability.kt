@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import com.google.firebase.FirebaseApp
 import com.google.firebase.analytics.FirebaseAnalytics
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.google.firebase.remoteconfig.FirebaseRemoteConfig
@@ -18,11 +19,16 @@ import dev.opencode.mobile.platform.FrameworkSdkLevel
  * Firebase is already initialized by the google-services plugin; this entry
  * records the protected Crashlytics verification non-fatal and owns the
  * consented product-event API. Feature code must never import Firebase.
+ * A release build without google-services.json (a public clone) has no
+ * FirebaseApp, so the seam stays a no-op there.
  */
 internal object OpenCodeReleaseObservability {
     private var application: Application? = null
 
     fun initialize(application: Application) {
+        if (FirebaseApp.getApps(application).isEmpty()) {
+            return
+        }
         this.application = application
         tagFrameworkSdkAlignment()
         activateFeatureFlags()

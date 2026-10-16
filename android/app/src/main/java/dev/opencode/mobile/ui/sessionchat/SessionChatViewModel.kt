@@ -108,6 +108,7 @@ class SessionChatViewModel
         connectionSessionCoordinator: ConnectionSessionCoordinator,
         private val sessionModelSelectionStore: SessionModelSelectionStore,
         composerDraftStore: ComposerDraftStore,
+        projectFilesRepository: dev.opencode.mobile.domain.filesystem.ProjectFilesRepository,
         newSessionModelSelectionResolver: NewSessionModelSelectionResolver,
         private val connectionProfileStore: ConnectionProfileStore,
         private val activeConnectionManager: ActiveConnectionManager,
@@ -136,6 +137,12 @@ class SessionChatViewModel
                 composer.catalogRetryDelaysMs = value
             }
 
+        internal var fileSearchDelayMs: Long
+            get() = composer.fileSearchDelayMs
+            set(value) {
+                composer.fileSearchDelayMs = value
+            }
+
         private val timeline =
             SessionChatTimeline(
                 messageRepository = messageRepository,
@@ -154,6 +161,7 @@ class SessionChatViewModel
                 composerDraftStore = composerDraftStore,
                 scope = viewModelScope,
                 foregroundEventStream = foregroundEventStream,
+                projectFilesRepository = projectFilesRepository,
             )
         private val sessionInfo =
             SessionInfo(
@@ -2150,4 +2158,23 @@ internal fun orderedPermissionRequests(
         }
     val requestsBySession = requests.groupBy { it.sessionId }
     return sessionOrder.flatMap { requestsBySession[it].orEmpty() }
+}
+
+internal object EmptyProjectFilesRepository : dev.opencode.mobile.domain.filesystem.ProjectFilesRepository {
+    override suspend fun listEntries(
+        worktree: String,
+        relativeDirectory: String,
+    ) = emptyList<dev.opencode.mobile.domain.filesystem.ProjectEntry>()
+
+    override suspend fun findFiles(
+        worktree: String,
+        query: String,
+        limit: Int,
+    ) = emptyList<dev.opencode.mobile.domain.filesystem.ProjectEntry>()
+
+    override suspend fun readFile(
+        worktree: String,
+        relativePath: String,
+    ): dev.opencode.mobile.domain.filesystem.ProjectFileContent =
+        throw dev.opencode.mobile.domain.filesystem.ProjectFilesException("No project files", detail = "No project files")
 }

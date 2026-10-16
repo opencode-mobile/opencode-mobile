@@ -24,7 +24,7 @@ class ProjectsApi private constructor(
             .get()
             .get("api/project")
             .body<List<V2ProjectDto>>()
-            .map { ProjectDto(id = it.id, directory = it.canonical) }
+            .map { ProjectDto(id = it.id, directory = it.canonical, vcs = it.vcs, time = it.time) }
 
     suspend fun getCurrentProject(directory: String? = null): ProjectDto =
         httpClient

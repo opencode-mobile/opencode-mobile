@@ -3,6 +3,8 @@ package dev.opencode.mobile.ui.sessionchat.region
 import dev.opencode.mobile.domain.agent.AgentRepository
 import dev.opencode.mobile.domain.agent.ComposerMentionRouting
 import dev.opencode.mobile.domain.agent.ComposerSuggestionMode
+import dev.opencode.mobile.domain.agent.FileMention
+import dev.opencode.mobile.domain.filesystem.ProjectFilesRepository
 import dev.opencode.mobile.domain.agent.SelectableAgent
 import dev.opencode.mobile.domain.command.CommandError
 import dev.opencode.mobile.domain.command.CommandInvocationCollapser
@@ -55,6 +57,7 @@ import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineRegionState
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineState
 import dev.opencode.mobile.ui.sessionchat.knownChildSessionIds
 import dev.opencode.mobile.ui.sessionchat.toAtSuggestion
+import dev.opencode.mobile.ui.sessionchat.toFileSuggestion
 import dev.opencode.mobile.ui.sessionchat.toSlashSuggestion
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
@@ -86,11 +89,15 @@ class SessionChatComposer(
     private val composerDraftStore: ComposerDraftStore,
     private val scope: CoroutineScope,
     private val foregroundEventStream: ForegroundEventStream? = null,
+    private val projectFilesRepository: ProjectFilesRepository? = null,
 ) {
     var ioDispatcher: CoroutineDispatcher = kotlinx.coroutines.Dispatchers.IO
     var capabilities: SessionCapabilities = SessionCapabilities.OpenCode
     var allowsMentions: Boolean = true
     var allowsSlashCommands: Boolean = true
+
+    /** Debounce before `findFiles` while an `@` query is open. Tests set this to 0. */
+    var fileSearchDelayMs: Long = 200L
 
     /** Backoff for refetching a catalog that came back empty (a server still loading providers). */
     var catalogRetryDelaysMs: List<Long> = DEFAULT_CATALOG_RETRY_DELAYS_MS
@@ -119,6 +126,8 @@ class SessionChatComposer(
     private var catalogLoadGeneration = 0
     private var catalogEventJob: Job? = null
     private var catalogRetryJob: Job? = null
+    private var fileSearchJob: Job? = null
+    private var fileSearchGeneration = 0
 
     /** The chip shows a selection seeded from [ModelCatalogStore] that the gate has not reconciled yet. */
     private var provisionalSelection = false
@@ -635,6 +644,7 @@ class SessionChatComposer(
                     text = text,
                     cursor = cursor,
                     mentions = previous.agentMentions,
+                    fileMentions = previous.fileMentions,
                 )
             when (mode) {
                 is ComposerSuggestionMode.At -> {
@@ -656,8 +666,10 @@ class SessionChatComposer(
                         text = text,
                         cursor = cursor.coerceIn(0, text.length),
                         mentions = previous.agentMentions,
+                        fileMentions = previous.fileMentions,
                     )
             }
+            scheduleFileSearch()
             return
         }
 
@@ -668,12 +680,14 @@ class SessionChatComposer(
                 previousMentions = previous.agentMentions,
                 proposedText = text,
                 proposedCursor = cursor,
+                previousFileMentions = previous.fileMentions,
             )
         val mode =
             suggestionMode(
                 text = reconciled.text,
                 cursor = reconciled.cursor,
                 mentions = reconciled.mentions,
+                fileMentions = reconciled.fileMentions,
             )
         when (mode) {
             is ComposerSuggestionMode.At -> {
@@ -696,6 +710,7 @@ class SessionChatComposer(
                         state.composer.copy(
                             text = reconciled.text,
                             agentMentions = reconciled.mentions,
+                            fileMentions = reconciled.fileMentions,
                             cursor = reconciled.cursor,
                             selectionRevision =
                                 if (selectionChanged) {
@@ -708,8 +723,10 @@ class SessionChatComposer(
                     text = reconciled.text,
                     cursor = reconciled.cursor,
                     mentions = reconciled.mentions,
+                    fileMentions = reconciled.fileMentions,
                 )
         }
+        scheduleFileSearch()
         schedulePersistDraft()
     }
 
@@ -731,31 +748,50 @@ class SessionChatComposer(
         updateComposerText(inserted, cursor = inserted.length)
     }
 
-    fun selectAtSuggestion(agentName: String) {
+    fun selectAtSuggestion(id: String) {
         val composer = _state.value.composer
+        val suggestion = _state.value.atSuggestions.firstOrNull { it.id == id || it.agentName == id }
+        val filePath = suggestion?.filePath
         val result =
-            ComposerMentionRouting.insertMention(
-                text = composer.text,
-                cursor = composer.cursor,
-                agentName = agentName,
-                mentionId = UUID.randomUUID().toString(),
-                existingMentions = composer.agentMentions,
-            )
+            if (filePath != null) {
+                ComposerMentionRouting.insertFileMention(
+                    text = composer.text,
+                    cursor = composer.cursor,
+                    path = filePath,
+                    mentionId = UUID.randomUUID().toString(),
+                    existingMentions = composer.agentMentions,
+                    existingFileMentions = composer.fileMentions,
+                )
+            } else {
+                ComposerMentionRouting.insertMention(
+                    text = composer.text,
+                    cursor = composer.cursor,
+                    agentName = suggestion?.agentName ?: id,
+                    mentionId = UUID.randomUUID().toString(),
+                    existingMentions = composer.agentMentions,
+                    existingFileMentions = composer.fileMentions,
+                )
+            }
         draftRevision += 1
+        fileSearchJob?.cancel()
+        fileSearchGeneration += 1
         _state.update { state ->
             state.copy(
                 composer =
                     state.composer.copy(
                         text = result.text,
                         agentMentions = result.mentions,
+                        fileMentions = result.fileMentions,
                         cursor = result.cursor,
                         selectionRevision = state.composer.selectionRevision + 1,
                     ),
-                // Close after select; `@name` would otherwise still match the at-trigger.
+                // Close after select; the inserted token would otherwise still match the at-trigger.
                 atSuggestionsVisible = false,
                 atSuggestions = emptyList(),
                 slashSuggestionsVisible = false,
                 slashSuggestions = emptyList(),
+                fileSuggestions = emptyList(),
+                fileSuggestionQuery = null,
             )
         }
         schedulePersistDraft()
@@ -868,6 +904,7 @@ class SessionChatComposer(
             it.copy(
                 text = text,
                 agentMentions = emptyList(),
+                fileMentions = emptyList(),
                 cursor = text.length,
                 selectionRevision = it.selectionRevision + 1,
             )
@@ -908,14 +945,23 @@ class SessionChatComposer(
         val composer = _state.value.composer
         val submittedText = composer.text
         val submittedMentions = composer.agentMentions
-        val mentionPrepared =
-            if (allowsMentions) {
-                composer.text to composer.agentMentions
-            } else {
-                ComposerMentionRouting.withoutMentionTokens(composer.text, composer.agentMentions) to emptyList()
-            }
-        val (prompt, mentionsForSend) =
-            ComposerMentionRouting.trimForSend(mentionPrepared.first, mentionPrepared.second)
+        val submittedFileMentions = composer.fileMentions
+        val mentionText: String
+        val mentionList: List<dev.opencode.mobile.domain.agent.AgentMention>
+        val fileList: List<FileMention>
+        if (allowsMentions) {
+            mentionText = submittedText
+            mentionList = submittedMentions
+            fileList = submittedFileMentions
+        } else {
+            mentionText = ComposerMentionRouting.withoutMentionTokens(submittedText, submittedMentions)
+            mentionList = emptyList()
+            fileList = emptyList()
+        }
+        val trimmed = ComposerMentionRouting.trimForSend(mentionText, mentionList, fileList)
+        val prompt = trimmed.text
+        val mentionsForSend = trimmed.agentMentions
+        val filesForSend = trimmed.fileMentions
         val attachments = composer.attachments
         val submittedDraftRevision = draftRevision
         val submittedAttachmentRevisions =
@@ -1011,6 +1057,7 @@ class SessionChatComposer(
                         textRevision = submittedDraftRevision,
                         submittedText = submittedText,
                         submittedMentions = submittedMentions,
+                        submittedFileMentions = submittedFileMentions,
                         submittedAttachments = attachments,
                         submittedAttachmentRevisions = submittedAttachmentRevisions,
                     )
@@ -1034,6 +1081,7 @@ class SessionChatComposer(
                         text: String,
                         skillIds: List<String>,
                         mentions: List<dev.opencode.mobile.domain.agent.AgentMention>,
+                        fileMentions: List<FileMention>,
                     ) {
                         suspend fun send(delivery: FollowUpDelivery) {
                             messageRepository.sendPromptAsync(
@@ -1052,6 +1100,8 @@ class SessionChatComposer(
                                         variant = composer.selectedVariant,
                                         mode = composer.selectedMode,
                                         agentMentions = mentions,
+                                        fileMentions = fileMentions,
+                                        worktree = worktree,
                                         skillIds = skillIds,
                                         delivery = delivery,
                                     ),
@@ -1073,8 +1123,8 @@ class SessionChatComposer(
                                 throw busy
                             }
                         }
-                        if (mentions.isNotEmpty()) {
-                            logI("prompt send agentParts=${mentions.size}")
+                        if (mentions.isNotEmpty() || fileMentions.isNotEmpty()) {
+                            logI("prompt send agentParts=${mentions.size} fileParts=${fileMentions.size}")
                         }
                     }
                     when (intent) {
@@ -1104,12 +1154,14 @@ class SessionChatComposer(
                                 text = intent.text,
                                 skillIds = emptyList(),
                                 mentions = mentionsForSend,
+                                fileMentions = filesForSend,
                             )
                         is ComposerSubmitIntent.SkillPrompt ->
                             sendPrompt(
                                 text = intent.text,
                                 skillIds = listOf(intent.skillId),
                                 mentions = emptyList(),
+                                fileMentions = emptyList(),
                             )
                         ComposerSubmitIntent.Ignored ->
                             error("Slash commands are not available")
@@ -1137,6 +1189,7 @@ class SessionChatComposer(
                     textRevision = submittedDraftRevision,
                     submittedText = submittedText,
                     submittedMentions = submittedMentions,
+                    submittedFileMentions = submittedFileMentions,
                     submittedAttachments = attachments,
                     submittedAttachmentRevisions = submittedAttachmentRevisions,
                 )
@@ -1163,6 +1216,7 @@ class SessionChatComposer(
             }
             val clearedText = if (draftRevision == textRevision) "" else state.composer.text
             val clearedMentions = if (draftRevision == textRevision) emptyList() else state.composer.agentMentions
+            val clearedFiles = if (draftRevision == textRevision) emptyList() else state.composer.fileMentions
             val clearedCursor = if (draftRevision == textRevision) 0 else state.composer.cursor
             state
                 .copy(
@@ -1171,6 +1225,7 @@ class SessionChatComposer(
                             text = clearedText,
                             attachments = keptAttachments,
                             agentMentions = clearedMentions,
+                            fileMentions = clearedFiles,
                             cursor = clearedCursor,
                             selectionRevision = state.composer.selectionRevision + 1,
                         ),
@@ -1178,6 +1233,7 @@ class SessionChatComposer(
                     text = clearedText,
                     cursor = clearedCursor,
                     mentions = clearedMentions,
+                    fileMentions = clearedFiles,
                 )
         }
         persistDraftJob?.cancel()
@@ -1188,6 +1244,7 @@ class SessionChatComposer(
         textRevision: Int,
         submittedText: String,
         submittedMentions: List<dev.opencode.mobile.domain.agent.AgentMention>,
+        submittedFileMentions: List<FileMention>,
         submittedAttachments: List<Attachment>,
         submittedAttachmentRevisions: Map<String, Int>,
     ) {
@@ -1200,6 +1257,7 @@ class SessionChatComposer(
             val restoreText = draftRevision == textRevision
             val text = if (restoreText) submittedText else state.composer.text
             val mentions = if (restoreText) submittedMentions else state.composer.agentMentions
+            val files = if (restoreText) submittedFileMentions else state.composer.fileMentions
             val cursor = if (restoreText) submittedText.length else state.composer.cursor
             val currentIds =
                 state.composer.attachments
@@ -1214,6 +1272,7 @@ class SessionChatComposer(
                             text = text,
                             attachments = restoredAttachments,
                             agentMentions = mentions,
+                            fileMentions = files,
                             cursor = cursor,
                             selectionRevision = state.composer.selectionRevision + 1,
                         ),
@@ -1221,6 +1280,7 @@ class SessionChatComposer(
                     text = text,
                     cursor = cursor,
                     mentions = mentions,
+                    fileMentions = files,
                 )
         }
         persistDraftJob?.cancel()
@@ -1308,7 +1368,11 @@ class SessionChatComposer(
 
     private fun currentDraft(): ComposerDraft {
         val composer = _state.value.composer
-        return ComposerDraft(text = composer.text, agentMentions = composer.agentMentions)
+        return ComposerDraft(
+            text = composer.text,
+            agentMentions = composer.agentMentions,
+            fileMentions = composer.fileMentions,
+        )
     }
 
     private fun applyDraft(draft: ComposerDraft) {
@@ -1319,6 +1383,7 @@ class SessionChatComposer(
                         state.composer.copy(
                             text = draft.text,
                             agentMentions = draft.agentMentions,
+                            fileMentions = draft.fileMentions,
                             cursor = draft.text.length,
                             selectionRevision = state.composer.selectionRevision + 1,
                         ),
@@ -1326,6 +1391,7 @@ class SessionChatComposer(
                     text = draft.text,
                     cursor = draft.text.length,
                     mentions = draft.agentMentions,
+                    fileMentions = draft.fileMentions,
                 )
         }
     }
@@ -1599,26 +1665,31 @@ class SessionChatComposer(
                 text = composer.text,
                 cursor = composer.cursor,
                 mentions = composer.agentMentions,
+                fileMentions = composer.fileMentions,
             )
         }
+        scheduleFileSearch()
     }
 
     private fun SessionChatComposerRegionState.withComposerSuggestions(
         text: String,
         cursor: Int,
         mentions: List<dev.opencode.mobile.domain.agent.AgentMention> = emptyList(),
+        fileMentions: List<FileMention> = emptyList(),
     ): SessionChatComposerRegionState =
-        when (val mode = this.suggestionMode(text, cursor, mentions)) {
-            is ComposerSuggestionMode.At ->
+        when (val mode = suggestionMode(text, cursor, mentions, fileMentions)) {
+            is ComposerSuggestionMode.At -> {
+                val files = if (fileSuggestionQuery == mode.query) fileSuggestions else emptyList()
                 copy(
                     atSuggestionsVisible = true,
                     atSuggestions =
                         ComposerMentionRouting
                             .filterAgents(mentionableAgents, mode.query)
-                            .map { it.toAtSuggestion() },
+                            .map { it.toAtSuggestion() } + files,
                     slashSuggestionsVisible = false,
                     slashSuggestions = emptyList(),
                 )
+            }
             is ComposerSuggestionMode.Slash ->
                 copy(
                     slashSuggestionsVisible = true,
@@ -1646,17 +1717,20 @@ class SessionChatComposer(
         text: String,
         cursor: Int,
         mentions: List<dev.opencode.mobile.domain.agent.AgentMention>,
-    ): ComposerSuggestionMode = _state.value.suggestionMode(text, cursor, mentions)
+        fileMentions: List<FileMention> = emptyList(),
+    ): ComposerSuggestionMode = _state.value.suggestionMode(text, cursor, mentions, fileMentions)
 
     private fun SessionChatComposerRegionState.suggestionMode(
         text: String,
         cursor: Int,
         mentions: List<dev.opencode.mobile.domain.agent.AgentMention>,
+        fileMentions: List<FileMention> = emptyList(),
     ): ComposerSuggestionMode =
         ComposerMentionRouting.suggestionMode(
             text = text,
             cursor = cursor,
             mentions = mentions,
+            fileMentions = fileMentions,
             allowsMentions = allowsMentions,
             allowsSlashCommands = allowsSlashCommands || slashSkills().isNotEmpty(),
         )
@@ -1664,6 +1738,65 @@ class SessionChatComposer(
     private fun SessionChatComposerRegionState.slashSkills(): List<ComposerSlashSkill> {
         val providerId = composer.selectedModel?.option?.providerId ?: return emptyList()
         return composer.modelProviderTraits[providerId]?.slashSkills.orEmpty()
+    }
+
+    private fun scheduleFileSearch() {
+        val composer = _state.value.composer
+        val mode =
+            suggestionMode(
+                text = composer.text,
+                cursor = composer.cursor,
+                mentions = composer.agentMentions,
+                fileMentions = composer.fileMentions,
+            )
+        val query = (mode as? ComposerSuggestionMode.At)?.query
+        if (query == null) {
+            fileSearchJob?.cancel()
+            fileSearchGeneration += 1
+            if (_state.value.fileSuggestionQuery != null || _state.value.fileSuggestions.isNotEmpty()) {
+                _state.update { it.copy(fileSuggestions = emptyList(), fileSuggestionQuery = null) }
+            }
+            return
+        }
+        if (query == _state.value.fileSuggestionQuery && fileSearchJob?.isActive != true) return
+        val repository = projectFilesRepository ?: return
+        val worktree = boundWorktree ?: return
+        fileSearchJob?.cancel()
+        val generation = ++fileSearchGeneration
+        fileSearchJob =
+            scope.launch {
+                if (fileSearchDelayMs > 0) delay(fileSearchDelayMs)
+                val results =
+                    try {
+                        withContext(ioDispatcher) { repository.findFiles(worktree, query) }
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (_: Exception) {
+                        emptyList()
+                    }
+                if (generation != fileSearchGeneration) return@launch
+                _state.update { state ->
+                    val current = state.composer
+                    val currentMode =
+                        suggestionMode(
+                            text = current.text,
+                            cursor = current.cursor,
+                            mentions = current.agentMentions,
+                            fileMentions = current.fileMentions,
+                        )
+                    if (currentMode !is ComposerSuggestionMode.At || currentMode.query != query) return@update state
+                    state
+                        .copy(
+                            fileSuggestions = results.map { it.toFileSuggestion() },
+                            fileSuggestionQuery = query,
+                        ).withComposerSuggestions(
+                            text = current.text,
+                            cursor = current.cursor,
+                            mentions = current.agentMentions,
+                            fileMentions = current.fileMentions,
+                        )
+                }
+            }
     }
 
     private fun formatSentTime(epochMs: Long): String =

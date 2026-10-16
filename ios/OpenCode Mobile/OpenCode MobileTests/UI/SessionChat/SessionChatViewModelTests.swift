@@ -890,6 +890,38 @@ struct SessionChatViewModelTests {
         #expect(viewModel.uiState.composer.agentMentions.isEmpty)
     }
 
+    @Test func atSuggestion_selectsProjectFileAndSendsReferenceNotAttachment() async {
+        let repository = FakeMessageRepository()
+        let files = StubProjectFilesRepository(
+            entries: [ProjectEntry(name: "App.kt", relativePath: "src/App.kt", isDirectory: false)]
+        )
+        let viewModel = makeViewModel(messageRepository: repository, projectFilesRepository: files)
+        viewModel.fileSearchDelayMs = 0
+        await viewModel.loadMessages()
+
+        viewModel.updateComposerText("see @App", cursor: 8)
+        let ready = await waitUntil {
+            viewModel.uiState.atSuggestions.contains { $0.filePath == "src/App.kt" }
+        }
+        guard ready else {
+            Issue.record("Expected project file suggestion")
+            return
+        }
+
+        viewModel.selectAtSuggestion(agentName: "file:src/App.kt")
+        #expect(viewModel.uiState.composer.text == "see @src/App.kt ")
+        #expect(viewModel.uiState.composer.fileMentions.count == 1)
+        #expect(viewModel.uiState.composer.agentMentions.isEmpty)
+        #expect(viewModel.uiState.composer.attachments.isEmpty)
+
+        await viewModel.sendPrompt()
+
+        #expect(repository.sentOptions?.text == "see @src/App.kt")
+        #expect(repository.sentOptions?.fileMentions.map(\.path) == ["src/App.kt"])
+        #expect(repository.sentOptions?.attachments.isEmpty == true)
+        #expect(repository.sentOptions?.worktree == "/repo")
+    }
+
     @Test func atSuggestion_winsOverSlashSuggestions() async {
         let viewModel = makeViewModel(messageRepository: FakeMessageRepository())
         await viewModel.loadMessages()
@@ -4622,7 +4654,8 @@ struct SessionChatViewModelTests {
         catalogRetryDelaysMs: [Int] = [],
         engine: ConnectionEngine = .opencode,
         harnessRepository: (any T3HarnessRepository)? = nil,
-        sessionViewReporter: (any SessionViewReporter)? = nil
+        sessionViewReporter: (any SessionViewReporter)? = nil,
+        projectFilesRepository: (any ProjectFilesRepository)? = nil
     ) -> SessionChatViewModel {
         let eventStream = eventStream ?? FakeForegroundEventStream()
         // Mutations (send/rename/fork/new/permissions) require Connected; default fakes start Idle.
@@ -4681,6 +4714,7 @@ struct SessionChatViewModelTests {
             liveUpdates: liveUpdates,
             clock: clock,
             harnessRepository: harnessRepository,
+            projectFilesRepository: projectFilesRepository,
             catalogRetryDelaysMs: catalogRetryDelaysMs
         )
         viewModel.startObserving()
@@ -4796,6 +4830,22 @@ struct SessionChatViewModelTests {
             try? await Task.sleep(for: .milliseconds(10))
         }
         return predicate()
+    }
+}
+
+private nonisolated struct StubProjectFilesRepository: ProjectFilesRepository, Sendable {
+    var entries: [ProjectEntry]
+
+    func listEntries(worktree _: String, relativeDirectory _: String) async throws -> [ProjectEntry] {
+        []
+    }
+
+    func findFiles(worktree _: String, query _: String, limit _: Int) async throws -> [ProjectEntry] {
+        entries
+    }
+
+    func readFile(worktree _: String, relativePath _: String) async throws -> ProjectFileContent {
+        throw ProjectFilesError.notFound
     }
 }
 

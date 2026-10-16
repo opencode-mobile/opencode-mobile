@@ -10,7 +10,6 @@ import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
 import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
-import dev.opencode.mobile.ui.components.OpenCodeBottomSheetContentMode
 import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeListItemStatus
 import dev.opencode.mobile.ui.components.OpenCodeListItemStatusTone
@@ -42,7 +41,6 @@ internal fun SessionChatSkillsSheet(
             )
             onDismiss()
         },
-        contentMode = OpenCodeBottomSheetContentMode.ActionList,
     ) {
         Column(
             modifier =

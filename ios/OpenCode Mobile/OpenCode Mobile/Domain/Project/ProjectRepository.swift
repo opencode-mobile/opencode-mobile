@@ -37,7 +37,15 @@ struct DefaultProjectRepository: ProjectRepository, Sendable {
     func listProjects() async throws -> [Project] {
         try await run {
             if await activeConnectionManager?.currentProtocolOrProbe() == .v2 {
-                return try await api.listProjectsV2().map(adapter.project)
+                do {
+                    return try await api.listProjectsV2().map(adapter.project)
+                } catch is CancellationError {
+                    throw CancellationError()
+                } catch {
+                    // Servers detected as v2 may not serve `/api/project` (it falls through to
+                    // the web UI); the unprefixed list is still there.
+                    DiagnosticLog.info(.connection, "api/project unavailable; using /project")
+                }
             }
             return try await api.listProjects().map(adapter.project)
         }

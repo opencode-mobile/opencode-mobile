@@ -1,0 +1,35 @@
+OpenCode Mobile
+Copyright (C) 2026 Ivan Fenenko
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free Software
+Foundation, version 3 of the License. See LICENSE for the full text.
+
+This program is distributed in the hope that it will be useful, but WITHOUT
+ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+Third-party components keep their own licenses; see THIRD_PARTY_NOTICES.md.
+
+
+Additional permission under GNU GPL version 3 section 7
+
+If you modify this Program, or any covered work, by linking or combining it
+with the Firebase SDKs or Google Play services libraries (or a modified
+version of those libraries), containing parts covered by the terms of their
+respective licenses, the licensors of this Program grant you additional
+permission to convey the resulting work. Corresponding Source for a
+non-source form of such a combination shall not include the source code for
+the parts of those libraries used as well as that of the covered work.
+
+
+Branding
+
+The GPL covers the source code only. The app icon and store graphics in
+app-icon/ and play-listing/, and the launcher and app icon assets generated
+from them in the Android and iOS projects, are not licensed under the GPL;
+all rights reserved. A fork that you distribute must use its own icon,
+store graphics, application id, and bundle id.
+
+OpenCode Mobile is an unofficial client. It is not affiliated with or
+endorsed by the opencode project or its authors.

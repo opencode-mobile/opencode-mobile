@@ -6,8 +6,14 @@ plugins {
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
     alias(libs.plugins.ktlint)
-    alias(libs.plugins.google.services)
-    alias(libs.plugins.firebase.crashlytics)
+    alias(libs.plugins.google.services) apply false
+    alias(libs.plugins.firebase.crashlytics) apply false
+}
+
+// Release CI injects google-services.json; a clone without it builds Firebase-free.
+if (file("google-services.json").isFile) {
+    apply(plugin = "com.google.gms.google-services")
+    apply(plugin = "com.google.firebase.crashlytics")
 }
 
 val releaseArtifactTaskRequested =
@@ -87,7 +93,9 @@ ktlint {
 
 android {
     namespace = "dev.opencode.mobile"
-    compileSdk = 36
+    // Compose BOM 2026.09 and hilt-navigation-compose 1.4 require compile SDK 37.
+    // targetSdk stays 36 so the app does not opt in to new runtime behavior.
+    compileSdk = 37
     // Pin NDK so release builds can package native debug symbols for Play.
     ndkVersion = "27.2.12479018"
     defaultConfig {
@@ -188,6 +196,8 @@ dependencies {
 
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
+    // Hilt's transitive kotlin-metadata-jvm stops at metadata 2.2. Kotlin 2.4 needs 2.4.x on the processor classpath.
+    ksp(libs.kotlin.metadata.jvm)
     implementation(libs.hilt.navigation.compose)
 
     implementation(libs.ktor.client.core)
