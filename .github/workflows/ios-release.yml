@@ -96,6 +96,10 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
+      - name: Install Android compile SDK 37
+        working-directory: .
+        run: ./scripts/ensure-android-platform.sh 37
+
       - name: Prepare App Store Connect API key
         shell: bash
         env:
@@ -163,10 +167,7 @@ jobs:
           } >> "$GITHUB_ENV"
 
       - name: Resolve Swift Package dependencies
-        run: |
-          xcodebuild -resolvePackageDependencies \
-            -project "OpenCode Mobile.xcodeproj" \
-            -scheme "OpenCode Mobile"
+        run: bash ../../.github/scripts/resolve-ios-packages.sh
 
       - name: Archive Release for iOS device
         run: |
