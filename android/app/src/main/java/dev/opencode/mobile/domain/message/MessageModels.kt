@@ -160,6 +160,15 @@ sealed class MessagePart {
         val timeStartEpochMs: Long? = null,
         val timeEndEpochMs: Long? = null,
     ) : MessagePart()
+
+    /**
+     * A v2 timeline notice ([TimelineNotice]); the only part of a
+     * [MessageRole.Notice] message. [id] is the notice message id.
+     */
+    data class Notice(
+        val id: String,
+        val notice: TimelineNotice,
+    ) : MessagePart()
 }
 
 data class PromptSendOptions(
@@ -186,6 +195,9 @@ enum class MessageRole {
     Assistant,
     Command,
     Tool,
+
+    /** A v2 timeline notice: neither a prompt nor a reply, never part of a turn. */
+    Notice,
     Unknown,
 }
 

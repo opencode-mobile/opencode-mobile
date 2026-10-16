@@ -17,7 +17,9 @@ object SessionTranscriptAuthority {
                 is MessagePart.Reasoning -> ThoughtPartChrome.isVisible(part)
                 is MessagePart.Tool -> ToolPartIdentity.isVisibleOnTimeline(part)
                 is MessagePart.File -> true
-                is MessagePart.Compaction -> false
+                is MessagePart.Compaction,
+                is MessagePart.Notice,
+                -> false
             }
         }
 }

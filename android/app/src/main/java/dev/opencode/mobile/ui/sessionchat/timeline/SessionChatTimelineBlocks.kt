@@ -8,6 +8,7 @@ import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.MessageStopReason
 import dev.opencode.mobile.domain.message.ThoughtPartChrome
+import dev.opencode.mobile.domain.message.TimelineNotice
 import dev.opencode.mobile.domain.message.ToolPartIdentity
 import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.markdown.MarkdownDocument
@@ -79,6 +80,15 @@ sealed class SessionChatTimelineBlock {
         val action: FailureAction? = null,
         val actionLabel: String? = null,
         val coveredByLiveRetry: Boolean = false,
+    ) : SessionChatTimelineBlock()
+
+    /**
+     * A v2 timeline notice (moved, agent, model, instructions, restart): its own
+     * quiet row, never merged into a reply. Copy comes from [SessionChatNoticeCopy].
+     */
+    data class Notice(
+        override val blockID: String,
+        val notice: TimelineNotice,
     ) : SessionChatTimelineBlock()
 
     data class ToolGroup(
@@ -368,6 +378,11 @@ object SessionChatTimelineBlocks {
                     }
                     index += 1
                 }
+                is MessagePart.Notice -> {
+                    if (!flushText()) return SessionChatTimelineBlocksResult.MissingPartIds
+                    blocks += noticeBlock(part)
+                    index += 1
+                }
             }
         }
         if (!flushText()) return SessionChatTimelineBlocksResult.MissingPartIds
@@ -469,6 +484,10 @@ object SessionChatTimelineBlocks {
                     if (!flushParagraph()) return SessionChatTimelineBlocksResult.MissingPartIds
                     blocks += compactionCard(part) ?: return SessionChatTimelineBlocksResult.MissingPartIds
                 }
+                is MessagePart.Notice -> {
+                    if (!flushParagraph()) return SessionChatTimelineBlocksResult.MissingPartIds
+                    blocks += noticeBlock(part)
+                }
             }
         }
         if (!flushParagraph()) return SessionChatTimelineBlocksResult.MissingPartIds
@@ -491,6 +510,9 @@ object SessionChatTimelineBlocks {
             detailIsMarkdown = true,
         )
     }
+
+    private fun noticeBlock(part: MessagePart.Notice): SessionChatTimelineBlock.Notice =
+        SessionChatTimelineBlock.Notice(blockID = PresentationBlockId.direct(part.id), notice = part.notice)
 
     /** A message that carries a compaction marker stays its own row. */
     private fun isCompactionBody(body: DisplayMessageBody): Boolean = body.message.parts.any { it is MessagePart.Compaction }
@@ -1017,6 +1039,7 @@ object SessionChatTimelineBlocks {
             is SessionChatTimelineBlock.StepParagraph,
             is SessionChatTimelineBlock.StopNote,
             is SessionChatTimelineBlock.FailureLine,
+            is SessionChatTimelineBlock.Notice,
             -> false
         }
 
@@ -1097,6 +1120,7 @@ object SessionChatTimelineBlocks {
     private fun isTransparentPart(part: MessagePart): Boolean =
         when (part) {
             is MessagePart.Compaction -> true
+            is MessagePart.Notice -> false
             is MessagePart.Text -> !part.isDisplayable || part.text.isBlank()
             is MessagePart.Tool -> !isVisibleTool(part)
             is MessagePart.File -> false
