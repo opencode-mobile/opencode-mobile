@@ -18,22 +18,29 @@ nonisolated final class EventsAPIClient: @unchecked Sendable {
 
     private let connectionProvider: @Sendable () -> ServerConnection?
     private let injectedSession: URLSession?
+    private let onConnectBudgetExceeded: @Sendable () -> Void
     private let sessionLock = NSLock()
     private var ownedDials: [OwnedDial] = []
     private var installedToken: UInt64 = 0
     private var retiredBefore: UInt64 = 0
 
-    init(connectionProvider: @escaping @Sendable () -> ServerConnection?) {
+    init(
+        connectionProvider: @escaping @Sendable () -> ServerConnection?,
+        onConnectBudgetExceeded: @escaping @Sendable () -> Void = {}
+    ) {
         self.connectionProvider = connectionProvider
         self.injectedSession = nil
+        self.onConnectBudgetExceeded = onConnectBudgetExceeded
     }
 
     init(
         connectionProvider: @escaping @Sendable () -> ServerConnection?,
-        urlSession: URLSession
+        urlSession: URLSession,
+        onConnectBudgetExceeded: @escaping @Sendable () -> Void = {}
     ) {
         self.connectionProvider = connectionProvider
         self.injectedSession = urlSession
+        self.onConnectBudgetExceeded = onConnectBudgetExceeded
     }
 
     deinit {
@@ -228,6 +235,7 @@ nonisolated final class EventsAPIClient: @unchecked Sendable {
                     .sse,
                     "SSE connect budget exceeded path=\(path) budgetMs=\(Self.budgetMilliseconds(connectBudget))"
                 )
+                onConnectBudgetExceeded()
                 return .transport(SseConnectBudgetExceeded())
             }
             if error is CancellationError {

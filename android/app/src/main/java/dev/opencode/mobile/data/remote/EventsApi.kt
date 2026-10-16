@@ -31,6 +31,11 @@ class EventsApi private constructor(
 ) {
     constructor(httpClient: OpencodeSseHttpClient) : this(sseClient = httpClient)
 
+    constructor(
+        httpClient: OpencodeSseHttpClient,
+        onEvict: () -> Unit,
+    ) : this(sseClient = httpClient, onEvict = onEvict)
+
     internal constructor(
         httpClient: HttpClient,
         onEvict: () -> Unit = {},
@@ -149,6 +154,22 @@ class EventsApi private constructor(
         const val CONNECT_BUDGET_EXCEEDED = "SSE connect budget exceeded"
     }
 }
+
+fun sessionEventsApi(
+    sseHttpClient: OpencodeSseHttpClient,
+    rebuildRest: () -> Unit,
+): EventsApi = EventsApi(sseHttpClient, onEvict = rebuildRest)
+
+internal fun sessionEventsApi(
+    sse: HttpClient,
+    rebuildRest: () -> Unit,
+    connectBudgetMs: Long = EventsApi.CONNECT_BUDGET_MS,
+): EventsApi =
+    EventsApi(
+        httpClient = sse,
+        onEvict = rebuildRest,
+        connectBudgetMs = connectBudgetMs,
+    )
 
 internal class SseConnectRace {
     private val state = AtomicInteger(PENDING)

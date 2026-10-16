@@ -143,7 +143,12 @@ struct EventsAPIClientTests {
 
     @Test func streamEvents_connectBudgetFailsHungHandshakeAsTransport() async throws {
         let before = Set(DiagnosticLogBuffer.shared.snapshot().entries.map(\.id))
-        let client = makeClient(responseBody: "", hang: true)
+        let budgetHits = BudgetHitCounter()
+        let client = makeClient(
+            responseBody: "",
+            hang: true,
+            onConnectBudgetExceeded: { budgetHits.increment() }
+        )
         let started = ContinuousClock.now
         let outcome = try await client.streamEvents(
             path: "api/event",
@@ -158,6 +163,7 @@ struct EventsAPIClientTests {
         #expect(error is SseConnectBudgetExceeded)
         #expect(!(error is SseHandshakeError))
         #expect(elapsed < .seconds(2))
+        #expect(budgetHits.value == 1)
 
         let fresh = DiagnosticLogBuffer.shared.snapshot().entries.filter { !before.contains($0.id) }
         #expect(fresh.contains {
@@ -178,6 +184,7 @@ struct EventsAPIClientTests {
             return
         }
         #expect(lines.count == 1)
+        #expect(budgetHits.value == 1)
     }
 
     @Test func retireStreamingSessions_rejectsLaterOpenOfOlderToken() {
@@ -204,7 +211,8 @@ struct EventsAPIClientTests {
         responseBody: String,
         serverProtocol: ServerProtocol? = nil,
         statusCode: Int = 200,
-        hang: Bool = false
+        hang: Bool = false,
+        onConnectBudgetExceeded: @escaping @Sendable () -> Void = {}
     ) -> EventsAPIClient {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [MockSSEURLProtocol.self]
@@ -221,8 +229,26 @@ struct EventsAPIClientTests {
         )
         return EventsAPIClient(
             connectionProvider: { connection },
-            urlSession: session
+            urlSession: session,
+            onConnectBudgetExceeded: onConnectBudgetExceeded
         )
+    }
+}
+
+private final class BudgetHitCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var hits = 0
+
+    func increment() {
+        lock.lock()
+        hits += 1
+        lock.unlock()
+    }
+
+    var value: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return hits
     }
 }
 

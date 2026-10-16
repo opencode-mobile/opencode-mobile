@@ -2,20 +2,20 @@ import Foundation
 
 nonisolated struct FilesystemAPIClient: Sendable {
     private let connectionProvider: @Sendable () -> ServerConnection?
-    private let urlSession: URLSession
+    private let resolveURLSession: @Sendable () -> URLSession
     private let decoder = JSONDecoder()
 
     init(
         connectionProvider: @escaping @Sendable () -> ServerConnection?,
-        urlSession: URLSession = OpenCodeURLSessions.rest
+        urlSession: URLSession? = nil
     ) {
         self.connectionProvider = connectionProvider
-        self.urlSession = urlSession
+        self.resolveURLSession = OpenCodeURLSessions.restResolver(injected: urlSession)
     }
 
-    init(fixedConnection: ServerConnection, urlSession: URLSession = OpenCodeURLSessions.rest) {
+    init(fixedConnection: ServerConnection, urlSession: URLSession? = nil) {
         self.connectionProvider = { fixedConnection }
-        self.urlSession = urlSession
+        self.resolveURLSession = OpenCodeURLSessions.restResolver(injected: urlSession)
     }
 
     func getPaths() async throws -> PathDTO {
@@ -141,7 +141,7 @@ nonisolated struct FilesystemAPIClient: Sendable {
         let startedAt = OpenCodeAPITrace.start(request)
         let result: BoundedBodyCollector.Result
         do {
-            result = try await BoundedBodyCollector.load(request, in: urlSession, limit: limit)
+            result = try await BoundedBodyCollector.load(request, in: resolveURLSession(), limit: limit)
         } catch ProjectsAPIError.invalidResponse {
             OpenCodeAPITrace.invalidResponse(request, startedAt: startedAt)
             throw ProjectsAPIError.invalidResponse
@@ -196,7 +196,7 @@ nonisolated struct FilesystemAPIClient: Sendable {
         let data: Data
         let response: URLResponse
         do {
-            (data, response) = try await urlSession.data(for: request)
+            (data, response) = try await resolveURLSession().data(for: request)
         } catch {
             OpenCodeAPITrace.failure(request, error: error, startedAt: startedAt)
             throw error
