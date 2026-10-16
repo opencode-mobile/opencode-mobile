@@ -1,7 +1,6 @@
 import SwiftUI
 
-/// Pinned part of the Add project sheet: path field with Up, root chips, and the Add button.
-/// Kept above the scrolling rows so Add stays visible over the keyboard.
+/// Pinned top of the Add project sheet: path field with Up, then the root chips.
 struct AddProjectSheetHeader: View {
     let sheet: AddProjectSheetState
     let onFieldChange: (String) -> Void
@@ -45,15 +44,33 @@ struct AddProjectSheetHeader: View {
                     .padding(.horizontal, 20)
                 }
             }
+        }
+        .padding(.bottom, 8)
+    }
+}
 
+/// Pinned bottom of the Add project sheet: the target path, then the Add button.
+/// The sheet keeps it above the keyboard and supplies its padding.
+struct AddProjectSheetFooter: View {
+    let sheet: AddProjectSheetState
+    let onAdd: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let target = sheet.addTarget {
+                Text(target)
+                    .font(OpenCodeTypography.caption)
+                    .foregroundStyle(OpenCodeColors.textWeak)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
             OpenCodeButton(
                 variant: .fullWidthText(title: sheet.addTitle),
                 enabled: sheet.addEnabled,
                 action: onAdd
             )
-            .padding(.horizontal, 20)
         }
-        .padding(.bottom, 8)
     }
 }
 

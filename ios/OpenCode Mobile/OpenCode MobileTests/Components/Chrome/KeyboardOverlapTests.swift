@@ -65,46 +65,57 @@ final class KeyboardOverlapTests: XCTestCase {
         XCTAssertEqual(KeyboardOverlap.currentAmount(in: host), 0)
     }
 
-    func testDismissesActionListOnFirstPresent() {
+    func testDismissSheetDismissesOnFirstPresent() {
         XCTAssertTrue(
-            KeyboardOverlap.shouldDismissActionListKeyboard(
+            KeyboardOverlap.shouldDismissSheetKeyboard(
                 isPresented: true,
                 wasPresented: false,
-                contentMode: .actionList,
-                presentedContentMode: nil
+                keyboard: .dismiss,
+                presentedKeyboard: nil
             )
         )
     }
 
-    func testDoesNotDismissFormOnFirstPresent() {
+    func testKeepSheetDoesNotDismissOnFirstPresent() {
         XCTAssertFalse(
-            KeyboardOverlap.shouldDismissActionListKeyboard(
+            KeyboardOverlap.shouldDismissSheetKeyboard(
                 isPresented: true,
                 wasPresented: false,
-                contentMode: .form,
-                presentedContentMode: nil
+                keyboard: .keep,
+                presentedKeyboard: nil
             )
         )
     }
 
-    func testDismissesWhenSwitchingFromFormToActionList() {
-        XCTAssertTrue(
-            KeyboardOverlap.shouldDismissActionListKeyboard(
-                isPresented: true,
-                wasPresented: true,
-                contentMode: .actionList,
-                presentedContentMode: .form
-            )
-        )
-    }
-
-    func testDoesNotDismissRepeatedActionListUpdates() {
+    func testExpandSheetDoesNotDismissOnFirstPresent() {
         XCTAssertFalse(
-            KeyboardOverlap.shouldDismissActionListKeyboard(
+            KeyboardOverlap.shouldDismissSheetKeyboard(
+                isPresented: true,
+                wasPresented: false,
+                keyboard: .expand,
+                presentedKeyboard: nil
+            )
+        )
+    }
+
+    func testDismissesWhenSwitchingFromKeepToDismiss() {
+        XCTAssertTrue(
+            KeyboardOverlap.shouldDismissSheetKeyboard(
                 isPresented: true,
                 wasPresented: true,
-                contentMode: .actionList,
-                presentedContentMode: .actionList
+                keyboard: .dismiss,
+                presentedKeyboard: .keep
+            )
+        )
+    }
+
+    func testDoesNotDismissRepeatedDismissUpdates() {
+        XCTAssertFalse(
+            KeyboardOverlap.shouldDismissSheetKeyboard(
+                isPresented: true,
+                wasPresented: true,
+                keyboard: .dismiss,
+                presentedKeyboard: .dismiss
             )
         )
     }

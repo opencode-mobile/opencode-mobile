@@ -10,145 +10,313 @@ final class OpenCodeBottomSheetHeightTests: XCTestCase {
 
     func testAvailableHeightSubtractsBottomInsetAndKeyboard() {
         XCTAssertEqual(
-            OpenCodeBottomSheetHeight.availableHeight(containerHeight: containerHeight, keyboardOverlap: 0),
+            OpenCodeBottomSheetLayoutMath.availableHeight(containerHeight: containerHeight, keyboardOverlap: 0),
             866
         )
         XCTAssertEqual(
-            OpenCodeBottomSheetHeight.availableHeight(containerHeight: containerHeight, keyboardOverlap: keyboard),
+            OpenCodeBottomSheetLayoutMath.availableHeight(containerHeight: containerHeight, keyboardOverlap: keyboard),
             530
         )
         XCTAssertEqual(
-            OpenCodeBottomSheetHeight.availableHeight(containerHeight: 100, keyboardOverlap: 200),
+            OpenCodeBottomSheetLayoutMath.availableHeight(containerHeight: 100, keyboardOverlap: 200),
             0
         )
     }
 
     func testKeepHeightUsesRestingHeightWithKeyboard() {
-        let available = OpenCodeBottomSheetHeight.availableHeight(
+        let available = OpenCodeBottomSheetLayoutMath.availableHeight(
             containerHeight: containerHeight,
             keyboardOverlap: keyboard
         )
-        let height = OpenCodeBottomSheetHeight.cardHeight(
+        let height = OpenCodeBottomSheetLayoutMath.cardHeight(
             restingHeight: available * 0.5,
             availableHeight: available,
             topSafeArea: topSafeArea,
             keyboardOverlap: keyboard,
-            behavior: .keepHeight
+            keyboard: .keep
         )
         XCTAssertEqual(height, 265)
     }
 
     func testKeepHeightClampsRestingHeightToAvailable() {
-        let height = OpenCodeBottomSheetHeight.cardHeight(
+        let height = OpenCodeBottomSheetLayoutMath.cardHeight(
             restingHeight: 900,
             availableHeight: 530,
             topSafeArea: topSafeArea,
             keyboardOverlap: keyboard,
-            behavior: .keepHeight
+            keyboard: .keep
         )
         XCTAssertEqual(height, 530)
     }
 
     func testKeepHeightLeavesContentSizedCardContentSized() {
         XCTAssertNil(
-            OpenCodeBottomSheetHeight.cardHeight(
+            OpenCodeBottomSheetLayoutMath.cardHeight(
                 restingHeight: nil,
                 availableHeight: 530,
                 topSafeArea: topSafeArea,
                 keyboardOverlap: keyboard,
-                behavior: .keepHeight
+                keyboard: .keep
             )
         )
     }
 
     func testExpandFillsSpaceBetweenTopSafeAreaAndKeyboard() {
-        let available = OpenCodeBottomSheetHeight.availableHeight(
+        let available = OpenCodeBottomSheetLayoutMath.availableHeight(
             containerHeight: containerHeight,
             keyboardOverlap: keyboard
         )
-        let height = OpenCodeBottomSheetHeight.cardHeight(
+        let height = OpenCodeBottomSheetLayoutMath.cardHeight(
             restingHeight: available * 0.5,
             availableHeight: available,
             topSafeArea: topSafeArea,
             keyboardOverlap: keyboard,
-            behavior: .expand
+            keyboard: .expand
         )
         // 874 - 8 bottom inset - 336 keyboard - 62 safe area - 8 top gap.
         XCTAssertEqual(height, 460)
-        XCTAssertEqual(OpenCodeBottomSheetHeight.expandedTopGap, 8)
+        XCTAssertEqual(OpenCodeBottomSheetLayoutMath.expandedTopGap, 8)
     }
 
     func testExpandReturnsToRestingHeightWhenKeyboardHides() {
-        let available = OpenCodeBottomSheetHeight.availableHeight(
+        let available = OpenCodeBottomSheetLayoutMath.availableHeight(
             containerHeight: containerHeight,
             keyboardOverlap: 0
         )
-        let height = OpenCodeBottomSheetHeight.cardHeight(
+        let height = OpenCodeBottomSheetLayoutMath.cardHeight(
             restingHeight: available * 0.5,
             availableHeight: available,
             topSafeArea: topSafeArea,
             keyboardOverlap: 0,
-            behavior: .expand
+            keyboard: .expand
         )
         XCTAssertEqual(height, 433)
     }
 
     func testExpandWithoutKeyboardKeepsContentSizedCard() {
         XCTAssertNil(
-            OpenCodeBottomSheetHeight.cardHeight(
+            OpenCodeBottomSheetLayoutMath.cardHeight(
                 restingHeight: nil,
                 availableHeight: 866,
                 topSafeArea: topSafeArea,
                 keyboardOverlap: 0,
-                behavior: .expand
+                keyboard: .expand
             )
         )
     }
 
     func testExpandGivesContentSizedCardAFixedHeightWithKeyboard() {
-        let height = OpenCodeBottomSheetHeight.cardHeight(
+        let height = OpenCodeBottomSheetLayoutMath.cardHeight(
             restingHeight: nil,
             availableHeight: 530,
             topSafeArea: topSafeArea,
             keyboardOverlap: keyboard,
-            behavior: .expand
+            keyboard: .expand
         )
         XCTAssertEqual(height, 460)
     }
 
     func testExpandNeverShrinksBelowRestingHeight() {
         // Landscape-like: little room, resting height already larger than the expanded target.
-        let height = OpenCodeBottomSheetHeight.cardHeight(
+        let height = OpenCodeBottomSheetLayoutMath.cardHeight(
             restingHeight: 120,
             availableHeight: 150,
             topSafeArea: 40,
             keyboardOverlap: 200,
-            behavior: .expand
+            keyboard: .expand
         )
         XCTAssertEqual(height, 120)
     }
 
     func testExpandedHeightIsNeverNegative() {
-        let height = OpenCodeBottomSheetHeight.cardHeight(
+        let height = OpenCodeBottomSheetLayoutMath.cardHeight(
             restingHeight: nil,
             availableHeight: 20,
             topSafeArea: 62,
             keyboardOverlap: keyboard,
-            behavior: .expand
+            keyboard: .expand
         )
         XCTAssertEqual(height, 0)
     }
 
     func testKeyboardExpandedOnlyForExpandWithVisibleKeyboard() {
-        XCTAssertTrue(OpenCodeBottomSheetHeight.isKeyboardExpanded(behavior: .expand, keyboardOverlap: keyboard))
-        XCTAssertFalse(OpenCodeBottomSheetHeight.isKeyboardExpanded(behavior: .expand, keyboardOverlap: 0))
-        XCTAssertFalse(OpenCodeBottomSheetHeight.isKeyboardExpanded(behavior: .keepHeight, keyboardOverlap: keyboard))
+        XCTAssertTrue(OpenCodeBottomSheetLayoutMath.isKeyboardExpanded(keyboard: .expand, keyboardOverlap: keyboard))
+        XCTAssertFalse(OpenCodeBottomSheetLayoutMath.isKeyboardExpanded(keyboard: .expand, keyboardOverlap: 0))
+        XCTAssertFalse(OpenCodeBottomSheetLayoutMath.isKeyboardExpanded(keyboard: .keep, keyboardOverlap: keyboard))
+        XCTAssertFalse(OpenCodeBottomSheetLayoutMath.isKeyboardExpanded(keyboard: .dismiss, keyboardOverlap: keyboard))
     }
 
-    func testFormsAlwaysTrackKeyboardAndActionListsOnlyWhenExpanding() {
-        XCTAssertTrue(OpenCodeBottomSheetHeight.tracksKeyboard(contentMode: .form, behavior: .keepHeight))
-        XCTAssertTrue(OpenCodeBottomSheetHeight.tracksKeyboard(contentMode: .form, behavior: .expand))
-        XCTAssertTrue(OpenCodeBottomSheetHeight.tracksKeyboard(contentMode: .actionList, behavior: .expand))
-        XCTAssertFalse(OpenCodeBottomSheetHeight.tracksKeyboard(contentMode: .actionList, behavior: .keepHeight))
+    func testOnlyDismissSheetsIgnoreTheKeyboard() {
+        XCTAssertFalse(OpenCodeBottomSheetLayoutMath.tracksKeyboard(.dismiss))
+        XCTAssertTrue(OpenCodeBottomSheetLayoutMath.tracksKeyboard(.keep))
+        XCTAssertTrue(OpenCodeBottomSheetLayoutMath.tracksKeyboard(.expand))
+    }
+
+    func testDismissKeyboardNeverGrowsTheCard() {
+        let height = OpenCodeBottomSheetLayoutMath.cardHeight(
+            restingHeight: 433,
+            availableHeight: 866,
+            topSafeArea: topSafeArea,
+            keyboardOverlap: keyboard,
+            keyboard: .dismiss
+        )
+        XCTAssertEqual(height, 433)
+    }
+
+    func testScrollableHeightIsHalfOfAvailable() {
+        XCTAssertEqual(OpenCodeBottomSheetLayoutMath.scrollableHeight(availableHeight: 866), 433)
+        XCTAssertEqual(OpenCodeBottomSheetLayoutMath.scrollableDetentFraction, 0.5)
+    }
+
+    // MARK: Bottom clearance
+
+    // iPhone 17: 34pt home indicator minus the card's 8pt bottom inset.
+    private let safeAreaBottom: CGFloat = 26
+
+    private func clearance(
+        _ height: OpenCodeBottomSheetHeight,
+        _ policy: OpenCodeBottomSheetKeyboard,
+        keyboardOverlap: CGFloat = 0,
+        safeAreaBottom: CGFloat? = nil
+    ) -> CGFloat {
+        OpenCodeBottomSheetLayoutMath.bottomClearance(
+            height: height,
+            keyboard: policy,
+            keyboardOverlap: keyboardOverlap,
+            safeAreaBottom: safeAreaBottom ?? self.safeAreaBottom
+        )
+    }
+
+    func testFitContentSheetsUseTheCompactClearance() {
+        XCTAssertEqual(clearance(.fitContent, .dismiss), 20)
+        XCTAssertEqual(clearance(.fitContent, .keep), 20)
+        XCTAssertEqual(clearance(.fitContent, .expand), 20)
+        XCTAssertEqual(clearance(.fitContent, .keep, keyboardOverlap: keyboard), 20)
+        XCTAssertEqual(clearance(.fitContent, .expand, keyboardOverlap: keyboard), 20)
+    }
+
+    func testHalfSheetThatDismissesTheKeyboardUsesTheCompactClearance() {
+        XCTAssertEqual(clearance(.half, .dismiss), 20)
+        XCTAssertEqual(clearance(.half, .dismiss, keyboardOverlap: keyboard), 20)
+    }
+
+    func testHalfSheetThatKeepsTheKeyboardClearsTheHomeIndicator() {
+        XCTAssertEqual(clearance(.half, .keep), 26)
+        XCTAssertEqual(clearance(.half, .keep, keyboardOverlap: keyboard), 26)
+        XCTAssertEqual(clearance(.half, .expand), 26)
+    }
+
+    func testExpandedHalfSheetOnTheKeyboardUsesTheCompactClearance() {
+        XCTAssertEqual(clearance(.half, .expand, keyboardOverlap: keyboard), 20)
+    }
+
+    func testHomeIndicatorClearanceNeverDropsBelowCompact() {
+        XCTAssertEqual(clearance(.half, .keep, safeAreaBottom: 0), 20)
+        XCTAssertEqual(OpenCodeBottomSheetLayoutMath.compactBottomClearance, 20)
+    }
+
+    // MARK: Fit content
+
+    func testFitContentHeightCountsEveryPartIncludingThePinnedBottom() {
+        let height = OpenCodeBottomSheetLayoutMath.fitContentHeight(
+            headerHeight: 60,
+            pinnedTopHeight: 40,
+            contentHeight: 192,
+            pinnedBottomHeight: 56,
+            bottomClearance: 20
+        )
+        XCTAssertEqual(height, 368)
+    }
+
+    func testFitContentStaysCompactUpToTheLimit() {
+        XCTAssertEqual(OpenCodeBottomSheetLayoutMath.compactMaxHeight, 420)
+        XCTAssertTrue(OpenCodeBottomSheetLayoutMath.fitsCompact(fitContentHeight: 420))
+        XCTAssertFalse(OpenCodeBottomSheetLayoutMath.fitsCompact(fitContentHeight: 420.5))
+    }
+
+    func testPinnedBottomCanPushFitContentToTheScrollableDetent() {
+        let withoutFooter = OpenCodeBottomSheetLayoutMath.fitContentHeight(
+            headerHeight: 60,
+            pinnedTopHeight: 0,
+            contentHeight: 300,
+            pinnedBottomHeight: 0,
+            bottomClearance: 20
+        )
+        let withFooter = OpenCodeBottomSheetLayoutMath.fitContentHeight(
+            headerHeight: 60,
+            pinnedTopHeight: 0,
+            contentHeight: 300,
+            pinnedBottomHeight: 56,
+            bottomClearance: 20
+        )
+        XCTAssertTrue(OpenCodeBottomSheetLayoutMath.fitsCompact(fitContentHeight: withoutFooter))
+        XCTAssertFalse(OpenCodeBottomSheetLayoutMath.fitsCompact(fitContentHeight: withFooter))
+    }
+
+    // MARK: Scroll area
+
+    func testScrollAreaGetsTheCardMinusPinnedPartsAndClearance() {
+        // Half detent (433) - header 60 - pinned top 100 - footer 56 (8 gap + 48 button) - clearance 26.
+        let height = OpenCodeBottomSheetLayoutMath.scrollAreaHeight(
+            cardHeight: 433,
+            headerHeight: 60,
+            pinnedTopHeight: 100,
+            pinnedBottomHeight: 56,
+            bottomClearance: 26
+        )
+        XCTAssertEqual(height, 191)
+    }
+
+    func testScrollAreaWithoutPinnedBottomMatchesTheOldLayout() {
+        let height = OpenCodeBottomSheetLayoutMath.scrollAreaHeight(
+            cardHeight: 433,
+            headerHeight: 60,
+            pinnedTopHeight: 0,
+            pinnedBottomHeight: 0,
+            bottomClearance: 26
+        )
+        XCTAssertEqual(height, 347)
+    }
+
+    func testExpandedScrollAreaGrowsWhileTheFooterKeepsItsHeight() {
+        let available = OpenCodeBottomSheetLayoutMath.availableHeight(
+            containerHeight: containerHeight,
+            keyboardOverlap: keyboard
+        )
+        let card = OpenCodeBottomSheetLayoutMath.cardHeight(
+            restingHeight: OpenCodeBottomSheetLayoutMath.scrollableHeight(availableHeight: available),
+            availableHeight: available,
+            topSafeArea: topSafeArea,
+            keyboardOverlap: keyboard,
+            keyboard: .expand
+        ) ?? 0
+        let bottomClearance = clearance(.half, .expand, keyboardOverlap: keyboard)
+        let height = OpenCodeBottomSheetLayoutMath.scrollAreaHeight(
+            cardHeight: card,
+            headerHeight: 60,
+            pinnedTopHeight: 100,
+            pinnedBottomHeight: 56,
+            bottomClearance: bottomClearance
+        )
+        // 460 expanded card - 60 - 100 - 56 - 20.
+        XCTAssertEqual(height, 224)
+    }
+
+    func testScrollAreaKeepsAMinimumWhenPinnedPartsFillTheCard() {
+        let height = OpenCodeBottomSheetLayoutMath.scrollAreaHeight(
+            cardHeight: 200,
+            headerHeight: 60,
+            pinnedTopHeight: 100,
+            pinnedBottomHeight: 56,
+            bottomClearance: 26
+        )
+        XCTAssertEqual(height, OpenCodeBottomSheetLayoutMath.minScrollAreaHeight)
+        XCTAssertEqual(OpenCodeBottomSheetLayoutMath.minScrollAreaHeight, 48)
+    }
+
+    func testPinnedBottomAddsItsGapOnlyWhenItRendersSomething() {
+        XCTAssertEqual(OpenCodeBottomSheetLayoutMath.pinnedBottomTopSpacing, 8)
+        XCTAssertEqual(OpenCodeBottomSheetLayoutMath.pinnedBottomHeight(contentHeight: 48), 56)
+        XCTAssertEqual(OpenCodeBottomSheetLayoutMath.pinnedBottomHeight(contentHeight: 0), 0)
     }
 }

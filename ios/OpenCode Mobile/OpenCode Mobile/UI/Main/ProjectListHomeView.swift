@@ -163,10 +163,9 @@ struct ProjectListHomeView: View {
             .openCodeBottomSheet(
                 isPresented: addProjectPresentedBinding,
                 title: "Add project",
-                contentMode: .form,
-                alwaysFixedHeight: true,
-                keyboardBehavior: .expand,
-                pinnedContent: {
+                height: .half,
+                keyboard: .expand,
+                pinnedTop: {
                     AddProjectSheetHeader(
                         sheet: viewModel.addProjectSheet,
                         onFieldChange: viewModel.updateAddProjectField,
@@ -174,19 +173,29 @@ struct ProjectListHomeView: View {
                         onSelectRoot: { path in Task { await viewModel.selectAddProjectRoot(path: path) } },
                         onAdd: { Task { await viewModel.confirmAddProject() } }
                     )
+                },
+                content: {
+                    AddProjectSheetRows(
+                        sheet: viewModel.addProjectSheet,
+                        onOpenFolder: { path in Task { await viewModel.openAddProjectFolder(path: path) } },
+                        onSelectSuggestion: { path in Task { await viewModel.selectAddProjectSuggestion(path: path) } },
+                        onRetry: { Task { await viewModel.retryAddProjectListing() } }
+                    )
+                },
+                pinnedBottom: {
+                    AddProjectSheetFooter(
+                        sheet: viewModel.addProjectSheet,
+                        onAdd: { Task { await viewModel.confirmAddProject() } }
+                    )
                 }
-            ) {
-                AddProjectSheetRows(
-                    sheet: viewModel.addProjectSheet,
-                    onOpenFolder: { path in Task { await viewModel.openAddProjectFolder(path: path) } },
-                    onSelectSuggestion: { path in Task { await viewModel.selectAddProjectSuggestion(path: path) } },
-                    onRetry: { Task { await viewModel.retryAddProjectListing() } }
-                )
-            }
+            )
+            // .dismiss would suit this list better; .keep preserves today's
+            // behavior until #680 revisits it.
             .openCodeBottomSheet(
                 isPresented: projectPickerBinding,
                 title: "Filter by project",
-                contentMode: .form
+                height: .half,
+                keyboard: .keep
             ) {
                 SessionListProjectPickerRows(
                     tabs: projectPickerTabs,
