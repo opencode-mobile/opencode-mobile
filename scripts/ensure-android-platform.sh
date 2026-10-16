@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Installs platforms/android-<api> when the runner SDK does not have it yet.
-# compileSdk can move ahead of the image baked into a self-hosted runner.
+# Installs an Android SDK platform when a self-hosted runner does not have it.
+# API 37 and later are published as platforms;android-<level>.0, not android-<level>.
 API_LEVEL="${1:?usage: ensure-android-platform.sh <api-level>}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+CMDLINE_TOOLS_VERSION="${ANDROID_CMDLINE_TOOLS_VERSION:-14742923}"
 
 sdk="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
 if [[ -z "$sdk" && -f "${ROOT}/android/local.properties" ]]; then
@@ -15,21 +16,99 @@ if [[ -z "$sdk" || ! -d "$sdk" ]]; then
   exit 1
 fi
 
-platform_dir="${sdk}/platforms/android-${API_LEVEL}"
-if [[ -d "$platform_dir" ]]; then
-  echo "platforms/android-${API_LEVEL} already installed at ${sdk}"
+if [[ "$API_LEVEL" == *.* ]]; then
+  package="platforms;android-${API_LEVEL}"
+  dir_names=("android-${API_LEVEL}")
+elif [[ "$API_LEVEL" -ge 37 ]]; then
+  package="platforms;android-${API_LEVEL}.0"
+  dir_names=("android-${API_LEVEL}.0" "android-${API_LEVEL}")
+else
+  package="platforms;android-${API_LEVEL}"
+  dir_names=("android-${API_LEVEL}")
+fi
+
+platform_installed() {
+  local name
+  for name in "${dir_names[@]}"; do
+    if [[ -d "${sdk}/platforms/${name}" ]]; then
+      echo "platforms/${name} already installed at ${sdk}"
+      return 0
+    fi
+  done
+  return 1
+}
+
+if platform_installed; then
   exit 0
 fi
 
-manager="$(find "${sdk}/cmdline-tools" -type f -name sdkmanager -print -quit)"
+pick_manager() {
+  local candidate
+  for candidate in \
+    "${sdk}/cmdline-tools/latest/bin/sdkmanager" \
+    "${sdk}/cmdline-tools/latest-2/bin/sdkmanager"
+  do
+    if [[ -f "$candidate" ]]; then
+      echo "$candidate"
+      return 0
+    fi
+  done
+  if [[ -d "${sdk}/cmdline-tools" ]]; then
+    find "${sdk}/cmdline-tools" -type f -name sdkmanager -print -quit || true
+  fi
+}
+
+install_cmdline_tools() {
+  local host tmp
+  case "$(uname -s)" in
+    Darwin) host=mac ;;
+    Linux) host=linux ;;
+    *)
+      echo "Cannot download cmdline-tools on $(uname -s)" >&2
+      return 1
+      ;;
+  esac
+  tmp="$(mktemp -d)"
+  curl -fsSL -o "${tmp}/cmdtools.zip" \
+    "https://dl.google.com/android/repository/commandlinetools-${host}-${CMDLINE_TOOLS_VERSION}_latest.zip"
+  unzip -q "${tmp}/cmdtools.zip" -d "${tmp}/cmdtools"
+  mkdir -p "${sdk}/cmdline-tools"
+  rm -rf "${sdk}/cmdline-tools/latest"
+  mv "${tmp}/cmdtools/cmdline-tools" "${sdk}/cmdline-tools/latest"
+  rm -rf "${tmp}"
+  echo "Installed Android cmdline-tools ${CMDLINE_TOOLS_VERSION} into ${sdk}/cmdline-tools/latest"
+}
+
+run_sdkmanager() {
+  local manager="$1"
+  local log
+  log="$(mktemp)"
+  set +o pipefail
+  yes | "$manager" --sdk_root="$sdk" "$package" >"$log" 2>&1 || true
+  set -o pipefail
+  cat "$log"
+  if grep -q "Failed to find package" "$log"; then
+    rm -f "$log"
+    return 1
+  fi
+  rm -f "$log"
+}
+
+manager="$(pick_manager || true)"
 if [[ -z "$manager" ]]; then
-  echo "sdkmanager not found under ${sdk}/cmdline-tools" >&2
-  exit 1
+  install_cmdline_tools
+  manager="$(pick_manager)"
 fi
 
-yes | "$manager" --sdk_root="$sdk" "platforms;android-${API_LEVEL}"
-if [[ ! -d "$platform_dir" ]]; then
-  echo "Failed to install platforms;android-${API_LEVEL} into ${sdk}" >&2
-  exit 1
+if ! run_sdkmanager "$manager"; then
+  echo "sdkmanager could not see ${package}; installing current cmdline-tools and retrying" >&2
+  install_cmdline_tools
+  manager="$(pick_manager)"
+  run_sdkmanager "$manager"
 fi
-echo "Installed platforms/android-${API_LEVEL} into ${sdk}"
+
+if platform_installed; then
+  exit 0
+fi
+echo "Failed to install ${package} into ${sdk}" >&2
+exit 1

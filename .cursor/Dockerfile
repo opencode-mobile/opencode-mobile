@@ -41,7 +41,7 @@ RUN mkdir -p "${ANDROID_HOME}/cmdline-tools" \
     && yes | "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null \
     && "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" \
         "platform-tools" \
-        "platforms;android-37" \
+        "platforms;android-37.0" \
         "build-tools;36.0.0" \
         "ndk;${ANDROID_NDK_VERSION}" > /dev/null \
     && chmod -R a+rX "${ANDROID_HOME}"
