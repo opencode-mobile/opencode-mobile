@@ -136,7 +136,7 @@ tasks.named<KotlinNativeTest>("iosSimulatorArm64Test") {
 
 android {
     namespace = "dev.opencode.mobile.markdown"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         minSdk = 24

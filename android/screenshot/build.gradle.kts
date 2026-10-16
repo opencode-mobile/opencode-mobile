@@ -8,7 +8,7 @@ plugins {
 
 android {
     namespace = "dev.opencode.mobile.screenshot"
-    compileSdk = 36
+    compileSdk = 37
     defaultConfig {
         minSdk = 24
     }
