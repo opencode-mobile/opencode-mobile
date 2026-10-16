@@ -1,5 +1,5 @@
 [versions]
-androidGradlePlugin = "9.0.1"
+androidGradlePlugin = "9.4.1"
 androidxCore = "1.19.1"
 androidxSplashscreen = "1.2.0"
 androidxLifecycle = "2.10.0"
@@ -13,13 +13,13 @@ androidxTestUiautomator = "2.4.0"
 coroutines = "1.11.0"
 junit = "4.13.2"
 joni = "2.2.7"
-kotlin = "2.2.21"
+kotlin = "2.4.21"
 nav3Core = "1.0.1"
 lifecycleViewmodelNav3 = "2.10.0"
-hilt = "2.57.1"
+hilt = "2.60.1"
 ktor = "3.6.0"
 hiltNavigationCompose = "1.4.0"
-ksp = "2.2.21-2.0.5"
+ksp = "2.3.12"
 datastore = "1.1.7"
 securityCrypto = "1.1.0"
 room = "2.8.5"
@@ -59,6 +59,7 @@ androidx-navigation3-ui = { module = "androidx.navigation3:navigation3-ui", vers
 androidx-lifecycle-viewmodel-navigation3 = { module = "androidx.lifecycle:lifecycle-viewmodel-navigation3", version.ref = "lifecycleViewmodelNav3" }
 hilt-android = { module = "com.google.dagger:hilt-android", version.ref = "hilt" }
 hilt-compiler = { module = "com.google.dagger:hilt-compiler", version.ref = "hilt" }
+kotlin-metadata-jvm = { module = "org.jetbrains.kotlin:kotlin-metadata-jvm", version.ref = "kotlin" }
 hilt-navigation-compose = { module = "androidx.hilt:hilt-navigation-compose", version.ref = "hiltNavigationCompose" }
 ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
 ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "ktor" }
