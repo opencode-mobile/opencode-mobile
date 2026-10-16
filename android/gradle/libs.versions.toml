@@ -1,5 +1,5 @@
 [versions]
-androidGradlePlugin = "9.0.1"
+androidGradlePlugin = "9.4.1"
 androidxCore = "1.18.0"
 androidxSplashscreen = "1.0.1"
 androidxLifecycle = "2.10.0"
