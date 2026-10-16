@@ -40,6 +40,8 @@ struct SessionChatTimelineViewProps {
     /// the chip count at tap time (Screen Model state).
     let expandedStepParagraphs: [String: Int]
     let onExpandStepParagraph: (String, Int) -> Void
+    /// Catalog names for model-switch notices.
+    let noticeModelNames: TimelineNoticeModelNames
 
     init(
         timeline: SessionChatTimelineState,
@@ -75,7 +77,8 @@ struct SessionChatTimelineViewProps {
         onUserScrollDismissKeyboard: @escaping () -> Void = {},
         supportsSessionMessageDiff: Bool = true,
         expandedStepParagraphs: [String: Int] = [:],
-        onExpandStepParagraph: @escaping (String, Int) -> Void = { _, _ in }
+        onExpandStepParagraph: @escaping (String, Int) -> Void = { _, _ in },
+        noticeModelNames: TimelineNoticeModelNames = .empty
     ) {
         self.timeline = timeline
         self.messages = messages
@@ -111,6 +114,7 @@ struct SessionChatTimelineViewProps {
         self.supportsSessionMessageDiff = supportsSessionMessageDiff
         self.expandedStepParagraphs = expandedStepParagraphs
         self.onExpandStepParagraph = onExpandStepParagraph
+        self.noticeModelNames = noticeModelNames
     }
 }
 
@@ -183,6 +187,7 @@ private struct SessionChatTimelineReadyView: View {
     @State private var previousMountedWorkingLabel: String?
     @State private var previousWorkingIndicatorFading = false
     @State private var previousExpandedStepParagraphs: [String: Int] = [:]
+    @State private var previousNoticeModelNames: TimelineNoticeModelNames = .empty
     @State private var topOverlayInset: CGFloat = 0
     /// Syncing label the top pill slot shows, lagging the prop by the show delay
     /// and minimum visible time in `SessionChatTopPill`.
@@ -248,6 +253,11 @@ private struct SessionChatTimelineReadyView: View {
                     rows: props.messages,
                     expanded: props.expandedStepParagraphs,
                     previousExpanded: previousExpandedStepParagraphs
+                )
+                .addingNoticeModelNames(
+                    rows: props.messages,
+                    names: props.noticeModelNames,
+                    previous: previousNoticeModelNames
                 ),
                 scrollController: scrollController,
                 onRefresh: props.onRefresh,
@@ -269,7 +279,8 @@ private struct SessionChatTimelineReadyView: View {
                     onChangesReviewTap: props.onChangesReviewTap,
                     supportsSessionMessageDiff: props.supportsSessionMessageDiff,
                     expandedStepParagraphs: props.expandedStepParagraphs,
-                    onExpandStepParagraph: props.onExpandStepParagraph
+                    onExpandStepParagraph: props.onExpandStepParagraph,
+                    noticeModelNames: props.noticeModelNames
                 )
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -332,6 +343,7 @@ private struct SessionChatTimelineReadyView: View {
             previousMountedWorkingLabel = mountedWorkingLabel
             previousWorkingIndicatorFading = props.workingIndicatorFading
             previousExpandedStepParagraphs = props.expandedStepParagraphs
+            previousNoticeModelNames = props.noticeModelNames
             refreshSessionTodosPillSnapshot(totalCount: props.sessionTodoTotalCount)
             updateDisplayedSyncingLabel(props.syncingIndicatorLabel)
             scrollController.autoFollowEnabled = true
@@ -351,6 +363,9 @@ private struct SessionChatTimelineReadyView: View {
         }
         .onChange(of: props.expandedStepParagraphs) { _, newValue in
             previousExpandedStepParagraphs = newValue
+        }
+        .onChange(of: props.noticeModelNames) { _, newValue in
+            previousNoticeModelNames = newValue
         }
         .onChange(of: props.messages.count) { _, newCount in
             logScroll("message-count changed count=\(newCount)")
@@ -457,6 +472,7 @@ private struct SessionChatTimelineHostRow: View {
     let supportsSessionMessageDiff: Bool
     let expandedStepParagraphs: [String: Int]
     let onExpandStepParagraph: (String, Int) -> Void
+    let noticeModelNames: TimelineNoticeModelNames
 
     var body: some View {
         if message.id == SessionChatStatusChrome.workingRowID {
@@ -467,6 +483,8 @@ private struct SessionChatTimelineHostRow: View {
                     : (WorkingTurnIndicator.showsIdleMark(label: message.text) ? .idle : .working),
                 fading: workingIndicatorFading
             )
+        } else if message.role == .notice {
+            SessionChatNoticeRow(blocks: message.blocks, modelNames: noticeModelNames)
         } else {
             HStack {
                 if message.role == .assistant || message.role == .command || message.role == .tool || message.role == .unknown {
@@ -559,6 +577,8 @@ private struct SessionChatMessageRow: View {
                     onExpandStepParagraph: onExpandStepParagraph
                 )
                 .frame(maxWidth: .infinity, alignment: .leading)
+            case .notice:
+                SessionChatNoticeRow(blocks: message.blocks, modelNames: .empty)
             case .command, .tool, .unknown:
                 FallbackMessageBubble(
                     roleLabel: message.role.displayLabel,
@@ -577,7 +597,7 @@ private extension SessionChatRow {
                 .text(id: blockID, text: text)
             case .attachment(_, let file):
                 .attachment(file.attachmentPresentation)
-            case .toolCard, .toolGroup, .childSessionRow, .reasoning, .stepParagraph, .stopNote, .failureLine:
+            case .toolCard, .toolGroup, .childSessionRow, .reasoning, .stepParagraph, .stopNote, .failureLine, .notice:
                 nil
             }
         }
@@ -723,6 +743,8 @@ private struct AssistantMessageContent: View {
                     )
                 case .stopNote(_, let reason):
                     OpenCodeMessageNote(variant: reason == .length ? .truncated : .interrupted)
+                case .notice(_, let notice):
+                    SessionChatNoticeLine(notice: notice, modelNames: .empty)
                 case .failureLine(_, let text, let providerBody, let isNeutral, let action, let actionLabel, let covered):
                     if !(hideLiveRetryFailures && covered) {
                         FailureLineBlock(
@@ -1069,6 +1091,42 @@ private struct FailureMarkTap: ViewModifier {
         } else {
             content
         }
+    }
+}
+
+/// A notice row: one Design System notice line per notice, full width and leading.
+private struct SessionChatNoticeRow: View {
+    let blocks: [SessionChatTimelineBlock]
+    let modelNames: TimelineNoticeModelNames
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(blocks, id: \.blockID) { block in
+                if case .notice(_, let notice) = block {
+                    SessionChatNoticeLine(notice: notice, modelNames: modelNames)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// Expansion is local view state: it only changes how much of the value shows.
+private struct SessionChatNoticeLine: View {
+    let notice: TimelineNotice
+    let modelNames: TimelineNoticeModelNames
+    @State private var state: OpenCodeTimelineNoticeState = .collapsed
+
+    var body: some View {
+        let presentation = TimelineNoticeCopy.presentation(for: notice, modelNames: modelNames)
+        OpenCodeTimelineNotice(
+            variant: presentation.isMove ? .moved : .plain,
+            label: presentation.label,
+            value: presentation.value,
+            state: state,
+            onToggle: { state = state.toggled }
+        )
+        .id(notice.id)
     }
 }
 

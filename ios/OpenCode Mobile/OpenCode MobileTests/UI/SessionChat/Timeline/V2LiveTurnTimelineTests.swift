@@ -235,6 +235,88 @@ struct V2LiveTurnTimelineTests {
         #expect(metaLine(second) == "plan|scripted|low")
     }
 
+    @Test func liveNotices_areStandaloneRowsBetweenSteps_andRESTReplacesThemInPlace() throws {
+        apply(prompt("u1", "Plan it, then build it", at: 1_000))
+        apply(step("a1", at: 1_100))
+        apply(text("a1", "Planning first.", at: 1_110))
+        apply(tool("a1", callID: "call_glob", name: "glob", at: 1_120))
+        apply(stepEnded("a1", finish: "tool-calls", at: 1_130))
+        apply(agentSelected("plan", at: 1_200))
+        apply(modelSelected(Self.scriptedHigh, at: 1_201))
+        apply([envelope("session.moved", 1_202, #""location":{"directory":"/repo/wt"},"projectID":"p""#)])
+        apply(step("a2", at: 1_300, model: Self.scriptedHigh))
+        apply(text("a2", "Now building.", at: 1_310))
+        apply(stepEnded("a2", finish: "stop", at: 1_320))
+        apply(idle(at: 1_330))
+
+        let agentID = "msg_session.agent.selected1200"
+        let modelID = "msg_session.model.selected1201"
+        let movedID = "msg_session.moved1202"
+        let live = store.messages(sessionID: Self.session)
+        #expect(live.filter { $0.role == .notice }.map(\.id) == [agentID, modelID, movedID])
+        #expect(live.filter { $0.role == .user }.map(\.id) == ["u1"])
+
+        let frame = chipFrame(live)
+        #expect(frame.messages.map(\.id) == ["u1", "a1", agentID, modelID, movedID, "a2"])
+        #expect(frame.messages[2].blocks == [
+            .notice(
+                blockID: PresentationBlockId.direct(agentID),
+                notice: TimelineNotice(id: agentID, kind: .agentChanged(agent: "plan", previous: nil))
+            ),
+        ])
+        #expect(stepParagraphs(frame.messages[1].blocks).map(\.paragraph.text) == ["Planning first."])
+        #expect(stepParagraphs(frame.messages[5].blocks).map(\.paragraph.text) == ["Now building."])
+
+        try reload(
+            """
+            [
+              {"id":"u1","type":"user","text":"Plan it, then build it","time":{"created":1000}},
+              {"id":"a1","type":"assistant","agent":"build","model":{"id":"m","providerID":"p"},
+               "content":[{"type":"text","text":"Planning first."},
+                 {"type":"tool","id":"call_glob","name":"glob","state":{"status":"completed","input":{"pattern":"*"},
+                  "content":[{"type":"text","text":"ok"}]}}],
+               "time":{"created":1100,"completed":1130}},
+              {"id":"\(agentID)","type":"agent-switched","agent":"plan","previous":"build","time":{"created":1200}},
+              {"id":"\(modelID)","type":"model-switched","model":\(Self.scriptedHigh),
+               "previous":{"id":"m","providerID":"p"},"time":{"created":1201}},
+              {"id":"\(movedID)","type":"location-switched","location":{"directory":"/repo/wt"},
+               "previous":{"location":{"directory":"/repo"}},"time":{"created":1202}},
+              {"id":"a2","type":"assistant","agent":"plan","model":\(Self.scriptedHigh),
+               "content":[{"type":"text","text":"Now building."}],"time":{"created":1300,"completed":1320}}
+            ]
+            """,
+            inbox: "[]"
+        )
+
+        let reloaded = store.messages(sessionID: Self.session)
+        #expect(reloaded.map(\.id) == ["u1", "a1", agentID, modelID, movedID, "a2"])
+        let agent = try #require(reloaded.first { $0.id == agentID })
+        #expect(agent.parts == [.notice(TimelineNotice(id: agentID, kind: .agentChanged(agent: "plan", previous: "build")))])
+        #expect(chipFrame(reloaded).messages.map(\.id) == ["u1", "a1", agentID, modelID, movedID, "a2"])
+    }
+
+    @Test func liveRestartSynthetic_isANoticeNotAPrompt() throws {
+        apply(prompt("u1", "Long task", at: 1_000))
+        apply(step("a1", at: 1_100))
+        apply(text("a1", "Working.", at: 1_110))
+        apply([
+            envelope(
+                "session.synthetic",
+                1_500,
+                #""text":"Continue where you left off.","description":"Continuing after restart","metadata":{"notice":"restart"}"#
+            ),
+        ])
+
+        let messages = store.messages(sessionID: Self.session)
+        #expect(messages.filter { $0.role == .user }.map(\.id) == ["u1"])
+        let notice = try #require(messages.first { $0.role == .notice })
+        #expect(notice.id == "msg_session.synthetic1500")
+        #expect(notice.parts == [.notice(TimelineNotice(id: notice.id, kind: .restart))])
+        let frame = chipFrame(messages)
+        #expect(frame.messages.last?.blocks.count == 1)
+        #expect(frame.messages.last?.message.role == .notice)
+    }
+
     @Test func stoppedTool_isInterruptedNotFailed_liveAndAfterReload() throws {
         apply(prompt("u1", "Start the deployment.", at: 1_000))
         apply(step("a1", at: 1_100))

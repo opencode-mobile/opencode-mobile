@@ -68,7 +68,7 @@ nonisolated extension Message {
                 !reasoning.isStreaming
             case .tool(let tool):
                 tool.status != .pending && tool.status != .running
-            case .file, .compaction:
+            case .file, .compaction, .notice:
                 true
             }
         }

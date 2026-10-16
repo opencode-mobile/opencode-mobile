@@ -55,7 +55,7 @@ nonisolated enum ThoughtPartChrome {
                     }
                 case .file:
                     visible = true
-                case .compaction:
+                case .compaction, .notice:
                     break
                 }
             }

@@ -55,7 +55,7 @@ nonisolated enum MessageSnapshotAuthority {
                     if tool.status == .completed {
                         completedTools += 1
                     }
-                case .file, .compaction, .reasoning:
+                case .file, .compaction, .reasoning, .notice:
                     break
                 }
             }

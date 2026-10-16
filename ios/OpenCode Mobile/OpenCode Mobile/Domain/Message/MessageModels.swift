@@ -396,6 +396,8 @@ nonisolated enum MessagePart: Equatable, Sendable {
     /// behind a disclosure, never as reply text.
     case compaction(CompactionPart)
     case reasoning(ReasoningPart)
+    /// A session-level change recorded between turns. Only on a `.notice` message.
+    case notice(TimelineNotice)
 }
 
 nonisolated struct TextPart: Equatable, Sendable {
@@ -591,6 +593,42 @@ nonisolated struct ReasoningPart: Equatable, Sendable {
     }
 }
 
+/// A session-level change the timeline shows as a quiet line where it happened:
+/// the working directory moved, the agent or model changed, instructions were
+/// updated, or the server resumed a turn after a restart. Only v2 records these.
+nonisolated struct TimelineNotice: Equatable, Sendable {
+    /// The server message id; a live notice and its REST copy share it.
+    let id: String
+    let kind: TimelineNoticeKind
+}
+
+nonisolated enum TimelineNoticeKind: Equatable, Sendable {
+    /// The session's working directory moved.
+    case moved(directory: String)
+    /// The primary agent changed. `previous` is nil when unknown or unchanged.
+    case agentChanged(agent: String, previous: String?)
+    /// The model or its variant changed. `previous` is nil when unknown (live).
+    case modelChanged(model: TimelineNoticeModel, previous: TimelineNoticeModel?)
+    /// Instruction files changed; `sources` may be empty when the server named none.
+    case instructionsUpdated(sources: [String])
+    /// Any other system update, by its human-readable description.
+    case systemNote(String)
+    /// The server restarted mid-turn and resumed it.
+    case restart
+}
+
+nonisolated struct TimelineNoticeModel: Equatable, Sendable {
+    let providerID: String?
+    let modelID: String
+    let variant: String?
+
+    init(providerID: String?, modelID: String, variant: String? = nil) {
+        self.providerID = providerID
+        self.modelID = modelID
+        self.variant = variant
+    }
+}
+
 nonisolated struct CompactionPart: Equatable, Sendable {
     let id: String?
     let auto: Bool
@@ -653,6 +691,8 @@ nonisolated enum MessageRole: String, Sendable {
     case assistant
     case command
     case tool
+    /// A timeline notice: neither the user's prompt nor a reply.
+    case notice
     case unknown
 
     var displayLabel: String {
@@ -665,6 +705,8 @@ nonisolated enum MessageRole: String, Sendable {
             "Command"
         case .tool:
             "Tool"
+        case .notice:
+            "Notice"
         case .unknown:
             "Message"
         }

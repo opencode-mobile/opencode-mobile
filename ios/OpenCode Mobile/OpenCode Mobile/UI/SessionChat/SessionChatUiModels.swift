@@ -80,6 +80,8 @@ extension SessionChatRow: MessageListTimelineHeightEstimating {
                 .outgoing
             case .assistant:
                 .assistant
+            case .notice:
+                .line
             case .tool, .command, .unknown:
                 .compact
             }
