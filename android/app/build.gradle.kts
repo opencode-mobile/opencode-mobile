@@ -93,7 +93,9 @@ ktlint {
 
 android {
     namespace = "dev.opencode.mobile"
-    compileSdk = 36
+    // Compose BOM 2026.09 and hilt-navigation-compose 1.4 require compile SDK 37.
+    // targetSdk stays 36 so the app does not opt in to new runtime behavior.
+    compileSdk = 37
     // Pin NDK so release builds can package native debug symbols for Play.
     ndkVersion = "27.2.12479018"
     defaultConfig {

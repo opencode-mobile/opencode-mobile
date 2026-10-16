@@ -35,6 +35,10 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
+      - name: Install Android compile SDK 37
+        working-directory: .
+        run: ./scripts/ensure-android-platform.sh 37
+
       # Pre-existing style/lint debt; keep visible but do not block PR merge yet.
       - name: Run ktlint and Android Lint
         continue-on-error: true

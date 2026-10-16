@@ -40,6 +40,10 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
+      - name: Install Android compile SDK 37
+        working-directory: .
+        run: ./scripts/ensure-android-platform.sh 37
+
       # Soft-disabled on PRs to save macOS minutes. Android Joni covers shared
       # highlighter logic; this step uniquely covers libonig / Kotlin/Native.
       # Re-enable on every PR: change the if below to always().
