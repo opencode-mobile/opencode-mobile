@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dev.opencode.mobile.domain.agent.AgentMention
+import dev.opencode.mobile.domain.agent.FileMention
 import dev.opencode.mobile.domain.composer.ComposerDraft
 import dev.opencode.mobile.domain.composer.ComposerDraftStore
 import dev.opencode.mobile.domain.model.ModelSelectionConnectionIdentity
@@ -156,9 +157,18 @@ class DataStoreComposerDraftStore
         )
 
         @Serializable
+        private data class StoredFileMention(
+            val id: String,
+            val path: String,
+            val start: Int,
+            val end: Int,
+        )
+
+        @Serializable
         private data class StoredComposerDraft(
             val text: String,
             val agentMentions: List<StoredAgentMention> = emptyList(),
+            val fileMentions: List<StoredFileMention> = emptyList(),
             val savedAtEpochMs: Long? = null,
         ) {
             fun toDraft() =
@@ -167,6 +177,10 @@ class DataStoreComposerDraftStore
                     agentMentions =
                         agentMentions.map {
                             AgentMention(id = it.id, name = it.name, start = it.start, end = it.end)
+                        },
+                    fileMentions =
+                        fileMentions.map {
+                            FileMention(id = it.id, path = it.path, start = it.start, end = it.end)
                         },
                     savedAtEpochMs = savedAtEpochMs,
                 )
@@ -178,6 +192,10 @@ class DataStoreComposerDraftStore
                         agentMentions =
                             draft.agentMentions.map {
                                 StoredAgentMention(id = it.id, name = it.name, start = it.start, end = it.end)
+                            },
+                        fileMentions =
+                            draft.fileMentions.map {
+                                StoredFileMention(id = it.id, path = it.path, start = it.start, end = it.end)
                             },
                         savedAtEpochMs = draft.savedAtEpochMs,
                     )

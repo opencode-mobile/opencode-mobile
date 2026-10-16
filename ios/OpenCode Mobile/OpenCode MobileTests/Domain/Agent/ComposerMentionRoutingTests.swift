@@ -132,4 +132,62 @@ struct ComposerMentionRoutingTests {
         #expect(parts[1].start == 13)
         #expect(parts[1].end == 21)
     }
+
+    @Test func insertFileMention_shiftsAgentMentionsAndKeepsThemSeparate() {
+        let agents = [AgentMention(id: "m1", name: "explore", start: 0, end: 8)]
+        let result = ComposerMentionRouting.insertFileMention(
+            text: "@explore look at @App",
+            cursor: 22,
+            path: "src/App.kt",
+            mentionID: "f1",
+            existingMentions: agents
+        )
+        #expect(result.text == "@explore look at @src/App.kt ")
+        #expect(result.mentions == agents)
+        #expect(result.fileMentions == [FileMention(id: "f1", path: "src/App.kt", start: 17, end: 28)])
+    }
+
+    @Test func reconcile_atomicDeleteOfFileMentionShiftsFollowingAgent() {
+        let result = ComposerMentionRouting.reconcileAfterEdit(
+            previousText: "@src/App.kt @explore",
+            previousMentions: [AgentMention(id: "m1", name: "explore", start: 12, end: 20)],
+            proposedText: "@src/App.k @explore",
+            proposedCursor: 9,
+            previousFileMentions: [FileMention(id: "f1", path: "src/App.kt", start: 0, end: 11)]
+        )
+        #expect(result.text.trimmingCharacters(in: .whitespacesAndNewlines) == "@explore")
+        #expect(result.fileMentions.isEmpty)
+        #expect(result.mentions.count == 1)
+        #expect(result.mentions[0].start == 1)
+        let mention = result.mentions[0]
+        let token = result.text[result.text.index(result.text.startIndex, offsetBy: mention.start) ..< result.text.index(result.text.startIndex, offsetBy: mention.end)]
+        #expect(String(token) == "@explore")
+    }
+
+    @Test func fileParts_requireTheTokenToStillMatch() {
+        let parts = ComposerMentionRouting.fileParts(
+            text: "see @src/App.kt",
+            mentions: [FileMention(id: "f1", path: "src/App.kt", start: 4, end: 15)]
+        )
+        #expect(parts.count == 1)
+        #expect(parts[0].path == "src/App.kt")
+        #expect(parts[0].filename == "App.kt")
+        #expect(parts[0].sourceValue == "@src/App.kt")
+        #expect(
+            ComposerMentionRouting.fileParts(
+                text: "see @other",
+                mentions: [FileMention(id: "f1", path: "src/App.kt", start: 4, end: 10)]
+            ).isEmpty
+        )
+    }
+
+    @Test func atQuery_insideFileMentionStaysClosed() {
+        let files = [FileMention(id: "f1", path: "my file.kt", start: 0, end: 11)]
+        #expect(ComposerMentionRouting.atSuggestionQuery("@my file.kt", cursor: 4, fileMentions: files) == nil)
+    }
+
+    @Test func projectFileURL_encodesSpacesAndKeepsSlashes() {
+        #expect(ProjectPaths.fileURL(worktree: "/repo", relativePath: "src/App.kt") == "file:///repo/src/App.kt")
+        #expect(ProjectPaths.fileURL(worktree: "/repo", relativePath: "my file.kt") == "file:///repo/my%20file.kt")
+    }
 }

@@ -148,6 +148,8 @@ nonisolated struct SendMessagePartDTO: Codable, Sendable {
     let url: String?
     let name: String?
     let source: AgentPartSourceDTO?
+    /// Project-file mention. Written by the prompt body writer; not a device attachment.
+    let fileSource: FileReferenceSourceDTO?
 
     init(
         id: String? = nil,
@@ -157,7 +159,8 @@ nonisolated struct SendMessagePartDTO: Codable, Sendable {
         filename: String? = nil,
         url: String? = nil,
         name: String? = nil,
-        source: AgentPartSourceDTO? = nil
+        source: AgentPartSourceDTO? = nil,
+        fileSource: FileReferenceSourceDTO? = nil
     ) {
         self.id = id
         self.type = type
@@ -167,10 +170,47 @@ nonisolated struct SendMessagePartDTO: Codable, Sendable {
         self.url = url
         self.name = name
         self.source = source
+        self.fileSource = fileSource
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, type, text, mime, filename, url, name, source
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(String.self, forKey: .id)
+        type = try container.decode(String.self, forKey: .type)
+        text = try container.decodeIfPresent(String.self, forKey: .text)
+        mime = try container.decodeIfPresent(String.self, forKey: .mime)
+        filename = try container.decodeIfPresent(String.self, forKey: .filename)
+        url = try container.decodeIfPresent(String.self, forKey: .url)
+        name = try container.decodeIfPresent(String.self, forKey: .name)
+        source = try container.decodeIfPresent(AgentPartSourceDTO.self, forKey: .source)
+        fileSource = nil
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(id, forKey: .id)
+        try container.encode(type, forKey: .type)
+        try container.encodeIfPresent(text, forKey: .text)
+        try container.encodeIfPresent(mime, forKey: .mime)
+        try container.encodeIfPresent(filename, forKey: .filename)
+        try container.encodeIfPresent(url, forKey: .url)
+        try container.encodeIfPresent(name, forKey: .name)
+        try container.encodeIfPresent(source, forKey: .source)
     }
 }
 
-nonisolated struct AgentPartSourceDTO: Codable, Sendable {
+nonisolated struct FileReferenceSourceDTO: Sendable, Equatable {
+    let path: String
+    let value: String
+    let start: Int
+    let end: Int
+}
+
+nonisolated struct AgentPartSourceDTO: Codable, Sendable, Equatable {
     let value: String
     let start: Int
     let end: Int
@@ -182,20 +222,53 @@ nonisolated struct V2PromptRequestDTO: Codable, Sendable {
     let agents: [V2PromptAgentDTO]?
     let skills: [V2PromptSkillDTO]?
     let delivery: String
+    /// Project-file mentions. Written into `files` as literal URIs, after device attachments.
+    let fileMentions: [V2PromptFileMentionDTO]?
 
     init(
         text: String,
         files: [V2PromptFileDTO]? = nil,
         agents: [V2PromptAgentDTO]? = nil,
         skills: [V2PromptSkillDTO]? = nil,
-        delivery: String = "steer"
+        delivery: String = "steer",
+        fileMentions: [V2PromptFileMentionDTO]? = nil
     ) {
         self.text = text
         self.files = files
         self.agents = agents
         self.skills = skills
         self.delivery = delivery
+        self.fileMentions = fileMentions
     }
+
+    private enum CodingKeys: String, CodingKey {
+        case text, files, agents, skills, delivery
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        text = try container.decode(String.self, forKey: .text)
+        files = try container.decodeIfPresent([V2PromptFileDTO].self, forKey: .files)
+        agents = try container.decodeIfPresent([V2PromptAgentDTO].self, forKey: .agents)
+        skills = try container.decodeIfPresent([V2PromptSkillDTO].self, forKey: .skills)
+        delivery = try container.decode(String.self, forKey: .delivery)
+        fileMentions = nil
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(text, forKey: .text)
+        try container.encodeIfPresent(files, forKey: .files)
+        try container.encodeIfPresent(agents, forKey: .agents)
+        try container.encodeIfPresent(skills, forKey: .skills)
+        try container.encode(delivery, forKey: .delivery)
+    }
+}
+
+nonisolated struct V2PromptFileMentionDTO: Sendable, Equatable {
+    let uri: String
+    let name: String
+    let mention: V2PromptSourceDTO
 }
 
 nonisolated struct V2PromptSkillDTO: Codable, Sendable, Equatable {

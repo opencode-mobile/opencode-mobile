@@ -649,7 +649,8 @@ extension Container {
                 liveUpdates: self.liveUpdates(),
                 lastTurnReviewChangesStore: self.lastTurnReviewChangesStore(),
                 syncCoordinator: self.syncCoordinator(),
-                mcpRepository: self.mcpRepository()
+                mcpRepository: self.mcpRepository(),
+                projectFilesRepository: self.projectFilesRepository()
             )
         }
     }

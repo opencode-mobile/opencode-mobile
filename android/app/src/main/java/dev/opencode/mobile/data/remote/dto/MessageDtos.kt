@@ -159,6 +159,15 @@ data class SendMessagePartDto(
     val filename: String? = null,
     val name: String? = null,
     val source: AgentPartSourceDto? = null,
+    /** Project-file mention. Written by the prompt body writer; not a device attachment. */
+    @Transient val fileSource: FileReferenceSourceDto? = null,
+)
+
+data class FileReferenceSourceDto(
+    val path: String,
+    val value: String,
+    val start: Int,
+    val end: Int,
 )
 
 @Serializable
@@ -175,6 +184,14 @@ data class V2PromptRequestDto(
     val agents: List<V2PromptAgentDto>? = null,
     val skills: List<V2PromptSkillDto>? = null,
     val delivery: String,
+    /** Project-file mentions. Written into `files` as literal URIs, after device attachments. */
+    @Transient val fileMentions: List<V2PromptFileMentionDto>? = null,
+)
+
+data class V2PromptFileMentionDto(
+    val uri: String,
+    val name: String,
+    val mention: V2PromptSourceDto,
 )
 
 @Serializable
