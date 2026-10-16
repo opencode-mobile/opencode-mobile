@@ -31,6 +31,7 @@ enum class ComponentGalleryEntryId {
     ToolCallCard,
     ToolChip,
     MessageNote,
+    TimelineNotice,
     ChildSessionRow,
     WorkingIndicator,
     ReasoningRow,
@@ -355,6 +356,12 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.MessageNote,
             title = "Message Note",
             description = "Muted note under a reply that was cut off or interrupted.",
+            category = ComponentGalleryCategory.Chat,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.TimelineNotice,
+            title = "Timeline Notice",
+            description = "Quiet inline line for a move, agent or model switch, instructions, or restart.",
             category = ComponentGalleryCategory.Chat,
         ),
         ComponentGalleryEntry(
