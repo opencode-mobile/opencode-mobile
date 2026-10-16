@@ -29,10 +29,7 @@ jobs:
         run: ./scripts/ensure-android-platform.sh 37
 
       - name: Resolve Swift Package dependencies
-        run: |
-          xcodebuild -resolvePackageDependencies \
-            -project "OpenCode Mobile.xcodeproj" \
-            -scheme "OpenCode Mobile"
+        run: bash ../../.github/scripts/resolve-ios-packages.sh
 
       - name: Build for iOS Simulator
         run: |

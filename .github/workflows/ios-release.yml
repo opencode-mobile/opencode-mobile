@@ -167,10 +167,7 @@ jobs:
           } >> "$GITHUB_ENV"
 
       - name: Resolve Swift Package dependencies
-        run: |
-          xcodebuild -resolvePackageDependencies \
-            -project "OpenCode Mobile.xcodeproj" \
-            -scheme "OpenCode Mobile"
+        run: bash ../../.github/scripts/resolve-ios-packages.sh
 
       - name: Archive Release for iOS device
         run: |
