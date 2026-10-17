@@ -289,19 +289,7 @@ fun <T> OpenCodeReorderableList(
                                         .width(revealWidthDp)
                                         .fillMaxHeight()
                                         .graphicsLayer { translationX = revealWidthPx - revealPx }
-                                        .background(MaterialTheme.colorScheme.error, shape)
-                                        .then(
-                                            // Only tappable once settled open, so a
-                                            // half-revealed strip cannot be hit.
-                                            if (openKey == itemKey) {
-                                                Modifier.clickable {
-                                                    openKey = null
-                                                    onContextAction?.invoke(item)
-                                                }
-                                            } else {
-                                                Modifier
-                                            },
-                                        ),
+                                        .background(MaterialTheme.colorScheme.error, shape),
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Text(
@@ -504,6 +492,24 @@ fun <T> OpenCodeReorderableList(
                                 },
                     ) {
                         row(item)
+                    }
+                    if (canReveal && openKey == itemKey) {
+                        // The row's pointerInput covers its layout frame; graphicsLayer
+                        // only slides the pixels. This target sits above that frame in
+                        // the revealed gap, or Remove never receives the tap.
+                        Box(modifier = Modifier.matchParentSize()) {
+                            Box(
+                                modifier =
+                                    Modifier
+                                        .align(Alignment.CenterEnd)
+                                        .width(revealWidthDp)
+                                        .fillMaxHeight()
+                                        .clickable {
+                                            openKey = null
+                                            onContextAction?.invoke(item)
+                                        },
+                            )
+                        }
                     }
                 }
             }

@@ -151,17 +151,6 @@ struct OpenCodeReorderableList<Item: Identifiable, Row: View>: View {
                 }
             }
             .offset(x: -reveal)
-            .background(alignment: .trailing) {
-                if reveal > 0 {
-                    // The strip is laid out at full width against the trailing
-                    // edge and clipped to the gap the row has vacated, so it is
-                    // never visible through the row's own translucent fill.
-                    contextActionStrip(item)
-                        .frame(width: OpenCodeReorderableListMath.swipeRevealWidth)
-                        .frame(width: reveal, alignment: .trailing)
-                        .clipped()
-                }
-            }
             .animation(reorderableRevealAnimation, value: reveal)
             .scaleEffect(rowScale(isPressing: isPressing, isDragged: isDragged))
             .shadow(
@@ -184,6 +173,17 @@ struct OpenCodeReorderableList<Item: Identifiable, Row: View>: View {
             }
             .overlay {
                 gestureLayer(item, at: index, movable: movable, canReveal: canReveal)
+            }
+            .overlay(alignment: .trailing) {
+                if reveal > 0 {
+                    // Above the gesture layer. That layer covers the row's layout
+                    // frame — the row is only visually offset — so a strip drawn
+                    // behind it never receives the tap and Remove does nothing.
+                    contextActionStrip(item)
+                        .frame(width: OpenCodeReorderableListMath.swipeRevealWidth)
+                        .frame(width: reveal, alignment: .trailing)
+                        .clipped()
+                }
             }
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isButton)
@@ -226,25 +226,36 @@ struct OpenCodeReorderableList<Item: Identifiable, Row: View>: View {
 
     @ViewBuilder
     private func gestureLayer(_ item: Item, at index: Int, movable: Bool, canReveal: Bool) -> some View {
-        Color.clear
-            .contentShape(Rectangle())
-            .onTapGesture {
-                // A tap anywhere dismisses the open row instead of selecting,
-                // so the revealed action is never one stray tap from a select.
-                if openID != nil {
-                    openID = nil
-                } else {
-                    onSelect(item)
+        // Leave the revealed strip out of this layer once the row is open.
+        // Otherwise a tap on Remove is also a tap on the row, which dismisses
+        // the swipe and can select the project instead of removing it.
+        HStack(spacing: 0) {
+            Color.clear
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    // A tap anywhere dismisses the open row instead of selecting,
+                    // so the revealed action is never one stray tap from a select.
+                    if openID != nil {
+                        openID = nil
+                    } else {
+                        onSelect(item)
+                    }
                 }
+                .gesture(
+                    swipeGesture(item),
+                    including: canReveal && !session.isDragging(item.id) ? .all : .none
+                )
+                .gesture(
+                    liftGesture(item, at: index, movable: movable),
+                    including: movable && openID == nil ? .all : .none
+                )
+            if openID == item.id {
+                Color.clear
+                    .frame(width: OpenCodeReorderableListMath.swipeRevealWidth)
+                    .allowsHitTesting(false)
             }
-            .gesture(
-                swipeGesture(item),
-                including: canReveal && !session.isDragging(item.id) ? .all : .none
-            )
-            .gesture(
-                liftGesture(item, at: index, movable: movable),
-                including: movable && openID == nil ? .all : .none
-            )
+        }
     }
 
     private func swipeGesture(_ item: Item) -> some Gesture {
