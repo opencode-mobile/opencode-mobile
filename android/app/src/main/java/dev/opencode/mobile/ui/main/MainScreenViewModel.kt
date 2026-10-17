@@ -645,7 +645,7 @@ class MainScreenViewModel
 
         fun chooseFork() {
             val state = sessionActions.value
-            if (state.target == null || !state.canFork) return
+            if (state.target == null) return
             logAction(
                 ProductAnalytics.Screen.HOME_SESSION_ACTIONS,
                 ProductAnalytics.Action.SESSION_ACTIONS_FORK,
@@ -1276,7 +1276,6 @@ data class HomeSessionActionTarget(
 data class HomeSessionActionsUiState(
     val target: HomeSessionActionTarget? = null,
     val sheetVisible: Boolean = false,
-    val canFork: Boolean = false,
     val canArchive: Boolean = true,
     val renameVisible: Boolean = false,
     val renameDraft: String = "",
@@ -1286,6 +1285,8 @@ data class HomeSessionActionsUiState(
     val forkDraft: String = "",
     val forkSubmitting: Boolean = false,
     val forkError: String? = null,
+    /** Set when there is nothing to fork (no user message); disables confirm. */
+    val forkBlockedMessage: String? = null,
     val forkResultVisible: Boolean = false,
     val forkedTitle: String = "",
     val deleteConfirmVisible: Boolean = false,

@@ -260,6 +260,8 @@ struct HomeSessionTitleDialogState: Equatable {
     var draftTitle = ""
     var isSubmitting = false
     var errorMessage: String?
+    /// Set when the action cannot run at all (a fork with no user message); disables confirm.
+    var blockedMessage: String?
 }
 
 struct HomeSessionForkResultState: Equatable {
@@ -314,8 +316,6 @@ final class ProjectListHomeViewModel {
     private(set) var removalSnackbar: OpenCodeSnackbarMessage?
     var sessionActionsTarget: HomeSessionActionTarget? { sessionActionsRegion.target }
     var sessionActionsSheetVisible: Bool { sessionActionsRegion.sheetVisible }
-    /// Stays false until a message fetch confirms the session is forkable.
-    var sessionActionsCanFork: Bool { sessionActionsRegion.canFork }
     var sessionActionsCanArchive: Bool { sessionActionsRegion.canArchive }
     var sessionRenameDialog: HomeSessionTitleDialogState { sessionActionsRegion.renameDialog }
     var sessionForkDialog: HomeSessionTitleDialogState { sessionActionsRegion.forkDialog }

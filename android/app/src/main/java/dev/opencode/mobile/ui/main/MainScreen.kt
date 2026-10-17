@@ -614,13 +614,11 @@ private fun HomeSessionActions(
             startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Edit, null),
             onClick = callbacks.onChooseRename,
         )
-        if (state.canFork) {
-            OpenCodeBottomSheetEntry(
-                title = "Fork session",
-                startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.ContentCopy, null),
-                onClick = callbacks.onChooseFork,
-            )
-        }
+        OpenCodeBottomSheetEntry(
+            title = "Fork session",
+            startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.ContentCopy, null),
+            onClick = callbacks.onChooseFork,
+        )
         if (state.canArchive) {
             OpenCodeBottomSheetEntry(
                 title = "Archive",
@@ -674,7 +672,7 @@ private fun HomeSessionActions(
         primaryOption =
             OpenCodeDialogOption(
                 title = "Fork",
-                enabled = !state.forkSubmitting,
+                enabled = !state.forkSubmitting && state.forkBlockedMessage == null,
                 onClick = callbacks.onConfirmFork,
             ),
         secondaryOption =
@@ -689,7 +687,7 @@ private fun HomeSessionActions(
                 onValueChange = callbacks.onForkDraftChange,
                 hint = "Title",
                 enabled = !state.forkSubmitting,
-                errorMessage = state.forkError,
+                errorMessage = state.forkError ?: state.forkBlockedMessage,
             ),
         onDismissRequest = {
             if (!state.forkSubmitting) {
