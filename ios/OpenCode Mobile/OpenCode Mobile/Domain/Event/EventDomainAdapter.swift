@@ -227,9 +227,19 @@ nonisolated struct EventDomainAdapter: Sendable {
             [textPartUpdated(properties)]
         case "session.next.moved", "session.moved":
             [event(type: "session.updated", properties: properties)]
-        case "session.next.agent.switched", "session.next.model.switched",
-             "session.agent.selected", "session.model.selected":
+                + noticeEvents(.location, properties: properties, envelopeID: envelopeID)
+        case "session.next.agent.switched", "session.agent.selected":
             [event(type: "session.updated", properties: properties), messageContext(properties)].compactMap { $0 }
+                + noticeEvents(.agent, properties: properties, envelopeID: envelopeID)
+        case "session.next.model.switched", "session.model.selected":
+            [event(type: "session.updated", properties: properties), messageContext(properties)].compactMap { $0 }
+                + noticeEvents(.model, properties: properties, envelopeID: envelopeID)
+        case "session.instructions.updated":
+            [event(type: type, properties: properties)]
+                + noticeEvents(.instructions, properties: properties, envelopeID: envelopeID)
+        case "session.synthetic":
+            [event(type: type, properties: properties)]
+                + noticeEvents(.synthetic, properties: properties, envelopeID: envelopeID)
         case "session.renamed":
             [renamedToUpdated(properties)]
         case "session.forked":
@@ -647,6 +657,70 @@ nonisolated struct EventDomainAdapter: Sendable {
     }
 
     private enum CompactionPhase { case started, ended, failed }
+
+    private enum NoticeSource { case location, agent, model, instructions, synthetic }
+
+    /// The timeline notice the server appends for a v2 move, switch, instruction update
+    /// or restart. Its message id is the envelope id with `evt_` swapped for `msg_`
+    /// (`SessionMessage.ID.fromEvent`), so the REST copy replaces this row in place.
+    /// Live events may omit `previous`; the REST copy fills it in.
+    private func noticeEvents(
+        _ source: NoticeSource,
+        properties: [String: Any],
+        envelopeID: String?
+    ) -> [OpencodeEvent] {
+        guard let envelopeID, !envelopeID.isEmpty, let sessionID = sessionID(from: properties) else { return [] }
+        let messageID = envelopeID.hasPrefix("evt_") ? "msg_" + String(envelopeID.dropFirst("evt_".count)) : envelopeID
+        var notice: [String: Any]
+        switch source {
+        case .location:
+            guard let location = properties["location"] as? [String: Any],
+                  let directory = string(in: location, key: "directory")
+            else { return [] }
+            notice = ["type": "location-switched", "location": ["directory": directory]]
+        case .agent:
+            guard let agent = string(in: properties, key: "agent") else { return [] }
+            notice = ["type": "agent-switched", "agent": agent]
+            if let previous = string(in: properties, key: "previous") { notice["previous"] = previous }
+        case .model:
+            guard let model = properties["model"] as? [String: Any] else { return [] }
+            notice = ["type": "model-switched", "model": model]
+            if let previous = properties["previous"] as? [String: Any] { notice["previous"] = previous }
+        case .instructions:
+            // The initial baseline and empty deltas carry no text and append no message.
+            guard properties["text"] is String else { return [] }
+            let sources = ((properties["delta"] as? [String: Any])?.keys).map { Array($0).sorted() } ?? []
+            notice = [
+                "type": "system",
+                "description": MessageDomainAdapter.instructionsDescriptionPrefix + sources.joined(separator: ", "),
+                "metadata": ["notice": "instructions", "instructionSources": sources],
+            ]
+        case .synthetic:
+            // Only the restart synthetic is a notice; other synthetic items stay as they are.
+            let metadata = properties["metadata"] as? [String: Any]
+            let description = string(in: properties, key: "description")
+            guard string(in: metadata, key: "notice") == "restart"
+                || description == MessageDomainAdapter.restartDescription
+            else { return [] }
+            notice = ["type": "synthetic", "metadata": ["notice": "restart"]]
+            if let description { notice["description"] = description }
+        }
+        var info: [String: Any] = ["id": messageID, "role": "notice", "sessionID": sessionID]
+        if let created = int64(in: properties, key: "created") {
+            info["time"] = ["created": created, "completed": created]
+        }
+        let part: [String: Any] = [
+            "id": messageID,
+            "messageID": messageID,
+            "sessionID": sessionID,
+            "type": "notice",
+            "notice": notice,
+        ]
+        return [
+            event(type: "message.updated", properties: ["info": info]),
+            event(type: "message.part.updated", properties: ["part": part]),
+        ]
+    }
 
     /// v2 compaction is its own transcript item (`type: compaction`). Its id is
     /// `inputID` or the `started` envelope id with `evt_` swapped for `msg_`; a

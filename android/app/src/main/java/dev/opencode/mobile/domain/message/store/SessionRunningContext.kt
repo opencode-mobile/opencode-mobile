@@ -29,6 +29,7 @@ data class SessionRunningContext(
 
     /** A message that carries its own agent or model supersedes earlier switches of that field. */
     fun advancedBy(message: Message): SessionRunningContext {
+        if (message.role == MessageRole.Notice) return switchedBy(message)
         if (message.mode.equals(COMPACTION_MODE, ignoreCase = true)) return this
         val ownModel = message.modelContext()
         val ownAgent = message.mode?.takeIf { it.isNotBlank() }
@@ -51,6 +52,24 @@ data class SessionRunningContext(
             switchedModel = model ?: switchedModel,
             switchedAtEpochMs = atEpochMs ?: switchedAtEpochMs,
         )
+
+    /** A REST agent or model switch notice switches the running value, as the REST projection does. */
+    private fun switchedBy(message: Message): SessionRunningContext =
+        when (val notice = message.parts.firstNotNullOfOrNull { (it as? MessagePart.Notice)?.notice }) {
+            is TimelineNotice.AgentChanged -> switched(agent = notice.agent, model = null, atEpochMs = message.sentAtEpochMs)
+            is TimelineNotice.ModelChanged ->
+                switched(
+                    agent = null,
+                    model =
+                        MessageModelContext(
+                            providerId = notice.model.providerId,
+                            modelId = notice.model.modelId,
+                            variant = notice.model.variant,
+                        ),
+                    atEpochMs = message.sentAtEpochMs,
+                )
+            else -> this
+        }
 
     /**
      * Re-derive from an authoritative message list. A live switch survives only when it is

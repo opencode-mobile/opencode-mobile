@@ -26,7 +26,7 @@ nonisolated enum SessionTranscriptAuthority {
                 ToolPartIdentity.isVisibleOnTimeline(tool)
             case .file:
                 true
-            case .compaction:
+            case .compaction, .notice:
                 false
             }
         }

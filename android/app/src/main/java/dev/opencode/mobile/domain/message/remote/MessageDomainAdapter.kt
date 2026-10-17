@@ -133,6 +133,11 @@ class MessageDomainAdapter {
                     timeStartEpochMs = dto.time?.start,
                     timeEndEpochMs = dto.time?.end,
                 )
+            // Client-only part of the v2 live notice projection; no v1 server sends it.
+            "notice" -> {
+                val id = dto.id ?: dto.messageId ?: return null
+                TimelineNoticeCodec.decode(dto.notice)?.let { MessagePart.Notice(id = id, notice = it) }
+            }
             else -> null
         }
     }
@@ -353,14 +358,22 @@ class MessageDomainAdapter {
             when (dto.type) {
                 "agent-switched",
                 "location-switched",
-                -> agent = dto.agent ?: agent
-                "model-switched" -> model = dto.model
+                -> {
+                    agent = dto.agent ?: agent
+                    projectV2Notice(dto)?.let { messages += it }
+                }
+                "model-switched" -> {
+                    model = dto.model
+                    projectV2Notice(dto)?.let { messages += it }
+                }
+                "system" -> projectV2Notice(dto)?.let { messages += it }
                 "user" -> {
                     messages += projectV2User(dto, agent, model)
                     agent = dto.agent ?: agent
                     model = dto.model ?: model
                 }
-                "synthetic" -> projectV2Synthetic(dto, agent, model)?.let { messages += it }
+                "synthetic" ->
+                    (projectV2Notice(dto) ?: projectV2Synthetic(dto, agent, model))?.let { messages += it }
                 "skill" -> messages += projectV2Skill(dto, agent, model)
                 "shell" -> messages += projectV2Shell(dto, agent, model)
                 "assistant" -> {
@@ -456,6 +469,21 @@ class MessageDomainAdapter {
                             dto.files.sumOf { it.mention?.text?.length ?: it.source?.text?.length ?: 0 } +
                             dto.agents.sumOf { it.mention?.text?.length ?: it.source?.text?.length ?: 0 },
                 ),
+        )
+    }
+
+    /**
+     * A v2 timeline notice is its own row: no agent, model, text or context
+     * estimate, so it never changes a turn, the running context, or the read state.
+     */
+    private fun projectV2Notice(dto: V2SessionMessageDto): Message? {
+        val notice = V2TimelineNotices.fromMessage(dto) ?: return null
+        return messageFromV2(
+            id = dto.id,
+            role = MessageRole.Notice,
+            parts = listOf(MessagePart.Notice(id = dto.id, notice = notice)),
+            sentAtEpochMs = dto.time?.created,
+            completedAtEpochMs = dto.time?.completed,
         )
     }
 
@@ -816,6 +844,8 @@ class MessageDomainAdapter {
             "assistant" -> MessageRole.Assistant
             "command" -> MessageRole.Command
             "tool" -> MessageRole.Tool
+            // Client-only role of the v2 live notice projection; no v1 server sends it.
+            "notice" -> MessageRole.Notice
             else -> MessageRole.Unknown
         }
 
@@ -874,6 +904,7 @@ class MessageDomainAdapter {
                     is MessagePart.File,
                     is MessagePart.Compaction,
                     is MessagePart.Reasoning,
+                    is MessagePart.Notice,
                     -> null
                 }
             }

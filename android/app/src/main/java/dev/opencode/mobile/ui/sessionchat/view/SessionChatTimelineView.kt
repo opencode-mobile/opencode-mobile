@@ -47,6 +47,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -90,6 +91,9 @@ import dev.opencode.mobile.ui.components.OpenCodeSessionBranchPill
 import dev.opencode.mobile.ui.components.OpenCodeSessionTodosPill
 import dev.opencode.mobile.ui.components.OpenCodeStatusStack
 import dev.opencode.mobile.ui.components.OpenCodeSyncingPill
+import dev.opencode.mobile.ui.components.OpenCodeTimelineNotice
+import dev.opencode.mobile.ui.components.OpenCodeTimelineNoticeState
+import dev.opencode.mobile.ui.components.OpenCodeTimelineNoticeVariant
 import dev.opencode.mobile.ui.components.OpenCodeToolCallCard
 import dev.opencode.mobile.ui.components.OpenCodeToolCallCardStatus
 import dev.opencode.mobile.ui.components.OpenCodeToolChip
@@ -110,6 +114,8 @@ import dev.opencode.mobile.ui.scroll.rememberMessageListUserScroll
 import dev.opencode.mobile.ui.sessionchat.AttachmentPresentationMapper
 import dev.opencode.mobile.ui.sessionchat.SessionBranchPillUiState
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
+import dev.opencode.mobile.ui.sessionchat.SessionChatNoticeCopy
+import dev.opencode.mobile.ui.sessionchat.SessionChatNoticeModelNames
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlock
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlocks
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineState
@@ -125,6 +131,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.yield
 
 private val LocalHideLiveRetryFailures = staticCompositionLocalOf { false }
+private val LocalNoticeModelNames = staticCompositionLocalOf { SessionChatNoticeModelNames() }
 
 internal data class SessionChatTimelineViewProps(
     val timeline: SessionChatTimelineState,
@@ -146,6 +153,8 @@ internal data class SessionChatTimelineViewProps(
     val hideFloatStack: Boolean = false,
     /** Hide rate-limit and quota marks while the composer retry status is showing. */
     val hideLiveRetryFailures: Boolean = false,
+    /** Model display names a "Switched to" notice shows; the model id when absent. */
+    val noticeModelNames: SessionChatNoticeModelNames = SessionChatNoticeModelNames(),
     /** Extra bottom inset so the timeline can scroll under a floating composer. */
     val bottomOverlayInset: Dp = 0.dp,
     val onRefresh: () -> Unit,
@@ -218,7 +227,10 @@ internal fun SessionChatTimelineView(
             }
 
         SessionChatTimelineState.Ready -> {
-            CompositionLocalProvider(LocalHideLiveRetryFailures provides props.hideLiveRetryFailures) {
+            CompositionLocalProvider(
+                LocalHideLiveRetryFailures provides props.hideLiveRetryFailures,
+                LocalNoticeModelNames provides props.noticeModelNames,
+            ) {
             SessionChatTimelineReadyView(
                 messages = props.messages,
                 timelineFrame = props.timelineFrame,
@@ -632,6 +644,13 @@ private fun SessionChatMessageRow(
                     onExpandStepParagraph = onExpandStepParagraph,
                 )
 
+            MessageRole.Notice ->
+                message.blocks.forEach { block ->
+                    if (block is SessionChatTimelineBlock.Notice) {
+                        key(block.blockID) { TimelineNoticeBlock(block) }
+                    }
+                }
+
             MessageRole.Command, MessageRole.Tool, MessageRole.Unknown ->
                 FallbackMessageBubble(
                     roleLabel = message.role.displayLabel(),
@@ -660,6 +679,7 @@ private fun SessionChatMessageItem.outgoingContent(): List<OpenCodeOutgoingMessa
             is SessionChatTimelineBlock.StepParagraph,
             is SessionChatTimelineBlock.StopNote,
             is SessionChatTimelineBlock.FailureLine,
+            is SessionChatTimelineBlock.Notice,
             -> null
         }
     }
@@ -801,6 +821,7 @@ private fun AssistantMessageContent(
                                     MessageStopReason.Interrupted -> OpenCodeMessageNoteVariant.Interrupted
                                 },
                         )
+                    is SessionChatTimelineBlock.Notice -> TimelineNoticeBlock(block)
                     is SessionChatTimelineBlock.FailureLine -> {
                         if (!LocalHideLiveRetryFailures.current || !block.coveredByLiveRetry) {
                             FailureLineBlock(
@@ -842,6 +863,20 @@ private fun AssistantMessageContent(
             }
         }
     }
+}
+
+/** A v2 timeline notice row; tapping a row with a value expands it in place. */
+@Composable
+private fun TimelineNoticeBlock(block: SessionChatTimelineBlock.Notice) {
+    val line = SessionChatNoticeCopy.line(block.notice, LocalNoticeModelNames.current)
+    var expanded by rememberSaveable(block.blockID) { mutableStateOf(false) }
+    OpenCodeTimelineNotice(
+        label = line.label,
+        value = line.value,
+        variant = if (line.isMove) OpenCodeTimelineNoticeVariant.Move else OpenCodeTimelineNoticeVariant.Change,
+        state = if (expanded) OpenCodeTimelineNoticeState.Expanded else OpenCodeTimelineNoticeState.Collapsed,
+        onToggle = { expanded = !expanded },
+    )
 }
 
 @Composable

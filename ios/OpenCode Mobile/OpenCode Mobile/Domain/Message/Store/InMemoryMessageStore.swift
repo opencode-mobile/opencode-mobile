@@ -1353,6 +1353,8 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
             part.id
         case .reasoning(let part):
             part.id
+        case .notice(let notice):
+            notice.id
         }
     }
 

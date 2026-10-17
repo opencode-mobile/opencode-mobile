@@ -95,9 +95,83 @@ nonisolated struct MessageDomainAdapter: Sendable {
                     timeEndEpochMs: dto.time?.end
                 )
             )
+        case "notice":
+            guard let id = dto.id ?? dto.messageID, let notice = dto.notice else { return nil }
+            return timelineNotice(id: id, from: notice).map(MessagePart.notice)
         default:
             return nil
         }
+    }
+
+    /// The product notice for a v2 notice item, or nil when the item draws no row
+    /// (an unknown type, a switch without its value, or a non-restart synthetic).
+    func timelineNotice(id: String, from dto: V2NoticeDTO) -> TimelineNotice? {
+        let kind: TimelineNoticeKind?
+        switch dto.type {
+        case "location-switched":
+            kind = Self.nonBlank(dto.location?.directory).map { TimelineNoticeKind.moved(directory: $0) }
+        case "agent-switched":
+            kind = Self.nonBlank(dto.agent).map { agent in
+                let previous = Self.nonBlank(dto.previous?.agent)
+                return .agentChanged(agent: agent, previous: previous == agent ? nil : previous)
+            }
+        case "model-switched":
+            kind = Self.noticeModel(dto.model).map { model in
+                .modelChanged(model: model, previous: Self.noticeModel(dto.previous?.model))
+            }
+        case "system":
+            kind = Self.systemNotice(metadata: dto.metadata, description: dto.description)
+        case "synthetic":
+            kind = Self.isRestartNotice(metadata: dto.metadata, description: dto.description) ? .restart : nil
+        default:
+            kind = nil
+        }
+        return kind.map { TimelineNotice(id: id, kind: $0) }
+    }
+
+    static let instructionsDescriptionPrefix = "Instructions updated: "
+    static let restartDescription = "Continuing after restart"
+
+    /// Instruction updates name their sources in metadata, or in the description
+    /// older servers wrote. Other system items show their description only: `text`
+    /// is the model-facing update.
+    private static func systemNotice(metadata: [String: AnyCodable]?, description: String?) -> TimelineNoticeKind {
+        if case .string("instructions")? = metadata?["notice"],
+           case .array(let values)? = metadata?["instructionSources"]
+        {
+            let sources = values.compactMap { value -> String? in
+                if case .string(let source) = value { return nonBlank(source) }
+                return nil
+            }
+            if !sources.isEmpty { return .instructionsUpdated(sources: sources) }
+        }
+        if let description, description.hasPrefix(instructionsDescriptionPrefix) {
+            let sources = description.dropFirst(instructionsDescriptionPrefix.count)
+                .split(separator: ",")
+                .compactMap { nonBlank(String($0)) }
+            return .instructionsUpdated(sources: sources)
+        }
+        if let description = nonBlank(description) { return .systemNote(description) }
+        return .instructionsUpdated(sources: [])
+    }
+
+    private static func isRestartNotice(metadata: [String: AnyCodable]?, description: String?) -> Bool {
+        if case .string("restart")? = metadata?["notice"] { return true }
+        return description == restartDescription
+    }
+
+    private static func noticeModel(_ dto: V2ModelRefDTO?) -> TimelineNoticeModel? {
+        guard let modelID = nonBlank(dto?.id) else { return nil }
+        return TimelineNoticeModel(
+            providerID: nonBlank(dto?.providerID),
+            modelID: modelID,
+            variant: nonBlank(dto?.variant)
+        )
+    }
+
+    private static func nonBlank(_ value: String?) -> String? {
+        guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else { return nil }
+        return trimmed
     }
 
     func toolPart(
@@ -285,13 +359,18 @@ nonisolated struct MessageDomainAdapter: Sendable {
             switch dto.type {
             case "agent-switched", "location-switched":
                 agent = dto.agent ?? agent
+                appendV2Notice(dto, to: &messages)
             case "model-switched":
                 model = dto.model
+                appendV2Notice(dto, to: &messages)
+            case "system":
+                appendV2Notice(dto, to: &messages)
             case "user":
                 messages.append(projectV2User(dto, agent: agent, model: model))
                 agent = dto.agent ?? agent
                 model = dto.model ?? model
             case "synthetic":
+                if appendV2Notice(dto, to: &messages) { break }
                 if let synthetic = projectV2Synthetic(dto, agent: agent, model: model) {
                     messages.append(synthetic)
                 }
@@ -357,6 +436,23 @@ nonisolated struct MessageDomainAdapter: Sendable {
     }
 
     // MARK: Private
+
+    /// A notice is its own row: no agent, model or context estimate, so it never
+    /// reads as a prompt or reply and never moves the running context.
+    @discardableResult
+    private func appendV2Notice(_ dto: V2SessionMessageDTO, to messages: inout [Message]) -> Bool {
+        guard let notice = timelineNotice(id: dto.id, from: dto.notice) else { return false }
+        messages.append(
+            messageFromV2(
+                id: dto.id,
+                role: .notice,
+                parts: [.notice(notice)],
+                sentAtEpochMs: dto.time?.created,
+                completedAtEpochMs: dto.time?.created
+            )
+        )
+        return true
+    }
 
     private func projectV2User(_ dto: V2SessionMessageDTO, agent: String, model: V2ModelRefDTO?) -> Message {
         var parts: [MessagePart] = []
@@ -731,6 +827,8 @@ nonisolated struct MessageDomainAdapter: Sendable {
             .command
         case "tool":
             .tool
+        case "notice":
+            .notice
         default:
             .unknown
         }
@@ -783,7 +881,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
                 guard t.isDisplayable else { return nil }
                 let trimmed = t.text.trimmingCharacters(in: .whitespacesAndNewlines)
                 return trimmed.isEmpty ? nil : trimmed
-            case .file, .tool, .compaction, .reasoning:
+            case .file, .tool, .compaction, .reasoning, .notice:
                 return nil
             }
         }

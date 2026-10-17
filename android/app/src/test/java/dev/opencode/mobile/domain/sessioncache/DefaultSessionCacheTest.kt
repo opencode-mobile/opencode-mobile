@@ -3,6 +3,8 @@ package dev.opencode.mobile.domain.sessioncache
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.message.NoticeModelRef
+import dev.opencode.mobile.domain.message.TimelineNotice
 import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionActivity
@@ -97,6 +99,40 @@ class DefaultSessionCacheTest {
             assertNull(handle.seed())
             scope.advanceTimeBy(1)
             scope.runCurrent()
+            assertEquals(messages, handle.seed())
+        }
+
+    @Test
+    fun messageHandleRoundTripsTimelineNotices() =
+        runTest {
+            val cache =
+                DefaultSessionCache(
+                    store = InMemorySessionCacheStore(),
+                    connectionIdProvider = { "http://localhost:4096/|opencode" },
+                    scope = backgroundScope,
+                    json = json,
+                    debounceMs = 60_000L,
+                )
+            val handle = cache.openMessages("s1", "/repo")
+            val messages =
+                listOf(
+                    TimelineNotice.Moved("/repo/b", previousDirectory = "/repo"),
+                    TimelineNotice.AgentChanged("plan", previous = "build"),
+                    TimelineNotice.ModelChanged(NoticeModelRef("openai", "gpt-5", "high"), NoticeModelRef("openai", "gpt-5")),
+                    TimelineNotice.InstructionsUpdated(listOf("AGENTS.md", "CLAUDE.md")),
+                    TimelineNotice.Restart,
+                ).mapIndexed { index, notice ->
+                    Message(
+                        id = "msg_$index",
+                        role = MessageRole.Notice,
+                        text = "",
+                        parts = listOf(MessagePart.Notice(id = "msg_$index", notice = notice)),
+                        sentAtEpochMs = index.toLong(),
+                    )
+                }
+            handle.note(messages)
+            testScheduler.runCurrent()
+            handle.flush()
             assertEquals(messages, handle.seed())
         }
 

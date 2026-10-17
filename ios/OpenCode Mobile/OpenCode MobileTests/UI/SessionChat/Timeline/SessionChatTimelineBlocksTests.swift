@@ -2918,6 +2918,43 @@ struct SessionChatTimelineBlocksTests {
         #expect(card.detailIsMarkdown)
     }
 
+    @Test func build_noticeRoleBecomesOneNoticeBlockPerNotice() {
+        let notice = TimelineNotice(id: "msg_n", kind: .moved(directory: "/repo/wt"))
+        let blocks = okBlocks(role: .notice, parts: [.notice(notice)], chipTimeline: true)
+        #expect(blocks == [.notice(blockID: PresentationBlockId.direct("msg_n"), notice: notice)])
+    }
+
+    @Test func merge_noticeBreaksToolAndChipRuns() {
+        let notice = TimelineNotice(id: "msg_n", kind: .agentChanged(agent: "plan", previous: "build"))
+        let noticeBody = DisplayMessageBody(
+            message: Message(
+                id: "msg_n",
+                role: .notice,
+                text: "",
+                parts: [.notice(notice)],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: nil
+            ),
+            isStreaming: false,
+            blocks: okBlocks(role: .notice, parts: [.notice(notice)]),
+            renderedMarkdown: nil
+        )
+        let bodies = [toolOnlyBody(id: "a1", toolID: "bash-1"), noticeBody, toolOnlyBody(id: "a2", toolID: "bash-2")]
+        let collapsed = SessionChatTimelineBlocks.mergeConsecutiveToolOnlyAssistantBodies(
+            bodies,
+            collapseConsecutiveToolCalls: true
+        )
+        #expect(collapsed.map(\.id) == ["a1", "msg_n", "a2"])
+        let chips = SessionChatTimelineBlocks.mergeConsecutiveToolOnlyAssistantBodies(
+            bodies,
+            collapseConsecutiveToolCalls: false,
+            chipTimeline: true
+        )
+        #expect(chips.map(\.id) == ["a1", "msg_n", "a2"])
+        #expect(chips[1].blocks == noticeBody.blocks)
+    }
+
     private func okBlocks(
         role: MessageRole = .assistant,
         parts: [MessagePart],

@@ -9,6 +9,7 @@ import dev.opencode.mobile.domain.message.MessageContextEstimate
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.SessionFailure
+import dev.opencode.mobile.domain.message.TimelineNoticeCodec
 import dev.opencode.mobile.domain.message.MessageStopReason
 import dev.opencode.mobile.domain.message.MessageTokenUsage
 import dev.opencode.mobile.domain.message.ToolStatus
@@ -464,6 +465,12 @@ private fun MessagePart.toCachePayload(): CachedMessagePartPayload? =
                 timeStartEpochMs = timeStartEpochMs,
                 timeEndEpochMs = timeEndEpochMs,
             )
+        is MessagePart.Notice ->
+            CachedMessagePartPayload(
+                kind = "notice",
+                id = id,
+                metadata = TimelineNoticeCodec.encode(notice),
+            )
     }
 
 private fun CachedMessagePartPayload.toDomain(): MessagePart? =
@@ -520,5 +527,9 @@ private fun CachedMessagePartPayload.toDomain(): MessagePart? =
                 completed = status == "completed",
                 summary = text?.takeIf { it.isNotBlank() },
             )
+        "notice" -> {
+            val noticeId = id ?: return null
+            TimelineNoticeCodec.decode(metadata)?.let { MessagePart.Notice(id = noticeId, notice = it) }
+        }
         else -> null
     }

@@ -24,10 +24,15 @@ nonisolated struct V2SessionMessageDTO: Decodable, Sendable {
     let callID: String?
     let name: String?
     let description: String?
+    /// Notice items: the agent, model or location before a switch.
+    let previous: V2PreviousDTO?
+    /// `location-switched`: the session's new location.
+    let location: V2LocationRefDTO?
+    let metadata: [String: AnyCodable]?
 
     private enum CodingKeys: String, CodingKey {
         case id, type, text, files, agents, agent, model, content, cost, tokens, error, outcome, retry, finish, time
-        case reason, summary, status, command, output, callID, name, description
+        case reason, summary, status, command, output, callID, name, description, previous, location, metadata
     }
 
     init(from decoder: Decoder) throws {
@@ -55,6 +60,22 @@ nonisolated struct V2SessionMessageDTO: Decodable, Sendable {
         callID = try container.decodeIfPresent(String.self, forKey: .callID)
         name = try container.decodeIfPresent(String.self, forKey: .name)
         description = try container.decodeIfPresent(String.self, forKey: .description)
+        previous = try? container.decodeIfPresent(V2PreviousDTO.self, forKey: .previous)
+        location = try? container.decodeIfPresent(V2LocationRefDTO.self, forKey: .location)
+        metadata = try? container.decodeIfPresent([String: AnyCodable].self, forKey: .metadata)
+    }
+
+    /// The fields a timeline notice reads, shared with the live projection.
+    var notice: V2NoticeDTO {
+        V2NoticeDTO(
+            type: type,
+            agent: agent,
+            model: model,
+            previous: previous,
+            location: location,
+            metadata: metadata,
+            description: description
+        )
     }
 
     private static func decodeOutput(from container: KeyedDecodingContainer<CodingKeys>) -> String? {
@@ -74,10 +95,94 @@ nonisolated struct V2MessageTimeDTO: Decodable, Sendable {
     let completed: Int64?
 }
 
-nonisolated struct V2ModelRefDTO: Decodable, Sendable {
+nonisolated struct V2ModelRefDTO: Codable, Sendable {
     let id: String?
     let providerID: String?
     let variant: String?
+}
+
+nonisolated struct V2LocationRefDTO: Codable, Sendable {
+    let directory: String?
+}
+
+/// `previous` on a switch item: an agent id (`agent-switched`), a model ref
+/// (`model-switched`) or `{location}` (`location-switched`).
+nonisolated struct V2PreviousDTO: Codable, Sendable {
+    let agent: String?
+    let model: V2ModelRefDTO?
+    let location: V2LocationRefDTO?
+
+    init(agent: String? = nil, model: V2ModelRefDTO? = nil, location: V2LocationRefDTO? = nil) {
+        self.agent = agent
+        self.model = model
+        self.location = location
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, providerID, variant, location
+    }
+
+    init(from decoder: Decoder) throws {
+        if let agent = try? decoder.singleValueContainer().decode(String.self) {
+            self.init(agent: agent)
+            return
+        }
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let location = try? container.decodeIfPresent(V2LocationRefDTO.self, forKey: .location)
+        let id = try? container.decodeIfPresent(String.self, forKey: .id)
+        let model = id.map { id in
+            V2ModelRefDTO(
+                id: id,
+                providerID: try? container.decodeIfPresent(String.self, forKey: .providerID),
+                variant: try? container.decodeIfPresent(String.self, forKey: .variant)
+            )
+        }
+        self.init(model: model, location: location)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        if let agent {
+            var container = encoder.singleValueContainer()
+            try container.encode(agent)
+            return
+        }
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(model?.id, forKey: .id)
+        try container.encodeIfPresent(model?.providerID, forKey: .providerID)
+        try container.encodeIfPresent(model?.variant, forKey: .variant)
+        try container.encodeIfPresent(location, forKey: .location)
+    }
+}
+
+/// The fields of a v2 notice item (`location-switched`, `agent-switched`,
+/// `model-switched`, `system`, `synthetic`). REST reads them off the session
+/// message; the live projection carries them on a client-only `notice` part.
+nonisolated struct V2NoticeDTO: Codable, Sendable {
+    let type: String
+    let agent: String?
+    let model: V2ModelRefDTO?
+    let previous: V2PreviousDTO?
+    let location: V2LocationRefDTO?
+    let metadata: [String: AnyCodable]?
+    let description: String?
+
+    init(
+        type: String,
+        agent: String? = nil,
+        model: V2ModelRefDTO? = nil,
+        previous: V2PreviousDTO? = nil,
+        location: V2LocationRefDTO? = nil,
+        metadata: [String: AnyCodable]? = nil,
+        description: String? = nil
+    ) {
+        self.type = type
+        self.agent = agent
+        self.model = model
+        self.previous = previous
+        self.location = location
+        self.metadata = metadata
+        self.description = description
+    }
 }
 
 nonisolated struct V2UnknownErrorDTO: Decodable, Sendable {

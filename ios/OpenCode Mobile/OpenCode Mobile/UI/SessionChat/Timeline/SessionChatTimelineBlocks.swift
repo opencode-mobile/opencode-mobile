@@ -25,6 +25,8 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
         actionLabel: String?,
         coveredByLiveRetry: Bool
     )
+    /// A session-level change (moved, agent, model, instructions, restart) on its own row.
+    case notice(blockID: String, notice: TimelineNotice)
 
     var blockID: String {
         switch self {
@@ -46,6 +48,8 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
             blockID
         case .failureLine(let blockID, _, _, _, _, _, _):
             blockID
+        case .notice(let blockID, _):
+            blockID
         }
     }
 
@@ -65,7 +69,7 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
         case .stepParagraph(_, let paragraph):
             guard let textBlockID = paragraph.textBlockID, let text = paragraph.text else { return nil }
             return (textBlockID, text, paragraph.renderedMarkdown)
-        case .attachment, .toolCard, .toolGroup, .childSessionRow, .reasoning, .stopNote, .failureLine:
+        case .attachment, .toolCard, .toolGroup, .childSessionRow, .reasoning, .stopNote, .failureLine, .notice:
             return nil
         }
     }
@@ -77,7 +81,7 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
             return .text(blockID: blockID, text: text, renderedMarkdown: document)
         case .stepParagraph(let blockID, let paragraph):
             return .stepParagraph(blockID: blockID, paragraph: paragraph.withRenderedMarkdown(document))
-        case .attachment, .toolCard, .toolGroup, .childSessionRow, .reasoning, .stopNote, .failureLine:
+        case .attachment, .toolCard, .toolGroup, .childSessionRow, .reasoning, .stopNote, .failureLine, .notice:
             return self
         }
     }
@@ -116,6 +120,8 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
         ):
             lID == rID && lText == rText && lBody == rBody && lNeutral == rNeutral
                 && lAction == rAction && lLabel == rLabel && lCovered == rCovered
+        case let (.notice(lID, lNotice), .notice(rID, rNotice)):
+            lID == rID && lNotice == rNotice
         default:
             false
         }
@@ -462,6 +468,9 @@ nonisolated enum SessionChatTimelineBlocks {
         chipTimeline: Bool = false
     ) -> SessionChatTimelineBlocksResult {
         guard !parts.isEmpty else { return .ok([]) }
+        if role == .notice {
+            return .ok(noticeBlocks(parts))
+        }
         if chipTimeline, role == .assistant {
             return buildStepParagraphs(parts: parts)
         }
@@ -506,6 +515,10 @@ nonisolated enum SessionChatTimelineBlocks {
                         file: file
                     )
                 )
+                index += 1
+            case .notice(let notice):
+                flushText()
+                blocks.append(noticeBlock(notice))
                 index += 1
             case .compaction(let compaction):
                 // v1 marks compaction on the user message that asked for it;
@@ -816,6 +829,18 @@ nonisolated enum SessionChatTimelineBlocks {
         }
     }
 
+    /// Notices never merge with replies: each stays the line it was recorded as.
+    private static func noticeBlocks(_ parts: [MessagePart]) -> [SessionChatTimelineBlock] {
+        parts.compactMap { part in
+            guard case .notice(let notice) = part else { return nil }
+            return noticeBlock(notice)
+        }
+    }
+
+    private static func noticeBlock(_ notice: TimelineNotice) -> SessionChatTimelineBlock {
+        .notice(blockID: PresentationBlockId.direct(notice.id), notice: notice)
+    }
+
     private static func isCompactionBody(_ body: DisplayMessageBody) -> Bool {
         body.message.parts.contains { if case .compaction = $0 { return true }; return false }
     }
@@ -849,7 +874,7 @@ nonisolated enum SessionChatTimelineBlocks {
             true
         case .toolCard(_, let card):
             !Self.isChildSessionTool(card.toolName)
-        case .text, .attachment, .childSessionRow, .reasoning, .stepParagraph, .stopNote, .failureLine:
+        case .text, .attachment, .childSessionRow, .reasoning, .stepParagraph, .stopNote, .failureLine, .notice:
             false
         }
     }
@@ -941,6 +966,9 @@ nonisolated enum SessionChatTimelineBlocks {
             case .compaction(let compaction):
                 guard flushParagraph(), let card = compactionCard(compaction) else { return .missingPartIds }
                 blocks.append(card)
+            case .notice(let notice):
+                guard flushParagraph() else { return .missingPartIds }
+                blocks.append(noticeBlock(notice))
             case .reasoning(let reasoning):
                 guard ThoughtPartChrome.isVisible(reasoning), !reasoning.isStreaming else { continue }
                 guard let partId = reasoning.id else { return .missingPartIds }
@@ -1454,7 +1482,7 @@ nonisolated enum SessionChatTimelineBlocks {
                 || textPart.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         case .tool(let tool):
             !isVisibleTool(tool)
-        case .file:
+        case .file, .notice:
             false
         case .reasoning(let reasoning):
             !isLiveReasoning(reasoning)

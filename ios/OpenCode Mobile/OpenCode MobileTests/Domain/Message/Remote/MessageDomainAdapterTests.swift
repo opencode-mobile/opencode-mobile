@@ -728,7 +728,7 @@ struct MessageDomainAdapterTests {
         #expect(message.contextEstimate.userCharacters == "agent prompt text".count)
     }
 
-    @Test func projectV2MapsUserAssistantAndSkipsSwitches() throws {
+    @Test func projectV2MapsUserAssistantAndASwitchNotice() throws {
         let dtos = try decoder.decode(
             [V2SessionMessageDTO].self,
             from: Data(
@@ -764,7 +764,9 @@ struct MessageDomainAdapterTests {
             )
         )
 
-        let messages = adapter.messages(fromV2: dtos)
+        let all = adapter.messages(fromV2: dtos)
+        #expect(all.map(\.role) == [.notice, .user, .assistant])
+        let messages = all.filter { $0.role != .notice }
 
         #expect(messages.count == 2)
         #expect(messages[0].role == .user)
@@ -925,7 +927,7 @@ struct MessageDomainAdapterTests {
             )
         )
 
-        let messages = adapter.messages(fromV2: dtos)
+        let messages = adapter.messages(fromV2: dtos).filter { $0.role != .notice }
         let message = try #require(messages.first)
         #expect(messages.count == 1)
         #expect(message.mode == "build")
@@ -1329,6 +1331,7 @@ extension MessagePart {
         case .tool(let part): part.id
         case .compaction(let part): part.id
         case .reasoning(let part): part.id
+        case .notice(let notice): notice.id
         }
     }
 }

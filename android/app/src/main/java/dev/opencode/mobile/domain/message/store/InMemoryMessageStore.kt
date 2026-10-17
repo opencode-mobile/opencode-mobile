@@ -1183,6 +1183,7 @@ class InMemoryMessageStore
                 is MessagePart.File -> id
                 is MessagePart.Compaction -> id
                 is MessagePart.Reasoning -> id
+                is MessagePart.Notice -> id
             }
 
         private fun MessagePart.isStreamingPart(): Boolean =

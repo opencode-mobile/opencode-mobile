@@ -91,6 +91,8 @@ nonisolated struct MessagePartDTO: Codable, Sendable {
     let mime: String?
     let filename: String?
     let url: String?
+    /// Client-only `notice` part from the v2 live projection.
+    let notice: V2NoticeDTO?
 }
 
 nonisolated struct MessageToolStateDTO: Codable, Sendable {

@@ -341,6 +341,45 @@ struct MessageListTimelineApplyPacket: Equatable, Sendable {
         )
     }
 
+    /// Model-switch notices show the catalog name, which can arrive after the row.
+    /// Rows whose resolved name changed reconfigure; the names fold into revision
+    /// so an unchanged catalog never re-applies.
+    func addingNoticeModelNames(
+        rows: [SessionChatRow],
+        names: TimelineNoticeModelNames,
+        previous: TimelineNoticeModelNames
+    ) -> MessageListTimelineApplyPacket {
+        var fingerprint: UInt64 = 0
+        var rowIDs: Set<String> = []
+        for row in rows where row.role == .notice {
+            for block in row.blocks {
+                guard case .notice(let blockID, let notice) = block,
+                      case .modelChanged(let model, _) = notice.kind
+                else { continue }
+                let name = names.name(for: model)
+                fingerprint = fingerprint &+ SessionChatStepParagraphExpansion.fingerprint([blockID + (name ?? ""): 0])
+                if name != previous.name(for: model) { rowIDs.insert(row.id) }
+            }
+        }
+        guard fingerprint != 0 else { return self }
+        var nextKinds = kinds
+        if !rowIDs.isEmpty {
+            nextKinds.insert(.structure)
+            nextKinds.insert(.content)
+        }
+        return MessageListTimelineApplyPacket(
+            frameRevision: frameRevision &+ (fingerprint &* 1_000_000_007),
+            insertedRowIDs: insertedRowIDs,
+            changedRowIDs: changedRowIDs.union(rowIDs),
+            removedRowIDs: removedRowIDs,
+            layoutChangedRowIDs: layoutChangedRowIDs.union(rowIDs),
+            grewBottomRowIDs: grewBottomRowIDs,
+            decorateRowIDs: decorateRowIDs,
+            isRequired: isRequired,
+            kinds: nextKinds
+        )
+    }
+
     /// Gallery / non-projector path: treat every surviving ID as needing reconfigure.
     static func reconfigureAllSurviving(
         frameRevision: UInt64,

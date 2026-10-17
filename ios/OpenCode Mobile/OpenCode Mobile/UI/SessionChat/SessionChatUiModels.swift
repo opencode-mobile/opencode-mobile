@@ -80,6 +80,8 @@ extension SessionChatRow: MessageListTimelineHeightEstimating {
                 .outgoing
             case .assistant:
                 .assistant
+            case .notice:
+                .line
             case .tool, .command, .unknown:
                 .compact
             }
@@ -325,7 +327,7 @@ struct SessionChatUiState: Equatable {
         for message in messages {
             if message.role == .user {
                 candidate = message.isPending || message.isStreaming ? nil : message
-            } else if let candidate, !message.isPending, !message.isStreaming {
+            } else if message.role != .notice, let candidate, !message.isPending, !message.isStreaming {
                 latest = candidate.id
             }
         }
