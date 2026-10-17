@@ -483,6 +483,26 @@ private fun ListItemStartDecoration(
                                 .semantics { hideFromAccessibility() },
                     )
                 }
+                if (decorator.worktree) {
+                    Box(
+                        modifier =
+                            Modifier
+                                .align(Alignment.TopEnd)
+                                .offset(x = 1.dp, y = (-1).dp)
+                                .size(ListItemLetterStatusDotSize + 4.dp)
+                                .border(2.dp, backgroundBase, CircleShape)
+                                .clip(CircleShape)
+                                .background(openCodeColor("surface-raised-base")),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = OpenCodeIcons.CallSplit,
+                            contentDescription = "Worktree",
+                            modifier = Modifier.size(10.dp),
+                            tint = openCodeColor("icon-strong-base"),
+                        )
+                    }
+                }
             }
         }
         is StartDecorator.Icon -> {

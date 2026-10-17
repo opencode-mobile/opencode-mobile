@@ -17,6 +17,8 @@ enum OpenCodeTopBarSubtitleAccessory {
 
 enum OpenCodeTopBarSubtitleLeading {
     case letter(Character, LetterAccent)
+    /// Worktree checkout. The icon is callSplit; the subtitle is the checkout name.
+    case worktree
 }
 
 enum OpenCodeTopBarLeading {
@@ -200,6 +202,11 @@ struct OpenCodeTopBar: View {
                 if hasSubtitle, case let .letter(character, accent)? = subtitleLeading {
                     topBarLetterBadge(character: character, accent: accent)
                 }
+                if hasSubtitle, case .worktree? = subtitleLeading {
+                    OpenCodeIconImage(icon: .callSplit, size: 12)
+                        .foregroundStyle(OpenCodeColors.iconStrongBase)
+                        .accessibilityLabel("Worktree")
+                }
                 if let subtitle {
                     Text(subtitle)
                         .font(OpenCodeTypography.caption)
@@ -236,6 +243,8 @@ struct OpenCodeTopBar: View {
         if let subtitle {
             if case let .letter(character, _)? = subtitleLeading {
                 parts.append("Project \(String(character).uppercased()) \(subtitle)")
+            } else if case .worktree? = subtitleLeading {
+                parts.append("Worktree \(subtitle)")
             } else {
                 parts.append(subtitle)
             }

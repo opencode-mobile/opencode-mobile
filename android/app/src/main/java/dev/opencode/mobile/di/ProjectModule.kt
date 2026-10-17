@@ -9,6 +9,8 @@ import dev.opencode.mobile.data.remote.EventsApi
 import dev.opencode.mobile.data.remote.FilesystemApi
 import dev.opencode.mobile.data.remote.HealthApi
 import dev.opencode.mobile.data.remote.ProjectsApi
+import dev.opencode.mobile.data.remote.WorktreeRemote
+import dev.opencode.mobile.data.remote.WorktreesApi
 import dev.opencode.mobile.data.remote.sessionEventsApi
 import dev.opencode.mobile.domain.connection.ConnectivityDeviceNetworkPath
 import dev.opencode.mobile.domain.connection.DeviceNetworkPath
@@ -31,6 +33,8 @@ import dev.opencode.mobile.domain.filesystem.TextMateProjectFileHighlighter
 import dev.opencode.mobile.domain.project.DefaultProjectRepository
 import dev.opencode.mobile.domain.project.ProjectDomainAdapter
 import dev.opencode.mobile.domain.project.ProjectRepository
+import dev.opencode.mobile.domain.worktree.DefaultWorktreeRepository
+import dev.opencode.mobile.domain.worktree.WorktreeRepository
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.OpencodeSseHttpClient
@@ -46,6 +50,14 @@ abstract class ProjectModule {
     @Binds
     @Singleton
     abstract fun bindProjectRepository(impl: DefaultProjectRepository): ProjectRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindWorktreeRepository(impl: DefaultWorktreeRepository): WorktreeRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindWorktreeRemote(impl: WorktreesApi): WorktreeRemote
 
     @Binds
     @Singleton
@@ -67,6 +79,10 @@ abstract class ProjectModule {
         @Provides
         @Singleton
         fun provideProjectsApi(httpClient: OpencodeHttpClient): ProjectsApi = ProjectsApi(httpClient)
+
+        @Provides
+        @Singleton
+        fun provideWorktreesApi(httpClient: OpencodeHttpClient): WorktreesApi = WorktreesApi(httpClient)
 
         @Provides
         @Singleton

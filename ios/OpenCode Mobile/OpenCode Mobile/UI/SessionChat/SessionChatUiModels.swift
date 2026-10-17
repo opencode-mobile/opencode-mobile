@@ -222,6 +222,8 @@ struct SessionChatUiState: Equatable {
     var projectLabel: String? = nil
     var projectLetter: Character? = nil
     var projectLetterAccent: LetterAccent? = nil
+    /// True when the subtitle is a worktree checkout name instead of the project letter.
+    var worktreeCheckout: Bool = false
     var sessionBranchPill: SessionChatBranchPillUiState? = nil
     var timeline: SessionChatTimelineState
     var messages: [SessionChatRow]

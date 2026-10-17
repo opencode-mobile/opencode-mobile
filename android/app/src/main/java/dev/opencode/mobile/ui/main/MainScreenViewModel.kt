@@ -11,7 +11,11 @@ import dev.opencode.mobile.domain.connection.userMessage
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.event.FixedLiveUpdates
+import dev.opencode.mobile.domain.event.ForegroundEventStream
+import dev.opencode.mobile.domain.event.IdleForegroundEventStream
 import dev.opencode.mobile.domain.event.LiveUpdates
+import dev.opencode.mobile.domain.event.OpencodeEvent
+import dev.opencode.mobile.domain.event.namedProjectId
 import dev.opencode.mobile.domain.filesystem.FilesystemRepository
 import dev.opencode.mobile.domain.filesystem.ServerPathPolicy
 import dev.opencode.mobile.domain.live.LiveStoreRefreshPolicy
@@ -34,6 +38,9 @@ import dev.opencode.mobile.domain.session.SessionSummary
 import dev.opencode.mobile.domain.session.activeSessions
 import dev.opencode.mobile.domain.session.rootSessions
 import dev.opencode.mobile.domain.sessioncache.SessionCache
+import dev.opencode.mobile.domain.worktree.UnavailableWorktreeRepository
+import dev.opencode.mobile.domain.worktree.WorktreeInventory
+import dev.opencode.mobile.domain.worktree.WorktreeRepository
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.letterAccentForWorktree
@@ -78,6 +85,8 @@ class MainScreenViewModel
         private val connectionSessionCoordinator: ConnectionSessionCoordinator,
         private val sessionCache: SessionCache,
         private val liveUpdates: LiveUpdates = FixedLiveUpdates(),
+        worktreeRepository: WorktreeRepository = UnavailableWorktreeRepository,
+        private val foregroundEventStream: ForegroundEventStream = IdleForegroundEventStream,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow<MainScreenUiState>(MainScreenUiState.Probing)
         val uiState: StateFlow<MainScreenUiState> = _uiState.asStateFlow()
@@ -121,6 +130,24 @@ class MainScreenViewModel
             get() = activeConnectionManager.current()?.baseUrl.orEmpty()
         private var liveObservationJobs: List<Job> = emptyList()
         private var observedWorktrees: List<String> = emptyList()
+        private val worktreeMarks =
+            HomeWorktreeMarks(
+                repository = worktreeRepository,
+                currentProjectId = { directory -> projectRepository.getCurrentProject(directory).id },
+                listSessions = { directory ->
+                    sessionRepository
+                        .listSessions(directory)
+                        .activeSessions()
+                        .rootSessions()
+                        .map { session ->
+                            val summary = sessionDomainAdapter.toSessionSummary(session)
+                            if (summary.directory.isNullOrBlank()) summary.copy(directory = directory) else summary
+                        }
+                },
+            )
+        private val worktreeInventories = mutableMapOf<String, WorktreeInventory>()
+        private val worktreeProjectIds = mutableMapOf<String, String>()
+        private var worktreeMarkJob: Job? = null
 
         // Title fields report one edit per dialog appearance instead of per keystroke.
         private var renameDraftEditReported = false
@@ -142,6 +169,9 @@ class MainScreenViewModel
             viewModelScope.launch {
                 connectionSessionCoordinator.profileCleared.collect {
                     stopLiveObservations()
+                    worktreeMarks.onDisconnected()
+                    worktreeInventories.clear()
+                    worktreeProjectIds.clear()
                     _uiState.value = MainScreenUiState.Disconnected
                     _serversChrome.value = HomeServersChrome()
                 }
@@ -744,6 +774,7 @@ class MainScreenViewModel
             // without Probing/Loading. Live store then SWR-refreshes.
             if (!preserveContent && worktrees.isNotEmpty()) {
                 if (_uiState.value is MainScreenUiState.Loaded && liveObservationsRunning(worktrees)) {
+                    reloadWorktreeMarks(worktrees)
                     return
                 }
                 val sections = loadSectionsFromCache(worktrees)
@@ -755,6 +786,7 @@ class MainScreenViewModel
                         }
                 }
                 startLiveObservations(worktrees)
+                reloadWorktreeMarks(worktrees)
                 return
             }
 
@@ -828,6 +860,7 @@ class MainScreenViewModel
                             MainScreenUiState.Loaded(sections = sections)
                     }
                 startLiveObservations(worktrees)
+                reloadWorktreeMarks(worktrees)
             } catch (error: Throwable) {
                 if (preserveContent) return
                 stopLiveObservations()
@@ -1074,13 +1107,52 @@ class MainScreenViewModel
                             )
                         }
                     }
+                } +
+                    viewModelScope.launch {
+                        foregroundEventStream.events.collect { event ->
+                            val projectId = event.namedProjectId() ?: return@collect
+                            if (event.type != "worktree.updated") return@collect
+                            if (!worktreeMarks.knows(projectId)) return@collect
+                            val update = worktreeMarks.refetch(projectId) ?: return@collect
+                            applyWorktreeMark(update)
+                        }
+                    }
+        }
+
+        private fun reloadWorktreeMarks(worktrees: List<String>) {
+            worktreeMarkJob?.cancel()
+            worktreeMarks.onConnection(serverBaseUrl)
+            worktreeMarkJob =
+                viewModelScope.launch {
+                    for (worktree in worktrees) {
+                        applyWorktreeMark(worktreeMarks.load(worktree))
+                    }
                 }
+        }
+
+        private fun applyWorktreeMark(update: WorktreeMarkUpdate) {
+            worktreeInventories[update.addedPath] = update.inventory
+            update.projectId?.let { worktreeProjectIds[update.addedPath] = it }
+            val state = _uiState.value as? MainScreenUiState.Loaded ?: return
+            val section = state.sections.firstOrNull { it.worktree == update.addedPath } ?: return
+            val updated =
+                section.copy(
+                    projectId = worktreeProjectIds[update.addedPath] ?: section.projectId,
+                    worktreeInventory = update.inventory,
+                    allSessions = worktreeMarks.applyExtras(update.addedPath, section.allSessions, update.extras),
+                )
+            _uiState.value =
+                state.copy(
+                    sections = state.sections.map { current -> if (current.worktree == update.addedPath) updated else current },
+                )
         }
 
         private fun stopLiveObservations() {
             liveObservationJobs.forEach { it.cancel() }
             liveObservationJobs = emptyList()
             observedWorktrees = emptyList()
+            worktreeMarkJob?.cancel()
+            worktreeMarkJob = null
         }
 
         private fun liveObservationsRunning(worktrees: List<String>): Boolean =
@@ -1120,8 +1192,10 @@ class MainScreenViewModel
                     }
             val updatedSection =
                 section.copy(
-                    allSessions = summaries,
+                    allSessions = worktreeMarks.withLive(worktree, summaries),
                     sessionsFromCache = sessionsFromCache,
+                    projectId = worktreeProjectIds[worktree] ?: section.projectId,
+                    worktreeInventory = worktreeInventories[worktree] ?: section.worktreeInventory,
                 )
             val updatedSections =
                 state.sections.map { current ->
@@ -1226,6 +1300,8 @@ data class ProjectSectionUi(
     val allSessions: List<SessionSummary>,
     val loadError: String? = null,
     val sessionsFromCache: Boolean = false,
+    val projectId: String? = null,
+    val worktreeInventory: dev.opencode.mobile.domain.worktree.WorktreeInventory = dev.opencode.mobile.domain.worktree.WorktreeInventory.Unloaded,
 )
 
 data class SessionOpenTarget(

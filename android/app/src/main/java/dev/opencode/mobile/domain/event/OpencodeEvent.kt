@@ -1,6 +1,8 @@
 package dev.opencode.mobile.domain.event
 
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 
 data class OpencodeEvent(
     val type: String,
@@ -46,4 +48,10 @@ data class OpencodeEvent(
                 "session.idle",
             )
     }
+}
+
+fun OpencodeEvent.namedProjectId(): String? {
+    val properties = rawProperties ?: return null
+    fun string(key: String) = (properties[key] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
+    return string("projectID") ?: string("projectId")
 }

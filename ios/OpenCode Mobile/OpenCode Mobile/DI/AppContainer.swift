@@ -109,6 +109,19 @@ extension Container {
         onMainActor { ProjectDomainAdapter() }.singleton
     }
 
+    var worktreesAPIClient: Factory<WorktreesAPIClient> {
+        onMainActor { WorktreesAPIClient(connectionProvider: self.connectionProvider()) }.singleton
+    }
+
+    var worktreeRepository: Factory<any WorktreeRepository> {
+        onMainActor {
+            DefaultWorktreeRepository(
+                api: self.worktreesAPIClient(),
+                activeConnectionManager: self.activeConnectionManager()
+            )
+        }.singleton
+    }
+
     var projectRepository: Factory<any ProjectRepository> {
         onMainActor {
             DefaultProjectRepository(
@@ -633,7 +646,9 @@ extension Container {
                 sessionReadyStore: self.sessionReadyStore(),
                 connectionSessionCoordinator: self.connectionSessionCoordinator(),
                 sessionCache: self.sessionCache(),
-                liveUpdates: self.liveUpdates()
+                liveUpdates: self.liveUpdates(),
+                worktreeRepository: self.worktreeRepository(),
+                foregroundEventStream: self.foregroundEventStream()
             )
         }
     }
@@ -672,7 +687,9 @@ extension Container {
                 lastTurnReviewChangesStore: self.lastTurnReviewChangesStore(),
                 syncCoordinator: self.syncCoordinator(),
                 mcpRepository: self.mcpRepository(),
-                projectFilesRepository: self.projectFilesRepository()
+                projectFilesRepository: self.projectFilesRepository(),
+                worktreeRepository: self.worktreeRepository(),
+                projectRepository: self.projectRepository()
             )
         }
     }

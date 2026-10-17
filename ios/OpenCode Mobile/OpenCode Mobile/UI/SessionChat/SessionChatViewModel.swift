@@ -53,6 +53,11 @@ final class SessionChatViewModel {
     private var projectLabel: String?
     private var projectLetter: Character?
     private var projectLetterAccent: LetterAccent?
+    private var worktreeCheckout = false
+    private var checkoutProjectIDs: Set<String> = []
+    private var worktreeEventTask: Task<Void, Never>?
+    private let worktreeRepository: any WorktreeRepository
+    private let projectRepository: any ProjectRepository
     private var projectIdentityTask: Task<Void, Never>?
     /// Chip-timeline step paragraphs the user expanded past `+N more`:
     /// paragraph id to the chip count at tap time.
@@ -96,7 +101,9 @@ final class SessionChatViewModel {
         clock: any SyncClock = SystemSyncClock(),
         mcpRepository: (any McpRepository)? = nil,
         projectFilesRepository: (any ProjectFilesRepository)? = nil,
-        catalogRetryDelaysMs: [Int] = SessionChatComposer.defaultCatalogRetryDelaysMs
+        catalogRetryDelaysMs: [Int] = SessionChatComposer.defaultCatalogRetryDelaysMs,
+        worktreeRepository: any WorktreeRepository = UnavailableWorktreeRepository(),
+        projectRepository: any ProjectRepository = UnavailableProjectRepository()
     ) {
         self.sessionID = sessionID
         self.sessionTitle = sessionTitle
@@ -116,6 +123,8 @@ final class SessionChatViewModel {
         self.sessionReadyStore = sessionReadyStore ?? EmptySessionReadyStore()
         self.sessionViewReporter = sessionViewReporter ?? EmptySessionViewReporter()
         self.foregroundEventStream = foregroundEventStream
+        self.worktreeRepository = worktreeRepository
+        self.projectRepository = projectRepository
         self.timeline = SessionChatTimeline(
             sessionID: sessionID,
             worktree: worktree,
@@ -199,6 +208,7 @@ final class SessionChatViewModel {
 
     func startObserving() {
         isSessionBound = true
+        startWorktreeEventObservation()
         startCollapsePreferenceObservation()
         repoStrip.start()
         reviewChanges.start()
@@ -1115,6 +1125,8 @@ final class SessionChatViewModel {
         optimisticCreateTask = nil
         projectIdentityTask?.cancel()
         projectIdentityTask = nil
+        worktreeEventTask?.cancel()
+        worktreeEventTask = nil
         timeline.stopObserving()
         sessionInfo.stopObserving()
         inbox.stop()
@@ -1135,12 +1147,15 @@ final class SessionChatViewModel {
             projectLabel = nil
             projectLetter = nil
             projectLetterAccent = nil
+            worktreeCheckout = false
             return
         }
         let displayName = ProjectDomainAdapter.displayName(from: worktree)
         projectLabel = displayName
         projectLetter = letterCharacter(for: displayName)
         projectLetterAccent = letterAccent(for: worktree)
+        worktreeCheckout = false
+        checkoutProjectIDs = []
         projectIdentityTask = Task { [worktree, connectionProfileStore, activeConnectionManager] in
             let baseURL: String?
             if let current = activeConnectionManager.currentProfile()?.baseURL, !current.isEmpty {
@@ -1157,11 +1172,76 @@ final class SessionChatViewModel {
                 peers = []
             }
             guard !Task.isCancelled else { return }
+            let checkout = await resolveCheckoutName(boundDirectory: worktree, peers: peers)
+            guard !Task.isCancelled else { return }
             await MainActor.run {
-                self.projectLabel = smartProjectLabel(focusWorktree: worktree, peerWorktrees: peers)
-                self.projectLetter = letterCharacter(for: displayName)
-                self.projectLetterAccent = letterAccent(for: worktree)
+                guard !Task.isCancelled else { return }
+                if let checkout {
+                    self.projectLabel = checkout
+                    self.projectLetter = nil
+                    self.projectLetterAccent = nil
+                    self.worktreeCheckout = true
+                } else {
+                    self.projectLabel = smartProjectLabel(focusWorktree: worktree, peerWorktrees: peers)
+                    self.projectLetter = letterCharacter(for: displayName)
+                    self.projectLetterAccent = letterAccent(for: worktree)
+                    self.worktreeCheckout = false
+                }
                 self.publishUiState()
+            }
+        }
+    }
+
+    private func resolveCheckoutName(boundDirectory: String, peers: [String]) async -> String? {
+        guard !peers.isEmpty else { return nil }
+        let baseURL = await connectionProfileStore.activeProfile()?.baseURL ?? activeConnectionManager.currentProfile()?.baseURL
+        if let baseURL, !baseURL.isEmpty {
+            worktreeRepository.onConnection(key: baseURL)
+        }
+        var inventories: [String: WorktreeInventory] = [:]
+        var projectIDs: Set<String> = []
+        for added in peers {
+            if Task.isCancelled { return nil }
+            let projectID = try? await projectRepository.getCurrentProject(directory: added).id
+            let usable = projectID?.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let usable, !usable.isEmpty {
+                projectIDs.insert(usable)
+                if Task.isCancelled { return nil }
+                await MainActor.run {
+                    guard !Task.isCancelled else { return }
+                    checkoutProjectIDs.insert(usable)
+                }
+            }
+            let loaded = await worktreeRepository.loadRefreshed(addedPath: added, projectID: usable)
+            switch loaded {
+            case let .loaded(directories, _):
+                inventories[added] = .loaded(directories)
+            case .failed:
+                inventories[added] = .failed
+            case .unloaded, .stopped:
+                inventories[added] = .unloaded
+            }
+        }
+        if Task.isCancelled { return nil }
+        await MainActor.run {
+            guard !Task.isCancelled else { return }
+            checkoutProjectIDs = projectIDs
+        }
+        guard !Task.isCancelled else { return nil }
+        return WorktreeMark.checkoutNameIfMarked(boundDirectory: boundDirectory, addedPaths: peers) { added in
+            inventories[added] ?? .unloaded
+        }
+    }
+
+    private func startWorktreeEventObservation() {
+        worktreeEventTask?.cancel()
+        worktreeEventTask = Task { [weak self] in
+            guard let self else { return }
+            for await event in self.foregroundEventStream.events() {
+                guard event.type == "worktree.updated", let projectID = event.namedProjectID else { continue }
+                let known = await MainActor.run { self.checkoutProjectIDs.contains(projectID) }
+                guard known else { continue }
+                await MainActor.run { self.refreshProjectIdentity() }
             }
         }
     }
@@ -1369,6 +1449,7 @@ final class SessionChatViewModel {
             projectLabel: projectLabel,
             projectLetter: projectLetter,
             projectLetterAccent: projectLetterAccent,
+            worktreeCheckout: worktreeCheckout,
             sessionBranchPill: SessionChatBranchPillUiState.resolved(from: repoStripState),
             timeline: timelineState.timeline,
             messages: timelineState.messages,

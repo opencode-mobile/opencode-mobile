@@ -28,6 +28,7 @@ import dev.opencode.mobile.domain.connection.ConnectionProfileIdentity
 import dev.opencode.mobile.domain.session.SessionIdleOutcome
 import dev.opencode.mobile.domain.session.SessionSummary
 import dev.opencode.mobile.domain.time.RelativeTimeFormatting
+import dev.opencode.mobile.domain.worktree.WorktreeMark
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.letterAccentForWorktree
@@ -969,6 +970,12 @@ internal fun List<ProjectSectionUi>.toCrossProjectSessionListSessions(): List<Se
                 updatedAtEpochMs = session.updatedAtEpochMs,
                 retryAttempt = session.retryAttempt(),
                 statusStale = session.statusStale,
+                worktreeCheckout =
+                    WorktreeMark.showsBadge(
+                        sessionDirectory = session.directory?.takeIf { it.isNotEmpty() } ?: section.worktree,
+                        addedPath = section.worktree,
+                        inventory = section.worktreeInventory,
+                    ),
             )
         }
 }

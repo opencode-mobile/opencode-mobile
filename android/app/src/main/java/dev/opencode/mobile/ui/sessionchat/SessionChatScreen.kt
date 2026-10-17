@@ -603,9 +603,13 @@ fun SessionChatScreen(
                     title = uiState.sessionTitle.ifBlank { sessionTitle },
                     subtitle = uiState.projectLabel,
                     subtitleLeading =
-                        uiState.projectLetter?.let { letter ->
-                            uiState.projectLetterAccent?.let { accent ->
-                                OpenCodeTopBarSubtitleLeading.Letter(letter, accent)
+                        if (uiState.worktreeCheckout) {
+                            OpenCodeTopBarSubtitleLeading.Worktree
+                        } else {
+                            uiState.projectLetter?.let { letter ->
+                                uiState.projectLetterAccent?.let { accent ->
+                                    OpenCodeTopBarSubtitleLeading.Letter(letter, accent)
+                                }
                             }
                         },
                     subtitleAccessory =

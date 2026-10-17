@@ -43,6 +43,7 @@ fun TopBarGalleryScreen(modifier: Modifier = Modifier) {
     var showTwoLine by rememberSaveable { mutableStateOf(false) }
     var showStatusDot by rememberSaveable { mutableStateOf(false) }
     var showProjectMeta by rememberSaveable { mutableStateOf(false) }
+    var showWorktreeCheckout by rememberSaveable { mutableStateOf(false) }
     var statusName by rememberSaveable { mutableStateOf(OpenCodeSessionConnectionStatus.Live.name) }
     var actionsEnabled by rememberSaveable { mutableStateOf(true) }
     var titleSwitcher by rememberSaveable { mutableStateOf(false) }
@@ -68,6 +69,7 @@ fun TopBarGalleryScreen(modifier: Modifier = Modifier) {
         }
     val subtitle =
         when {
+            showWorktreeCheckout -> "crisp-cactus"
             showProjectMeta -> "opencode-mobile"
             showTwoLine -> "Importing icons explanation"
             else -> null
@@ -76,16 +78,16 @@ fun TopBarGalleryScreen(modifier: Modifier = Modifier) {
         runCatching { OpenCodeSessionConnectionStatus.valueOf(statusName) }
             .getOrDefault(OpenCodeSessionConnectionStatus.Live)
     val subtitleAccessory =
-        if (showStatusDot || showProjectMeta) {
+        if (showStatusDot || showProjectMeta || showWorktreeCheckout) {
             OpenCodeTopBarSubtitleAccessory.StatusDot(connectionStatus)
         } else {
             null
         }
     val subtitleLeading =
-        if (showProjectMeta) {
-            OpenCodeTopBarSubtitleLeading.Letter('O', dev.opencode.mobile.theme.LetterAccent.Blue)
-        } else {
-            null
+        when {
+            showWorktreeCheckout -> OpenCodeTopBarSubtitleLeading.Worktree
+            showProjectMeta -> OpenCodeTopBarSubtitleLeading.Letter('O', dev.opencode.mobile.theme.LetterAccent.Blue)
+            else -> null
         }
     val leading =
         when (leadingSelection) {
@@ -153,6 +155,11 @@ fun TopBarGalleryScreen(modifier: Modifier = Modifier) {
                     selected = showProjectMeta,
                     onClick = { showProjectMeta = !showProjectMeta },
                 )
+                OpenCodeChoiceBadge(
+                    label = "Worktree checkout",
+                    selected = showWorktreeCheckout,
+                    onClick = { showWorktreeCheckout = !showWorktreeCheckout },
+                )
                 OpenCodeChoiceBadge(label = "Divider", selected = showDivider, onClick = { showDivider = !showDivider })
                 OpenCodeChoiceBadge(
                     label = "Actions enabled",
@@ -166,7 +173,7 @@ fun TopBarGalleryScreen(modifier: Modifier = Modifier) {
                 )
             }
 
-            if (showStatusDot || showProjectMeta) {
+            if (showStatusDot || showProjectMeta || showWorktreeCheckout) {
                 ControlGroup(title = "Connection") {
                     OpenCodeSessionConnectionStatus.entries.forEach { option ->
                         OpenCodeChoiceBadge(

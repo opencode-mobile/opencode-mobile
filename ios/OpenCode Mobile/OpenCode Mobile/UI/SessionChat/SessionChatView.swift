@@ -158,6 +158,9 @@ struct SessionChatView: View {
                     title: viewModel.uiState.sessionTitle.isEmpty ? session.title : viewModel.uiState.sessionTitle,
                     subtitle: viewModel.uiState.projectLabel,
                     subtitleLeading: {
+                        if viewModel.uiState.worktreeCheckout {
+                            return .worktree
+                        }
                         if let letter = viewModel.uiState.projectLetter,
                            let accent = viewModel.uiState.projectLetterAccent {
                             return .letter(letter, accent)
