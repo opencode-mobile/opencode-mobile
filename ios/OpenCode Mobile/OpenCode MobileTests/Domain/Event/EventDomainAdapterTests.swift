@@ -893,11 +893,11 @@ struct EventDomainAdapterTests {
             adapter.sessionRevertUpdate(from: adapter.parseEvent(dataLine: line)!)
         }
         #expect(
-            update(#"{"payload":{"type":"session.updated","properties":{"info":{"id":"ses-1","revert":{"messageID":"msg-2"}}}}}"#)
+            update(#"{"payload":{"type":"session.updated","properties":{"info":{"id":"ses-1","time":{"created":1},"revert":{"messageID":"msg-2"}}}}}"#)
                 == SessionRevertUpdate(sessionID: "ses-1", messageID: "msg-2")
         )
         #expect(
-            update(#"{"payload":{"type":"session.updated","properties":{"info":{"id":"ses-1","title":"T"}}}}"#)
+            update(#"{"payload":{"type":"session.updated","properties":{"info":{"id":"ses-1","title":"T","time":{"created":1}}}}}"#)
                 == SessionRevertUpdate(sessionID: "ses-1", messageID: nil)
         )
         #expect(
@@ -912,6 +912,8 @@ struct EventDomainAdapterTests {
             update(#"{"type":"session.revert.committed","data":{"sessionID":"ses-2","to":"msg-5"}}"#)
                 == SessionRevertUpdate(sessionID: "ses-2", messageID: nil)
         )
+        // v2 rename is projected as a partial `session.updated`; it must not clear a staged revert.
+        #expect(update(#"{"type":"session.renamed","data":{"sessionID":"ses-2","title":"New"}}"#) == nil)
     }
 
     @Test func sessionTitleUpdate_ignoresNonUpdatedEvents() {

@@ -759,9 +759,10 @@ class SessionChatTimeline(
         val structuralStartedAt = System.nanoTime()
         val projected =
             withContext(ioDispatcher) {
+                val visible = hidingReverted(sortedDisplayMessages(displayMessages), revertBoundary)
                 val bodies =
                     SessionChatTimelineBlocks.mergeConsecutiveToolOnlyAssistantBodies(
-                        linkChildSessions(hidingReverted(sortedDisplayMessages(displayMessages), revertBoundary), children).mapNotNull { display ->
+                        linkChildSessions(visible, children).mapNotNull { display ->
                             displayMessageBody(display, previousById[display.id])
                         },
                         collapseConsecutiveToolCalls,

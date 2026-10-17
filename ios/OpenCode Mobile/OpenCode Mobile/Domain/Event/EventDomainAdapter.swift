@@ -1182,11 +1182,12 @@ nonisolated struct EventDomainAdapter: Sendable {
     }
 
     /// Pending-revert change. v1 `session.updated` carries the whole session, so an absent
-    /// `info.revert` means none; v2 stages, clears and commits with dedicated events.
+    /// `info.revert` means none; v2 stages, clears and commits with dedicated events. A partial
+    /// `info` (the v2 `session.renamed` projection) says nothing about the revert and is ignored.
     func sessionRevertUpdate(from event: OpencodeEvent) -> SessionRevertUpdate? {
         switch event.type {
         case "session.updated":
-            guard let info = event.rawProperties?["info"]?.dictionaryValue else { return nil }
+            guard let info = event.rawProperties?["info"]?.dictionaryValue, info["time"] != nil else { return nil }
             guard let sessionID = event.sessionID ?? info["id"]?.stringValue else { return nil }
             let messageID = info["revert"]?.dictionaryValue?["messageID"]?.stringValue
             return SessionRevertUpdate(sessionID: sessionID, messageID: messageID)

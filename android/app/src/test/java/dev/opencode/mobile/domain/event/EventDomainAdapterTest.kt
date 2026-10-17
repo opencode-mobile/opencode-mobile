@@ -1371,11 +1371,13 @@ class EventDomainAdapterTest {
         fun update(line: String) = adapter.sessionRevertUpdate(adapter.parseEvent(line)!!)
         assertEquals(
             SessionRevertUpdate("ses-1", "msg-2"),
-            update("""{"payload":{"type":"session.updated","properties":{"info":{"id":"ses-1","revert":{"messageID":"msg-2"}}}}}"""),
+            update(
+                """{"payload":{"type":"session.updated","properties":{"info":{"id":"ses-1","time":{"created":1},"revert":{"messageID":"msg-2"}}}}}""",
+            ),
         )
         assertEquals(
             SessionRevertUpdate("ses-1", null),
-            update("""{"payload":{"type":"session.updated","properties":{"info":{"id":"ses-1","title":"T"}}}}"""),
+            update("""{"payload":{"type":"session.updated","properties":{"info":{"id":"ses-1","title":"T","time":{"created":1}}}}}"""),
         )
         assertEquals(
             SessionRevertUpdate("ses-2", "msg-5"),
@@ -1389,6 +1391,8 @@ class EventDomainAdapterTest {
             SessionRevertUpdate("ses-2", null),
             update("""{"type":"session.revert.committed","data":{"sessionID":"ses-2","to":"msg-5"}}"""),
         )
+        // v2 rename is projected as a partial `session.updated`; it must not clear a staged revert.
+        assertEquals(null, update("""{"type":"session.renamed","data":{"sessionID":"ses-2","title":"New"}}"""))
     }
 
     @Test

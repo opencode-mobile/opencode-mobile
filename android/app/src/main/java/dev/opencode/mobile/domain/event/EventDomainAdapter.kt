@@ -1202,13 +1202,15 @@ class EventDomainAdapter(
 
     /**
      * Pending-revert change. v1 `session.updated` carries the whole session, so an absent
-     * `info.revert` means none; v2 stages, clears and commits with dedicated events.
+     * `info.revert` means none; v2 stages, clears and commits with dedicated events. A partial
+     * `info` (the v2 `session.renamed` projection) says nothing about the revert and is ignored.
      */
     fun sessionRevertUpdate(event: OpencodeEvent): SessionRevertUpdate? {
         fun JsonObject.string(key: String): String? = (this[key] as? JsonPrimitive)?.contentOrNull
         return when (event.type) {
             "session.updated" -> {
                 val info = event.rawProperties?.get("info") as? JsonObject ?: return null
+                if (info["time"] == null) return null
                 val sessionId = event.sessionId ?: info.string("id") ?: return null
                 val messageId = (info["revert"] as? JsonObject)?.string("messageID")
                 SessionRevertUpdate(sessionId = sessionId, messageId = messageId)

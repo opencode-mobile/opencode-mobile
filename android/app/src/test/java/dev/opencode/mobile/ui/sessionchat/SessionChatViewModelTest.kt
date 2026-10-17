@@ -4419,6 +4419,27 @@ class SessionChatViewModelTest {
             assertFalse(shows("msg-4"))
             assertTrue(viewModel.uiState.value.hasPendingRevert)
 
+            // A v2 rename (projected as a partial session.updated) keeps the staged revert.
+            repository.eventStream.emit(
+                OpencodeEvent(
+                    type = "session.updated",
+                    rawProperties =
+                        buildJsonObject {
+                            put(
+                                "info",
+                                buildJsonObject {
+                                    put("id", "ses-1")
+                                    put("sessionID", "ses-1")
+                                    put("title", "Renamed")
+                                },
+                            )
+                        },
+                ),
+            )
+            advanceUntilIdle()
+            assertFalse(shows("msg-3"))
+            assertTrue(viewModel.uiState.value.hasPendingRevert)
+
             repository.eventStream.emit(OpencodeEvent(type = "session.revert.cleared", sessionId = "ses-1"))
             advanceUntilIdle()
             assertTrue(shows("msg-3"))
@@ -4449,6 +4470,7 @@ class SessionChatViewModelTest {
                                 buildJsonObject {
                                     put("id", "ses-1")
                                     put("title", "Title")
+                                    put("time", buildJsonObject { put("created", 1) })
                                     put("revert", buildJsonObject { put("messageID", "msg-2") })
                                 },
                             )

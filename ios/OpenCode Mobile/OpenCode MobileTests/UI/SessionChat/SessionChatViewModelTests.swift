@@ -3239,6 +3239,25 @@ struct SessionChatViewModelTests {
         #expect(shows("msg-2"))
         #expect(viewModel.uiState.hasPendingRevert)
 
+        // A v2 rename (projected as a partial session.updated) keeps the staged revert.
+        eventStream.emit(
+            OpencodeEvent(
+                type: "session.updated",
+                sessionID: "ses-1",
+                rawProperties: [
+                    "info": .dictionary([
+                        "id": .string("ses-1"),
+                        "sessionID": .string("ses-1"),
+                        "title": .string("Renamed"),
+                    ]),
+                ]
+            )
+        )
+        let renamed = await waitUntil { viewModel.uiState.sessionTitle == "Renamed" }
+        #expect(renamed)
+        #expect(!shows("msg-3"))
+        #expect(viewModel.uiState.hasPendingRevert)
+
         eventStream.emit(OpencodeEvent(type: "session.revert.cleared", sessionID: "ses-1"))
         let restored = await waitUntil { shows("msg-3") && shows("msg-4") }
         #expect(restored)
@@ -3266,6 +3285,7 @@ struct SessionChatViewModelTests {
                     "info": .dictionary([
                         "id": .string("ses-1"),
                         "title": .string("Title"),
+                        "time": .dictionary(["created": .int(1)]),
                         "revert": .dictionary(["messageID": .string("msg-2")]),
                     ]),
                 ]
