@@ -143,6 +143,12 @@ final class SessionChatTimeline {
         return messages.filter { $0.message.id < boundary }
     }
 
+    /// Newest messages the projection shows, so reverted rows hidden at the
+    /// tail never take the warm slots from on-screen images.
+    nonisolated static func previewWarmCandidates(_ visible: [DisplayMessage]) -> [Message] {
+        visible.suffix(AttachmentPreviewCache.warmMessageCount).map(\.message)
+    }
+
     /// Looks up this session's children when a subagent part has no child id
     /// (history reloads drop the one-shot `tool.progress` id), then re-projects
     /// so its row or chip can open the child. Each unlinked part is looked up
@@ -738,7 +744,7 @@ final class SessionChatTimeline {
             : timelineFrame
 
         // Match Android: structural DisplayFrame + TimelineFrame conversion off main.
-        let previewCandidates = displayMessages.suffix(AttachmentPreviewCache.warmMessageCount).map(\.message)
+        let previewCandidates = Self.previewWarmCandidates(visibleDisplayMessages)
         let projected = await Task.detached(priority: .userInitiated) {
             AttachmentPreviewCache.shared.warm(previewCandidates)
             let frame = DisplayFrameBuilder.build(

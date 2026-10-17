@@ -54,6 +54,18 @@ struct AttachmentPreviewCacheTests {
         #expect(cache.resolved(file).previewData == nil)
     }
 
+    @Test func previewWarmCandidates_skipRevertedTail() {
+        let messages = (1...9).map { index in
+            DisplayMessage(
+                message: Message(id: "msg-\(index)", role: .user, text: "", model: nil, mode: nil, sentAtEpochMs: Int64(index))
+            )
+        }
+        // Reverting from msg-5 hides msg-5...msg-9; the newest shown rows are msg-1...msg-4.
+        let visible = SessionChatTimeline.hidingReverted(messages, from: "msg-5")
+        let candidates = SessionChatTimeline.previewWarmCandidates(visible)
+        #expect(candidates.map(\.id) == ["msg-1", "msg-2", "msg-3", "msg-4"])
+    }
+
     private static func message(parts: [MessagePart]) -> Message {
         Message(id: "msg-1", role: .user, text: "", parts: parts, model: nil, mode: nil, sentAtEpochMs: 1)
     }
