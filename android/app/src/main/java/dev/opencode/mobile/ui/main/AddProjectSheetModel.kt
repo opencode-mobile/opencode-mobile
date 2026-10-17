@@ -27,6 +27,8 @@ data class AddProjectSheetUi(
     val emptyMessage: String?,
     val roots: List<AddProjectRootUi>,
     val suggestions: List<AddProjectSuggestionUi>,
+    /** False until this presentation has heard back from the server project list. */
+    val suggestionsResolved: Boolean = false,
     val showSuggestions: Boolean,
     /** Header over the folder list; only shown with the suggestions section. */
     val folderSectionTitle: String?,
@@ -42,6 +44,7 @@ data class AddProjectSheetUi(
     companion object {
         const val PICK_A_FOLDER = "Pick a folder"
         const val BROWSE_FOLDERS = "Browse folders"
+        const val NO_OTHER_PROJECTS = "No other projects on this server."
         const val ALREADY_ON_HOME = "Already on home"
         const val ADD_HOME_FOLDER = "Add home folder"
         const val NO_SUBFOLDERS = "No subfolders"
@@ -97,6 +100,8 @@ data class AddProjectSheetSession(
     /** Folders in `/Volumes` on a POSIX server. */
     val volumes: List<DirectoryNode> = emptyList(),
     val serverProjects: List<Project> = emptyList(),
+    /** True once this presentation's project-list fetch has finished, including a failure. */
+    val suggestionsResolved: Boolean = false,
     val addedWorktrees: List<String> = emptyList(),
     /** Windows roots of folders listed successfully during this session. */
     val listedRoots: Set<String> = emptySet(),
@@ -192,6 +197,7 @@ object AddProjectSheetModel {
             emptyMessage = emptyMessage,
             roots = roots(session, directory, filter),
             suggestions = suggestions,
+            suggestionsResolved = session.suggestionsResolved,
             showSuggestions = showSuggestions,
             folderSectionTitle = if (showSuggestions && directory != null) "In ${ServerPathPolicy.name(directory)}" else null,
             upTarget =

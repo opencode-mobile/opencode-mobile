@@ -1,61 +1,143 @@
 import SwiftUI
 
-/// Short Add project sheet: server projects to add in one tap, then Browse folders.
+/// Short Add project sheet. Browse folders is first. The suggestion block is always
+/// five rows tall, so the card opens at its final height and does not resize when the
+/// server list arrives or comes back short.
 struct AddProjectSuggestions: View {
     let sheet: AddProjectSheetState
     let onSelectSuggestion: (String) -> Void
     let onBrowse: () -> Void
     let onRetry: () -> Void
 
+    private var isListError: Bool {
+        sheet.listError != nil && sheet.directory == nil && !sheet.isValidating
+    }
+
+    private var isLoadingSuggestions: Bool {
+        !sheet.isValidating && !isListError && !sheet.suggestionsResolved && !sheet.showSuggestions
+    }
+
+    private var showsEmptySuggestions: Bool {
+        !sheet.isValidating && !isListError && sheet.suggestionsResolved && !sheet.showSuggestions
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if sheet.isValidating {
-                OpenCodeStatusStack(spinner: "Checking folder")
-                    .frame(maxWidth: .infinity)
-                    .padding(24)
-            } else {
-                if sheet.showSuggestions {
-                    OpenCodeSectionHeader(title: "On this server")
-                    ForEach(sheet.suggestions) { suggestion in
-                        OpenCodeListItem(
-                            title: suggestion.name,
-                            subtitle: suggestion.path,
-                            caption: suggestion.activityLabel,
-                            startDecorator: .icon(.callSplit),
-                            action: { onSelectSuggestion(suggestion.path) }
-                        )
-                    }
-                } else if sheet.listError != nil, sheet.directory == nil {
-                    OpenCodeEmptyState(
-                        title: "Unable to list this folder",
-                        message: sheet.listError ?? AddProjectSheetState.listErrorMessage,
-                        fillsAvailableSpace: false,
-                        primaryAction: OpenCodeEmptyStateAction(title: "Retry", action: onRetry)
-                    )
-                    .padding(20)
-                } else if sheet.isLoading, sheet.suggestions.isEmpty {
-                    OpenCodeStatusStack(spinner: "Loading folders")
-                        .frame(maxWidth: .infinity)
-                        .padding(24)
-                }
-                OpenCodeListItem(
-                    title: AddProjectSheetState.browseFoldersTitle,
-                    subtitle: "Pick any folder on this server",
-                    enabled: !sheet.isValidating,
-                    startDecorator: .icon(.folder),
-                    accessory: .disclosure,
-                    action: onBrowse
-                )
-                if let fieldError = sheet.fieldError {
-                    Text(fieldError)
-                        .font(OpenCodeTypography.caption)
-                        .foregroundStyle(OpenCodeColors.error)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 12)
+            OpenCodeListItem(
+                title: AddProjectSheetState.browseFoldersTitle,
+                subtitle: "Pick any folder on this server",
+                enabled: !sheet.isValidating,
+                startDecorator: .icon(.folder),
+                accessory: .disclosure,
+                action: onBrowse
+            )
+            if let fieldError = sheet.fieldError {
+                Text(fieldError)
+                    .font(OpenCodeTypography.caption)
+                    .foregroundStyle(OpenCodeColors.error)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 12)
+            }
+            OpenCodeSectionHeader(title: "On this server")
+                .opacity(isListError ? 0 : 1)
+                .accessibilityHidden(isListError)
+            suggestionFrame
+        }
+    }
+
+    private var suggestionFrame: some View {
+        let frame = ZStack(alignment: .top) {
+            VStack(spacing: 0) {
+                ForEach(0..<ServerProjectSuggestions.defaultLimit, id: \.self) { index in
+                    suggestionSlot(index)
                 }
             }
+            if sheet.isValidating {
+                OpenCodeStatusStack(spinner: "Checking folder")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if isListError {
+                OpenCodeEmptyState(
+                    title: "Unable to list this folder",
+                    message: sheet.listError ?? AddProjectSheetState.listErrorMessage,
+                    fillsAvailableSpace: false,
+                    primaryAction: OpenCodeEmptyStateAction(title: "Retry", action: onRetry)
+                )
+                .padding(20)
+            } else if showsEmptySuggestions {
+                Text(AddProjectSheetState.noOtherProjectsMessage)
+                    .font(OpenCodeTypography.caption)
+                    .foregroundStyle(OpenCodeColors.textWeak)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
+            }
         }
+        return Group {
+            if isLoadingSuggestions {
+                frame
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("Loading projects")
+            } else {
+                frame
+            }
+        }
+    }
+
+    /// A hidden suggestion row keeps every slot the height of a real row, loaded or not.
+    private var suggestionRuler: some View {
+        OpenCodeListItem(
+            title: "Project",
+            subtitle: "/Users/placeholder",
+            caption: "1d ago",
+            enabled: false,
+            startDecorator: .icon(.callSplit),
+            action: {}
+        )
+        .hidden()
+        .accessibilityHidden(true)
+        .allowsHitTesting(false)
+    }
+
+    private func suggestionSlot(_ index: Int) -> some View {
+        ZStack(alignment: .leading) {
+            suggestionRuler
+            if isLoadingSuggestions {
+                AddProjectSuggestionSkeleton()
+            } else if !sheet.isValidating, !isListError, sheet.showSuggestions, index < sheet.suggestions.count {
+                let suggestion = sheet.suggestions[index]
+                OpenCodeListItem(
+                    title: suggestion.name,
+                    subtitle: suggestion.path,
+                    caption: suggestion.activityLabel,
+                    startDecorator: .icon(.callSplit),
+                    action: { onSelectSuggestion(suggestion.path) }
+                )
+            }
+        }
+    }
+}
+
+/// Feature-local stand-in for a suggestion row. The hidden list item behind it sets the height.
+private struct AddProjectSuggestionSkeleton: View {
+    var body: some View {
+        HStack(spacing: 12) {
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .fill(OpenCodeColors.textWeaker.opacity(0.35))
+                .frame(width: 20, height: 20)
+            VStack(alignment: .leading, spacing: 6) {
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(OpenCodeColors.textWeaker.opacity(0.35))
+                    .frame(width: 132, height: 12)
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(OpenCodeColors.textWeaker.opacity(0.35))
+                    .frame(width: 196, height: 10)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .accessibilityHidden(true)
     }
 }
 

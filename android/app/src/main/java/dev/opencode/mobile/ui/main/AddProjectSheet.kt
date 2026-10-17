@@ -4,25 +4,35 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.domain.filesystem.ServerPathPolicy
+import dev.opencode.mobile.domain.project.ServerProjectSuggestions
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.BottomSheetWindowOverlay
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
@@ -89,64 +99,177 @@ internal fun AddProjectSheet(
     }
 }
 
-/** Server projects the user can add in one tap, then Browse folders. */
+/**
+ * Browse folders first, then server projects in a fixed five-row frame. The card opens at
+ * its final height and does not resize when the list arrives or comes back short.
+ */
 @Composable
 private fun AddProjectSuggestions(
     sheet: AddProjectSheetUi,
     callbacks: AddProjectSheetCallbacks,
 ) {
-    if (sheet.isValidating) {
-        OpenCodeStatusStack(
-            title = "Checking folder",
-            style = OpenCodeStatusStackStyle.Spinner,
-            modifier = Modifier.fillMaxWidth().padding(24.dp),
+    val isListError = sheet.listError != null && sheet.directory == null && !sheet.isValidating
+    val isLoadingSuggestions = !sheet.isValidating && !isListError && !sheet.suggestionsResolved && !sheet.showSuggestions
+    val showsEmptySuggestions = !sheet.isValidating && !isListError && sheet.suggestionsResolved && !sheet.showSuggestions
+    Column(modifier = Modifier.fillMaxWidth()) {
+        OpenCodeListItem(
+            title = AddProjectSheetUi.BROWSE_FOLDERS,
+            subtitle = "Pick any folder on this server",
+            enabled = !sheet.isValidating,
+            startDecorator = StartDecorator.Icon(OpenCodeIcons.Folder, contentDescription = null),
+            accessory = OpenCodeListItemAccessory.Disclosure,
+            onClick = callbacks.onBrowse,
         )
-        return
-    }
-    if (sheet.showSuggestions) {
-        OpenCodeSectionHeader(title = "On this server")
-        sheet.suggestions.forEach { suggestion ->
-            OpenCodeListItem(
-                title = suggestion.name,
-                subtitle = suggestion.path,
-                caption = suggestion.activityLabel,
-                startDecorator = StartDecorator.Icon(OpenCodeIcons.CallSplit, contentDescription = null),
-                onClick = { callbacks.onSelectSuggestion(suggestion.path) },
+        sheet.fieldError?.let { message ->
+            Text(
+                text = message,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.error,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = OpenCodeLayout.SheetContentHorizontalInset)
+                        .padding(bottom = 12.dp),
             )
         }
-    } else if (sheet.listError != null && sheet.directory == null) {
-        OpenCodeEmptyState(
-            title = AddProjectSheetUi.LIST_ERROR_TITLE,
-            message = sheet.listError,
-            primaryAction = OpenCodeEmptyStateAction(title = "Retry", onClick = callbacks.onRetry),
-            modifier = Modifier.padding(20.dp),
-        )
-    } else if (sheet.isLoading && sheet.suggestions.isEmpty()) {
-        OpenCodeStatusStack(
-            title = "Loading folders",
-            style = OpenCodeStatusStackStyle.Spinner,
-            modifier = Modifier.fillMaxWidth().padding(24.dp),
-        )
-    }
-    OpenCodeListItem(
-        title = AddProjectSheetUi.BROWSE_FOLDERS,
-        subtitle = "Pick any folder on this server",
-        enabled = !sheet.isValidating,
-        startDecorator = StartDecorator.Icon(OpenCodeIcons.Folder, contentDescription = null),
-        accessory = OpenCodeListItemAccessory.Disclosure,
-        onClick = callbacks.onBrowse,
-    )
-    sheet.fieldError?.let { message ->
-        Text(
-            text = message,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.error,
+        OpenCodeSectionHeader(
+            title = "On this server",
             modifier =
                 Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = OpenCodeLayout.SheetContentHorizontalInset)
-                    .padding(bottom = 12.dp),
+                    .alpha(if (isListError) 0f else 1f)
+                    .then(if (isListError) Modifier.clearAndSetSemantics {} else Modifier),
         )
+        SuggestionFrame(
+            sheet = sheet,
+            callbacks = callbacks,
+            isListError = isListError,
+            isLoadingSuggestions = isLoadingSuggestions,
+            showsEmptySuggestions = showsEmptySuggestions,
+        )
+    }
+}
+
+@Composable
+private fun SuggestionFrame(
+    sheet: AddProjectSheetUi,
+    callbacks: AddProjectSheetCallbacks,
+    isListError: Boolean,
+    isLoadingSuggestions: Boolean,
+    showsEmptySuggestions: Boolean,
+) {
+    Box(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .then(
+                    if (isLoadingSuggestions) {
+                        Modifier.semantics(mergeDescendants = true) {
+                            contentDescription = "Loading projects"
+                        }
+                    } else {
+                        Modifier
+                    },
+                ),
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            repeat(ServerProjectSuggestions.MAX_SUGGESTIONS) { index ->
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    AddProjectSuggestionRuler()
+                    if (isLoadingSuggestions) {
+                        AddProjectSuggestionSkeleton(Modifier.align(Alignment.CenterStart))
+                    } else if (
+                        !sheet.isValidating &&
+                        !isListError &&
+                        sheet.showSuggestions &&
+                        index < sheet.suggestions.size
+                    ) {
+                        val suggestion = sheet.suggestions[index]
+                        OpenCodeListItem(
+                            title = suggestion.name,
+                            subtitle = suggestion.path,
+                            caption = suggestion.activityLabel,
+                            startDecorator = StartDecorator.Icon(OpenCodeIcons.CallSplit, contentDescription = null),
+                            onClick = { callbacks.onSelectSuggestion(suggestion.path) },
+                        )
+                    }
+                }
+            }
+        }
+        when {
+            sheet.isValidating ->
+                OpenCodeStatusStack(
+                    title = "Checking folder",
+                    style = OpenCodeStatusStackStyle.Spinner,
+                    modifier = Modifier.align(Alignment.Center).padding(24.dp),
+                )
+            isListError ->
+                OpenCodeEmptyState(
+                    title = AddProjectSheetUi.LIST_ERROR_TITLE,
+                    message = sheet.listError ?: AddProjectSheetUi.LIST_ERROR_MESSAGE,
+                    primaryAction = OpenCodeEmptyStateAction(title = "Retry", onClick = callbacks.onRetry),
+                    modifier = Modifier.align(Alignment.TopCenter).padding(20.dp),
+                )
+            showsEmptySuggestions ->
+                Text(
+                    text = AddProjectSheetUi.NO_OTHER_PROJECTS,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = openCodeColor("text-weak"),
+                    modifier =
+                        Modifier
+                            .align(Alignment.TopStart)
+                            .padding(horizontal = OpenCodeLayout.SheetContentHorizontalInset)
+                            .padding(top = 8.dp),
+                )
+        }
+    }
+}
+
+/** Hidden suggestion row. Every slot stays the height of a real row, loaded or not. */
+@Composable
+private fun AddProjectSuggestionRuler() {
+    OpenCodeListItem(
+        title = "Project",
+        subtitle = "/Users/placeholder",
+        caption = "1d ago",
+        enabled = false,
+        startDecorator = StartDecorator.Icon(OpenCodeIcons.CallSplit, contentDescription = null),
+        modifier = Modifier.alpha(0f).clearAndSetSemantics {},
+    )
+}
+
+@Composable
+private fun AddProjectSuggestionSkeleton(modifier: Modifier = Modifier) {
+    val bar = openCodeColor("text-weaker").copy(alpha = 0.35f)
+    Row(
+        modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .size(20.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(bar),
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.weight(1f)) {
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxWidth(0.42f)
+                        .height(12.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(bar),
+            )
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxWidth(0.62f)
+                        .height(10.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(bar),
+            )
+        }
     }
 }
 
