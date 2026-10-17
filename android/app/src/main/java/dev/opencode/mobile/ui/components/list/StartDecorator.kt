@@ -10,7 +10,7 @@ sealed class StartDecorator {
         val character: Char,
         val accent: LetterAccent,
         val statusDot: OpenCodeListItemStatusTone? = null,
-        /** Small worktree mark on the top-end corner. The status dot stays bottom-end. */
+        /** Small worktree mark on the bottom-end corner. With a status dot the two merge into one status-colored badge. */
         val worktree: Boolean = false,
     ) : StartDecorator()
 

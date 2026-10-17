@@ -361,27 +361,38 @@ struct OpenCodeListItem<Trailing: View>: View {
                     .background(accent.badgeFill, in: Circle())
                     .accessibilityHidden(true)
 
-                if let statusDot {
-                    Circle()
-                        .fill(statusForeground(statusDot))
-                        .frame(width: listItemLetterStatusDotSize, height: listItemLetterStatusDotSize)
-                        .overlay(
-                            Circle()
-                                .stroke(OpenCodeColors.backgroundBase, lineWidth: 2)
-                        )
+                if let statusDot, worktree {
+                    OpenCodeIconImage(icon: .callSplit, size: 10)
+                        .foregroundStyle(OpenCodeColors.backgroundBase)
+                        .frame(width: listItemLetterStatusDotSize + 4, height: listItemLetterStatusDotSize + 4)
+                        .background(statusForeground(statusDot), in: Circle())
+                        .overlay(Circle().stroke(OpenCodeColors.backgroundBase, lineWidth: 2))
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                         .offset(x: 1, y: 1)
-                        .accessibilityHidden(true)
-                }
-                if worktree {
-                    OpenCodeIconImage(icon: .callSplit, size: 10)
-                        .foregroundStyle(OpenCodeColors.iconStrongBase)
-                        .frame(width: listItemLetterStatusDotSize + 4, height: listItemLetterStatusDotSize + 4)
-                        .background(OpenCodeColors.surfaceRaisedBase, in: Circle())
-                        .overlay(Circle().stroke(OpenCodeColors.backgroundBase, lineWidth: 2))
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                        .offset(x: 1, y: -1)
                         .accessibilityLabel("Worktree")
+                } else {
+                    if let statusDot {
+                        Circle()
+                            .fill(statusForeground(statusDot))
+                            .frame(width: listItemLetterStatusDotSize, height: listItemLetterStatusDotSize)
+                            .overlay(
+                                Circle()
+                                    .stroke(OpenCodeColors.backgroundBase, lineWidth: 2)
+                            )
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                            .offset(x: 1, y: 1)
+                            .accessibilityHidden(true)
+                    }
+                    if worktree {
+                        OpenCodeIconImage(icon: .callSplit, size: 10)
+                            .foregroundStyle(OpenCodeColors.iconStrongBase)
+                            .frame(width: listItemLetterStatusDotSize + 4, height: listItemLetterStatusDotSize + 4)
+                            .background(OpenCodeColors.surfaceRaisedBase, in: Circle())
+                            .overlay(Circle().stroke(OpenCodeColors.backgroundBase, lineWidth: 2))
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                            .offset(x: 1, y: 1)
+                            .accessibilityLabel("Worktree")
+                    }
                 }
             }
             .frame(width: listItemLetterBadgeSize, height: listItemLetterBadgeSize)
