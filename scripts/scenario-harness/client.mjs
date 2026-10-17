@@ -259,6 +259,10 @@ export function createClient({ getServer, password, emit }) {
       stopObservers();
       const server = base();
       pending.permissions.clear();
+      // A restarted (or protocol-switched) server never reports idle for the old sessions.
+      busy.clear();
+      for (const waiter of idleWaiters) waiter.resolve(false);
+      idleWaiters.clear();
       pending.questions.clear();
       const controller = new AbortController();
       const paths =

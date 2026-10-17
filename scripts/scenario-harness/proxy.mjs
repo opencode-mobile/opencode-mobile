@@ -6,6 +6,8 @@
 import http from "node:http";
 
 const EVENT_PATHS = new Set(["/global/event", "/event", "/api/event"]);
+// Health probes stay reachable during the all-requests 401 fault, on both protocols.
+const HEALTH_PATHS = new Set(["/global/health", "/api/health", "/api/info"]);
 
 export function createProxy({ getUpstream, emit }) {
   const streams = new Set(); // { req, res, upstream, path, stalled, startedAt, id }
@@ -48,7 +50,7 @@ export function createProxy({ getUpstream, emit }) {
     if (isEvent) sseAttempts += 1;
     if (faults.latencyMs > 0) await new Promise((resolve) => setTimeout(resolve, faults.latencyMs));
     const sseAuthFault = isEvent && Date.now() < faults.rejectSseAuthUntil;
-    if ((Date.now() < faults.rejectAuthUntil && !url.pathname.endsWith("/health")) || sseAuthFault) {
+    if ((Date.now() < faults.rejectAuthUntil && !HEALTH_PATHS.has(url.pathname)) || sseAuthFault) {
       res.writeHead(401, { "content-type": "application/json", "www-authenticate": 'Basic realm="opencode"' });
       res.end(JSON.stringify({ error: "Unauthorized (harness fault)" }));
       emit("app.request", { id, method: req.method, path: url.pathname + url.search, status: 401, ms: Date.now() - startedAt, ua, fault: true });

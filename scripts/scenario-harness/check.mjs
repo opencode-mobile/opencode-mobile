@@ -160,7 +160,7 @@ for (const { scenario, variant } of plays) {
 
 console.log("Summary:");
 for (const r of results) console.log(`  ${r.ok ? "ok  " : r.outcome.startsWith("skipped") ? "skip" : "!!  "} ${r.name}: ${r.outcome}${r.appOnly ? " (app check)" : ""}`);
-process.exitCode = results.some((r) => r.outcome === "timeout") ? 1 : 0;
+process.exitCode = results.some((r) => !r.ok && !r.outcome.startsWith("skipped")) ? 1 : 0;
 
 function toolLabel(d) {
   const p = d.props ?? {};
