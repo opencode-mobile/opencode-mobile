@@ -45,6 +45,8 @@ final class HomeWorktreeMarks {
     private let currentProjectID: @Sendable (String) async -> String?
     private let listSessions: @Sendable (String) async -> [SessionListItem]
     private var projectIDs: [String: String] = [:]
+    private var epochs: [String: Int] = [:]
+    private let epochLock = NSLock()
     private let fold = HomeWorktreeSessionFold()
 
     init(
@@ -66,26 +68,50 @@ final class HomeWorktreeMarks {
     }
 
     func knows(_ projectID: String) -> Bool {
-        projectIDs.values.contains(projectID)
+        epochLock.withLock { projectIDs.values.contains(projectID) }
     }
 
     func load(addedPath: String) async -> WorktreeMarkUpdate {
         let lookedUp: String?
-        if let cached = projectIDs[addedPath] {
+        if let cached = epochLock.withLock({ projectIDs[addedPath] }) {
             lookedUp = cached
         } else {
             lookedUp = await currentProjectID(addedPath)?.trimmingCharacters(in: .whitespacesAndNewlines)
         }
         let usable = (lookedUp?.isEmpty == false) ? lookedUp : nil
         // Record the id before refresh so a worktree.updated emitted by that call is not dropped.
-        if let usable { projectIDs[addedPath] = usable }
+        if let usable {
+            epochLock.withLock { projectIDs[addedPath] = usable }
+        }
+        let epoch = begin(addedPath)
         let loaded = await repository.loadRefreshed(addedPath: addedPath, projectID: usable)
+        // A refetch that started during this load saw the pre-refresh list. Drop it.
+        end(addedPath, epoch: epoch)
         return await update(addedPath: addedPath, projectID: usable, load: loaded)
     }
 
     func refetch(projectID: String) async -> WorktreeMarkUpdate? {
-        guard let addedPath = projectIDs.first(where: { $0.value == projectID })?.key else { return nil }
-        return await update(addedPath: addedPath, projectID: projectID, load: await repository.refetch(projectID: projectID))
+        guard let addedPath = epochLock.withLock({ projectIDs.first { $0.value == projectID }?.key }) else { return nil }
+        guard let epoch = epochLock.withLock({ epochs[addedPath] }) else { return nil }
+        let loaded = await repository.refetch(projectID: projectID)
+        guard epochLock.withLock({ epochs[addedPath] }) == epoch else { return nil }
+        return await update(addedPath: addedPath, projectID: projectID, load: loaded)
+    }
+
+    private func begin(_ addedPath: String) -> Int {
+        epochLock.withLock {
+            let next = (epochs[addedPath] ?? 0) + 1
+            epochs[addedPath] = next
+            return next
+        }
+    }
+
+    private func end(_ addedPath: String, epoch: Int) {
+        epochLock.withLock {
+            if epochs[addedPath] == epoch {
+                epochs[addedPath] = epoch + 1
+            }
+        }
     }
 
     func withLive(addedPath: String, primary: [SessionListItem]) -> [SessionListItem] {

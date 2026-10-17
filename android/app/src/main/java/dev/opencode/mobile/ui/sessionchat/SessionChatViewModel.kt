@@ -87,6 +87,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
+import kotlin.coroutines.coroutineContext
 
 @HiltViewModel
 class SessionChatViewModel
@@ -1426,10 +1427,15 @@ class SessionChatViewModel
             val inventories = mutableMapOf<String, WorktreeInventory>()
             checkoutProjectIds.clear()
             for (added in peers) {
+                coroutineContext.ensureActive()
                 val projectId =
-                    runCatching { projectRepository.getCurrentProject(added).id }
-                        .getOrNull()
-                        ?.takeIf { it.isNotBlank() }
+                    try {
+                        projectRepository.getCurrentProject(added).id
+                    } catch (cancellation: CancellationException) {
+                        throw cancellation
+                    } catch (_: Exception) {
+                        null
+                    }?.takeIf { it.isNotBlank() }
                 if (projectId != null) checkoutProjectIds += projectId
                 val load = worktreeRepository.loadRefreshed(added, projectId)
                 inventories[added] =

@@ -54,6 +54,7 @@ internal class HomeWorktreeMarks(
     private val listSessions: suspend (String) -> List<SessionSummary>,
 ) {
     private val projectIds = mutableMapOf<String, String>()
+    private val epochs = mutableMapOf<String, Int>()
     private val fold = HomeWorktreeSessionFold()
 
     fun onDisconnected() = repository.onDisconnected()
@@ -68,12 +69,32 @@ internal class HomeWorktreeMarks(
                 ?: runCatching { currentProjectId(addedPath) }.getOrNull()?.takeIf { it.isNotBlank() }
         // Record the id before refresh so a worktree.updated emitted by that call is not dropped.
         if (projectId != null) projectIds[addedPath] = projectId
-        return update(addedPath, projectId, repository.loadRefreshed(addedPath, projectId))
+        val epoch = begin(addedPath)
+        val loaded = repository.loadRefreshed(addedPath, projectId)
+        // A refetch that started during this load saw the pre-refresh list. Drop it.
+        end(addedPath, epoch)
+        return update(addedPath, projectId, loaded)
     }
 
     suspend fun refetch(projectId: String): WorktreeMarkUpdate? {
         val addedPath = projectIds.entries.firstOrNull { it.value == projectId }?.key ?: return null
-        return update(addedPath, projectId, repository.refetch(projectId))
+        val epoch = epochs[addedPath] ?: return null
+        val loaded = repository.refetch(projectId)
+        if (epochs[addedPath] != epoch) return null
+        return update(addedPath, projectId, loaded)
+    }
+
+    private fun begin(addedPath: String): Int {
+        val next = (epochs[addedPath] ?: 0) + 1
+        epochs[addedPath] = next
+        return next
+    }
+
+    private fun end(
+        addedPath: String,
+        epoch: Int,
+    ) {
+        if (epochs[addedPath] == epoch) epochs[addedPath] = epoch + 1
     }
 
     fun withLive(

@@ -1175,6 +1175,7 @@ final class SessionChatViewModel {
             let checkout = await resolveCheckoutName(boundDirectory: worktree, peers: peers)
             guard !Task.isCancelled else { return }
             await MainActor.run {
+                guard !Task.isCancelled else { return }
                 if let checkout {
                     self.projectLabel = checkout
                     self.projectLetter = nil
@@ -1205,7 +1206,11 @@ final class SessionChatViewModel {
             let usable = projectID?.trimmingCharacters(in: .whitespacesAndNewlines)
             if let usable, !usable.isEmpty {
                 projectIDs.insert(usable)
-                await MainActor.run { checkoutProjectIDs.insert(usable) }
+                if Task.isCancelled { return nil }
+                await MainActor.run {
+                    guard !Task.isCancelled else { return }
+                    checkoutProjectIDs.insert(usable)
+                }
             }
             let loaded = await worktreeRepository.loadRefreshed(addedPath: added, projectID: usable)
             switch loaded {
@@ -1217,7 +1222,12 @@ final class SessionChatViewModel {
                 inventories[added] = .unloaded
             }
         }
-        await MainActor.run { checkoutProjectIDs = projectIDs }
+        if Task.isCancelled { return nil }
+        await MainActor.run {
+            guard !Task.isCancelled else { return }
+            checkoutProjectIDs = projectIDs
+        }
+        guard !Task.isCancelled else { return nil }
         return WorktreeMark.checkoutNameIfMarked(boundDirectory: boundDirectory, addedPaths: peers) { added in
             inventories[added] ?? .unloaded
         }
