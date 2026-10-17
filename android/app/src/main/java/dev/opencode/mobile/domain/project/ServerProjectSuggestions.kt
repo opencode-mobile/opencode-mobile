@@ -43,7 +43,7 @@ object ServerProjectSuggestions {
         return posix.contains("/appdata/local/temp/") || posix.endsWith("/appdata/local/temp")
     }
 
-    private val TEMP_PREFIXES = listOf("/tmp", "/private/tmp", "/var/folders", "/private/var/folders", "/var/tmp")
+    private val TEMP_PREFIXES = listOf("/tmp", "/private/tmp", "/var/folders", "/private/var/folders", "/var/tmp", "/private/var/tmp")
 
     private fun activity(project: Project): Long = project.activityAtEpochMs ?: Long.MIN_VALUE
 }

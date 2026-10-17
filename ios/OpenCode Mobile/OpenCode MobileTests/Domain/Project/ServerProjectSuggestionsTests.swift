@@ -62,6 +62,7 @@ struct ServerProjectSuggestionsTests {
             project("upload", "/private/var/folders/_p/x/T/opencode/uploads/8d82", activity: 9),
             project("var", "/var/folders/_p/x/T/repo", activity: 8),
             project("tmp", "/tmp/repo", activity: 7),
+            project("var-tmp", "/private/var/tmp/repo", activity: 7),
             project("scratch", "/Users/me/.t3/scratch", activity: 6),
             project("dot", "/Users/me/.jenv", activity: 5),
             project("win-temp", #"C:\Users\me\AppData\Local\Temp\repo"#, activity: 4),

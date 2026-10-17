@@ -105,6 +105,7 @@ class ServerProjectSuggestionsTest {
                         project("upload", "/private/var/folders/_p/x/T/opencode/uploads/8d82", 9),
                         project("var", "/var/folders/_p/x/T/repo", 8),
                         project("tmp", "/tmp/repo", 7),
+                        project("var-tmp", "/private/var/tmp/repo", 7),
                         project("scratch", "/Users/me/.t3/scratch", 6),
                         project("dot", "/Users/me/.jenv", 5),
                         project("win-temp", """C:\Users\me\AppData\Local\Temp\repo""", 4),

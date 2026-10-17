@@ -61,7 +61,7 @@ nonisolated enum ServerProjectSuggestions {
         return posix.contains("/appdata/local/temp/") || posix.hasSuffix("/appdata/local/temp")
     }
 
-    private static let tempPrefixes = ["/tmp", "/private/tmp", "/var/folders", "/private/var/folders", "/var/tmp"]
+    private static let tempPrefixes = ["/tmp", "/private/tmp", "/var/folders", "/private/var/folders", "/var/tmp", "/private/var/tmp"]
 
     private static func isNewer(_ candidate: Int64?, than current: Int64?) -> Bool {
         guard let candidate else { return false }
