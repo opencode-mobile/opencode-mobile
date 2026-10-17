@@ -1,0 +1,10 @@
+{
+  "name": "acme-invoices",
+  "version": "0.4.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --experimental-strip-types --test test/*.test.mjs",
+    "build": "sh scripts/slow-build.sh"
+  }
+}

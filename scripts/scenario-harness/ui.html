@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scenario Harness</title>
+<style>
+:root {
+  --bg: #f6f6f4; --panel: #ffffff; --ink: #1d1d1b; --muted: #6b6b66; --line: #e3e2dd;
+  --accent: #2f5bd3; --accent-ink: #ffffff; --ok: #1f8a4c; --warn: #b26a00; --bad: #c0362c;
+  --chip: #efeee9; --lane-app: #2f5bd3; --lane-server: #1f8a4c; --lane-model: #8a3fc7; --lane-harness: #b26a00;
+  --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141413; --panel: #1d1d1b; --ink: #ecebe6; --muted: #9a9993; --line: #2f2f2c;
+    --accent: #7c9cff; --accent-ink: #0d1530; --ok: #4cc283; --warn: #e2a33b; --bad: #f0675b;
+    --chip: #2a2a27; --lane-app: #7c9cff; --lane-server: #4cc283; --lane-model: #c08bf0; --lane-harness: #e2a33b;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+header { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--panel); position: sticky; top: 0; z-index: 2; }
+header h1 { font-size: 15px; margin: 0 8px 0 0; }
+.pill { padding: 2px 8px; border-radius: 999px; background: var(--chip); font-weight: 600; font-size: 12px; }
+.pill.ready { color: var(--ok); } .pill.starting { color: var(--warn); } .pill.exited, .pill.stopped { color: var(--bad); }
+button { font: inherit; border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+button:hover { border-color: var(--accent); }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+button.danger { color: var(--bad); }
+button.on { background: var(--warn); color: #1d1d1b; border-color: var(--warn); }
+button:disabled { opacity: .45; cursor: default; }
+input, select, textarea { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; }
+main { display: grid; grid-template-columns: minmax(320px, 420px) 1fr; gap: 12px; padding: 12px 16px; height: calc(100vh - 54px); }
+.col { overflow: auto; display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+section h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 8px; display: flex; justify-content: space-between; align-items: center; }
+.row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.kv { display: grid; grid-template-columns: 70px 1fr auto; gap: 4px 8px; align-items: center; font-family: var(--mono); font-size: 12px; }
+.kv span:nth-child(3n+1) { color: var(--muted); font-family: inherit; }
+.scenario { border-top: 1px solid var(--line); padding: 8px 0; }
+.scenario:first-of-type { border-top: 0; }
+.scenario .title { font-weight: 600; }
+.scenario .meta { color: var(--muted); font-size: 12px; }
+.scenario .expect { font-size: 12px; margin: 4px 0; color: var(--muted); display: none; }
+.scenario.open .expect { display: block; }
+.scenario.armed { box-shadow: inset 3px 0 0 var(--accent); padding-left: 8px; }
+.chip { display: inline-block; padding: 0 6px; border-radius: 4px; background: var(--chip); font-size: 11px; color: var(--muted); }
+.empty { color: var(--muted); font-size: 12px; }
+.card { border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; margin-top: 6px; }
+.timeline { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.filters { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 8px; }
+.filters label { display: inline-flex; gap: 4px; align-items: center; }
+#log { flex: 1; overflow: auto; font-family: var(--mono); font-size: 12px; border-top: 1px solid var(--line); }
+.ev { display: grid; grid-template-columns: 78px 64px 1fr; gap: 8px; padding: 2px 4px; border-bottom: 1px solid var(--line); cursor: pointer; }
+.ev:hover { background: var(--chip); }
+.ev .t { color: var(--muted); }
+.ev .lane { font-weight: 700; }
+.ev.app .lane { color: var(--lane-app); } .ev.server .lane { color: var(--lane-server); }
+.ev.model .lane { color: var(--lane-model); } .ev.harness .lane { color: var(--lane-harness); }
+.ev .msg { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ev.bad .msg { color: var(--bad); }
+.ev pre { grid-column: 1 / -1; margin: 4px 0; white-space: pre-wrap; word-break: break-all; background: var(--bg); padding: 6px; border-radius: 6px; max-height: 360px; overflow: auto; }
+.progress { height: 4px; background: var(--chip); border-radius: 2px; overflow: hidden; margin-top: 4px; }
+.progress > div { height: 100%; background: var(--accent); }
+@media (max-width: 860px) { main { grid-template-columns: 1fr; height: auto; } #log { max-height: 70vh; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Scenario Harness</h1>
+  <span id="server-pill" class="pill">…</span>
+  <span id="server-detail" class="chip"></span>
+  <button id="start-v1">Start v1</button>
+  <button id="start-v2">Start v2</button>
+  <label class="row"><input type="checkbox" id="fresh"> fresh project</label>
+  <button id="stop" class="danger">Stop</button>
+  <span style="flex:1"></span>
+  <span id="conn" class="chip">connecting…</span>
+</header>
+<main>
+  <div class="col">
+    <section>
+      <h2>Connect the apps</h2>
+      <div class="kv" id="connect"></div>
+    </section>
+
+    <section>
+      <h2>Live <span class="row"><label title="Stream speed multiplier on all delays">pacing <input id="pacing" type="number" min="0" step="0.25" value="1" style="width:60px"></label></span></h2>
+      <div id="armed"></div>
+      <div id="runs"></div>
+      <div id="gates"></div>
+      <div id="automation"></div>
+      <div class="row" style="margin-top:8px">
+        <button id="disarm">Disarm</button>
+        <button id="release-all">Release all gates</button>
+        <button id="model-abort" class="danger">Cut model streams</button>
+        <button id="reset">Reset runs</button>
+        <button id="reset-files" title="git reset --hard + clean in the throwaway project (Run/Arm also does this)">Reset project files</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Pending asks</h2>
+      <div id="pending"><div class="empty">No permission or question waiting.</div></div>
+    </section>
+
+    <section>
+      <h2>Scenarios <span class="chip">Arm = next app prompt · Run = harness plays the user</span></h2>
+      <div id="scenarios"></div>
+    </section>
+
+    <section>
+      <h2>Faults (apps only)</h2>
+      <div class="row">
+        <button data-fault="drop">Drop SSE now</button>
+        <button data-fault="offline" data-ms="3000">Offline 3s</button>
+        <button data-fault="offline" data-ms="15000">Offline 15s</button>
+        <button data-fault="auth" data-ms="10000">401 for 10s</button>
+      </div>
+      <div class="row" style="margin-top:6px">
+        <button id="stall">Stall SSE</button>
+        <button id="hbonly">Heartbeats only</button>
+        <label>latency <input id="latency" type="number" min="0" step="100" value="0" style="width:70px"> ms</label>
+        <button data-fault="clear">Clear</button>
+      </div>
+      <div id="streams" class="empty" style="margin-top:6px"></div>
+    </section>
+
+    <section>
+      <h2>Another client <button id="refresh-sessions">Refresh</button></h2>
+      <div class="row">
+        <input id="new-title" placeholder="new session title" style="flex:1">
+        <button id="create-session">Create</button>
+      </div>
+      <div id="sessions"></div>
+    </section>
+  </div>
+
+  <div class="col">
+    <section class="timeline">
+      <h2>Timeline <span class="row"><button id="clear-log">Clear</button><button id="pause">Pause</button></span></h2>
+      <div class="filters">
+        <label><input type="checkbox" data-lane="app" checked> App requests</label>
+        <label><input type="checkbox" data-lane="server" checked> Server events</label>
+        <label><input type="checkbox" data-lane="model" checked> Model</label>
+        <label><input type="checkbox" data-lane="harness" checked> Harness</label>
+        <label title="message.part.delta, heartbeats, sync, plugin.added, duplicate /global/event"><input type="checkbox" id="noise"> noise</label>
+        <input id="search" placeholder="filter text" style="flex:1; min-width:120px">
+      </div>
+      <div id="log"></div>
+    </section>
+  </div>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+let state = {};
+let events = [];
+let paused = false;
+let sessions = [];
+const openScenarios = new Set();
+
+async function api(path, body) {
+  const res = await fetch(path, { method: body === undefined ? "GET" : "POST", headers: { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) { toast(data.error ?? res.statusText); throw new Error(data.error); }
+  return data;
+}
+function toast(text) { push({ seq: -1, at: Date.now(), type: "ui.error", data: { error: text } }); }
+
+const NOISE = /message\.part\.delta|session\.(text|reasoning|tool\.input)\.delta|heartbeat|^sync$|plugin\.added|lsp\.|file\.watcher/;
+function lane(e) {
+  if (e.type === "app.request") return "app";
+  if (e.type === "server.event" || e.type === "server.log") return "server";
+  if (e.type.startsWith("model.")) return "model";
+  return "harness";
+}
+function isNoise(e) {
+  if (e.type === "server.event") return NOISE.test(e.data.type) || e.data.source.includes("/global/event");
+  if (e.type === "server.log") return true;
+  if (e.type === "client.pending") return true;
+  return false;
+}
+function summary(e) {
+  const d = e.data ?? {};
+  switch (e.type) {
+    case "app.request": return `${d.method} ${d.path} → ${d.status}${d.ms != null ? ` (${d.ms}ms)` : ""}${d.ua ? `  ${d.ua}` : ""}`;
+    case "server.event": return `${d.type}  ${eventDetail(d)}  [${d.source}]`;
+    case "server.log": return d.line;
+    case "model.call": return `${d.kind === "turn" ? "" : d.kind + ": "}${d.label}${d.lastUser ? `  ← "${d.lastUser.slice(0, 60)}"` : ""}${d.toolResults ? `  (${d.toolResults} tool results)` : ""}`;
+    case "model.done": return `${d.label} → ${d.outcome} in ${d.ms}ms`;
+    case "model.run": return `${d.phase}: ${d.run.scenario} (${d.run.protocol})`;
+    case "model.miss": return `unserved ${d.method} ${d.path}`;
+    case "client.call": return `${d.method} ${d.path} → ${d.status}`;
+    case "automation.step": return `auto ${d.do}${d.on ? ` on ${d.on}` : ""} session ${d.sessionID ?? "?"}`;
+    case "automation.error": return `auto failed: ${d.error}`;
+    case "harness.run": return `run ${d.scenario}${d.variant ? ` (${d.variant})` : ""}${d.drive ? " driven by harness" : " armed for the app"}`;
+    case "ui.error": return d.error;
+    case "observer.state": return `${d.label}: ${d.status}`;
+    default: return JSON.stringify(d).slice(0, 200);
+  }
+}
+function eventDetail(d) {
+  const p = d.props ?? {};
+  if (d.type === "message.part.updated") { const part = p.part ?? {}; return [part.type, part.tool, part.state?.status].filter(Boolean).join(" "); }
+  if (d.type === "session.status") return JSON.stringify(p.status ?? p);
+  if (d.type === "message.updated") return [p.info?.role, p.info?.finish, p.info?.error?.name].filter(Boolean).join(" ");
+  if (d.type.startsWith("permission")) return [p.permission ?? p.action, (p.patterns ?? p.resources ?? []).join(" "), p.reply ?? p.decision].filter(Boolean).join(" ");
+  const sid = p.sessionID ?? p.info?.id;
+  return sid ? sid.slice(-10) : "";
+}
+function bad(e) {
+  const d = e.data ?? {};
+  if (e.type === "app.request") return typeof d.status === "number" && d.status >= 400;
+  if (e.type === "client.call") return d.status >= 400;
+  return /error|fail/i.test(e.type) || (e.type === "server.event" && /error/.test(d.type));
+}
+
+function push(e) {
+  if (e.type === "hello") { state = e.data; renderAll(); return; }
+  if (e.type === "model.state") { state.model = e.data; renderLive(); renderScenarios(); return; }
+  if (e.type === "proxy.state") { state.proxy = e.data; renderFaults(); return; }
+  if (e.type === "server.state") { state.server = e.data; renderServer(); return; }
+  if (e.type === "client.pending") { state.pending = e.data; renderPending(); }
+  if (e.type === "harness.run" || e.type === "automation.step") refreshState();
+  if (e.type === "server.event" && /^session\.(created|updated|deleted)/.test(e.data.type)) scheduleSessions();
+  events.push(e);
+  if (events.length > 5000) events.splice(0, 1000);
+  if (!paused) appendEvent(e);
+}
+
+function visible(e) {
+  const lanes = [...document.querySelectorAll("[data-lane]")].filter((c) => c.checked).map((c) => c.dataset.lane);
+  if (!lanes.includes(lane(e))) return false;
+  if (!$("noise").checked && isNoise(e)) return false;
+  const q = $("search").value.trim().toLowerCase();
+  if (q && !(summary(e) + JSON.stringify(e.data)).toLowerCase().includes(q)) return false;
+  return true;
+}
+function eventRow(e) {
+  const div = document.createElement("div");
+  div.className = `ev ${lane(e)}${bad(e) ? " bad" : ""}`;
+  const time = new Date(e.at).toLocaleTimeString([], { hour12: false }) + "." + String(e.at % 1000).padStart(3, "0").slice(0, 1);
+  div.innerHTML = `<span class="t">${time}</span><span class="lane">${lane(e)}</span><span class="msg">${esc(summary(e))}</span>`;
+  div.addEventListener("click", () => {
+    const pre = div.querySelector("pre");
+    if (pre) pre.remove(); else { const p = document.createElement("pre"); p.textContent = JSON.stringify(e.data, null, 2); div.appendChild(p); }
+  });
+  return div;
+}
+function appendEvent(e) {
+  if (!visible(e)) return;
+  const log = $("log");
+  const stick = log.scrollTop + log.clientHeight >= log.scrollHeight - 30;
+  log.appendChild(eventRow(e));
+  while (log.childElementCount > 2500) log.firstChild.remove();
+  if (stick) log.scrollTop = log.scrollHeight;
+}
+function rerenderLog() {
+  const log = $("log");
+  log.innerHTML = "";
+  const frag = document.createDocumentFragment();
+  for (const e of events.filter(visible).slice(-2500)) frag.appendChild(eventRow(e));
+  log.appendChild(frag);
+  log.scrollTop = log.scrollHeight;
+}
+
+function renderServer() {
+  const s = state.server;
+  const pill = $("server-pill");
+  pill.className = `pill ${s?.status ?? ""}`;
+  pill.textContent = s ? `${s.protocol} · ${s.status}` : "not started";
+  $("server-detail").textContent = s?.health?.version ? `opencode ${s.health.version}` : s?.code != null ? `exit ${s.code}` : "";
+}
+function renderConnect() {
+  const c = state.connect ?? {};
+  const row = (k, v) => `<span>${k}</span><span>${esc(v)}</span><button data-copy="${esc(v)}">copy</button>`;
+  $("connect").innerHTML = [row("iOS sim", c.ios), row("Android", c.android), ...(c.lan ?? []).slice(0, 2).map((u) => row("LAN", u)), row("user", c.username), row("password", c.password)].join("");
+}
+function renderScenarios() {
+  const protocol = state.server?.protocol;
+  const armed = state.model?.armed?.scenarioId;
+  const order = { P0: 0, P1: 1, P2: 2 };
+  const sorted = [...(state.scenarios ?? [])].sort((a, b) => (order[a.priority] ?? 9) - (order[b.priority] ?? 9));
+  $("scenarios").innerHTML = sorted.map((s) => {
+    const off = protocol && !s.protocols.includes(protocol);
+    return `<div class="scenario${openScenarios.has(s.id) ? " open" : ""}${armed === s.id ? " armed" : ""}" data-id="${s.id}">
+      <div class="row"><span class="title" data-toggle="${s.id}" style="cursor:pointer;flex:1">${esc(s.title)}</span>
+        <button data-arm="${s.id}" ${off ? "disabled" : ""}>Arm</button>
+        <button class="primary" data-run="${s.id}" ${off || (!s.prompt && !s.automated) ? "disabled" : ""}>Run</button></div>
+      <div class="meta"><span class="chip">${s.priority}</span> <span class="chip">${s.category}</span> <code>${s.id}</code> ${s.protocols.length < 2 ? `<span class="chip">${s.protocols.join("")} only</span>` : ""}${s.automated ? ' <span class="chip">automated</span>' : ""}${s.appOnly ? ' <span class="chip">needs device</span>' : ""}</div>
+      <div class="expect">${s.prompt ? `Prompt: <em>${esc(s.prompt)}</em><br>` : ""}${esc(s.expect)}
+        ${s.variants.length ? `<div class="row" style="margin-top:4px">Variants: ${s.variants.map((v) => `<button data-arm="${s.id}" data-variant="${v}">Arm ${v}</button><button data-run="${s.id}" data-variant="${v}">Run ${v}</button>`).join("")}</div>` : ""}</div>
+    </div>`;
+  }).join("");
+}
+function renderLive() {
+  const m = state.model ?? {};
+  $("pacing").value = m.pacing ?? 1;
+  $("armed").innerHTML = m.armed ? `<div class="card">Armed: <b>${esc(m.armed.scenarioId)}</b>. Send any prompt from the app (or include <code>scenario: ${esc(m.armed.scenarioId)}</code>).</div>` : `<div class="empty">Nothing armed. Unscripted prompts answer "ok".</div>`;
+  $("runs").innerHTML = (m.runs ?? []).slice(0, 4).map((r) => {
+    const total = r.mainCalls + r.children.reduce((a, c) => a + c.calls, 0);
+    const done = r.mainCall + r.children.reduce((a, c) => a + c.call, 0);
+    return `<div class="card"><div class="row"><b style="flex:1">${esc(r.scenario)}</b><span class="chip">${r.protocol}</span><span class="chip">${r.status}</span></div>
+      <div class="meta">main ${r.mainCall}/${r.mainCalls}${r.children.map((c) => ` · child ${c.call}/${c.calls}${c.bound ? "" : " (waiting)"}`).join("")}</div>
+      <div class="progress"><div style="width:${total ? Math.round((done / total) * 100) : 0}%"></div></div></div>`;
+  }).join("");
+  $("gates").innerHTML = (m.gates ?? []).map((g) => `<div class="card row"><span style="flex:1">⏸ ${esc(g.label)}</span><button class="primary" data-release="${g.id}">Release</button></div>`).join("");
+}
+function renderAutomation() {
+  const a = state.automation;
+  $("automation").innerHTML = a?.steps?.length ? `<div class="card"><div class="meta">Automation for ${esc(a.scenario)}</div>${a.steps.map((s) => `<div>${s.fired ? "✓" : "○"} ${esc(s.do)} ${s.on ? `on ${esc(s.on)}` : `at ${s.at}ms`}${s.delayMs ? ` +${s.delayMs}ms` : ""}</div>`).join("")}</div>` : "";
+}
+function renderPending() {
+  const p = state.pending ?? { permissions: [], questions: [] };
+  const perms = p.permissions.map((x) => `<div class="card"><b>${esc(x.title)}</b> <code>${esc((x.patterns ?? []).join(" "))}</code>
+    <div class="meta">${esc(x.sessionID)}</div>
+    <div class="row" style="margin-top:4px"><button class="primary" data-perm="${x.id}" data-session="${x.sessionID}" data-reply="once">Allow once</button>
+    <button data-perm="${x.id}" data-session="${x.sessionID}" data-reply="always">Always</button>
+    <button class="danger" data-perm="${x.id}" data-session="${x.sessionID}" data-reply="reject">Reject</button></div></div>`);
+  const qs = p.questions.map((x) => {
+    const list = Array.isArray(x.questions) ? x.questions : [];
+    return `<div class="card"><b>Question</b> <span class="meta">${esc(x.sessionID)}</span>
+      ${list.map((q, i) => `<div>${esc(q.question ?? q.label ?? q.title ?? "")}</div><div class="row">${(q.options ?? []).map((o) => `<button data-q="${x.id}" data-session="${x.sessionID}" data-index="${i}" data-label="${esc(o.label ?? o)}">${esc(o.label ?? o)}</button>`).join("")}</div>`).join("") || `<pre>${esc(JSON.stringify(x.raw, null, 1).slice(0, 600))}</pre>`}
+      <div class="row"><button class="danger" data-qreject="${x.id}" data-session="${x.sessionID}">Dismiss</button></div></div>`;
+  });
+  $("pending").innerHTML = [...perms, ...qs].join("") || `<div class="empty">No permission or question waiting.</div>`;
+}
+function renderFaults() {
+  const f = state.proxy ?? {};
+  $("stall").classList.toggle("on", Boolean(f.stall));
+  $("hbonly").classList.toggle("on", Boolean(f.heartbeatOnly));
+  const notes = [];
+  if (f.offlineFor) notes.push(`offline ${Math.ceil(f.offlineFor / 1000)}s`);
+  if (f.rejectAuthFor) notes.push(`401 ${Math.ceil(f.rejectAuthFor / 1000)}s`);
+  if (f.latencyMs) notes.push(`+${f.latencyMs}ms`);
+  $("streams").innerHTML = `${notes.length ? `<b>${notes.join(" · ")}</b><br>` : ""}${(f.streams ?? []).length ? `Open app event streams: ${(f.streams ?? []).map((s) => `<code>${esc(s.path.split("?")[0])}</code> ${Math.round(s.ageMs / 1000)}s`).join(", ")}` : "No app event streams open."}`;
+}
+function renderSessions() {
+  $("sessions").innerHTML = sessions.slice(0, 12).map((s) => `<div class="card"><div class="row"><b style="flex:1">${esc(s.title || s.id)}</b><code class="meta">${esc(s.id.slice(-8))}</code></div>
+    <div class="row" style="margin-top:4px"><input data-prompt-input="${s.id}" placeholder="prompt as another client" style="flex:1">
+    <button data-prompt="${s.id}">Send</button><button data-abort="${s.id}" class="danger">Abort</button></div>
+    <div class="row" style="margin-top:4px"><button data-rename="${s.id}">Rename</button><button data-delete="${s.id}" class="danger">Delete</button></div></div>`).join("") || `<div class="empty">No sessions.</div>`;
+}
+function renderAll() { renderServer(); renderConnect(); renderScenarios(); renderLive(); renderAutomation(); renderPending(); renderFaults(); loadSessions(); }
+
+let sessionTimer;
+function scheduleSessions() { clearTimeout(sessionTimer); sessionTimer = setTimeout(loadSessions, 500); }
+async function loadSessions() {
+  if (state.server?.status !== "ready") { sessions = []; renderSessions(); return; }
+  try {
+    const list = await api("/harness/action", { name: "listSessions" });
+    sessions = (Array.isArray(list) ? list : list?.items ?? []).filter((s) => !s.parentID).sort((a, b) => (b.time?.updated ?? b.time?.created ?? 0) - (a.time?.updated ?? a.time?.created ?? 0));
+  } catch { sessions = []; }
+  renderSessions();
+}
+async function refreshState() { state = { ...state, ...(await api("/harness/state")) }; renderAutomation(); }
+
+document.addEventListener("click", async (ev) => {
+  const t = ev.target.closest("button, [data-toggle]");
+  if (!t) return;
+  const d = t.dataset;
+  try {
+    if (d.copy) navigator.clipboard?.writeText(d.copy);
+    else if (d.toggle) { openScenarios.has(d.toggle) ? openScenarios.delete(d.toggle) : openScenarios.add(d.toggle); renderScenarios(); }
+    else if (d.arm) await api("/harness/run", { scenario: d.arm, variant: d.variant, drive: false });
+    else if (d.run) await api("/harness/run", { scenario: d.run, variant: d.variant, drive: true });
+    else if (d.release) await api("/harness/release", { gate: d.release });
+    else if (d.perm) await api("/harness/action", { name: "replyPermission", sessionID: d.session, requestID: d.perm, reply: d.reply });
+    else if (d.q) await api("/harness/action", { name: "replyQuestion", sessionID: d.session, requestID: d.q, answers: [[d.label]] });
+    else if (d.qreject) await api("/harness/action", { name: "rejectQuestion", sessionID: d.session, requestID: d.qreject });
+    else if (d.prompt) { const input = document.querySelector(`[data-prompt-input="${d.prompt}"]`); await api("/harness/action", { name: "prompt", sessionID: d.prompt, text: input.value || "Hello from another client" }); input.value = ""; }
+    else if (d.abort) await api("/harness/action", { name: "abort", sessionID: d.abort });
+    else if (d.rename) { const title = prompt("New title"); if (title) await api("/harness/action", { name: "rename", sessionID: d.rename, title }); }
+    else if (d.delete) { if (confirm("Delete this session on the server?")) await api("/harness/action", { name: "remove", sessionID: d.delete }); }
+    else if (d.fault === "drop") await api("/harness/fault/drop", {});
+    else if (d.fault === "offline") await api("/harness/fault", { offlineMs: Number(d.ms) });
+    else if (d.fault === "auth") await api("/harness/fault", { rejectAuthMs: Number(d.ms) });
+    else if (d.fault === "clear") { $("latency").value = 0; await api("/harness/fault/clear", {}); }
+  } catch {}
+});
+$("start-v1").onclick = () => api("/harness/server/start", { protocol: "v1", fresh: $("fresh").checked });
+$("start-v2").onclick = () => api("/harness/server/start", { protocol: "v2", fresh: $("fresh").checked });
+$("stop").onclick = () => api("/harness/server/stop", {});
+$("disarm").onclick = () => api("/harness/arm", { scenario: null });
+$("release-all").onclick = () => api("/harness/release", {});
+$("model-abort").onclick = () => api("/harness/model/abort", {});
+$("reset").onclick = () => api("/harness/reset", {});
+$("reset-files").onclick = () => api("/harness/project/reset", {});
+$("pacing").onchange = (e) => api("/harness/pacing", { value: Number(e.target.value) });
+$("latency").onchange = (e) => api("/harness/fault", { latencyMs: Number(e.target.value) });
+$("stall").onclick = () => api("/harness/fault", { stall: !state.proxy?.stall });
+$("hbonly").onclick = () => api("/harness/fault", { heartbeatOnly: !state.proxy?.heartbeatOnly });
+$("refresh-sessions").onclick = loadSessions;
+$("create-session").onclick = async () => { await api("/harness/action", { name: "createSession", title: $("new-title").value || "From another client" }); $("new-title").value = ""; loadSessions(); };
+$("clear-log").onclick = () => { events = []; rerenderLog(); };
+$("pause").onclick = (e) => { paused = !paused; e.target.textContent = paused ? "Resume" : "Pause"; e.target.classList.toggle("on", paused); if (!paused) rerenderLog(); };
+for (const el of document.querySelectorAll("[data-lane], #noise")) el.onchange = rerenderLog;
+$("search").oninput = rerenderLog;
+
+async function connect() {
+  try { for (const e of await api("/harness/history")) { events.push(e); if (e.type === "client.pending") state.pending = e.data; } } catch {}
+  const source = new EventSource("/harness/events");
+  source.onopen = () => { $("conn").textContent = "live"; };
+  source.onerror = () => { $("conn").textContent = "reconnecting…"; };
+  source.onmessage = (m) => { const e = JSON.parse(m.data); if (e.type === "hello") { state = e.data; renderAll(); rerenderLog(); } else push(e); };
+}
+connect();
+</script>
+</body>
+</html>
