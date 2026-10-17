@@ -718,6 +718,7 @@ internal fun resolveStreamingDecorationTarget(message: Message): StreamingDecora
             is MessagePart.File,
             is MessagePart.Compaction,
             is MessagePart.Reasoning,
+            is MessagePart.Notice,
             -> flush()
         }
     }

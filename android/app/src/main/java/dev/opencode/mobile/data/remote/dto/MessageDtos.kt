@@ -104,6 +104,8 @@ data class MessagePartDto(
     val auto: Boolean? = null,
     val completed: Boolean? = null,
     val summary: String? = null,
+    /** Client-only `notice` part from the v2 live projection (a timeline notice). */
+    val notice: JsonObject? = null,
 )
 
 @Serializable

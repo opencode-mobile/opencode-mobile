@@ -12,6 +12,8 @@ import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessagePatch
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.MessageStopReason
+import dev.opencode.mobile.domain.message.NoticeModelRef
+import dev.opencode.mobile.domain.message.TimelineNotice
 import dev.opencode.mobile.markdown.MarkdownDocument
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -276,6 +278,115 @@ class V2LiveTurnTimelineTest {
         apply(prompt("u2", "Second", at = 2_010))
 
         assertEquals("plan|scripted|low", store.messages(SESSION).single { it.id == "u2" }.metaLine())
+    }
+
+    @Test
+    fun liveNotices_showWithoutRestThenShareOneRowWithTheRestItem() {
+        apply(prompt("u1", "First", at = 1_000))
+        apply(step("a1", at = 1_050))
+        apply(text("a1", "Reply.", at = 1_060))
+        apply(stepEnded("a1", "stop", at = 1_070))
+        apply(idle(at = 1_080))
+        apply(moved("/repo/.worktrees/feat", at = 2_000))
+        apply(agentSelected("plan", at = 2_001))
+        apply(modelSelected(SCRIPTED_HIGH, at = 2_002))
+        apply(instructionsUpdated(at = 2_003))
+        apply(restart(at = 2_004))
+
+        val live = store.messages(SESSION).filter { it.role == MessageRole.Notice }
+        val ids =
+            listOf(
+                "msg_session.moved2000",
+                "msg_session.agent.selected2001",
+                "msg_session.model.selected2002",
+                "msg_session.instructions.updated2003",
+                "msg_session.synthetic2004",
+            )
+        assertEquals(ids, live.map { it.id })
+        assertEquals(
+            listOf(
+                TimelineNotice.Moved("/repo/.worktrees/feat"),
+                TimelineNotice.AgentChanged("plan"),
+                TimelineNotice.ModelChanged(NoticeModelRef("sim", "scripted", "high")),
+                TimelineNotice.InstructionsUpdated(listOf("AGENTS.md")),
+                TimelineNotice.Restart,
+            ),
+            live.map { it.notice() },
+        )
+        // Each notice is its own row, after the finished turn.
+        val rows = chipBodies(displayOrder(store.messages(SESSION)))
+        assertEquals(listOf("u1", "a1") + ids, rows.map { it.message.id })
+        rows.drop(2).forEach { row ->
+            assertTrue(row.blocks.single() is SessionChatTimelineBlock.Notice)
+        }
+
+        // REST records the same items under the same ids, with what changed from.
+        reload(
+            """
+            [
+              {"id":"u1","type":"user","text":"First","time":{"created":1000}},
+              {"id":"a1","type":"assistant","agent":"build","model":{"id":"m","providerID":"p"},
+               "content":[{"type":"text","text":"Reply."}],"time":{"created":1050}},
+              {"id":"${ids[0]}","type":"location-switched","location":{"directory":"/repo/.worktrees/feat"},
+               "previous":{"location":{"directory":"/repo"}},"time":{"created":2000}},
+              {"id":"${ids[1]}","type":"agent-switched","agent":"plan","previous":"build","time":{"created":2001}},
+              {"id":"${ids[2]}","type":"model-switched","model":$SCRIPTED_HIGH,
+               "previous":{"id":"m","providerID":"p"},"time":{"created":2002}},
+              {"id":"${ids[3]}","type":"system","text":"model text","description":"Instructions updated: AGENTS.md",
+               "metadata":{"notice":"instructions","instructionSources":["AGENTS.md"]},"time":{"created":2003}},
+              {"id":"${ids[4]}","type":"synthetic","text":"Resume.","metadata":{"notice":"restart"},"time":{"created":2004}}
+            ]
+            """,
+            inbox = "[]",
+        )
+
+        val reloaded = store.messages(SESSION).filter { it.role == MessageRole.Notice }
+        assertEquals(ids, reloaded.map { it.id })
+        assertEquals(TimelineNotice.AgentChanged("plan", previous = "build"), reloaded[1].notice())
+        assertEquals(TimelineNotice.Moved("/repo/.worktrees/feat", previousDirectory = "/repo"), reloaded[0].notice())
+    }
+
+    @Test
+    fun noticeBetweenAssistantSteps_isAStandaloneRowThatSplitsTheChipMerge() {
+        apply(prompt("u1", "Explore", at = 1_000))
+        apply(step("a1", at = 1_100))
+        apply(text("a1", "Looking around.", at = 1_110))
+        apply(tool("a1", "call_glob", "glob", at = 1_120))
+        apply(stepEnded("a1", "tool-calls", at = 1_130))
+        apply(moved("/repo/b", at = 1_150))
+        apply(step("a2", at = 1_200))
+        apply(text("a2", "Found it.", at = 1_210))
+        apply(stepEnded("a2", "stop", at = 1_220))
+        apply(idle(at = 1_230))
+
+        val notice = "msg_session.moved1150"
+        val rows = chipBodies(displayOrder(store.messages(SESSION)))
+        assertEquals(listOf("u1", "a1", notice, "a2"), rows.map { it.message.id })
+        val block = rows[2].blocks.single() as SessionChatTimelineBlock.Notice
+        assertEquals("p:$notice", block.blockID)
+        assertEquals(TimelineNotice.Moved("/repo/b"), block.notice)
+        assertEquals(listOf("Looking around."), rows[1].blocks.stepParagraphs().map { it.text })
+        assertEquals(listOf("Found it."), rows[3].blocks.stepParagraphs().map { it.text })
+    }
+
+    @Test
+    fun restSwitchNoticesAfterTheLastReply_stampTheNextLivePrompt() {
+        reload(
+            """
+            [
+              {"id":"u1","type":"user","text":"First","time":{"created":1000}},
+              {"id":"a1","type":"assistant","agent":"build","model":$SCRIPTED,
+               "content":[{"type":"text","text":"Answer."}],"time":{"created":1100}},
+              {"id":"s1","type":"agent-switched","agent":"plan","previous":"build","time":{"created":2000}},
+              {"id":"s2","type":"model-switched","model":$SCRIPTED_HIGH,"previous":$SCRIPTED,"time":{"created":2001}}
+            ]
+            """,
+            inbox = "[]",
+        )
+        // The switches happened before this app connected: only REST knows them.
+        apply(prompt("u2", "Next prompt", at = 2_100))
+
+        assertEquals("plan|scripted|high", store.messages(SESSION).single { it.id == "u2" }.metaLine())
     }
 
     @Test
@@ -646,6 +757,19 @@ class V2LiveTurnTimelineTest {
         at: Long,
     ): List<String> = listOf(envelope("session.model.selected", at, """"model":$model"""))
 
+    private fun moved(
+        directory: String,
+        at: Long,
+    ): List<String> = listOf(envelope("session.moved", at, """"location":{"directory":"$directory"},"projectID":"prj_1""""))
+
+    private fun instructionsUpdated(at: Long): List<String> =
+        listOf(envelope("session.instructions.updated", at, """"delta":{"AGENTS.md":{}},"text":"<instructions>""""))
+
+    private fun restart(at: Long): List<String> =
+        listOf(envelope("session.synthetic", at, """"text":"Resume.","metadata":{"notice":"restart"}"""))
+
+    private fun Message.notice(): TimelineNotice = parts.filterIsInstance<MessagePart.Notice>().single().notice
+
     private fun Message.metaLine(): String? = if (mode == null && model == null) null else "$mode|$model|$variant"
 
     private fun textStarted(
@@ -782,6 +906,7 @@ class V2LiveTurnTimelineTest {
             is MessagePart.Tool -> id
             is MessagePart.File -> id
             is MessagePart.Compaction -> id
+            is MessagePart.Notice -> id
             is MessagePart.Reasoning -> id
         }
 

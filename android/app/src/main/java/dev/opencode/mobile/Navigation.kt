@@ -110,6 +110,7 @@ import dev.opencode.mobile.ui.componentgallery.components.StatusStackGalleryScre
 import dev.opencode.mobile.ui.componentgallery.components.SyncingPillGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.TagGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.TextInputGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.TimelineNoticeGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ToolCallCardGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ToolChipGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.TopBarGalleryScreen
@@ -710,6 +711,7 @@ fun MainNavigation() {
                                                         ComponentGalleryEntryId.ToolCallCard -> ToolCallCardGalleryScreen()
                                                         ComponentGalleryEntryId.ToolChip -> ToolChipGalleryScreen()
                                                         ComponentGalleryEntryId.MessageNote -> MessageNoteGalleryScreen()
+                                                        ComponentGalleryEntryId.TimelineNotice -> TimelineNoticeGalleryScreen()
                                                         ComponentGalleryEntryId.ChildSessionRow -> ChildSessionRowGalleryScreen()
                                                         ComponentGalleryEntryId.WorkingIndicator ->
                                                             WorkingIndicatorGalleryScreen()

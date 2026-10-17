@@ -334,7 +334,8 @@ struct SessionChatView: View {
                     expandedStepParagraphs: viewModel.uiState.expandedStepParagraphs,
                     onExpandStepParagraph: { paragraphID, chipCount in
                         viewModel.expandStepParagraph(paragraphID, chipCount: chipCount)
-                    }
+                    },
+                    noticeModelNames: TimelineNoticeModelNames(options: viewModel.uiState.composer.modelOptions)
                 )
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)

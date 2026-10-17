@@ -257,7 +257,11 @@ data class SessionChatUiState(
             messages.forEach { message ->
                 if (message.role == MessageRole.User) {
                     candidate = message.takeUnless { it.isPending || it.isStreaming }
-                } else if (candidate != null && !message.isPending && !message.isStreaming) {
+                } else if (message.role != MessageRole.Notice &&
+                    candidate != null &&
+                    !message.isPending &&
+                    !message.isStreaming
+                ) {
                     latest = candidate?.id
                 }
             }
@@ -763,5 +767,6 @@ fun MessageRole.displayLabel(): String =
         MessageRole.Assistant -> "Assistant"
         MessageRole.Command -> "Command"
         MessageRole.Tool -> "Tool"
+        MessageRole.Notice -> "Notice"
         MessageRole.Unknown -> "Message"
     }

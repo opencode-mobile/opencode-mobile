@@ -679,7 +679,85 @@ private extension MessagePart {
                 timeStartEpochMs: part.timeStartEpochMs,
                 timeEndEpochMs: part.timeEndEpochMs
             )
+        case let .notice(notice):
+            return CachedMessagePartPayload(kind: "notice", id: notice.id, metadata: notice.kind.cacheFields)
         }
+    }
+}
+
+private extension TimelineNoticeKind {
+    var cacheFields: [String: AnyCodable] {
+        func optional(_ value: String?) -> AnyCodable { value.map(AnyCodable.string) ?? .null }
+        switch self {
+        case let .moved(directory):
+            return ["notice": .string("moved"), "directory": .string(directory)]
+        case let .agentChanged(agent, previous):
+            return ["notice": .string("agent"), "agent": .string(agent), "previous": optional(previous)]
+        case let .modelChanged(model, previous):
+            return [
+                "notice": .string("model"),
+                "model": model.cacheFields,
+                "previous": previous?.cacheFields ?? .null,
+            ]
+        case let .instructionsUpdated(sources):
+            return ["notice": .string("instructions"), "sources": .array(sources.map(AnyCodable.string))]
+        case let .systemNote(description):
+            return ["notice": .string("system"), "description": .string(description)]
+        case .restart:
+            return ["notice": .string("restart")]
+        }
+    }
+
+    init?(cacheFields fields: [String: AnyCodable]) {
+        func string(_ key: String) -> String? {
+            if case .string(let value)? = fields[key] { return value }
+            return nil
+        }
+        switch string("notice") {
+        case "moved":
+            guard let directory = string("directory") else { return nil }
+            self = .moved(directory: directory)
+        case "agent":
+            guard let agent = string("agent") else { return nil }
+            self = .agentChanged(agent: agent, previous: string("previous"))
+        case "model":
+            guard let model = fields["model"].flatMap(TimelineNoticeModel.init(cacheField:)) else { return nil }
+            self = .modelChanged(model: model, previous: fields["previous"].flatMap(TimelineNoticeModel.init(cacheField:)))
+        case "instructions":
+            guard case .array(let values)? = fields["sources"] else { return nil }
+            self = .instructionsUpdated(sources: values.compactMap { value in
+                if case .string(let source) = value { return source }
+                return nil
+            })
+        case "system":
+            guard let description = string("description") else { return nil }
+            self = .systemNote(description)
+        case "restart":
+            self = .restart
+        default:
+            return nil
+        }
+    }
+}
+
+private extension TimelineNoticeModel {
+    var cacheFields: AnyCodable {
+        .dictionary([
+            "providerID": providerID.map(AnyCodable.string) ?? .null,
+            "modelID": .string(modelID),
+            "variant": variant.map(AnyCodable.string) ?? .null,
+        ])
+    }
+
+    init?(cacheField: AnyCodable) {
+        guard case .dictionary(let fields) = cacheField, case .string(let modelID)? = fields["modelID"] else {
+            return nil
+        }
+        func string(_ key: String) -> String? {
+            if case .string(let value)? = fields[key] { return value }
+            return nil
+        }
+        self.init(providerID: string("providerID"), modelID: modelID, variant: string("variant"))
     }
 }
 
@@ -743,6 +821,9 @@ private extension CachedMessagePartPayload {
                     summary: text.flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 }
                 )
             )
+        case "notice":
+            guard let id, let kind = metadata.flatMap(TimelineNoticeKind.init(cacheFields:)) else { return nil }
+            return .notice(TimelineNotice(id: id, kind: kind))
         default:
             return nil
         }

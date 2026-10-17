@@ -56,7 +56,9 @@ object ThoughtPartChrome {
                             visible = true
                         }
                     is MessagePart.File -> visible = true
-                    is MessagePart.Compaction -> Unit
+                    is MessagePart.Compaction,
+                    is MessagePart.Notice,
+                    -> Unit
                 }
             }
             if (!visible && !isCompaction(message)) {

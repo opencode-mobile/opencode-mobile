@@ -179,6 +179,35 @@ import Testing
         #expect(encoded.contains("\"schemaVersion\":1"))
     }
 
+    @Test func codecRoundTripsTimelineNotices() throws {
+        let kinds: [TimelineNoticeKind] = [
+            .moved(directory: "/repo/wt"),
+            .agentChanged(agent: "plan", previous: "build"),
+            .agentChanged(agent: "plan", previous: nil),
+            .modelChanged(
+                model: TimelineNoticeModel(providerID: "openai", modelID: "gpt-5", variant: "high"),
+                previous: TimelineNoticeModel(providerID: "openai", modelID: "gpt-5")
+            ),
+            .modelChanged(model: TimelineNoticeModel(providerID: nil, modelID: "gpt-5"), previous: nil),
+            .instructionsUpdated(sources: ["AGENTS.md", "CLAUDE.md"]),
+            .systemNote("Skills reloaded"),
+            .restart,
+        ]
+        let messages = kinds.enumerated().map { index, kind in
+            Message(
+                id: "n\(index)",
+                role: .notice,
+                text: "",
+                parts: [.notice(TimelineNotice(id: "n\(index)", kind: kind))],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: Int64(index)
+            )
+        }
+        let decoded = SessionCacheCodec.decodeMessages(try SessionCacheCodec.encodeMessages(messages))
+        #expect(decoded == messages)
+    }
+
     @Test func activityRoundTripPerDirectory() async {
         let cache = DefaultSessionCache(
             store: InMemorySessionCacheStore(),

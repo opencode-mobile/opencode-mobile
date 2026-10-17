@@ -658,6 +658,8 @@ fun SessionChatScreen(
                 )
             }
 
+            val modelOptions = uiState.composer.modelOptions
+            val noticeModelNames = remember(modelOptions) { SessionChatNoticeModelNames.from(modelOptions) }
             OpenCodeReadableColumn(modifier = Modifier.weight(1f)) {
                 SessionChatTimelineView(
                     props =
@@ -680,6 +682,7 @@ fun SessionChatScreen(
                             sessionTodoActivePreview = uiState.sessionTodoActivePreview?.content,
                             hideFloatStack = showSessionTodosSheet,
                             hideLiveRetryFailures = uiState.retryCard != null,
+                            noticeModelNames = noticeModelNames,
                             // Composer + 16 end-pin gap; Scroll to end uses this as-is
                             // (no extra scrollToEndPillBottomPadding).
                             bottomOverlayInset = timelineBottomInset,

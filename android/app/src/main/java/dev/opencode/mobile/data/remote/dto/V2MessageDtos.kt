@@ -30,6 +30,11 @@ data class V2SessionMessageDto(
     @SerialName("callID") val callId: String? = null,
     val name: String? = null,
     val description: String? = null,
+    /** `location-switched`: the new location, `{directory}`. */
+    val location: JsonObject? = null,
+    /** Switch items: a previous agent id, model ref, or `{location}`, by item type. */
+    val previous: JsonElement? = null,
+    val metadata: JsonObject? = null,
 )
 
 @Serializable

@@ -44,12 +44,16 @@ enum MessageListTimelineRowHeightEstimate {
         case outgoing
         case assistant
         case compact
+        /// One caption line (timeline notices).
+        case line
     }
 
     static func fallback(characterCount: Int, style: Style) -> CGFloat {
         switch style {
         case .compact:
             return 64
+        case .line:
+            return 24
         case .outgoing:
             return min(240, max(72, 56 + CGFloat(characterCount) * 0.32))
         case .assistant:

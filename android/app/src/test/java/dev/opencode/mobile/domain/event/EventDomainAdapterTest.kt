@@ -5,13 +5,16 @@ import dev.opencode.mobile.domain.session.SessionStatus
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -1576,5 +1579,121 @@ class EventDomainAdapterTest {
                 """{"type":"message.updated","properties":{"info":{"role":"user","time":{"completed":123}}}}""",
             )
         assertFalse(adapter.assistantMessageCompleted(event!!))
+    }
+
+    // MARK: v2 timeline notices
+
+    private fun JsonObject.obj(key: String): JsonObject = getValue(key).jsonObject
+
+    private fun JsonObject.str(key: String): String? = (this[key] as? JsonPrimitive)?.content
+
+    private fun List<OpencodeEvent>.part(): JsonObject = single { it.type == "message.part.updated" }.rawProperties!!.obj("part")
+
+    private fun noticeEvents(line: String): Pair<JsonObject, JsonObject>? {
+        val events = adapter.parseEvents(line)
+        val updated = events.firstOrNull { it.type == "message.updated" } ?: return null
+        return updated.rawProperties!!.obj("info") to events.part()
+    }
+
+    @Test
+    fun parseEvents_v2MoveEmitsANoticeKeyedByTheEnvelopeId() {
+        val line =
+            """{"id":"evt_0fa1","created":1790000000000,"type":"session.moved",""" +
+                """"data":{"sessionID":"ses-1","location":{"directory":"/repo/.worktrees/feature"},"projectID":"prj_1"}}"""
+        val events = adapter.parseEvents(line)
+        val (info, part) = noticeEvents(line)!!
+
+        // The session refresh stays; the notice rides alongside it.
+        assertEquals("session.updated", events.first().type)
+        assertEquals("msg_0fa1", info.str("id"))
+        assertEquals("notice", info.str("role"))
+        assertEquals("1790000000000", info.obj("time").str("created"))
+        assertEquals("msg_0fa1", part.str("id"))
+        assertEquals("msg_0fa1", part.str("messageID"))
+        assertEquals("notice", part.str("type"))
+        val notice = part.obj("notice")
+        assertEquals("moved", notice.str("kind"))
+        assertEquals("/repo/.worktrees/feature", notice.str("directory"))
+    }
+
+    @Test
+    fun parseEvents_v2AgentAndModelSwitchesKeepContextAndAddNotices() {
+        val agent =
+            adapter.parseEvents(
+                """{"id":"evt_a1","created":10,"type":"session.agent.selected",""" +
+                    """"data":{"sessionID":"ses-1","agent":"plan","previous":"build"}}""",
+            )
+        val model =
+            adapter.parseEvents(
+                """{"id":"evt_m1","created":11,"type":"session.next.model.switched",""" +
+                    """"data":{"sessionID":"ses-1","model":{"id":"gpt-5","providerID":"openai","variant":"high"}}}""",
+            )
+
+        assertEquals(
+            listOf("session.updated", EventDomainAdapter.MESSAGE_CONTEXT_EVENT, "message.updated", "message.part.updated"),
+            agent.map { it.type },
+        )
+        assertEquals(
+            listOf("session.updated", EventDomainAdapter.MESSAGE_CONTEXT_EVENT, "message.updated", "message.part.updated"),
+            model.map { it.type },
+        )
+        val agentNotice = agent.part().obj("notice")
+        assertEquals("agent", agentNotice.str("kind"))
+        assertEquals("plan", agentNotice.str("agent"))
+        assertEquals("build", agentNotice.str("previous"))
+        assertEquals("msg_a1", agent.part().str("messageID"))
+        val modelNotice = model.part().obj("notice")
+        assertEquals("model", modelNotice.str("kind"))
+        assertEquals("gpt-5", modelNotice.obj("model").str("id"))
+        assertEquals("high", modelNotice.obj("model").str("variant"))
+        assertNull(modelNotice["previous"])
+    }
+
+    @Test
+    fun parseEvents_v2InstructionsUpdateIsANoticeOnlyWithModelText() {
+        val (info, part) =
+            noticeEvents(
+                """{"id":"evt_i1","created":20,"type":"session.instructions.updated",""" +
+                    """"data":{"sessionID":"ses-1","delta":{"AGENTS.md":{},"CLAUDE.md":{}},"text":"<system>…</system>"}}""",
+            )!!
+        assertEquals("msg_i1", info.str("id"))
+        val notice = part.obj("notice")
+        assertEquals("instructions", notice.str("kind"))
+        assertEquals(
+            listOf("AGENTS.md", "CLAUDE.md"),
+            notice.getValue("sources").jsonArray.map { it.jsonPrimitive.content },
+        )
+
+        // The baseline observation has no text: the server records no item, so no row.
+        val baseline =
+            adapter.parseEvents(
+                """{"id":"evt_i0","created":19,"type":"session.instructions.updated",""" +
+                    """"data":{"sessionID":"ses-1","delta":{"AGENTS.md":{}}}}""",
+            )
+        assertTrue(baseline.none { it.type == "message.updated" || it.type == "message.part.updated" })
+    }
+
+    @Test
+    fun parseEvents_v2SyntheticIsANoticeOnlyForARestart() {
+        val (info, part) =
+            noticeEvents(
+                """{"id":"evt_r1","created":30,"type":"session.synthetic",""" +
+                    """"data":{"sessionID":"ses-1","text":"Continue.","metadata":{"notice":"restart"}}}""",
+            )!!
+        assertEquals("msg_r1", info.str("id"))
+        assertEquals("restart", part.obj("notice").str("kind"))
+        assertNotNull(
+            noticeEvents(
+                """{"id":"evt_r2","created":31,"type":"session.synthetic",""" +
+                    """"data":{"sessionID":"ses-1","text":"Continue.","description":"Continuing after restart"}}""",
+            ),
+        )
+
+        val other =
+            adapter.parseEvents(
+                """{"id":"evt_s1","created":32,"type":"session.synthetic",""" +
+                    """"data":{"sessionID":"ses-1","text":"Subagent done.","metadata":{"source":"subagent"}}}""",
+            )
+        assertTrue(other.none { it.type == "message.updated" || it.type == "message.part.updated" })
     }
 }

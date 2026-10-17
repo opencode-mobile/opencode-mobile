@@ -76,18 +76,18 @@ extension MessagesAPI {
 
 nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
     private let connectionProvider: @Sendable () -> ServerConnection?
-    private let urlSession: URLSession
+    private let resolveURLSession: @Sendable () -> URLSession
     private let bodyUploader: DurableJSONUploader?
     private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
 
     init(
         connectionProvider: @escaping @Sendable () -> ServerConnection?,
-        urlSession: URLSession = OpenCodeURLSessions.rest,
+        urlSession: URLSession? = nil,
         bodyUploader: DurableJSONUploader? = nil
     ) {
         self.connectionProvider = connectionProvider
-        self.urlSession = urlSession
+        self.resolveURLSession = OpenCodeURLSessions.restResolver(injected: urlSession)
         self.bodyUploader = bodyUploader
     }
 
@@ -370,7 +370,7 @@ nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
         let data: Data
         let response: URLResponse
         do {
-            (data, response) = try await urlSession.data(for: request)
+            (data, response) = try await resolveURLSession().data(for: request)
         } catch {
             OpenCodeAPITrace.failure(request, error: error, startedAt: startedAt)
             throw error

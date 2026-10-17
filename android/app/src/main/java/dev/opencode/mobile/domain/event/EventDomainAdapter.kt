@@ -2,9 +2,12 @@ package dev.opencode.mobile.domain.event
 
 import dev.opencode.mobile.domain.message.AttachmentDataUrl
 import dev.opencode.mobile.domain.message.SessionFailure
+import dev.opencode.mobile.domain.message.TimelineNotice
+import dev.opencode.mobile.domain.message.TimelineNoticeCodec
 import dev.opencode.mobile.domain.message.ToolInterruption
 import dev.opencode.mobile.domain.message.ToolPartIdentity
 import dev.opencode.mobile.domain.message.V2ContentPartId
+import dev.opencode.mobile.domain.message.V2TimelineNotices
 import dev.opencode.mobile.domain.session.SessionActivity
 import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.domain.session.toSessionActivity
@@ -263,12 +266,25 @@ class EventDomainAdapter(
             -> listOf(textPartUpdated(properties))
             "session.next.moved",
             "session.moved",
-            -> listOf(event("session.updated", properties))
+            ->
+                listOf(event("session.updated", properties)) +
+                    noticeEvents(V2TimelineNotices.moved(properties), properties, envelopeId)
             "session.next.agent.switched",
-            "session.next.model.switched",
             "session.agent.selected",
+            ->
+                listOfNotNull(event("session.updated", properties), messageContext(properties)) +
+                    noticeEvents(V2TimelineNotices.agentSelected(properties), properties, envelopeId)
+            "session.next.model.switched",
             "session.model.selected",
-            -> listOfNotNull(event("session.updated", properties), messageContext(properties))
+            ->
+                listOfNotNull(event("session.updated", properties), messageContext(properties)) +
+                    noticeEvents(V2TimelineNotices.modelSelected(properties), properties, envelopeId)
+            "session.instructions.updated" ->
+                noticeEvents(V2TimelineNotices.instructionsUpdated(properties), properties, envelopeId)
+                    .ifEmpty { listOf(event(type, properties)) }
+            "session.synthetic" ->
+                noticeEvents(V2TimelineNotices.synthetic(properties), properties, envelopeId)
+                    .ifEmpty { listOf(event(type, properties)) }
             "session.renamed" -> listOf(renamedToUpdated(properties))
             "session.forked" -> listOf(forkedToCreated(properties))
             "session.usage.updated",
@@ -698,7 +714,7 @@ class EventDomainAdapter(
         phase: CompactionPhase,
     ): List<OpencodeEvent> {
         val sessionId = sessionIdFromProperties(properties)
-        val fromEnvelope = envelopeId?.let { id -> if (id.startsWith("evt_")) "msg_" + id.removePrefix("evt_") else id }
+        val fromEnvelope = messageIdFromEnvelope(envelopeId)
         val remembered = sessionId?.let { runningCompactionIds[it] }
         val messageId =
             when (phase) {
@@ -747,6 +763,45 @@ class EventDomainAdapter(
             event("message.part.updated", buildJsonObject { put("part", part) }),
         )
     }
+
+    /**
+     * A v2 timeline notice as a client-only `notice` message: the server records it
+     * as its own session item whose id is the event envelope id with `evt_` swapped
+     * for `msg_`, so the live row and the REST row share one id.
+     */
+    private fun noticeEvents(
+        notice: TimelineNotice?,
+        properties: JsonObject,
+        envelopeId: String?,
+    ): List<OpencodeEvent> {
+        if (notice == null) return emptyList()
+        val messageId = messageIdFromEnvelope(envelopeId) ?: return emptyList()
+        val sessionId = sessionIdFromProperties(properties)
+        val info =
+            buildJsonObject {
+                put("id", messageId)
+                sessionId?.let { put("sessionID", it) }
+                put("role", NOTICE_ROLE)
+                properties.long("created")?.let { created ->
+                    put("time", buildJsonObject { put("created", created) })
+                }
+            }
+        val part =
+            buildJsonObject {
+                put("id", messageId)
+                sessionId?.let { put("sessionID", it) }
+                put("messageID", messageId)
+                put("type", NOTICE_ROLE)
+                put("notice", TimelineNoticeCodec.encode(notice))
+            }
+        return listOf(
+            event("message.updated", buildJsonObject { put("info", info) }),
+            event("message.part.updated", buildJsonObject { put("part", part) }),
+        )
+    }
+
+    private fun messageIdFromEnvelope(envelopeId: String?): String? =
+        envelopeId?.takeIf { it.isNotBlank() }?.let { id -> if (id.startsWith("evt_")) "msg_" + id.removePrefix("evt_") else id }
 
     /**
      * v2 announces a committed revert only as `session.revert.committed {to}`:
@@ -1170,6 +1225,9 @@ class EventDomainAdapter(
 
         /** Client-only projection of a v2 agent/model switch for the message store. */
         const val MESSAGE_CONTEXT_EVENT = "message.context"
+
+        /** Client-only message role and part type of a live v2 timeline notice. */
+        private const val NOTICE_ROLE = "notice"
 
         private val WRAPPER_KEYS =
             setOf(

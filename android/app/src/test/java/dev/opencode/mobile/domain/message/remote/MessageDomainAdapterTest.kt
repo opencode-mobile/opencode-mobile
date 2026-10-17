@@ -953,7 +953,7 @@ class MessageDomainAdapterTest {
     }
 
     @Test
-    fun projectV2_mapsUserAssistantAndSkipsSwitches() {
+    fun projectV2_mapsUserAssistantAndSwitchNotice() {
         val dtos =
             json.decodeFromString<List<dev.opencode.mobile.data.remote.dto.V2SessionMessageDto>>(
                 """
@@ -987,7 +987,10 @@ class MessageDomainAdapterTest {
                 """.trimIndent(),
             )
 
-        val messages = adapter.projectV2(dtos)
+        val projected = adapter.projectV2(dtos)
+        assertEquals(listOf("msg_switch", "msg_user", "msg_asst"), projected.map { it.id })
+        assertEquals(MessageRole.Notice, projected[0].role)
+        val messages = projected.drop(1)
 
         assertEquals(2, messages.size)
         assertEquals(MessageRole.User, messages[0].role)
@@ -1134,7 +1137,7 @@ class MessageDomainAdapterTest {
                 """.trimIndent(),
             )
 
-        val message = adapter.projectV2(dtos).single()
+        val message = adapter.projectV2(dtos).single { it.role == MessageRole.Assistant }
 
         assertEquals("build", message.mode)
         assertEquals("gpt-5", message.modelId)
@@ -1529,6 +1532,205 @@ class MessageDomainAdapterTest {
         val messages = listOf(Message(id = "msg-1", role = MessageRole.User, text = "Hello"))
         assertEquals(messages, adapter.mergeInbox(messages, emptyList()))
     }
+
+    // MARK: v2 timeline notices
+
+    private fun projectV2(body: String): List<Message> =
+        adapter.projectV2(json.decodeFromString<List<dev.opencode.mobile.data.remote.dto.V2SessionMessageDto>>(body.trimIndent()))
+
+    private fun Message.notice(): TimelineNotice = parts.filterIsInstance<MessagePart.Notice>().single().notice
+
+    @Test
+    fun projectV2_projectsEveryNoticeKindInOrderAsItsOwnRow() {
+        val messages =
+            projectV2(
+                """
+                [
+                  {"id":"msg_moved","type":"location-switched","location":{"directory":"/repo/.worktrees/feat"},
+                   "projectID":"prj_1","previous":{"location":{"directory":"/repo"},"projectID":"prj_1"},
+                   "time":{"created":1}},
+                  {"id":"msg_agent","type":"agent-switched","agent":"plan","previous":"build","time":{"created":2}},
+                  {"id":"msg_model","type":"model-switched","model":{"id":"gpt-5","providerID":"openai"},
+                   "previous":{"id":"claude","providerID":"anthropic"},"time":{"created":3}},
+                  {"id":"msg_instr","type":"system","text":"<model-facing>","description":"Instructions updated: AGENTS.md, CLAUDE.md",
+                   "metadata":{"notice":"instructions","instructionSources":["AGENTS.md","CLAUDE.md"]},"time":{"created":4}},
+                  {"id":"msg_restart","type":"synthetic","text":"Continue the turn.","metadata":{"notice":"restart"},
+                   "time":{"created":5}},
+                  {"id":"msg_user","type":"user","text":"Go","time":{"created":6}}
+                ]
+                """,
+            )
+
+        assertEquals(
+            listOf("msg_moved", "msg_agent", "msg_model", "msg_instr", "msg_restart", "msg_user"),
+            messages.map { it.id },
+        )
+        val notices = messages.dropLast(1)
+        notices.forEach { message ->
+            assertEquals(MessageRole.Notice, message.role)
+            assertEquals("", message.text)
+            assertNull(message.mode)
+            assertNull(message.model)
+            assertEquals(MessageContextEstimate(), message.contextEstimate)
+            assertEquals(message.id, message.parts.single().partId())
+        }
+        assertEquals(TimelineNotice.Moved("/repo/.worktrees/feat", previousDirectory = "/repo"), notices[0].notice())
+        assertEquals(TimelineNotice.AgentChanged(agent = "plan", previous = "build"), notices[1].notice())
+        assertEquals(
+            TimelineNotice.ModelChanged(
+                model = NoticeModelRef(providerId = "openai", modelId = "gpt-5"),
+                previous = NoticeModelRef(providerId = "anthropic", modelId = "claude"),
+            ),
+            notices[2].notice(),
+        )
+        assertEquals(TimelineNotice.InstructionsUpdated(listOf("AGENTS.md", "CLAUDE.md")), notices[3].notice())
+        assertEquals(TimelineNotice.Restart, notices[4].notice())
+        assertEquals(1L, notices[0].sentAtEpochMs)
+    }
+
+    @Test
+    fun projectV2_noticesKeepTheRunningAgentAndModelForLaterPrompts() {
+        val messages =
+            projectV2(
+                """
+                [
+                  {"id":"msg_agent","type":"agent-switched","agent":"plan","time":{"created":1}},
+                  {"id":"msg_model","type":"model-switched","model":{"id":"gpt-5","providerID":"openai","variant":"high"},
+                   "time":{"created":2}},
+                  {"id":"msg_moved","type":"location-switched","location":{"directory":"/repo/b"},"time":{"created":3}},
+                  {"id":"msg_user","type":"user","text":"Go","time":{"created":4}}
+                ]
+                """,
+            )
+
+        val user = messages.single { it.role == MessageRole.User }
+        assertEquals("plan", user.mode)
+        assertEquals("gpt-5", user.modelId)
+        assertEquals("high", user.variant)
+    }
+
+    @Test
+    fun projectV2_agentNoticeWithoutPrevious() {
+        val notice =
+            projectV2("""[{"id":"msg_a","type":"agent-switched","agent":"build","time":{"created":1}}]""")
+                .single()
+                .notice()
+
+        assertEquals(TimelineNotice.AgentChanged(agent = "build", previous = null), notice)
+    }
+
+    @Test
+    fun projectV2_modelNoticeTellsAVariantOnlyChangeFromAModelChange() {
+        val messages =
+            projectV2(
+                """
+                [
+                  {"id":"msg_v","type":"model-switched","model":{"id":"gpt-5","providerID":"openai","variant":"high"},
+                   "previous":{"id":"gpt-5","providerID":"openai"},"time":{"created":1}},
+                  {"id":"msg_m","type":"model-switched","model":{"id":"gpt-5","providerID":"openai"},
+                   "previous":{"id":"gpt-5","providerID":"azure"},"time":{"created":2}},
+                  {"id":"msg_n","type":"model-switched","model":{"id":"gpt-5","providerID":"openai"},"time":{"created":3}}
+                ]
+                """,
+            )
+
+        val notices = messages.map { it.notice() as TimelineNotice.ModelChanged }
+        assertTrue(notices[0].isVariantOnly)
+        assertEquals("high", notices[0].model.variant)
+        assertFalse(notices[1].isVariantOnly)
+        assertFalse(notices[2].isVariantOnly)
+    }
+
+    @Test
+    fun projectV2_systemNoticeReadsSourcesFromMetadataThenDescription() {
+        val messages =
+            projectV2(
+                """
+                [
+                  {"id":"msg_meta","type":"system","text":"model text","description":"Instructions updated: A.md",
+                   "metadata":{"notice":"instructions","instructionSources":["AGENTS.md","docs/RULES.md"]},"time":{"created":1}},
+                  {"id":"msg_desc","type":"system","text":"model text","description":"Instructions updated: AGENTS.md, CLAUDE.md",
+                   "time":{"created":2}},
+                  {"id":"msg_other","type":"system","text":"model text","description":"Tools changed","time":{"created":3}},
+                  {"id":"msg_bare","type":"system","text":"model text","time":{"created":4}}
+                ]
+                """,
+            )
+
+        assertEquals(
+            listOf(
+                TimelineNotice.InstructionsUpdated(listOf("AGENTS.md", "docs/RULES.md")),
+                TimelineNotice.InstructionsUpdated(listOf("AGENTS.md", "CLAUDE.md")),
+                TimelineNotice.SystemNote("Tools changed"),
+                TimelineNotice.InstructionsUpdated(emptyList()),
+            ),
+            messages.map { it.notice() },
+        )
+        // The model-facing text is never shown.
+        assertTrue(messages.none { it.text.contains("model text") })
+    }
+
+    @Test
+    fun projectV2_restartSyntheticIsANoticeWhileOtherSyntheticStaysHiddenUserText() {
+        val messages =
+            projectV2(
+                """
+                [
+                  {"id":"msg_r","type":"synthetic","text":"Resume.","description":"Continuing after restart","time":{"created":1}},
+                  {"id":"msg_s","type":"synthetic","text":"Subagent finished.","description":"Subagent done",
+                   "metadata":{"source":"subagent"},"time":{"created":2}}
+                ]
+                """,
+            )
+
+        assertEquals(MessageRole.Notice, messages[0].role)
+        assertEquals(TimelineNotice.Restart, messages[0].notice())
+        assertEquals(MessageRole.User, messages[1].role)
+        val text = messages[1].parts.single() as MessagePart.Text
+        assertEquals("Subagent done", text.text)
+        assertTrue(text.isSynthetic)
+    }
+
+    @Test
+    fun toMessage_decodesTheLiveNoticeProjection() {
+        val dto =
+            json.decodeFromString<MessageDto>(
+                """
+                {
+                  "info": {"id": "msg_n", "role": "notice", "time": {"created": 5}},
+                  "parts": [
+                    {"id": "msg_n", "messageID": "msg_n", "type": "notice",
+                     "notice": {"kind": "agent", "agent": "plan", "previous": "build"}}
+                  ]
+                }
+                """.trimIndent(),
+            )
+
+        val message = adapter.toMessage(dto)
+
+        assertEquals(MessageRole.Notice, message.role)
+        assertEquals("", message.text)
+        assertEquals(TimelineNotice.AgentChanged(agent = "plan", previous = "build"), message.notice())
+    }
+
+    @Test
+    fun timelineNoticeCodec_roundTripsEveryKind() {
+        val notices =
+            listOf(
+                TimelineNotice.Moved("/repo/b", previousDirectory = "/repo/a"),
+                TimelineNotice.Moved("/repo/b"),
+                TimelineNotice.AgentChanged("plan", previous = "build"),
+                TimelineNotice.ModelChanged(
+                    model = NoticeModelRef("openai", "gpt-5", variant = "high"),
+                    previous = NoticeModelRef("openai", "gpt-5"),
+                ),
+                TimelineNotice.InstructionsUpdated(listOf("AGENTS.md")),
+                TimelineNotice.SystemNote("Tools changed"),
+                TimelineNotice.Restart,
+            )
+
+        notices.forEach { assertEquals(it, TimelineNoticeCodec.decode(TimelineNoticeCodec.encode(it))) }
+    }
 }
 
 private fun MessagePart.partId(): String? =
@@ -1537,5 +1739,6 @@ private fun MessagePart.partId(): String? =
         is MessagePart.Tool -> id
         is MessagePart.File -> id
         is MessagePart.Compaction -> id
+        is MessagePart.Notice -> id
         is MessagePart.Reasoning -> id
     }
