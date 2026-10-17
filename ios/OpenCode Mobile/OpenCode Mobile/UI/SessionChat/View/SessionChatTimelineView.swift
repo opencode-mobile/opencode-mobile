@@ -235,10 +235,18 @@ private struct SessionChatTimelineReadyView: View {
         return rows
     }
 
+    /// List identity per row: a server echo keeps the cell of the optimistic row it replaced.
+    private var listItems: [SessionChatTimelineListItem] {
+        let aliases = props.timelineFrame.listIDAliases
+        return displayMessages.map { row in
+            SessionChatTimelineListItem(id: aliases[row.id] ?? row.id, row: row)
+        }
+    }
+
     var body: some View {
         ZStack(alignment: .bottom) {
             MessageListTimelineHost(
-                items: displayMessages,
+                items: listItems,
                 // Declared timeline sets stay; Working label folds into
                 // revision, and only label *changes* reconfigure that stable
                 // row without clearing the packet (OPE-136).
@@ -258,7 +266,8 @@ private struct SessionChatTimelineReadyView: View {
                     rows: props.messages,
                     names: props.noticeModelNames,
                     previous: previousNoticeModelNames
-                ),
+                )
+                .aliasingRowIDs(props.timelineFrame.listIDAliases),
                 scrollController: scrollController,
                 onRefresh: props.onRefresh,
                 onUserScrollDismissKeyboard: props.onUserScrollDismissKeyboard,
@@ -267,9 +276,9 @@ private struct SessionChatTimelineReadyView: View {
                 bottomContentPadding: 0,
                 bottomOverlayInset: props.bottomOverlayInset,
                 topOverlayInset: topOverlayInset
-            ) { message in
+            ) { item in
                 SessionChatTimelineHostRow(
-                    message: message,
+                    message: item.row,
                     workingIndicatorFading: props.workingIndicatorFading,
                     onMessageActionsTap: props.onMessageActionsTap,
                     onToolDetailTap: props.onToolDetailTap,
@@ -1142,4 +1151,10 @@ private struct FallbackMessageBubble: View {
             .padding(.vertical, 8)
             .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: 12))
     }
+}
+
+/// Host item keyed by list identity rather than the row's message id.
+struct SessionChatTimelineListItem: Identifiable {
+    let id: String
+    let row: SessionChatRow
 }

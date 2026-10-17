@@ -184,6 +184,17 @@ struct EventDomainAdapterTests {
         #expect(file?["filename"]?.stringValue == "Photo 1.jpeg")
     }
 
+    @Test func parseEvents_projectsPromptedInlineFileDataAsDataURL() {
+        let adapter = EventDomainAdapter()
+        let events = adapter.parseEvents(
+            dataLine: #"{"type":"session.inbox.enqueued","data":{"inboxID":"msg-2","sessionID":"ses-1","item":{"type":"user","payload":{"text":"What","files":[{"data":"AA==","mime":"image/jpeg","source":{"type":"inline"},"name":"Photo 1.png"}]},"delivery":"steer"}}}"#
+        )
+        let file = events[2].rawProperties?["part"]?.dictionaryValue
+        #expect(file?["url"]?.stringValue == "data:image/jpeg;base64,AA==")
+        #expect(file?["mime"]?.stringValue == "image/jpeg")
+        #expect(file?["filename"]?.stringValue == "Photo 1.png")
+    }
+
     @Test func parseEvents_projectsPromptedFilesWithoutURI() {
         let adapter = EventDomainAdapter()
         let events = adapter.parseEvents(

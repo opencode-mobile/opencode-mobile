@@ -398,13 +398,16 @@ nonisolated struct EventDomainAdapter: Sendable {
         if let sessionID {
             part["sessionID"] = sessionID
         }
-        if let uri = string(in: file, key: "uri") {
-            part["url"] = uri
-        }
-        if let mime = string(in: file, key: "mime")
+        let mime = string(in: file, key: "mime")
             ?? string(in: file, key: "uri").flatMap(AttachmentDataURL.mime(fromDataURL:))
             ?? string(in: file, key: "name").flatMap(AttachmentDataURL.mime(fromFilename:))
-        {
+        if let uri = string(in: file, key: "uri") {
+            part["url"] = uri
+        } else if let data = string(in: file, key: "data"), let mime {
+            // Inline attachment (a sent photo): same data URL the REST mapping builds.
+            part["url"] = "data:\(mime.lowercased());base64,\(data)"
+        }
+        if let mime {
             part["mime"] = mime
         }
         if let name = string(in: file, key: "name") {

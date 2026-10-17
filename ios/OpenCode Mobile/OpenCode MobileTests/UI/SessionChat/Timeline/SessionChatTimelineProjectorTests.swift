@@ -1169,6 +1169,130 @@ struct SessionChatTimelineProjectorTests {
         #expect(counts[SessionChatTimelineProjector.optimisticSignature(earlierRow)] == 1)
     }
 
+    @Test func project_optimisticEcho_keepsOptimisticListIdentity() {
+        let pending = pendingUserRow(id: "optimistic-1", text: "What do you see here")
+        let optimistic = OptimisticInputs(
+            pendingRows: [pending],
+            baselineSignatureCounts: [:],
+            mergePending: true
+        )
+        let withOptimistic = project(displayFrame(messages: []), optimistic: optimistic)
+        #expect(withOptimistic.listIDAliases.isEmpty)
+
+        let echo = userMessage(id: "msg-1", text: "What do you see here")
+        let reconciled = project(
+            displayFrame(revision: 2, messages: [DisplayMessage(message: echo)]),
+            optimistic: optimistic,
+            previous: withOptimistic
+        )
+        #expect(reconciled.rows.map(\.id) == ["msg-1"])
+        #expect(reconciled.listIDAliases == ["msg-1": "optimistic-1"])
+
+        let reply = makeMessage(id: "msg-2", parts: [text("a1", "A cat")], text: "A cat", sentAtEpochMs: 2)
+        let later = project(
+            displayFrame(revision: 3, messages: [DisplayMessage(message: echo), DisplayMessage(message: reply)]),
+            previous: reconciled
+        )
+        #expect(later.listIDAliases == ["msg-1": "optimistic-1"])
+
+        let cleared = project(displayFrame(revision: 4, messages: [DisplayMessage(message: reply)]), previous: later)
+        #expect(cleared.listIDAliases.isEmpty)
+    }
+
+    @Test func project_imageEchoReencodedByServer_stillReplacesOptimisticRow() {
+        let local = FilePart(
+            id: "local-photo",
+            filename: "Photo 1.png",
+            mime: "image/png",
+            kind: .image,
+            dataURL: "",
+            previewData: Data([1])
+        )
+        let pending = TimelineRow(
+            id: "optimistic-photo",
+            role: .user,
+            text: "What do you see here",
+            metadataLabel: "",
+            isPending: true,
+            blocks: [
+                .text(blockID: PresentationBlockId.direct("optimistic-text"), text: "What do you see here", renderedMarkdown: nil),
+                .attachment(blockID: PresentationBlockId.direct("local-photo"), file: local),
+            ],
+            contentRevision: ContentRevision.of("What do you see here"),
+            layoutRevision: 1
+        )
+        let optimistic = OptimisticInputs(pendingRows: [pending], baselineSignatureCounts: [:], mergePending: true)
+        let withOptimistic = project(displayFrame(messages: []), optimistic: optimistic)
+
+        let echo = userMessage(
+            id: "msg-photo",
+            text: "What do you see here",
+            parts: [
+                text("u-photo", "What do you see here"),
+                .file(
+                    FilePart(
+                        id: "msg-photo:file:0",
+                        filename: "Photo 1.png",
+                        mime: "image/jpeg",
+                        kind: .image,
+                        dataURL: "data:image/jpeg;base64,/9j/"
+                    )
+                ),
+            ]
+        )
+        let reconciled = project(
+            displayFrame(revision: 2, messages: [DisplayMessage(message: echo)]),
+            optimistic: optimistic,
+            previous: withOptimistic
+        )
+        #expect(reconciled.rows.map(\.id) == ["msg-photo"])
+        #expect(reconciled.listIDAliases == ["msg-photo": "optimistic-photo"])
+    }
+
+    @Test func project_steerEchoBeforeDelivery_keepsOptimisticRowShown() {
+        let pending = pendingUserRow(id: "optimistic-1", text: "What do you see here")
+        let optimistic = OptimisticInputs(
+            pendingRows: [pending],
+            baselineSignatureCounts: [:],
+            mergePending: true
+        )
+        let withOptimistic = project(displayFrame(messages: []), optimistic: optimistic)
+
+        // v2 enqueues an idle send as a steer before delivery; that copy is hidden.
+        let delivered = userMessage(id: "msg-1", text: "What do you see here")
+        let waiting = delivered.withPickupState(isWaitingForPickup: true, followUpDelivery: .steer)
+        let inInbox = project(
+            displayFrame(revision: 2, messages: [DisplayMessage(message: waiting)]),
+            optimistic: optimistic,
+            previous: withOptimistic
+        )
+        #expect(inInbox.rows.map(\.id) == ["optimistic-1"])
+        #expect(inInbox.removedRowIDs.isEmpty)
+        #expect(
+            SessionChatTimelineProjector.unmatchedPending(
+                [pending],
+                serverRows: SessionChatTimelineProjector.serverRows(
+                    from: displayFrame(revision: 2, messages: [DisplayMessage(message: waiting)])
+                ),
+                baselineSignatureCounts: [:]
+            ).map(\.id) == ["optimistic-1"]
+        )
+
+        let shown = project(
+            displayFrame(revision: 3, messages: [DisplayMessage(message: delivered)]),
+            optimistic: optimistic,
+            previous: inInbox
+        )
+        #expect(shown.rows.map(\.id) == ["msg-1"])
+        #expect(shown.listIDAliases == ["msg-1": "optimistic-1"])
+    }
+
+    @Test func project_serverRowWithoutOptimisticPredecessor_keepsOwnListIdentity() {
+        let echo = userMessage(id: "msg-1", text: "Hello")
+        let first = project(displayFrame(messages: [DisplayMessage(message: echo)]))
+        #expect(first.listIDAliases.isEmpty)
+    }
+
     // MARK: - Helpers
 
     private func project(

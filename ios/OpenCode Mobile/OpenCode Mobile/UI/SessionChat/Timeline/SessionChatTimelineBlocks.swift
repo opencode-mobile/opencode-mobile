@@ -512,7 +512,7 @@ nonisolated enum SessionChatTimelineBlocks {
                 blocks.append(
                     .attachment(
                         blockID: PresentationBlockId.direct(file.id),
-                        file: file
+                        file: AttachmentPreviewCache.shared.resolved(file)
                     )
                 )
                 index += 1
@@ -962,7 +962,12 @@ nonisolated enum SessionChatTimelineBlocks {
                 }
                 pendingText.append((id: partId, text: trimmed))
             case .file(let file):
-                blocks.append(.attachment(blockID: PresentationBlockId.direct(file.id), file: file))
+                blocks.append(
+                    .attachment(
+                        blockID: PresentationBlockId.direct(file.id),
+                        file: AttachmentPreviewCache.shared.resolved(file)
+                    )
+                )
             case .compaction(let compaction):
                 guard flushParagraph(), let card = compactionCard(compaction) else { return .missingPartIds }
                 blocks.append(card)
