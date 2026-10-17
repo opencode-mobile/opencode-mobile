@@ -91,7 +91,7 @@ struct AddProjectSuggestions: View {
             subtitle: "/Users/placeholder",
             caption: "1d ago",
             enabled: false,
-            startDecorator: .icon(.callSplit),
+            startDecorator: .icon(.folder),
             action: {}
         )
         .hidden()
@@ -110,7 +110,7 @@ struct AddProjectSuggestions: View {
                     title: suggestion.name,
                     subtitle: suggestion.path,
                     caption: suggestion.activityLabel,
-                    startDecorator: .icon(.callSplit),
+                    startDecorator: .icon(.folder),
                     action: { onSelectSuggestion(suggestion.path) }
                 )
             }

@@ -353,9 +353,9 @@ struct ProjectListHomeViewModelTests {
         )
         let projectRepository = FakeProjectRepository(projects: [
             Project(id: "global", worktree: "/", displayName: "/"),
-            Project(id: "old", worktree: "/Users/me/web", displayName: "web", activityAtEpochMs: 1),
-            Project(id: "app", worktree: "/Users/me/app", displayName: "app", activityAtEpochMs: 2),
-            Project(id: "one", worktree: "/one", displayName: "one", activityAtEpochMs: 3),
+            Project(id: "old", worktree: "/Users/me/web", displayName: "web", activityAtEpochMs: 1, isRepository: true),
+            Project(id: "app", worktree: "/Users/me/app", displayName: "app", activityAtEpochMs: 2, isRepository: true),
+            Project(id: "one", worktree: "/one", displayName: "one", activityAtEpochMs: 3, isRepository: true),
         ])
         let viewModel = makeViewModel(
             projectRepository: projectRepository,
@@ -415,7 +415,7 @@ struct ProjectListHomeViewModelTests {
     @Test func closeAddProjectBrowser_afterEnteringAFolder_restoresHomeSuggestions() async {
         let viewModel = makeViewModel(
             projectRepository: FakeProjectRepository(projects: [
-                Project(id: "web", worktree: "/Users/me/web", displayName: "web", activityAtEpochMs: 5),
+                Project(id: "web", worktree: "/Users/me/web", displayName: "web", activityAtEpochMs: 5, isRepository: true),
             ]),
             filesystemRepository: FakeFilesystemRepository(
                 paths: ServerPaths(home: "/Users/me", directory: "/Users/me", worktree: "/"),
@@ -453,7 +453,7 @@ struct ProjectListHomeViewModelTests {
         )
         let viewModel = makeViewModel(
             projectRepository: FakeProjectRepository(projects: [
-                Project(id: "app", worktree: "/home/app", displayName: "app", activityAtEpochMs: 1),
+                Project(id: "app", worktree: "/home/app", displayName: "app", activityAtEpochMs: 1, isRepository: true),
             ]),
             filesystemRepository: filesystem,
             connectionProfileStore: FakeConnectionProfileStore(initial: ["/one"])
@@ -646,7 +646,7 @@ struct ProjectListHomeViewModelTests {
         )
         let viewModel = makeViewModel(
             projectRepository: FakeProjectRepository(projects: [
-                Project(id: "work", worktree: #"D:\work\app"#, displayName: "app", activityAtEpochMs: 1),
+                Project(id: "work", worktree: #"D:\work\app"#, displayName: "app", activityAtEpochMs: 1, isRepository: true),
                 Project(id: "here", worktree: #"C:\Users\me\here"#, displayName: "here"),
             ]),
             filesystemRepository: filesystem,
@@ -714,7 +714,7 @@ struct ProjectListHomeViewModelTests {
         )
         let viewModel = makeViewModel(
             projectRepository: FakeProjectRepository(projects: [
-                Project(id: "app", worktree: #"C:\Users\me\app"#, displayName: "app", activityAtEpochMs: 1),
+                Project(id: "app", worktree: #"C:\Users\me\app"#, displayName: "app", activityAtEpochMs: 1, isRepository: true),
             ]),
             filesystemRepository: filesystem,
             connectionProfileStore: FakeConnectionProfileStore(initial: ["/one"])
@@ -742,7 +742,7 @@ struct ProjectListHomeViewModelTests {
         )
         let viewModel = makeViewModel(
             projectRepository: FakeProjectRepository(projects: [
-                Project(id: "app", worktree: "/home/app", displayName: "app", activityAtEpochMs: 1),
+                Project(id: "app", worktree: "/home/app", displayName: "app", activityAtEpochMs: 1, isRepository: true),
             ]),
             filesystemRepository: filesystem,
             connectionProfileStore: FakeConnectionProfileStore(initial: ["/home/app"])
@@ -877,7 +877,7 @@ struct ProjectListHomeViewModelTests {
         )
         let viewModel = makeViewModel(
             projectRepository: FakeProjectRepository(projects: [
-                Project(id: "app", worktree: "/srv/app", displayName: "app", activityAtEpochMs: 1),
+                Project(id: "app", worktree: "/srv/app", displayName: "app", activityAtEpochMs: 1, isRepository: true),
             ]),
             filesystemRepository: filesystem,
             connectionProfileStore: store

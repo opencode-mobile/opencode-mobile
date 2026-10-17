@@ -6,6 +6,8 @@ data class Project(
     val displayName: String,
     /** Last activity on the server (v2 `time.active`, else `time.updated`), epoch ms. */
     val activityAtEpochMs: Long? = null,
+    /** True when the server tracks the folder with a version control system (`vcs`, e.g. git). */
+    val isRepository: Boolean = false,
 )
 
 sealed class ServerProbeError : Exception() {

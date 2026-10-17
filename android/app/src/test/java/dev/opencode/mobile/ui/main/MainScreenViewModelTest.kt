@@ -300,11 +300,11 @@ class MainScreenViewModelTest {
                     bootWorktree = "/one",
                     projects =
                         listOf(
-                            Project(id = "global", worktree = "/", displayName = "/", activityAtEpochMs = 9),
-                            Project(id = "old", worktree = "/Users/me/app", displayName = "app", activityAtEpochMs = 1),
-                            Project(id = "web", worktree = "/Users/me/web", displayName = "web", activityAtEpochMs = 5),
-                            Project(id = "app", worktree = "/Users/me/app", displayName = "app", activityAtEpochMs = 4),
-                            Project(id = "one", worktree = "/one", displayName = "one", activityAtEpochMs = 8),
+                            Project(id = "global", worktree = "/", displayName = "/", activityAtEpochMs = 9, isRepository = true),
+                            Project(id = "old", worktree = "/Users/me/app", displayName = "app", activityAtEpochMs = 1, isRepository = true),
+                            Project(id = "web", worktree = "/Users/me/web", displayName = "web", activityAtEpochMs = 5, isRepository = true),
+                            Project(id = "app", worktree = "/Users/me/app", displayName = "app", activityAtEpochMs = 4, isRepository = true),
+                            Project(id = "one", worktree = "/one", displayName = "one", activityAtEpochMs = 8, isRepository = true),
                         ),
                 )
             val viewModel =
@@ -391,6 +391,7 @@ class MainScreenViewModelTest {
                                         worktree = "/Users/me/web",
                                         displayName = "web",
                                         activityAtEpochMs = 5,
+                                        isRepository = true,
                                     ),
                                 ),
                         ),
@@ -420,7 +421,7 @@ class MainScreenViewModelTest {
                     bootWorktree = "/one",
                     projects =
                         (1L..18L).map {
-                            Project(id = "p$it", worktree = "/srv/p$it", displayName = "p$it", activityAtEpochMs = it)
+                            Project(id = "p$it", worktree = "/srv/p$it", displayName = "p$it", activityAtEpochMs = it, isRepository = true)
                         },
                 )
             val viewModel = openSheet(projectRepository = projectRepository)
@@ -877,7 +878,7 @@ class MainScreenViewModelTest {
             val projectRepository =
                 FakeProjectRepository(
                     bootWorktree = "/one",
-                    projects = listOf(Project(id = "web", worktree = "/srv/web", displayName = "web", activityAtEpochMs = 1)),
+                    projects = listOf(Project(id = "web", worktree = "/srv/web", displayName = "web", activityAtEpochMs = 1, isRepository = true)),
                 )
             val viewModel =
                 openSheet(

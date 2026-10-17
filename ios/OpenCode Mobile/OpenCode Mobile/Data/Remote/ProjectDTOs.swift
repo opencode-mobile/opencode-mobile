@@ -40,6 +40,7 @@ nonisolated struct V2ProjectDTO: Decodable, Sendable {
     let id: String
     let canonical: String
     let name: String?
+    let vcs: String?
     let time: ProjectTimeDTO?
 }
 
