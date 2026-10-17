@@ -2,15 +2,16 @@ import Testing
 @testable import OpenCode_Mobile
 
 struct SseAttemptPolicyTests {
-    @Test func http401And403AreTerminalAuthFailed() {
+    @Test func http401And403AreAuthFailedWithSlowRetry() {
         for status in [401, 403] {
             let decision = SseAttemptPolicy.decide(
                 outcome: .http(status),
                 protocolConfirmed: false,
-                attempt: 1,
-                delayMs: { _ in 9_999 }
+                attempt: 2,
+                delayMs: { _ in 9_999 },
+                authDelayMs: { $0 * 10_000 }
             )
-            #expect(decision == .terminal(.authFailed))
+            #expect(decision == .authFailed(retryAfterMs: 20_000))
         }
     }
 

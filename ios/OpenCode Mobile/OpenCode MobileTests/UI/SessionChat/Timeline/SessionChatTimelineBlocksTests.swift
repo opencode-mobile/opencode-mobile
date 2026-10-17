@@ -1272,6 +1272,43 @@ struct SessionChatTimelineBlocksTests {
         #expect(tool.changesInitialFilePath == nil)
     }
 
+    @Test func build_v2PatchToolRendersAsPatchWithPerFileCounts() {
+        func file(_ path: String, _ additions: Int, _ deletions: Int) -> AnyCodable {
+            .dictionary([
+                "file": .string(path),
+                "additions": .int(additions),
+                "deletions": .int(deletions),
+            ])
+        }
+        let blocks = okBlocks(
+            parts: [
+                .tool(
+                    ToolPart(
+                        id: "patch-1",
+                        toolName: "patch",
+                        status: .completed,
+                        metadata: [
+                            "files": .array([
+                                file("src/currency.ts", 1, 0),
+                                file("src/format.ts", 2, 1),
+                                file("src/legacy-format.js", 0, 3),
+                            ]),
+                        ]
+                    )
+                ),
+            ]
+        )
+        guard case .toolCard(_, let tool) = blocks.first else {
+            Issue.record("Expected tool card")
+            return
+        }
+        #expect(tool.title == "Patch")
+        #expect(tool.subtitle == "3 files")
+        #expect(tool.additions == 3)
+        #expect(tool.deletions == 4)
+        #expect(tool.opensChangesReview)
+    }
+
     @Test func build_applyPatchSingleFileDeepLinksPath() {
         let blocks = okBlocks(
             parts: [

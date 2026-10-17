@@ -76,7 +76,7 @@ struct DefaultForegroundEventStreamTests {
         #expect(becameConnected)
     }
 
-    @Test func http401StopsRetriesAndSurfacesAuthFailed() async {
+    @Test func http401SurfacesAuthFailedAndBacksOffInsteadOfHotLooping() async {
         let harness = makeStream(responses: [""], statusCode: 401)
         var states: [EventStreamConnectionState] = []
         let stateTask = Task { @MainActor in
@@ -86,11 +86,38 @@ struct DefaultForegroundEventStreamTests {
         }
         harness.stream.start()
         let failed = await waitUntil(timeoutMs: 5_000) { states.contains(.authFailed) }
-        let requestCount = MockForegroundSSEURLProtocol.requestCount(streamID: harness.streamID)
+        let hotLooped = await waitUntil(timeoutMs: 2_000) {
+            MockForegroundSSEURLProtocol.requestCount(streamID: harness.streamID) >= 2
+        }
         await harness.stream.stop()
         stateTask.cancel()
         #expect(failed)
-        #expect(requestCount == 1)
+        #expect(!hotLooped)
+    }
+
+    @Test func http401RecoversToConnectedOnWakeOnceAuthIsAccepted() async {
+        let harness = makeStream(responses: [""], statusCode: 401)
+        var states: [EventStreamConnectionState] = []
+        let stateTask = Task { @MainActor in
+            for await state in harness.stream.connectionStateUpdates() {
+                states.append(state)
+            }
+        }
+        harness.stream.start()
+        let failed = await waitUntil(timeoutMs: 5_000) { states.contains(.authFailed) }
+        #expect(failed)
+        MockForegroundSSEURLProtocol.register(
+            streamID: harness.streamID,
+            responses: [Data(Self.connectedFrame.utf8)],
+            statusCode: 200,
+            holdOpen: true
+        )
+        // Foreground or pull-to-refresh cut the auth backoff short.
+        harness.stream.onReconnectWake()
+        let live = await waitUntil(timeoutMs: 3_000) { states.last == .connected }
+        await harness.stream.stop()
+        stateTask.cancel()
+        #expect(live)
     }
 
     @Test func http404FastRetriesWhileProtocolUnconfirmed() async {

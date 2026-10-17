@@ -50,7 +50,8 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
     private var subscriberContinuations: [UUID: AsyncStream<OpencodeEvent>.Continuation] = [:]
     private var connectionStateContinuations: [UUID: AsyncStream<EventStreamConnectionState>.Continuation] = [:]
     private var snapshotContinuations: [UUID: AsyncStream<LiveConnectionSnapshot>.Continuation] = [:]
-    private var authTerminal = false
+    /// Leases whose last attempt was rejected with 401/403; guarded by `lock`.
+    private var authRejectedTargets: Set<String> = []
     private var protocolConfirmed = false
     private let reconnectWake = ReconnectWakeGate()
 
@@ -140,10 +141,6 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
 
     func start() {
         lock.lock()
-        if authTerminal {
-            lock.unlock()
-            return
-        }
         if occupancyTask != nil {
             let stuckIdle = _connectionState == .idle && appliedConfig == nil
             if !stuckIdle {
@@ -193,7 +190,6 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         protocolProbeTask = nil
         probe?.cancel()
         pendingStartConfig = nil
-        authTerminal = false
         protocolConfirmed = false
         let leaseWork = cancelAllLeasesLocked()
         eventIngress.reset()
@@ -481,10 +477,6 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
     private func reconcileLeases(_ config: LiveConnectionConfig, generation: UInt64) {
         guard stillCurrent(generation), isOccupying() else { return }
         lock.lock()
-        if authTerminal {
-            lock.unlock()
-            return
-        }
         appliedConfig = config
         lastDirectoriesByIdentity[config.identity] = config.directories
         configEpoch += 1
@@ -493,6 +485,7 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         let stale = leases.keys.filter { !required.contains($0) }
         for key in stale {
             leases.removeValue(forKey: key)?.cancel()
+            authRejectedTargets.remove(key)
         }
         for target in targets where leases[target.key] == nil {
             leases[target.key] = startLease(target, generation: generation)
@@ -509,11 +502,9 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         lease.loopTask = Task { [weak self, weak lease] in
             guard let self, let lease else { return }
             while !Task.isCancelled, generation == self.currentGeneration(), self.isOccupying() {
-                if self.isAuthTerminal() { return }
                 guard self.isRequired(target.key) else { return }
                 await self.deviceNetworkPath.waitUntilReady()
                 guard generation == self.currentGeneration(), self.isRequired(target.key) else { return }
-                if self.isAuthTerminal() { return }
                 // A wake already pending before this attempt must not skip the backoff
                 // after it fails. A wake during the attempt sets pending again.
                 _ = self.reconnectWake.consumePending()
@@ -627,7 +618,6 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
                     self.markLeaseDead(lease, generation: generation)
                 }
                 guard generation == self.currentGeneration(), self.isRequired(target.key) else { return }
-                if self.isAuthTerminal() { return }
                 self.logAttemptOutcome(target.key, outcome)
                 let decision = SseAttemptPolicy.decide(
                     outcome: outcome,
@@ -635,11 +625,18 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
                     attempt: retry.attempt + 1
                 )
                 switch decision {
-                case .terminal(.authFailed):
-                    self.markAuthFailed(generation: generation, targetKey: target.key, outcome: outcome)
-                    return
-                case .terminal:
-                    return
+                case let .authFailed(retryAfterMs):
+                    self.markAuthFailed(
+                        generation: generation,
+                        targetKey: target.key,
+                        outcome: outcome,
+                        retryAfterMs: retryAfterMs
+                    )
+                    retry.increment()
+                    let wokeEarly = await self.reconnectWake.wait(milliseconds: retryAfterMs)
+                    if wokeEarly {
+                        retry.reset()
+                    }
                 case let .retry(afterMs):
                     if self.deviceNetworkPath.status == .unavailable {
                         continue
@@ -670,11 +667,15 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         }
     }
 
+    /// Shows the rejected credential without giving up: the lease keeps retrying on the slow auth
+    /// backoff (woken early by foreground or refresh) so the stream recovers once auth does.
     private func markAuthFailed(
         generation: UInt64,
         targetKey: String,
-        outcome: SseAttemptOutcome
+        outcome: SseAttemptOutcome,
+        retryAfterMs: Int
     ) {
+        guard stillCurrent(generation) else { return }
         let status: Int
         if case let .http(code) = outcome {
             status = code
@@ -682,17 +683,13 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
             status = 0
         }
         lock.lock()
-        authTerminal = true
+        authRejectedTargets.insert(targetKey)
         lock.unlock()
         DiagnosticLog.warning(
             .sse,
-            "SSE auth failed target=\(targetKey) status=\(status); stopping retries"
+            "SSE auth failed target=\(targetKey) status=\(status); retrying in \(retryAfterMs)ms"
         )
-        applyConnectionState(.authFailed, generation: generation)
-        lock.lock()
-        cancelAllLeasesLocked()
-        lock.unlock()
-        publishSnapshot()
+        refreshOverallState(generation: generation)
     }
 
     private func publishDataLine(
@@ -757,6 +754,9 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
     private func markLeaseLive(_ lease: Lease, generation: UInt64) {
         guard stillCurrent(generation) else { return }
         lease.setLive(true)
+        lock.lock()
+        authRejectedTargets.remove(lease.target.key)
+        lock.unlock()
         refreshOverallState(generation: generation)
     }
 
@@ -769,7 +769,9 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
     private func refreshOverallState(generation: UInt64) {
         guard stillCurrent(generation) else { return }
         lock.lock()
-        if authTerminal {
+        if !authRejectedTargets.isEmpty {
+            // Not all live while rejected, so the recovery publishes a reconnect and screens refetch.
+            overall.lastAllLive = false
             let decisionGeneration = streamGeneration
             lock.unlock()
             applyConnectionState(.authFailed, generation: decisionGeneration)
@@ -952,12 +954,6 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
             .contains { $0.key == key }
     }
 
-    private func isAuthTerminal() -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return authTerminal
-    }
-
     private func isProtocolConfirmed() -> Bool {
         lock.lock()
         defer { lock.unlock() }
@@ -974,6 +970,7 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
             if let stream = taken.stream { streams.append(stream) }
         }
         leases.removeAll()
+        authRejectedTargets.removeAll()
         return CancelledLeaseWork(loops: loops, streams: streams)
     }
 

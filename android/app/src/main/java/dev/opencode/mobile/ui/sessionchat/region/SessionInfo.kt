@@ -368,6 +368,11 @@ class SessionInfo(
                                 _state.update { it.copy(errorMessage = sessionErrorMessage(event.rawProperties)) }
                             }
                             applySessionUpdatedTitle(event, sessionId)
+                            // Another client deleted the open session: leave instead of showing a dead chat.
+                            if (eventDomainAdapter.sessionDeletedId(event) == sessionId) {
+                                logI("session deleted elsewhere session=$sessionId; leaving")
+                                requestLeaveSession()
+                            }
                         }
                     }
                 }

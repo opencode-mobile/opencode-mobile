@@ -1228,7 +1228,7 @@ nonisolated enum SessionChatTimelineBlocks {
                 kind = .file
                 family = .explore
                 label = inputString(tool.input, keys: "url").map(hostLabel)
-            case "edit", "write", "apply_patch":
+            case "edit", "write", "apply_patch", "patch":
                 kind = .file
                 family = .change
                 label = card.subtitle.map(lastPathComponent)
@@ -1611,7 +1611,7 @@ nonisolated enum SessionChatTimelineBlocks {
         case "websearch": return count == 1 ? "Search" : "\(count) searches"
         case "question": return askedQuestionsTitle(count)
         case "skill": return count == 1 ? "Skill" : "\(count) skills"
-        case "apply_patch": return count == 1 ? "Patch" : "\(count) patches"
+        case "apply_patch", "patch": return count == 1 ? "Patch" : "\(count) patches"
         case "linear_get_issue": return count == 1 ? "Get issue" : "\(count) Get issues"
         case "linear_save_issue": return count == 1 ? "Save issue" : "\(count) Save issues"
         default:
@@ -1796,7 +1796,7 @@ nonisolated enum SessionChatTimelineBlocks {
             return fileChangeChrome(tool: tool, displayTitle: "Edit")
         case "write":
             return fileChangeChrome(tool: tool, displayTitle: "Write")
-        case "apply_patch":
+        case "apply_patch", "patch":
             return fileChangeChrome(tool: tool, displayTitle: "Patch")
         default:
             return nil

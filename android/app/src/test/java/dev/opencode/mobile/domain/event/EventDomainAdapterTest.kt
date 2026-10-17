@@ -1348,6 +1348,54 @@ class EventDomainAdapterTest {
     }
 
     @Test
+    fun sessionDeletedId_readsV1InfoIdAndV2SessionId() {
+        val v1 =
+            adapter.parseEvent(
+                """{"payload":{"type":"session.deleted","properties":{"info":{"id":"ses-1","title":"Gone"}}}}""",
+            )!!
+        assertEquals("ses-1", adapter.sessionDeletedId(v1))
+        val v2 =
+            adapter.parseEvent(
+                """{"id":"evt_1","type":"session.deleted","data":{"sessionID":"ses-2"},"durable":{"aggregateID":"ses-2","seq":18,"version":2}}""",
+            )!!
+        assertEquals("ses-2", adapter.sessionDeletedId(v2))
+        val updated =
+            adapter.parseEvent(
+                """{"payload":{"type":"session.updated","properties":{"info":{"id":"ses-1"}}}}""",
+            )!!
+        assertEquals(null, adapter.sessionDeletedId(updated))
+    }
+
+    @Test
+    fun sessionRevertUpdate_readsV1SessionAndV2RevertEvents() {
+        fun update(line: String) = adapter.sessionRevertUpdate(adapter.parseEvent(line)!!)
+        assertEquals(
+            SessionRevertUpdate("ses-1", "msg-2"),
+            update(
+                """{"payload":{"type":"session.updated","properties":{"info":{"id":"ses-1","time":{"created":1},"revert":{"messageID":"msg-2"}}}}}""",
+            ),
+        )
+        assertEquals(
+            SessionRevertUpdate("ses-1", null),
+            update("""{"payload":{"type":"session.updated","properties":{"info":{"id":"ses-1","title":"T","time":{"created":1}}}}}"""),
+        )
+        assertEquals(
+            SessionRevertUpdate("ses-2", "msg-5"),
+            update("""{"type":"session.revert.staged","data":{"sessionID":"ses-2","revert":{"messageID":"msg-5"}}}"""),
+        )
+        assertEquals(
+            SessionRevertUpdate("ses-2", null),
+            update("""{"type":"session.revert.cleared","data":{"sessionID":"ses-2"}}"""),
+        )
+        assertEquals(
+            SessionRevertUpdate("ses-2", null),
+            update("""{"type":"session.revert.committed","data":{"sessionID":"ses-2","to":"msg-5"}}"""),
+        )
+        // v2 rename is projected as a partial `session.updated`; it must not clear a staged revert.
+        assertEquals(null, update("""{"type":"session.renamed","data":{"sessionID":"ses-2","title":"New"}}"""))
+    }
+
+    @Test
     fun sessionViewed_parsesV2PlainEvent() {
         val event =
             adapter.parseEvent(

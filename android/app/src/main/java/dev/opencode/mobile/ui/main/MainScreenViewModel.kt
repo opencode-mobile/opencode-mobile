@@ -229,6 +229,8 @@ class MainScreenViewModel
                     viewModelScope.launch {
                         if (_isRefreshing.value) return@launch
                         _isRefreshing.value = true
+                        // A stream backing off (e.g. after a rejected credential) retries now.
+                        foregroundEventStream.onReconnectWake()
                         try {
                             sessionLiveStore.invalidate(null)
                             sessionStatusLiveStore.invalidate(null)

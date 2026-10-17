@@ -513,6 +513,8 @@ final class ProjectListHomeViewModel {
                 userRefreshing = false
                 publishRefreshing()
             }
+            // A stream backing off (e.g. after a rejected credential) retries now.
+            foregroundEventStream?.onReconnectWake()
             await sessionLiveStore.invalidate(directory: nil)
             await sessionStatusLiveStore.invalidate(directory: nil)
         default:

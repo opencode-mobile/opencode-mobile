@@ -7,6 +7,7 @@ import dev.opencode.mobile.domain.composer.ComposerDraftStore
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
+import dev.opencode.mobile.domain.event.SessionRevertUpdate
 import dev.opencode.mobile.domain.mcp.McpRepository
 import dev.opencode.mobile.domain.mcp.McpServerCatalog
 import dev.opencode.mobile.domain.message.Message
@@ -488,6 +489,16 @@ class SessionChatCommands(
         )
     }
 
+    /**
+     * A revert staged, cleared or committed for the open session by any client, including the
+     * server's echo of this device's own revert.
+     */
+    fun applyRevertUpdate(update: SessionRevertUpdate) {
+        if (update.sessionId != boundSessionId || update.messageId == currentRevertMessageId) return
+        logI("revert boundary update session=${update.sessionId} message=${update.messageId ?: "none"}")
+        setRevertBoundary(update.messageId)
+    }
+
     fun consumePendingRevert() {
         if (currentRevertMessageId == null) return
         setRevertBoundary(null)
@@ -624,7 +635,7 @@ class SessionChatCommands(
 
     private fun setRevertBoundary(messageId: String?) {
         currentRevertMessageId = messageId
-        _state.update { it.copy(hasPendingRevert = messageId != null) }
+        _state.update { it.copy(hasPendingRevert = messageId != null, revertMessageId = messageId) }
         updateVisibility(lastMessages, lastHasSelectedComposerModel)
     }
 

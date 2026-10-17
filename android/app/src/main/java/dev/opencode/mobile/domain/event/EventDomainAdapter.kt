@@ -1201,6 +1201,47 @@ class EventDomainAdapter(
     }
 
     /**
+     * Pending-revert change. v1 `session.updated` carries the whole session, so an absent
+     * `info.revert` means none; v2 stages, clears and commits with dedicated events. A partial
+     * `info` (the v2 `session.renamed` projection) says nothing about the revert and is ignored.
+     */
+    fun sessionRevertUpdate(event: OpencodeEvent): SessionRevertUpdate? {
+        fun JsonObject.string(key: String): String? = (this[key] as? JsonPrimitive)?.contentOrNull
+        return when (event.type) {
+            "session.updated" -> {
+                val info = event.rawProperties?.get("info") as? JsonObject ?: return null
+                if (info["time"] == null) return null
+                val sessionId = event.sessionId ?: info.string("id") ?: return null
+                val messageId = (info["revert"] as? JsonObject)?.string("messageID")
+                SessionRevertUpdate(sessionId = sessionId, messageId = messageId)
+            }
+            "session.revert.staged" -> {
+                val sessionId = event.sessionId ?: return null
+                val messageId =
+                    (event.rawProperties?.get("revert") as? JsonObject)?.string("messageID") ?: return null
+                SessionRevertUpdate(sessionId = sessionId, messageId = messageId)
+            }
+            "session.revert.cleared", "session.revert.committed" -> {
+                val sessionId = event.sessionId ?: return null
+                SessionRevertUpdate(sessionId = sessionId, messageId = null)
+            }
+            else -> null
+        }
+    }
+
+    /** Session removed on the server. v1 carries the id only in `info.id`; v2 sends `sessionID`. */
+    fun sessionDeletedId(event: OpencodeEvent): String? {
+        if (event.type != "session.deleted") return null
+        val info = event.rawProperties?.get("info") as? JsonObject
+
+        fun JsonObject.string(key: String): String? = (this[key] as? JsonPrimitive)?.contentOrNull
+        return event.sessionId
+            ?: info?.string("id")
+            ?: info?.string("sessionID")
+            ?: info?.string("sessionId")
+    }
+
+    /**
      * v2 `session.viewed` read acknowledgement: the session was seen up to the run
      * that ended at `idle`. Returns null for other events or a missing watermark.
      */
@@ -1269,6 +1310,15 @@ data class ParsedSessionActivity(
 data class SessionTitleUpdate(
     val sessionId: String,
     val title: String,
+)
+
+/**
+ * Pending revert of a session after an event: [messageId] is the first reverted message, null
+ * when no revert is pending any more (cleared, or committed and already truncated).
+ */
+data class SessionRevertUpdate(
+    val sessionId: String,
+    val messageId: String?,
 )
 
 data class SessionViewedUpdate(

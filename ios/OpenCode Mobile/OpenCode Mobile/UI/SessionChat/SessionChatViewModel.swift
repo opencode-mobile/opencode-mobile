@@ -24,6 +24,7 @@ final class SessionChatViewModel {
     private let sessionReadyStore: any SessionReadyStore
     private let sessionViewReporter: any SessionViewReporter
     private let foregroundEventStream: any ForegroundEventStream
+    private let eventAdapter = EventDomainAdapter()
     /// Invalidates in-flight `withObservationTracking` for the collapse preference.
     private var collapsePreferenceGeneration = 0
     private var lastSnackbarKey: String?
@@ -208,7 +209,7 @@ final class SessionChatViewModel {
 
     func startObserving() {
         isSessionBound = true
-        startWorktreeEventObservation()
+        startSessionEventObservation()
         startCollapsePreferenceObservation()
         repoStrip.start()
         reviewChanges.start()
@@ -1233,11 +1234,15 @@ final class SessionChatViewModel {
         }
     }
 
-    private func startWorktreeEventObservation() {
+    private func startSessionEventObservation() {
         worktreeEventTask?.cancel()
         worktreeEventTask = Task { [weak self] in
             guard let self else { return }
             for await event in self.foregroundEventStream.events() {
+                if let revert = self.eventAdapter.sessionRevertUpdate(from: event) {
+                    await MainActor.run { self.commands.applyRevertUpdate(revert) }
+                    continue
+                }
                 guard event.type == "worktree.updated", let projectID = event.namedProjectID else { continue }
                 let known = await MainActor.run { self.checkoutProjectIDs.contains(projectID) }
                 guard known else { continue }
@@ -1358,6 +1363,7 @@ final class SessionChatViewModel {
             isSessionBusy: infoState.sessionStatusLabel != nil
         )
         let commandsState = commands.state
+        timeline.updateRevertBoundary(commands.revertMessageID)
         let isCompacting = effectiveCompacting(
             localCompacting: commandsState.isCompacting,
             sessionStatusLabel: infoState.sessionStatusLabel

@@ -111,6 +111,29 @@ class SessionChatTimeline(
         }
     }
 
+    /**
+     * First message of a pending revert (v1 `session.revert`, v2 `session.revert.staged`): it and
+     * every later message stay hidden until the revert is cleared or committed (#619).
+     */
+    private var revertBoundaryMessageId: String? = null
+
+    fun updateRevertBoundary(messageId: String?) {
+        if (messageId == revertBoundaryMessageId) return
+        revertBoundaryMessageId = messageId
+        val sessionId = boundSessionId ?: return
+        val worktree = boundWorktree ?: return
+        if (lastLoadedDisplayMessages.isNotEmpty()) {
+            applyLoadedDisplayMessages(
+                displayMessages = lastLoadedDisplayMessages,
+                sourceSessionId = sessionId,
+                sourceWorktree = worktree,
+                fromQuietRefresh = true,
+                source = "revert-boundary",
+                messagesFromCache = _state.value.messagesFromCache,
+            )
+        }
+    }
+
     fun updateChipTimeline(enabled: Boolean) {
         if (enabled == chipTimeline) return
         chipTimeline = enabled
@@ -716,6 +739,7 @@ class SessionChatTimeline(
         lastLoadedMessages = displayMessages.map { it.message }
         scheduleChildSessionLookup(sourceSessionId, sourceWorktree)
         val children = childSessions
+        val revertBoundary = revertBoundaryMessageId
         val stateSnapshot = _state.value
         val previousById = stateSnapshot.messages.associateBy { it.id }
         val previousFrame = lastTimelineFrame
@@ -735,9 +759,10 @@ class SessionChatTimeline(
         val structuralStartedAt = System.nanoTime()
         val projected =
             withContext(ioDispatcher) {
+                val visible = hidingReverted(sortedDisplayMessages(displayMessages), revertBoundary)
                 val bodies =
                     SessionChatTimelineBlocks.mergeConsecutiveToolOnlyAssistantBodies(
-                        linkChildSessions(sortedDisplayMessages(displayMessages), children).mapNotNull { display ->
+                        linkChildSessions(visible, children).mapNotNull { display ->
                             displayMessageBody(display, previousById[display.id])
                         },
                         collapseConsecutiveToolCalls,
@@ -1191,5 +1216,19 @@ class SessionChatTimeline(
         private const val SOURCE_PENDING_PROMPT = "pending-prompt"
         private const val SOURCE_CHILD_SESSIONS = "child-sessions"
         private const val CHILD_SESSION_LOOKUP_ATTEMPTS = 3
+
+        /**
+         * Drops the revert boundary message and everything after it. A boundary outside the
+         * loaded window falls back to id order, which opencode message ids follow.
+         */
+        internal fun hidingReverted(
+            messages: List<DisplayMessage>,
+            boundary: String?,
+        ): List<DisplayMessage> {
+            if (boundary == null) return messages
+            val index = messages.indexOfFirst { it.message.id == boundary }
+            if (index >= 0) return messages.take(index)
+            return messages.filter { it.message.id < boundary }
+        }
     }
 }

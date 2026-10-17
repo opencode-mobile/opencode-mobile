@@ -330,7 +330,7 @@ class DefaultForegroundEventStreamTest {
         }
 
     @Test
-    fun http401_setsAuthFailedAndStopsRetrying() =
+    fun http401_setsAuthFailedAndBacksOffInsteadOfHotLooping() =
         runBlocking {
             val attempts = AtomicInteger(0)
             val client =
@@ -467,7 +467,68 @@ class DefaultForegroundEventStreamTest {
         }
 
     @Test
-    fun http403_setsAuthFailedAndStopsRetrying() =
+    fun http401_recoversToConnectedOnWakeOnceAuthIsAccepted() =
+        runBlocking {
+            val attempts = AtomicInteger(0)
+            val client =
+                HttpClient(
+                    MockEngine {
+                        val n = attempts.incrementAndGet()
+                        if (n <= 2) {
+                            respond(content = "", status = HttpStatusCode.Unauthorized)
+                        } else {
+                            val channel = ByteChannel(autoFlush = true)
+                            channel.writeStringUtf8(CONNECTED_V1)
+                            respond(
+                                content = channel,
+                                status = HttpStatusCode.OK,
+                                headers = headersOf(HttpHeaders.ContentType, "text/event-stream"),
+                            )
+                        }
+                    },
+                )
+            val store = FakeProfileStore()
+            val manager =
+                ActiveConnectionManager(
+                    store,
+                    ConnectionProbing { ServerProtocol.V2 },
+                )
+            manager.applyProfile(sampleProfile, serverProtocol = ServerProtocol.V2)
+            val stream =
+                DefaultForegroundEventStream(
+                    eventsApi = EventsApi(client),
+                    eventDomainAdapter = EventDomainAdapter(Json { ignoreUnknownKeys = true }),
+                    diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
+                    activeConnectionManager = manager,
+                    connectionProfileStore = store,
+                )
+            try {
+                stream.start()
+                withTimeout(3_000) {
+                    stream.connectionState.first { it == EventStreamConnectionState.AuthFailed }
+                }
+                // Foreground or pull-to-refresh cut the auth backoff short; the stream keeps
+                // reporting the rejection until a retry is accepted.
+                stream.onReconnectWake()
+                withTimeout(3_000) {
+                    while (attempts.get() < 2) {
+                        delay(10)
+                    }
+                }
+                assertEquals(EventStreamConnectionState.AuthFailed, stream.connectionState.value)
+                stream.onReconnectWake()
+                withTimeout(3_000) {
+                    stream.connectionState.first { it == EventStreamConnectionState.Connected }
+                }
+                assertEquals(3, attempts.get())
+            } finally {
+                stream.stop()
+                client.close()
+            }
+        }
+
+    @Test
+    fun http403_setsAuthFailedAndBacksOffInsteadOfHotLooping() =
         runBlocking {
             val attempts = AtomicInteger(0)
             val client =
