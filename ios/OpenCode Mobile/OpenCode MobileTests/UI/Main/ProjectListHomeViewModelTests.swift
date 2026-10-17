@@ -1011,9 +1011,11 @@ struct ProjectListHomeViewModelTests {
         #expect(viewModel.revealNewestToken == 0)
     }
 
-    @Test func onSessionLongPress_opensSheetAndKeepsForkHiddenWithoutUserMessages() async {
+    @Test func onSessionLongPress_opensSheetWithoutFetchingMessages() async {
+        let messageRepository = FakeMessageRepository(messages: [userMessage(id: "m1", text: "Hello")])
         let viewModel = makeViewModel(
             projectRepository: FakeProjectRepository(),
+            messageRepository: messageRepository,
             connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"])
         )
         await viewModel.refresh()
@@ -1022,36 +1024,76 @@ struct ProjectListHomeViewModelTests {
         #expect(viewModel.sessionActionsSheetVisible)
         #expect(viewModel.sessionActionsTarget?.sessionId == "s1")
         #expect(viewModel.sessionActionsTarget?.title == "Alpha")
-        let stayedHidden = await waitUntil(timeoutMs: 200) { viewModel.sessionActionsCanFork }
-        #expect(stayedHidden == false)
+        let fetched = await waitUntil(timeoutMs: 200) { messageRepository.listCallCount > 0 }
+        #expect(fetched == false)
     }
 
-    @Test func onSessionLongPress_showsForkWhenSessionHasVisibleUserMessage() async {
+    @Test func openSessionFork_allowsForkWhenSessionHasVisibleUserMessage() async {
+        let messageRepository = FakeMessageRepository(messages: [userMessage(id: "m1", text: "Hello")])
         let viewModel = makeViewModel(
             projectRepository: FakeProjectRepository(),
-            messageRepository: FakeMessageRepository(messages: [userMessage(id: "m1", text: "Hello")]),
+            messageRepository: messageRepository,
             connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"])
         )
         await viewModel.refresh()
         viewModel.onSessionLongPress(sessionId: "s1", title: "Alpha", worktree: "/repo")
+        viewModel.openSessionFork()
 
-        #expect(await waitUntil { viewModel.sessionActionsCanFork })
+        #expect(viewModel.sessionForkDialog.isVisible)
+        #expect(await waitUntil { messageRepository.listCallCount == 1 })
+        let blocked = await waitUntil(timeoutMs: 200) { viewModel.sessionForkDialog.blockedMessage != nil }
+        #expect(blocked == false)
     }
 
-    @Test func onSessionLongPress_hidesForkWhenMessageFetchFails() async {
+    @Test func openSessionFork_blocksDialogWithoutUserMessages() async {
+        let sessionRepository = FakeSessionRepository()
         let viewModel = makeViewModel(
             projectRepository: FakeProjectRepository(),
-            messageRepository: FakeMessageRepository(
-                messages: [userMessage(id: "m1", text: "Hello")],
-                listError: TestError.message("offline")
-            ),
+            sessionRepository: sessionRepository,
             connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"])
         )
         await viewModel.refresh()
         viewModel.onSessionLongPress(sessionId: "s1", title: "Alpha", worktree: "/repo")
+        viewModel.openSessionFork()
 
-        let becameForkable = await waitUntil(timeoutMs: 200) { viewModel.sessionActionsCanFork }
-        #expect(becameForkable == false)
+        #expect(await waitUntil { viewModel.sessionForkDialog.blockedMessage == "Nothing to fork yet" })
+        #expect(viewModel.sessionForkDialog.isVisible)
+        await viewModel.confirmSessionFork()
+        #expect(sessionRepository.forkedIDs.isEmpty)
+    }
+
+    @Test func confirmSessionFork_beforeCheckFinishesWaitsAndBlocksEmptySession() async {
+        let sessionRepository = FakeSessionRepository()
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            sessionRepository: sessionRepository,
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"])
+        )
+        await viewModel.refresh()
+        viewModel.onSessionLongPress(sessionId: "s1", title: "Alpha", worktree: "/repo")
+        viewModel.openSessionFork()
+        await viewModel.confirmSessionFork()
+
+        #expect(sessionRepository.forkedIDs.isEmpty)
+        #expect(viewModel.sessionForkDialog.isSubmitting == false)
+        #expect(viewModel.sessionForkDialog.blockedMessage == "Nothing to fork yet")
+    }
+
+    @Test func openSessionFork_checkFailureLeavesForkToServer() async {
+        let sessionRepository = FakeSessionRepository()
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            sessionRepository: sessionRepository,
+            messageRepository: FakeMessageRepository(listError: TestError.message("offline")),
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"])
+        )
+        await viewModel.refresh()
+        viewModel.onSessionLongPress(sessionId: "s1", title: "Alpha", worktree: "/repo")
+        viewModel.openSessionFork()
+        await viewModel.confirmSessionFork()
+
+        #expect(viewModel.sessionForkDialog.blockedMessage == nil)
+        #expect(sessionRepository.forkedIDs == ["s1"])
     }
 
     @Test func dismissSessionActions_clearsTarget() async {
@@ -1159,6 +1201,7 @@ struct ProjectListHomeViewModelTests {
         let viewModel = makeViewModel(
             projectRepository: FakeProjectRepository(),
             sessionRepository: sessionRepository,
+            messageRepository: FakeMessageRepository(messages: [userMessage(id: "m1", text: "Hello")]),
             connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"])
         )
         await viewModel.refresh()
@@ -1180,6 +1223,7 @@ struct ProjectListHomeViewModelTests {
     @Test func confirmSessionFork_stayChoiceKeepsHome() async {
         let viewModel = makeViewModel(
             projectRepository: FakeProjectRepository(),
+            messageRepository: FakeMessageRepository(messages: [userMessage(id: "m1", text: "Hello")]),
             connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"])
         )
         await viewModel.refresh()
@@ -1198,6 +1242,7 @@ struct ProjectListHomeViewModelTests {
         let viewModel = makeViewModel(
             projectRepository: FakeProjectRepository(),
             sessionRepository: sessionRepository,
+            messageRepository: FakeMessageRepository(messages: [userMessage(id: "m1", text: "Hello")]),
             connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"])
         )
         await viewModel.refresh()
@@ -2019,6 +2064,7 @@ private final class FakeMessageRepository: MessageRepository, @unchecked Sendabl
     let messages: [Message]
     let listError: Error?
     let catchUpChrome: Bool
+    private(set) var listCallCount = 0
 
     init(messages: [Message] = [], listError: Error? = nil, catchUpChrome: Bool = false) {
         self.messages = messages
@@ -2049,6 +2095,7 @@ private final class FakeMessageRepository: MessageRepository, @unchecked Sendabl
     func clearMessageCache() {}
 
     func listMessages(sessionID: String, directory: String?) async throws -> [Message] {
+        listCallCount += 1
         if let listError { throw listError }
         return messages
     }

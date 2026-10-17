@@ -306,13 +306,11 @@ struct ProjectListHomeView: View {
                     startDecorator: .icon(.edit),
                     action: { viewModel.openSessionRename() }
                 )
-                if viewModel.sessionActionsCanFork {
-                    OpenCodeBottomSheetEntry(
-                        title: "Fork session",
-                        startDecorator: .icon(.contentCopy),
-                        action: { viewModel.openSessionFork() }
-                    )
-                }
+                OpenCodeBottomSheetEntry(
+                    title: "Fork session",
+                    startDecorator: .icon(.contentCopy),
+                    action: { viewModel.openSessionFork() }
+                )
                 if viewModel.sessionActionsCanArchive {
                     OpenCodeBottomSheetEntry(
                         title: "Archive",
@@ -391,6 +389,7 @@ struct ProjectListHomeView: View {
                 primaryOption: OpenCodeDialogOption(
                     title: "Fork",
                     enabled: !viewModel.sessionForkDialog.isSubmitting
+                        && viewModel.sessionForkDialog.blockedMessage == nil
                 ) {
                     Task { await viewModel.confirmSessionFork() }
                 },
@@ -407,6 +406,7 @@ struct ProjectListHomeView: View {
                     hint: "Title",
                     enabled: !viewModel.sessionForkDialog.isSubmitting,
                     errorMessage: viewModel.sessionForkDialog.errorMessage
+                        ?? viewModel.sessionForkDialog.blockedMessage
                 )
             )
             .openCodeDialog(

@@ -1297,36 +1297,65 @@ class MainScreenViewModelTest {
         }
 
     @Test
-    fun onSessionLongPress_showsSheetAndEnablesForkWhenUserMessagesExist() =
+    fun onSessionLongPress_showsSheetWithoutFetchingMessages() =
         runTest(testDispatcher) {
+            val messageRepository =
+                FakeMessageRepository(
+                    messagesBySession =
+                        mapOf(
+                            "s1" to listOf(Message(id = "m1", role = MessageRole.User, text = "Hello")),
+                        ),
+                )
             val viewModel =
                 createViewModel(
                     connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
-                    messageRepository =
-                        FakeMessageRepository(
-                            messagesBySession =
-                                mapOf(
-                                    "s1" to listOf(Message(id = "m1", role = MessageRole.User, text = "Hello")),
-                                ),
-                        ),
+                    messageRepository = messageRepository,
                 )
             advanceUntilIdle()
 
             viewModel.onSessionLongPress(sessionId = "s1", title = "Session one", worktree = "/repo")
+            advanceUntilIdle()
+
             val opened = viewModel.sessionActions.value
             assertTrue(opened.sheetVisible)
             assertEquals("Session one", opened.target?.title)
-            advanceUntilIdle()
-
-            assertTrue(viewModel.sessionActions.value.canFork)
+            assertEquals(0, messageRepository.listCallCount)
         }
 
     @Test
-    fun onSessionLongPress_hidesForkWhenNoUserMessages() =
+    fun chooseFork_opensDialogAndAllowsForkWhenUserMessagesExist() =
         runTest(testDispatcher) {
+            val messageRepository =
+                FakeMessageRepository(
+                    messagesBySession =
+                        mapOf(
+                            "s1" to listOf(Message(id = "m1", role = MessageRole.User, text = "Hello")),
+                        ),
+                )
             val viewModel =
                 createViewModel(
                     connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    messageRepository = messageRepository,
+                )
+            advanceUntilIdle()
+
+            viewModel.onSessionLongPress(sessionId = "s1", title = "Session one", worktree = "/repo")
+            viewModel.chooseFork()
+            assertTrue(viewModel.sessionActions.value.forkVisible)
+            advanceUntilIdle()
+
+            assertEquals(1, messageRepository.listCallCount)
+            assertNull(viewModel.sessionActions.value.forkBlockedMessage)
+        }
+
+    @Test
+    fun chooseFork_blocksDialogWhenNoUserMessages() =
+        runTest(testDispatcher) {
+            val sessionRepository = FakeSessionRepository(mutableMapOf("/repo" to emptyList()))
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    sessionRepository = sessionRepository,
                     messageRepository =
                         FakeMessageRepository(
                             messagesBySession =
@@ -1341,29 +1370,59 @@ class MainScreenViewModelTest {
             advanceUntilIdle()
 
             viewModel.onSessionLongPress(sessionId = "s1", title = "Session one", worktree = "/repo")
+            viewModel.chooseFork()
             advanceUntilIdle()
 
-            assertFalse(viewModel.sessionActions.value.canFork)
+            assertTrue(viewModel.sessionActions.value.forkVisible)
+            assertEquals("Nothing to fork yet", viewModel.sessionActions.value.forkBlockedMessage)
 
-            viewModel.chooseFork()
-            assertFalse(viewModel.sessionActions.value.forkVisible)
+            viewModel.confirmFork()
+            advanceUntilIdle()
+            assertTrue(sessionRepository.forkedIds.isEmpty())
         }
 
     @Test
-    fun onSessionLongPress_forkGateFailureLeavesForkHidden() =
+    fun confirmFork_beforeCheckFinishesWaitsAndBlocksEmptySession() =
         runTest(testDispatcher) {
+            val sessionRepository = FakeSessionRepository(mutableMapOf("/repo" to emptyList()))
             val viewModel =
                 createViewModel(
                     connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    sessionRepository = sessionRepository,
+                    messageRepository = FakeMessageRepository(),
+                )
+            advanceUntilIdle()
+
+            viewModel.onSessionLongPress(sessionId = "s1", title = "Session one", worktree = "/repo")
+            viewModel.chooseFork()
+            viewModel.confirmFork()
+            advanceUntilIdle()
+
+            assertTrue(sessionRepository.forkedIds.isEmpty())
+            assertFalse(viewModel.sessionActions.value.forkSubmitting)
+            assertEquals("Nothing to fork yet", viewModel.sessionActions.value.forkBlockedMessage)
+        }
+
+    @Test
+    fun chooseFork_checkFailureLeavesForkToServer() =
+        runTest(testDispatcher) {
+            val sessionRepository = FakeSessionRepository(mutableMapOf("/repo" to emptyList()))
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    sessionRepository = sessionRepository,
                     messageRepository = FakeMessageRepository(listError = IllegalStateException("offline")),
                 )
             advanceUntilIdle()
 
             viewModel.onSessionLongPress(sessionId = "s1", title = "Session one", worktree = "/repo")
+            viewModel.chooseFork()
             advanceUntilIdle()
+            assertNull(viewModel.sessionActions.value.forkBlockedMessage)
 
-            assertFalse(viewModel.sessionActions.value.canFork)
-            assertTrue(viewModel.sessionActions.value.sheetVisible)
+            viewModel.confirmFork()
+            advanceUntilIdle()
+            assertEquals(listOf("s1"), sessionRepository.forkedIds)
         }
 
     @Test
@@ -2155,6 +2214,7 @@ private class FakeMessageRepository(
     private val listError: Throwable? = null,
 ) : MessageRepository {
     val catchUpChrome = MutableStateFlow(false)
+    var listCallCount = 0
 
     override fun observeCatchUpChrome(): Flow<Boolean> = catchUpChrome
 
@@ -2189,6 +2249,7 @@ private class FakeMessageRepository(
         sessionId: String,
         directory: String?,
     ): List<Message> {
+        listCallCount += 1
         listError?.let { throw it }
         return messagesBySession[sessionId].orEmpty()
     }
