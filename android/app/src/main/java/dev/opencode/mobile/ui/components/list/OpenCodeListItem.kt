@@ -509,8 +509,8 @@ private fun ListItemStartDecoration(
                         Box(
                             modifier =
                                 Modifier
-                                    .align(Alignment.TopEnd)
-                                    .offset(x = 1.dp, y = (-1).dp)
+                                    .align(Alignment.BottomEnd)
+                                    .offset(x = 1.dp, y = 1.dp)
                                     .size(ListItemLetterStatusDotSize + 4.dp)
                                     .border(2.dp, backgroundBase, CircleShape)
                                     .clip(CircleShape)

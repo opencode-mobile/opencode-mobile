@@ -389,8 +389,8 @@ struct OpenCodeListItem<Trailing: View>: View {
                             .frame(width: listItemLetterStatusDotSize + 4, height: listItemLetterStatusDotSize + 4)
                             .background(OpenCodeColors.surfaceRaisedBase, in: Circle())
                             .overlay(Circle().stroke(OpenCodeColors.backgroundBase, lineWidth: 2))
-                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                            .offset(x: 1, y: -1)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                            .offset(x: 1, y: 1)
                             .accessibilityLabel("Worktree")
                     }
                 }
