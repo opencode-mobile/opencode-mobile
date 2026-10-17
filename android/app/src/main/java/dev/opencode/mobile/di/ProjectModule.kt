@@ -9,6 +9,7 @@ import dev.opencode.mobile.data.remote.EventsApi
 import dev.opencode.mobile.data.remote.FilesystemApi
 import dev.opencode.mobile.data.remote.HealthApi
 import dev.opencode.mobile.data.remote.ProjectsApi
+import dev.opencode.mobile.data.remote.sessionEventsApi
 import dev.opencode.mobile.domain.connection.ConnectivityDeviceNetworkPath
 import dev.opencode.mobile.domain.connection.DeviceNetworkPath
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogger
@@ -105,7 +106,10 @@ abstract class EventStreamModule {
     companion object {
         @Provides
         @Singleton
-        fun provideEventsApi(sseHttpClient: OpencodeSseHttpClient): EventsApi = EventsApi(sseHttpClient)
+        fun provideEventsApi(
+            sseHttpClient: OpencodeSseHttpClient,
+            httpClient: OpencodeHttpClient,
+        ): EventsApi = sessionEventsApi(sseHttpClient) { httpClient.rebuild() }
 
         @Provides
         @Singleton

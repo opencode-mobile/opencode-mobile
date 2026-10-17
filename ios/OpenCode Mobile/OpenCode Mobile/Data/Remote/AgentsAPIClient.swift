@@ -8,15 +8,19 @@ nonisolated enum AgentsAPIError: Error {
 
 nonisolated struct AgentsAPIClient: Sendable {
     private let connectionProvider: @Sendable () -> ServerConnection?
-    private let urlSession: URLSession
+    private let resolveURLSession: @Sendable () -> URLSession
     private let decoder = JSONDecoder()
 
     init(
         connectionProvider: @escaping @Sendable () -> ServerConnection?,
-        urlSession: URLSession = OpenCodeURLSessions.rest
+        urlSession: URLSession? = nil
     ) {
         self.connectionProvider = connectionProvider
-        self.urlSession = urlSession
+        self.resolveURLSession = OpenCodeURLSessions.restResolver(injected: urlSession)
+    }
+
+    func resolvedURLSession() -> URLSession {
+        resolveURLSession()
     }
 
     func listAgents(directory: String? = nil) async throws -> [AgentDTO] {
@@ -58,7 +62,7 @@ nonisolated struct AgentsAPIClient: Sendable {
         let data: Data
         let response: URLResponse
         do {
-            (data, response) = try await urlSession.data(for: request)
+            (data, response) = try await resolveURLSession().data(for: request)
         } catch {
             OpenCodeAPITrace.failure(request, error: error, startedAt: startedAt)
             throw error

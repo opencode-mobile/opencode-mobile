@@ -100,6 +100,30 @@ class EventsApiTest {
         }
 
     @Test
+    fun sessionEventsApi_budgetExceeded_invokesRebuildRestOnce() =
+        runBlocking {
+            val rebuilds = AtomicInteger(0)
+            val client =
+                HttpClient(
+                    MockEngine {
+                        awaitCancellation()
+                    },
+                )
+            try {
+                val outcome =
+                    sessionEventsApi(
+                        sse = client,
+                        rebuildRest = { rebuilds.incrementAndGet() },
+                        connectBudgetMs = 80L,
+                    ).streamEvents(path = "global/event") { }
+                assertTrue(outcome is SseAttemptOutcome.Transport)
+                assertEquals(1, rebuilds.get())
+            } finally {
+                client.close()
+            }
+        }
+
+    @Test
     fun streamEvents_headerBudgetExceeded_returnsTransportAndEvicts() =
         runBlocking {
             val evicted = AtomicInteger(0)

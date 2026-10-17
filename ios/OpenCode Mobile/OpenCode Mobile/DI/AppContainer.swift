@@ -418,7 +418,8 @@ extension Container {
     var eventsAPIClient: Factory<EventsAPIClient> {
         onMainActor {
             EventsAPIClient(
-                connectionProvider: self.connectionProvider()
+                connectionProvider: self.connectionProvider(),
+                onConnectBudgetExceeded: { OpenCodeURLSessions.replaceRest() }
             )
         }.singleton
     }
