@@ -273,6 +273,27 @@ struct V2TimelineNoticeTests {
         #expect(parsed.map(\.type).contains("session.updated"))
     }
 
+    // MARK: Turns
+
+    @Test func noticeRowsNeverCompleteAUserTurnOrStartAPage() {
+        func row(_ id: String, _ role: MessageRole) -> SessionChatRow {
+            SessionChatRow(id: id, role: role, text: "", metadataLabel: "")
+        }
+        var state = SessionChatUiState.initial(sessionID: "ses", sessionTitle: "Session")
+        state.timeline = .ready
+        state.messages = [row("u1", .user), row("n1", .notice)]
+        #expect(state.latestCompletedUserMessageID == nil)
+        state.messages.append(row("a1", .assistant))
+        #expect(state.latestCompletedUserMessageID == "u1")
+
+        func message(_ id: String, _ role: MessageRole) -> Message {
+            Message(id: id, role: role, text: "", model: nil, mode: nil, sentAtEpochMs: nil)
+        }
+        let notice = message("n0", .notice)
+        #expect(!MessageHistoryMerge.beginsMidTurn([notice, message("u1", .user)]))
+        #expect(MessageHistoryMerge.beginsMidTurn([notice, message("a1", .assistant)]))
+    }
+
     // MARK: Helpers
 
     private func project(_ json: String) throws -> [Message] {

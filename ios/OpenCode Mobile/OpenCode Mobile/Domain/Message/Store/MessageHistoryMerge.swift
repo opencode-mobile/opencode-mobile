@@ -2,7 +2,8 @@ import Foundation
 
 nonisolated enum MessageHistoryMerge {
     static func beginsMidTurn(_ messages: [Message]) -> Bool {
-        guard let oldest = messages.first else { return false }
+        // A notice sits between turns, so the first prompt or reply decides.
+        guard let oldest = messages.first(where: { $0.role != .notice }) else { return false }
         return !isTurnBoundary(oldest)
     }
 
