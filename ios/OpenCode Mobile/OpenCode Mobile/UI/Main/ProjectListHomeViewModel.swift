@@ -69,6 +69,8 @@ struct AddProjectSheetState: Equatable {
     var emptyMessage: String?
     var roots: [AddProjectRoot] = []
     var suggestions: [AddProjectSuggestion] = []
+    /// False until this presentation has heard back from the server project list.
+    var suggestionsResolved = false
     var showSuggestions = false
     /// Header over the folder rows while suggestions are shown above them.
     var folderSectionTitle: String?
@@ -81,6 +83,7 @@ struct AddProjectSheetState: Equatable {
     /// True while Browse folders has replaced the suggestion sheet with the full-screen browser.
     var isBrowsing = false
     static let browseFoldersTitle = "Browse folders"
+    static let noOtherProjectsMessage = "No other projects on this server."
 
     static let empty = AddProjectSheetState()
 
@@ -96,6 +99,7 @@ struct AddProjectSheetState: Equatable {
         sheet.isValidating = inputs.isValidating
         sheet.fieldError = inputs.fieldError
         sheet.isBrowsing = inputs.isBrowsing
+        sheet.suggestionsResolved = inputs.suggestionsResolved
         guard !inputs.home.isEmpty else {
             sheet.isLoading = inputs.pathsError == nil
             sheet.listError = inputs.pathsError
@@ -228,6 +232,8 @@ struct AddProjectSheetInputs: Equatable {
     var listings: [String: [DirectoryNode]] = [:]
     var listErrors: [String: String] = [:]
     var serverProjects: [Project] = []
+    /// True once this presentation's project-list fetch has finished, including a failure.
+    var suggestionsResolved = false
     /// Folders in `/Volumes` on a POSIX server.
     var volumes: [DirectoryNode] = []
     /// Roots of folders the field listed this session (Windows drives and shares).
@@ -1287,6 +1293,7 @@ final class ProjectListHomeViewModel {
         let loadedVolumes = await volumes
         guard generation == addProjectGeneration else { return }
         addProjectInputs.serverProjects = loadedProjects
+        addProjectInputs.suggestionsResolved = true
         addProjectInputs.volumes = loadedVolumes.filter { !DirectoryListingPolicy.isHidden($0.name) }
         publishAddProjectSheet()
     }

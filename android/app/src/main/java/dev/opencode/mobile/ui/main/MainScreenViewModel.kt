@@ -1033,10 +1033,12 @@ class MainScreenViewModel
                         throw cancellation
                     } catch (_: Exception) {
                         // The section stays hidden.
+                        if (generation != addProjectGeneration) return@launch
+                        updateAddProjectSession { it.copy(suggestionsResolved = true) }
                         return@launch
                     }
                 if (generation != addProjectGeneration) return@launch
-                updateAddProjectSession { it.copy(serverProjects = projects) }
+                updateAddProjectSession { it.copy(serverProjects = projects, suggestionsResolved = true) }
             }
         }
 
