@@ -4,6 +4,7 @@ import android.util.Log
 import dev.opencode.mobile.domain.command.ServerCommand
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
+import dev.opencode.mobile.domain.message.AttachmentPreviewCache
 import dev.opencode.mobile.domain.message.BlockDecorationCache
 import dev.opencode.mobile.domain.message.DisplayMessage
 import dev.opencode.mobile.domain.message.DisplayMessageListUpdate
@@ -419,6 +420,7 @@ class SessionChatTimeline(
                 changedRowIDs = emptySet(),
                 removedRowIDs = emptySet(),
                 layoutChangedRowIDs = emptySet(),
+                listIdAliases = previous?.listIdAliases.orEmpty(),
             )
         lastTimelineFrame = frame
         _state.update {
@@ -449,6 +451,7 @@ class SessionChatTimeline(
                     changedRowIDs = emptySet(),
                     removedRowIDs = setOf(optimisticId).intersect(prior.rows.map { it.id }.toSet()),
                     layoutChangedRowIDs = emptySet(),
+                    listIdAliases = prior.listIdAliases,
                 )
             }
         lastTimelineFrame = frame
@@ -760,6 +763,9 @@ class SessionChatTimeline(
         val projected =
             withContext(ioDispatcher) {
                 val visible = hidingReverted(sortedDisplayMessages(displayMessages), revertBoundary)
+                AttachmentPreviewCache.shared.warm(
+                    visible.takeLast(AttachmentPreviewCache.WARM_MESSAGE_COUNT).map { it.message },
+                )
                 val bodies =
                     SessionChatTimelineBlocks.mergeConsecutiveToolOnlyAssistantBodies(
                         linkChildSessions(visible, children).mapNotNull { display ->

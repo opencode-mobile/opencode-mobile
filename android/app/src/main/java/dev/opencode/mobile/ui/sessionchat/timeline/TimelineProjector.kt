@@ -49,7 +49,16 @@ data class TimelineFrame(
      * Not inferred from ID sets.
      */
     val isRequired: Boolean = false,
+    /**
+     * Server row id → list key for server echoes that replaced an optimistic send row.
+     * The list keys the echo under the optimistic id, so its item slot is reused instead
+     * of removed and inserted. Carried across frames while the row stays.
+     */
+    val listIdAliases: Map<String, String> = emptyMap(),
 ) {
+    /** LazyColumn key for [rowId]. */
+    fun listKey(rowId: String): String = listIdAliases[rowId] ?: rowId
+
     /** Row IDs whose apply can change list geometry (inserts ∪ layout-affecting restyles). */
     fun layoutAffectingRowIDs(): Set<String> = insertedRowIDs + layoutChangedRowIDs
 
@@ -97,11 +106,21 @@ object TimelineProjector {
                 projectRow(body, previousById[body.message.id])
             }
         val merged = mergeWithPending(authoritative, optimisticInputs)
+        val rows = merged.rows.filterNot(::isHiddenPendingPrompt)
+        val previousIds = previousById.keys
+        val currentIds = rows.mapTo(HashSet()) { it.id }
+        // Alias only an echo that replaces its optimistic row in this frame. A server
+        // row the list already shows under its own id keeps that key.
+        val listIdAliases =
+            previous?.listIdAliases.orEmpty().filterKeys { it in currentIds } +
+                merged.echoes.filter { (serverId, pendingId) ->
+                    pendingId in previousIds && serverId !in previousIds && serverId in currentIds
+                }
         return diffFrame(
             frameRevision = frame.frameRevision,
-            rows = merged.filterNot(::isHiddenPendingPrompt),
+            rows = rows,
             previous = previous,
-        )
+        ).copy(listIdAliases = listIdAliases)
     }
 
     /** Project server bodies without hiding inbox rows. Used for send-time baselines. */
@@ -124,6 +143,11 @@ object TimelineProjector {
     /**
      * Pending rows that no new server echo accounts for yet. Same match
      * [mergeWithPending] and [SessionChatTimeline] reconciliation use.
+     *
+     * A shown optimistic row is not retired by a waiting steer echo. v2 enqueues every
+     * prompt, idle sends included, as a steer delivered at the next step boundary;
+     * retiring on that hidden copy left a frame with neither bubble. A queued echo still
+     * retires it, since the pending strip owns a real queue.
      */
     fun unmatchedPending(
         pendingRows: List<TimelineRow>,
@@ -132,9 +156,14 @@ object TimelineProjector {
     ): List<TimelineRow> =
         pendingRows.filter { pending ->
             serverRows.none { server ->
-                isNewServerEchoOf(server, pending, baselineSignatures)
+                retiresPending(server, pending) && isNewServerEchoOf(server, pending, baselineSignatures)
             }
         }
+
+    private fun retiresPending(
+        server: TimelineRow,
+        pending: TimelineRow,
+    ): Boolean = isHiddenPendingPrompt(pending) || server.pendingDelivery != FollowUpDelivery.Steer
 
     fun isNewServerEchoOf(
         server: TimelineRow,
@@ -375,12 +404,18 @@ object TimelineProjector {
      */
     fun isHiddenPendingPrompt(row: TimelineRow): Boolean = row.role == MessageRole.User && row.pendingDelivery != null
 
+    /** Merged rows plus, for each dropped optimistic row matched to its echo, `serverId → pendingId`. */
+    private data class PendingMerge(
+        val rows: List<TimelineRow>,
+        val echoes: Map<String, String> = emptyMap(),
+    )
+
     private fun mergeWithPending(
         serverRows: List<TimelineRow>,
         optimisticInputs: OptimisticInputs,
-    ): List<TimelineRow> {
+    ): PendingMerge {
         val pendingRows = optimisticInputs.pendingRows
-        if (pendingRows.isEmpty()) return serverRows
+        if (pendingRows.isEmpty()) return PendingMerge(serverRows)
         val baselineSignatures = optimisticInputs.baselineSignatures
         val pendingToKeep =
             unmatchedPending(
@@ -389,9 +424,10 @@ object TimelineProjector {
                 baselineSignatures = baselineSignatures,
             )
         val dropped = pendingRows.filter { pending -> pendingToKeep.none { it.id == pending.id } }
-        return splicePending(
-            applyPendingMetadata(serverRows, dropped, baselineSignatures),
-            pendingToKeep,
+        val withMetadata = applyPendingMetadata(serverRows, dropped, baselineSignatures)
+        return PendingMerge(
+            rows = splicePending(withMetadata.rows, pendingToKeep),
+            echoes = withMetadata.echoes,
         )
     }
 
@@ -414,37 +450,43 @@ object TimelineProjector {
         serverRows: List<TimelineRow>,
         dropped: List<TimelineRow>,
         baselineSignatures: Map<String, String>,
-    ): List<TimelineRow> {
-        if (dropped.isEmpty()) return serverRows
-        return serverRows.map { row ->
-            if (row.role != MessageRole.User) return@map row
-            if (baselineSignatures[row.id] == reconciliationSignature(row)) return@map row
-            val pending =
-                dropped.firstOrNull { candidate -> matchesOptimistic(row, candidate) } ?: return@map row
-            val metadata =
-                if (row.metadataLabel.isEmpty() && pending.metadataLabel.isNotEmpty()) {
-                    pending.metadataLabel
-                } else {
-                    row.metadataLabel
+    ): PendingMerge {
+        if (dropped.isEmpty()) return PendingMerge(serverRows)
+        val echoes = mutableMapOf<String, String>()
+        val rows =
+            serverRows.map { row ->
+                if (row.role != MessageRole.User) return@map row
+                if (baselineSignatures[row.id] == reconciliationSignature(row)) return@map row
+                val pending =
+                    dropped.firstOrNull { candidate -> matchesOptimistic(row, candidate) } ?: return@map row
+                if (!isHiddenPendingPrompt(row) && pending.id !in echoes.values) {
+                    echoes[row.id] = pending.id
                 }
-            val copyAttachments = row.attachments.isEmpty() && pending.attachments.isNotEmpty()
-            val attachments = if (copyAttachments) pending.attachments else row.attachments
-            val blocks =
-                if (copyAttachments) {
-                    row.blocks + pending.blocks.filterIsInstance<SessionChatTimelineBlock.Attachment>()
-                } else {
-                    row.blocks
+                val metadata =
+                    if (row.metadataLabel.isEmpty() && pending.metadataLabel.isNotEmpty()) {
+                        pending.metadataLabel
+                    } else {
+                        row.metadataLabel
+                    }
+                val copyAttachments = row.attachments.isEmpty() && pending.attachments.isNotEmpty()
+                val attachments = if (copyAttachments) pending.attachments else row.attachments
+                val blocks =
+                    if (copyAttachments) {
+                        row.blocks + pending.blocks.filterIsInstance<SessionChatTimelineBlock.Attachment>()
+                    } else {
+                        row.blocks
+                    }
+                if (metadata == row.metadataLabel && attachments === row.attachments && blocks === row.blocks) {
+                    return@map row
                 }
-            if (metadata == row.metadataLabel && attachments === row.attachments && blocks === row.blocks) {
-                return@map row
+                row.copy(
+                    metadataLabel = metadata,
+                    attachments = attachments,
+                    blocks = blocks,
+                    layoutRevision = row.layoutRevision + 1,
+                )
             }
-            row.copy(
-                metadataLabel = metadata,
-                attachments = attachments,
-                blocks = blocks,
-                layoutRevision = row.layoutRevision + 1,
-            )
-        }
+        return PendingMerge(rows, echoes)
     }
 
     /**

@@ -435,11 +435,17 @@ class EventDomainAdapter(
                 sessionId?.let { put("sessionID", it) }
                 messageId?.let { put("messageID", it) }
                 put("type", "file")
-                file.string("uri")?.let { put("url", it) }
                 val mime =
                     file.string("mime")
                         ?: file.string("uri")?.let(AttachmentDataUrl::mimeFromDataUrl)
                         ?: file.string("name")?.let(AttachmentDataUrl::mimeFromFilename)
+                val uri = file.string("uri")
+                val data = file.string("data")
+                when {
+                    uri != null -> put("url", uri)
+                    // Inline attachment (a sent photo): same data URL the REST mapping builds.
+                    data != null && mime != null -> put("url", "data:${mime.lowercase()};base64,$data")
+                }
                 mime?.let { put("mime", it) }
                 file.string("name")?.let { put("filename", it) }
             }

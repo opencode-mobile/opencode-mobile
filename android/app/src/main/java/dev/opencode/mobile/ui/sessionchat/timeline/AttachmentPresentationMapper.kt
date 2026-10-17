@@ -1,9 +1,8 @@
 package dev.opencode.mobile.ui.sessionchat
 
 import dev.opencode.mobile.domain.message.Attachment
-import dev.opencode.mobile.domain.message.AttachmentDataUrl
 import dev.opencode.mobile.domain.message.AttachmentKind
-import dev.opencode.mobile.domain.message.AttachmentThumbnailer
+import dev.opencode.mobile.domain.message.AttachmentPreviewCache
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.ui.components.OpenCodeAttachmentPresentation
 import dev.opencode.mobile.ui.components.OpenCodeAttachmentVariant
@@ -28,12 +27,7 @@ internal object AttachmentPresentationMapper {
         )
 
     fun from(file: MessagePart.File): SessionChatAttachmentItem {
-        val imageBytes =
-            if (file.kind == AttachmentKind.Image && file.dataUrl.length <= 512 * 1024) {
-                AttachmentDataUrl.decode(file.dataUrl, file.mime)?.let(AttachmentThumbnailer::create)
-            } else {
-                null
-            }
+        val imageBytes = AttachmentPreviewCache.shared.preview(file)
         return SessionChatAttachmentItem(
             id = file.id,
             filename = file.filename,
