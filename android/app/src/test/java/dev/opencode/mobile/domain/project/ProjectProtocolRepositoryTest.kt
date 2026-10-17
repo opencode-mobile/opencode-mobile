@@ -34,7 +34,10 @@ class ProjectProtocolRepositoryTest {
 
             val projects = repository(client, ServerProtocol.V1).listProjects()
 
-            assertEquals(listOf(Project(id = "p1", worktree = "/Users/me/repo", displayName = "repo")), projects)
+            assertEquals(
+                listOf(Project(id = "p1", worktree = "/Users/me/repo", displayName = "repo", isRepository = true)),
+                projects,
+            )
             assertTrue(
                 requests
                     .single()
@@ -59,7 +62,15 @@ class ProjectProtocolRepositoryTest {
             val projects = repository(client, ServerProtocol.V2).listProjects()
 
             assertEquals(
-                listOf(Project(id = "p2", worktree = "/Users/me/app", displayName = "app", activityAtEpochMs = 1)),
+                listOf(
+                    Project(
+                        id = "p2",
+                        worktree = "/Users/me/app",
+                        displayName = "app",
+                        activityAtEpochMs = 1,
+                        isRepository = true,
+                    ),
+                ),
                 projects,
             )
             assertTrue(
@@ -85,6 +96,7 @@ class ProjectProtocolRepositoryTest {
             val projects = repository(client, ServerProtocol.V1).listProjects()
 
             assertEquals(listOf(20L, null), projects.map { it.activityAtEpochMs })
+            assertEquals(listOf(true, false), projects.map { it.isRepository })
         }
 
     @Test

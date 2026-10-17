@@ -250,6 +250,7 @@ struct SessionProtocolRepositoryTests {
 
         #expect(projects.map(\.id) == ["proj_2"])
         #expect(projects.map(\.worktree) == ["/Users/me/app"])
+        #expect(projects.map(\.isRepository) == [true])
         let url = try #require(ProtocolRoutingURLProtocol.requests.first?.url)
         #expect(url.path.hasSuffix("/api/project"))
     }
@@ -269,6 +270,7 @@ struct SessionProtocolRepositoryTests {
         let projects = try await repository.listProjects()
 
         #expect(projects.map(\.activityAtEpochMs) == [30, 20, nil])
+        #expect(projects.map(\.isRepository) == [false, false, false])
     }
 
     @Test func v2ListProjectsFallsBackToProjectWhenApiProjectIsTheWebUI() async throws {
@@ -287,6 +289,7 @@ struct SessionProtocolRepositoryTests {
 
         #expect(projects.map(\.worktree) == ["/", "/repo"])
         #expect(projects.map(\.activityAtEpochMs) == [2, 1_712_000_000_000])
+        #expect(projects.map(\.isRepository) == [false, true])
         #expect(ProtocolRoutingURLProtocol.requests.count == 2)
         #expect(ProtocolRoutingURLProtocol.requests[0].url?.path.hasSuffix("/api/project") == true)
         let fallback = try #require(ProtocolRoutingURLProtocol.requests[1].url)

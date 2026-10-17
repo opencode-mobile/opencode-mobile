@@ -49,12 +49,64 @@ struct ServerProjectSuggestionsTests {
         #expect(suggestions.map(\.id) == ["p7", "p6", "p5", "p4", "p3"])
     }
 
-    private func project(_ id: String, _ worktree: String, activity: Int64?) -> Project {
+    @Test func excludesFoldersWithoutVersionControl() {
+        let projects = [
+            project("folder", "/Users/me/notes", activity: 2, repository: false),
+            project("repo", "/Users/me/app", activity: 1),
+        ]
+        #expect(worktrees(projects) == ["/Users/me/app"])
+    }
+
+    @Test func excludesTempAndHiddenFolders() {
+        let projects = [
+            project("upload", "/private/var/folders/_p/x/T/opencode/uploads/8d82", activity: 9),
+            project("var", "/var/folders/_p/x/T/repo", activity: 8),
+            project("tmp", "/tmp/repo", activity: 7),
+            project("scratch", "/Users/me/.t3/scratch", activity: 6),
+            project("dot", "/Users/me/.jenv", activity: 5),
+            project("win-temp", #"C:\Users\me\AppData\Local\Temp\repo"#, activity: 4),
+            project("tmpish", "/Users/me/tmp-tools", activity: 3),
+            project("app", "/Users/me/app", activity: 2),
+        ]
+        #expect(worktrees(projects) == ["/Users/me/tmp-tools", "/Users/me/app"])
+    }
+
+    /// A real server's list: agents and tools left plain-folder projects that outrank the repos.
+    @Test func suggestsReposNotOnHomeFromAgentCreatedServerList() {
+        let projects = [
+            project("opencode", "/Users/ivan/Projects/opencode", activity: 20),
+            project("mobile", "/Users/ivan/Projects/opencode-mobile", activity: 19),
+            project("home", "/Users/ivan", activity: 18, repository: false),
+            project("t3code", "/Users/ivan/Projects/t3code", activity: 17),
+            project("root", "/", activity: 16, repository: false),
+            project("scratch", "/Users/ivan/.t3/scratch", activity: 15, repository: false),
+            project("projects", "/Users/ivan/Projects", activity: 14, repository: false),
+            project("evidence", "/Users/ivan/Projects/oc-655-evidence", activity: 13, repository: false),
+            project("upload", "/private/var/folders/_p/drt8/T/opencode/uploads/8d82a3f4", activity: 12, repository: false),
+            project("global", "/", activity: 11, repository: false),
+            project("instax", "/Users/ivan/Projects/INSTAX", activity: 10),
+            project("homelab", "/Users/ivan/Projects/homelab", activity: 9),
+            project("difftest", "/Users/ivan/Projects/DiffTest", activity: 8),
+            project("docs", "/Users/ivan/Projects/opencode-mobile-docs", activity: 7),
+            project("jenv", "/Users/ivan/.jenv", activity: 6),
+        ]
+        let home = [
+            "/Users/ivan/Projects/opencode",
+            "/Users/ivan/Projects/opencode-mobile",
+            "/Users/ivan",
+            "/Users/ivan/Projects/t3code",
+        ]
+        let suggestions = ServerProjectSuggestions.suggestions(from: projects, excluding: home)
+        #expect(suggestions.map(\.displayName) == ["INSTAX", "homelab", "DiffTest", "opencode-mobile-docs"])
+    }
+
+    private func project(_ id: String, _ worktree: String, activity: Int64?, repository: Bool = true) -> Project {
         Project(
             id: id,
             worktree: worktree,
             displayName: ProjectDomainAdapter.displayName(from: worktree),
-            activityAtEpochMs: activity
+            activityAtEpochMs: activity,
+            isRepository: repository
         )
     }
 

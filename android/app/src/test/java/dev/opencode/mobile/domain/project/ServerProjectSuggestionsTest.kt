@@ -81,15 +81,88 @@ class ServerProjectSuggestionsTest {
         assertEquals(listOf("p8", "p7", "p6", "p5", "p4"), result.map { it.id })
     }
 
+    @Test
+    fun excludesFoldersWithoutVersionControl() {
+        val result =
+            ServerProjectSuggestions.suggestions(
+                projects =
+                    listOf(
+                        project("folder", "/Users/me/notes", 2, repository = false),
+                        project("repo", "/Users/me/app", 1),
+                    ),
+                addedWorktrees = emptyList(),
+            )
+
+        assertEquals(listOf("/Users/me/app"), result.map { it.worktree })
+    }
+
+    @Test
+    fun excludesTempAndHiddenFolders() {
+        val result =
+            ServerProjectSuggestions.suggestions(
+                projects =
+                    listOf(
+                        project("upload", "/private/var/folders/_p/x/T/opencode/uploads/8d82", 9),
+                        project("var", "/var/folders/_p/x/T/repo", 8),
+                        project("tmp", "/tmp/repo", 7),
+                        project("scratch", "/Users/me/.t3/scratch", 6),
+                        project("dot", "/Users/me/.jenv", 5),
+                        project("win-temp", """C:\Users\me\AppData\Local\Temp\repo""", 4),
+                        project("tmpish", "/Users/me/tmp-tools", 3),
+                        project("app", "/Users/me/app", 2),
+                    ),
+                addedWorktrees = emptyList(),
+            )
+
+        assertEquals(listOf("/Users/me/tmp-tools", "/Users/me/app"), result.map { it.worktree })
+    }
+
+    /** A real server's list: agents and tools left plain-folder projects that outrank the repos. */
+    @Test
+    fun suggestsReposNotOnHomeFromAgentCreatedServerList() {
+        val result =
+            ServerProjectSuggestions.suggestions(
+                projects =
+                    listOf(
+                        project("opencode", "/Users/ivan/Projects/opencode", 20),
+                        project("mobile", "/Users/ivan/Projects/opencode-mobile", 19),
+                        project("home", "/Users/ivan", 18, repository = false),
+                        project("t3code", "/Users/ivan/Projects/t3code", 17),
+                        project("root", "/", 16, repository = false),
+                        project("scratch", "/Users/ivan/.t3/scratch", 15, repository = false),
+                        project("projects", "/Users/ivan/Projects", 14, repository = false),
+                        project("evidence", "/Users/ivan/Projects/oc-655-evidence", 13, repository = false),
+                        project("upload", "/private/var/folders/_p/drt8/T/opencode/uploads/8d82a3f4", 12, repository = false),
+                        project("global", "/", 11, repository = false),
+                        project("instax", "/Users/ivan/Projects/INSTAX", 10),
+                        project("homelab", "/Users/ivan/Projects/homelab", 9),
+                        project("difftest", "/Users/ivan/Projects/DiffTest", 8),
+                        project("docs", "/Users/ivan/Projects/opencode-mobile-docs", 7),
+                        project("jenv", "/Users/ivan/.jenv", 6),
+                    ),
+                addedWorktrees =
+                    listOf(
+                        "/Users/ivan/Projects/opencode",
+                        "/Users/ivan/Projects/opencode-mobile",
+                        "/Users/ivan",
+                        "/Users/ivan/Projects/t3code",
+                    ),
+            )
+
+        assertEquals(listOf("INSTAX", "homelab", "DiffTest", "opencode-mobile-docs"), result.map { it.displayName })
+    }
+
     private fun project(
         id: String,
         worktree: String,
         activity: Long?,
+        repository: Boolean = true,
     ): Project =
         Project(
             id = id,
             worktree = worktree,
             displayName = ProjectDomainAdapter.displayNameFromWorktree(worktree),
             activityAtEpochMs = activity,
+            isRepository = repository,
         )
 }

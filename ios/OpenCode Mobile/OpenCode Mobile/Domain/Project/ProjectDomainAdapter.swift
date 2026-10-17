@@ -7,7 +7,8 @@ struct ProjectDomainAdapter: Sendable {
             id: dto.id,
             worktree: worktree,
             displayName: Self.displayName(from: worktree),
-            activityAtEpochMs: dto.time?.activityEpochMs
+            activityAtEpochMs: dto.time?.activityEpochMs,
+            isRepository: !(dto.vcs ?? "").isEmpty
         )
     }
 

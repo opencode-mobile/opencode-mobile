@@ -188,7 +188,7 @@ private fun SuggestionFrame(
                             title = suggestion.name,
                             subtitle = suggestion.path,
                             caption = suggestion.activityLabel,
-                            startDecorator = StartDecorator.Icon(OpenCodeIcons.CallSplit, contentDescription = null),
+                            startDecorator = StartDecorator.Icon(OpenCodeIcons.Folder, contentDescription = null),
                             onClick = { callbacks.onSelectSuggestion(suggestion.path) },
                         )
                     }
@@ -232,7 +232,7 @@ private fun AddProjectSuggestionRuler() {
         subtitle = "/Users/placeholder",
         caption = "1d ago",
         enabled = false,
-        startDecorator = StartDecorator.Icon(OpenCodeIcons.CallSplit, contentDescription = null),
+        startDecorator = StartDecorator.Icon(OpenCodeIcons.Folder, contentDescription = null),
         modifier = Modifier.alpha(0f).clearAndSetSemantics {},
     )
 }

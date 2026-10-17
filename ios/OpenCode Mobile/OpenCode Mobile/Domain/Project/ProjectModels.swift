@@ -6,6 +6,8 @@ struct Project: Sendable, Equatable {
     let displayName: String
     /// Last activity in epoch ms (v2 `time.active`, else `time.updated`), when the server sent it.
     var activityAtEpochMs: Int64? = nil
+    /// True when the server tracks the folder with a version control system (`vcs`, e.g. git).
+    var isRepository = false
 }
 
 enum ServerProbeError: Error, Equatable {
