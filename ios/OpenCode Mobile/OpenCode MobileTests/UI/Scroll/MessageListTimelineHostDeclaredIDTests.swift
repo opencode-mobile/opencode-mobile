@@ -68,6 +68,65 @@ struct MessageListTimelineHostDeclaredIDTests {
         #expect(EqualityCountingItem.equalityCallCount == 0)
     }
 
+    @Test func aliasedServerEcho_reconfiguresOptimisticCellInsteadOfReplacingIt() {
+        let controller = MessageListTimelineViewController<EqualityCountingItem, Text>(
+            itemContent: { Text($0.label) },
+            horizontalContentPadding: 0,
+            topContentPadding: 0,
+            bottomContentPadding: 0,
+            bottomOverlayInset: 0,
+            interItemSpacing: 0
+        )
+        controller.loadViewIfNeeded()
+        controller.view.frame = CGRect(x: 0, y: 0, width: 320, height: 640)
+
+        controller.apply(
+            items: [
+                EqualityCountingItem(id: "a", label: "A"),
+                EqualityCountingItem(id: "optimistic-1", label: "Sending"),
+            ],
+            packet: MessageListTimelineApplyPacket(
+                frameRevision: 1,
+                insertedRowIDs: ["a", "optimistic-1"],
+                changedRowIDs: [],
+                removedRowIDs: [],
+                layoutChangedRowIDs: ["a", "optimistic-1"],
+                grewBottomRowIDs: [],
+                decorateRowIDs: [],
+                isRequired: false,
+                kinds: [.structure]
+            ),
+            animatingDifferences: false
+        )
+
+        // Server echo `msg-1` replaced `optimistic-1` in the projected frame.
+        let packet = MessageListTimelineApplyPacket(
+            frameRevision: 2,
+            insertedRowIDs: ["msg-1"],
+            changedRowIDs: [],
+            removedRowIDs: ["optimistic-1"],
+            layoutChangedRowIDs: ["msg-1"],
+            grewBottomRowIDs: [],
+            decorateRowIDs: [],
+            isRequired: false,
+            kinds: [.structure]
+        ).aliasingRowIDs(["msg-1": "optimistic-1"])
+        #expect(packet.insertedRowIDs.isEmpty)
+        #expect(packet.removedRowIDs.isEmpty)
+        #expect(packet.changedRowIDs == ["optimistic-1"])
+        #expect(packet.layoutChangedRowIDs == ["optimistic-1"])
+
+        controller.apply(
+            items: [
+                EqualityCountingItem(id: "a", label: "A"),
+                EqualityCountingItem(id: "optimistic-1", label: "Sent"),
+            ],
+            packet: packet,
+            animatingDifferences: false
+        )
+        #expect(controller.lastReconfiguredIDs == ["optimistic-1"])
+    }
+
     @Test func sameFrameRevision_skipsReapplyEvenWithLeftoverChangeSets() {
         let controller = MessageListTimelineViewController<EqualityCountingItem, Text>(
             itemContent: { Text($0.label) },

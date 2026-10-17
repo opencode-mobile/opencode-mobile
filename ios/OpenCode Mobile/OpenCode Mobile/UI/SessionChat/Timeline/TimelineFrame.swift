@@ -138,6 +138,10 @@ nonisolated struct TimelineFrame: Equatable, Sendable {
     let decorateRowIDs: Set<String>
     /// Region-owned load / refresh / post-send applies that must not be coalesced away.
     let isRequired: Bool
+    /// Server row id → list identity for server echoes that replaced an optimistic
+    /// send row. Hosts key the echo under the optimistic id, so the cell reconfigures
+    /// in place instead of a delete and insert. Carried across frames.
+    var listIDAliases: [String: String] = [:]
 
     static let empty = TimelineFrame(
         frameRevision: 0,
@@ -177,7 +181,8 @@ nonisolated struct TimelineFrame: Equatable, Sendable {
             layoutChangedRowIDs: layoutChangedRowIDs,
             grewBottomRowIDs: grewBottomRowIDs,
             decorateRowIDs: decorateRowIDs,
-            isRequired: isRequired
+            isRequired: isRequired,
+            listIDAliases: listIDAliases
         )
     }
 }
@@ -377,6 +382,31 @@ struct MessageListTimelineApplyPacket: Equatable, Sendable {
             decorateRowIDs: decorateRowIDs,
             isRequired: isRequired,
             kinds: nextKinds
+        )
+    }
+
+    /// Rekeys declared row IDs into list identity (`TimelineFrame.listIDAliases`).
+    /// An echo that replaced its optimistic row in this frame lands in both the
+    /// inserted and removed sets under one identity; it becomes a layout change
+    /// so the host reconfigures that cell.
+    func aliasingRowIDs(_ aliases: [String: String]) -> MessageListTimelineApplyPacket {
+        guard !aliases.isEmpty else { return self }
+        func rekey(_ ids: Set<String>) -> Set<String> {
+            Set(ids.map { aliases[$0] ?? $0 })
+        }
+        let inserted = rekey(insertedRowIDs)
+        let removed = rekey(removedRowIDs)
+        let replaced = inserted.intersection(removed)
+        return MessageListTimelineApplyPacket(
+            frameRevision: frameRevision,
+            insertedRowIDs: inserted.subtracting(replaced),
+            changedRowIDs: rekey(changedRowIDs).union(replaced),
+            removedRowIDs: removed.subtracting(replaced),
+            layoutChangedRowIDs: rekey(layoutChangedRowIDs).union(replaced),
+            grewBottomRowIDs: rekey(grewBottomRowIDs),
+            decorateRowIDs: rekey(decorateRowIDs),
+            isRequired: isRequired,
+            kinds: kinds
         )
     }
 

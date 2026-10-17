@@ -738,7 +738,9 @@ final class SessionChatTimeline {
             : timelineFrame
 
         // Match Android: structural DisplayFrame + TimelineFrame conversion off main.
+        let previewCandidates = displayMessages.suffix(AttachmentPreviewCache.warmMessageCount).map(\.message)
         let projected = await Task.detached(priority: .userInitiated) {
+            AttachmentPreviewCache.shared.warm(previewCandidates)
             let frame = DisplayFrameBuilder.build(
                 sessionKey: sessionKey,
                 frameRevision: frameRevision,
@@ -932,7 +934,8 @@ final class SessionChatTimeline {
             layoutChangedRowIDs: layoutChangedRowIDs,
             grewBottomRowIDs: grewBottomRowIDs,
             decorateRowIDs: decorateRowIDs,
-            isRequired: isRequired
+            isRequired: isRequired,
+            listIDAliases: timelineFrame.listIDAliases
         )
     }
 

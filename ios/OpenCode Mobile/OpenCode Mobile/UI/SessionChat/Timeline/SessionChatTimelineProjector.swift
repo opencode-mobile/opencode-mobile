@@ -58,7 +58,7 @@ nonisolated enum SessionChatTimelineProjector {
 
         let serverRows = serverRows(from: frame, previousByID: previousByID, metadataLabel: resolveLabel)
 
-        let merged: [TimelineRow] =
+        let merged: (rows: [TimelineRow], echoes: [String: String]) =
             if optimistic.mergePending {
                 mergeWithPending(
                     serverRows,
@@ -66,12 +66,19 @@ nonisolated enum SessionChatTimelineProjector {
                     baselineSignatureCounts: optimistic.baselineSignatureCounts
                 )
             } else {
-                serverRows
+                (serverRows, [:])
             }
-        let rows = merged.filter { !isHiddenPendingPrompt($0) }
+        let rows = merged.rows.filter { !isHiddenPendingPrompt($0) }
 
         let previousIDs = Set(previousByID.keys)
         let nextIDs = Set(rows.map(\.id))
+        // Alias only an echo that replaces its optimistic row in this frame. A server
+        // row the host already shows under its own id keeps that identity.
+        var listIDAliases = (previous?.listIDAliases ?? [:]).filter { nextIDs.contains($0.key) }
+        for (serverID, pendingID) in merged.echoes
+        where previousIDs.contains(pendingID) && !previousIDs.contains(serverID) && nextIDs.contains(serverID) {
+            listIDAliases[serverID] = pendingID
+        }
         let inserted = nextIDs.subtracting(previousIDs)
         let removed = previousIDs.subtracting(nextIDs)
 
@@ -111,7 +118,8 @@ nonisolated enum SessionChatTimelineProjector {
             layoutChangedRowIDs: layoutChanged,
             grewBottomRowIDs: grewBottom,
             decorateRowIDs: decorate,
-            isRequired: false
+            isRequired: false,
+            listIDAliases: listIDAliases
         )
     }
 
@@ -296,12 +304,14 @@ nonisolated enum SessionChatTimelineProjector {
         row.role == .user && row.pendingDelivery != nil
     }
 
+    /// Merged rows plus, for each dropped optimistic row matched to its server
+    /// echo, `serverID → pendingID`.
     private static func mergeWithPending(
         _ serverRows: [TimelineRow],
         pendingRows: [TimelineRow],
         baselineSignatureCounts: [String: Int]
-    ) -> [TimelineRow] {
-        guard !pendingRows.isEmpty else { return serverRows }
+    ) -> (rows: [TimelineRow], echoes: [String: String]) {
+        guard !pendingRows.isEmpty else { return (serverRows, [:]) }
         let pendingToKeep = unmatchedPending(
             pendingRows,
             serverRows: serverRows,
@@ -309,17 +319,45 @@ nonisolated enum SessionChatTimelineProjector {
         )
         let keptIDs = Set(pendingToKeep.map(\.id))
         let dropped = pendingRows.filter { !keptIDs.contains($0.id) }
-        return splicePending(
-            applyPendingChrome(serverRows, dropped: dropped),
-            pendingToKeep: pendingToKeep
-        )
+        let chromed = applyPendingChrome(serverRows, dropped: dropped)
+        return (splicePending(chromed.rows, pendingToKeep: pendingToKeep), chromed.echoes)
     }
 
     /// Pending optimistic rows that no new server echo accounts for yet. A row is
     /// matched by exact signature when the server count exceeds the send-time
     /// baseline; attachment rows fall back to a text-only match. Shared with
     /// `SessionChatTimeline` so reconciliation and merge agree on "acknowledged".
+    ///
+    /// A shown optimistic row is not retired by a waiting steer echo. v2 enqueues every
+    /// prompt, idle sends included, as a steer delivered at the next step boundary;
+    /// retiring on that hidden copy left a frame with neither bubble. A queued echo
+    /// still retires it, since the pending strip owns a real queue.
     static func unmatchedPending(
+        _ pendingRows: [TimelineRow],
+        serverRows: [TimelineRow],
+        baselineSignatureCounts: [String: Int]
+    ) -> [TimelineRow] {
+        let shownPending = pendingRows.filter { !isHiddenPendingPrompt($0) }
+        guard !shownPending.isEmpty else {
+            return unmatched(pendingRows, serverRows: serverRows, baselineSignatureCounts: baselineSignatureCounts)
+        }
+        let keptIDs = Set(
+            unmatched(
+                shownPending,
+                serverRows: serverRows.filter { $0.pendingDelivery != .steer },
+                baselineSignatureCounts: baselineSignatureCounts
+            ).map(\.id)
+        ).union(
+            unmatched(
+                pendingRows.filter(isHiddenPendingPrompt),
+                serverRows: serverRows,
+                baselineSignatureCounts: baselineSignatureCounts
+            ).map(\.id)
+        )
+        return pendingRows.filter { keptIDs.contains($0.id) }
+    }
+
+    private static func unmatched(
         _ pendingRows: [TimelineRow],
         serverRows: [TimelineRow],
         baselineSignatureCounts: [String: Int]
@@ -416,8 +454,8 @@ nonisolated enum SessionChatTimelineProjector {
     private static func applyPendingChrome(
         _ serverRows: [TimelineRow],
         dropped: [TimelineRow]
-    ) -> [TimelineRow] {
-        guard !dropped.isEmpty else { return serverRows }
+    ) -> (rows: [TimelineRow], echoes: [String: String]) {
+        guard !dropped.isEmpty else { return (serverRows, [:]) }
         var remaining = dropped
         var pendingByServerID: [String: TimelineRow] = [:]
         for row in serverRows where row.role == .user {
@@ -447,8 +485,9 @@ nonisolated enum SessionChatTimelineProjector {
             }) else { continue }
             pendingByServerID[target.id] = pending
         }
-        guard !pendingByServerID.isEmpty else { return serverRows }
-        return serverRows.map { row in
+        guard !pendingByServerID.isEmpty else { return (serverRows, [:]) }
+        let echoes = pendingByServerID.mapValues(\.id)
+        let rows = serverRows.map { row in
             guard let pending = pendingByServerID[row.id] else { return row }
             var next = row
             if row.metadataLabel.isEmpty, !pending.metadataLabel.isEmpty {
@@ -463,6 +502,7 @@ nonisolated enum SessionChatTimelineProjector {
             }
             return next
         }
+        return (rows, echoes)
     }
 
     static func signatureCounts(_ rows: [TimelineRow]) -> [String: Int] {
@@ -478,8 +518,9 @@ nonisolated enum SessionChatTimelineProjector {
             case .text(_, let text, _):
                 return "text:\(text)"
             case .attachment(_, let file):
+                // Kind, not mime: a server may re-encode an image (v2 stores a large PNG as JPEG).
                 let name = file.filename.trimmingCharacters(in: .whitespacesAndNewlines)
-                return name.isEmpty ? "file:\(file.mime)" : "file:\(name):\(file.mime)"
+                return name.isEmpty ? "file:\(file.kind.rawValue)" : "file:\(name):\(file.kind.rawValue)"
             case .toolCard, .toolGroup, .childSessionRow, .reasoning, .stepParagraph, .stopNote, .failureLine, .notice:
                 return nil
             }
@@ -557,7 +598,7 @@ nonisolated enum SessionChatTimelineProjector {
             case .text(let id, _, let doc):
                 "t:\(id):\(doc != nil)"
             case .attachment(let id, let file):
-                "a:\(id):\(file.id)"
+                "a:\(id):\(file.id):\(file.previewData != nil)"
             case .toolCard(let id, let card):
                 "c:\(id):\(card.errorText != nil):\(card.additions ?? -1):\(card.deletions ?? -1)"
             case .toolGroup(let id, let group):
