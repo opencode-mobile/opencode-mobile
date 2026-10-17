@@ -353,7 +353,11 @@ private fun SessionChatTimelineReadyView(
     val layoutAffectingRevision = apply?.layoutAffectingRevision ?: 0L
     val structureAffectingRevision = apply?.structureAffectingRevision ?: 0L
     val growBottomRevision = apply?.growBottomRevision ?: 0L
-    val messageIds = remember(committedMessages) { committedMessages.map { it.id } }
+    // List keys, not row ids: visible-anchor restore matches them against item keys.
+    val messageIds =
+        remember(committedMessages, committedFrame) {
+            committedMessages.map { committedFrame?.listKey(it.id) ?: it.id }
+        }
     val timeline =
         rememberMessageListTimeline(
             messageCount = committedMessages.size,
@@ -367,10 +371,11 @@ private fun SessionChatTimelineReadyView(
         )
 
     val oldestMessageId = committedMessages.firstOrNull()?.id
-    val oldestVisible by remember(listState, oldestMessageId) {
+    val oldestMessageKey = oldestMessageId?.let { committedFrame?.listKey(it) ?: it }
+    val oldestVisible by remember(listState, oldestMessageKey) {
         derivedStateOf {
             oldestMessageId != null &&
-                listState.layoutInfo.visibleItemsInfo.any { it.key == oldestMessageId }
+                listState.layoutInfo.visibleItemsInfo.any { it.key == oldestMessageKey }
         }
     }
     val olderLoadIntent = remember { MessageListOlderLoadIntent() }
@@ -450,7 +455,8 @@ private fun SessionChatTimelineReadyView(
                         // add the default 12 or the resting gap becomes 28.
                         bottom = bottomOverlayInset,
                     ),
-                key = { message -> message.id },
+                // A server echo keeps the item slot of the optimistic row it replaced.
+                key = { message -> committedFrame?.listKey(message.id) ?: message.id },
                 statusIndicatorKey =
                     if (committedWorkingLabel != null) {
                         SESSION_CHAT_STATUS_INDICATOR_KEY

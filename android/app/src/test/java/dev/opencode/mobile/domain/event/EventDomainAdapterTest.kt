@@ -307,6 +307,20 @@ class EventDomainAdapterTest {
     }
 
     @Test
+    fun parseEvents_projectsInlinePromptedFileDataIntoDataUrl() {
+        val events =
+            adapter.parseEvents(
+                """{"type":"session.inbox.enqueued","data":{"inboxID":"msg-2","sessionID":"ses-1","item":{"type":"user","payload":{"text":"What","files":[{"data":"AA==","mime":"image/JPEG","source":{"type":"inline"},"name":"Photo 1.png"}]},"delivery":"steer"}}}""",
+            )
+
+        val file = events[2].rawProperties?.get("part")?.jsonObject
+        assertEquals("file", file?.get("type")?.jsonPrimitive?.content)
+        assertEquals("data:image/jpeg;base64,AA==", file?.get("url")?.jsonPrimitive?.content)
+        assertEquals("image/JPEG", file?.get("mime")?.jsonPrimitive?.content)
+        assertEquals("Photo 1.png", file?.get("filename")?.jsonPrimitive?.content)
+    }
+
+    @Test
     fun parseEvents_projectsPromptedFilesWithoutUri() {
         val events =
             adapter.parseEvents(

@@ -1819,6 +1819,182 @@ class TimelineProjectorTest {
         assertTrue(rows.single { it.id == "msg-inbox" }.pendingDelivery == FollowUpDelivery.Queue)
     }
 
+    @Test
+    fun unmatchedPending_keepsShownOptimisticWhenOnlyWaitingSteerEchoArrives() {
+        val pending = userRow(id = "optimistic-1", text = "What is this", isPending = true)
+        val steer = userRow(id = "msg-echo", text = "What is this", pendingDelivery = FollowUpDelivery.Steer)
+        val leftover =
+            TimelineProjector.unmatchedPending(
+                pendingRows = listOf(pending),
+                serverRows = listOf(steer),
+                baselineSignatures = emptyMap(),
+            )
+        assertEquals(listOf("optimistic-1"), leftover.map { it.id })
+    }
+
+    @Test
+    fun unmatchedPending_hiddenSteerOptimisticStillRetiredBySteerEcho() {
+        val pending =
+            userRow(id = "optimistic-1", text = "Steer this", isPending = true, pendingDelivery = FollowUpDelivery.Steer)
+        val steer = userRow(id = "msg-echo", text = "Steer this", pendingDelivery = FollowUpDelivery.Steer)
+        val leftover =
+            TimelineProjector.unmatchedPending(
+                pendingRows = listOf(pending),
+                serverRows = listOf(steer),
+                baselineSignatures = emptyMap(),
+            )
+        assertTrue(leftover.isEmpty())
+    }
+
+    @Test
+    fun project_photoSend_keepsOptimisticThroughSteerEchoAndKeysDeliveredEchoUnderIt() {
+        val pending =
+            TimelineProjector.rowFromMessageItem(
+                SessionChatMessageItem(
+                    id = "optimistic-1",
+                    role = MessageRole.User,
+                    text = "What is this",
+                    metadataLabel = "Build · Scripted · 10:58 PM",
+                    isPending = true,
+                    blocks =
+                        listOf(
+                            SessionChatTimelineBlock.Text(
+                                blockID = PresentationBlockId.messageFallback("optimistic-1"),
+                                text = "What is this",
+                            ),
+                        ),
+                    attachments =
+                        listOf(
+                            SessionChatAttachmentItem(
+                                id = "local-photo",
+                                filename = "Photo 1.png",
+                                variant = OpenCodeAttachmentVariant.Image,
+                                signature = "local-png",
+                            ),
+                        ),
+                ),
+            )
+        val inputs = OptimisticInputs(pendingRows = listOf(pending))
+        val optimisticFrame =
+            TimelineFrame(
+                frameRevision = 1L,
+                rows = listOf(pending),
+                insertedRowIDs = setOf(pending.id),
+                changedRowIDs = emptySet(),
+                removedRowIDs = emptySet(),
+                layoutChangedRowIDs = emptySet(),
+            )
+
+        val steerFrame =
+            TimelineProjector.project(
+                frame = photoEchoFrame(revision = 2L, waiting = FollowUpDelivery.Steer),
+                optimisticInputs = inputs,
+                previous = optimisticFrame,
+            )
+        assertEquals(listOf("optimistic-1"), steerFrame.rows.map { it.id })
+        assertTrue(steerFrame.removedRowIDs.isEmpty())
+
+        val deliveredFrame =
+            TimelineProjector.project(
+                frame = photoEchoFrame(revision = 3L, waiting = null),
+                optimisticInputs = inputs,
+                previous = steerFrame,
+            )
+        assertEquals(listOf("msg-echo"), deliveredFrame.rows.map { it.id })
+        assertEquals(mapOf("msg-echo" to "optimistic-1"), deliveredFrame.listIdAliases)
+        assertEquals("optimistic-1", deliveredFrame.listKey("msg-echo"))
+
+        val settledFrame =
+            TimelineProjector.project(
+                frame = photoEchoFrame(revision = 4L, waiting = null),
+                previous = deliveredFrame,
+            )
+        assertEquals("optimistic-1", settledFrame.listKey("msg-echo"))
+    }
+
+    @Test
+    fun project_serverRowAlreadyListedKeepsItsOwnKey() {
+        val pending = userRow(id = "optimistic-1", text = "Hold this", isPending = true)
+        val echoBody = userBody(id = "msg-echo", text = "Hold this")
+        val previous =
+            TimelineProjector.project(
+                frame = DisplayFrame(sessionKey = "session", frameRevision = 1L, sourceRevision = 0L, messages = listOf(echoBody)),
+            )
+        val frame =
+            TimelineProjector.project(
+                frame = DisplayFrame(sessionKey = "session", frameRevision = 2L, sourceRevision = 0L, messages = listOf(echoBody)),
+                optimisticInputs = OptimisticInputs(pendingRows = listOf(pending)),
+                previous = previous,
+            )
+        assertTrue(frame.listIdAliases.isEmpty())
+        assertEquals("msg-echo", frame.listKey("msg-echo"))
+    }
+
+    @Test
+    fun matchesOptimistic_imageReencodedByServerUnderSameNameStillMatches() {
+        fun photoRow(
+            id: String,
+            signature: String,
+        ) = TimelineProjector.rowFromMessageItem(
+            SessionChatMessageItem(
+                id = id,
+                role = MessageRole.User,
+                text = "What is this",
+                metadataLabel = "",
+                attachments =
+                    listOf(
+                        SessionChatAttachmentItem(
+                            id = "$id-file",
+                            filename = "Photo 1.png",
+                            variant = OpenCodeAttachmentVariant.Image,
+                            signature = signature,
+                        ),
+                    ),
+            ),
+        )
+        // v2 stores a large PNG as image/jpeg under the original filename.
+        assertTrue(
+            TimelineProjector.matchesOptimistic(
+                server = photoRow("msg-echo", signature = "image/jpeg"),
+                pending = photoRow("optimistic-1", signature = "image/png"),
+            ),
+        )
+    }
+
+    private fun photoEchoFrame(
+        revision: Long,
+        waiting: FollowUpDelivery?,
+    ): DisplayFrame {
+        val file =
+            MessagePart.File(
+                id = "prt-photo",
+                filename = "Photo 1.png",
+                mime = "image/jpeg",
+                kind = AttachmentKind.Image,
+                dataUrl = "",
+            )
+        val message =
+            Message(
+                id = "msg-echo",
+                role = MessageRole.User,
+                text = "What is this",
+                parts = listOf(MessagePart.Text("What is this", id = "prt-text"), file),
+                isWaitingForPickup = waiting != null,
+                followUpDelivery = waiting,
+            )
+        val blocks =
+            when (val result = SessionChatTimelineBlocks.build(MessageRole.User, message.parts)) {
+                is SessionChatTimelineBlocksResult.Ok -> result.blocks
+                SessionChatTimelineBlocksResult.MissingPartIds -> error("expected Ok")
+            }
+        return DisplayFrame(
+            sessionKey = "session",
+            frameRevision = revision,
+            sourceRevision = 0L,
+            messages = listOf(DisplayMessageBody(message, blocks)),
+        )
+    }
+
     private fun userRow(
         id: String,
         text: String,
