@@ -470,37 +470,60 @@ private fun ListItemStartDecoration(
                         maxLines = 1,
                     )
                 }
-                decorator.statusDot?.let { tone ->
+                val statusTone = decorator.statusDot
+                val showWorktree = decorator.worktree
+                if (statusTone != null && showWorktree) {
                     Box(
                         modifier =
                             Modifier
                                 .align(Alignment.BottomEnd)
                                 .offset(x = 1.dp, y = 1.dp)
-                                .size(ListItemLetterStatusDotSize)
-                                .border(2.dp, backgroundBase, CircleShape)
-                                .clip(CircleShape)
-                                .background(tone.foreground())
-                                .semantics { hideFromAccessibility() },
-                    )
-                }
-                if (decorator.worktree) {
-                    Box(
-                        modifier =
-                            Modifier
-                                .align(Alignment.TopEnd)
-                                .offset(x = 1.dp, y = (-1).dp)
                                 .size(ListItemLetterStatusDotSize + 4.dp)
                                 .border(2.dp, backgroundBase, CircleShape)
                                 .clip(CircleShape)
-                                .background(openCodeColor("surface-raised-base")),
+                                .background(statusTone.foreground()),
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(
                             imageVector = OpenCodeIcons.CallSplit,
                             contentDescription = "Worktree",
                             modifier = Modifier.size(10.dp),
-                            tint = openCodeColor("icon-strong-base"),
+                            tint = backgroundBase,
                         )
+                    }
+                } else {
+                    statusTone?.let { tone ->
+                        Box(
+                            modifier =
+                                Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .offset(x = 1.dp, y = 1.dp)
+                                    .size(ListItemLetterStatusDotSize)
+                                    .border(2.dp, backgroundBase, CircleShape)
+                                    .clip(CircleShape)
+                                    .background(tone.foreground())
+                                    .semantics { hideFromAccessibility() },
+                        )
+                    }
+                    if (showWorktree) {
+                        Box(
+                            modifier =
+                                Modifier
+                                    .align(Alignment.TopEnd)
+                                    .offset(x = 1.dp, y = (-1).dp)
+                                    .size(ListItemLetterStatusDotSize + 4.dp)
+                                    .border(2.dp, backgroundBase, CircleShape)
+                                    .clip(CircleShape)
+                                    .background(openCodeColor("surface-raised-base")),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                imageVector = OpenCodeIcons.CallSplit,
+                                contentDescription = "Worktree",
+                                modifier = Modifier.size(10.dp),
+                                tint = openCodeColor("icon-strong-base"),
+                            )
+                        }
                     }
                 }
             }
