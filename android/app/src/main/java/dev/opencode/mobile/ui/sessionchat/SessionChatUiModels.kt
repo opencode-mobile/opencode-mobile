@@ -653,6 +653,8 @@ data class SessionChatCommandsRegionState(
     val mcpErrorMessage: String? = null,
     val mcpSummary: McpServerSummary = McpServerSummary.Empty,
     val hasPendingRevert: Boolean = false,
+    /** First reverted message while a revert is pending; the timeline hides it and later turns. */
+    val revertMessageId: String? = null,
     val forkDialogVisible: Boolean = false,
     val forkDraftTitle: String = "",
     val forkSubmitting: Boolean = false,

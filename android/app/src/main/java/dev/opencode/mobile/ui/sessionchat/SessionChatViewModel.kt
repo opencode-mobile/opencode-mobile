@@ -264,6 +264,10 @@ class SessionChatViewModel
             composer.ioDispatcher = ioDispatcher
             viewModelScope.launch {
                 foregroundEventStream.events.collect { event ->
+                    eventDomainAdapter.sessionRevertUpdate(event)?.let { update ->
+                        commands.applyRevertUpdate(update)
+                        return@collect
+                    }
                     if (event.type != "worktree.updated") return@collect
                     val projectId = event.namedProjectId() ?: return@collect
                     if (projectId !in checkoutProjectIds) return@collect
@@ -285,6 +289,7 @@ class SessionChatViewModel
                     )
                 }.collect { (timelineState, composerState, infoState, reviewChangesState, commandsState, inboxState) ->
                     timeline.updateServerCommands(composerState.serverCommands)
+                    timeline.updateRevertBoundary(commandsState.revertMessageId)
                     composer.tryApplyInitialSelection(timelineState, timeline.modelSelectionHistoryHints())
                     val isTurnActive =
                         infoState.sessionStatusLabel != null ||

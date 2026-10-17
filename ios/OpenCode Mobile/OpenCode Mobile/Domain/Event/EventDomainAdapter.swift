@@ -1181,6 +1181,38 @@ nonisolated struct EventDomainAdapter: Sendable {
         return SessionTitleUpdate(sessionID: sessionID, title: title)
     }
 
+    /// Pending-revert change. v1 `session.updated` carries the whole session, so an absent
+    /// `info.revert` means none; v2 stages, clears and commits with dedicated events.
+    func sessionRevertUpdate(from event: OpencodeEvent) -> SessionRevertUpdate? {
+        switch event.type {
+        case "session.updated":
+            guard let info = event.rawProperties?["info"]?.dictionaryValue else { return nil }
+            guard let sessionID = event.sessionID ?? info["id"]?.stringValue else { return nil }
+            let messageID = info["revert"]?.dictionaryValue?["messageID"]?.stringValue
+            return SessionRevertUpdate(sessionID: sessionID, messageID: messageID)
+        case "session.revert.staged":
+            guard let sessionID = event.sessionID,
+                  let messageID = event.rawProperties?["revert"]?.dictionaryValue?["messageID"]?.stringValue
+            else { return nil }
+            return SessionRevertUpdate(sessionID: sessionID, messageID: messageID)
+        case "session.revert.cleared", "session.revert.committed":
+            guard let sessionID = event.sessionID else { return nil }
+            return SessionRevertUpdate(sessionID: sessionID, messageID: nil)
+        default:
+            return nil
+        }
+    }
+
+    /// Session removed on the server. v1 carries the id only in `info.id`; v2 sends `sessionID`.
+    func sessionDeletedID(from event: OpencodeEvent) -> String? {
+        guard event.type == "session.deleted" else { return nil }
+        let info = event.rawProperties?["info"]?.dictionaryValue
+        return event.sessionID
+            ?? info?["id"]?.stringValue
+            ?? info?["sessionID"]?.stringValue
+            ?? info?["sessionId"]?.stringValue
+    }
+
     /// Viewed watermark carried by a v2 `session.viewed` event (`{ sessionID, idle }`).
     /// Returns nil when the event is not a usable viewed update.
     func sessionViewed(_ event: OpencodeEvent) -> SessionViewedUpdate? {
@@ -1225,6 +1257,13 @@ nonisolated struct SessionViewedUpdate: Equatable, Sendable {
 nonisolated struct SessionTitleUpdate: Equatable, Sendable {
     let sessionID: String
     let title: String
+}
+
+/// Pending revert of a session after an event: `messageID` is the first reverted message, nil
+/// when no revert is pending any more (cleared, or committed and already truncated).
+nonisolated struct SessionRevertUpdate: Equatable, Sendable {
+    let sessionID: String
+    let messageID: String?
 }
 
 /// Session → running v2 compaction item id, shared by copies of the adapter.

@@ -871,6 +871,49 @@ struct EventDomainAdapterTests {
         #expect(update?.title == "Live title")
     }
 
+    @Test func sessionDeletedID_readsV1InfoIDAndV2SessionID() {
+        let adapter = EventDomainAdapter()
+        let v1 = adapter.parseEvent(
+            dataLine: #"{"payload":{"type":"session.deleted","properties":{"info":{"id":"ses-1","title":"Gone"}}}}"#
+        )
+        #expect(adapter.sessionDeletedID(from: v1!) == "ses-1")
+        let v2 = adapter.parseEvent(
+            dataLine: #"{"id":"evt_1","type":"session.deleted","data":{"sessionID":"ses-2"},"durable":{"aggregateID":"ses-2","seq":18,"version":2}}"#
+        )
+        #expect(adapter.sessionDeletedID(from: v2!) == "ses-2")
+        let updated = adapter.parseEvent(
+            dataLine: #"{"payload":{"type":"session.updated","properties":{"info":{"id":"ses-1"}}}}"#
+        )
+        #expect(adapter.sessionDeletedID(from: updated!) == nil)
+    }
+
+    @Test func sessionRevertUpdate_readsV1SessionAndV2RevertEvents() {
+        let adapter = EventDomainAdapter()
+        func update(_ line: String) -> SessionRevertUpdate? {
+            adapter.sessionRevertUpdate(from: adapter.parseEvent(dataLine: line)!)
+        }
+        #expect(
+            update(#"{"payload":{"type":"session.updated","properties":{"info":{"id":"ses-1","revert":{"messageID":"msg-2"}}}}}"#)
+                == SessionRevertUpdate(sessionID: "ses-1", messageID: "msg-2")
+        )
+        #expect(
+            update(#"{"payload":{"type":"session.updated","properties":{"info":{"id":"ses-1","title":"T"}}}}"#)
+                == SessionRevertUpdate(sessionID: "ses-1", messageID: nil)
+        )
+        #expect(
+            update(#"{"type":"session.revert.staged","data":{"sessionID":"ses-2","revert":{"messageID":"msg-5"}}}"#)
+                == SessionRevertUpdate(sessionID: "ses-2", messageID: "msg-5")
+        )
+        #expect(
+            update(#"{"type":"session.revert.cleared","data":{"sessionID":"ses-2"}}"#)
+                == SessionRevertUpdate(sessionID: "ses-2", messageID: nil)
+        )
+        #expect(
+            update(#"{"type":"session.revert.committed","data":{"sessionID":"ses-2","to":"msg-5"}}"#)
+                == SessionRevertUpdate(sessionID: "ses-2", messageID: nil)
+        )
+    }
+
     @Test func sessionTitleUpdate_ignoresNonUpdatedEvents() {
         let adapter = EventDomainAdapter()
         let event = adapter.parseEvent(

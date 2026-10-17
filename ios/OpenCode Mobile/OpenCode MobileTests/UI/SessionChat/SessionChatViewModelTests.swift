@@ -440,6 +440,36 @@ struct SessionChatViewModelTests {
         #expect(viewModel.uiState.sessionTitle == "Live title")
     }
 
+    @Test func sessionDeletedEvent_leavesOpenSessionOnly() async {
+        let eventStream = FakeForegroundEventStream()
+        let viewModel = makeViewModel(eventStream: eventStream)
+        defer { viewModel.stopObserving() }
+
+        // Let SessionInfo finish subscribing to the fake event stream.
+        try? await Task.sleep(for: .milliseconds(50))
+
+        // v1 shape: the id is only in info.id.
+        eventStream.emit(
+            OpencodeEvent(
+                type: "session.deleted",
+                sessionID: nil,
+                rawProperties: ["info": .dictionary(["id": .string("ses-other")])]
+            )
+        )
+        let leftEarly = await waitUntil(timeoutMs: 200) { viewModel.uiState.shouldLeaveSession }
+        #expect(!leftEarly)
+
+        eventStream.emit(
+            OpencodeEvent(
+                type: "session.deleted",
+                sessionID: nil,
+                rawProperties: ["info": .dictionary(["id": .string("ses-1")])]
+            )
+        )
+        let left = await waitUntil { viewModel.uiState.shouldLeaveSession }
+        #expect(left)
+    }
+
     @Test func cancelRenameSession_hidesDialog() async {
         let viewModel = makeViewModel()
         defer { viewModel.stopObserving() }
@@ -3176,6 +3206,74 @@ struct SessionChatViewModelTests {
         #expect(sessionRepository.revertRequest == .init(id: "ses-1", messageID: "msg-1", partID: nil))
         #expect(sessionRepository.abortCallCount == 0)
         #expect(viewModel.uiState.hasPendingRevert)
+    }
+
+    @Test func revertStagedElsewhere_hidesRevertedTurnsUntilCleared() async {
+        let messages = [
+            Message(id: "msg-1", role: .user, text: "First", model: nil, mode: nil, sentAtEpochMs: 1),
+            Message(id: "msg-2", role: .assistant, text: "Reply", model: nil, mode: nil, sentAtEpochMs: 2),
+            Message(id: "msg-3", role: .user, text: "Second", model: nil, mode: nil, sentAtEpochMs: 3),
+            Message(id: "msg-4", role: .assistant, text: "Reply 2", model: nil, mode: nil, sentAtEpochMs: 4),
+        ]
+        let eventStream = FakeForegroundEventStream()
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(messages: messages),
+            eventStream: eventStream,
+            serverProtocol: .v2
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        func shows(_ id: String) -> Bool { viewModel.uiState.messages.contains { $0.id.contains(id) } }
+        #expect(shows("msg-3"))
+
+        eventStream.emit(
+            OpencodeEvent(
+                type: "session.revert.staged",
+                sessionID: "ses-1",
+                rawProperties: ["revert": .dictionary(["messageID": .string("msg-3")])]
+            )
+        )
+        let hidden = await waitUntil { !shows("msg-3") && !shows("msg-4") }
+        #expect(hidden)
+        #expect(shows("msg-1"))
+        #expect(shows("msg-2"))
+        #expect(viewModel.uiState.hasPendingRevert)
+
+        eventStream.emit(OpencodeEvent(type: "session.revert.cleared", sessionID: "ses-1"))
+        let restored = await waitUntil { shows("msg-3") && shows("msg-4") }
+        #expect(restored)
+        #expect(!viewModel.uiState.hasPendingRevert)
+    }
+
+    @Test func v1SessionUpdatedRevertFromElsewhere_showsPendingRevert() async {
+        let messages = [
+            Message(id: "msg-1", role: .user, text: "First", model: nil, mode: nil, sentAtEpochMs: 1),
+            Message(id: "msg-2", role: .assistant, text: "Reply", model: nil, mode: nil, sentAtEpochMs: 2),
+        ]
+        let eventStream = FakeForegroundEventStream()
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(messages: messages),
+            eventStream: eventStream
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+
+        eventStream.emit(
+            OpencodeEvent(
+                type: "session.updated",
+                sessionID: nil,
+                rawProperties: [
+                    "info": .dictionary([
+                        "id": .string("ses-1"),
+                        "title": .string("Title"),
+                        "revert": .dictionary(["messageID": .string("msg-2")]),
+                    ]),
+                ]
+            )
+        )
+        let pending = await waitUntil { viewModel.uiState.hasPendingRevert }
+        #expect(pending)
+        #expect(!viewModel.uiState.messages.contains { $0.id.contains("msg-2") })
     }
 
     @Test func cancelRevert_unrevertsAndClearsComposer() async {

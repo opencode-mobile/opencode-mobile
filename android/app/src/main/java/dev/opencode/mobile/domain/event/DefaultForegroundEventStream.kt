@@ -111,7 +111,9 @@ class DefaultForegroundEventStream
         private val eventIngress = SseEventIngress(eventDomainAdapter)
         private var overall = LiveOverallFlags()
         private val configEpoch = AtomicLong(0)
-        private val authTerminal = AtomicBoolean(false)
+
+        /** Leases whose last attempt was rejected with 401/403; guarded by [leaseLock]. */
+        private val authRejectedTargets = mutableSetOf<String>()
         private val protocolConfirmed = AtomicBoolean(false)
         private val reconnectWakeEpoch = AtomicLong(0)
         private val reconnectWake =
@@ -235,7 +237,6 @@ class DefaultForegroundEventStream
             val snapshot: LiveConnectionSnapshot
             val occupancyToJoin: Job?
             val leaseJobs: List<Job>
-            authTerminal.set(false)
             protocolConfirmed.set(false)
             synchronized(stateLock) {
                 val wasFullyConnected = overall.wasFullyConnected
@@ -466,6 +467,7 @@ class DefaultForegroundEventStream
                     val stale = leases.keys.filter { it !in required }
                     stale.forEach { key ->
                         leases.remove(key)?.cancel()
+                        authRejectedTargets.remove(key)
                     }
                     for (target in targets) {
                         if (leases[target.key] == null) {
@@ -486,11 +488,9 @@ class DefaultForegroundEventStream
                 scope.launch {
                     var retryAttempt = 0
                     while (generation == streamGeneration.get() && occupancyJob?.isActive == true) {
-                        if (authTerminal.get()) return@launch
                         if (!isRequired(target.key)) return@launch
                         deviceNetworkPath.waitUntilReady()
                         if (generation != streamGeneration.get() || !isRequired(target.key)) return@launch
-                        if (authTerminal.get()) return@launch
                         val lastActivityMs = lease.lastActivityMs
                         lastActivityMs.set(System.currentTimeMillis())
                         val attemptId = lease.nextAttempt()
@@ -642,7 +642,6 @@ class DefaultForegroundEventStream
                                 }
                             }
                         if (generation != streamGeneration.get() || !isRequired(target.key)) return@launch
-                        if (authTerminal.get()) return@launch
                         if (lease.currentAttempt() == attemptId) {
                             logAttemptOutcome(target.key, outcome)
                         }
@@ -654,11 +653,18 @@ class DefaultForegroundEventStream
                                     attempt = retryAttempt + 1,
                                 )
                         ) {
-                            SseRetryDecision.AuthFailed -> {
+                            is SseRetryDecision.AuthFailed -> {
                                 val status =
                                     (outcome as? SseAttemptOutcome.Http)?.statusCode ?: 0
-                                markAuthFailed(generation, target.key, status)
-                                return@launch
+                                markAuthFailed(generation, target.key, status, decision.delayMs)
+                                if (reconnectWakeEpoch.get() != wakeAtStart) {
+                                    retryAttempt = 0
+                                    continue
+                                }
+                                retryAttempt += 1
+                                if (awaitReconnectWakeOrDelay(decision.delayMs)) {
+                                    retryAttempt = 0
+                                }
                             }
                             is SseRetryDecision.Retry -> {
                                 if (deviceNetworkPath.status.value == DeviceNetworkPathStatus.Unavailable) {
@@ -694,18 +700,23 @@ class DefaultForegroundEventStream
                 } == true
             }
 
+        /**
+         * Shows the rejected credential without giving up: the lease keeps retrying on the slow auth
+         * backoff (woken early by foreground or refresh) so the stream recovers once auth does.
+         */
         private fun markAuthFailed(
             generation: Long,
             targetKey: String,
             statusCode: Int,
+            retryInMs: Long,
         ) {
-            authTerminal.set(true)
+            if (generation != streamGeneration.get()) return
+            synchronized(leaseLock) { authRejectedTargets += targetKey }
             diagnosticLogger.warning(
                 DiagnosticLogArea.Sse,
-                "SSE auth failed target=$targetKey status=$statusCode; stopping retries",
+                "SSE auth failed target=$targetKey status=$statusCode; retrying in ${retryInMs}ms",
             )
-            setConnectionState(EventStreamConnectionState.AuthFailed, generation)
-            cancelAllLeases()
+            refreshOverallState(generation)
         }
 
         private fun logAttemptOutcome(
@@ -791,6 +802,7 @@ class DefaultForegroundEventStream
         ) {
             if (generation != streamGeneration.get()) return
             lease.live.set(true)
+            synchronized(leaseLock) { authRejectedTargets -= lease.target.key }
             refreshOverallState(generation)
         }
 
@@ -827,7 +839,7 @@ class DefaultForegroundEventStream
 
         private fun decideOverallStateLocked(generation: Long): OverallDecision? {
             if (generation != streamGeneration.get()) return null
-            if (_connectionState.value == EventStreamConnectionState.AuthFailed) {
+            if (synchronized(leaseLock) { authRejectedTargets.isNotEmpty() }) {
                 return OverallDecision(
                     generation = generation,
                     connectionState = EventStreamConnectionState.AuthFailed,
@@ -929,6 +941,7 @@ class DefaultForegroundEventStream
                     }
                 leases.values.forEach { it.cancel() }
                 leases.clear()
+                authRejectedTargets.clear()
                 return jobs
             }
         }

@@ -1566,6 +1566,28 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun sessionDeletedEvent_leavesOpenSessionOnly() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val viewModel = createViewModel(repository)
+            viewModel.bind("ses-1", "Original title", "/repo")
+            advanceUntilIdle()
+
+            fun deleted(id: String) =
+                OpencodeEvent(
+                    type = "session.deleted",
+                    rawProperties = buildJsonObject { put("info", buildJsonObject { put("id", id) }) },
+                )
+            repository.eventStream.emit(deleted("ses-other"))
+            advanceUntilIdle()
+            assertFalse(viewModel.uiState.value.shouldLeaveSession)
+
+            repository.eventStream.emit(deleted("ses-1"))
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.shouldLeaveSession)
+        }
+
+    @Test
     fun cancelRenameSession_hidesDialog() =
         runTest(testDispatcher) {
             val viewModel = createViewModel(FakeMessageRepository())
@@ -4361,6 +4383,84 @@ class SessionChatViewModelTest {
             assertEquals("First", viewModel.uiState.value.composer.text)
             assertEquals(0, sessionRepository.abortCallCount)
             assertTrue(viewModel.uiState.value.hasPendingRevert)
+        }
+
+    @Test
+    fun revertStagedElsewhere_hidesRevertedTurnsUntilCleared() =
+        runTest(testDispatcher) {
+            val messages =
+                listOf(
+                    Message(id = "msg-1", role = MessageRole.User, text = "First"),
+                    Message(id = "msg-2", role = MessageRole.Assistant, text = "Reply"),
+                    Message(id = "msg-3", role = MessageRole.User, text = "Second"),
+                    Message(id = "msg-4", role = MessageRole.Assistant, text = "Reply 2"),
+                )
+            val repository = FakeMessageRepository(messages = messages)
+            val viewModel = createViewModel(repository = repository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            fun shows(id: String) =
+                viewModel.uiState.value.messages
+                    .any { it.id.contains(id) }
+            assertTrue(shows("msg-3"))
+
+            repository.eventStream.emit(
+                OpencodeEvent(
+                    type = "session.revert.staged",
+                    sessionId = "ses-1",
+                    rawProperties = buildJsonObject { put("revert", buildJsonObject { put("messageID", "msg-3") }) },
+                ),
+            )
+            advanceUntilIdle()
+            assertTrue(shows("msg-1"))
+            assertTrue(shows("msg-2"))
+            assertFalse(shows("msg-3"))
+            assertFalse(shows("msg-4"))
+            assertTrue(viewModel.uiState.value.hasPendingRevert)
+
+            repository.eventStream.emit(OpencodeEvent(type = "session.revert.cleared", sessionId = "ses-1"))
+            advanceUntilIdle()
+            assertTrue(shows("msg-3"))
+            assertTrue(shows("msg-4"))
+            assertFalse(viewModel.uiState.value.hasPendingRevert)
+        }
+
+    @Test
+    fun v1SessionUpdatedRevertFromElsewhere_showsPendingRevert() =
+        runTest(testDispatcher) {
+            val messages =
+                listOf(
+                    Message(id = "msg-1", role = MessageRole.User, text = "First"),
+                    Message(id = "msg-2", role = MessageRole.Assistant, text = "Reply"),
+                )
+            val repository = FakeMessageRepository(messages = messages)
+            val viewModel = createViewModel(repository = repository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            repository.eventStream.emit(
+                OpencodeEvent(
+                    type = "session.updated",
+                    rawProperties =
+                        buildJsonObject {
+                            put(
+                                "info",
+                                buildJsonObject {
+                                    put("id", "ses-1")
+                                    put("title", "Title")
+                                    put("revert", buildJsonObject { put("messageID", "msg-2") })
+                                },
+                            )
+                        },
+                ),
+            )
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.hasPendingRevert)
+            assertFalse(
+                viewModel.uiState.value.messages
+                    .any { it.id.contains("msg-2") },
+            )
         }
 
     @Test

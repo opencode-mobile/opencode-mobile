@@ -431,6 +431,19 @@ final class SessionChatCommands {
         )
     }
 
+    /// First reverted message while a revert is pending; the timeline hides it and later turns.
+    var revertMessageID: String? { currentRevertMessageID }
+
+    /// A revert staged, cleared or committed for the open session by any client, including the
+    /// server's echo of this device's own revert.
+    func applyRevertUpdate(_ update: SessionRevertUpdate) {
+        guard update.sessionID == sessionID, update.messageID != currentRevertMessageID else { return }
+        OpenCodeLog.sessionChat.info(
+            "revert boundary update session=\(self.sessionID) message=\(update.messageID ?? "none")"
+        )
+        setRevertBoundary(update.messageID)
+    }
+
     func consumePendingRevert() {
         guard currentRevertMessageID != nil else { return }
         setRevertBoundary(nil)

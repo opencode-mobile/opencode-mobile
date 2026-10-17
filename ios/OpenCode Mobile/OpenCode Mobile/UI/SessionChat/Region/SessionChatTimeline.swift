@@ -33,6 +33,9 @@ final class SessionChatTimeline {
     private(set) var collapseConsecutiveToolCalls = false
     /// Chip-timeline preference (OPE-260); narration paragraphs with tool chips.
     private(set) var chipTimeline = false
+    /// First message of a pending revert (v1 `session.revert`, v2 `session.revert.staged`): it and
+    /// every later message stay hidden until the revert is cleared or committed (#619).
+    private(set) var revertBoundaryMessageID: String?
     /// Children of this session that subagent parts without a child id link to (#648).
     private(set) var childSessions: [SessionChatChildSessionCandidate] = []
     private let listChildSessions: (@MainActor (String) async throws -> [Session])?
@@ -108,6 +111,36 @@ final class SessionChatTimeline {
                 expirePendingPromptPatches: false
             )
         }
+    }
+
+    func updateRevertBoundary(_ messageID: String?) {
+        guard messageID != revertBoundaryMessageID else { return }
+        revertBoundaryMessageID = messageID
+        guard !lastLoadedDisplayMessages.isEmpty else { return }
+        let snapshot = lastLoadedDisplayMessages
+        let fromCache = state.messagesFromCache
+        Task {
+            await applyLoadedDisplayMessagesTransform(
+                snapshot,
+                isRefreshing: false,
+                fromQuietRefresh: true,
+                messagesFromCache: fromCache,
+                expirePendingPromptPatches: false
+            )
+        }
+    }
+
+    /// Drops the revert boundary message and everything after it. A boundary outside the loaded
+    /// window falls back to id order, which opencode message ids follow.
+    nonisolated static func hidingReverted(
+        _ messages: [DisplayMessage],
+        from boundary: String?
+    ) -> [DisplayMessage] {
+        guard let boundary else { return messages }
+        if let index = messages.firstIndex(where: { $0.message.id == boundary }) {
+            return Array(messages[..<index])
+        }
+        return messages.filter { $0.message.id < boundary }
     }
 
     /// Looks up this session's children when a subagent part has no child id
@@ -287,7 +320,7 @@ final class SessionChatTimeline {
             sessionKey: sessionID,
             frameRevision: frameRevision,
             sourceRevision: frameRevision,
-            displayMessages: displayMessages,
+            displayMessages: Self.hidingReverted(displayMessages, from: revertBoundaryMessageID),
             serverCommands: serverCommands,
             collapseConsecutiveToolCalls: collapseConsecutiveToolCalls,
             chipTimeline: chipTimeline,
@@ -687,6 +720,7 @@ final class SessionChatTimeline {
         let collapse = collapseConsecutiveToolCalls
         let chips = chipTimeline
         let children = childSessions
+        let visibleDisplayMessages = Self.hidingReverted(displayMessages, from: revertBoundaryMessageID)
 
         let pendingRows: [TimelineRow]
         if mergePendingWhileSending {
@@ -709,7 +743,7 @@ final class SessionChatTimeline {
                 sessionKey: sessionKey,
                 frameRevision: frameRevision,
                 sourceRevision: frameRevision,
-                displayMessages: displayMessages,
+                displayMessages: visibleDisplayMessages,
                 serverCommands: commands,
                 collapseConsecutiveToolCalls: collapse,
                 chipTimeline: chips,

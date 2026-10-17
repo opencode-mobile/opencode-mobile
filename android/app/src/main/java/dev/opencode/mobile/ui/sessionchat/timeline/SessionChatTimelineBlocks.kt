@@ -677,7 +677,7 @@ object SessionChatTimelineBlocks {
             isChildSessionTool(name) -> ToolChipFamily.Agent
             name == "skill" -> ToolChipFamily.Skill
             name in contextToolNames || name == "webfetch" -> ToolChipFamily.Explore
-            name == "edit" || name == "write" || name == "apply_patch" -> ToolChipFamily.Change
+            name == "edit" || name == "write" || name == "apply_patch" || name == "patch" -> ToolChipFamily.Change
             else -> ToolChipFamily.Command
         }
 
@@ -688,7 +688,7 @@ object SessionChatTimelineBlocks {
     ): String =
         when (name) {
             "read" -> readPathSubtitle(tool.input)?.let(::lastPathComponent)
-            "edit", "write", "apply_patch" -> card.subtitle?.let(::lastPathComponent)
+            "edit", "write", "apply_patch", "patch" -> card.subtitle?.let(::lastPathComponent)
             "glob", "grep" -> inputString(tool.input, "pattern") ?: inputString(tool.input, "path", "directory")
             "websearch" -> inputString(tool.input, "query")
             "webfetch" -> inputString(tool.input, "url")?.let(::urlHost)
@@ -1251,7 +1251,7 @@ object SessionChatTimelineBlocks {
             "websearch" -> if (count == 1) "Search" else "$count searches"
             "question" -> askedQuestionsTitle(count)
             "skill" -> if (count == 1) "Skill" else "$count skills"
-            "apply_patch" -> if (count == 1) "Patch" else "$count patches"
+            "apply_patch", "patch" -> if (count == 1) "Patch" else "$count patches"
             "linear_get_issue" -> if (count == 1) "Get issue" else "$count Get issues"
             "linear_save_issue" -> if (count == 1) "Save issue" else "$count Save issues"
             else -> if (count == 1) name else "$count $name"
@@ -1386,7 +1386,7 @@ object SessionChatTimelineBlocks {
             "task", "subagent" -> taskChrome(tool)
             "edit" -> fileChangeChrome(tool, displayTitle = "Edit")
             "write" -> fileChangeChrome(tool, displayTitle = "Write")
-            "apply_patch" -> fileChangeChrome(tool, displayTitle = "Patch")
+            "apply_patch", "patch" -> fileChangeChrome(tool, displayTitle = "Patch")
             else -> null
         }
     }

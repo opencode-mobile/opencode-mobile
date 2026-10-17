@@ -1617,6 +1617,52 @@ class SessionChatTimelineBlocksTest {
     }
 
     @Test
+    fun build_v2PatchToolRendersAsPatchWithPerFileCounts() {
+        fun file(
+            path: String,
+            additions: Int,
+            deletions: Int,
+        ) = JsonObject(
+            mapOf(
+                "file" to JsonPrimitive(path),
+                "additions" to JsonPrimitive(additions),
+                "deletions" to JsonPrimitive(deletions),
+            ),
+        )
+        val tool =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "patch",
+                            status = ToolStatus.Completed,
+                            id = "prt-1",
+                            metadata =
+                                JsonObject(
+                                    mapOf(
+                                        "files" to
+                                            kotlinx.serialization.json.JsonArray(
+                                                listOf(
+                                                    file("src/currency.ts", 1, 0),
+                                                    file("src/format.ts", 2, 1),
+                                                    file("src/legacy-format.js", 0, 3),
+                                                ),
+                                            ),
+                                    ),
+                                ),
+                        ),
+                    ),
+            ).single() as SessionChatTimelineBlock.ToolCard
+
+        assertEquals("Patch", tool.title)
+        assertEquals("3 files", tool.subtitle)
+        assertEquals(3, tool.additions)
+        assertEquals(4, tool.deletions)
+        assertTrue(tool.opensChangesReview)
+    }
+
+    @Test
     fun build_applyPatchSingleFileDeepLinksPath() {
         val tool =
             buildBlocks(

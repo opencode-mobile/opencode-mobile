@@ -13,6 +13,11 @@ struct SseRetryBackoffTests {
         #expect(jittered == 1_000)
     }
 
+    @Test func authSequenceIsSlowerAndCapsAtThirtySecondsBeforeJitter() {
+        let sequence = [1, 2, 3, 4, 5].map { SseRetryBackoff.authDelayMs(attempt: $0, randomInt: { _, _ in 0 }) }
+        #expect(sequence == [5_000, 10_000, 20_000, 30_000, 30_000])
+    }
+
     @Test func exponentialSequenceCapsAtEightSecondsBeforeJitter() {
         let sequence = [1, 2, 3, 4, 5].map { SseRetryBackoff.delayMs(attempt: $0, randomInt: { _, _ in 0 }) }
         #expect(sequence == [1_000, 2_000, 4_000, 8_000, 8_000])

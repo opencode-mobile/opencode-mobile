@@ -8,7 +8,10 @@ internal sealed interface SseRetryDecision {
         val delayMs: Long,
     ) : SseRetryDecision
 
-    data object AuthFailed : SseRetryDecision
+    /** The server rejected the credential; show it, but keep retrying slowly in case auth recovers. */
+    data class AuthFailed(
+        val delayMs: Long,
+    ) : SseRetryDecision
 }
 
 internal object SseAttemptPolicy {
@@ -28,7 +31,7 @@ internal object SseAttemptPolicy {
             is SseAttemptOutcome.Http ->
                 when {
                     outcome.statusCode == 401 || outcome.statusCode == 403 ->
-                        SseRetryDecision.AuthFailed
+                        SseRetryDecision.AuthFailed(SseRetryBackoff.authDelayMs(attempt, random))
                     outcome.statusCode == 404 && !protocolConfirmed ->
                         SseRetryDecision.Retry(UNCONFIRMED_404_RETRY_MS)
                     else -> SseRetryDecision.Retry(SseRetryBackoff.delayMs(attempt, random))
