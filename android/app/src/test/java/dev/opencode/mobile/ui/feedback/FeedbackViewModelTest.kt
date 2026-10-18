@@ -361,6 +361,51 @@ class FeedbackViewModelTest {
         }
 
     @Test
+    fun dictation_morphsTheSheetIntoListening() {
+        val viewModel = viewModel()
+        viewModel.dictationEnabled = { true }
+        viewModel.open(FeedbackScreen.Settings)
+        assertEquals("Report a problem", viewModel.state.value.sheetTitle)
+        assertFalse(viewModel.state.value.dictationTakesOverCompose)
+
+        viewModel.beginDictation(languageLabel = "English", onDevice = true)
+
+        assertEquals("Listening", viewModel.state.value.sheetTitle)
+        assertTrue(viewModel.state.value.dictationTakesOverCompose)
+
+        viewModel.dictationCancel()
+
+        assertEquals("Report a problem", viewModel.state.value.sheetTitle)
+        assertFalse(viewModel.state.value.dictationTakesOverCompose)
+    }
+
+    @Test
+    fun dictationUnavailable_takesOverWithoutTheListeningTitle() {
+        val viewModel = viewModel()
+        viewModel.dictationEnabled = { true }
+        viewModel.open(FeedbackScreen.Settings)
+
+        viewModel.beginDictationUnavailable(ComposerDictationPhase.PermissionDenied, "Microphone access is off")
+
+        assertTrue(viewModel.state.value.dictationTakesOverCompose)
+        assertEquals("Report a problem", viewModel.state.value.sheetTitle)
+    }
+
+    @Test
+    fun dictationStopped_keepsTheListeningTitle() {
+        val viewModel = viewModel()
+        viewModel.dictationEnabled = { true }
+        viewModel.open(FeedbackScreen.Settings)
+        viewModel.beginDictation(languageLabel = "English", onDevice = true)
+
+        viewModel.dictationStopped()
+
+        assertEquals(ComposerDictationPhase.Stopped, viewModel.state.value.dictation?.phase)
+        assertEquals("Listening", viewModel.state.value.sheetTitle)
+        assertTrue(viewModel.state.value.dictationTakesOverCompose)
+    }
+
+    @Test
     fun dictation_staysOffWhenTheSettingIsOff() {
         val viewModel = viewModel()
         viewModel.dictationEnabled = { false }

@@ -208,6 +208,45 @@ struct FeedbackViewModelTests {
         #expect(model.uiState.dictation == nil)
     }
 
+    @Test func dictation_morphsTheSheetIntoListening() {
+        let model = makeModel(dictationEnabled: true)
+        #expect(model.uiState.sheetTitle == "Report a problem")
+        #expect(model.uiState.dictationTakesOverCompose == false)
+
+        model.beginDictation(languageLabel: "English", onDevice: true)
+
+        #expect(model.uiState.sheetTitle == "Listening")
+        #expect(model.uiState.dictationTakesOverCompose == true)
+
+        model.dictationCancel()
+
+        #expect(model.uiState.sheetTitle == "Report a problem")
+        #expect(model.uiState.dictationTakesOverCompose == false)
+    }
+
+    @Test func dictationUnavailable_takesOverWithoutTheListeningTitle() {
+        let model = makeModel(dictationEnabled: true)
+
+        model.beginDictationUnavailable(.permissionDenied, message: "Microphone access is off")
+
+        #expect(model.uiState.dictationTakesOverCompose == true)
+        #expect(model.uiState.sheetTitle == "Report a problem")
+    }
+
+    @Test func dictationInsert_keepsTheListeningTitleWhileFinishing() {
+        let model = makeModel(dictationEnabled: true)
+        model.dictationFinishDelayNs = 60_000_000_000
+        model.beginDictation(languageLabel: "English", onDevice: true)
+        model.dictationPartial(committed: "hi", volatile: "")
+
+        model.dictationInsert()
+
+        #expect(model.uiState.dictation?.phase == .finishing)
+        #expect(model.uiState.sheetTitle == "Listening")
+        #expect(model.uiState.dictationTakesOverCompose == true)
+        model.dictationCancel()
+    }
+
     @Test func dictation_staysOffWhenTheSettingIsOff() {
         let model = makeModel(dictationEnabled: false)
 

@@ -13,6 +13,11 @@ import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -92,6 +97,7 @@ import dev.opencode.mobile.ui.components.OpenCodeInlineNotice
 import dev.opencode.mobile.ui.components.OpenCodeInlineNoticeAction
 import dev.opencode.mobile.ui.components.OpenCodeInlineNoticeTone
 import dev.opencode.mobile.ui.components.OpenCodeInlineNoticeVariant
+import dev.opencode.mobile.ui.components.OpenCodeLayout
 import dev.opencode.mobile.ui.components.OpenCodeOverflowMenuEntry
 import dev.opencode.mobile.ui.components.OpenCodeTextInput
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
@@ -177,12 +183,7 @@ fun FeedbackSheet(
     val page = if (state.status is FeedbackSendStatus.Sent) null else state.page
     OpenCodeBottomSheet(
         visible = sheetState.visible,
-        title =
-            when (page) {
-                FeedbackPage.HideParts -> "Hide parts"
-                FeedbackPage.LogPreview -> "Diagnostic log"
-                FeedbackPage.Compose, null -> "Report a problem"
-            },
+        title = state.sheetTitle,
         onDismissRequest = {
             if (page == FeedbackPage.HideParts || page == FeedbackPage.LogPreview) {
                 viewModel.closePage()
@@ -200,70 +201,94 @@ fun FeedbackSheet(
         keyboard = if (page == FeedbackPage.Compose) OpenCodeBottomSheetKeyboard.Expand else OpenCodeBottomSheetKeyboard.Dismiss,
         pinnedTop = {
             when (page) {
-                FeedbackPage.Compose -> KindSwitch(state.kind, viewModel::setKind)
+                FeedbackPage.Compose ->
+                    if (!state.dictationTakesOverCompose) {
+                        KindSwitch(state.kind, viewModel::setKind)
+                    }
                 FeedbackPage.LogPreview -> LogWindowSwitch(state.logWindow, viewModel::setLogWindow)
                 FeedbackPage.HideParts, null -> Unit
             }
         },
-        pinnedBottom = {
-            when (page) {
-                FeedbackPage.Compose -> {
-                    val card = state.dictation?.toCardModel(dictation.elapsedLabel)
-                    if (card != null) {
-                        FeedbackDictation(
-                            card = card,
-                            onCancel = viewModel::dictationCancel,
-                            onInsert = viewModel::dictationInsert,
-                            onOpenSettings = { openAppSettings(context) },
-                            onDownload = dictation.download,
-                            onRetry = dictation.retry,
-                        )
-                    } else {
-                        FeedbackActions(
-                            state = state,
-                            showsMic = dictation.showsMic,
-                            onAddScreenshot = {
-                                if (state.addScreenshotPicksPhoto) {
-                                    photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                                } else {
-                                    viewModel.addCapturedScreenshot()
-                                }
-                            },
-                            onAddLogs = { viewModel.setIncludeLogs(true) },
-                            onDictate = dictation.begin,
-                            onSend = viewModel::send,
-                        )
+        pinnedBottom =
+            if (state.dictationTakesOverCompose) {
+                null
+            } else {
+                {
+                    when (page) {
+                        FeedbackPage.Compose ->
+                            FeedbackActions(
+                                state = state,
+                                showsMic = dictation.showsMic,
+                                onAddScreenshot = {
+                                    if (state.addScreenshotPicksPhoto) {
+                                        photoPicker.launch(
+                                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                                        )
+                                    } else {
+                                        viewModel.addCapturedScreenshot()
+                                    }
+                                },
+                                onAddLogs = { viewModel.setIncludeLogs(true) },
+                                onDictate = dictation.begin,
+                                onSend = viewModel::send,
+                            )
+                        FeedbackPage.HideParts ->
+                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                OpenCodeButton(
+                                    variant = OpenCodeButtonVariant.FullWidthText("Undo"),
+                                    contrast = OpenCodeButtonContrast.Low,
+                                    enabled = state.screenshot?.hiddenRects?.isNotEmpty() == true,
+                                    onClick = viewModel::undoHiddenArea,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                OpenCodeButton(
+                                    variant = OpenCodeButtonVariant.FullWidthText("Done"),
+                                    onClick = viewModel::closePage,
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
+                        FeedbackPage.LogPreview -> Unit
+                        null ->
+                            OpenCodeButton(
+                                variant = OpenCodeButtonVariant.FullWidthText("Done"),
+                                onClick = ::dismiss,
+                            )
                     }
                 }
-                FeedbackPage.HideParts ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        OpenCodeButton(
-                            variant = OpenCodeButtonVariant.FullWidthText("Undo"),
-                            contrast = OpenCodeButtonContrast.Low,
-                            enabled = state.screenshot?.hiddenRects?.isNotEmpty() == true,
-                            onClick = viewModel::undoHiddenArea,
-                            modifier = Modifier.weight(1f),
-                        )
-                        OpenCodeButton(
-                            variant = OpenCodeButtonVariant.FullWidthText("Done"),
-                            onClick = viewModel::closePage,
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
-                FeedbackPage.LogPreview -> Unit
-                null ->
-                    OpenCodeButton(
-                        variant = OpenCodeButtonVariant.FullWidthText("Done"),
-                        onClick = ::dismiss,
-                    )
-            }
-        },
+            },
     ) {
-        when (page) {
-            FeedbackPage.Compose -> ComposeBody(state, viewModel)
-            FeedbackPage.HideParts -> HidePartsBody(state, viewModel)
-            FeedbackPage.LogPreview -> LogPreviewBody(state)
-            null -> SentBody(state)
+        val listeningCard =
+            if (state.dictationTakesOverCompose) state.dictation?.toCardModel(dictation.elapsedLabel) else null
+        AnimatedContent(
+            targetState = listeningCard,
+            transitionSpec = {
+                fadeIn(tween(durationMillis = 240)) togetherWith fadeOut(tween(durationMillis = 160))
+            },
+            contentKey = { it != null },
+            label = "feedback-dictation-morph",
+        ) { card ->
+            if (card != null) {
+                FeedbackDictation(
+                    card = card,
+                    onCancel = viewModel::dictationCancel,
+                    onInsert = viewModel::dictationInsert,
+                    onOpenSettings = { openAppSettings(context) },
+                    onDownload = dictation.download,
+                    onRetry = dictation.retry,
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = OpenCodeLayout.SheetContentHorizontalInset)
+                            .padding(top = 8.dp, bottom = 12.dp),
+                )
+            } else {
+                when (page) {
+                    FeedbackPage.Compose -> ComposeBody(state, viewModel)
+                    FeedbackPage.HideParts -> HidePartsBody(state, viewModel)
+                    FeedbackPage.LogPreview -> LogPreviewBody(state)
+                    null -> SentBody(state)
+                }
+            }
         }
     }
 }
@@ -453,7 +478,7 @@ private fun FeedbackActions(
     }
 }
 
-/** The Dictation Card takes the action row's place while the user speaks, as in the Session Composer. */
+/** The Dictation Card replaces the compose form, so listening is the sheet rather than a second popup. */
 @Composable
 private fun FeedbackDictation(
     card: ComposerDictationCardModel,
@@ -462,10 +487,12 @@ private fun FeedbackDictation(
     onOpenSettings: () -> Unit,
     onDownload: () -> Unit,
     onRetry: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val focusManager = LocalFocusManager.current
     LaunchedEffect(Unit) { focusManager.clearFocus() }
     OpenCodeDictationCard(
+        modifier = modifier,
         variant = card.variant,
         committed = card.committed,
         volatileTail = card.volatileTail,
