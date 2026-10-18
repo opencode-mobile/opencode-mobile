@@ -37,6 +37,20 @@ class FeedbackLogRedactorTest {
     }
 
     @Test
+    fun redact_masksPortNumbersInSocketErrors() {
+        val redacted =
+            FeedbackLogRedactor.redact(
+                "failed to connect to /10.0.2.2 (port 4403) from /10.0.2.17 (port 58284) after 5000ms; Port=8080 port: 22",
+            )
+
+        assertEquals(
+            "failed to connect to /[REDACTED-HOST] (port [REDACTED]) from /[REDACTED-HOST] (port [REDACTED]) " +
+                "after 5000ms; Port=[REDACTED] port: [REDACTED]",
+            redacted,
+        )
+    }
+
+    @Test
     fun knownValues_skipDefaultUsername() {
         val known = FeedbackLogRedactor.knownValues(profile.copy(username = "opencode"))
 

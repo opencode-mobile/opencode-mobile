@@ -26,6 +26,8 @@ object FeedbackLogRedactor {
             Regex("""\[[0-9A-Fa-f:.]+](?::\d{1,5})?""") to HOST,
             Regex("""\b\d{1,3}(?:\.\d{1,3}){3}(?::\d{1,5})?\b""") to HOST,
             Regex("""\b[A-Za-z][A-Za-z0-9-]*(?:\.[A-Za-z0-9-]+)*:\d{2,5}\b""") to HOST,
+            // "(port 4403)" in socket errors, after the address itself was masked.
+            Regex("""(?i)\b(port\s*[=:]?\s*)\d{1,5}\b""") to "$1$VALUE",
         )
 
     private val json = Json { ignoreUnknownKeys = true }
