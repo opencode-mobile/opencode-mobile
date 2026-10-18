@@ -135,22 +135,32 @@ extension EnvironmentValues {
 
 /// Overlay of `OpenCodeTopBar` that draws its rail items in the trailing inset and
 /// reports through `isActive` whether the bar should drop them from its
-/// horizontal row. It spans the bar plus the trailing safe-area inset; items below
+/// horizontal row, and through `isInVerticalBarContext` whether the bar sits where
+/// the system would use a vertical bar (even with nothing to put in it). It spans the bar plus the trailing safe-area inset; items below
 /// the bar draw outside its frame, so no ancestor may clip it.
 struct OpenCodeTopBarVerticalBarLayer: View {
     let items: [OpenCodeTopBarRailItem]
     @Binding var isActive: Bool
+    @Binding var isInVerticalBarContext: Bool
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @Environment(\.openCodeTopBarVerticalBarSimulation) private var simulation
-    @State private var environmentEdge: HorizontalEdge?
+    /// Read whole so `toolbarVerticalEdge`, an iOS 27.1 key, is available on the
+    /// first layout without an availability-gated property wrapper.
+    @Environment(\.self) private var environment
     @State private var traitEdge: HorizontalEdge?
 
-    /// `toolbarVerticalEdge` first; the UIKit trait it mirrors covers a hosting
-    /// context that does not populate the environment.
+    /// `toolbarVerticalEdge` first, read synchronously so the rail is right on the
+    /// first frame; the UIKit trait it mirrors covers a hosting context that does
+    /// not populate the environment.
     private var verticalEdge: HorizontalEdge? {
-        environmentEdge ?? traitEdge
+        #if canImport(SwiftUI, _version: 8.0.85)
+        if #available(iOS 27.1, *), let edge = environment.toolbarVerticalEdge {
+            return edge
+        }
+        #endif
+        return traitEdge
     }
 
     var body: some View {
@@ -160,7 +170,8 @@ struct OpenCodeTopBarVerticalBarLayer: View {
             // that doesn't touch the trailing edge (a split's sidebar) can't extend.
             GeometryReader { proxy in
                 let trailingInset = max(0, proxy.size.width - barProxy.size.width)
-                let frames = itemFrames(in: proxy, trailingInset: trailingInset)
+                let participating = participates(in: proxy, trailingInset: trailingInset)
+                let frames = itemFrames(in: proxy, trailingInset: trailingInset, participating: participating)
                 ZStack(alignment: .topLeading) {
                     ForEach(Array(frames.enumerated()), id: \.offset) { entry in
                         railButton(items[entry.offset])
@@ -173,16 +184,29 @@ struct OpenCodeTopBarVerticalBarLayer: View {
                         overflowAnchor: overflowAnchor(frames: frames, proxy: proxy)
                     )
                 )
-                .onAppear { isActive = !frames.isEmpty }
+                .onAppear {
+                    isActive = !frames.isEmpty
+                    isInVerticalBarContext = participating
+                }
                 .onChange(of: frames.isEmpty) { _, isEmpty in isActive = !isEmpty }
+                .onChange(of: participating) { _, value in isInVerticalBarContext = value }
             }
             .ignoresSafeArea(.container, edges: .trailing)
         }
         .background { edgeProbes }
     }
 
-    private func itemFrames(in proxy: GeometryProxy, trailingInset: CGFloat) -> [CGRect] {
-        guard !items.isEmpty else { return [] }
+    private func participates(in proxy: GeometryProxy, trailingInset: CGFloat) -> Bool {
+        if simulation != nil { return true }
+        return OpenCodeVerticalBarLayout.participates(
+            verticalEdge: verticalEdge,
+            trailingInset: trailingInset,
+            topInWindow: proxy.frame(in: .global).minY
+        )
+    }
+
+    private func itemFrames(in proxy: GeometryProxy, trailingInset: CGFloat, participating: Bool) -> [CGRect] {
+        guard !items.isEmpty, participating else { return [] }
         if let simulation {
             let railMinX = proxy.size.width
             return OpenCodeVerticalBarLayout.itemFrames(
@@ -193,13 +217,6 @@ struct OpenCodeTopBarVerticalBarLayer: View {
                     CGRect(x: railMinX, y: 0, width: simulation.trailingInset, height: simulation.statusColumnHeight),
                 ]
             )
-        }
-        guard OpenCodeVerticalBarLayout.participates(
-            verticalEdge: verticalEdge,
-            trailingInset: trailingInset,
-            topInWindow: proxy.frame(in: .global).minY
-        ) else {
-            return []
         }
         let railMinX = proxy.size.width - trailingInset
         var occlusions = occlusionFrames(in: proxy)
@@ -255,11 +272,8 @@ struct OpenCodeTopBarVerticalBarLayer: View {
     private var edgeProbes: some View {
         #if canImport(SwiftUI, _version: 8.0.85)
         if #available(iOS 27.1, *), simulation == nil {
-            ZStack {
-                OpenCodeToolbarVerticalEdgeProbe { environmentEdge = $0 }
-                OpenCodeVerticalBarTraitProbe { traitEdge = $0 }
-            }
-            .accessibilityHidden(true)
+            OpenCodeVerticalBarTraitProbe { traitEdge = $0 }
+                .accessibilityHidden(true)
         }
         #endif
     }
@@ -279,19 +293,6 @@ private extension View {
 // The iOS 27.1 vertical-bar and reserved-region APIs only exist in the iOS 27.1
 // SDK (SwiftUI 8.0.85); `#available` alone doesn't compile against older SDKs.
 #if canImport(SwiftUI, _version: 8.0.85)
-/// Reports SwiftUI's `toolbarVerticalEdge`, which only an iOS 27.1 type can read.
-@available(iOS 27.1, *)
-private struct OpenCodeToolbarVerticalEdgeProbe: View {
-    let onChange: (HorizontalEdge?) -> Void
-    @Environment(\.toolbarVerticalEdge) private var edge
-
-    var body: some View {
-        Color.clear
-            .onAppear { onChange(edge) }
-            .onChange(of: edge) { _, newEdge in onChange(newEdge) }
-    }
-}
-
 /// Reports the hosting view's `UITraitCollection.verticalBarEdge`, the system's
 /// preferred vertical-bar edge whether or not a system bar is visible.
 @available(iOS 27.1, *)

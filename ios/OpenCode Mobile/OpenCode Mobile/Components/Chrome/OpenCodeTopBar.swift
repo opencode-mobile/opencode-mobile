@@ -61,6 +61,8 @@ struct OpenCodeTopBar: View {
 
     /// Set by the vertical bar layer while it draws the rail items (iPhone Duo).
     @State private var verticalBarActive = false
+    /// Set while the bar sits where iPhone Duo uses a vertical bar, rail items or not.
+    @State private var inVerticalBarContext = false
 
     init(
         title: String? = nil,
@@ -128,7 +130,11 @@ struct OpenCodeTopBar: View {
             }
         }
         .overlay {
-            OpenCodeTopBarVerticalBarLayer(items: railItems, isActive: $verticalBarActive)
+            OpenCodeTopBarVerticalBarLayer(
+                items: railItems,
+                isActive: $verticalBarActive,
+                isInVerticalBarContext: $inVerticalBarContext
+            )
         }
         // Rail items hang below the bar; keep them above the screen content.
         .zIndex(verticalBarActive ? 1 : 0)
@@ -212,7 +218,7 @@ struct OpenCodeTopBar: View {
     }
 
     private var leadingPadding: CGFloat {
-        verticalBarActive && hasLeadingControl ? topBarVerticalBarLeadingPadding : topBarHorizontalPadding
+        inVerticalBarContext && hasLeadingControl ? topBarVerticalBarLeadingPadding : topBarHorizontalPadding
     }
 
     private var hasLeadingControl: Bool {

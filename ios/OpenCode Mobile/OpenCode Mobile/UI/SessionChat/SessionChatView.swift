@@ -953,7 +953,9 @@ struct SessionChatView: View {
     }
 
     private func leaveSession() {
-        viewModelStorage?.stopObserving()
+        // Release this screen's lease rather than stopping the shared model outright:
+        // during a fold/unfold hand-off another screen may still host it.
+        viewModelStorage?.detachHost(hostID)
         if detailControl != nil {
             onLeaveSession?()
         } else {
