@@ -51,6 +51,34 @@ class FeedbackLogRedactorTest {
     }
 
     @Test
+    fun redact_masksBareIpv6InSocketErrors() {
+        val known = FeedbackLogRedactor.knownValues(profile)
+
+        val redacted =
+            FeedbackLogRedactor.redact(
+                "failed to connect to zz-devbox.tail1234.ts.net/fd7a:115c:a1e0::5d01:4f2a (port 4096) " +
+                    "from /fd7a:115c:a1e0::77 (port 51234) via fe80::1 and 2001:db8:85a3:0:0:8a2e:370:7334",
+                known,
+            )
+
+        listOf("fd7a", "115c", "5d01", "fe80", "2001:db8", "7334", "zz-devbox").forEach {
+            assertFalse("still contains $it: $redacted", redacted.contains(it))
+        }
+        assertEquals(
+            "failed to connect to [REDACTED]/[REDACTED-HOST] (port [REDACTED]) from /[REDACTED-HOST] (port [REDACTED]) " +
+                "via [REDACTED-HOST] and [REDACTED-HOST]",
+            redacted,
+        )
+    }
+
+    @Test
+    fun redact_keepsClockTimesAndSingleColonPairs() {
+        val line = "17:51:19 retry 2 of 3 at 09:30 ratio 3:4 scope Foo::bar"
+
+        assertEquals(line, FeedbackLogRedactor.redact(line))
+    }
+
+    @Test
     fun knownValues_skipDefaultUsername() {
         val known = FeedbackLogRedactor.knownValues(profile.copy(username = "opencode"))
 

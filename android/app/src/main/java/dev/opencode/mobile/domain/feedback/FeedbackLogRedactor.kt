@@ -20,10 +20,17 @@ object FeedbackLogRedactor {
     const val URL = "[REDACTED-URL]"
     const val VALUE = "[REDACTED]"
 
+    private const val HEX = "[0-9A-Fa-f]{1,4}"
+
     private val patterns =
         listOf(
             Regex("""\b[A-Za-z][A-Za-z0-9+.-]*://[^\s"'<>]+""") to URL,
             Regex("""\[[0-9A-Fa-f:.]+](?::\d{1,5})?""") to HOST,
+            // Bare IPv6, as socket errors print it: three or more groups, or a `::` compression.
+            // Two-colon clock times (12:30:45) do not match. Same pattern as iOS.
+            Regex(
+                "(?<![\\w:])(?:(?:$HEX:){3,7}$HEX|(?:$HEX(?::$HEX){0,6})?::(?:$HEX(?::$HEX){0,6})?)(?![\\w:])",
+            ) to HOST,
             Regex("""\b\d{1,3}(?:\.\d{1,3}){3}(?::\d{1,5})?\b""") to HOST,
             Regex("""\b[A-Za-z][A-Za-z0-9-]*(?:\.[A-Za-z0-9-]+)*:\d{2,5}\b""") to HOST,
             // "(port 4403)" in socket errors, after the address itself was masked.
