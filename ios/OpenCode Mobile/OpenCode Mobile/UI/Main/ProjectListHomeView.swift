@@ -20,7 +20,6 @@ struct ProjectListHomeView: View {
     @State private var displayedSessions: [SessionListSession] = []
     /// Bumped when a keyboard shortcut selects a row so the list scrolls it into view.
     @State private var revealSelectedSessionToken = 0
-    @State private var settledPageVisible = false
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Binding private var presentConnectionSetupOnAppear: Bool
@@ -34,9 +33,12 @@ struct ProjectListHomeView: View {
     }
 
     var body: some View {
-        NavigationStack(path: $navigationPath) {
-            sessionPresentations(projectPresentations(homeChrome))
-        }
+        // Sheets sit on the stack itself so they also present over a pushed Settled page.
+        sessionPresentations(projectPresentations(
+            NavigationStack(path: $navigationPath) {
+                homeChrome
+            }
+        ))
     }
 
     private var homeChrome: some View {
@@ -90,6 +92,19 @@ struct ProjectListHomeView: View {
             }
             .navigationDestination(for: SessionListItem.self) { session in
                 SessionChatView(session: session)
+            }
+            .navigationDestination(for: SettledSessionsRoute.self) { _ in
+                SettledSessionsDestination(
+                    viewModel: viewModel,
+                    selectedFilterId: selectedSessionFilterId,
+                    onOpenSession: { session in
+                        ProductAnalytics.logUserAction(
+                            screenId: ProductAnalytics.Screen.home,
+                            actionId: ProductAnalytics.Action.homeOpenSession
+                        )
+                        navigationPath.append(session)
+                    }
+                )
             }
             .navigationDestination(for: TerminalsCatalogRoute.self) { _ in
                 TerminalsCatalogView { worktree, projectTitle, ptyId in
@@ -160,9 +175,6 @@ struct ProjectListHomeView: View {
                 } else {
                     viewModel.markHomeHidden()
                 }
-            }
-            .onChange(of: viewModel.showsHomeSettle) { _, shows in
-                if !shows { settledPageVisible = false }
             }
             .onAppear {
                 if isHomeVisible {
@@ -685,23 +697,15 @@ struct ProjectListHomeView: View {
 
     private var homePane: some View {
         VStack(spacing: 0) {
-            if settledPageVisible && viewModel.showsHomeSettle {
-                OpenCodeTopBar(
-                    title: "Settled",
-                    subtitle: settledPageCount == 1 ? "1 thread" : "\(settledPageCount) threads",
-                    leading: .back(consumesInteractivePop: true) { settledPageVisible = false }
-                )
-            } else {
-                OpenCodeTopBar(
-                    title: viewModel.serversChrome.title,
-                    subtitleAccessory: showsLiveUpdatesStatus
-                        ? .statusDot(viewModel.liveUpdatesConnectionStatus.openCodeStatus)
-                        : nil,
-                    actions: homeTopBarActions,
-                    onTitleClick: viewModel.serversChrome.isSwitcher ? { viewModel.showServersSheet() } : nil,
-                    titleMenuExpanded: viewModel.serversChrome.sheetVisible
-                )
-            }
+            OpenCodeTopBar(
+                title: viewModel.serversChrome.title,
+                subtitleAccessory: showsLiveUpdatesStatus
+                    ? .statusDot(viewModel.liveUpdatesConnectionStatus.openCodeStatus)
+                    : nil,
+                actions: homeTopBarActions,
+                onTitleClick: viewModel.serversChrome.isSwitcher ? { viewModel.showServersSheet() } : nil,
+                titleMenuExpanded: viewModel.serversChrome.sheetVisible
+            )
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -882,23 +886,6 @@ struct ProjectListHomeView: View {
         }
     }
 
-    /// Filtered settled rows behind the Settled top bar. Zero until that page is open.
-    private var settledPageCount: Int {
-        guard settledPageVisible, viewModel.showsHomeSettle,
-              case let .loaded(sections, _, _, _) = viewModel.state
-        else { return 0 }
-        let feed = sections.homeFeed(showsSettle: true, nowEpochMs: homeNowEpochMs)
-        let tabs = SessionListHomeChrome.filterTabs(
-            projects: sections.homeChromeProjects(),
-            sessionCount: feed.activeCount
-        )
-        let resolved = SessionListHomeChrome.resolvedFilterId(
-            selectedId: selectedSessionFilterId,
-            tabs: tabs
-        )
-        return feed.settled.visibleForFilter(resolved).count
-    }
-
     private var homeNowEpochMs: Int64 {
         Int64(Date().timeIntervalSince1970 * 1000)
     }
@@ -1050,43 +1037,6 @@ struct ProjectListHomeView: View {
             selectedId: selectedSessionFilterId,
             tabs: filterTabs
         )
-        Group {
-            if settledPageVisible && showsSettle {
-                SettledSessionsPage(
-                    sessions: feed.settled.visibleForFilter(selectedFilterId),
-                    onSessionSelected: { session in
-                        ProductAnalytics.logUserAction(
-                            screenId: ProductAnalytics.Screen.home,
-                            actionId: ProductAnalytics.Action.homeOpenSession
-                        )
-                        openSession(
-                            SessionListItem(
-                                id: session.id,
-                                title: session.title,
-                                worktree: session.worktree
-                            )
-                        )
-                    },
-                    onSessionLongPress: { session in
-                        viewModel.onSessionLongPress(
-                            sessionId: session.id,
-                            title: session.title,
-                            worktree: session.worktree
-                        )
-                    },
-                    onSettleGesture: { session, gesture in
-                        Task {
-                            await viewModel.onSettleGesture(
-                                sessionId: session.id,
-                                title: session.title,
-                                worktree: session.worktree,
-                                gesture: gesture
-                            )
-                        }
-                    },
-                    onRefresh: { await viewModel.pullToRefresh() }
-                )
-            } else {
         SessionList(
             sessions: feed.ladder,
             filterTabs: filterTabs,
@@ -1151,7 +1101,7 @@ struct ProjectListHomeView: View {
             },
             showsEmptyContent: sections.isEmpty,
             settledSessions: showsSettle ? feed.settled : [],
-            onOpenSettled: showsSettle ? { settledPageVisible = true } : nil,
+            onOpenSettled: showsSettle ? { navigationPath.append(SettledSessionsRoute()) } : nil,
             onSettleGesture: showsSettle
                 ? { session, gesture in
                     Task {
@@ -1166,13 +1116,87 @@ struct ProjectListHomeView: View {
                 : nil,
             emptyContent: { NoProjectsEmptyState() }
         )
-            }
-        }
         .onChange(of: selectedFilterId, initial: true) { _, resolved in
             if selectedSessionFilterId != resolved {
                 selectedSessionFilterId = resolved
             }
         }
+    }
+}
+
+private struct SettledSessionsRoute: Hashable {}
+
+/// Pushed from Home the same way as a session, so it slides in and pops with the system Back gesture.
+private struct SettledSessionsDestination: View {
+    let viewModel: ProjectListHomeViewModel
+    let selectedFilterId: String
+    let onOpenSession: (SessionListItem) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        let sessions = settledSessions
+        VStack(spacing: 0) {
+            OpenCodeTopBar(
+                title: "Settled",
+                subtitle: sessions.count == 1 ? "1 thread" : "\(sessions.count) threads",
+                leading: .back(action: { dismiss() })
+            )
+            SettledSessionsPage(
+                sessions: sessions,
+                onSessionSelected: { session in
+                    onOpenSession(
+                        SessionListItem(
+                            id: session.id,
+                            title: session.title,
+                            worktree: session.worktree
+                        )
+                    )
+                },
+                onSessionLongPress: { session in
+                    viewModel.onSessionLongPress(
+                        sessionId: session.id,
+                        title: session.title,
+                        worktree: session.worktree
+                    )
+                },
+                onSettleGesture: { session, gesture in
+                    Task {
+                        await viewModel.onSettleGesture(
+                            sessionId: session.id,
+                            title: session.title,
+                            worktree: session.worktree,
+                            gesture: gesture
+                        )
+                    }
+                },
+                onRefresh: { await viewModel.pullToRefresh() }
+            )
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(OpenCodeColors.backgroundBase)
+        .toolbar(.hidden, for: .navigationBar)
+        .navigationBarBackButtonHidden(true)
+        .onChange(of: viewModel.showsHomeSettle) { _, shows in
+            if !shows { dismiss() }
+        }
+    }
+
+    private var settledSessions: [SessionListSession] {
+        guard viewModel.showsHomeSettle, case let .loaded(sections, _, _, _) = viewModel.state else {
+            return []
+        }
+        let now = Int64(Date().timeIntervalSince1970 * 1000)
+        let feed = sections.homeFeed(showsSettle: true, nowEpochMs: now)
+        let tabs = SessionListHomeChrome.filterTabs(
+            projects: sections.homeChromeProjects(),
+            sessionCount: feed.activeCount
+        )
+        let resolved = SessionListHomeChrome.resolvedFilterId(
+            selectedId: selectedFilterId,
+            tabs: tabs
+        )
+        return feed.settled.visibleForFilter(resolved)
     }
 }
 

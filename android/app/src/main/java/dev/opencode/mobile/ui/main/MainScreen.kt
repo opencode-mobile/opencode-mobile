@@ -1,6 +1,6 @@
 package dev.opencode.mobile.ui.main
 
-import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -24,8 +25,15 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation3.runtime.NavKey
+import androidx.navigation3.runtime.entryProvider
+import androidx.navigation3.runtime.rememberNavBackStack
+import androidx.navigation3.ui.NavDisplay
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
+import dev.opencode.mobile.backwardRouteTransition
+import dev.opencode.mobile.forwardRouteTransition
+import dev.opencode.mobile.popRouteUnlessRoot
 import dev.opencode.mobile.domain.connection.ConnectionProfileIdentity
 import dev.opencode.mobile.domain.home.HomeSettleFeed
 import dev.opencode.mobile.domain.home.HomeSettleGesture
@@ -76,6 +84,7 @@ import dev.opencode.mobile.ui.keyboard.KeyboardShortcutHandler
 import dev.opencode.mobile.ui.keyboard.KeyboardShortcutRules
 import dev.opencode.mobile.ui.keyboard.SessionStepDirection
 import dev.opencode.mobile.ui.sessionchat.SessionConnectionStatus
+import kotlinx.serialization.Serializable
 
 /** Long-press session actions on home: sheet, rename/fork dialogs, delete confirm. */
 data class HomeSessionActionsCallbacks(
@@ -292,10 +301,6 @@ internal fun MainScreen(
 
     var showNewSessionProjectPicker by rememberSaveable { mutableStateOf(false) }
     var selectedFilterId by rememberSaveable { mutableStateOf(SessionListFilterTab.ALL_ID) }
-    var settledPageVisible by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(showsHomeSettle) {
-        if (!showsHomeSettle) settledPageVisible = false
-    }
     val loadedSections = (uiState as? MainScreenUiState.Loaded)?.sections.orEmpty()
     val chromeProjects = loadedSections.toHomeChromeProjects()
     val showTerminalAction =
@@ -333,171 +338,87 @@ internal fun MainScreen(
         visible = (uiState as? MainScreenUiState.Loaded)?.pendingProjectRemoval != null,
     )
 
+    val columnStack = rememberNavBackStack(HomeColumnFeed)
+    LaunchedEffect(showsHomeSettle) {
+        if (!showsHomeSettle) {
+            while (columnStack.lastOrNull() is SettledSessionsRoute) {
+                columnStack.popRouteUnlessRoot()
+            }
+        }
+    }
+
     Box(modifier = modifier.fillMaxSize()) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            val settledCount =
-                if (settledPageVisible) {
-                    val sections =
-                        when (uiState) {
-                            is MainScreenUiState.Loaded -> uiState.sections
-                            else -> emptyList()
-                        }
-                    sections
-                        .homeFeed(showsSettle = true, nowEpochMs = System.currentTimeMillis())
-                        .settled
-                        .visibleForFilter(selectedFilterId)
-                        .size
-                } else {
-                    0
-                }
-            if (settledPageVisible) {
-                // Settled replaces the home list in place, so it is not on the nav back stack.
-                // A selected split-pane session keeps the pane BackHandler, which is registered first.
-                if (!sessionKeyboardNavigationEnabled || selectedSessionId == null) {
-                    BackHandler { settledPageVisible = false }
-                }
-                OpenCodeTopBar(
-                    title = "Settled",
-                    subtitle = if (settledCount == 1) "1 thread" else "$settledCount threads",
-                    leading = OpenCodeTopBarLeading.Back(onClick = { settledPageVisible = false }),
-                )
-            } else {
-            OpenCodeTopBar(
-                title = serversChrome.title,
-                onTitleClick = if (serversChrome.isSwitcher) onTitleClick else null,
-                titleMenuExpanded = serversChrome.sheetVisible,
-                subtitleAccessory =
-                    if (showsLiveUpdatesStatus(uiState)) {
-                        OpenCodeTopBarSubtitleAccessory.StatusDot(
-                            liveUpdatesConnectionStatus.toOpenCodeSessionConnectionStatus(),
-                        )
-                    } else {
-                        null
-                    },
-                actions =
-                    buildList {
-                        if (showTerminalAction) {
-                            add(
-                                OpenCodeTopBarAction.Icon(
-                                    imageVector = OpenCodeIcons.Terminal,
-                                    contentDescription = "Terminal",
-                                    onClick = {
+        NavDisplay(
+            modifier = Modifier.fillMaxSize(),
+            backStack = columnStack,
+            onBack = { columnStack.popRouteUnlessRoot() },
+            transitionSpec = { forwardRouteTransition() },
+            popTransitionSpec = { backwardRouteTransition() },
+            predictivePopTransitionSpec = { backwardRouteTransition() },
+            entryProvider =
+                entryProvider {
+                    entry<HomeColumnFeed> {
+                        HomeColumn(
+                            uiState = uiState,
+                            liveUpdatesConnectionStatus = liveUpdatesConnectionStatus,
+                            serversChrome = serversChrome,
+                            showTerminalAction = showTerminalAction,
+                            onTitleClick = onTitleClick,
+                            onTerminalClick = onTerminalClick,
+                            onSettingsClick = onSettingsClick,
+                            content = {
+                                HomeColumnBody(
+                                    uiState = uiState,
+                                    isRefreshing = isRefreshing,
+                                    removalSnackbar = removalSnackbar,
+                                    onBrowseProjectsClick = onAddProjectClick,
+                                    onSessionClick = onSessionClick,
+                                    onRequestNewSessionProjectPicker = {
                                         ProductAnalytics.logUserAction(
                                             screenId = ProductAnalytics.Screen.HOME,
-                                            actionId = ProductAnalytics.Action.HOME_OPEN_TERMINAL,
+                                            actionId = ProductAnalytics.Action.HOME_OPEN_NEW_SESSION_PROJECT_PICKER,
                                         )
-                                        onTerminalClick()
+                                        showNewSessionProjectPicker = true
                                     },
-                                ),
-                            )
-                        }
-                        add(
-                            OpenCodeTopBarAction.Icon(
-                                imageVector = OpenCodeIcons.Settings,
-                                contentDescription = "Settings",
-                                onClick = {
-                                    ProductAnalytics.logUserAction(
-                                        screenId = ProductAnalytics.Screen.HOME,
-                                        actionId = ProductAnalytics.Action.HOME_OPEN_SETTINGS,
-                                    )
-                                    onSettingsClick()
-                                },
-                            ),
-                        )
-                    },
-            )
-            }
-
-            when (uiState) {
-                is MainScreenUiState.Disconnected -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize().navigationBarsPadding(),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        ConnectionOnboardingScreen(
-                            onConnectClick = {
-                                ProductAnalytics.logUserAction(
-                                    screenId = ProductAnalytics.Screen.HOME_CONNECTION_EMPTY,
-                                    actionId = ProductAnalytics.Action.HOME_CONNECT,
+                                    onCreateSession = onNewSession,
+                                    onRemoveProject = onRemoveProject,
+                                    onReorderProjects = onReorderProjects,
+                                    onRefresh = onRefresh,
+                                    onRetryProbe = onRetryProbe,
+                                    onEditConnection = onEditConnection,
+                                    onConnectClick = onConnectClick,
+                                    sessionActionsCallbacks = sessionActionsCallbacks,
+                                    showsHomeSettle = showsHomeSettle,
+                                    revealNewestToken = revealNewestToken,
+                                    pendingSelectedFilterId = pendingSelectedFilterId,
+                                    onConsumePendingSelectedFilter = onConsumePendingSelectedFilter,
+                                    selectedFilterId = selectedFilterId,
+                                    onSelectedFilterIdChange = { selectedFilterId = it },
+                                    selectedSessionId = selectedSessionId,
+                                    sessionKeyboardNavigationEnabled = sessionKeyboardNavigationEnabled,
+                                    onOpenSettled = {
+                                        if (columnStack.lastOrNull() != SettledSessionsRoute) {
+                                            columnStack.add(SettledSessionsRoute)
+                                        }
+                                    },
                                 )
-                                onConnectClick()
                             },
                         )
                     }
-                }
-                MainScreenUiState.Probing,
-                MainScreenUiState.Loading,
-                -> {
-                    OpenCodeStatusStack(
-                        title = "Loading sessions",
-                        subtitle = "Checking server…",
-                        testTag = "homeLoading",
-                        modifier = Modifier.fillMaxSize().navigationBarsPadding(),
-                    )
-                }
-                is MainScreenUiState.ProbeFailed -> {
-                    ProbeFailedContent(
-                        message = uiState.message,
-                        onRetry = onRetryProbe,
-                        onEditConnection = onEditConnection,
-                        modifier = Modifier.fillMaxSize().navigationBarsPadding(),
-                    )
-                }
-                is MainScreenUiState.Empty,
-                is MainScreenUiState.Loaded,
-                -> {
-                    val sections =
-                        when (uiState) {
-                            is MainScreenUiState.Loaded -> uiState.sections
-                            else -> emptyList()
-                        }
-                    val projectSessionCreateError =
-                        when (uiState) {
-                            is MainScreenUiState.Empty -> uiState.projectSessionCreateError
-                            is MainScreenUiState.Loaded -> uiState.projectSessionCreateError
-                            else -> null
-                        }
-                    HomeProjectsContent(
-                        sections = sections,
-                        projectSessionCreateError = projectSessionCreateError,
-                        isRefreshing = isRefreshing,
-                        onRefresh = onRefresh,
-                        onBrowseProjectsClick = onAddProjectClick,
-                        onSessionClick = { target ->
-                            ProductAnalytics.logUserAction(
-                                screenId = ProductAnalytics.Screen.HOME,
-                                actionId = ProductAnalytics.Action.HOME_OPEN_SESSION,
-                            )
-                            onSessionClick(target)
-                        },
-                        onRequestNewSessionProjectPicker = {
-                            ProductAnalytics.logUserAction(
-                                screenId = ProductAnalytics.Screen.HOME,
-                                actionId = ProductAnalytics.Action.HOME_OPEN_NEW_SESSION_PROJECT_PICKER,
-                            )
-                            showNewSessionProjectPicker = true
-                        },
-                        onCreateSession = onNewSession,
-                        onRemoveProject = onRemoveProject,
-                        onReorderProjects = onReorderProjects,
-                        removalSnackbar = removalSnackbar,
-                        onSessionLongPress = sessionActionsCallbacks.onSessionLongPress,
-                        showsSettle = showsHomeSettle,
-                        settledPageVisible = settledPageVisible,
-                        onOpenSettled = { settledPageVisible = true },
-                        onSettleGesture = sessionActionsCallbacks.onSettleGesture,
-                        revealNewestToken = revealNewestToken,
-                        pendingSelectedFilterId = pendingSelectedFilterId,
-                        onConsumePendingSelectedFilter = onConsumePendingSelectedFilter,
-                        selectedFilterId = selectedFilterId,
-                        onSelectedFilterIdChange = { selectedFilterId = it },
-                        selectedSessionId = selectedSessionId,
-                        sessionKeyboardNavigationEnabled = sessionKeyboardNavigationEnabled,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-            }
-        }
+                    entry<SettledSessionsRoute> {
+                        SettledSessionsColumn(
+                            sections = loadedSections,
+                            selectedFilterId = selectedFilterId,
+                            isRefreshing = isRefreshing,
+                            onRefresh = onRefresh,
+                            onBack = { columnStack.popRouteUnlessRoot() },
+                            onSessionClick = onSessionClick,
+                            onSessionLongPress = sessionActionsCallbacks.onSessionLongPress,
+                            onSettleGesture = sessionActionsCallbacks.onSettleGesture,
+                        )
+                    }
+                },
+        )
 
         OpenCodeSnackbarHost(
             message = removalSnackbar,
@@ -883,6 +804,241 @@ private fun HomeSessionActions(
     )
 }
 
+@Serializable
+private data object HomeColumnFeed : NavKey
+
+@Serializable
+private data object SettledSessionsRoute : NavKey
+
+@Composable
+private fun HomeColumn(
+    uiState: MainScreenUiState,
+    liveUpdatesConnectionStatus: SessionConnectionStatus,
+    serversChrome: HomeServersChrome,
+    showTerminalAction: Boolean,
+    onTitleClick: () -> Unit,
+    onTerminalClick: () -> Unit,
+    onSettingsClick: () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        OpenCodeTopBar(
+            title = serversChrome.title,
+            onTitleClick = if (serversChrome.isSwitcher) onTitleClick else null,
+            titleMenuExpanded = serversChrome.sheetVisible,
+            subtitleAccessory =
+                if (showsLiveUpdatesStatus(uiState)) {
+                    OpenCodeTopBarSubtitleAccessory.StatusDot(
+                        liveUpdatesConnectionStatus.toOpenCodeSessionConnectionStatus(),
+                    )
+                } else {
+                    null
+                },
+            actions =
+                buildList {
+                    if (showTerminalAction) {
+                        add(
+                            OpenCodeTopBarAction.Icon(
+                                imageVector = OpenCodeIcons.Terminal,
+                                contentDescription = "Terminal",
+                                onClick = {
+                                    ProductAnalytics.logUserAction(
+                                        screenId = ProductAnalytics.Screen.HOME,
+                                        actionId = ProductAnalytics.Action.HOME_OPEN_TERMINAL,
+                                    )
+                                    onTerminalClick()
+                                },
+                            ),
+                        )
+                    }
+                    add(
+                        OpenCodeTopBarAction.Icon(
+                            imageVector = OpenCodeIcons.Settings,
+                            contentDescription = "Settings",
+                            onClick = {
+                                ProductAnalytics.logUserAction(
+                                    screenId = ProductAnalytics.Screen.HOME,
+                                    actionId = ProductAnalytics.Action.HOME_OPEN_SETTINGS,
+                                )
+                                onSettingsClick()
+                            },
+                        ),
+                    )
+                },
+        )
+        Box(modifier = Modifier.weight(1f)) {
+            content()
+        }
+    }
+}
+
+@Composable
+private fun HomeColumnBody(
+    uiState: MainScreenUiState,
+    isRefreshing: Boolean,
+    removalSnackbar: OpenCodeSnackbarMessage?,
+    onBrowseProjectsClick: () -> Unit,
+    onSessionClick: (SessionOpenTarget) -> Unit,
+    onRequestNewSessionProjectPicker: () -> Unit,
+    onCreateSession: (String) -> Unit,
+    onRemoveProject: (String) -> Unit,
+    onReorderProjects: (List<String>) -> Unit,
+    onRefresh: () -> Unit,
+    onRetryProbe: () -> Unit,
+    onEditConnection: () -> Unit,
+    onConnectClick: () -> Unit,
+    sessionActionsCallbacks: HomeSessionActionsCallbacks,
+    showsHomeSettle: Boolean,
+    revealNewestToken: Int,
+    pendingSelectedFilterId: String?,
+    onConsumePendingSelectedFilter: () -> Unit,
+    selectedFilterId: String,
+    onSelectedFilterIdChange: (String) -> Unit,
+    selectedSessionId: String?,
+    sessionKeyboardNavigationEnabled: Boolean,
+    onOpenSettled: () -> Unit,
+) {
+    when (uiState) {
+        is MainScreenUiState.Disconnected -> {
+            Box(
+                modifier = Modifier.fillMaxSize().navigationBarsPadding(),
+                contentAlignment = Alignment.Center,
+            ) {
+                ConnectionOnboardingScreen(
+                    onConnectClick = {
+                        ProductAnalytics.logUserAction(
+                            screenId = ProductAnalytics.Screen.HOME_CONNECTION_EMPTY,
+                            actionId = ProductAnalytics.Action.HOME_CONNECT,
+                        )
+                        onConnectClick()
+                    },
+                )
+            }
+        }
+        MainScreenUiState.Probing,
+        MainScreenUiState.Loading,
+        -> {
+            OpenCodeStatusStack(
+                title = "Loading sessions",
+                subtitle = "Checking server…",
+                testTag = "homeLoading",
+                modifier = Modifier.fillMaxSize().navigationBarsPadding(),
+            )
+        }
+        is MainScreenUiState.ProbeFailed -> {
+            ProbeFailedContent(
+                message = uiState.message,
+                onRetry = onRetryProbe,
+                onEditConnection = onEditConnection,
+                modifier = Modifier.fillMaxSize().navigationBarsPadding(),
+            )
+        }
+        is MainScreenUiState.Empty,
+        is MainScreenUiState.Loaded,
+        -> {
+            val sections =
+                when (uiState) {
+                    is MainScreenUiState.Loaded -> uiState.sections
+                    else -> emptyList()
+                }
+            val projectSessionCreateError =
+                when (uiState) {
+                    is MainScreenUiState.Empty -> uiState.projectSessionCreateError
+                    is MainScreenUiState.Loaded -> uiState.projectSessionCreateError
+                    else -> null
+                }
+            HomeProjectsContent(
+                sections = sections,
+                projectSessionCreateError = projectSessionCreateError,
+                isRefreshing = isRefreshing,
+                onRefresh = onRefresh,
+                onBrowseProjectsClick = onBrowseProjectsClick,
+                onSessionClick = { target ->
+                    ProductAnalytics.logUserAction(
+                        screenId = ProductAnalytics.Screen.HOME,
+                        actionId = ProductAnalytics.Action.HOME_OPEN_SESSION,
+                    )
+                    onSessionClick(target)
+                },
+                onRequestNewSessionProjectPicker = onRequestNewSessionProjectPicker,
+                onCreateSession = onCreateSession,
+                onRemoveProject = onRemoveProject,
+                onReorderProjects = onReorderProjects,
+                removalSnackbar = removalSnackbar,
+                onSessionLongPress = sessionActionsCallbacks.onSessionLongPress,
+                showsSettle = showsHomeSettle,
+                onOpenSettled = onOpenSettled,
+                onSettleGesture = sessionActionsCallbacks.onSettleGesture,
+                revealNewestToken = revealNewestToken,
+                pendingSelectedFilterId = pendingSelectedFilterId,
+                onConsumePendingSelectedFilter = onConsumePendingSelectedFilter,
+                selectedFilterId = selectedFilterId,
+                onSelectedFilterIdChange = onSelectedFilterIdChange,
+                selectedSessionId = selectedSessionId,
+                sessionKeyboardNavigationEnabled = sessionKeyboardNavigationEnabled,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SettledSessionsColumn(
+    sections: List<ProjectSectionUi>,
+    selectedFilterId: String,
+    isRefreshing: Boolean,
+    onRefresh: () -> Unit,
+    onBack: () -> Unit,
+    onSessionClick: (SessionOpenTarget) -> Unit,
+    onSessionLongPress: (SessionListSession) -> Unit,
+    onSettleGesture: (SessionListSession, HomeSettleGesture) -> Unit,
+) {
+    val feed = sections.homeFeed(showsSettle = true, nowEpochMs = System.currentTimeMillis())
+    val resolvedFilterId =
+        SessionListHomeChrome.resolvedFilterId(
+            selectedId = selectedFilterId,
+            tabs =
+                SessionListHomeChrome.filterTabs(
+                    projects = sections.toHomeChromeProjects(),
+                    sessionCount = feed.activeCount,
+                ),
+        )
+    val sessions = feed.settled.visibleForFilter(resolvedFilterId)
+    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        OpenCodeTopBar(
+            title = "Settled",
+            subtitle = if (sessions.size == 1) "1 thread" else "${sessions.size} threads",
+            leading = OpenCodeTopBarLeading.Back(onClick = onBack),
+        )
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = onRefresh,
+            modifier = Modifier.weight(1f),
+        ) {
+            SettledSessionsPage(
+                sessions = sessions,
+                onSessionSelected = { session ->
+                    ProductAnalytics.logUserAction(
+                        screenId = ProductAnalytics.Screen.HOME,
+                        actionId = ProductAnalytics.Action.HOME_OPEN_SESSION,
+                    )
+                    onSessionClick(
+                        SessionOpenTarget(
+                            sessionId = session.id,
+                            title = session.title,
+                            worktree = session.worktree,
+                        ),
+                    )
+                },
+                onSessionLongPress = onSessionLongPress,
+                onSettleGesture = onSettleGesture,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+    }
+}
+
 @Composable
 private fun ProbeFailedContent(
     message: String,
@@ -915,7 +1071,6 @@ private fun HomeProjectsContent(
     removalSnackbar: OpenCodeSnackbarMessage?,
     onSessionLongPress: (SessionListSession) -> Unit,
     showsSettle: Boolean = false,
-    settledPageVisible: Boolean = false,
     onOpenSettled: () -> Unit = {},
     onSettleGesture: (SessionListSession, HomeSettleGesture) -> Unit = { _, _ -> },
     revealNewestToken: Int = 0,
@@ -1001,23 +1156,6 @@ private fun HomeProjectsContent(
             presentation = ProductAnalytics.Presentation.SHEET,
             visible = showProjectPicker,
         )
-        if (settledPageVisible) {
-            SettledSessionsPage(
-                sessions = feed.settled.visibleForFilter(resolvedFilterId),
-                onSessionSelected = { session ->
-                    onSessionClick(
-                        SessionOpenTarget(
-                            sessionId = session.id,
-                            title = session.title,
-                            worktree = session.worktree,
-                        ),
-                    )
-                },
-                onSessionLongPress = onSessionLongPress,
-                onSettleGesture = onSettleGesture,
-                modifier = Modifier.fillMaxSize(),
-            )
-        } else {
         SessionList(
             sessions = feed.ladder,
             settledSessions = if (showsSettle) feed.settled else emptyList(),
@@ -1079,7 +1217,6 @@ private fun HomeProjectsContent(
                     null
                 },
         )
-        }
         OpenCodeBottomSheet(
             visible = showProjectPicker,
             title = "Filter by project",
