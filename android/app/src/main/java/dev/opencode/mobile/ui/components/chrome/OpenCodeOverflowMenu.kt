@@ -119,6 +119,64 @@ fun OpenCodeTopBarOverflowHost(
     }
 }
 
+/**
+ * The overflow menu opened from a control inside the content, such as a + button: the panel
+ * sits above [anchor], start-aligned, or below it when there is no room above.
+ */
+@Composable
+fun OpenCodeAnchoredOverflowHost(
+    expanded: Boolean,
+    onDismissRequest: () -> Unit,
+    entries: List<OpenCodeOverflowMenuEntry>,
+    modifier: Modifier = Modifier,
+    anchor: @Composable () -> Unit,
+) {
+    val gapPx = with(LocalDensity.current) { OverflowMenuAnchorTopOffset.roundToPx() }
+    Box(modifier = modifier) {
+        anchor()
+        if (expanded) {
+            Popup(
+                popupPositionProvider = remember(gapPx) { AnchoredOverflowMenuPositionProvider(gapPx) },
+                onDismissRequest = onDismissRequest,
+                properties =
+                    PopupProperties(
+                        focusable = true,
+                        dismissOnBackPress = true,
+                        dismissOnClickOutside = true,
+                        usePlatformDefaultWidth = false,
+                    ),
+            ) {
+                OpenCodeOverflowMenuPanel(
+                    entries = entries,
+                    onDismissRequest = onDismissRequest,
+                )
+            }
+        }
+    }
+}
+
+private class AnchoredOverflowMenuPositionProvider(
+    private val gapPx: Int,
+) : PopupPositionProvider {
+    override fun calculatePosition(
+        anchorBounds: IntRect,
+        windowSize: IntSize,
+        layoutDirection: LayoutDirection,
+        popupContentSize: IntSize,
+    ): androidx.compose.ui.unit.IntOffset {
+        val start =
+            if (layoutDirection == LayoutDirection.Ltr) {
+                anchorBounds.left
+            } else {
+                anchorBounds.right - popupContentSize.width
+            }
+        val x = start.coerceIn(0, (windowSize.width - popupContentSize.width).coerceAtLeast(0))
+        val above = anchorBounds.top - gapPx - popupContentSize.height
+        val y = if (above >= 0) above else anchorBounds.bottom + gapPx
+        return androidx.compose.ui.unit.IntOffset(x, y)
+    }
+}
+
 private class OverflowMenuPopupPositionProvider(
     private val topBarBounds: androidx.compose.ui.geometry.Rect,
     private val endInsetPx: Int,

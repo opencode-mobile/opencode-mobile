@@ -2,6 +2,7 @@ import SwiftUI
 
 struct OverflowMenuGalleryView: View {
     @State private var menuExpanded = false
+    @State private var anchoredExpanded = false
     @State private var entriesEnabled = true
     @State private var selectionRowsEnabled = false
     @State private var showDestructive = false
@@ -99,8 +100,8 @@ struct OverflowMenuGalleryView: View {
                 }
 
                 Text(
-                    "Use the overflow icon in the live top bar preview to open the menu. " +
-                        "Switch controls to review enabled, disabled, and aligned selection states."
+                    "Use the overflow icon in the live top bar preview, or the + button for the anchored " +
+                        "menu. Switch controls to review enabled, disabled, and aligned selection states."
                 )
                 .font(OpenCodeTypography.bodySecondary)
                 .foregroundStyle(OpenCodeColors.textBase)
@@ -120,6 +121,18 @@ struct OverflowMenuGalleryView: View {
                     showDivider: true
                 )
             }
+
+            OpenCodeAnchoredOverflowHost(
+                isPresented: $anchoredExpanded,
+                entries: entries
+            ) {
+                OpenCodeButton(
+                    variant: .iconCircle(.add, accessibilityLabel: "Add attachment"),
+                    contrast: .low,
+                    action: { anchoredExpanded = true }
+                )
+            }
+            .padding(.horizontal, 16)
         }
     }
 }
