@@ -372,6 +372,38 @@ class ConnectionProbeServiceTest {
             headers = headersOf(HttpHeaders.ContentType, "text/html"),
         )
 
+    @Test
+    fun probeServer_keepsHealthVersionForEachProtocol() =
+        runTest {
+            val v1 =
+                service { request ->
+                    when (request.url.encodedPath) {
+                        "/global/health" ->
+                            respond(
+                                content = """{"healthy":true,"version":"1.18.4"}""",
+                                status = HttpStatusCode.OK,
+                                headers = headersOf(HttpHeaders.ContentType, "application/json"),
+                            )
+                        else -> jsonNotFound()
+                    }
+                }
+            val v2 =
+                service { request ->
+                    when (request.url.encodedPath) {
+                        "/api/info" ->
+                            respond(
+                                content = """{"healthy":true,"version":"2.0.0","pid":123}""",
+                                status = HttpStatusCode.OK,
+                                headers = headersOf(HttpHeaders.ContentType, "application/json"),
+                            )
+                        else -> jsonNotFound()
+                    }
+                }
+
+            assertEquals(DetectedServer(ServerProtocol.V1, "1.18.4"), v1.probeServer(connection))
+            assertEquals(DetectedServer(ServerProtocol.V2, "2.0.0"), v2.probeServer(connection))
+        }
+
     private fun service(handler: MockRequestHandler) =
         ConnectionProbeService(
             json = json,

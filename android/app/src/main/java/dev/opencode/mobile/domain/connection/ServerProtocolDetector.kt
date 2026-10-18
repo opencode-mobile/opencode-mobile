@@ -19,7 +19,14 @@ class ServerProtocolDetector(
         fetchGlobalHealth: suspend () -> HealthDto,
         fetchApiInfo: suspend () -> HealthDto,
         fetchApiHealth: suspend () -> HealthDto,
-    ): ServerProtocol {
+    ): ServerProtocol = detectServer(fetchGlobalHealth, fetchApiInfo, fetchApiHealth).protocol
+
+    /** [detect] plus the health payload's server version, when the server reports one. */
+    suspend fun detectServer(
+        fetchGlobalHealth: suspend () -> HealthDto,
+        fetchApiInfo: suspend () -> HealthDto,
+        fetchApiHealth: suspend () -> HealthDto,
+    ): DetectedServer {
         val (globalHealth, apiInfo, apiHealth, lastError) =
             coroutineScope {
                 val global =
@@ -57,21 +64,26 @@ class ServerProtocolDetector(
                     ServerProtocolProbeErrors.unresolved(globalHealth, lastError),
                 )
 
-        when {
-            globalHealth?.healthy == true -> adapter.requireHealthy(globalHealth)
-            else -> {
-                val payload = ServerProtocolClassifier.v2Health(apiInfo, apiHealth)
-                if (payload?.pid != null && payload.healthy == false) {
-                    throw ServerProbeError.Unhealthy(payload.version)
+        val version =
+            when {
+                globalHealth?.healthy == true -> {
+                    adapter.requireHealthy(globalHealth)
+                    globalHealth.version
+                }
+                else -> {
+                    val payload = ServerProtocolClassifier.v2Health(apiInfo, apiHealth)
+                    if (payload?.pid != null && payload.healthy == false) {
+                        throw ServerProbeError.Unhealthy(payload.version)
+                    }
+                    payload?.version
                 }
             }
-        }
 
         DiagnosticLog.info(
             DiagnosticLogArea.Connection,
             "protocol=${protocol.wireValue}",
         )
-        return protocol
+        return DetectedServer(protocol = protocol, version = version?.trim()?.takeIf { it.isNotEmpty() })
     }
 
     private suspend fun probe(
@@ -108,3 +120,9 @@ class ServerProtocolDetector(
         val lastError: Throwable?,
     )
 }
+
+/** A probed server: its protocol and the version its health endpoint reported. */
+data class DetectedServer(
+    val protocol: ServerProtocol,
+    val version: String? = null,
+)
