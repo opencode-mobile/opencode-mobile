@@ -58,6 +58,8 @@ class FirebaseRestFeedbackSubmitterTest {
         )
 
     private val requests = mutableListOf<HttpRequestData>()
+    private val now = 10_000_000L
+    private val cooldown = MemoryCooldownStore()
 
     @Test
     fun submit_refreshesUploadsThenCommitsWithKeyRestrictionHeaders() =
@@ -234,6 +236,8 @@ class FirebaseRestFeedbackSubmitterTest {
                     config = config,
                     appCheck = { throw IllegalStateException("Play Integrity unavailable") },
                     identityStore = MemoryIdentityStore("refresh-1"),
+                    cooldownStore = cooldown,
+                    nowMs = { now },
                     httpClient =
                         HttpClient(
                             MockEngine { request ->
@@ -264,18 +268,41 @@ class FirebaseRestFeedbackSubmitterTest {
         }
 
     @Test
-    fun submit_commit403IsRateLimited() =
+    fun submit_storage403IsUnverified() =
         runTest {
-            val result =
-                submitter(MemoryIdentityStore("refresh-1")) { request ->
-                    if (request.url.host == "firestore.googleapis.com") {
-                        jsonResponse("""{"error":{"code":403,"status":"PERMISSION_DENIED"}}""", HttpStatusCode.Forbidden)
-                    } else {
-                        happyPath(request)
-                    }
-                }.submit(report)
+            val result = submitWhere("firebasestorage.googleapis.com", HttpStatusCode.Forbidden)
 
-            assertEquals(FeedbackSubmitResult.RateLimited(60), result)
+            assertEquals(FeedbackSubmitResult.Unverified, result)
+            assertFalse(requests.any { it.url.host == "firestore.googleapis.com" })
+        }
+
+    @Test
+    fun submit_commit401IsUnverified() =
+        runTest {
+            cooldown.lastSent = now - 10_000
+
+            assertEquals(FeedbackSubmitResult.Unverified, submitWhere("firestore.googleapis.com", HttpStatusCode.Unauthorized))
+        }
+
+    @Test
+    fun submit_commit403AfterARecentSendIsRateLimitedForTheRemainingCooldown() =
+        runTest {
+            cooldown.lastSent = now - 15_000
+
+            val result = submitWhere("firestore.googleapis.com", HttpStatusCode.Forbidden)
+
+            assertEquals(FeedbackSubmitResult.RateLimited(45), result)
+        }
+
+    @Test
+    fun submit_commit403WithoutARecentSendIsUnverified() =
+        runTest {
+            // App Check enforcement and the rate limit both answer 403 on commit.
+            assertEquals(FeedbackSubmitResult.Unverified, submitWhere("firestore.googleapis.com", HttpStatusCode.Forbidden))
+
+            requests.clear()
+            cooldown.lastSent = now - 60_000
+            assertEquals(FeedbackSubmitResult.Unverified, submitWhere("firestore.googleapis.com", HttpStatusCode.Forbidden))
         }
 
     @Test
@@ -313,6 +340,18 @@ class FirebaseRestFeedbackSubmitterTest {
             assertNull(requests.firstNotNullOfOrNull { it.headers["X-Ios-Bundle-Identifier"] })
         }
 
+    private suspend fun submitWhere(
+        host: String,
+        status: HttpStatusCode,
+    ): FeedbackSubmitResult =
+        submitter(MemoryIdentityStore("refresh-1")) { request ->
+            if (request.url.host == host) {
+                jsonResponse("""{"error":{"code":${status.value},"status":"PERMISSION_DENIED"}}""", status)
+            } else {
+                happyPath(request)
+            }
+        }.submit(report)
+
     private fun submitter(
         store: FeedbackIdentityStore,
         handler: suspend MockRequestHandleScope.(HttpRequestData) -> HttpResponseData,
@@ -321,6 +360,8 @@ class FirebaseRestFeedbackSubmitterTest {
             config = config,
             appCheck = { "app-check-token" },
             identityStore = store,
+            cooldownStore = cooldown,
+            nowMs = { now },
             httpClient =
                 HttpClient(
                     MockEngine { request ->
@@ -353,6 +394,16 @@ class FirebaseRestFeedbackSubmitterTest {
         }
 
     private fun JsonObject.string(key: String): String = getValue(key).jsonPrimitive.content
+
+    private class MemoryCooldownStore : FeedbackCooldownStore {
+        var lastSent: Long? = null
+
+        override fun lastSentAtEpochMs(): Long? = lastSent
+
+        override fun recordSent(atEpochMs: Long) {
+            lastSent = atEpochMs
+        }
+    }
 
     private class MemoryIdentityStore(
         var token: String?,

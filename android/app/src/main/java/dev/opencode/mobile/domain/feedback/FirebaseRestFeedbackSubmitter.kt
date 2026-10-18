@@ -51,12 +51,18 @@ interface FeedbackIdentityStore {
  * Release submit flow over Firebase REST (#721): App Check token, anonymous user (refresh,
  * or sign up again), one Storage upload per attachment, then one Firestore commit that
  * creates the report and stamps the per-user rate limit.
+ *
+ * With App Check enforced, a commit without a valid token and a commit inside the server's
+ * 60 s rate limit both return 403. [cooldownStore] tells them apart: a 403 is a rate limit only
+ * when the last successful send is under 60 s old, otherwise the request was not verified.
  */
 class FirebaseRestFeedbackSubmitter(
     private val config: FeedbackFirebaseConfig,
     private val appCheck: FeedbackAppCheckTokenProvider,
     private val identityStore: FeedbackIdentityStore,
     private val httpClient: HttpClient,
+    private val cooldownStore: FeedbackCooldownStore,
+    private val nowMs: () -> Long = { System.currentTimeMillis() },
 ) : FeedbackSubmitter {
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -146,7 +152,8 @@ class FirebaseRestFeedbackSubmitter(
             }
         when {
             response.status.isSuccess() -> Unit
-            response.status.value == 401 -> throw SubmitFailure(FeedbackSubmitResult.Unverified)
+            response.status.value == 401 || response.status.value == 403 ->
+                throw SubmitFailure(FeedbackSubmitResult.Unverified)
             else -> throw failed("upload ${response.status.value}")
         }
     }
@@ -166,10 +173,15 @@ class FirebaseRestFeedbackSubmitter(
         when {
             response.status.isSuccess() -> Unit
             response.status.value == 401 -> throw SubmitFailure(FeedbackSubmitResult.Unverified)
-            response.status.value == 403 ->
-                throw SubmitFailure(FeedbackSubmitResult.RateLimited(FeedbackCooldownStore.COOLDOWN_SECONDS))
+            response.status.value == 403 -> throw SubmitFailure(commitForbidden())
             else -> throw failed("commit ${response.status.value}")
         }
+    }
+
+    /** A 403 right after a successful send is the server rate limit; otherwise App Check or rules. */
+    private fun commitForbidden(): FeedbackSubmitResult {
+        val remaining = FeedbackCooldownStore.remainingSeconds(cooldownStore.lastSentAtEpochMs(), nowMs())
+        return if (remaining > 0) FeedbackSubmitResult.RateLimited(remaining) else FeedbackSubmitResult.Unverified
     }
 
     internal fun commitBody(

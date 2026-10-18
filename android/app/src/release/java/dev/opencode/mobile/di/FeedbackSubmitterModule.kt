@@ -9,6 +9,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import dev.opencode.mobile.domain.feedback.FeedbackAppCheckTokenProvider
+import dev.opencode.mobile.domain.feedback.FeedbackCooldownStore
 import dev.opencode.mobile.domain.feedback.FeedbackFirebaseConfig
 import dev.opencode.mobile.domain.feedback.FeedbackIdentityStore
 import dev.opencode.mobile.domain.feedback.FeedbackSubmitter
@@ -36,6 +37,7 @@ object FeedbackSubmitterModule {
     fun provideFeedbackSubmitter(
         @ApplicationContext context: Context,
         identityStore: FeedbackIdentityStore,
+        cooldownStore: FeedbackCooldownStore,
     ): FeedbackSubmitter {
         val options = FirebaseApp.getApps(context).firstOrNull()?.options ?: return ShareFeedbackSubmitter()
         val projectId = options.projectId ?: return ShareFeedbackSubmitter()
@@ -51,6 +53,7 @@ object FeedbackSubmitterModule {
                 ),
             appCheck = PlayIntegrityAppCheckToken,
             identityStore = identityStore,
+            cooldownStore = cooldownStore,
             httpClient =
                 HttpClient(OkHttp) {
                     install(HttpTimeout) {
