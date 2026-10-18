@@ -247,6 +247,27 @@ struct ConnectionProbeServiceTests {
         #expect(manager.serverProtocol == nil)
     }
 
+    @Test func probeServer_keepsTheV1GlobalHealthVersion() async throws {
+        ProtocolHealthURLProtocol.reset(responsesByPath: [
+            "/global/health": (200, #"{"healthy":true,"version":"1.18.4"}"#),
+        ])
+
+        let outcome = try await makeService().probeServer(connection: sampleConnection)
+
+        #expect(outcome == ServerProbeOutcome(serverProtocol: .v1, serverVersion: "1.18.4"))
+    }
+
+    @Test func probeServer_keepsTheV2ApiInfoVersion() async throws {
+        ProtocolHealthURLProtocol.reset(responsesByPath: [
+            "/global/health": (404, #"{}"#),
+            "/api/info": (200, #"{"healthy":true,"version":"2.0.0","pid":123}"#),
+        ])
+
+        let outcome = try await makeService().probeServer(connection: sampleConnection)
+
+        #expect(outcome == ServerProbeOutcome(serverProtocol: .v2, serverVersion: "2.0.0"))
+    }
+
     private var sampleConnection: ServerConnection {
         ServerConnection(
             baseURL: URL(string: "https://example.test")!,
