@@ -1,36 +1,22 @@
 import SwiftUI
 
-/// Hide parts (#721): tap the screenshot to cover an area with a black box.
-struct FeedbackHidePartsView: View {
+/// Hide parts page of the report sheet (#721): tap the screenshot to cover an
+/// area with a black box.
+struct FeedbackHidePartsContent: View {
     let model: FeedbackViewModel
 
     var body: some View {
-        VStack(spacing: 0) {
-            OpenCodeTopBar(
-                title: "Hide parts",
-                leading: .none,
-                actions: [.label(title: "Done", action: { model.closeHideParts() })],
-                showDivider: true
-            )
-            VStack(spacing: 16) {
-                Text("Tap an area to cover it.")
-                    .font(OpenCodeTypography.bodySecondary)
-                    .foregroundStyle(OpenCodeColors.textBase)
-                    .frame(maxWidth: .infinity)
-                if let preview = model.uiState.screenshotPreview {
-                    screenshot(preview)
-                }
-                OpenCodeButton(
-                    variant: .compactText(title: "Undo"),
-                    enabled: model.uiState.hiddenAreaCount > 0,
-                    contrast: .low,
-                    action: { model.undoHiddenPart() }
-                )
+        VStack(spacing: 12) {
+            Text("Tap an area to cover it.")
+                .font(OpenCodeTypography.bodySecondary)
+                .foregroundStyle(OpenCodeColors.textBase)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            if let preview = model.uiState.screenshotPreview {
+                screenshot(preview)
             }
-            .padding(16)
-            .frame(maxHeight: .infinity, alignment: .top)
         }
-        .background(OpenCodeColors.backgroundBase)
+        .padding(.horizontal, 20)
+        .padding(.bottom, 8)
     }
 
     private func screenshot(_ image: UIImage) -> some View {
@@ -57,9 +43,28 @@ struct FeedbackHidePartsView: View {
                         }
                 }
             }
-            .frame(maxHeight: .infinity)
+            .frame(maxHeight: 420)
+            .frame(maxWidth: .infinity)
             .accessibilityLabel("Screenshot, \(model.uiState.hiddenAreaCount) areas hidden")
             .accessibilityAddTraits(.allowsDirectInteraction)
             .accessibilityIdentifier("feedbackHidePartsImage")
+    }
+}
+
+/// Undo and Done under the Hide parts page.
+struct FeedbackHidePartsActions: View {
+    let model: FeedbackViewModel
+
+    var body: some View {
+        HStack(spacing: 8) {
+            OpenCodeButton(
+                variant: .compactText(title: "Undo"),
+                enabled: model.uiState.hiddenAreaCount > 0,
+                contrast: .low,
+                action: { model.undoHiddenPart() }
+            )
+            Spacer(minLength: 0)
+            OpenCodeButton(variant: .compactText(title: "Done"), action: { model.closeHideParts() })
+        }
     }
 }

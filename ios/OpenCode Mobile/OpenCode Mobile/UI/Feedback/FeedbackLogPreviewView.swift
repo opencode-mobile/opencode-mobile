@@ -1,56 +1,52 @@
 import SwiftUI
 
-/// Diagnostic log preview (#721): the redacted lines a report would attach.
-struct FeedbackLogPreviewView: View {
+/// Window picker pinned on the Diagnostic log page (#721).
+struct FeedbackLogWindowPicker: View {
     let model: FeedbackViewModel
 
     var body: some View {
-        VStack(spacing: 0) {
-            OpenCodeTopBar(
-                title: "Diagnostic log",
-                leading: .back(action: { model.closeLogPreview() }),
-                showDivider: true
-            )
-            OpenCodeFilterTabs(
-                tabs: DiagnosticLogExportWindow.allCases.map {
-                    OpenCodeFilterTab(id: String($0.minutes), title: "\($0.minutes) min")
-                },
-                selectedTabId: String(model.uiState.logWindow.minutes),
-                onTabSelected: { id in
-                    if let window = Int(id).flatMap(DiagnosticLogExportWindow.init(rawValue:)) {
-                        model.setLogWindow(window)
-                    }
-                }
-            )
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-            lines
+        HStack(spacing: 8) {
+            ForEach(DiagnosticLogExportWindow.allCases, id: \.self) { window in
+                OpenCodeChoiceBadge(
+                    label: "\(window.minutes) min",
+                    selected: model.uiState.logWindow == window,
+                    action: { model.setLogWindow(window) }
+                )
+            }
+            Spacer(minLength: 0)
         }
-        .background(OpenCodeColors.backgroundBase)
+        .padding(.horizontal, 20)
+        .padding(.bottom, 8)
     }
+}
 
-    @ViewBuilder
-    private var lines: some View {
+/// Diagnostic log page of the report sheet: the redacted lines a report attaches.
+struct FeedbackLogPreviewContent: View {
+    let model: FeedbackViewModel
+
+    var body: some View {
         let lines = model.uiState.logPreview ?? []
-        if lines.isEmpty {
-            OpenCodeEmptyState(
-                title: "No log lines",
-                message: "Nothing was logged in the last \(model.uiState.logWindow.minutes) minutes."
-            )
-        } else {
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 4) {
-                    ForEach(lines) { line in
-                        Text("\(line.time) \(line.level.rawValue) \(line.area)  \(line.message)")
-                            .font(OpenCodeTypography.code)
-                            .foregroundStyle(color(for: line.level))
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .textSelection(.enabled)
-                    }
+        VStack(alignment: .leading, spacing: 4) {
+            if lines.isEmpty {
+                OpenCodeEmptyState(
+                    title: "No log lines",
+                    message: "Nothing was logged in the last \(model.uiState.logWindow.minutes) minutes.",
+                    fillsAvailableSpace: false
+                )
+                .padding(.vertical, 16)
+            } else {
+                ForEach(lines) { line in
+                    Text("\(line.time) \(line.level.rawValue) \(line.area)  \(line.message)")
+                        .font(OpenCodeTypography.code)
+                        .foregroundStyle(color(for: line.level))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .textSelection(.enabled)
                 }
-                .padding(16)
             }
         }
+        .padding(.horizontal, 20)
+        .padding(.bottom, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func color(for level: DiagnosticLogLevel) -> Color {

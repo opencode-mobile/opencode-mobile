@@ -5,8 +5,9 @@ import UIKit
 
 extension View {
     /// Report-a-problem sheet (#721). Set `model` to open it; it clears `model`
-    /// when the sheet closes. Attach to the screen that opens it: the photo
-    /// picker, Hide parts, the log preview and the share sheet present from here.
+    /// when the sheet closes. Hide parts and the Diagnostic log are pages inside
+    /// the sheet. Attach to the screen that opens it: the photo picker and the
+    /// share sheet present from here.
     func feedbackSheet(model: Binding<FeedbackViewModel?>) -> some View {
         modifier(FeedbackSheetModifier(model: model))
     }
@@ -30,27 +31,41 @@ private struct FeedbackSheetModifier: ViewModifier {
         content
             .openCodeBottomSheet(
                 isPresented: presented,
-                title: "Report a problem",
+                title: page.title,
+                leadingAction: backAction,
                 height: .half,
                 keyboard: .expand,
                 pinnedTop: {
                     if let model {
-                        FeedbackSheetPinnedTop(model: model)
+                        switch model.uiState.page {
+                        case .compose: FeedbackSheetPinnedTop(model: model)
+                        case .hideParts: EmptyView()
+                        case .logPreview: FeedbackLogWindowPicker(model: model)
+                        }
                     }
                 },
                 content: {
                     if let model {
-                        FeedbackSheetBody(model: model)
+                        switch model.uiState.page {
+                        case .compose: FeedbackSheetBody(model: model)
+                        case .hideParts: FeedbackHidePartsContent(model: model)
+                        case .logPreview: FeedbackLogPreviewContent(model: model)
+                        }
                     }
                 },
                 pinnedBottom: {
                     if let model {
-                        FeedbackSheetPinnedBottom(
-                            model: model,
-                            showsMic: dictationSupport.showsMic,
-                            onDictationAction: handleDictation,
-                            onDone: { presented.wrappedValue = false }
-                        )
+                        switch model.uiState.page {
+                        case .compose:
+                            FeedbackSheetPinnedBottom(
+                                model: model,
+                                showsMic: dictationSupport.showsMic,
+                                onDictationAction: handleDictation,
+                                onDone: { presented.wrappedValue = false }
+                            )
+                        case .hideParts: FeedbackHidePartsActions(model: model)
+                        case .logPreview: EmptyView()
+                        }
                     }
                 }
             )
@@ -62,16 +77,6 @@ private struct FeedbackSheetModifier: ViewModifier {
                     if let data = try? await item.loadTransferable(type: Data.self) {
                         model?.attachPickedScreenshot(data)
                     }
-                }
-            }
-            .fullScreenCover(isPresented: hideParts) {
-                if let model {
-                    FeedbackHidePartsView(model: model)
-                }
-            }
-            .fullScreenCover(isPresented: logPreview) {
-                if let model {
-                    FeedbackLogPreviewView(model: model)
                 }
             }
             .sheet(item: $shareItems, onDismiss: { model?.dismissShare() }) { share in
@@ -122,18 +127,25 @@ private struct FeedbackSheetModifier: ViewModifier {
         )
     }
 
-    private var hideParts: Binding<Bool> {
-        Binding(
-            get: { model?.uiState.isHidingParts ?? false },
-            set: { if !$0 { model?.closeHideParts() } }
-        )
+    private var page: FeedbackSheetPage {
+        model?.uiState.page ?? .compose
     }
 
-    private var logPreview: Binding<Bool> {
-        Binding(
-            get: { model?.uiState.logPreview != nil },
-            set: { if !$0 { model?.closeLogPreview() } }
-        )
+    /// Back arrow on the Hide parts and Diagnostic log pages.
+    private var backAction: OpenCodeBottomSheetHeaderAction? {
+        guard let model else { return nil }
+        switch model.uiState.page {
+        case .compose:
+            return nil
+        case .hideParts:
+            return OpenCodeBottomSheetHeaderAction(icon: .arrowBack, accessibilityLabel: "Back") {
+                model.closeHideParts()
+            }
+        case .logPreview:
+            return OpenCodeBottomSheetHeaderAction(icon: .arrowBack, accessibilityLabel: "Back") {
+                model.closeLogPreview()
+            }
+        }
     }
 
     /// Message text plus each file written to a temporary folder.
@@ -400,6 +412,7 @@ private struct FeedbackSheetPinnedBottom: View {
         case let .textChanged(text, _, selectionEnd):
             model.updateMessage(text, cursor: selectionEnd)
         case let .openAttachment(id):
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
             if id == FeedbackSheetAttachment.screenshot {
                 model.openHideParts()
             } else {
