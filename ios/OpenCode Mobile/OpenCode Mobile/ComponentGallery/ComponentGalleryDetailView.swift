@@ -192,6 +192,8 @@ struct ComponentGalleryDetailView: View {
             SessionComposerGalleryView()
         case .dictationCard:
             DictationCardGalleryView()
+        case .feedbackComposer:
+            FeedbackComposerGalleryView()
         case .composerSuggestionOverlay:
             ComposerSuggestionOverlayGalleryView()
         case .renderedMarkdown:
