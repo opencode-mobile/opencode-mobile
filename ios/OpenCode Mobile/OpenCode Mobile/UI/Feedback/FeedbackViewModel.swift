@@ -44,6 +44,20 @@ enum FeedbackErrorAction: Equatable {
     }
 }
 
+enum FeedbackSheetPage: Equatable {
+    case compose
+    case hideParts
+    case logPreview
+
+    var title: String {
+        switch self {
+        case .compose: "Report a problem"
+        case .hideParts: "Hide parts"
+        case .logPreview: "Diagnostic log"
+        }
+    }
+}
+
 enum FeedbackSendPhase: Equatable {
     case editing
     case sending
@@ -86,6 +100,13 @@ struct FeedbackUiState {
 
     var placeholder: String { kind.placeholder }
 
+    /// Page the sheet shows: the composer, Hide parts or the Diagnostic log.
+    var page: FeedbackSheetPage {
+        if isHidingParts { return .hideParts }
+        if logPreview != nil { return .logPreview }
+        return .compose
+    }
+
     var canSend: Bool {
         phase != .sending && !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
@@ -112,6 +133,8 @@ final class FeedbackViewModel {
     @ObservationIgnored private let metadataProvider: any FeedbackMetadataProviding
     @ObservationIgnored private let cooldownStore: any FeedbackCooldownStore
     @ObservationIgnored private let logBuffer: DiagnosticLogBuffer
+    /// Masks server addresses and profile terms in the preview and the upload.
+    @ObservationIgnored private let logRedactor: () -> FeedbackLogRedactor
     @ObservationIgnored private let now: () -> Date
     @ObservationIgnored private let makeReportID: () -> String
     @ObservationIgnored private let dictationEnabled: () -> Bool
@@ -130,6 +153,7 @@ final class FeedbackViewModel {
         metadataProvider: any FeedbackMetadataProviding,
         cooldownStore: any FeedbackCooldownStore,
         logBuffer: DiagnosticLogBuffer = .shared,
+        logRedactor: @escaping () -> FeedbackLogRedactor = { FeedbackLogRedactor() },
         now: @escaping () -> Date = Date.init,
         makeReportID: @escaping () -> String = FeedbackReference.newReportID,
         dictationEnabled: @escaping () -> Bool = { SessionChatDisplayPreferences.shared.composerDictation }
@@ -138,6 +162,7 @@ final class FeedbackViewModel {
         self.metadataProvider = metadataProvider
         self.cooldownStore = cooldownStore
         self.logBuffer = logBuffer
+        self.logRedactor = logRedactor
         self.now = now
         self.makeReportID = makeReportID
         self.dictationEnabled = dictationEnabled
@@ -287,6 +312,7 @@ final class FeedbackViewModel {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "HH:mm:ss"
+        let redactor = logRedactor()
         return logBuffer.snapshot().entries
             .filter { $0.timestampEpochMilliseconds >= cutoff }
             .map { entry in
@@ -297,7 +323,7 @@ final class FeedbackViewModel {
                     ),
                     level: entry.level,
                     area: entry.area.rawValue,
-                    message: entry.message
+                    message: redactor.redact(entry.message)
                 )
             }
     }
@@ -338,12 +364,14 @@ final class FeedbackViewModel {
         let draft = draft
         let metadata = metadataProvider.metadata(screen: draft.screen)
         let logBuffer = logBuffer
+        let logRedactor = logRedactor()
         return await Task.detached(priority: .userInitiated) {
             FeedbackSubmissionAssembler.assemble(
                 draft: draft,
                 metadata: metadata,
                 reportID: reportID,
-                logBuffer: logBuffer
+                logBuffer: logBuffer,
+                logRedactor: logRedactor
             )
         }.value
     }

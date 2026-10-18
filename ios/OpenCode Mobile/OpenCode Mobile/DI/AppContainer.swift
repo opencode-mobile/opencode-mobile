@@ -717,7 +717,10 @@ extension Container {
                 metadataProvider: DefaultFeedbackMetadataProvider(
                     activeConnectionManager: self.activeConnectionManager()
                 ),
-                cooldownStore: UserDefaultsFeedbackCooldownStore()
+                cooldownStore: UserDefaultsFeedbackCooldownStore(),
+                logRedactor: { [manager = self.activeConnectionManager()] in
+                    FeedbackLogRedactor(profile: manager.currentProfile())
+                }
             )
         }
     }

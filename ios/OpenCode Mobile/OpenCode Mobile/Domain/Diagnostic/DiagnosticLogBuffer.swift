@@ -163,7 +163,12 @@ nonisolated final class DiagnosticLogBuffer: @unchecked Sendable {
         }
     }
 
-    func exportJSONL(window: DiagnosticLogExportWindow = .default) throws -> Data {
+    /// - Parameter message: extra pass over each exported message (feedback
+    ///   reports mask server addresses); the Settings export leaves it as is.
+    func exportJSONL(
+        window: DiagnosticLogExportWindow = .default,
+        message: (String) -> String = { $0 }
+    ) throws -> Data {
         let snapshot = snapshot()
         let now = clock()
         let cutoff = now - window.milliseconds
@@ -189,7 +194,7 @@ nonisolated final class DiagnosticLogBuffer: @unchecked Sendable {
                     "timestampEpochMilliseconds": entry.timestampEpochMilliseconds,
                     "area": entry.area.rawValue,
                     "level": entry.level.rawValue,
-                    "message": entry.message,
+                    "message": message(entry.message),
                 ])
             )
         }

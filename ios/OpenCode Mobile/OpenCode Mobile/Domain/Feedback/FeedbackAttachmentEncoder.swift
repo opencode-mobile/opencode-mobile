@@ -82,19 +82,20 @@ nonisolated enum FeedbackScreenshotEncoder {
     }
 }
 
-/// Diagnostic log attachment: the redacted JSONL export, gzipped. Falls back to
-/// a shorter window when the chosen one is over 1 MB.
+/// Diagnostic log attachment: the JSONL export with server addresses masked,
+/// gzipped. Falls back to a shorter window when the chosen one is over 1 MB.
 nonisolated enum FeedbackLogEncoder {
     static func encode(
         buffer: DiagnosticLogBuffer,
         window: DiagnosticLogExportWindow,
+        redactor: FeedbackLogRedactor = FeedbackLogRedactor(),
         maxBytes: Int = FeedbackAttachmentFile.maxBytes
     ) -> Data? {
         let windows = DiagnosticLogExportWindow.allCases
             .filter { $0.minutes <= window.minutes }
             .sorted { $0.minutes > $1.minutes }
         for candidate in windows {
-            guard let jsonl = try? buffer.exportJSONL(window: candidate),
+            guard let jsonl = try? buffer.exportJSONL(window: candidate, message: redactor.redact),
                   let gzipped = try? FeedbackGzip.compress(jsonl)
             else { continue }
             if gzipped.count <= maxBytes {
@@ -111,13 +112,18 @@ nonisolated enum FeedbackSubmissionAssembler {
         draft: FeedbackDraft,
         metadata: FeedbackMetadata,
         reportID: String,
-        logBuffer: DiagnosticLogBuffer
+        logBuffer: DiagnosticLogBuffer,
+        logRedactor: FeedbackLogRedactor = FeedbackLogRedactor()
     ) -> FeedbackSubmission {
         var attachments: [FeedbackAttachmentFile] = []
         if let screenshot = draft.screenshot, let data = FeedbackScreenshotEncoder.encode(screenshot) {
             attachments.append(.screenshot(data))
         }
-        if draft.includeLogs, let data = FeedbackLogEncoder.encode(buffer: logBuffer, window: draft.logWindow) {
+        if draft.includeLogs, let data = FeedbackLogEncoder.encode(
+            buffer: logBuffer,
+            window: draft.logWindow,
+            redactor: logRedactor
+        ) {
             attachments.append(.logs(data))
         }
         return FeedbackSubmission(
