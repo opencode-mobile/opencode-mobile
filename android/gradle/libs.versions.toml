@@ -83,6 +83,7 @@ firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "fir
 firebase-crashlytics = { module = "com.google.firebase:firebase-crashlytics" }
 firebase-analytics = { module = "com.google.firebase:firebase-analytics" }
 firebase-config = { module = "com.google.firebase:firebase-config" }
+firebase-appcheck-playintegrity = { module = "com.google.firebase:firebase-appcheck-playintegrity" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "androidGradlePlugin" }

@@ -7,6 +7,8 @@ import android.os.Build
 import android.os.Bundle
 import com.google.firebase.FirebaseApp
 import com.google.firebase.analytics.FirebaseAnalytics
+import com.google.firebase.appcheck.FirebaseAppCheck
+import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.google.firebase.remoteconfig.FirebaseRemoteConfig
 import dev.opencode.mobile.domain.featureflags.FeatureFlag
@@ -30,6 +32,8 @@ internal object OpenCodeReleaseObservability {
             return
         }
         this.application = application
+        // #721: in-app feedback asks App Check for a Play Integrity token per report.
+        FirebaseAppCheck.getInstance().installAppCheckProviderFactory(PlayIntegrityAppCheckProviderFactory.getInstance())
         tagFrameworkSdkAlignment()
         activateFeatureFlags()
         val enabled =
