@@ -40,6 +40,7 @@ import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetHeight
 import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonContrast
+import dev.opencode.mobile.ui.components.OpenCodeButtonSize
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
 import dev.opencode.mobile.ui.components.OpenCodeEmptyState
@@ -361,6 +362,8 @@ private fun AddProjectPathChrome(
             onClick = callbacks.onUp,
             enabled = sheet.upTarget != null && !sheet.isValidating,
             contrast = OpenCodeButtonContrast.Low,
+            // Match the 48dp path field. Medium (40dp) sits short of it; iOS uses .large.
+            size = OpenCodeButtonSize.Large,
         )
     }
     if (sheet.roots.isNotEmpty()) {
