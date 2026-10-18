@@ -147,11 +147,12 @@ struct FirebaseFeedbackRESTSubmitterTests {
         #expect(result == .offline)
     }
 
-    @Test func storage401_isUnverified() async {
+    @Test(arguments: [401, 403])
+    func storageRejection_isUnverified(status: Int) async {
         FeedbackStubURLProtocol.reset { request in
             switch Self.stage(of: request) {
             case "signUp": (200, #"{"idToken":"id","refreshToken":"r","localId":"uid"}"#)
-            case "upload": (401, #"{"error":{"code":401}}"#)
+            case "upload": (status, #"{"error":{"code":\#(status)}}"#)
             default: (200, "{}")
             }
         }
@@ -162,18 +163,36 @@ struct FirebaseFeedbackRESTSubmitterTests {
         #expect(FeedbackStubURLProtocol.requests.map(Self.stage) == ["signUp", "upload"])
     }
 
-    @Test func commit403_isTheServerRateLimit() async {
-        FeedbackStubURLProtocol.reset { request in
-            switch Self.stage(of: request) {
-            case "signUp": (200, #"{"idToken":"id","refreshToken":"r","localId":"uid"}"#)
-            case "commit": (403, #"{"error":{"code":403,"status":"PERMISSION_DENIED"}}"#)
-            default: (200, "{}")
-            }
-        }
+    @Test func commit403_afterARecentSuccess_isTheServerRateLimit() async {
+        FeedbackStubURLProtocol.reset(commitStatus: 403)
+        let now = Date()
+        let cooldown = StubCooldownStore(lastSent: now.addingTimeInterval(-20))
+
+        let result = await makeSubmitter(cooldown: cooldown, now: now).submit(Self.submission)
+
+        #expect(result == .rateLimited(retryAfterSeconds: 40))
+    }
+
+    @Test func commit403_withoutARecentSuccess_isAnAppCheckRejection() async {
+        FeedbackStubURLProtocol.reset(commitStatus: 403)
+        let now = Date()
+
+        let never = await makeSubmitter(cooldown: StubCooldownStore(lastSent: nil), now: now)
+            .submit(Self.submission)
+        FeedbackStubURLProtocol.reset(commitStatus: 403)
+        let longAgo = await makeSubmitter(cooldown: StubCooldownStore(lastSent: now.addingTimeInterval(-61)), now: now)
+            .submit(Self.submission)
+
+        #expect(never == .unverified)
+        #expect(longAgo == .unverified)
+    }
+
+    @Test func commit401_isUnverified() async {
+        FeedbackStubURLProtocol.reset(commitStatus: 401)
 
         let result = await makeSubmitter().submit(Self.submission)
 
-        #expect(result == .rateLimited(retryAfterSeconds: 60))
+        #expect(result == .unverified)
     }
 
     @Test func otherHTTPFailures_areFailed() async {
@@ -211,6 +230,8 @@ struct FirebaseFeedbackRESTSubmitterTests {
 
     private func makeSubmitter(
         store: MemoryRefreshTokenStore = MemoryRefreshTokenStore(),
+        cooldown: StubCooldownStore = StubCooldownStore(lastSent: nil),
+        now: Date = Date(),
         appCheck: @escaping @Sendable () async throws -> String = { "app-check-token" }
     ) -> FirebaseFeedbackRESTSubmitter {
         let configuration = URLSessionConfiguration.ephemeral
@@ -223,6 +244,8 @@ struct FirebaseFeedbackRESTSubmitterTests {
             ),
             appCheckToken: appCheck,
             tokenStore: store,
+            cooldownStore: cooldown,
+            now: { now },
             session: URLSession(configuration: configuration)
         )
     }
@@ -240,6 +263,14 @@ struct FirebaseFeedbackRESTSubmitterTests {
         guard let index = FeedbackStubURLProtocol.requests.firstIndex(of: request) else { return nil }
         return try? JSONSerialization.jsonObject(with: FeedbackStubURLProtocol.bodies[index]) as? [String: Any]
     }
+}
+
+private struct StubCooldownStore: FeedbackCooldownStore {
+    let lastSent: Date?
+
+    func lastSentAt() -> Date? { lastSent }
+
+    func recordSent(at date: Date) {}
 }
 
 private final class MemoryRefreshTokenStore: FeedbackRefreshTokenStore, @unchecked Sendable {
@@ -283,6 +314,19 @@ private final class FeedbackStubURLProtocol: URLProtocol {
         failure = nil
         recorded = []
         lock.unlock()
+    }
+
+    /// Sign-up and uploads succeed; the commit answers with `commitStatus`.
+    static func reset(commitStatus: Int) {
+        reset { request in
+            if FirebaseFeedbackRESTSubmitterTests.stage(of: request) == "signUp" {
+                return (200, #"{"idToken":"id","refreshToken":"r","localId":"uid"}"#)
+            }
+            if FirebaseFeedbackRESTSubmitterTests.stage(of: request) == "commit" {
+                return (commitStatus, #"{"error":{"code":\#(commitStatus),"status":"PERMISSION_DENIED"}}"#)
+            }
+            return (200, "{}")
+        }
     }
 
     static func reset(failWith error: URLError) {

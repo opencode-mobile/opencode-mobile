@@ -19,24 +19,29 @@ nonisolated struct FirebaseFeedbackConfiguration: Equatable, Sendable {
 /// release seam constructs it with a real App Check token provider.
 nonisolated final class FirebaseFeedbackRESTSubmitter: FeedbackSubmitter {
     static let failedMessage = "Couldn't send the report."
-    static let serverRateLimitSeconds = 60
     /// Refresh errors that mean the anonymous user is gone: sign up again.
     static let signUpAgainErrors = ["USER_NOT_FOUND", "USER_DISABLED", "TOKEN_EXPIRED", "INVALID_REFRESH_TOKEN"]
 
     private let configuration: FirebaseFeedbackConfiguration
     private let appCheckToken: @Sendable () async throws -> String
     private let tokenStore: any FeedbackRefreshTokenStore
+    private let cooldownStore: any FeedbackCooldownStore
+    private let now: @Sendable () -> Date
     private let session: URLSession
 
     init(
         configuration: FirebaseFeedbackConfiguration,
         appCheckToken: @escaping @Sendable () async throws -> String,
         tokenStore: any FeedbackRefreshTokenStore,
+        cooldownStore: any FeedbackCooldownStore = UserDefaultsFeedbackCooldownStore(),
+        now: @escaping @Sendable () -> Date = { Date() },
         session: URLSession = .shared
     ) {
         self.configuration = configuration
         self.appCheckToken = appCheckToken
         self.tokenStore = tokenStore
+        self.cooldownStore = cooldownStore
+        self.now = now
         self.session = session
     }
 
@@ -57,7 +62,12 @@ nonisolated final class FirebaseFeedbackRESTSubmitter: FeedbackSubmitter {
             return .sent(reference: submission.reference)
         } catch let failure as Failure {
             DiagnosticLog.warning(.connection, "feedback submit failed \(failure.logDescription)")
-            return failure.result
+            return failure.result(
+                cooldownRemaining: FeedbackCooldown.remainingSeconds(
+                    lastSentAt: cooldownStore.lastSentAt(),
+                    now: now()
+                )
+            )
         } catch {
             return .failed(message: Self.failedMessage)
         }
@@ -214,17 +224,25 @@ nonisolated final class FirebaseFeedbackRESTSubmitter: FeedbackSubmitter {
         case http(Stage, Int, Data)
         case malformed(Stage)
 
-        /// Error mapping from the #721 contract.
-        var result: FeedbackSubmitResult {
+        /// Error mapping from the #721 contract, as measured with App Check
+        /// enforced: a commit without a valid App Check token gets the same 403
+        /// as the server-side rate limit, so a 403 only means rate-limited when
+        /// the last successful report is under 60 s old.
+        ///
+        /// - Parameter cooldownRemaining: seconds left since the last success, or nil.
+        func result(cooldownRemaining: Int?) -> FeedbackSubmitResult {
             switch self {
             case .transport:
                 return .offline
-            case .http(.upload, 401, _):
+            case .http(.upload, 401, _), .http(.upload, 403, _):
                 return .unverified
             case .http(.commit, 401, _):
                 return .unverified
             case .http(.commit, 403, _):
-                return .rateLimited(retryAfterSeconds: FirebaseFeedbackRESTSubmitter.serverRateLimitSeconds)
+                if let cooldownRemaining {
+                    return .rateLimited(retryAfterSeconds: cooldownRemaining)
+                }
+                return .unverified
             case .http, .malformed:
                 return .failed(message: FirebaseFeedbackRESTSubmitter.failedMessage)
             }
