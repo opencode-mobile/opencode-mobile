@@ -64,6 +64,12 @@ nonisolated struct ProjectsAPIClient: Sendable {
 
     /// Probe health endpoints and return the detected protocol.
     func detectProtocol() async throws -> ServerProtocol {
+        try await detectServer().serverProtocol
+    }
+
+    /// Probe health endpoints and return the detected protocol with the
+    /// health `version` of the payload that decided it.
+    func detectServer() async throws -> ServerProbeOutcome {
         async let globalFetch = fetchHealth(path: "global/health") { try await getGlobalHealth() }
         async let infoFetch = fetchHealth(path: "api/info") { try await getApiInfo() }
         async let apiHealthFetch = fetchHealth(path: "api/health") { try await getApiHealth() }
@@ -94,21 +100,25 @@ nonisolated struct ProjectsAPIClient: Sendable {
             )
         }
 
+        let version: String?
         switch detected {
         case .v1:
             if let resolvedGlobal {
                 try adapter.requireHealthy(resolvedGlobal)
             }
+            version = resolvedGlobal?.version
         case .v2:
-            if let payload = ServerProtocolClassifier.v2Health(
+            let payload = ServerProtocolClassifier.v2Health(
                 apiInfo: resolvedInfo,
                 apiHealth: resolvedApiHealth
-            ), payload.pid != nil, payload.healthy == false {
+            )
+            if let payload, payload.pid != nil, payload.healthy == false {
                 throw ServerProbeError.unhealthy(version: payload.version)
             }
+            version = payload?.version
         }
 
-        return detected
+        return ServerProbeOutcome(serverProtocol: detected, serverVersion: version)
     }
 
     private struct HealthFetch: Sendable {
