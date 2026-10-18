@@ -46,6 +46,7 @@ import dev.opencode.mobile.theme.openCodeColor
 internal val OpenCodeTextInputMinHeight = 48.dp
 internal val OpenCodeTextInputCornerRadius = OpenCodeRadius.small
 internal val OpenCodeTextInputPaddingHorizontal = 12.dp
+internal val OpenCodeTextInputMultilinePaddingVertical = 12.dp
 
 enum class OpenCodeTextInputKind {
     Text,
@@ -73,7 +74,14 @@ fun OpenCodeTextInput(
     enabled: Boolean = true,
     errorMessage: String? = null,
     submitAction: OpenCodeTextInputSubmitAction = OpenCodeTextInputSubmitAction.Done,
+    /** Above 1, the field is multi-line: it starts this tall, Return adds a line, and [submitAction] is unused. */
+    minLines: Int = 1,
+    /** The field grows up to this many lines, then scrolls. */
+    maxLines: Int = minLines,
 ) {
+    require(minLines in 1..maxLines) { "OpenCodeTextInput needs 1 <= minLines <= maxLines" }
+    val multiline = maxLines > 1
+    require(!multiline || kind == OpenCodeTextInputKind.Text) { "Only Text inputs can be multi-line" }
     val resolvedAccessibilityLabel = resolveOpenCodeTextInputAccessibilityLabel(hint, accessibilityLabel)
     requireNotNull(resolvedAccessibilityLabel) {
         "OpenCodeTextInput requires a non-blank hint or accessibilityLabel"
@@ -142,7 +150,9 @@ fun OpenCodeTextInput(
                         explicitAccessibilityLabel?.let { contentDescription = it }
                     },
             enabled = enabled,
-            singleLine = true,
+            singleLine = !multiline,
+            minLines = minLines,
+            maxLines = maxLines,
             textStyle = MaterialTheme.typography.bodyLarge.copy(color = textColor),
             cursorBrush = SolidColor(openCodeColor("interactive")),
             visualTransformation =
@@ -159,7 +169,12 @@ fun OpenCodeTextInput(
                             else -> KeyboardCapitalization.None
                         },
                     autoCorrectEnabled = kind == OpenCodeTextInputKind.Text,
-                    imeAction = if (submitAction == OpenCodeTextInputSubmitAction.Next) ImeAction.Next else ImeAction.Done,
+                    imeAction =
+                        when {
+                            multiline -> ImeAction.Default
+                            submitAction == OpenCodeTextInputSubmitAction.Next -> ImeAction.Next
+                            else -> ImeAction.Done
+                        },
                     keyboardType =
                         when (kind) {
                             // Ascii avoids URI-variation IME quirks that can drop Paste when empty.
@@ -183,8 +198,11 @@ fun OpenCodeTextInput(
                             .defaultMinSize(minHeight = OpenCodeTextInputMinHeight)
                             .background(surfaceRaised, fieldShape)
                             .border(borderWidth, borderColor, fieldShape)
-                            .padding(horizontal = OpenCodeTextInputPaddingHorizontal),
-                    contentAlignment = Alignment.CenterStart,
+                            .padding(
+                                horizontal = OpenCodeTextInputPaddingHorizontal,
+                                vertical = if (multiline) OpenCodeTextInputMultilinePaddingVertical else 0.dp,
+                            ),
+                    contentAlignment = if (multiline) Alignment.TopStart else Alignment.CenterStart,
                 ) {
                     if (textFieldValue.text.isEmpty() && hint.isNotEmpty()) {
                         Text(

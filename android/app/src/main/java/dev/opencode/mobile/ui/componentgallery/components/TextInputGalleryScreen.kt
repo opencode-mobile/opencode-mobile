@@ -24,6 +24,7 @@ fun TextInputGalleryScreen(modifier: Modifier = Modifier) {
     var enabled by rememberSaveable { mutableStateOf(true) }
     var showsError by rememberSaveable { mutableStateOf(false) }
     var isEmpty by rememberSaveable { mutableStateOf(true) }
+    var multiline by rememberSaveable { mutableStateOf(false) }
     val kind = OpenCodeTextInputKind.valueOf(kindName)
 
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -37,6 +38,7 @@ fun TextInputGalleryScreen(modifier: Modifier = Modifier) {
                     selected = option == kind,
                     onClick = {
                         kindName = option.name
+                        if (option != OpenCodeTextInputKind.Text) multiline = false
                         value = if (isEmpty) "" else option.sampleValue
                     },
                 )
@@ -53,6 +55,14 @@ fun TextInputGalleryScreen(modifier: Modifier = Modifier) {
                     value = if (isEmpty) "" else kind.sampleValue
                 },
             )
+            OpenCodeChoiceBadge(
+                label = "Multi-line",
+                selected = multiline,
+                onClick = {
+                    multiline = !multiline
+                    if (multiline) kindName = OpenCodeTextInputKind.Text.name
+                },
+            )
         }
         OpenCodeTextInput(
             value = value,
@@ -61,6 +71,8 @@ fun TextInputGalleryScreen(modifier: Modifier = Modifier) {
             kind = kind,
             enabled = enabled,
             errorMessage = if (showsError) "Enter a valid ${kind.fieldHint.lowercase()}" else null,
+            minLines = if (multiline) 4 else 1,
+            maxLines = if (multiline) 8 else 1,
         )
     }
 }

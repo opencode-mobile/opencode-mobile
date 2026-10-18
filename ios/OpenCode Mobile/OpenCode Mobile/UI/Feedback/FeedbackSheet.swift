@@ -165,21 +165,19 @@ private struct FeedbackSheetModifier: ViewModifier {
 
     // MARK: - Dictation (same engine and permission flow as Session Chat)
 
-    private func handleDictation(_ action: OpenCodeFeedbackComposerAction) {
+    private func handleDictation(_ action: FeedbackDictationAction) {
         guard let model else { return }
         switch action {
-        case .beginDictation, .dictationRetry:
+        case .begin, .retry:
             Task { await beginDictation(model) }
-        case .dictationCancel:
+        case .cancel:
             model.dictationCancel()
-        case .dictationInsert:
+        case .insert:
             model.dictationInsert()
-        case .dictationOpenSettings:
+        case .openSettings:
             UIApplication.shared.open(URL(string: UIApplication.openSettingsURLString)!)
-        case .dictationDownload:
+        case .download:
             Task { await downloadDictationModel(model) }
-        default:
-            break
         }
     }
 
@@ -286,7 +284,7 @@ private struct FeedbackSheetPinnedTop: View {
     }
 }
 
-/// Error banner and privacy note, or the sent confirmation.
+/// Error banner, attachments, message and privacy note, or the sent confirmation.
 private struct FeedbackSheetBody: View {
     static let privacyNote = "Goes to the OpenCode Mobile team only. Never includes your server address, "
         + "username or password. Logs are redacted on this phone."
@@ -316,12 +314,71 @@ private struct FeedbackSheetBody: View {
                     )
                     .accessibilityIdentifier("feedbackErrorBanner")
                 }
+                attachments
+                OpenCodeTextInput(
+                    text: Binding(
+                        get: { model.uiState.message },
+                        // Dictation inserts at the cursor; the field doesn't report it, so keep it at the end.
+                        set: { model.updateMessage($0, cursor: $0.count) }
+                    ),
+                    hint: model.uiState.placeholder,
+                    enabled: !isSending,
+                    minLines: 4,
+                    maxLines: 8
+                )
+                .accessibilityIdentifier("feedbackMessage")
                 OpenCodeInlineNotice(message: Self.privacyNote)
             }
         }
         .padding(.horizontal, 20)
         .padding(.top, 4)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var isSending: Bool { model.uiState.phase == .sending }
+
+    /// Screenshot and log rows: tap opens Hide parts or the log preview, × removes.
+    @ViewBuilder
+    private var attachments: some View {
+        let state = model.uiState
+        if state.screenshotPreview != nil || state.includeLogs {
+            VStack(spacing: 8) {
+                if let preview = state.screenshotPreview {
+                    OpenCodeAttachmentChip(
+                        attachment: OpenCodeAttachmentPresentation(
+                            id: FeedbackSheetAttachment.screenshot,
+                            filename: "Screenshot",
+                            variant: .image,
+                            image: preview,
+                            detail: state.hiddenAreaCount == 0
+                                ? "Tap to hide parts"
+                                : "\(state.hiddenAreaCount) hidden"
+                        ),
+                        onOpen: isSending ? nil : { _ in open { model.openHideParts() } },
+                        onRemove: { _ in model.removeScreenshot() }
+                    )
+                    .disabled(isSending)
+                }
+                if state.includeLogs {
+                    OpenCodeAttachmentChip(
+                        attachment: OpenCodeAttachmentPresentation(
+                            id: FeedbackSheetAttachment.logs,
+                            filename: state.logsChipTitle,
+                            variant: .text,
+                            detail: "Tap to preview"
+                        ),
+                        onOpen: isSending ? nil : { _ in open { model.openLogPreview() } },
+                        onRemove: { _ in model.removeLogs() }
+                    )
+                    .disabled(isSending)
+                }
+            }
+        }
+    }
+
+    private func open(_ page: () -> Void) {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        page()
     }
 
     private func sent(reference: String) -> some View {
@@ -343,102 +400,123 @@ private struct FeedbackSheetBody: View {
     }
 }
 
-/// The composer, or Done once the report is sent.
+/// Dictation steps the sheet hands back to the modifier that owns the session.
+private enum FeedbackDictationAction {
+    case begin
+    case cancel
+    case insert
+    case openSettings
+    case download
+    case retry
+}
+
+/// Add attachment, dictation and Send; the Dictation Card while the user
+/// speaks; Done once the report is sent.
 private struct FeedbackSheetPinnedBottom: View {
     let model: FeedbackViewModel
     let showsMic: Bool
-    let onDictationAction: (OpenCodeFeedbackComposerAction) -> Void
+    let onDictationAction: (FeedbackDictationAction) -> Void
     let onDone: () -> Void
 
+    @State private var addMenuOpen = false
+
     var body: some View {
-        if case .sent = model.uiState.phase {
-            OpenCodeButton(variant: .fullWidthText(title: "Done"), action: onDone)
-        } else {
-            OpenCodeFeedbackComposer(
-                state: composerState,
-                dictation: model.uiState.dictation.map { Self.composerDictation($0) },
-                onAction: handle
-            )
+        Group {
+            if case .sent = model.uiState.phase {
+                OpenCodeButton(variant: .fullWidthText(title: "Done"), action: onDone)
+            } else if let dictation = model.uiState.dictation {
+                dictationContent(dictation)
+            } else {
+                actions
+            }
         }
+        .animation(.easeInOut(duration: 0.24), value: model.uiState.dictation != nil)
     }
 
-    private var composerState: OpenCodeFeedbackComposerState {
+    private var isSending: Bool { model.uiState.phase == .sending }
+
+    private var actions: some View {
         let state = model.uiState
-        var attachments: [OpenCodeAttachmentPresentation] = []
-        var addChips: [OpenCodeFeedbackComposerAddChip] = []
-        if let preview = state.screenshotPreview {
-            attachments.append(
-                OpenCodeAttachmentPresentation(
-                    id: FeedbackSheetAttachment.screenshot,
-                    filename: "Screenshot",
-                    variant: .image,
-                    image: preview,
-                    detail: state.hiddenAreaCount == 0
-                        ? "Tap to hide parts"
-                        : "\(state.hiddenAreaCount) hidden"
+        return HStack(spacing: 8) {
+            OpenCodeAnchoredOverflowHost(
+                isPresented: $addMenuOpen,
+                entries: [
+                    OpenCodeOverflowMenuEntry(
+                        id: FeedbackSheetAttachment.screenshot,
+                        title: "Screenshot",
+                        icon: nil,
+                        enabled: state.screenshotPreview == nil,
+                        action: { model.addScreenshot() }
+                    ),
+                    OpenCodeOverflowMenuEntry(
+                        id: FeedbackSheetAttachment.logs,
+                        title: "Logs",
+                        icon: nil,
+                        enabled: !state.includeLogs,
+                        action: { model.addLogs() }
+                    ),
+                ]
+            ) {
+                OpenCodeButton(
+                    variant: .iconCircle(.add, accessibilityLabel: "Add attachment"),
+                    enabled: !isSending && (state.screenshotPreview == nil || !state.includeLogs),
+                    contrast: .low,
+                    action: { addMenuOpen = true }
                 )
-            )
-        } else {
-            addChips.append(.init(id: FeedbackSheetAttachment.screenshot, title: "Screenshot"))
-        }
-        if state.includeLogs {
-            attachments.append(
-                OpenCodeAttachmentPresentation(
-                    id: FeedbackSheetAttachment.logs,
-                    filename: state.logsChipTitle,
-                    variant: .text,
-                    detail: "Tap to preview"
+            }
+            if state.composerDictationEnabled && showsMic {
+                OpenCodeButton(
+                    variant: .iconCircle(.mic, accessibilityLabel: "Dictate"),
+                    enabled: !isSending,
+                    contrast: .low,
+                    action: { onDictationAction(.begin) }
                 )
-            )
-        } else {
-            addChips.append(.init(id: FeedbackSheetAttachment.logs, title: "Logs"))
-        }
-        return OpenCodeFeedbackComposerState(
-            message: state.message,
-            placeholder: state.placeholder,
-            selectionStart: state.selectionRevision == 0 ? nil : state.cursor,
-            selectionEnd: state.selectionRevision == 0 ? nil : state.cursor,
-            selectionRevision: state.selectionRevision,
-            attachments: attachments,
-            addChips: addChips,
-            characterLimit: FeedbackDraft.messageLimit,
-            send: state.phase == .sending ? .sending : (state.canSend ? .enabled : .disabled),
-            showDictationButton: state.composerDictationEnabled && showsMic
-        )
-    }
-
-    private func handle(_ action: OpenCodeFeedbackComposerAction) {
-        switch action {
-        case let .textChanged(text, _, selectionEnd):
-            model.updateMessage(text, cursor: selectionEnd)
-        case let .openAttachment(id):
-            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-            if id == FeedbackSheetAttachment.screenshot {
-                model.openHideParts()
-            } else {
-                model.openLogPreview()
             }
-        case let .removeAttachment(id):
-            if id == FeedbackSheetAttachment.screenshot {
-                model.removeScreenshot()
-            } else {
-                model.removeLogs()
-            }
-        case let .addAttachment(id):
-            if id == FeedbackSheetAttachment.screenshot {
-                model.addScreenshot()
-            } else {
-                model.addLogs()
-            }
-        case .send:
-            Task { await model.send() }
-        case .beginDictation, .dictationCancel, .dictationInsert, .dictationOpenSettings,
-             .dictationDownload, .dictationRetry:
-            onDictationAction(action)
+            Spacer(minLength: 0)
+            sendButton
         }
     }
 
-    private static func composerDictation(_ state: ComposerDictationUiState) -> OpenCodeSessionComposerDictation {
+    @ViewBuilder
+    private var sendButton: some View {
+        if isSending {
+            ProgressView()
+                .controlSize(.regular)
+                .frame(width: 44, height: 44)
+                .accessibilityLabel("Sending report")
+        } else {
+            OpenCodeButton(
+                variant: .iconCircle(.arrowUpward, accessibilityLabel: "Send report"),
+                enabled: model.uiState.canSend,
+                contrast: .accent,
+                action: {
+                    UIApplication.shared.sendAction(
+                        #selector(UIResponder.resignFirstResponder),
+                        to: nil,
+                        from: nil,
+                        for: nil
+                    )
+                    Task { await model.send() }
+                }
+            )
+        }
+    }
+
+    private func dictationContent(_ state: ComposerDictationUiState) -> some View {
+        let showsClock = state.phase == .listening || state.phase == .finishing
+        return Group {
+            if showsClock {
+                TimelineView(.periodic(from: state.startedAt, by: 1)) { context in
+                    dictationCard(state, elapsed: Self.elapsedLabel(from: state.startedAt, to: context.date))
+                }
+            } else {
+                dictationCard(state, elapsed: Self.elapsedLabel(from: state.startedAt, to: Date()))
+            }
+        }
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+    }
+
+    private func dictationCard(_ state: ComposerDictationUiState, elapsed: String) -> some View {
         let variant: OpenCodeDictationCardVariant = switch state.phase {
         case .listening: .listening
         case .finishing: .finishing
@@ -446,7 +524,7 @@ private struct FeedbackSheetPinnedBottom: View {
         case .modelNotInstalled: .unavailable(.modelNotInstalled)
         case .recognizerError: .unavailable(.recognizerError(state.errorMessage ?? ""))
         }
-        return OpenCodeSessionComposerDictation(
+        return OpenCodeDictationCard(
             variant: variant,
             committed: state.committed,
             volatileText: state.volatile,
@@ -454,8 +532,23 @@ private struct FeedbackSheetPinnedBottom: View {
             status: state.onDevice
                 ? "Listening · \(state.languageLabel) · on-device"
                 : "Listening · \(state.languageLabel)",
-            startedAt: state.startedAt
+            elapsed: elapsed,
+            onCancel: { onDictationAction(.cancel) },
+            onInsert: { onDictationAction(.insert) },
+            onUnavailableAction: {
+                switch variant {
+                case .unavailable(.permissionDenied): onDictationAction(.openSettings)
+                case .unavailable(.modelNotInstalled): onDictationAction(.download)
+                case .unavailable(.recognizerError): onDictationAction(.retry)
+                case .listening, .finishing: onDictationAction(.insert)
+                }
+            }
         )
+    }
+
+    static func elapsedLabel(from start: Date, to now: Date) -> String {
+        let elapsed = max(0, Int(now.timeIntervalSince(start)))
+        return String(format: "%d:%02d", elapsed / 60, elapsed % 60)
     }
 }
 

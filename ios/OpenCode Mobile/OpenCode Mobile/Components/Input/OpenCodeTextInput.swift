@@ -24,6 +24,11 @@ struct OpenCodeTextInput: View {
     var submitAction: OpenCodeTextInputSubmitAction = .done
     var isFocused: Binding<Bool>?
     var onSubmit: (() -> Void)?
+    /// Above 1, the field is multi-line: it starts this tall, Return adds a line,
+    /// and `submitAction` / `onSubmit` are unused.
+    var minLines = 1
+    /// The field grows up to this many lines, then scrolls.
+    var maxLines = 1
 
     @FocusState private var focused: Bool
 
@@ -36,8 +41,13 @@ struct OpenCodeTextInput: View {
         errorMessage: String? = nil,
         submitAction: OpenCodeTextInputSubmitAction = .done,
         isFocused: Binding<Bool>? = nil,
-        onSubmit: (() -> Void)? = nil
+        onSubmit: (() -> Void)? = nil,
+        minLines: Int = 1,
+        maxLines: Int? = nil
     ) {
+        let maxLines = maxLines ?? minLines
+        precondition(minLines >= 1 && minLines <= maxLines, "OpenCodeTextInput needs 1 <= minLines <= maxLines")
+        precondition(maxLines == 1 || kind == .text, "Only text inputs can be multi-line")
         precondition(
             Self.resolveAccessibilityLabel(hint: hint, accessibilityLabel: accessibilityLabel) != nil,
             "OpenCodeTextInput requires a non-blank hint or accessibilityLabel"
@@ -51,7 +61,11 @@ struct OpenCodeTextInput: View {
         self.submitAction = submitAction
         self.isFocused = isFocused
         self.onSubmit = onSubmit
+        self.minLines = minLines
+        self.maxLines = maxLines
     }
+
+    private var multiline: Bool { maxLines > 1 }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -61,10 +75,10 @@ struct OpenCodeTextInput: View {
                 .textInputAutocapitalization(kind == .text ? .sentences : .never)
                 .autocorrectionDisabled(kind != .text)
                 .focused($focused)
-                .submitLabel(submitAction == .next ? .next : .done)
-                .onSubmit { onSubmit?() }
+                .modifier(SubmitBehavior(enabled: !multiline, submitAction: submitAction, onSubmit: onSubmit))
                 .padding(.horizontal, 12)
-                .frame(minHeight: 48)
+                .padding(.vertical, multiline ? 12 : 0)
+                .frame(minHeight: 48, alignment: multiline ? .topLeading : .leading)
                 .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: 8))
                 .overlay {
                     RoundedRectangle(cornerRadius: 8)
@@ -97,6 +111,9 @@ struct OpenCodeTextInput: View {
             if kind == .password {
                 SecureField(hint, text: $text)
                     .textContentType(.password)
+            } else if multiline {
+                TextField(hint, text: $text, axis: .vertical)
+                    .lineLimit(minLines ... maxLines)
             } else {
                 TextField(hint, text: $text)
                     .textContentType(contentType)
@@ -126,6 +143,23 @@ struct OpenCodeTextInput: View {
         if errorMessage != nil { return OpenCodeColors.error }
         if focused { return OpenCodeColors.interactive }
         return OpenCodeColors.borderWeakerBase
+    }
+}
+
+/// Return submits a single-line field; a multi-line field keeps Return for new lines.
+private struct SubmitBehavior: ViewModifier {
+    let enabled: Bool
+    let submitAction: OpenCodeTextInputSubmitAction
+    let onSubmit: (() -> Void)?
+
+    func body(content: Content) -> some View {
+        if enabled {
+            content
+                .submitLabel(submitAction == .next ? .next : .done)
+                .onSubmit { onSubmit?() }
+        } else {
+            content
+        }
     }
 }
 

@@ -21,12 +21,14 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -51,6 +53,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
@@ -69,6 +72,8 @@ import dev.opencode.mobile.theme.CodeTextStyle
 import dev.opencode.mobile.theme.OpenCodeSmallShape
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.ComposerDictationCardModel
+import dev.opencode.mobile.ui.components.OpenCodeAnchoredOverflowHost
+import dev.opencode.mobile.ui.components.OpenCodeAttachmentChip
 import dev.opencode.mobile.ui.components.OpenCodeAttachmentPresentation
 import dev.opencode.mobile.ui.components.OpenCodeAttachmentVariant
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
@@ -79,18 +84,15 @@ import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonContrast
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
+import dev.opencode.mobile.ui.components.OpenCodeDictationCard
 import dev.opencode.mobile.ui.components.OpenCodeDictationCardVariant
 import dev.opencode.mobile.ui.components.OpenCodeDictationUnavailableReason
-import dev.opencode.mobile.ui.components.OpenCodeFeedbackAttachment
-import dev.opencode.mobile.ui.components.OpenCodeFeedbackAttachmentKind
-import dev.opencode.mobile.ui.components.OpenCodeFeedbackComposer
-import dev.opencode.mobile.ui.components.OpenCodeFeedbackComposerAction
-import dev.opencode.mobile.ui.components.OpenCodeFeedbackComposerState
-import dev.opencode.mobile.ui.components.OpenCodeFeedbackSendState
 import dev.opencode.mobile.ui.components.OpenCodeInlineNotice
 import dev.opencode.mobile.ui.components.OpenCodeInlineNoticeAction
 import dev.opencode.mobile.ui.components.OpenCodeInlineNoticeTone
 import dev.opencode.mobile.ui.components.OpenCodeInlineNoticeVariant
+import dev.opencode.mobile.ui.components.OpenCodeOverflowMenuEntry
+import dev.opencode.mobile.ui.components.OpenCodeTextInput
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.sessionchat.ComposerDictationPhase
 import dev.opencode.mobile.ui.sessionchat.ComposerDictationUiState
@@ -204,45 +206,34 @@ fun FeedbackSheet(
         },
         pinnedBottom = {
             when (page) {
-                FeedbackPage.Compose ->
-                    OpenCodeFeedbackComposer(
-                        state = state.toComposerState(dictation.showsMic),
-                        dictation = state.dictation?.toCardModel(dictation.elapsedLabel),
-                        onAction = { action ->
-                            when (action) {
-                                is OpenCodeFeedbackComposerAction.MessageChanged -> viewModel.updateMessage(action.text)
-                                is OpenCodeFeedbackComposerAction.OpenAttachment ->
-                                    when (action.kind) {
-                                        OpenCodeFeedbackAttachmentKind.Screenshot -> viewModel.openHideParts()
-                                        OpenCodeFeedbackAttachmentKind.Logs -> viewModel.openLogPreview()
-                                    }
-                                is OpenCodeFeedbackComposerAction.RemoveAttachment ->
-                                    when (action.kind) {
-                                        OpenCodeFeedbackAttachmentKind.Screenshot -> viewModel.removeScreenshot()
-                                        OpenCodeFeedbackAttachmentKind.Logs -> viewModel.setIncludeLogs(false)
-                                    }
-                                is OpenCodeFeedbackComposerAction.AddAttachment ->
-                                    when (action.kind) {
-                                        OpenCodeFeedbackAttachmentKind.Screenshot ->
-                                            if (state.addScreenshotPicksPhoto) {
-                                                photoPicker.launch(
-                                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
-                                                )
-                                            } else {
-                                                viewModel.addCapturedScreenshot()
-                                            }
-                                        OpenCodeFeedbackAttachmentKind.Logs -> viewModel.setIncludeLogs(true)
-                                    }
-                                OpenCodeFeedbackComposerAction.Send -> viewModel.send()
-                                OpenCodeFeedbackComposerAction.BeginDictation -> dictation.begin()
-                                OpenCodeFeedbackComposerAction.DictationCancel -> viewModel.dictationCancel()
-                                OpenCodeFeedbackComposerAction.DictationInsert -> viewModel.dictationInsert()
-                                OpenCodeFeedbackComposerAction.DictationOpenSettings -> openAppSettings(context)
-                                OpenCodeFeedbackComposerAction.DictationDownload -> dictation.download()
-                                OpenCodeFeedbackComposerAction.DictationRetry -> dictation.retry()
-                            }
-                        },
-                    )
+                FeedbackPage.Compose -> {
+                    val card = state.dictation?.toCardModel(dictation.elapsedLabel)
+                    if (card != null) {
+                        FeedbackDictation(
+                            card = card,
+                            onCancel = viewModel::dictationCancel,
+                            onInsert = viewModel::dictationInsert,
+                            onOpenSettings = { openAppSettings(context) },
+                            onDownload = dictation.download,
+                            onRetry = dictation.retry,
+                        )
+                    } else {
+                        FeedbackActions(
+                            state = state,
+                            showsMic = dictation.showsMic,
+                            onAddScreenshot = {
+                                if (state.addScreenshotPicksPhoto) {
+                                    photoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                                } else {
+                                    viewModel.addCapturedScreenshot()
+                                }
+                            },
+                            onAddLogs = { viewModel.setIncludeLogs(true) },
+                            onDictate = dictation.begin,
+                            onSend = viewModel::send,
+                        )
+                    }
+                }
                 FeedbackPage.HideParts ->
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         OpenCodeButton(
@@ -327,12 +318,167 @@ private fun ComposeBody(
                 action = notice.second,
             )
         }
+        // While sending, the draft is frozen: what's on screen is what gets uploaded.
+        val editable = state.status != FeedbackSendStatus.Sending
+        if (state.screenshot != null || state.includeLogs) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                state.screenshot?.let { shot ->
+                    val hidden = shot.hiddenRects.size
+                    OpenCodeAttachmentChip(
+                        attachment =
+                            OpenCodeAttachmentPresentation(
+                                id = "screenshot",
+                                filename = if (hidden == 0) "Screenshot" else "Screenshot · $hidden hidden",
+                                variant = OpenCodeAttachmentVariant.Image,
+                                imageBytes = shot.jpeg,
+                            ),
+                        onRemove = { viewModel.removeScreenshot() },
+                        onClick = viewModel::openHideParts,
+                        onClickLabel = "Hide parts",
+                        enabled = editable,
+                    )
+                }
+                if (state.includeLogs) {
+                    OpenCodeAttachmentChip(
+                        attachment =
+                            OpenCodeAttachmentPresentation(
+                                id = "logs",
+                                filename = "Logs · ${state.logWindow.minutes} min",
+                                variant = OpenCodeAttachmentVariant.Text,
+                            ),
+                        onRemove = { viewModel.setIncludeLogs(false) },
+                        onClick = viewModel::openLogPreview,
+                        onClickLabel = "Diagnostic log",
+                        enabled = editable,
+                    )
+                }
+            }
+        }
+        OpenCodeTextInput(
+            value = state.message,
+            onValueChange = viewModel::updateMessage,
+            hint = state.placeholder,
+            enabled = editable,
+            minLines = FEEDBACK_MESSAGE_MIN_LINES,
+            maxLines = FEEDBACK_MESSAGE_MAX_LINES,
+        )
         Text(
             text = FeedbackCopy.PRIVACY_NOTE,
             style = MaterialTheme.typography.bodySmall,
             color = openCodeColor("text-weak"),
         )
     }
+}
+
+private const val FEEDBACK_MESSAGE_MIN_LINES = 4
+private const val FEEDBACK_MESSAGE_MAX_LINES = 8
+
+/** Add attachment and dictation on the left, Send on the right. */
+@Composable
+private fun FeedbackActions(
+    state: FeedbackUiState,
+    showsMic: Boolean,
+    onAddScreenshot: () -> Unit,
+    onAddLogs: () -> Unit,
+    onDictate: () -> Unit,
+    onSend: () -> Unit,
+) {
+    val focusManager = LocalFocusManager.current
+    val sending = state.status == FeedbackSendStatus.Sending
+    var addMenuOpen by remember { mutableStateOf(false) }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        OpenCodeAnchoredOverflowHost(
+            expanded = addMenuOpen,
+            onDismissRequest = { addMenuOpen = false },
+            entries =
+                listOf(
+                    OpenCodeOverflowMenuEntry(
+                        title = "Screenshot",
+                        icon = null,
+                        onClick = onAddScreenshot,
+                        enabled = state.screenshot == null,
+                    ),
+                    OpenCodeOverflowMenuEntry(
+                        title = "Logs",
+                        icon = null,
+                        onClick = onAddLogs,
+                        enabled = !state.includeLogs,
+                    ),
+                ),
+        ) {
+            OpenCodeButton(
+                variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Add, "Add attachment"),
+                contrast = OpenCodeButtonContrast.Low,
+                enabled = !sending && (state.screenshot == null || !state.includeLogs),
+                onClick = { addMenuOpen = true },
+            )
+        }
+        if (state.composerDictationEnabled && showsMic) {
+            OpenCodeButton(
+                variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Mic, "Dictate"),
+                contrast = OpenCodeButtonContrast.Low,
+                enabled = !sending,
+                onClick = onDictate,
+            )
+        }
+        Spacer(Modifier.weight(1f))
+        if (sending) {
+            Box(
+                modifier = Modifier.size(40.dp).semantics { contentDescription = "Sending" },
+                contentAlignment = Alignment.Center,
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.dp,
+                    color = openCodeColor("icon-strong-base"),
+                )
+            }
+        } else {
+            OpenCodeButton(
+                variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.ArrowUpward, "Send"),
+                contrast = OpenCodeButtonContrast.Accent,
+                enabled = state.canSend,
+                onClick = {
+                    focusManager.clearFocus()
+                    onSend()
+                },
+            )
+        }
+    }
+}
+
+/** The Dictation Card takes the action row's place while the user speaks, as in the Session Composer. */
+@Composable
+private fun FeedbackDictation(
+    card: ComposerDictationCardModel,
+    onCancel: () -> Unit,
+    onInsert: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onDownload: () -> Unit,
+    onRetry: () -> Unit,
+) {
+    val focusManager = LocalFocusManager.current
+    LaunchedEffect(Unit) { focusManager.clearFocus() }
+    OpenCodeDictationCard(
+        variant = card.variant,
+        committed = card.committed,
+        volatileTail = card.volatileTail,
+        level = card.level,
+        languageLabel = card.languageLabel,
+        onDevice = card.onDevice,
+        elapsedLabel = card.elapsedLabel,
+        unavailableReason = card.unavailableReason,
+        errorMessage = card.errorMessage,
+        onCancel = onCancel,
+        onInsert = onInsert,
+        onOpenSettings = onOpenSettings,
+        onDownload = onDownload,
+        onRetry = onRetry,
+    )
 }
 
 @Composable
@@ -485,59 +631,6 @@ private fun FeedbackSendStatus.errorNotice(
         FeedbackSendStatus.Failed -> FeedbackCopy.FAILED to OpenCodeInlineNoticeAction("Try Again", onTryAgain)
         FeedbackSendStatus.Idle, FeedbackSendStatus.Sending, is FeedbackSendStatus.Sent -> null
     }
-
-private fun FeedbackUiState.toComposerState(showsMic: Boolean): OpenCodeFeedbackComposerState {
-    val attachments =
-        buildList {
-            screenshot?.let { shot ->
-                val hidden = shot.hiddenRects.size
-                add(
-                    OpenCodeFeedbackAttachment(
-                        kind = OpenCodeFeedbackAttachmentKind.Screenshot,
-                        presentation =
-                            OpenCodeAttachmentPresentation(
-                                id = "screenshot",
-                                filename = if (hidden == 0) "Screenshot" else "Screenshot · $hidden hidden",
-                                variant = OpenCodeAttachmentVariant.Image,
-                                imageBytes = shot.jpeg,
-                            ),
-                        openLabel = "Hide parts",
-                    ),
-                )
-            }
-            if (includeLogs) {
-                add(
-                    OpenCodeFeedbackAttachment(
-                        kind = OpenCodeFeedbackAttachmentKind.Logs,
-                        presentation =
-                            OpenCodeAttachmentPresentation(
-                                id = "logs",
-                                filename = "Logs · ${logWindow.minutes} min",
-                                variant = OpenCodeAttachmentVariant.Text,
-                            ),
-                        openLabel = "Diagnostic log",
-                    ),
-                )
-            }
-        }
-    return OpenCodeFeedbackComposerState(
-        message = message,
-        placeholder = placeholder,
-        attachments = attachments,
-        addableAttachments =
-            buildList {
-                if (screenshot == null) add(OpenCodeFeedbackAttachmentKind.Screenshot)
-                if (!includeLogs) add(OpenCodeFeedbackAttachmentKind.Logs)
-            },
-        showDictationButton = composerDictationEnabled && showsMic,
-        sendState =
-            when {
-                status == FeedbackSendStatus.Sending -> OpenCodeFeedbackSendState.Sending
-                canSend -> OpenCodeFeedbackSendState.Enabled
-                else -> OpenCodeFeedbackSendState.Disabled
-            },
-    )
-}
 
 private fun ComposerDictationUiState.toCardModel(elapsedLabel: String): ComposerDictationCardModel {
     val (variant, reason) =

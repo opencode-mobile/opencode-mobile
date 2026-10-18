@@ -63,11 +63,55 @@ struct OpenCodeTopBarOverflowHost<TopBar: View>: View {
                 OpenCodeOverflowMenuWindowOverlay(
                     isPresented: isPresented,
                     anchorFrame: anchorFrame,
+                    placement: .belowTrailing,
                     entries: entries,
                     onDismiss: { isPresented = false }
                 )
             }
     }
+}
+
+/// The overflow menu opened from a control inside the content, such as a +
+/// button: the panel sits above `anchor`, leading-aligned, or below it when
+/// there is no room above.
+struct OpenCodeAnchoredOverflowHost<Anchor: View>: View {
+    @Binding var isPresented: Bool
+    let entries: [OpenCodeOverflowMenuEntry]
+    @ViewBuilder let anchor: () -> Anchor
+
+    @State private var anchorFrame: CGRect = .zero
+
+    var body: some View {
+        anchor()
+            .background {
+                GeometryReader { geometry in
+                    Color.clear
+                        .onAppear {
+                            anchorFrame = geometry.frame(in: .global)
+                        }
+                        .onChange(of: geometry.frame(in: .global)) { _, frame in
+                            anchorFrame = frame
+                        }
+                }
+            }
+            .background {
+                OpenCodeOverflowMenuWindowOverlay(
+                    isPresented: isPresented,
+                    anchorFrame: anchorFrame,
+                    placement: .aboveLeading,
+                    entries: entries,
+                    onDismiss: { isPresented = false }
+                )
+            }
+    }
+}
+
+/// Where the panel sits relative to its anchor.
+private enum OverflowMenuPlacement {
+    /// Under the top bar, trailing-aligned.
+    case belowTrailing
+    /// Over a control, leading-aligned; flips below when there is no room.
+    case aboveLeading
 }
 
 struct OpenCodeOverflowMenuTrigger: View {
@@ -89,6 +133,7 @@ struct OpenCodeOverflowMenuTrigger: View {
 private struct OpenCodeOverflowMenuWindowOverlay: UIViewRepresentable {
     let isPresented: Bool
     let anchorFrame: CGRect
+    let placement: OverflowMenuPlacement
     let entries: [OpenCodeOverflowMenuEntry]
     let onDismiss: () -> Void
 
@@ -106,6 +151,7 @@ private struct OpenCodeOverflowMenuWindowOverlay: UIViewRepresentable {
         context.coordinator.update(
             isPresented: isPresented,
             anchorFrame: anchorFrame,
+            placement: placement,
             entries: entries,
             hostView: uiView
         )
@@ -122,6 +168,7 @@ private struct OpenCodeOverflowMenuWindowOverlay: UIViewRepresentable {
         func update(
             isPresented: Bool,
             anchorFrame: CGRect,
+            placement: OverflowMenuPlacement,
             entries: [OpenCodeOverflowMenuEntry],
             hostView: UIView
         ) {
@@ -138,6 +185,7 @@ private struct OpenCodeOverflowMenuWindowOverlay: UIViewRepresentable {
                     let controller = UIHostingController(
                         rootView: OpenCodeOverflowMenuOverlayContent(
                             anchorFrame: anchorFrame,
+                            placement: placement,
                             entries: entries,
                             onDismiss: onDismiss,
                             onEntrySelected: onDismiss
@@ -152,6 +200,7 @@ private struct OpenCodeOverflowMenuWindowOverlay: UIViewRepresentable {
                 } else {
                     overlayController?.rootView = OpenCodeOverflowMenuOverlayContent(
                         anchorFrame: anchorFrame,
+                        placement: placement,
                         entries: entries,
                         onDismiss: onDismiss,
                         onEntrySelected: onDismiss
@@ -171,6 +220,7 @@ private struct OpenCodeOverflowMenuWindowOverlay: UIViewRepresentable {
 
 private struct OpenCodeOverflowMenuOverlayContent: View {
     let anchorFrame: CGRect
+    let placement: OverflowMenuPlacement
     let entries: [OpenCodeOverflowMenuEntry]
     let onDismiss: () -> Void
     let onEntrySelected: () -> Void
@@ -195,12 +245,23 @@ private struct OpenCodeOverflowMenuOverlayContent: View {
                         .onChange(of: proxy.size) { _, size in panelSize = size }
                 }
             }
-            .position(
+            .position(panelCenter)
+        }
+        .ignoresSafeArea()
+    }
+
+    private var panelCenter: CGPoint {
+        switch placement {
+        case .belowTrailing:
+            return CGPoint(
                 x: anchorFrame.maxX - overflowMenuAnchorEndInset - (panelSize.width / 2),
                 y: anchorFrame.maxY + overflowMenuAnchorTopOffset + (panelSize.height / 2)
             )
+        case .aboveLeading:
+            let above = anchorFrame.minY - overflowMenuAnchorTopOffset - panelSize.height
+            let top = above >= 0 ? above : anchorFrame.maxY + overflowMenuAnchorTopOffset
+            return CGPoint(x: anchorFrame.minX + (panelSize.width / 2), y: top + (panelSize.height / 2))
         }
-        .ignoresSafeArea()
     }
 }
 

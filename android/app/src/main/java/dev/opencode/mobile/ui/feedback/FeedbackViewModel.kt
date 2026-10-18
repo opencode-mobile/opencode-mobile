@@ -84,7 +84,7 @@ data class FeedbackUiState(
     val canSend: Boolean
         get() = message.isNotBlank() && status != FeedbackSendStatus.Sending && dictation == null
 
-    /** From Settings there is no capture, so "+ Screenshot" opens the Photo Picker. */
+    /** From Settings there is no capture, so adding a screenshot opens the Photo Picker. */
     val addScreenshotPicksPhoto: Boolean get() = capturedScreenshot == null
 }
 
