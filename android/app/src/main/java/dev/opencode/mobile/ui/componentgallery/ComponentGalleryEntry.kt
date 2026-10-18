@@ -75,7 +75,6 @@ enum class ComponentGalleryEntryId {
     SessionBranchPill,
     SessionComposer,
     DictationCard,
-    FeedbackComposer,
     RenderedMarkdown,
     MessageList,
 }
@@ -405,12 +404,6 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.DictationCard,
             title = "Dictation Card",
             description = "Listening takeover for composer dictation.",
-            category = ComponentGalleryCategory.Session,
-        ),
-        ComponentGalleryEntry(
-            id = ComponentGalleryEntryId.FeedbackComposer,
-            title = "Feedback Composer",
-            description = "Report a problem: attachment chips, message, dictation, and send states.",
             category = ComponentGalleryCategory.Session,
         ),
         ComponentGalleryEntry(

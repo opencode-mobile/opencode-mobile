@@ -114,36 +114,6 @@ struct OpenCodeAttachmentChip: View {
     }
 }
 
-/// Dashed chip that adds a missing attachment ("+ Screenshot").
-struct OpenCodeAttachmentAddChip: View {
-    let title: String
-    var enabled: Bool = true
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                OpenCodeIconImage(icon: .add, size: 16)
-                    .foregroundStyle(OpenCodeColors.iconBase)
-                Text(title)
-                    .font(OpenCodeTypography.bodySecondary)
-                    .foregroundStyle(enabled ? OpenCodeColors.textBase : OpenCodeColors.textWeak)
-                    .lineLimit(1)
-            }
-            .padding(.horizontal, 10)
-            .frame(minHeight: 32)
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .strokeBorder(OpenCodeColors.borderWeakBase, style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
-            )
-            .contentShape(RoundedRectangle(cornerRadius: 8))
-        }
-        .buttonStyle(.plain)
-        .disabled(!enabled)
-        .accessibilityLabel("Add \(title.lowercased())")
-    }
-}
-
 struct OpenCodeMessageAttachment: View {
     let attachment: OpenCodeAttachmentPresentation
 
@@ -188,7 +158,6 @@ struct OpenCodeMessageAttachment: View {
             onOpen: { _ in },
             onRemove: { _ in }
         )
-        OpenCodeAttachmentAddChip(title: "Screenshot", action: {})
         OpenCodeMessageAttachment(
             attachment: .init(id: "pdf", filename: "product-brief.pdf", variant: .pdf)
         )

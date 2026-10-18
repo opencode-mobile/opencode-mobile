@@ -10,6 +10,7 @@ private let overflowMenuEntryIconSize: CGFloat = 20
 private let overflowMenuEntryIconSpacing: CGFloat = 12
 private let overflowMenuAnchorEndInset: CGFloat = 4
 private let overflowMenuAnchorTopOffset: CGFloat = 8
+/// Gap between an iPhone Duo rail item and the menu that opens beside it.
 private let overflowMenuRailItemSpacing: CGFloat = 8
 
 struct OpenCodeOverflowMenuEntry: Identifiable {
@@ -40,20 +41,6 @@ struct OpenCodeOverflowMenuEntry: Identifiable {
     }
 }
 
-/// Where the overflow menu opens from, in global coordinates.
-enum OpenCodeOverflowMenuAnchor: Equatable {
-    /// Under the trailing end of the top bar.
-    case belowTrailing(CGRect)
-    /// Beside an item in the iPhone Duo vertical bar, top-aligned with it.
-    case besideRailItem(CGRect)
-
-    var frame: CGRect {
-        switch self {
-        case let .belowTrailing(frame), let .besideRailItem(frame): frame
-        }
-    }
-}
-
 struct OpenCodeTopBarOverflowHost<TopBar: View>: View {
     @Binding var isPresented: Bool
     let entries: [OpenCodeOverflowMenuEntry]
@@ -62,11 +49,13 @@ struct OpenCodeTopBarOverflowHost<TopBar: View>: View {
     @State private var anchorFrame: CGRect = .zero
     @State private var verticalBar: OpenCodeTopBarVerticalBarState?
 
-    private var anchor: OpenCodeOverflowMenuAnchor {
+    /// Beside the rail item while the bar draws its iPhone Duo vertical bar,
+    /// otherwise under the trailing end of the bar.
+    private var menuAnchor: (frame: CGRect, placement: OverflowMenuPlacement) {
         if let railAnchor = verticalBar?.overflowAnchor {
-            return .besideRailItem(railAnchor)
+            return (railAnchor, .besideRailItem)
         }
-        return .belowTrailing(anchorFrame)
+        return (anchorFrame, .belowTrailing)
     }
 
     var body: some View {
@@ -89,7 +78,8 @@ struct OpenCodeTopBarOverflowHost<TopBar: View>: View {
             .background {
                 OpenCodeOverflowMenuWindowOverlay(
                     isPresented: isPresented,
-                    anchor: anchor,
+                    anchorFrame: menuAnchor.frame,
+                    placement: menuAnchor.placement,
                     entries: entries,
                     onDismiss: { isPresented = false }
                 )
@@ -97,6 +87,51 @@ struct OpenCodeTopBarOverflowHost<TopBar: View>: View {
             // The bar's rail items hang below the host; keep them above the screen content.
             .zIndex(verticalBar == nil ? 0 : 1)
     }
+}
+
+/// The overflow menu opened from a control inside the content, such as a +
+/// button: the panel sits above `anchor`, leading-aligned, or below it when
+/// there is no room above.
+struct OpenCodeAnchoredOverflowHost<Anchor: View>: View {
+    @Binding var isPresented: Bool
+    let entries: [OpenCodeOverflowMenuEntry]
+    @ViewBuilder let anchor: () -> Anchor
+
+    @State private var anchorFrame: CGRect = .zero
+
+    var body: some View {
+        anchor()
+            .background {
+                GeometryReader { geometry in
+                    Color.clear
+                        .onAppear {
+                            anchorFrame = geometry.frame(in: .global)
+                        }
+                        .onChange(of: geometry.frame(in: .global)) { _, frame in
+                            anchorFrame = frame
+                        }
+                }
+            }
+            .background {
+                OpenCodeOverflowMenuWindowOverlay(
+                    isPresented: isPresented,
+                    anchorFrame: anchorFrame,
+                    placement: .aboveLeading,
+                    entries: entries,
+                    onDismiss: { isPresented = false }
+                )
+            }
+    }
+}
+
+/// Where the panel sits relative to its anchor.
+private enum OverflowMenuPlacement {
+    /// Under the top bar, trailing-aligned.
+    case belowTrailing
+    /// Over a control, leading-aligned; flips below when there is no room.
+    case aboveLeading
+    /// Beside an item in the iPhone Duo vertical bar, top-aligned with it.
+    case besideRailItem
 }
 
 struct OpenCodeOverflowMenuTrigger: View {
@@ -117,7 +152,8 @@ struct OpenCodeOverflowMenuTrigger: View {
 
 private struct OpenCodeOverflowMenuWindowOverlay: UIViewRepresentable {
     let isPresented: Bool
-    let anchor: OpenCodeOverflowMenuAnchor
+    let anchorFrame: CGRect
+    let placement: OverflowMenuPlacement
     let entries: [OpenCodeOverflowMenuEntry]
     let onDismiss: () -> Void
 
@@ -134,7 +170,8 @@ private struct OpenCodeOverflowMenuWindowOverlay: UIViewRepresentable {
     func updateUIView(_ uiView: UIView, context: Context) {
         context.coordinator.update(
             isPresented: isPresented,
-            anchor: anchor,
+            anchorFrame: anchorFrame,
+            placement: placement,
             entries: entries,
             hostView: uiView
         )
@@ -150,7 +187,8 @@ private struct OpenCodeOverflowMenuWindowOverlay: UIViewRepresentable {
 
         func update(
             isPresented: Bool,
-            anchor: OpenCodeOverflowMenuAnchor,
+            anchorFrame: CGRect,
+            placement: OverflowMenuPlacement,
             entries: [OpenCodeOverflowMenuEntry],
             hostView: UIView
         ) {
@@ -162,11 +200,12 @@ private struct OpenCodeOverflowMenuWindowOverlay: UIViewRepresentable {
                 return
             }
 
-            if isPresented, anchor.frame != .zero {
+            if isPresented, anchorFrame != .zero {
                 if overlayController == nil {
                     let controller = UIHostingController(
                         rootView: OpenCodeOverflowMenuOverlayContent(
-                            anchor: anchor,
+                            anchorFrame: anchorFrame,
+                            placement: placement,
                             entries: entries,
                             onDismiss: onDismiss,
                             onEntrySelected: onDismiss
@@ -180,7 +219,8 @@ private struct OpenCodeOverflowMenuWindowOverlay: UIViewRepresentable {
                     overlayController = controller
                 } else {
                     overlayController?.rootView = OpenCodeOverflowMenuOverlayContent(
-                        anchor: anchor,
+                        anchorFrame: anchorFrame,
+                        placement: placement,
                         entries: entries,
                         onDismiss: onDismiss,
                         onEntrySelected: onDismiss
@@ -199,7 +239,8 @@ private struct OpenCodeOverflowMenuWindowOverlay: UIViewRepresentable {
 }
 
 private struct OpenCodeOverflowMenuOverlayContent: View {
-    let anchor: OpenCodeOverflowMenuAnchor
+    let anchorFrame: CGRect
+    let placement: OverflowMenuPlacement
     let entries: [OpenCodeOverflowMenuEntry]
     let onDismiss: () -> Void
     let onEntrySelected: () -> Void
@@ -230,16 +271,20 @@ private struct OpenCodeOverflowMenuOverlayContent: View {
     }
 
     private var panelCenter: CGPoint {
-        switch anchor {
-        case let .belowTrailing(frame):
-            CGPoint(
-                x: frame.maxX - overflowMenuAnchorEndInset - (panelSize.width / 2),
-                y: frame.maxY + overflowMenuAnchorTopOffset + (panelSize.height / 2)
+        switch placement {
+        case .belowTrailing:
+            return CGPoint(
+                x: anchorFrame.maxX - overflowMenuAnchorEndInset - (panelSize.width / 2),
+                y: anchorFrame.maxY + overflowMenuAnchorTopOffset + (panelSize.height / 2)
             )
-        case let .besideRailItem(frame):
-            CGPoint(
-                x: frame.minX - overflowMenuRailItemSpacing - (panelSize.width / 2),
-                y: frame.minY + (panelSize.height / 2)
+        case .aboveLeading:
+            let above = anchorFrame.minY - overflowMenuAnchorTopOffset - panelSize.height
+            let top = above >= 0 ? above : anchorFrame.maxY + overflowMenuAnchorTopOffset
+            return CGPoint(x: anchorFrame.minX + (panelSize.width / 2), y: top + (panelSize.height / 2))
+        case .besideRailItem:
+            return CGPoint(
+                x: anchorFrame.minX - overflowMenuRailItemSpacing - (panelSize.width / 2),
+                y: anchorFrame.minY + (panelSize.height / 2)
             )
         }
     }
