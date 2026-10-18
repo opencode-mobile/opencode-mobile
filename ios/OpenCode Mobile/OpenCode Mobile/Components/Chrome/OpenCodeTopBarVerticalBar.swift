@@ -219,10 +219,14 @@ struct OpenCodeTopBarVerticalBarLayer: View {
     }
 
     private func occlusionFrames(in proxy: GeometryProxy) -> [CGRect] {
+        #if canImport(SwiftUI, _version: 8.0.85)
         guard #available(iOS 27.1, *) else { return [] }
         return proxy.reservedRegions(kind: .occlusion)
             .filter(\.isActive)
             .map(\.frame)
+        #else
+        return []
+        #endif
     }
 
     private func overflowAnchor(frames: [CGRect], proxy: GeometryProxy) -> CGRect? {
@@ -249,6 +253,7 @@ struct OpenCodeTopBarVerticalBarLayer: View {
 
     @ViewBuilder
     private var edgeProbes: some View {
+        #if canImport(SwiftUI, _version: 8.0.85)
         if #available(iOS 27.1, *), simulation == nil {
             ZStack {
                 OpenCodeToolbarVerticalEdgeProbe { environmentEdge = $0 }
@@ -256,6 +261,7 @@ struct OpenCodeTopBarVerticalBarLayer: View {
             }
             .accessibilityHidden(true)
         }
+        #endif
     }
 }
 
@@ -270,6 +276,9 @@ private extension View {
     }
 }
 
+// The iOS 27.1 vertical-bar and reserved-region APIs only exist in the iOS 27.1
+// SDK (SwiftUI 8.0.85); `#available` alone doesn't compile against older SDKs.
+#if canImport(SwiftUI, _version: 8.0.85)
 /// Reports SwiftUI's `toolbarVerticalEdge`, which only an iOS 27.1 type can read.
 @available(iOS 27.1, *)
 private struct OpenCodeToolbarVerticalEdgeProbe: View {
@@ -341,3 +350,4 @@ final class OpenCodeVerticalBarTraitProbeView: UIView {
         }
     }
 }
+#endif

@@ -29,7 +29,7 @@ struct ProjectListHomeView: View {
     /// Bumped when a keyboard shortcut selects a row so the list scrolls it into view.
     @State private var revealSelectedSessionToken = 0
     @Environment(\.scenePhase) private var scenePhase
-    private var splitGate = OpenCodeSplitLayoutGate()
+    var splitGate = OpenCodeSplitLayoutGate()
     @Binding private var presentConnectionSetupOnAppear: Bool
 
     init(

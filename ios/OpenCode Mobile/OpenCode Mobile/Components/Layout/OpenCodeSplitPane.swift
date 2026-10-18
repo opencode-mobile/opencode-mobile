@@ -135,6 +135,8 @@ struct OpenCodeSplitPane<Leading: View, Trailing: View>: View {
     /// The window's vertical fold inside this pane (iPhone Duo inner display). Regions
     /// arrive after the first layout pass, so this is read on every evaluation.
     private static func fold(in proxy: GeometryProxy, bounds: OpenCodeSplitPaneBounds) -> OpenCodeSplitPaneFold? {
+        // `reservedRegions` only exists in the iOS 27.1 SDK (SwiftUI 8.0.85).
+        #if canImport(SwiftUI, _version: 8.0.85)
         guard #available(iOS 27.1, *) else { return nil }
         let divisions = proxy.reservedRegions(kind: .division, options: .includeInactive)
             .map { (frame: $0.frame, isActive: $0.isActive) }
@@ -143,6 +145,9 @@ struct OpenCodeSplitPane<Leading: View, Trailing: View>: View {
             containerWidth: proxy.size.width,
             bounds: bounds
         )
+        #else
+        return nil
+        #endif
     }
 
     private func divider(

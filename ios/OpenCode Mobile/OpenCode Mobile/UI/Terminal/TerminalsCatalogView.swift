@@ -3,7 +3,7 @@ import SwiftUI
 
 struct TerminalsCatalogView: View {
     @Environment(\.dismiss) private var dismiss
-    private var splitGate = OpenCodeSplitLayoutGate()
+    var splitGate = OpenCodeSplitLayoutGate()
     @State private var viewModel: TerminalsCatalogViewModel
     @State private var selected: TerminalRoute?
     var onOpen: (String, String, String) -> Void

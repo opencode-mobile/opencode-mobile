@@ -3,7 +3,7 @@ import SwiftUI
 
 struct ChangesView: View {
     @Environment(\.dismiss) private var dismiss
-    private var splitGate = OpenCodeSplitLayoutGate()
+    var splitGate = OpenCodeSplitLayoutGate()
     @State private var viewModel: ChangesViewModel
     @State private var sourceMenuPresented = false
     @State private var splitSelection: String?

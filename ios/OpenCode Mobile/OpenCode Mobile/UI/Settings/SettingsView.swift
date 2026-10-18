@@ -36,7 +36,7 @@ struct SettingsView: View {
     var build: String = AppVersion.current().build
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
-    private var splitGate = OpenCodeSplitLayoutGate()
+    var splitGate = OpenCodeSplitLayoutGate()
     /// Trailing-pane sub-screen in the regular-width split view. Unused on compact.
     @State private var selectedDetail: SettingsDetail = .servers
     @State private var showComponentGallery = false

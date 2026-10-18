@@ -2,6 +2,10 @@ import SwiftUI
 
 private let topBarMinHeight: CGFloat = 56
 private let topBarHorizontalPadding: CGFloat = 12
+/// Leading inset of a horizontal leading control while the iPhone Duo vertical bar
+/// is active. The top inset is 0 there, so the control sits under the display's
+/// 55pt corner; the system bar keeps its leading button 20pt in.
+private let topBarVerticalBarLeadingPadding: CGFloat = 20
 private let topBarVerticalPadding: CGFloat = 12
 private let topBarItemSpacing: CGFloat = 8
 private let topBarTitleSpacing: CGFloat = 12
@@ -104,7 +108,8 @@ struct OpenCodeTopBar: View {
                 trailingContent
             }
             .frame(maxWidth: .infinity, minHeight: topBarMinHeight)
-            .padding(.horizontal, topBarHorizontalPadding)
+            .padding(.leading, leadingPadding)
+            .padding(.trailing, topBarHorizontalPadding)
             .padding(.vertical, topBarVerticalPadding)
 
             if showDivider {
@@ -204,6 +209,10 @@ struct OpenCodeTopBar: View {
             if case .label = $0 { return true }
             return false
         }
+    }
+
+    private var leadingPadding: CGFloat {
+        verticalBarActive && hasLeadingControl ? topBarVerticalBarLeadingPadding : topBarHorizontalPadding
     }
 
     private var hasLeadingControl: Bool {

@@ -11,7 +11,7 @@ struct FilesRoute: Hashable, Identifiable {
 /// a wide window (iPad, iPhone Duo open) keeps the tree beside a tabbed viewer.
 struct FilesView: View {
     @Environment(\.dismiss) private var dismiss
-    private var splitGate = OpenCodeSplitLayoutGate()
+    var splitGate = OpenCodeSplitLayoutGate()
     @State private var viewModel: FilesViewModel
     @State private var pushedPath: String?
     @State private var treeMenuPresented = false

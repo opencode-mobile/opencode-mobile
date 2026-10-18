@@ -26,8 +26,9 @@ extension View {
 }
 
 /// Whether a full-window screen shows its split layout. Store it on the view
-/// (`private var splitGate = OpenCodeSplitLayoutGate()`); SwiftUI keeps the size
-/// classes and window width it reads current.
+/// (`var splitGate = OpenCodeSplitLayoutGate()`); SwiftUI keeps the size classes
+/// and window width it reads current. Keep it non-private: a private stored
+/// property hides the view's memberwise initializer from Xcode 26 builds.
 struct OpenCodeSplitLayoutGate: DynamicProperty {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
