@@ -79,7 +79,11 @@ final class ActiveConnectionManager: @unchecked Sendable {
         stamped.serverProtocol = serverProtocol ?? profile.serverProtocol
         let connection = ServerConnection(profile: stamped, serverProtocol: stamped.serverProtocol)
         lock.lock()
-        if _profile?.id != stamped.id {
+        // The version belongs to one server: switching profiles, or editing this profile to
+        // point at another address or user, must not report the previous machine's version.
+        let sameServer = _profile?.id == stamped.id
+            && (_connection.map { $0.hasSameIdentity(as: connection) } ?? false)
+        if !sameServer {
             _serverVersion = nil
         }
         _profile = stamped
