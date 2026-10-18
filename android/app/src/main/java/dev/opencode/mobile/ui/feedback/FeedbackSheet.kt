@@ -66,6 +66,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogExportWindow
 import dev.opencode.mobile.domain.feedback.FeedbackKind
+import dev.opencode.mobile.domain.feedback.FeedbackReport
 import dev.opencode.mobile.domain.feedback.FeedbackScreen
 import dev.opencode.mobile.domain.feedback.FeedbackSharePayload
 import dev.opencode.mobile.theme.CodeTextStyle
@@ -361,6 +362,7 @@ private fun ComposeBody(
             enabled = editable,
             minLines = FEEDBACK_MESSAGE_MIN_LINES,
             maxLines = FEEDBACK_MESSAGE_MAX_LINES,
+            maxLength = FeedbackReport.MAX_MESSAGE_LENGTH,
         )
         Text(
             text = FeedbackCopy.PRIVACY_NOTE,

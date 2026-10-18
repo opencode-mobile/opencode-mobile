@@ -324,7 +324,8 @@ private struct FeedbackSheetBody: View {
                     hint: model.uiState.placeholder,
                     enabled: !isSending,
                     minLines: 4,
-                    maxLines: 8
+                    maxLines: 8,
+                    maxLength: FeedbackDraft.messageLimit
                 )
                 .accessibilityIdentifier("feedbackMessage")
                 OpenCodeInlineNotice(message: Self.privacyNote)

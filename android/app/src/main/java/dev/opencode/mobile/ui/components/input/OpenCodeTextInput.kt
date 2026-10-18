@@ -39,6 +39,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.theme.OpenCodeRadius
 import dev.opencode.mobile.theme.openCodeColor
@@ -78,10 +79,13 @@ fun OpenCodeTextInput(
     minLines: Int = 1,
     /** The field grows up to this many lines, then scrolls. */
     maxLines: Int = minLines,
+    /** Multi-line inputs only: clips typed and pasted text to this many characters; an `N/max` count shows near the limit. */
+    maxLength: Int? = null,
 ) {
     require(minLines in 1..maxLines) { "OpenCodeTextInput needs 1 <= minLines <= maxLines" }
     val multiline = maxLines > 1
     require(!multiline || kind == OpenCodeTextInputKind.Text) { "Only Text inputs can be multi-line" }
+    require(maxLength == null || multiline) { "maxLength needs a multi-line input" }
     val resolvedAccessibilityLabel = resolveOpenCodeTextInputAccessibilityLabel(hint, accessibilityLabel)
     requireNotNull(resolvedAccessibilityLabel) {
         "OpenCodeTextInput requires a non-blank hint or accessibilityLabel"
@@ -135,7 +139,9 @@ fun OpenCodeTextInput(
     ) {
         BasicTextField(
             value = textFieldValue,
-            onValueChange = { next ->
+            onValueChange = { edited ->
+                // Clip here: a parent that clamps would echo an unchanged value and leave the extra text on screen.
+                val next = clipOpenCodeTextInput(edited, maxLength)
                 textFieldValue = next
                 if (next.text != value) {
                     onValueChange(next.text)
@@ -223,8 +229,37 @@ fun OpenCodeTextInput(
                 modifier = Modifier.padding(top = 6.dp),
             )
         }
+        openCodeTextInputLengthLabel(textFieldValue.text.length, maxLength)?.let { label ->
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodySmall,
+                color = openCodeColor("text-weak"),
+                textAlign = TextAlign.End,
+                modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+            )
+        }
     }
 }
+
+/** Keeps the first [maxLength] characters, with the cursor inside them. */
+internal fun clipOpenCodeTextInput(
+    value: TextFieldValue,
+    maxLength: Int?,
+): TextFieldValue {
+    if (maxLength == null || value.text.length <= maxLength) return value
+    return value.copy(
+        text = value.text.take(maxLength),
+        selection = TextRange(value.selection.start.coerceAtMost(maxLength), value.selection.end.coerceAtMost(maxLength)),
+        composition = null,
+    )
+}
+
+/** `N/max` once the text reaches 90% of [maxLength], so the cap is never a surprise. */
+internal fun openCodeTextInputLengthLabel(
+    length: Int,
+    maxLength: Int?,
+): String? =
+    if (maxLength != null && length * 10 >= maxLength * 9) "$length/$maxLength" else null
 
 internal fun resolveOpenCodeTextInputAccessibilityLabel(
     hint: String?,
