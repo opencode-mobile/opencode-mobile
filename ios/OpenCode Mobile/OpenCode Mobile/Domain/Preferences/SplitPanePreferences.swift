@@ -2,7 +2,8 @@ import CoreGraphics
 import Foundation
 import Observation
 
-/// Persists the tablet split-view leading pane width and collapsed state per screen.
+/// Persists the split-view leading pane width, collapsed state, and whether the
+/// divider follows the fold, per screen.
 @Observable
 final class SplitPanePreferences {
     static let shared = SplitPanePreferences()
@@ -14,6 +15,10 @@ final class SplitPanePreferences {
 
         static func isCollapsed(_ screen: OpenCodeSplitPaneScreen) -> String {
             "splitPane.\(screen.rawValue).isCollapsed"
+        }
+
+        static func followsFold(_ screen: OpenCodeSplitPaneScreen) -> String {
+            "splitPane.\(screen.rawValue).followsFold"
         }
     }
 
@@ -36,17 +41,20 @@ final class SplitPanePreferences {
     func setState(_ state: OpenCodeSplitPaneState, for screen: OpenCodeSplitPaneScreen) {
         let sanitized = OpenCodeSplitPaneState(
             leadingWidth: Self.storedWidth(state.leadingWidth),
-            isCollapsed: state.isCollapsed
+            isCollapsed: state.isCollapsed,
+            followsFold: state.followsFold
         )
         states[screen] = sanitized
         defaults.set(Double(sanitized.leadingWidth), forKey: StorageKeys.leadingWidth(screen))
         defaults.set(sanitized.isCollapsed, forKey: StorageKeys.isCollapsed(screen))
+        defaults.set(sanitized.followsFold, forKey: StorageKeys.followsFold(screen))
     }
 
     func clear() {
         for screen in OpenCodeSplitPaneScreen.allCases {
             defaults.removeObject(forKey: StorageKeys.leadingWidth(screen))
             defaults.removeObject(forKey: StorageKeys.isCollapsed(screen))
+            defaults.removeObject(forKey: StorageKeys.followsFold(screen))
             states[screen] = .initial
         }
     }
@@ -58,9 +66,13 @@ final class SplitPanePreferences {
         } else {
             width = storedWidth(CGFloat(defaults.double(forKey: StorageKeys.leadingWidth(screen))))
         }
+        // Missing on fresh installs and states saved before fold support. Only a window
+        // with a fold reads it, so those follow the fold.
+        let followsFold = defaults.object(forKey: StorageKeys.followsFold(screen)) as? Bool ?? true
         return OpenCodeSplitPaneState(
             leadingWidth: width,
-            isCollapsed: defaults.bool(forKey: StorageKeys.isCollapsed(screen))
+            isCollapsed: defaults.bool(forKey: StorageKeys.isCollapsed(screen)),
+            followsFold: followsFold
         )
     }
 

@@ -47,6 +47,8 @@ struct SessionChatView: View {
     @State private var composerFocusRequest = 0
     /// False while another screen is pushed over this chat.
     @State private var isOnScreen = false
+    /// This screen's lease on a view model it may share with the other Home layout.
+    @State private var hostID = UUID()
     @State private var dictationSession: any ComposerDictationSession = ComposerDictationSessions.make()
     @State private var dictationSupport = DictationSupport.hidden
 
@@ -116,30 +118,31 @@ struct SessionChatView: View {
                 // Back from a pushed screen: `.onDisappear` stopped observing. Resume on
                 // the same view model so the composer and timeline keep their state;
                 // the timeline's warm path refreshes quietly.
-                viewModel.startObserving()
+                viewModel.attachHost(hostID)
                 if !viewModel.hasCompletedInitialLoad {
                     await viewModel.loadMessages()
                 }
             case .rebuild:
                 dictationSession.stop()
-                viewModelStorage?.stopObserving()
+                viewModelStorage?.detachHost(hostID)
                 viewModelStorage = injectedViewModel ?? Container.makeSessionChatViewModel(
                     sessionID: session.id,
                     sessionTitle: session.title,
                     worktree: session.worktree
                 )
                 viewModelTaskID = taskID
-                viewModel.startObserving()
-                await viewModel.loadMessages()
+                // A view model handed over from the other Home layout may still be
+                // observing and loaded; it keeps its subscription and timeline.
+                viewModel.attachHost(hostID)
+                if !viewModel.hasCompletedInitialLoad {
+                    await viewModel.loadMessages()
+                }
             }
         }
     }
 
     private var sessionNavigationTaskID: String {
-        if let instanceID = session.optimisticNavigationInstanceID {
-            return "\(session.id)-\(instanceID.uuidString)"
-        }
-        return session.id
+        session.navigationID
     }
 
     // The modifier chain is split into small steps so each one type-checks quickly;
@@ -703,7 +706,7 @@ struct SessionChatView: View {
             .onDisappear {
                 isOnScreen = false
                 dictationSession.stop()
-                viewModelStorage?.stopObserving()
+                viewModelStorage?.detachHost(hostID)
             }
             .onChange(of: scenePhase) { _, phase in
                 guard viewModelStorage != nil else { return }
@@ -950,7 +953,9 @@ struct SessionChatView: View {
     }
 
     private func leaveSession() {
-        viewModelStorage?.stopObserving()
+        // Release this screen's lease rather than stopping the shared model outright:
+        // during a fold/unfold hand-off another screen may still host it.
+        viewModelStorage?.detachHost(hostID)
         if detailControl != nil {
             onLeaveSession?()
         } else {

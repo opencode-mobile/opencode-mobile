@@ -8,10 +8,10 @@ struct FilesRoute: Hashable, Identifiable {
 }
 
 /// Read-only File Browser for one project worktree. Phones push a File Viewer per file;
-/// iPad at regular width keeps the tree beside a tabbed viewer.
+/// a wide window (iPad, iPhone Duo open) keeps the tree beside a tabbed viewer.
 struct FilesView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    var splitGate = OpenCodeSplitLayoutGate()
     @State private var viewModel: FilesViewModel
     @State private var pushedPath: String?
     @State private var treeMenuPresented = false
@@ -23,7 +23,7 @@ struct FilesView: View {
     }
 
     private var isSplitLayout: Bool {
-        OpenCodeSplitPaneLayout.usesSplitLayout(horizontalSizeClass: horizontalSizeClass)
+        splitGate.usesSplitLayout
     }
 
     var body: some View {

@@ -10,6 +10,8 @@ private let overflowMenuEntryIconSize: CGFloat = 20
 private let overflowMenuEntryIconSpacing: CGFloat = 12
 private let overflowMenuAnchorEndInset: CGFloat = 4
 private let overflowMenuAnchorTopOffset: CGFloat = 8
+/// Gap between an iPhone Duo rail item and the menu that opens beside it.
+private let overflowMenuRailItemSpacing: CGFloat = 8
 
 struct OpenCodeOverflowMenuEntry: Identifiable {
     let id: String
@@ -45,9 +47,23 @@ struct OpenCodeTopBarOverflowHost<TopBar: View>: View {
     @ViewBuilder let topBar: () -> TopBar
 
     @State private var anchorFrame: CGRect = .zero
+    @State private var verticalBar: OpenCodeTopBarVerticalBarState?
+
+    /// Beside the rail item while the bar draws its iPhone Duo vertical bar,
+    /// otherwise under the trailing end of the bar.
+    private var menuAnchor: (frame: CGRect, placement: OverflowMenuPlacement) {
+        if let railAnchor = verticalBar?.overflowAnchor {
+            return (railAnchor, .besideRailItem)
+        }
+        return (anchorFrame, .belowTrailing)
+    }
 
     var body: some View {
         topBar()
+            .onPreferenceChange(OpenCodeTopBarVerticalBarPreferenceKey.self) { state in
+                verticalBar = state
+            }
+            .transformPreference(OpenCodeTopBarVerticalBarPreferenceKey.self) { $0 = nil }
             .background {
                 GeometryReader { geometry in
                     Color.clear
@@ -62,12 +78,14 @@ struct OpenCodeTopBarOverflowHost<TopBar: View>: View {
             .background {
                 OpenCodeOverflowMenuWindowOverlay(
                     isPresented: isPresented,
-                    anchorFrame: anchorFrame,
-                    placement: .belowTrailing,
+                    anchorFrame: menuAnchor.frame,
+                    placement: menuAnchor.placement,
                     entries: entries,
                     onDismiss: { isPresented = false }
                 )
             }
+            // The bar's rail items hang below the host; keep them above the screen content.
+            .zIndex(verticalBar == nil ? 0 : 1)
     }
 }
 
@@ -112,6 +130,8 @@ private enum OverflowMenuPlacement {
     case belowTrailing
     /// Over a control, leading-aligned; flips below when there is no room.
     case aboveLeading
+    /// Beside an item in the iPhone Duo vertical bar, top-aligned with it.
+    case besideRailItem
 }
 
 struct OpenCodeOverflowMenuTrigger: View {
@@ -261,6 +281,11 @@ private struct OpenCodeOverflowMenuOverlayContent: View {
             let above = anchorFrame.minY - overflowMenuAnchorTopOffset - panelSize.height
             let top = above >= 0 ? above : anchorFrame.maxY + overflowMenuAnchorTopOffset
             return CGPoint(x: anchorFrame.minX + (panelSize.width / 2), y: top + (panelSize.height / 2))
+        case .besideRailItem:
+            return CGPoint(
+                x: anchorFrame.minX - overflowMenuRailItemSpacing - (panelSize.width / 2),
+                y: anchorFrame.minY + (panelSize.height / 2)
+            )
         }
     }
 }

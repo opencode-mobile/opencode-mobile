@@ -1,6 +1,5 @@
 import CoreGraphics
 import SwiftUI
-import UIKit
 
 /// Screens that render as a split view on a wide window. Each keeps its own
 /// persisted leading-pane width and collapsed state.
@@ -28,11 +27,35 @@ struct OpenCodeSplitPaneState: Equatable, Sendable {
     /// Last open width. Kept while collapsed so reopening restores it.
     var leadingWidth: CGFloat
     var isCollapsed: Bool
+    /// The divider sits in the window's fold whenever one is reported. Fresh installs
+    /// and a divider snapped into the fold follow it; a custom drag width stays custom.
+    var followsFold: Bool = false
 
     static let initial = OpenCodeSplitPaneState(
         leadingWidth: OpenCodeSplitPaneLayout.defaultLeadingWidth,
-        isCollapsed: false
+        isCollapsed: false,
+        followsFold: true
     )
+}
+
+/// A vertical display division (the iPhone Duo hinge) inside a split pane, measured
+/// from the pane's leading edge.
+struct OpenCodeSplitPaneFold: Equatable, Sendable {
+    /// Distance from the pane's leading edge to the fold's leading edge.
+    var leadingOffset: CGFloat
+    var width: CGFloat
+    /// Book or partially open pose: the divider stays locked in the fold.
+    var isActive: Bool
+}
+
+/// What the split pane draws for the current state and fold.
+struct OpenCodeSplitPaneGeometry: Equatable, Sendable {
+    var leadingWidth: CGFloat
+    var dividerWidth: CGFloat
+    /// The divider fills the fold gap rather than drawing the 1pt line.
+    var isInFold: Bool
+    /// Hidden handle and no drag while the fold is active.
+    var isLocked: Bool
 }
 
 /// Width range and snap thresholds for one split-pane role.
@@ -55,25 +78,81 @@ enum OpenCodeSplitPaneLayout {
     static let reopenThreshold: CGFloat = 120
 
     static let dividerWidth: CGFloat = 1
+    /// Top and bottom inset of the centred line drawn in the fold gap.
+    static let foldLineInset: CGFloat = 12
     static let handleGripWidth: CGFloat = 6
     static let handleGripHeight: CGFloat = 40
     static let handleHitWidth: CGFloat = 28
     static let handleHitHeight: CGFloat = 72
     /// Drags shorter than this count as a tap on the handle.
     static let tapSlop: CGFloat = 4
+    /// Narrowest detail pane a split may leave next to a minimum-width sidebar.
+    static let minimumDetailWidth: CGFloat = 400
+    /// Window width left after horizontal safe-area insets that a split needs:
+    /// a minimum sidebar, the divider, and a minimum detail pane (681pt).
+    static let minimumSplitUsableWidth: CGFloat = minLeadingWidth + dividerWidth + minimumDetailWidth
+    /// Releasing the divider this close to the fold snaps it into the fold gap.
+    static let foldSnapDistance: CGFloat = 24
 
-    /// Tablet split only on iPad at regular width. Phones stay stacked in
-    /// every orientation, including large iPhones in landscape (regular width), and
-    /// iPad Slide Over or narrow Split View (compact width) stays stacked too.
+    /// Split on a regular × regular window with room for both panes. Idiom is not
+    /// checked: iPhone Duo reports `.phone` in every pose. Large iPhones in landscape
+    /// (compact height), iPad Slide Over and narrow Split View (compact width), and Duo
+    /// open and turned (669pt usable) stay stacked; a 13-inch iPad in half-and-half
+    /// Split View (683pt) still splits. A nil width (not measured, e.g. in
+    /// previews) falls back to the size classes alone.
     static func usesSplitLayout(
-        idiom: UIUserInterfaceIdiom,
-        horizontalSizeClass: UserInterfaceSizeClass?
+        horizontalSizeClass: UserInterfaceSizeClass?,
+        verticalSizeClass: UserInterfaceSizeClass?,
+        usableWidth: CGFloat?
     ) -> Bool {
-        idiom == .pad && horizontalSizeClass == .regular
+        guard horizontalSizeClass == .regular, verticalSizeClass == .regular else { return false }
+        guard let usableWidth else { return true }
+        return usableWidth >= minimumSplitUsableWidth
     }
 
-    static func usesSplitLayout(horizontalSizeClass: UserInterfaceSizeClass?) -> Bool {
-        usesSplitLayout(idiom: UIDevice.current.userInterfaceIdiom, horizontalSizeClass: horizontalSizeClass)
+    /// Picks the vertical division that lies inside the pane and leaves a leading
+    /// width the user could also drag to. Frames are in the pane's coordinate space.
+    static func fold(
+        divisions: [(frame: CGRect, isActive: Bool)],
+        containerWidth: CGFloat,
+        bounds: OpenCodeSplitPaneBounds = sidebarBounds
+    ) -> OpenCodeSplitPaneFold? {
+        for division in divisions {
+            let frame = division.frame
+            guard frame.height > frame.width,
+                  frame.minX >= bounds.minLeading,
+                  frame.minX <= bounds.maxLeading,
+                  frame.maxX < containerWidth else { continue }
+            return OpenCodeSplitPaneFold(
+                leadingOffset: frame.minX,
+                width: frame.width,
+                isActive: division.isActive
+            )
+        }
+        return nil
+    }
+
+    /// Resolved pane geometry outside a drag. An active fold locks the divider in the
+    /// fold without touching the persisted width.
+    static func geometry(
+        state: OpenCodeSplitPaneState,
+        fold: OpenCodeSplitPaneFold?,
+        bounds: OpenCodeSplitPaneBounds = sidebarBounds
+    ) -> OpenCodeSplitPaneGeometry {
+        if let fold, fold.isActive || state.followsFold {
+            return OpenCodeSplitPaneGeometry(
+                leadingWidth: fold.leadingOffset,
+                dividerWidth: fold.width,
+                isInFold: true,
+                isLocked: fold.isActive
+            )
+        }
+        return OpenCodeSplitPaneGeometry(
+            leadingWidth: clamp(width: state.leadingWidth, bounds: bounds),
+            dividerWidth: dividerWidth,
+            isInFold: false,
+            isLocked: false
+        )
     }
 
     static let sidebarBounds = OpenCodeSplitPaneBounds(
@@ -114,31 +193,48 @@ enum OpenCodeSplitPaneLayout {
     /// - Parameters:
     ///   - previous: State before the drag began. Its width is the remembered open width.
     ///   - proposedWidth: Leading width under the finger at release.
+    ///   - fold: Vertical fold in the pane, if any. Releasing within
+    ///     `foldSnapDistance` of it snaps into the fold and follows it from then on.
     static func resolveDragEnd(
         previous: OpenCodeSplitPaneState,
-        proposedWidth: CGFloat
+        proposedWidth: CGFloat,
+        fold: OpenCodeSplitPaneFold? = nil
     ) -> OpenCodeSplitPaneState {
-        resolveDragEnd(previous: previous, proposedWidth: proposedWidth, bounds: sidebarBounds)
+        resolveDragEnd(previous: previous, proposedWidth: proposedWidth, bounds: sidebarBounds, fold: fold)
     }
 
     static func resolveDragEnd(
         previous: OpenCodeSplitPaneState,
         proposedWidth: CGFloat,
-        bounds: OpenCodeSplitPaneBounds
+        bounds: OpenCodeSplitPaneBounds,
+        fold: OpenCodeSplitPaneFold? = nil
     ) -> OpenCodeSplitPaneState {
         let remembered = clamp(width: previous.leadingWidth, bounds: bounds)
         if previous.isCollapsed {
-            if proposedWidth > bounds.reopenThreshold {
-                return OpenCodeSplitPaneState(leadingWidth: remembered, isCollapsed: false)
-            }
-            return OpenCodeSplitPaneState(leadingWidth: remembered, isCollapsed: true)
+            return OpenCodeSplitPaneState(
+                leadingWidth: remembered,
+                isCollapsed: proposedWidth <= bounds.reopenThreshold,
+                followsFold: previous.followsFold
+            )
         }
         if proposedWidth < bounds.collapseThreshold {
-            return OpenCodeSplitPaneState(leadingWidth: remembered, isCollapsed: true)
+            return OpenCodeSplitPaneState(
+                leadingWidth: remembered,
+                isCollapsed: true,
+                followsFold: previous.followsFold
+            )
+        }
+        if let fold, abs(proposedWidth - fold.leadingOffset) <= foldSnapDistance {
+            return OpenCodeSplitPaneState(
+                leadingWidth: clamp(width: fold.leadingOffset, bounds: bounds),
+                isCollapsed: false,
+                followsFold: true
+            )
         }
         return OpenCodeSplitPaneState(
             leadingWidth: clamp(width: proposedWidth, bounds: bounds),
-            isCollapsed: false
+            isCollapsed: false,
+            followsFold: false
         )
     }
 
@@ -171,7 +267,8 @@ enum OpenCodeSplitPaneLayout {
     ) -> OpenCodeSplitPaneState {
         OpenCodeSplitPaneState(
             leadingWidth: clamp(width: state.leadingWidth, bounds: bounds),
-            isCollapsed: !state.isCollapsed
+            isCollapsed: !state.isCollapsed,
+            followsFold: state.followsFold
         )
     }
 }

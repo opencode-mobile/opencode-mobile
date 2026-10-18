@@ -3,7 +3,7 @@ import SwiftUI
 
 struct ChangesView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    var splitGate = OpenCodeSplitLayoutGate()
     @State private var viewModel: ChangesViewModel
     @State private var sourceMenuPresented = false
     @State private var splitSelection: String?
@@ -33,9 +33,9 @@ struct ChangesView: View {
         ))
     }
 
-    /// Same breakpoint as Home: iPad at regular width keeps the file list beside the diff.
+    /// Same breakpoint as Home: a wide window keeps the file list beside the diff.
     private var isSplitLayout: Bool {
-        OpenCodeSplitPaneLayout.usesSplitLayout(horizontalSizeClass: horizontalSizeClass)
+        splitGate.usesSplitLayout
     }
 
     var body: some View {
