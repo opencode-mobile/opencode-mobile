@@ -47,6 +47,7 @@ import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
 import dev.opencode.mobile.domain.app.AppVersion
 import dev.opencode.mobile.domain.connection.ConnectionProfile
+import dev.opencode.mobile.domain.feedback.FeedbackScreen
 import dev.opencode.mobile.domain.preferences.AnalyticsConsentPreferences
 import dev.opencode.mobile.domain.preferences.DeveloperToolsPreferences
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
@@ -74,6 +75,7 @@ import dev.opencode.mobile.ui.componentgallery.components.DialogGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.DictationCardGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.DiffStatGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.EmptyStateGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.FeedbackComposerGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.FileTabsGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.FilterTabsGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.HunkNavigationPillGalleryScreen
@@ -130,6 +132,8 @@ import dev.opencode.mobile.ui.components.openCodeDetailLeading
 import dev.opencode.mobile.ui.connection.ConnectionSetupMode
 import dev.opencode.mobile.ui.connection.ConnectionSetupScreen
 import dev.opencode.mobile.ui.connection.ConnectionSetupViewModel
+import dev.opencode.mobile.ui.feedback.FeedbackSheet
+import dev.opencode.mobile.ui.feedback.rememberFeedbackSheetState
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.keyboard.KeyboardShortcutAction
 import dev.opencode.mobile.ui.keyboard.KeyboardShortcutHandler
@@ -482,8 +486,15 @@ fun MainNavigation() {
                                                     backStack.add(detail.route)
                                                 }
                                             }
+                                            val feedbackSheet = rememberFeedbackSheetState()
+                                            FeedbackSheet(
+                                                sheetState = feedbackSheet,
+                                                screen = FeedbackScreen.Settings,
+                                                captureScreen = false,
+                                            )
                                             val settings: @Composable () -> Unit = {
                                                 SettingsScreen(
+                                                    onSendFeedbackClick = feedbackSheet::open,
                                                     onComponentGalleryClick = {
                                                         openSettingsDetail(SettingsDetail.ComponentGallery)
                                                     },
@@ -769,6 +780,8 @@ fun MainNavigation() {
                                                             SessionComposerGalleryScreen()
                                                         ComponentGalleryEntryId.DictationCard ->
                                                             DictationCardGalleryScreen()
+                                                        ComponentGalleryEntryId.FeedbackComposer ->
+                                                            FeedbackComposerGalleryScreen()
                                                         ComponentGalleryEntryId.RenderedMarkdown ->
                                                             RenderedMarkdownGalleryScreen()
                                                         ComponentGalleryEntryId.MessageList -> Unit

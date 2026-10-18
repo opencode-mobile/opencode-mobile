@@ -7,6 +7,8 @@ final class ActiveConnectionManager: @unchecked Sendable {
     private let profileStore: (any ConnectionProfileStore)?
     private var _connection: ServerConnection?
     private var _profile: ConnectionProfile?
+    /// Health `version` from the last probe of the active connection (#721).
+    private var _serverVersion: String?
     private var inFlightProbe: Task<Result<ServerProtocol, Error>, Never>?
     private var probeGeneration = 0
     private var probeFailed = false
@@ -29,6 +31,13 @@ final class ActiveConnectionManager: @unchecked Sendable {
 
     var serverProtocol: ServerProtocol? {
         connection?.serverProtocol
+    }
+
+    /// Server version reported by health when this connection was last probed.
+    var serverVersion: String? {
+        lock.lock()
+        defer { lock.unlock() }
+        return _serverVersion
     }
 
     var capabilities: ServerCapabilities {
@@ -70,6 +79,13 @@ final class ActiveConnectionManager: @unchecked Sendable {
         stamped.serverProtocol = serverProtocol ?? profile.serverProtocol
         let connection = ServerConnection(profile: stamped, serverProtocol: stamped.serverProtocol)
         lock.lock()
+        // The version belongs to one server: switching profiles, or editing this profile to
+        // point at another address or user, must not report the previous machine's version.
+        let sameServer = _profile?.id == stamped.id
+            && (_connection.map { $0.hasSameIdentity(as: connection) } ?? false)
+        if !sameServer {
+            _serverVersion = nil
+        }
         _profile = stamped
         _connection = connection
         probeFailed = false
@@ -231,8 +247,10 @@ final class ActiveConnectionManager: @unchecked Sendable {
             return .success(.v1)
         }
         do {
-            let detected = try await probing.probe(connection: current)
-            return .success(cacheDetectedProtocol(detected, for: current))
+            let outcome = try await probing.probeServer(connection: current)
+            return .success(
+                cacheDetectedProtocol(outcome.serverProtocol, serverVersion: outcome.serverVersion, for: current)
+            )
         } catch is CancellationError {
             return .failure(CancellationError())
         } catch {
@@ -248,6 +266,7 @@ final class ActiveConnectionManager: @unchecked Sendable {
     /// server's protocol onto a different connection.
     private func cacheDetectedProtocol(
         _ detected: ServerProtocol,
+        serverVersion: String?,
         for probed: ServerConnection
     ) -> ServerProtocol {
         lock.lock()
@@ -256,6 +275,7 @@ final class ActiveConnectionManager: @unchecked Sendable {
             return _connection?.serverProtocol ?? .v1
         }
         _connection = active.withProtocol(detected)
+        _serverVersion = serverVersion
         persistLocked()
         return detected
     }
@@ -288,6 +308,7 @@ final class ActiveConnectionManager: @unchecked Sendable {
         addressResolutionGeneration += 1
         _connection = nil
         _profile = nil
+        _serverVersion = nil
         probeFailed = false
         lock.unlock()
         addressResolution = nil
@@ -500,6 +521,20 @@ enum ProbeStatus: Equatable {
 
 protocol ConnectionProbing: Sendable {
     func probe(connection: ServerConnection) async throws -> ServerProtocol
+    /// Protocol plus the server's health `version`. Defaults to `probe` with no version.
+    func probeServer(connection: ServerConnection) async throws -> ServerProbeOutcome
+}
+
+extension ConnectionProbing {
+    func probeServer(connection: ServerConnection) async throws -> ServerProbeOutcome {
+        ServerProbeOutcome(serverProtocol: try await probe(connection: connection), serverVersion: nil)
+    }
+}
+
+/// Result of a health probe: the detected protocol and the health `version`.
+nonisolated struct ServerProbeOutcome: Equatable, Sendable {
+    let serverProtocol: ServerProtocol
+    let serverVersion: String?
 }
 
 struct ConnectionProbeService: ConnectionProbing, Sendable {
@@ -521,11 +556,15 @@ struct ConnectionProbeService: ConnectionProbing, Sendable {
     }
 
     func probe(connection: ServerConnection) async throws -> ServerProtocol {
+        try await probeServer(connection: connection).serverProtocol
+    }
+
+    func probeServer(connection: ServerConnection) async throws -> ServerProbeOutcome {
         let client = ProjectsAPIClient(fixedConnection: connection, urlSession: urlSession)
         do {
-            let detected = try await client.detectProtocol()
-            DiagnosticLog.info(.connection, "protocol=\(detected.wireValue)")
-            return detected
+            let outcome = try await client.detectServer()
+            DiagnosticLog.info(.connection, "protocol=\(outcome.serverProtocol.wireValue)")
+            return outcome
         } catch {
             throw adapter.mapProbeError(error)
         }

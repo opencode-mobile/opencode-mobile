@@ -53,6 +53,7 @@ import dev.opencode.mobile.SessionToolGroup
 import dev.opencode.mobile.domain.command.ClientSlashAction
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogAttachment
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogBuffer
+import dev.opencode.mobile.domain.feedback.FeedbackScreen
 import dev.opencode.mobile.domain.message.AttachmentIngestionService
 import dev.opencode.mobile.domain.preferences.DeveloperToolsPreferences
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
@@ -99,6 +100,8 @@ import dev.opencode.mobile.ui.components.OpenCodeTopBarSubtitleLeading
 import dev.opencode.mobile.ui.components.copySessionIdToClipboard
 import dev.opencode.mobile.ui.components.openCodeDetailLeading
 import dev.opencode.mobile.ui.components.rememberOpenCodeSessionComposerFocus
+import dev.opencode.mobile.ui.feedback.FeedbackSheet
+import dev.opencode.mobile.ui.feedback.rememberFeedbackSheetState
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.keyboard.KeyboardShortcutAction
 import dev.opencode.mobile.ui.keyboard.KeyboardShortcutHandler
@@ -175,6 +178,7 @@ fun SessionChatScreen(
     val attachmentSources = uiState.composer.attachmentSources(DeveloperToolsPreferences.unlocked)
     var menuExpanded by rememberSaveable { mutableStateOf(false) }
     var showDeleteConfirmation by remember { mutableStateOf(false) }
+    val feedbackSheet = rememberFeedbackSheetState()
     var activePicker by remember { mutableStateOf<ComposerPickerKind?>(null) }
     var activeModelProviderId by remember { mutableStateOf<String?>(null) }
     var modelFilterText by remember { mutableStateOf("") }
@@ -462,6 +466,12 @@ fun SessionChatScreen(
         visible = showAttachmentSource,
     )
 
+    FeedbackSheet(
+        sheetState = feedbackSheet,
+        screen = FeedbackScreen.SessionChat,
+        captureScreen = true,
+    )
+
     OpenCodeDialog(
         visible = showDeleteConfirmation,
         title = "Delete session",
@@ -584,6 +594,16 @@ fun SessionChatScreen(
                                 ),
                             )
                         }
+                        add(
+                            OpenCodeOverflowMenuEntry(
+                                title = "Report a problem",
+                                icon = OpenCodeIcons.Edit,
+                                onClick = {
+                                    menuExpanded = false
+                                    feedbackSheet.open()
+                                },
+                            ),
+                        )
                         add(
                             OpenCodeOverflowMenuEntry(
                                 title = "Delete",

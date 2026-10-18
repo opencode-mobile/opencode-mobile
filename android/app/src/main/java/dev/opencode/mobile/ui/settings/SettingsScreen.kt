@@ -61,6 +61,7 @@ fun SettingsScreen(
     onNavigateBack: () -> Unit,
     onServersClick: () -> Unit,
     onAppearanceClick: () -> Unit,
+    onSendFeedbackClick: () -> Unit = {},
     onClearData: () -> Unit,
     onClearSessionCache: () -> Unit,
     sessionCacheSizeLabel: String,
@@ -157,6 +158,17 @@ fun SettingsScreen(
                         logSettingsAction(ProductAnalytics.Action.SETTINGS_OPEN_CONNECTION)
                         onServersClick()
                     },
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+
+                OpenCodeSectionHeader(title = "Help & Feedback")
+
+                OpenCodeListItem(
+                    title = "Send Feedback",
+                    subtitle = "Report a bug or share an idea",
+                    style = OpenCodeListItemStyle.Card,
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Edit, "Send Feedback"),
+                    onClick = onSendFeedbackClick,
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
 

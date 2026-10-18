@@ -151,6 +151,7 @@ android {
     sourceSets {
         getByName("test") {
             resources.srcDir("../../shared/sse-recovery")
+            resources.srcDir("../../shared/feedback")
         }
     }
 }
@@ -223,4 +224,5 @@ dependencies {
     releaseImplementation(libs.firebase.crashlytics)
     releaseImplementation(libs.firebase.analytics)
     releaseImplementation(libs.firebase.config)
+    releaseImplementation(libs.firebase.appcheck.playintegrity)
 }

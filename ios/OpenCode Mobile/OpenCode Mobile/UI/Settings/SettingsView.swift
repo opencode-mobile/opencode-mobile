@@ -62,6 +62,8 @@ struct SettingsView: View {
     @State private var serversLetterAccent: LetterAccent = .blue
     /// False while another screen is pushed over Settings.
     @State private var isOnScreen = false
+    /// Report-a-problem sheet (#721); set to open it.
+    @State private var feedbackModel: FeedbackViewModel?
 
     var body: some View {
         Group {
@@ -83,6 +85,7 @@ struct SettingsView: View {
         .navigationBarBackButtonHidden(true)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(OpenCodeColors.backgroundBase)
+        .feedbackSheet(model: $feedbackModel)
         .onAppear { isOnScreen = true }
         .onDisappear { isOnScreen = false }
         .navigationDestination(isPresented: $showComponentGallery) {
@@ -263,6 +266,22 @@ struct SettingsView: View {
                         }
                     )
                     .padding(.horizontal, 16)
+
+                    OpenCodeSectionHeader(title: "Help & Feedback")
+
+                    OpenCodeListItem(
+                        title: "Send Feedback",
+                        subtitle: "Report a bug or share an idea",
+                        style: .card,
+                        startDecorator: .icon(.edit, accessibilityLabel: "Send Feedback"),
+                        action: {
+                            // No capture here: the screen behind is Settings.
+                            // "+ Screenshot" picks from Photos instead.
+                            feedbackModel = Container.makeFeedbackViewModel(screen: .settings, screenshot: nil)
+                        }
+                    )
+                    .padding(.horizontal, 16)
+                    .accessibilityIdentifier("settingsSendFeedback")
 
                     OpenCodeSectionHeader(title: "Appearance")
 

@@ -69,6 +69,7 @@ enum ComponentGalleryEntryID: String, Hashable {
     case sessionBranchPill
     case sessionComposer
     case dictationCard
+    case feedbackComposer
     case composerSuggestionOverlay
     case renderedMarkdown
     case messageList
@@ -380,6 +381,12 @@ let componentGalleryEntries = [
         id: .dictationCard,
         title: "Dictation Card",
         description: "Listening takeover for composer dictation.",
+        category: .session
+    ),
+    ComponentGalleryEntry(
+        id: .feedbackComposer,
+        title: "Feedback Composer",
+        description: "Report composer: attachment chips, message, dictation and Send in the composer shell.",
         category: .session
     ),
     ComponentGalleryEntry(

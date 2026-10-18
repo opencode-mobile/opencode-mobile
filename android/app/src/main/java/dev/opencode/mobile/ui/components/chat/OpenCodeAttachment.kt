@@ -4,6 +4,7 @@ import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,7 +12,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -46,11 +47,19 @@ data class OpenCodeAttachmentPresentation(
     val imageBytes: ByteArray? = null,
 )
 
+/**
+ * Removable attachment row. [onClick], when set, makes the row open the attachment
+ * (for example to mark up a screenshot or preview a log); [onClickLabel] names that action.
+ * [enabled] false locks the row while its owner can't change attachments (for example mid-send).
+ */
 @Composable
 fun OpenCodeAttachmentChip(
     attachment: OpenCodeAttachmentPresentation,
     onRemove: (String) -> Unit,
     modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
+    onClickLabel: String? = null,
+    enabled: Boolean = true,
 ) {
     val kindLabel = attachment.variant.label.uppercase()
     Row(
@@ -59,7 +68,15 @@ fun OpenCodeAttachmentChip(
                 .fillMaxWidth()
                 .border(1.dp, openCodeColor("border-weaker-base"), AttachmentShape)
                 .background(openCodeColor("surface-raised-base"), AttachmentShape)
-                .padding(start = 6.dp, top = 6.dp, bottom = 6.dp),
+                .then(
+                    if (onClick != null) {
+                        Modifier
+                            .clip(AttachmentShape)
+                            .clickable(enabled = enabled, onClickLabel = onClickLabel, role = Role.Button, onClick = onClick)
+                    } else {
+                        Modifier
+                    },
+                ).padding(start = 6.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -70,7 +87,7 @@ fun OpenCodeAttachmentChip(
                 .weight(1f)
                 .semantics { contentDescription = "${attachment.filename}, $kindLabel" },
         )
-        IconButton(onClick = { onRemove(attachment.id) }, modifier = Modifier.size(36.dp)) {
+        IconButton(onClick = { onRemove(attachment.id) }, enabled = enabled, modifier = Modifier.size(36.dp)) {
             Icon(
                 OpenCodeIcons.Close,
                 contentDescription = "Remove ${attachment.filename}",

@@ -3,6 +3,7 @@ package dev.opencode.mobile.network
 import dev.opencode.mobile.domain.connection.ConnectionProbing
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
+import dev.opencode.mobile.domain.connection.DetectedServer
 import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.project.ServerProbeError
 import kotlinx.coroutines.CompletableDeferred
@@ -17,6 +18,29 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class ActiveConnectionManagerProtocolTest {
+    @Test
+    fun probeActive_keepsServerVersionUntilDisconnect() =
+        runTest {
+            val manager =
+                ActiveConnectionManager(
+                    FakeProfileStore(),
+                    object : ConnectionProbing {
+                        override suspend fun probe(connection: ServerConnection): ServerProtocol = ServerProtocol.V2
+
+                        override suspend fun probeServer(connection: ServerConnection): DetectedServer =
+                            DetectedServer(ServerProtocol.V2, version = "1.3.2")
+                    },
+                )
+            manager.applyProfile(sampleProfile)
+            assertNull(manager.currentServerVersion())
+
+            manager.probeActive()
+
+            assertEquals("1.3.2", manager.currentServerVersion())
+            manager.disconnect()
+            assertNull(manager.currentServerVersion())
+        }
+
     @Test
     fun applyProfile_cachesDetectedProtocol() =
         runBlocking {

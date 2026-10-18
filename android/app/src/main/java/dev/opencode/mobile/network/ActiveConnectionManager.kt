@@ -30,6 +30,10 @@ class ActiveConnectionManager(
     private var inFlightProbe: CompletableDeferred<Result<ServerProtocol>>? = null
     private var probeFailed = false
 
+    /** Health `version` from the last probe of the active connection; null until one succeeds. */
+    @Volatile
+    private var serverVersion: String? = null
+
     suspend fun ensureLoaded() {
         val loaded =
             mutex.withLock {
@@ -57,6 +61,8 @@ class ActiveConnectionManager(
 
     fun currentProtocol(): ServerProtocol? = connection?.serverProtocol
 
+    fun currentServerVersion(): String? = serverVersion?.takeIf { connection != null }
+
     fun protocolHint(): ServerProtocol = currentProtocol() ?: ServerProtocol.V1
 
     fun currentCapabilities(): ServerCapabilities = connection?.capabilities ?: ServerCapabilities.forProtocol(ServerProtocol.V1)
@@ -72,6 +78,7 @@ class ActiveConnectionManager(
             connection = null
             profile = null
             probeFailed = false
+            serverVersion = null
             completeInFlight(Result.success(ServerProtocol.V1))
         }
     }
@@ -133,10 +140,12 @@ class ActiveConnectionManager(
         }
         val result =
             try {
-                val detected = probing.probe(current)
+                val server = probing.probeServer(current)
+                val detected = server.protocol
                 mutex.withLock {
                     val active = connection
                     if (active != null && sameProfileDuringProbe(probedProfile, profile, active, current)) {
+                        serverVersion = server.version
                         connection = active.withProtocol(detected)
                         persistLocked()
                         Result.success(detected)
@@ -248,6 +257,7 @@ class ActiveConnectionManager(
     }
 
     private fun bindLocked(loaded: ConnectionProfile?) {
+        if (loaded == null || profile?.hasSameIdentity(loaded) != true) serverVersion = null
         profile = loaded
         connection = loaded?.let(ServerConnection::fromProfile)
         probeFailed = false

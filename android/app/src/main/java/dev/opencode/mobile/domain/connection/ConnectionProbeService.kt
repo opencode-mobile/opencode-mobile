@@ -26,10 +26,12 @@ class ConnectionProbeService(
      *
      * Throws [ServerProbeError] when no health endpoint is usable.
      */
-    override suspend fun probe(connection: ServerConnection): ServerProtocol {
+    override suspend fun probe(connection: ServerConnection): ServerProtocol = probeServer(connection).protocol
+
+    override suspend fun probeServer(connection: ServerConnection): DetectedServer {
         val client = clientFactory(connection)
         try {
-            return detector.detect(
+            return detector.detectServer(
                 fetchGlobalHealth = { client.fetchHealth("global/health") },
                 fetchApiInfo = { client.fetchHealth("api/info") },
                 fetchApiHealth = { client.fetchHealth("api/health") },

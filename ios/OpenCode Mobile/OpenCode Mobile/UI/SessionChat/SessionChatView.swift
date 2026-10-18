@@ -19,6 +19,8 @@ struct SessionChatView: View {
     @State private var changesTarget: ChangesNavigationTarget?
     @State private var menuExpanded = false
     @State private var showDeleteConfirmation = false
+    /// Report-a-problem sheet (#721); set to open it.
+    @State private var feedbackModel: FeedbackViewModel?
     @State private var messageActionsTarget: SessionChatMessageActionsTarget?
     @State private var showPendingPromptsSheet = false
     @State private var toolDetailTarget: SessionChatToolDetailTarget?
@@ -146,6 +148,7 @@ struct SessionChatView: View {
         let sheets = sessionChatPickerSheets(sessionChatSheets(sessionChatLayout))
         let observed = sessionChatObservers(sessionChatDestinations(sheets))
         return sessionChatRoutes(sessionChatDialogs(sessionChatLifecycle(observed)))
+            .feedbackSheet(model: $feedbackModel)
     }
 
     private var sessionChatLayout: some View {
@@ -1053,6 +1056,16 @@ struct SessionChatView: View {
         }
         entries.append(
             OpenCodeOverflowMenuEntry(
+                title: "Report a problem",
+                icon: .edit,
+                action: {
+                    menuExpanded = false
+                    reportProblem()
+                }
+            )
+        )
+        entries.append(
+            OpenCodeOverflowMenuEntry(
                 title: "Delete",
                 icon: .close,
                 enabled: lifecycleEnabled,
@@ -1070,6 +1083,17 @@ struct SessionChatView: View {
             )
         )
         return entries
+    }
+
+    /// Captures this screen once the menu is gone, then opens the report sheet
+    /// with the screenshot attached (the sheet itself draws over the window).
+    private func reportProblem() {
+        resignComposerKeyboard()
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(250))
+            let screenshot = FeedbackScreenCapture.captureKeyWindow()
+            feedbackModel = Container.makeFeedbackViewModel(screen: .sessionChat, screenshot: screenshot)
+        }
     }
 
     private var composerKind: SessionChatComposerKind {

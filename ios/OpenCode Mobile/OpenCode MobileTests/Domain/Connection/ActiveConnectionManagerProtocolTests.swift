@@ -189,6 +189,47 @@ struct ActiveConnectionManagerProtocolTests {
         #expect(probing.calls == 1)
     }
 
+    @Test func probeActive_keepsTheServerVersionUntilTheProfileChanges() async throws {
+        let manager = ActiveConnectionManager(connectionProbing: VersionedProbe())
+        manager.apply(sampleProfile)
+        #expect(manager.serverVersion == nil)
+
+        _ = try await manager.probeActive()
+        #expect(manager.serverVersion == "1.19.1")
+
+        var other = sampleProfile
+        other.id = "other-profile"
+        manager.apply(other)
+        #expect(manager.serverVersion == nil)
+
+        _ = try await manager.probeActive()
+        manager.disconnect()
+        #expect(manager.serverVersion == nil)
+    }
+
+    @Test func apply_clearsTheServerVersionWhenTheSameProfilePointsAtAnotherServer() async throws {
+        let manager = ActiveConnectionManager(connectionProbing: VersionedProbe())
+        manager.apply(sampleProfile)
+        _ = try await manager.probeActive()
+        #expect(manager.serverVersion == "1.19.1")
+
+        manager.apply(sampleProfile)
+        #expect(manager.serverVersion == "1.19.1")
+
+        var moved = sampleProfile
+        moved.baseURL = "http://10.0.0.9:4096/"
+        manager.apply(moved)
+        #expect(manager.serverVersion == nil)
+
+        _ = try await manager.probeActive()
+        #expect(manager.serverVersion == "1.19.1")
+
+        var otherUser = moved
+        otherUser.username = "someone-else"
+        manager.apply(otherUser)
+        #expect(manager.serverVersion == nil)
+    }
+
     private var sampleProfile: ConnectionProfile {
         ConnectionProfile(
             baseURL: "http://127.0.0.1:4096/",
@@ -356,5 +397,13 @@ private final class InMemoryAddressProbeCredentialStore: SecureCredentialStore, 
 
     func clearAll() {
         passwords.removeAll()
+    }
+}
+
+private struct VersionedProbe: ConnectionProbing {
+    func probe(connection: ServerConnection) async throws -> ServerProtocol { .v1 }
+
+    func probeServer(connection: ServerConnection) async throws -> ServerProbeOutcome {
+        ServerProbeOutcome(serverProtocol: .v1, serverVersion: "1.19.1")
     }
 }

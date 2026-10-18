@@ -704,6 +704,27 @@ extension Container {
         }
     }
 
+    var feedbackSubmitter: Factory<any FeedbackSubmitter> {
+        onMainActor { OpenCodeReleaseObservability.makeFeedbackSubmitter() }.singleton
+    }
+
+    var feedbackViewModel: ParameterFactory<(screen: FeedbackScreen, screenshot: Data?), FeedbackViewModel> {
+        onMainActor {
+            FeedbackViewModel(
+                screen: $0.screen,
+                capturedScreenshot: $0.screenshot,
+                submitter: self.feedbackSubmitter(),
+                metadataProvider: DefaultFeedbackMetadataProvider(
+                    activeConnectionManager: self.activeConnectionManager()
+                ),
+                cooldownStore: UserDefaultsFeedbackCooldownStore(),
+                logRedactor: { [manager = self.activeConnectionManager()] in
+                    FeedbackLogRedactor(profile: manager.currentProfile())
+                }
+            )
+        }
+    }
+
     var terminalViewModel: ParameterFactory<(worktree: String, ptyId: String?), TerminalViewModel> {
         onMainActor {
             TerminalViewModel(
@@ -760,6 +781,11 @@ extension Container {
     @MainActor
     static func makeSessionContextViewModel(sessionID: String, worktree: String) -> SessionContextViewModel {
         shared.sessionContextViewModel((sessionID: sessionID, worktree: worktree))
+    }
+
+    @MainActor
+    static func makeFeedbackViewModel(screen: FeedbackScreen, screenshot: Data?) -> FeedbackViewModel {
+        shared.feedbackViewModel((screen: screen, screenshot: screenshot))
     }
 
     @MainActor
