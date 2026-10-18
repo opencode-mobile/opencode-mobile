@@ -40,6 +40,10 @@ Xcode, so make sure the intended project is open before using it. Build, test,
 and source-edit actions through these tools are project mutations: keep them
 within the requested scope and report results.
 
+Measured device geometry for unusual form factors (iPhone Duo poses, safe
+areas, status column, fold, system bars, simulator pose control) lives in
+`docs/devices/`; use it for layouts and prototypes instead of re-measuring.
+
 ## Design System And Feature Workflow
 
 - One conceptual Design System for both platforms: shared semantic meaning,
