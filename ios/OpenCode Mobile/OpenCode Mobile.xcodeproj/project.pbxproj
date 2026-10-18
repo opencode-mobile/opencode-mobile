@@ -12,6 +12,7 @@
 		63OCFIREBF00100002BDFFC /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = 63OCFIREPROD001002BDFFC /* FirebaseAnalytics */; };
 		63OCFIREBF00200002BDFFC /* FirebaseCrashlytics in Frameworks */ = {isa = PBXBuildFile; productRef = 63OCFIREPROD002002BDFFC /* FirebaseCrashlytics */; };
 		63OCFIREBF00300002BDFFC /* FirebaseRemoteConfig in Frameworks */ = {isa = PBXBuildFile; productRef = 63OCFIREPROD003002BDFFC /* FirebaseRemoteConfig */; };
+		63OCFIREBF00400002BDFFC /* FirebaseAppCheck in Frameworks */ = {isa = PBXBuildFile; productRef = 63OCFIREPROD004002BDFFC /* FirebaseAppCheck */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -64,6 +65,7 @@
 				63OCFIREBF00100002BDFFC /* FirebaseAnalytics in Frameworks */,
 				63OCFIREBF00200002BDFFC /* FirebaseCrashlytics in Frameworks */,
 				63OCFIREBF00300002BDFFC /* FirebaseRemoteConfig in Frameworks */,
+				63OCFIREBF00400002BDFFC /* FirebaseAppCheck in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -133,6 +135,7 @@
 				63OCFIREPROD001002BDFFC /* FirebaseAnalytics */,
 				63OCFIREPROD002002BDFFC /* FirebaseCrashlytics */,
 				63OCFIREPROD003002BDFFC /* FirebaseRemoteConfig */,
+				63OCFIREPROD004002BDFFC /* FirebaseAppCheck */,
 			);
 			productName = "OpenCode Mobile";
 			productReference = 63369C0F2FA933AE002BDFFC /* OpenCode Mobile.app */;
@@ -506,6 +509,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "OpenCode Mobile/OpenCode Mobile.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 677MTXPXZZ;
@@ -550,6 +554,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "OpenCode Mobile/OpenCode Mobile.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 677MTXPXZZ;
@@ -751,6 +756,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 63OCFIREPKG00100002BDFFC /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseRemoteConfig;
+		};
+		63OCFIREPROD004002BDFFC /* FirebaseAppCheck */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 63OCFIREPKG00100002BDFFC /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAppCheck;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
