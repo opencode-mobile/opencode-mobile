@@ -103,13 +103,13 @@ private enum ReleaseFirebaseBootstrap {
         guard let options = FirebaseApp.app()?.options,
               let projectID = options.projectID, !projectID.isEmpty,
               let storageBucket = options.storageBucket, !storageBucket.isEmpty,
-              !options.apiKey.isEmpty
+              let apiKey = options.apiKey, !apiKey.isEmpty
         else {
             return nil
         }
         return FirebaseFeedbackRESTSubmitter(
             configuration: FirebaseFeedbackConfiguration(
-                apiKey: options.apiKey,
+                apiKey: apiKey,
                 projectID: projectID,
                 storageBucket: storageBucket
             ),
