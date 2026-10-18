@@ -119,13 +119,18 @@ class FeedbackViewModel
         /**
          * Opens the sheet from [screen]. A sent report starts a fresh draft; an unsent one keeps
          * its kind and message. [capturedJpeg] is the screen captured before the sheet opened.
+         * A send still in flight (the sheet was closed mid-send) keeps running and keeps its draft,
+         * so its result, reference and cooldown still land.
          */
         fun open(
             screen: FeedbackScreen,
             capturedJpeg: ByteArray? = null,
         ) {
             invalidateDictationInsert()
-            sendJob?.cancel()
+            if (isSending) {
+                mutableState.update { it.copy(page = FeedbackPage.Compose, composerDictationEnabled = dictationEnabled()) }
+                return
+            }
             val captured = capturedJpeg?.let { FeedbackScreenshot(it) }
             mutableState.update { current ->
                 val keepDraft = current.status !is FeedbackSendStatus.Sent
@@ -148,31 +153,43 @@ class FeedbackViewModel
             }
         }
 
+        private val isSending: Boolean get() = mutableState.value.status == FeedbackSendStatus.Sending
+
+        /**
+         * Applies a draft edit unless a send is in flight. The report is built from the draft as it
+         * was when Send was tapped, so later edits would not reach the upload.
+         */
+        private fun editDraft(transform: (FeedbackUiState) -> FeedbackUiState) {
+            mutableState.update { current ->
+                if (current.status == FeedbackSendStatus.Sending) current else transform(current)
+            }
+        }
+
         fun setKind(kind: FeedbackKind) {
-            mutableState.update { it.copy(kind = kind) }
+            editDraft { it.copy(kind = kind) }
         }
 
         fun updateMessage(message: String) {
-            mutableState.update { it.copy(message = message.take(FeedbackReport.MAX_MESSAGE_LENGTH)) }
+            editDraft { it.copy(message = message.take(FeedbackReport.MAX_MESSAGE_LENGTH)) }
         }
 
         fun removeScreenshot() {
-            mutableState.update { it.copy(screenshot = null, page = FeedbackPage.Compose) }
+            editDraft { it.copy(screenshot = null, page = FeedbackPage.Compose) }
         }
 
         /** Re-attaches the captured screen. From Settings the screen opens the Photo Picker instead. */
         fun addCapturedScreenshot() {
-            mutableState.update { current ->
+            editDraft { current ->
                 current.capturedScreenshot?.let { current.copy(screenshot = it) } ?: current
             }
         }
 
         fun attachScreenshot(jpeg: ByteArray) {
-            mutableState.update { it.copy(screenshot = FeedbackScreenshot(jpeg)) }
+            editDraft { it.copy(screenshot = FeedbackScreenshot(jpeg)) }
         }
 
         fun openHideParts() {
-            if (mutableState.value.screenshot == null) return
+            if (mutableState.value.screenshot == null || isSending) return
             mutableState.update { it.copy(page = FeedbackPage.HideParts) }
         }
 
@@ -181,8 +198,8 @@ class FeedbackViewModel
             x: Float,
             y: Float,
         ) {
-            mutableState.update { current ->
-                val screenshot = current.screenshot ?: return@update current
+            editDraft { current ->
+                val screenshot = current.screenshot ?: return@editDraft current
                 current.copy(
                     screenshot = screenshot.withHiddenRects(screenshot.hiddenRects + FeedbackHiddenRect.centeredAt(x, y)),
                 )
@@ -190,8 +207,8 @@ class FeedbackViewModel
         }
 
         fun undoHiddenArea() {
-            mutableState.update { current ->
-                val screenshot = current.screenshot ?: return@update current
+            editDraft { current ->
+                val screenshot = current.screenshot ?: return@editDraft current
                 current.copy(screenshot = screenshot.withHiddenRects(screenshot.hiddenRects.dropLast(1)))
             }
         }
@@ -202,10 +219,11 @@ class FeedbackViewModel
         }
 
         fun setIncludeLogs(include: Boolean) {
-            mutableState.update { it.copy(includeLogs = include) }
+            editDraft { it.copy(includeLogs = include) }
         }
 
         fun setLogWindow(window: DiagnosticLogExportWindow) {
+            if (isSending) return
             mutableState.update { it.copy(logWindow = window) }
             if (mutableState.value.page == FeedbackPage.LogPreview) loadLogPreview()
         }
@@ -334,7 +352,7 @@ class FeedbackViewModel
             languageLabel: String,
             onDevice: Boolean,
         ) {
-            if (!dictationEnabled()) return
+            if (!dictationEnabled() || isSending) return
             invalidateDictationInsert()
             mutableState.update {
                 it.copy(

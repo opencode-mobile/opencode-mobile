@@ -183,6 +183,8 @@ private fun FeedbackEntry(
     onAction: (OpenCodeFeedbackComposerAction) -> Unit,
 ) {
     val focusManager = LocalFocusManager.current
+    // While sending, the draft is frozen: what's on screen is what gets uploaded.
+    val editable = state.sendState != OpenCodeFeedbackSendState.Sending
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         state.attachments.forEach { attachment ->
             OpenCodeAttachmentChip(
@@ -190,6 +192,7 @@ private fun FeedbackEntry(
                 onRemove = { onAction(OpenCodeFeedbackComposerAction.RemoveAttachment(attachment.kind)) },
                 onClick = { onAction(OpenCodeFeedbackComposerAction.OpenAttachment(attachment.kind)) },
                 onClickLabel = attachment.openLabel,
+                enabled = editable,
             )
         }
         if (state.addableAttachments.isNotEmpty()) {
@@ -200,6 +203,7 @@ private fun FeedbackEntry(
                 state.addableAttachments.forEach { kind ->
                     AddAttachmentChip(
                         label = kind.addLabel,
+                        enabled = editable,
                         onClick = { onAction(OpenCodeFeedbackComposerAction.AddAttachment(kind)) },
                     )
                 }
@@ -209,6 +213,7 @@ private fun FeedbackEntry(
             message = state.message,
             placeholder = state.placeholder,
             characterLimit = state.characterLimit,
+            enabled = editable,
             onMessageChange = { onAction(OpenCodeFeedbackComposerAction.MessageChanged(it)) },
         )
         Row(
@@ -261,12 +266,14 @@ private fun FeedbackMessageField(
     message: String,
     placeholder: String,
     characterLimit: Int,
+    enabled: Boolean,
     onMessageChange: (String) -> Unit,
 ) {
-    val bodyColor = openCodeColor("text-strong")
+    val bodyColor = openCodeColor(if (enabled) "text-strong" else "text-weak")
     BasicTextField(
         value = message,
         onValueChange = { onMessageChange(it.take(characterLimit)) },
+        enabled = enabled,
         textStyle = MaterialTheme.typography.bodyLarge.copy(color = bodyColor),
         cursorBrush = SolidColor(bodyColor),
         minLines = FeedbackMessageMinLines,
@@ -294,6 +301,7 @@ private fun FeedbackMessageField(
 @Composable
 private fun AddAttachmentChip(
     label: String,
+    enabled: Boolean,
     onClick: () -> Unit,
 ) {
     val borderColor = openCodeColor("border-base")
@@ -304,7 +312,7 @@ private fun AddAttachmentChip(
         modifier =
             Modifier
                 .clip(OpenCodeSmallShape)
-                .clickable(role = Role.Button, onClick = onClick)
+                .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
                 .drawBehind {
                     val strokeWidth = 1.dp.toPx()
                     val inset = strokeWidth / 2

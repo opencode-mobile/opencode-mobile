@@ -19,6 +19,7 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
@@ -169,6 +170,71 @@ class FeedbackViewModelTest {
             assertEquals(1, renderer.renderedRects)
             assertEquals(FeedbackSendStatus.Sent(report.reference), viewModel.state.value.status)
             assertEquals(now, cooldown.lastSent)
+        }
+
+    @Test
+    fun reopeningMidSend_letsTheSendFinishAndShowsTheResult() =
+        runTest(dispatcher) {
+            val gate = CompletableDeferred<Unit>()
+            val viewModel =
+                viewModel { report ->
+                    gate.await()
+                    FeedbackSubmitResult.Sent(report.reference)
+                }
+            viewModel.open(FeedbackScreen.SessionChat, capturedJpeg = byteArrayOf(1, 2))
+            viewModel.updateMessage("It froze.")
+            viewModel.send()
+            runCurrent()
+
+            viewModel.dismiss()
+            viewModel.open(FeedbackScreen.Settings)
+            assertEquals(FeedbackSendStatus.Sending, viewModel.state.value.status)
+            assertEquals("It froze.", viewModel.state.value.message)
+
+            gate.complete(Unit)
+            advanceUntilIdle()
+
+            val report = submitted.single()
+            assertEquals(FeedbackSendStatus.Sent(report.reference), viewModel.state.value.status)
+            assertEquals(now, cooldown.lastSent)
+        }
+
+    @Test
+    fun draftEditsWhileSending_areIgnored() =
+        runTest(dispatcher) {
+            val gate = CompletableDeferred<Unit>()
+            val viewModel =
+                viewModel { report ->
+                    gate.await()
+                    FeedbackSubmitResult.Offline
+                }
+            viewModel.open(FeedbackScreen.SessionChat, capturedJpeg = byteArrayOf(1, 2))
+            viewModel.updateMessage("It froze.")
+            viewModel.send()
+            runCurrent()
+
+            viewModel.removeScreenshot()
+            viewModel.setIncludeLogs(false)
+            viewModel.updateMessage("edited")
+            viewModel.setKind(FeedbackKind.Feedback)
+            viewModel.hideArea(0.5f, 0.5f)
+            viewModel.openHideParts()
+
+            val sending = viewModel.state.value
+            assertEquals("It froze.", sending.message)
+            assertEquals(FeedbackKind.Bug, sending.kind)
+            assertEquals(true, sending.screenshot != null)
+            assertEquals(0, sending.screenshot?.hiddenRects?.size)
+            assertEquals(true, sending.includeLogs)
+            assertEquals(FeedbackPage.Compose, sending.page)
+
+            gate.complete(Unit)
+            advanceUntilIdle()
+
+            assertEquals(listOf("screenshot.jpg", "logs.jsonl.gz"), submitted.single().attachments.map { it.name })
+            assertEquals(FeedbackSendStatus.Offline, viewModel.state.value.status)
+            viewModel.updateMessage("edited after the failure")
+            assertEquals("edited after the failure", viewModel.state.value.message)
         }
 
     @Test

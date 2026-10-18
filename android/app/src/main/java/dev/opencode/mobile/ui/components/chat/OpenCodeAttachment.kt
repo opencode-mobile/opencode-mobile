@@ -50,6 +50,7 @@ data class OpenCodeAttachmentPresentation(
 /**
  * Removable attachment row. [onClick], when set, makes the row open the attachment
  * (for example to mark up a screenshot or preview a log); [onClickLabel] names that action.
+ * [enabled] false locks the row while its owner can't change attachments (for example mid-send).
  */
 @Composable
 fun OpenCodeAttachmentChip(
@@ -58,6 +59,7 @@ fun OpenCodeAttachmentChip(
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
     onClickLabel: String? = null,
+    enabled: Boolean = true,
 ) {
     val kindLabel = attachment.variant.label.uppercase()
     Row(
@@ -70,7 +72,7 @@ fun OpenCodeAttachmentChip(
                     if (onClick != null) {
                         Modifier
                             .clip(AttachmentShape)
-                            .clickable(onClickLabel = onClickLabel, role = Role.Button, onClick = onClick)
+                            .clickable(enabled = enabled, onClickLabel = onClickLabel, role = Role.Button, onClick = onClick)
                     } else {
                         Modifier
                     },
@@ -85,7 +87,7 @@ fun OpenCodeAttachmentChip(
                 .weight(1f)
                 .semantics { contentDescription = "${attachment.filename}, $kindLabel" },
         )
-        IconButton(onClick = { onRemove(attachment.id) }, modifier = Modifier.size(36.dp)) {
+        IconButton(onClick = { onRemove(attachment.id) }, enabled = enabled, modifier = Modifier.size(36.dp)) {
             Icon(
                 OpenCodeIcons.Close,
                 contentDescription = "Remove ${attachment.filename}",
