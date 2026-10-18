@@ -36,7 +36,7 @@ struct SettingsView: View {
     var build: String = AppVersion.current().build
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    private var splitGate = OpenCodeSplitLayoutGate()
     /// Trailing-pane sub-screen in the regular-width split view. Unused on compact.
     @State private var selectedDetail: SettingsDetail = .servers
     @State private var showComponentGallery = false
@@ -614,7 +614,7 @@ struct SettingsView: View {
     }
 
     private var isSplitLayout: Bool {
-        OpenCodeSplitPaneLayout.usesSplitLayout(horizontalSizeClass: horizontalSizeClass)
+        splitGate.usesSplitLayout
     }
 
     /// Selected detail after the Developer Tools lock; what the trailing pane renders.
@@ -626,7 +626,7 @@ struct SettingsView: View {
         isSplitLayout && visibleDetail == detail
     }
 
-    /// Regular width swaps the trailing pane; compact pushes as before.
+    /// The split swaps the trailing pane; stacked pushes as before.
     private func open(_ detail: SettingsDetail) {
         if isSplitLayout {
             selectedDetail = detail

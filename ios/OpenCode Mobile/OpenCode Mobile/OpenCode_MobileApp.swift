@@ -20,6 +20,7 @@ struct OpenCode_MobileApp: App {
     var body: some Scene {
         WindowGroup {
             rootView
+                .openCodeWindowMetrics()
                 .openCodeTheme()
                 .background {
                     OpenCodeHapticAnchor()

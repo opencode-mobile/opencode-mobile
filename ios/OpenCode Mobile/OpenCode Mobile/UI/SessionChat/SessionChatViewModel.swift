@@ -8,6 +8,8 @@ final class SessionChatViewModel {
     /// Set once `loadMessages()` ran to completion. A retained view model that
     /// reappears before then (its first `.task` was cancelled) loads again.
     @ObservationIgnored private(set) var hasCompletedInitialLoad = false
+    /// Session Chat screens showing this view model; see `SessionChatHostLeases`.
+    @ObservationIgnored private var hostLeases = SessionChatHostLeases()
 
     private var sessionID: String
     private var sessionTitle: String
@@ -205,6 +207,22 @@ final class SessionChatViewModel {
         inbox.onChange = { [weak self] in self?.publishUiState() }
         refreshProjectIdentity()
         publishUiState()
+    }
+
+    /// A Session Chat screen started showing this view model. Starts observing for
+    /// the first screen only, so a fold ↔ unfold hand-off keeps the live subscription.
+    func attachHost(_ host: UUID) {
+        if hostLeases.attach(host) {
+            startObserving()
+        }
+    }
+
+    /// A Session Chat screen stopped showing this view model. Stops observing once
+    /// no screen shows it.
+    func detachHost(_ host: UUID) {
+        if hostLeases.detach(host) {
+            stopObserving()
+        }
     }
 
     func startObserving() {

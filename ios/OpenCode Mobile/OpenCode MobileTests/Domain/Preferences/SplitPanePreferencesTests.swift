@@ -35,6 +35,29 @@ import Testing
         #expect(reloaded.state(for: .settings) == .initial)
     }
 
+    @Test func followsFold_freshInstallFollows_customWidthPersists() {
+        let defaults = makeDefaults("followsFold")
+        let preferences = SplitPanePreferences(defaults: defaults)
+        #expect(preferences.state(for: .home).followsFold)
+
+        preferences.setState(OpenCodeSplitPaneState(leadingWidth: 420, isCollapsed: false, followsFold: false), for: .home)
+        preferences.setState(OpenCodeSplitPaneState(leadingWidth: 455, isCollapsed: false, followsFold: true), for: .settings)
+
+        let reloaded = SplitPanePreferences(defaults: defaults)
+        #expect(reloaded.state(for: .home) == OpenCodeSplitPaneState(leadingWidth: 420, isCollapsed: false, followsFold: false))
+        #expect(reloaded.state(for: .settings) == OpenCodeSplitPaneState(leadingWidth: 455, isCollapsed: false, followsFold: true))
+    }
+
+    @Test func stateSavedBeforeFoldSupport_followsTheFold() {
+        let defaults = makeDefaults("legacy")
+        defaults.set(400.0, forKey: "splitPane.home.leadingWidth")
+        defaults.set(false, forKey: "splitPane.home.isCollapsed")
+
+        let preferences = SplitPanePreferences(defaults: defaults)
+
+        #expect(preferences.state(for: .home) == OpenCodeSplitPaneState(leadingWidth: 400, isCollapsed: false, followsFold: true))
+    }
+
     @Test func setState_clampsWidth() {
         let defaults = makeDefaults("clamp")
         let preferences = SplitPanePreferences(defaults: defaults)
@@ -74,6 +97,7 @@ import Testing
         #expect(preferences.state(for: .settings) == .initial)
         #expect(defaults.object(forKey: "splitPane.home.leadingWidth") == nil)
         #expect(defaults.object(forKey: "splitPane.home.isCollapsed") == nil)
+        #expect(defaults.object(forKey: "splitPane.home.followsFold") == nil)
         #expect(defaults.object(forKey: "splitPane.settings.leadingWidth") == nil)
         #expect(defaults.object(forKey: "splitPane.settings.isCollapsed") == nil)
     }

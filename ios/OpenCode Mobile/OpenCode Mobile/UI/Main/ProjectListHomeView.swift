@@ -4,7 +4,15 @@ import SwiftUI
 struct ProjectListHomeView: View {
     @State private var viewModel: ProjectListHomeViewModel
     @State private var showSettings = false
-    @State private var navigationPath = NavigationPath()
+    /// Home's stack as typed routes, so a layout flip can find the open session.
+    /// The `NavigationStack` itself binds a type-erased `NavigationPath`: a typed
+    /// path traps in SwiftUI (`comparisonTypeMismatch`) when the split's nested
+    /// detail stack is torn down during a flip.
+    @State private var homeRoutes: [HomeRoute] = []
+    /// View models of the session routes, by `SessionListItem.navigationID`. Owned
+    /// here rather than by the pushed chat so a fold ↔ unfold hands the live view
+    /// model to the split detail pane and back.
+    @State private var stackedChatViewModels: [String: SessionChatViewModel] = [:]
     @State private var connectionSetupPresentation: ConnectionSetupPresentation?
     @State private var connectionSetupViewModel: ConnectionSetupViewModel?
     @State private var serversRefreshToken = 0
@@ -21,7 +29,7 @@ struct ProjectListHomeView: View {
     /// Bumped when a keyboard shortcut selects a row so the list scrolls it into view.
     @State private var revealSelectedSessionToken = 0
     @Environment(\.scenePhase) private var scenePhase
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    private var splitGate = OpenCodeSplitLayoutGate()
     @Binding private var presentConnectionSetupOnAppear: Bool
 
     init(
@@ -33,7 +41,7 @@ struct ProjectListHomeView: View {
     }
 
     var body: some View {
-        NavigationStack(path: $navigationPath) {
+        NavigationStack(path: homeNavigationPath) {
             Group {
                 if isSplitLayout {
                     OpenCodeSplitPane(
@@ -82,18 +90,23 @@ struct ProjectListHomeView: View {
                     serversRefreshToken: serversRefreshToken
                 )
             }
-            .navigationDestination(for: SessionListItem.self) { session in
-                SessionChatView(session: session)
-            }
-            .navigationDestination(for: TerminalsCatalogRoute.self) { _ in
-                TerminalsCatalogView { worktree, projectTitle, ptyId in
-                    navigationPath.append(
-                        TerminalRoute(worktree: worktree, projectTitle: projectTitle, ptyId: ptyId)
+            .navigationDestination(for: HomeRoute.self) { route in
+                switch route {
+                case let .session(session):
+                    SessionChatView(session: session, viewModel: stackedChatViewModels[session.navigationID])
+                case .terminalsCatalog:
+                    TerminalsCatalogView { worktree, projectTitle, ptyId in
+                        homeRoutes.append(
+                            .terminal(TerminalRoute(worktree: worktree, projectTitle: projectTitle, ptyId: ptyId))
+                        )
+                    }
+                case let .terminal(terminal):
+                    TerminalView(
+                        worktree: terminal.worktree,
+                        projectTitle: terminal.projectTitle,
+                        ptyId: terminal.ptyId
                     )
                 }
-            }
-            .navigationDestination(for: TerminalRoute.self) { route in
-                TerminalView(worktree: route.worktree, projectTitle: route.projectTitle, ptyId: route.ptyId)
             }
             .task {
                 ProductAnalytics.logScreenView(
@@ -114,11 +127,12 @@ struct ProjectListHomeView: View {
                 }
             }
             .onChange(of: isSplitLayout) { _, split in
-                // Keep the open chat when the window narrows to compact.
-                if !split, let session = selectedSession {
-                    selectedSession = nil
-                    navigationPath.append(session)
-                }
+                carryNavigationAcrossLayoutFlip(toSplit: split)
+            }
+            .onChange(of: homeRoutes) { _, routes in
+                // Popped chats release their view models.
+                let open = Set(routes.compactMap { $0.session?.navigationID })
+                stackedChatViewModels = stackedChatViewModels.filter { open.contains($0.key) }
             }
             .onChange(of: viewModel.serversChrome.active?.id) { _, _ in
                 // Clear All Data (active profile becomes nil) and profile switches
@@ -270,7 +284,7 @@ struct ProjectListHomeView: View {
                                 action: {
                                     Task {
                                         await viewModel.switchProfile(id: profile.id)
-                                        navigationPath = NavigationPath()
+                                        homeRoutes = []
                                         selectedSession = nil
                                     }
                                 }
@@ -510,7 +524,7 @@ struct ProjectListHomeView: View {
     }
 
     private var isHomeVisible: Bool {
-        navigationPath.isEmpty && !showSettings && scenePhase == .active
+        homeRoutes.isEmpty && !showSettings && scenePhase == .active
     }
 
     private var newSessionPickerProjects: [(worktree: String, displayName: String)] {
@@ -522,8 +536,21 @@ struct ProjectListHomeView: View {
         }
     }
 
+    /// Every push goes through `homeRoutes`, so the stack only ever shrinks on its
+    /// own (Back, swipe, pop to root); mirror that by dropping the popped routes.
+    private var homeNavigationPath: Binding<NavigationPath> {
+        Binding(
+            get: { NavigationPath(homeRoutes) },
+            set: { path in
+                if path.count < homeRoutes.count {
+                    homeRoutes = Array(homeRoutes.prefix(path.count))
+                }
+            }
+        )
+    }
+
     private var isSplitLayout: Bool {
-        OpenCodeSplitPaneLayout.usesSplitLayout(horizontalSizeClass: horizontalSizeClass)
+        splitGate.usesSplitLayout
     }
 
     /// Every session id in a fully loaded Home list; nil while loading, disconnected,
@@ -547,14 +574,7 @@ struct ProjectListHomeView: View {
         get { splitSelection?.session }
         nonmutating set {
             splitSelection = newValue.map { session in
-                SplitSessionSelection(
-                    session: session,
-                    viewModel: Container.makeSessionChatViewModel(
-                        sessionID: session.id,
-                        sessionTitle: session.title,
-                        worktree: session.worktree
-                    )
-                )
+                SplitSessionSelection(session: session, viewModel: Self.makeChatViewModel(session))
             }
         }
     }
@@ -565,7 +585,45 @@ struct ProjectListHomeView: View {
                 selectedSession = session
             }
         } else {
-            navigationPath.append(session)
+            stackedChatViewModels[session.navigationID] = Self.makeChatViewModel(session)
+            homeRoutes.append(.session(session))
+        }
+    }
+
+    private static func makeChatViewModel(_ session: SessionListItem) -> SessionChatViewModel {
+        Container.makeSessionChatViewModel(
+            sessionID: session.id,
+            sessionTitle: session.title,
+            worktree: session.worktree
+        )
+    }
+
+    /// Fold ↔ unfold (or an iPad resize) swapped the stacked and split layouts. The
+    /// open chat moves between the stack and the detail pane with its view model, so
+    /// the draft, timeline and live subscription carry over. Screens pushed inside
+    /// that chat (Changes, Files, child sessions…) belong to the outgoing layout's
+    /// stack and close; the chat itself stays open.
+    private func carryNavigationAcrossLayoutFlip(toSplit split: Bool) {
+        let current = HomeNavigationState(routes: homeRoutes, selection: selectedSession)
+        let next = split ? HomeLayoutContinuity.toSplit(current) : HomeLayoutContinuity.toStacked(current)
+        guard next != current else { return }
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            if split {
+                splitSelection = next.selection.map { session in
+                    SplitSessionSelection(
+                        session: session,
+                        viewModel: stackedChatViewModels[session.navigationID] ?? Self.makeChatViewModel(session)
+                    )
+                }
+            } else {
+                if let splitSelection {
+                    stackedChatViewModels[splitSelection.session.navigationID] = splitSelection.viewModel
+                }
+                splitSelection = nil
+            }
+            homeRoutes = next.routes
         }
     }
 
@@ -672,11 +730,7 @@ struct ProjectListHomeView: View {
     }
 
     private var selectedSessionNavigationID: String {
-        guard let selectedSession else { return "none" }
-        if let instanceID = selectedSession.optimisticNavigationInstanceID {
-            return "\(selectedSession.id)-\(instanceID.uuidString)"
-        }
-        return selectedSession.id
+        selectedSession?.navigationID ?? "none"
     }
 
     private var showsTerminalAction: Bool {
@@ -711,7 +765,7 @@ struct ProjectListHomeView: View {
         guard case let .loaded(sections, _, _, _) = viewModel.state else { return }
         let projects = sections.homeChromeProjects()
         if case .openCatalog = SessionListHomeChrome.terminalAction(projects: projects) {
-            navigationPath.append(TerminalsCatalogRoute())
+            homeRoutes.append(.terminalsCatalog)
         }
     }
 

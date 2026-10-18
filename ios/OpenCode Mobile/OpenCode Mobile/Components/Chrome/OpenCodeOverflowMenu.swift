@@ -10,6 +10,7 @@ private let overflowMenuEntryIconSize: CGFloat = 20
 private let overflowMenuEntryIconSpacing: CGFloat = 12
 private let overflowMenuAnchorEndInset: CGFloat = 4
 private let overflowMenuAnchorTopOffset: CGFloat = 8
+private let overflowMenuRailItemSpacing: CGFloat = 8
 
 struct OpenCodeOverflowMenuEntry: Identifiable {
     let id: String
@@ -39,15 +40,41 @@ struct OpenCodeOverflowMenuEntry: Identifiable {
     }
 }
 
+/// Where the overflow menu opens from, in global coordinates.
+enum OpenCodeOverflowMenuAnchor: Equatable {
+    /// Under the trailing end of the top bar.
+    case belowTrailing(CGRect)
+    /// Beside an item in the iPhone Duo vertical bar, top-aligned with it.
+    case besideRailItem(CGRect)
+
+    var frame: CGRect {
+        switch self {
+        case let .belowTrailing(frame), let .besideRailItem(frame): frame
+        }
+    }
+}
+
 struct OpenCodeTopBarOverflowHost<TopBar: View>: View {
     @Binding var isPresented: Bool
     let entries: [OpenCodeOverflowMenuEntry]
     @ViewBuilder let topBar: () -> TopBar
 
     @State private var anchorFrame: CGRect = .zero
+    @State private var verticalBar: OpenCodeTopBarVerticalBarState?
+
+    private var anchor: OpenCodeOverflowMenuAnchor {
+        if let railAnchor = verticalBar?.overflowAnchor {
+            return .besideRailItem(railAnchor)
+        }
+        return .belowTrailing(anchorFrame)
+    }
 
     var body: some View {
         topBar()
+            .onPreferenceChange(OpenCodeTopBarVerticalBarPreferenceKey.self) { state in
+                verticalBar = state
+            }
+            .transformPreference(OpenCodeTopBarVerticalBarPreferenceKey.self) { $0 = nil }
             .background {
                 GeometryReader { geometry in
                     Color.clear
@@ -62,11 +89,13 @@ struct OpenCodeTopBarOverflowHost<TopBar: View>: View {
             .background {
                 OpenCodeOverflowMenuWindowOverlay(
                     isPresented: isPresented,
-                    anchorFrame: anchorFrame,
+                    anchor: anchor,
                     entries: entries,
                     onDismiss: { isPresented = false }
                 )
             }
+            // The bar's rail items hang below the host; keep them above the screen content.
+            .zIndex(verticalBar == nil ? 0 : 1)
     }
 }
 
@@ -88,7 +117,7 @@ struct OpenCodeOverflowMenuTrigger: View {
 
 private struct OpenCodeOverflowMenuWindowOverlay: UIViewRepresentable {
     let isPresented: Bool
-    let anchorFrame: CGRect
+    let anchor: OpenCodeOverflowMenuAnchor
     let entries: [OpenCodeOverflowMenuEntry]
     let onDismiss: () -> Void
 
@@ -105,7 +134,7 @@ private struct OpenCodeOverflowMenuWindowOverlay: UIViewRepresentable {
     func updateUIView(_ uiView: UIView, context: Context) {
         context.coordinator.update(
             isPresented: isPresented,
-            anchorFrame: anchorFrame,
+            anchor: anchor,
             entries: entries,
             hostView: uiView
         )
@@ -121,7 +150,7 @@ private struct OpenCodeOverflowMenuWindowOverlay: UIViewRepresentable {
 
         func update(
             isPresented: Bool,
-            anchorFrame: CGRect,
+            anchor: OpenCodeOverflowMenuAnchor,
             entries: [OpenCodeOverflowMenuEntry],
             hostView: UIView
         ) {
@@ -133,11 +162,11 @@ private struct OpenCodeOverflowMenuWindowOverlay: UIViewRepresentable {
                 return
             }
 
-            if isPresented, anchorFrame != .zero {
+            if isPresented, anchor.frame != .zero {
                 if overlayController == nil {
                     let controller = UIHostingController(
                         rootView: OpenCodeOverflowMenuOverlayContent(
-                            anchorFrame: anchorFrame,
+                            anchor: anchor,
                             entries: entries,
                             onDismiss: onDismiss,
                             onEntrySelected: onDismiss
@@ -151,7 +180,7 @@ private struct OpenCodeOverflowMenuWindowOverlay: UIViewRepresentable {
                     overlayController = controller
                 } else {
                     overlayController?.rootView = OpenCodeOverflowMenuOverlayContent(
-                        anchorFrame: anchorFrame,
+                        anchor: anchor,
                         entries: entries,
                         onDismiss: onDismiss,
                         onEntrySelected: onDismiss
@@ -170,7 +199,7 @@ private struct OpenCodeOverflowMenuWindowOverlay: UIViewRepresentable {
 }
 
 private struct OpenCodeOverflowMenuOverlayContent: View {
-    let anchorFrame: CGRect
+    let anchor: OpenCodeOverflowMenuAnchor
     let entries: [OpenCodeOverflowMenuEntry]
     let onDismiss: () -> Void
     let onEntrySelected: () -> Void
@@ -195,12 +224,24 @@ private struct OpenCodeOverflowMenuOverlayContent: View {
                         .onChange(of: proxy.size) { _, size in panelSize = size }
                 }
             }
-            .position(
-                x: anchorFrame.maxX - overflowMenuAnchorEndInset - (panelSize.width / 2),
-                y: anchorFrame.maxY + overflowMenuAnchorTopOffset + (panelSize.height / 2)
-            )
+            .position(panelCenter)
         }
         .ignoresSafeArea()
+    }
+
+    private var panelCenter: CGPoint {
+        switch anchor {
+        case let .belowTrailing(frame):
+            CGPoint(
+                x: frame.maxX - overflowMenuAnchorEndInset - (panelSize.width / 2),
+                y: frame.maxY + overflowMenuAnchorTopOffset + (panelSize.height / 2)
+            )
+        case let .besideRailItem(frame):
+            CGPoint(
+                x: frame.minX - overflowMenuRailItemSpacing - (panelSize.width / 2),
+                y: frame.minY + (panelSize.height / 2)
+            )
+        }
     }
 }
 

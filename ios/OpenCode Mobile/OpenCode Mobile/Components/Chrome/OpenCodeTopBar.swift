@@ -55,6 +55,9 @@ struct OpenCodeTopBar: View {
     let onTitleClick: (() -> Void)?
     let titleMenuExpanded: Bool
 
+    /// Set by the vertical bar layer while it draws the rail items (iPhone Duo).
+    @State private var verticalBarActive = false
+
     init(
         title: String? = nil,
         subtitle: String? = nil,
@@ -119,11 +122,93 @@ struct OpenCodeTopBar: View {
                 )
             }
         }
+        .overlay {
+            OpenCodeTopBarVerticalBarLayer(items: railItems, isActive: $verticalBarActive)
+        }
+        // Rail items hang below the bar; keep them above the screen content.
+        .zIndex(verticalBarActive ? 1 : 0)
+    }
+
+    /// Whether the leading control stays in the top bar while the rail is active.
+    /// Like the system bar, only the sidebar toggle stays horizontal; Back, Close and
+    /// other leading icons go first in the rail.
+    private var leadingStaysHorizontal: Bool {
+        if case let .customIcon(icon, _, _) = leading {
+            return icon == .sidebar
+        }
+        return false
+    }
+
+    /// Back or Close first, then the icon actions in order. Labeled actions stay in
+    /// the top bar. The last icon action anchors the overflow menu, as the trailing
+    /// end of the bar does without the rail.
+    private var railItems: [OpenCodeTopBarRailItem] {
+        var items: [OpenCodeTopBarRailItem] = []
+        switch leading {
+        case .none:
+            break
+        case let .back(accessibilityLabel, _, action):
+            items.append(railItem(.arrowBack, accessibilityLabel, enabled: true, action: action))
+        case let .close(accessibilityLabel, action):
+            items.append(railItem(.close, accessibilityLabel, enabled: true, action: action))
+        case let .customIcon(icon, accessibilityLabel, action):
+            if !leadingStaysHorizontal {
+                items.append(railItem(icon, accessibilityLabel, enabled: true, action: action))
+            }
+        }
+        let lastIconIndex = actions.lastIndex {
+            if case .icon = $0 { return true }
+            return false
+        }
+        for (index, action) in actions.enumerated() {
+            if case let .icon(icon, accessibilityLabel, enabled, handler) = action {
+                items.append(
+                    railItem(
+                        icon,
+                        accessibilityLabel,
+                        enabled: enabled,
+                        anchorsOverflowMenu: index == lastIconIndex,
+                        action: handler
+                    )
+                )
+            }
+        }
+        return items
+    }
+
+    private func railItem(
+        _ icon: OpenCodeIcon,
+        _ accessibilityLabel: String,
+        enabled: Bool,
+        anchorsOverflowMenu: Bool = false,
+        action: @escaping () -> Void
+    ) -> OpenCodeTopBarRailItem {
+        OpenCodeTopBarRailItem(
+            icon: icon,
+            accessibilityLabel: accessibilityLabel,
+            enabled: enabled,
+            anchorsOverflowMenu: anchorsOverflowMenu,
+            action: action
+        )
+    }
+
+    private var showsLeadingControl: Bool {
+        !verticalBarActive || leadingStaysHorizontal
+    }
+
+    /// Actions drawn in the horizontal row: all of them, or only labeled ones while
+    /// the rail shows the icon actions.
+    private var horizontalActions: [OpenCodeTopBarAction] {
+        guard verticalBarActive else { return actions }
+        return actions.filter {
+            if case .label = $0 { return true }
+            return false
+        }
     }
 
     private var hasLeadingControl: Bool {
         if case .none = leading { return false }
-        return true
+        return showsLeadingControl
     }
 
     private var titleStartPadding: CGFloat {
@@ -135,6 +220,13 @@ struct OpenCodeTopBar: View {
 
     @ViewBuilder
     private var leadingContent: some View {
+        if showsLeadingControl {
+            leadingControl
+        }
+    }
+
+    @ViewBuilder
+    private var leadingControl: some View {
         switch leading {
         case .none:
             EmptyView()
@@ -304,6 +396,7 @@ struct OpenCodeTopBar: View {
 
     @ViewBuilder
     private var trailingContent: some View {
+        let actions = horizontalActions
         if actions.isEmpty {
             EmptyView()
         } else {
@@ -449,6 +542,56 @@ private struct OpenCodeTopBarPreviewContent: View {
             content()
         }
     }
+}
+
+/// The open iPhone Duo inner display: a mock status column and the 84pt rail past
+/// the bar's trailing edge, where the bar draws Back and its icon actions.
+struct OpenCodeTopBarVerticalBarPreviewFrame<Content: View>: View {
+    @ViewBuilder let content: () -> Content
+
+    private let simulation = OpenCodeTopBarVerticalBarSimulation.duoOpen
+
+    var body: some View {
+        content()
+            .environment(\.openCodeTopBarVerticalBarSimulation, simulation)
+            .padding(.trailing, simulation.trailingInset)
+            .frame(height: 312, alignment: .top)
+            .frame(maxWidth: .infinity)
+            .background(alignment: .topTrailing) {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(OpenCodeColors.surfaceRaisedBase)
+                    .frame(width: simulation.trailingInset, height: simulation.statusColumnHeight)
+                    .accessibilityHidden(true)
+            }
+            .background(OpenCodeColors.backgroundBase)
+    }
+}
+
+#Preview("Top Bar Duo Vertical Bar") {
+    VStack(alignment: .leading, spacing: 16) {
+        OpenCodeTopBarVerticalBarPreviewFrame {
+            OpenCodeTopBar(
+                title: "Wire session project chrome",
+                subtitle: "opencode-mobile",
+                subtitleLeading: .letter("O", .blue),
+                subtitleAccessory: .statusDot(.live),
+                leading: .back(action: {}),
+                actions: [.icon(.moreVert, accessibilityLabel: "More actions", action: {})],
+                showDivider: true
+            )
+        }
+        OpenCodeTopBarVerticalBarPreviewFrame {
+            OpenCodeTopBar(
+                title: "Session",
+                leading: .customIcon(.sidebar, accessibilityLabel: "Hide sidebar", action: {}),
+                actions: [
+                    .label(title: "Done", action: {}),
+                    .icon(.search, accessibilityLabel: "Search", action: {}),
+                ]
+            )
+        }
+    }
+    .openCodeTheme()
 }
 
 #Preview("Top Bar Light") {
