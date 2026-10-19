@@ -444,7 +444,7 @@ private fun FeedbackActions(
                 onClick = { addMenuOpen = true },
             )
         }
-        if (state.composerDictationEnabled && showsMic) {
+        if (showsMic) {
             OpenCodeButton(
                 variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Mic, "Dictate"),
                 contrast = OpenCodeButtonContrast.Low,

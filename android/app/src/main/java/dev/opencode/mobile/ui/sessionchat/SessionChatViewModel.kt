@@ -234,9 +234,8 @@ class SessionChatViewModel
         // expansion id with the chip count at tap time; reset per session.
         private var expandedStepParagraphs: Map<String, Int> = emptyMap()
 
-        // Composer dictation card. Preference off hides the mic; an active card is cancelled
-        // without inserting when the preference, mode, background, or screen goes away.
-        private var composerDictationEnabled = SessionChatDisplayPreferences.composerDictation
+        // Composer dictation card. An active card is cancelled without inserting when the
+        // mode, background, or screen goes away.
         private var dictation: ComposerDictationUiState? = null
         private var dictationGeneration = 0
         private var dictationInsertJob: Job? = null
@@ -340,18 +339,6 @@ class SessionChatViewModel
                     .distinctUntilChanged()
                     .collect { enabled ->
                         timeline.updateChipTimeline(enabled)
-                    }
-            }
-            viewModelScope.launch {
-                snapshotFlow { SessionChatDisplayPreferences.composerDictation }
-                    .distinctUntilChanged()
-                    .collect { enabled ->
-                        composerDictationEnabled = enabled
-                        if (!enabled && dictation != null) {
-                            cancelActiveDictation()
-                        } else {
-                            publishUiState()
-                        }
                     }
             }
         }
@@ -589,7 +576,6 @@ class SessionChatViewModel
             languageLabel: String,
             onDevice: Boolean,
         ) {
-            if (!SessionChatDisplayPreferences.composerDictation) return
             invalidateDictationInsert()
             dictation =
                 ComposerDictationUiState(
@@ -605,7 +591,6 @@ class SessionChatViewModel
             phase: ComposerDictationPhase,
             message: String? = null,
         ) {
-            if (!SessionChatDisplayPreferences.composerDictation) return
             if (
                 phase != ComposerDictationPhase.PermissionDenied &&
                 phase != ComposerDictationPhase.ModelNotInstalled &&
@@ -1706,7 +1691,6 @@ class SessionChatViewModel
                 projectLetterAccent = projectLetterAccent,
                 worktreeCheckout = worktreeCheckout,
                 sessionBranchPill = repoStrip.state.value.toSessionBranchPill(),
-                composerDictationEnabled = composerDictationEnabled,
                 dictation = dictation,
             )
         }

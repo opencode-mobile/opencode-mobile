@@ -546,10 +546,6 @@ fun MainNavigation() {
                                                         settingsViewModel::setFollowUpDelivery,
                                                     supportsFollowUpDelivery =
                                                         settingsViewModel.supportsFollowUpDelivery(),
-                                                    composerDictation =
-                                                        SessionChatDisplayPreferences.composerDictation,
-                                                    onComposerDictationChange =
-                                                        settingsViewModel::setComposerDictation,
                                                     textMateEnabled = MarkdownHighlightPreferences.textMateEnabled,
                                                     onTextMateEnabledChange = settingsViewModel::setTextMateEnabled,
                                                     productAnalyticsConsented =

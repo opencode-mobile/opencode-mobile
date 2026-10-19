@@ -16,7 +16,6 @@ import dev.opencode.mobile.domain.feedback.FeedbackScreenshot
 import dev.opencode.mobile.domain.feedback.FeedbackSharePayload
 import dev.opencode.mobile.domain.feedback.FeedbackSubmitResult
 import dev.opencode.mobile.domain.feedback.FeedbackSubmitter
-import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.ui.sessionchat.ComposerDictationPhase
 import dev.opencode.mobile.ui.sessionchat.ComposerDictationUiState
 import kotlinx.coroutines.CancellationException
@@ -68,7 +67,6 @@ data class FeedbackUiState(
     val page: FeedbackPage = FeedbackPage.Compose,
     /** Redacted log lines for the Diagnostic log page; null while loading. */
     val logPreviewLines: List<String>? = null,
-    val composerDictationEnabled: Boolean = false,
     val dictation: ComposerDictationUiState? = null,
     val status: FeedbackSendStatus = FeedbackSendStatus.Idle,
     /** A share sheet the screen should open once, then [FeedbackViewModel.consumeShare]. */
@@ -128,7 +126,6 @@ class FeedbackViewModel
         private val renderer: FeedbackAttachmentRenderer,
     ) : ViewModel() {
         internal var nowMs: () -> Long = { System.currentTimeMillis() }
-        internal var dictationEnabled: () -> Boolean = { SessionChatDisplayPreferences.composerDictation }
         internal var dictationFinishDelayMs: Long = 350
 
         private val mutableState = MutableStateFlow(FeedbackUiState())
@@ -154,7 +151,7 @@ class FeedbackViewModel
         ) {
             invalidateDictationInsert()
             if (isSending) {
-                mutableState.update { it.copy(page = FeedbackPage.Compose, composerDictationEnabled = dictationEnabled()) }
+                mutableState.update { it.copy(page = FeedbackPage.Compose) }
                 return
             }
             val captured = capturedJpeg?.let { FeedbackScreenshot(it) }
@@ -174,7 +171,6 @@ class FeedbackViewModel
                     capturedScreenshot = captured,
                     includeLogs = if (keepDraft) current.includeLogs else true,
                     logWindow = if (keepDraft) current.logWindow else DiagnosticLogExportWindow.DEFAULT,
-                    composerDictationEnabled = dictationEnabled(),
                 )
             }
         }
@@ -378,7 +374,7 @@ class FeedbackViewModel
             languageLabel: String,
             onDevice: Boolean,
         ) {
-            if (!dictationEnabled() || isSending) return
+            if (isSending) return
             invalidateDictationInsert()
             mutableState.update {
                 it.copy(
@@ -397,7 +393,6 @@ class FeedbackViewModel
             phase: ComposerDictationPhase,
             message: String? = null,
         ) {
-            if (!dictationEnabled()) return
             if (
                 phase != ComposerDictationPhase.PermissionDenied &&
                 phase != ComposerDictationPhase.ModelNotInstalled &&

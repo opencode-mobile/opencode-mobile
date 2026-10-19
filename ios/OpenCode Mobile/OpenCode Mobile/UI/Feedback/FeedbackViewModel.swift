@@ -89,7 +89,6 @@ struct FeedbackUiState {
     var logWindow: DiagnosticLogExportWindow = .default
     var phase: FeedbackSendPhase = .editing
     var dictation: ComposerDictationUiState?
-    var composerDictationEnabled = false
     var isHidingParts = false
     /// Lines of the Diagnostic log preview while it is open.
     var logPreview: [FeedbackLogLine]?
@@ -162,7 +161,6 @@ final class FeedbackViewModel {
     @ObservationIgnored private let logRedactor: () -> FeedbackLogRedactor
     @ObservationIgnored private let now: () -> Date
     @ObservationIgnored private let makeReportID: () -> String
-    @ObservationIgnored private let dictationEnabled: () -> Bool
     /// The screen captured before the sheet opened; "+ Screenshot" restores it.
     @ObservationIgnored private let capturedScreenshot: Data?
     @ObservationIgnored private var screenshotImage: UIImage?
@@ -180,8 +178,7 @@ final class FeedbackViewModel {
         logBuffer: DiagnosticLogBuffer = .shared,
         logRedactor: @escaping () -> FeedbackLogRedactor = { FeedbackLogRedactor() },
         now: @escaping () -> Date = Date.init,
-        makeReportID: @escaping () -> String = FeedbackReference.newReportID,
-        dictationEnabled: @escaping () -> Bool = { SessionChatDisplayPreferences.shared.composerDictation }
+        makeReportID: @escaping () -> String = FeedbackReference.newReportID
     ) {
         self.submitter = submitter
         self.metadataProvider = metadataProvider
@@ -190,9 +187,8 @@ final class FeedbackViewModel {
         self.logRedactor = logRedactor
         self.now = now
         self.makeReportID = makeReportID
-        self.dictationEnabled = dictationEnabled
         self.capturedScreenshot = capturedScreenshot
-        uiState = FeedbackUiState(screen: screen, composerDictationEnabled: dictationEnabled())
+        uiState = FeedbackUiState(screen: screen)
         if let capturedScreenshot {
             setScreenshot(FeedbackScreenshot(imageData: capturedScreenshot))
         }
@@ -224,14 +220,6 @@ final class FeedbackViewModel {
         } else {
             uiState.message = text
             uiState.cursor = min(max(0, cursor), text.count)
-        }
-    }
-
-    func refreshDictationPreference() {
-        let enabled = dictationEnabled()
-        uiState.composerDictationEnabled = enabled
-        if !enabled {
-            cancelDictationCard()
         }
     }
 
@@ -424,7 +412,6 @@ final class FeedbackViewModel {
     // MARK: - Dictation (mirrors Session Chat)
 
     func beginDictation(languageLabel: String, onDevice: Bool) {
-        guard uiState.composerDictationEnabled else { return }
         discardDictationInsert()
         uiState.dictation = ComposerDictationUiState(
             phase: .listening,
@@ -435,7 +422,6 @@ final class FeedbackViewModel {
     }
 
     func beginDictationUnavailable(_ phase: ComposerDictationPhase, message: String? = nil) {
-        guard uiState.composerDictationEnabled else { return }
         // A recognizer error can arrive after Insert has been confirmed.
         guard uiState.dictation?.phase != .finishing else { return }
         discardDictationInsert()

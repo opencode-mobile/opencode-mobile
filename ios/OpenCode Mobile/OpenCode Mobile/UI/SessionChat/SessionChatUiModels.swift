@@ -308,8 +308,6 @@ struct SessionChatUiState: Equatable {
     var expandedStepParagraphs: [String: Int] = [:]
     /// One-time Chip timeline intro sheet (OPE-270).
     var chipTimelineIntroVisible = false
-    /// Settings gate for the composer mic. The OS availability gate is applied in the view.
-    var composerDictationEnabled: Bool = false
     var dictation: ComposerDictationUiState? = nil
 
     /// A permission, question, or Screen Model-owned sheet or dialog would sit under the intro sheet.

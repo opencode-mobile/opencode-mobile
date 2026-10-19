@@ -728,7 +728,7 @@ struct SessionChatView: View {
                     dictationSession.stop()
                 }
             }
-            .task(id: viewModel.uiState.composerDictationEnabled) {
+            .task {
                 await refreshDictationSupport()
             }
             .openCodeKeyboardShortcut(
@@ -1216,7 +1216,7 @@ struct SessionChatView: View {
                     stopEnabled: !viewModel.uiState.isAborting &&
                         viewModel.uiState.canMutate,
                     followUpDelivery: composer.supportsFollowUpDelivery ? composer.followUpDelivery : nil,
-                    showDictationButton: viewModel.uiState.composerDictationEnabled && dictationSupport.showsMic
+                    showDictationButton: dictationSupport.showsMic
                 )
             )
         }
@@ -1377,10 +1377,6 @@ struct SessionChatView: View {
     }
 
     private func refreshDictationSupport() async {
-        guard viewModel.uiState.composerDictationEnabled else {
-            dictationSupport = .hidden
-            return
-        }
         dictationSupport = await dictationSession.probe()
     }
 

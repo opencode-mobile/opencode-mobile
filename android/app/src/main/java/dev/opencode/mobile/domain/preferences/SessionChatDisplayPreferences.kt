@@ -19,10 +19,8 @@ object SessionChatDisplayPreferences {
     private const val KEY_FOLLOW_UP_DELIVERY = "follow_up_delivery"
     private const val KEY_CHIP_TIMELINE_INTRO_DONE = "chip_timeline_intro_done"
     private const val KEY_CHIP_TIMELINE_INTRO_SNOOZED_UNTIL = "chip_timeline_intro_snoozed_until"
-    private const val KEY_COMPOSER_DICTATION = "composer_dictation"
     const val DEFAULT_COLLAPSE_CONSECUTIVE_TOOL_CALLS = true
     const val DEFAULT_CHIP_TIMELINE = false
-    const val DEFAULT_COMPOSER_DICTATION = false
     val DEFAULT_FOLLOW_UP_DELIVERY = FollowUpDelivery.Steer
 
     /** When true, a run of two or more consecutive visible tool parts in one
@@ -43,10 +41,6 @@ object SessionChatDisplayPreferences {
 
     /** Epoch millis until which a Later answer hides the intro sheet, or null if never snoozed. */
     var chipTimelineIntroSnoozedUntilMillis: Long? by mutableStateOf(null)
-        private set
-
-    /** Speak into the composer. Off until the user turns this on. */
-    var composerDictation: Boolean by mutableStateOf(DEFAULT_COMPOSER_DICTATION)
         private set
 
     /** True while the `session_chat_chip_timeline` flag allows the mode at all (OPE-269). */
@@ -84,7 +78,6 @@ object SessionChatDisplayPreferences {
             } else {
                 null
             }
-        composerDictation = prefs.getBoolean(KEY_COMPOSER_DICTATION, DEFAULT_COMPOSER_DICTATION)
     }
 
     fun updateCollapseConsecutiveToolCalls(value: Boolean) {
@@ -95,11 +88,6 @@ object SessionChatDisplayPreferences {
     fun updateFollowUpDelivery(value: FollowUpDelivery) {
         followUpDelivery = value
         prefs()?.edit()?.putString(KEY_FOLLOW_UP_DELIVERY, value.wireValue)?.apply()
-    }
-
-    fun updateComposerDictation(value: Boolean) {
-        composerDictation = value
-        prefs()?.edit()?.putBoolean(KEY_COMPOSER_DICTATION, value)?.apply()
     }
 
     /** Any explicit choice, from Settings or the intro sheet, also ends the intro. */
@@ -165,14 +153,12 @@ object SessionChatDisplayPreferences {
             ?.remove(KEY_CHIP_TIMELINE)
             ?.remove(KEY_CHIP_TIMELINE_INTRO_DONE)
             ?.remove(KEY_CHIP_TIMELINE_INTRO_SNOOZED_UNTIL)
-            ?.remove(KEY_COMPOSER_DICTATION)
             ?.apply()
         collapseConsecutiveToolCalls = DEFAULT_COLLAPSE_CONSECUTIVE_TOOL_CALLS
         followUpDelivery = DEFAULT_FOLLOW_UP_DELIVERY
         chipTimelinePreference = DEFAULT_CHIP_TIMELINE
         chipTimelineIntroDone = false
         chipTimelineIntroSnoozedUntilMillis = null
-        composerDictation = DEFAULT_COMPOSER_DICTATION
     }
 
     private fun prefs() = appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)

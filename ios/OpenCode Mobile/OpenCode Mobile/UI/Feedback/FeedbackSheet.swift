@@ -113,7 +113,6 @@ private struct FeedbackSheetModifier: ViewModifier {
                     dictationSession.stop()
                     return
                 }
-                model.refreshDictationPreference()
                 await refreshDictationSupport()
             }
     }
@@ -197,10 +196,6 @@ private struct FeedbackSheetModifier: ViewModifier {
     }
 
     private func refreshDictationSupport() async {
-        guard model?.uiState.composerDictationEnabled == true else {
-            dictationSupport = .hidden
-            return
-        }
         dictationSupport = await dictationSession.probe()
     }
 
@@ -475,7 +470,7 @@ private struct FeedbackSheetPinnedBottom: View {
                     action: { addMenuOpen = true }
                 )
             }
-            if state.composerDictationEnabled && showsMic {
+            if showsMic {
                 OpenCodeButton(
                     variant: .iconCircle(.mic, accessibilityLabel: "Dictate"),
                     enabled: !isSending,

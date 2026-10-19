@@ -4224,8 +4224,6 @@ struct SessionChatViewModelTests {
     }
 
     @Test func dictationInsert_splicesTranscriptAtCaret() {
-        SessionChatDisplayPreferences.shared.setComposerDictation(true)
-        defer { SessionChatDisplayPreferences.shared.clear() }
         let viewModel = makeViewModel()
         defer { viewModel.stopObserving() }
         viewModel.dictationFinishDelayNs = 0
@@ -4241,8 +4239,6 @@ struct SessionChatViewModelTests {
     }
 
     @Test func dictationCancel_afterPartialLeavesComposerUntouched() {
-        SessionChatDisplayPreferences.shared.setComposerDictation(true)
-        defer { SessionChatDisplayPreferences.shared.clear() }
         let viewModel = makeViewModel()
         defer { viewModel.stopObserving() }
         viewModel.dictationFinishDelayNs = 0
@@ -4258,8 +4254,6 @@ struct SessionChatViewModelTests {
     }
 
     @Test func dictationAutoCancel_modeChangeAndBackgroundDoNotInsert() {
-        SessionChatDisplayPreferences.shared.setComposerDictation(true)
-        defer { SessionChatDisplayPreferences.shared.clear() }
         let viewModel = makeViewModel()
         defer { viewModel.stopObserving() }
         viewModel.dictationFinishDelayNs = 0
@@ -4281,8 +4275,6 @@ struct SessionChatViewModelTests {
     }
 
     @Test func dictationInsert_emptyTranscriptLeavesCardUp() {
-        SessionChatDisplayPreferences.shared.setComposerDictation(true)
-        defer { SessionChatDisplayPreferences.shared.clear() }
         let viewModel = makeViewModel()
         defer { viewModel.stopObserving() }
         viewModel.dictationFinishDelayNs = 0
@@ -4298,8 +4290,6 @@ struct SessionChatViewModelTests {
     }
 
     @Test func dictationUnavailable_duringFinishingStillInserts() async throws {
-        SessionChatDisplayPreferences.shared.setComposerDictation(true)
-        defer { SessionChatDisplayPreferences.shared.clear() }
         let viewModel = makeViewModel()
         defer { viewModel.stopObserving() }
         viewModel.dictationFinishDelayNs = 30_000_000
@@ -4319,8 +4309,6 @@ struct SessionChatViewModelTests {
     }
 
     @Test func dictationPartial_doesNotChangeComposerText() {
-        SessionChatDisplayPreferences.shared.setComposerDictation(true)
-        defer { SessionChatDisplayPreferences.shared.clear() }
         let viewModel = makeViewModel()
         defer { viewModel.stopObserving() }
         viewModel.dictationFinishDelayNs = 0

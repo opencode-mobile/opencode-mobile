@@ -336,7 +336,6 @@ class FeedbackViewModelTest {
     fun dictationInsert_appendsTranscriptToTheMessage() =
         runTest(dispatcher) {
             val viewModel = viewModel()
-            viewModel.dictationEnabled = { true }
             viewModel.open(FeedbackScreen.Settings)
             viewModel.updateMessage("Crash")
 
@@ -363,7 +362,6 @@ class FeedbackViewModelTest {
     @Test
     fun dictation_morphsTheSheetIntoListening() {
         val viewModel = viewModel()
-        viewModel.dictationEnabled = { true }
         viewModel.open(FeedbackScreen.Settings)
         assertEquals("Report a problem", viewModel.state.value.sheetTitle)
         assertFalse(viewModel.state.value.dictationTakesOverCompose)
@@ -382,7 +380,6 @@ class FeedbackViewModelTest {
     @Test
     fun dictationUnavailable_takesOverWithoutTheListeningTitle() {
         val viewModel = viewModel()
-        viewModel.dictationEnabled = { true }
         viewModel.open(FeedbackScreen.Settings)
 
         viewModel.beginDictationUnavailable(ComposerDictationPhase.PermissionDenied, "Microphone access is off")
@@ -394,7 +391,6 @@ class FeedbackViewModelTest {
     @Test
     fun dictationStopped_keepsTheListeningTitle() {
         val viewModel = viewModel()
-        viewModel.dictationEnabled = { true }
         viewModel.open(FeedbackScreen.Settings)
         viewModel.beginDictation(languageLabel = "English", onDevice = true)
 
@@ -403,18 +399,6 @@ class FeedbackViewModelTest {
         assertEquals(ComposerDictationPhase.Stopped, viewModel.state.value.dictation?.phase)
         assertEquals("Listening", viewModel.state.value.sheetTitle)
         assertTrue(viewModel.state.value.dictationTakesOverCompose)
-    }
-
-    @Test
-    fun dictation_staysOffWhenTheSettingIsOff() {
-        val viewModel = viewModel()
-        viewModel.dictationEnabled = { false }
-        viewModel.open(FeedbackScreen.Settings)
-
-        viewModel.beginDictation(languageLabel = "English", onDevice = true)
-
-        assertFalse(viewModel.state.value.composerDictationEnabled)
-        assertNull(viewModel.state.value.dictation)
     }
 
     @Test
@@ -464,7 +448,6 @@ class FeedbackViewModelTest {
             renderer = renderer,
         ).also { viewModel ->
             viewModel.nowMs = { now }
-            viewModel.dictationEnabled = { false }
         }
 
     private class MemoryCooldownStore : FeedbackCooldownStore {
