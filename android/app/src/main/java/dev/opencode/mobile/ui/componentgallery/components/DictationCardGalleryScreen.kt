@@ -30,6 +30,10 @@ private enum class DictationCardGalleryVariant(
     Finishing("Finishing"),
     PermissionDenied("Permission denied"),
     ModelNotInstalled("Model not installed"),
+    ModelDownloading("Downloading"),
+    ModelDownloadStarting("Download starting"),
+    ModelDownloadQueued("Download queued"),
+    ModelDownloadFailed("Download failed"),
     RecognizerError("Recognizer error"),
 }
 
@@ -47,6 +51,10 @@ fun DictationCardGalleryScreen(modifier: Modifier = Modifier) {
             DictationCardGalleryVariant.Finishing -> OpenCodeDictationCardVariant.Finishing
             DictationCardGalleryVariant.PermissionDenied,
             DictationCardGalleryVariant.ModelNotInstalled,
+            DictationCardGalleryVariant.ModelDownloading,
+            DictationCardGalleryVariant.ModelDownloadStarting,
+            DictationCardGalleryVariant.ModelDownloadQueued,
+            DictationCardGalleryVariant.ModelDownloadFailed,
             DictationCardGalleryVariant.RecognizerError,
             -> OpenCodeDictationCardVariant.Unavailable
         }
@@ -54,6 +62,11 @@ fun DictationCardGalleryScreen(modifier: Modifier = Modifier) {
         when (variant) {
             DictationCardGalleryVariant.PermissionDenied -> OpenCodeDictationUnavailableReason.PermissionDenied
             DictationCardGalleryVariant.ModelNotInstalled -> OpenCodeDictationUnavailableReason.ModelNotInstalled
+            DictationCardGalleryVariant.ModelDownloading,
+            DictationCardGalleryVariant.ModelDownloadStarting,
+            -> OpenCodeDictationUnavailableReason.ModelDownloading
+            DictationCardGalleryVariant.ModelDownloadQueued -> OpenCodeDictationUnavailableReason.ModelDownloadQueued
+            DictationCardGalleryVariant.ModelDownloadFailed -> OpenCodeDictationUnavailableReason.ModelDownloadFailed
             DictationCardGalleryVariant.RecognizerError -> OpenCodeDictationUnavailableReason.RecognizerError
             DictationCardGalleryVariant.Listening,
             DictationCardGalleryVariant.Stopped,
@@ -95,6 +108,8 @@ fun DictationCardGalleryScreen(modifier: Modifier = Modifier) {
             elapsedLabel = "0:12",
             unavailableReason = unavailableReason,
             errorMessage = "Dictation stopped",
+            // The level slider doubles as download progress in the Downloading state.
+            downloadProgress = if (variant == DictationCardGalleryVariant.ModelDownloading) level else null,
             onCancel = {},
             onInsert = {},
             onOpenSettings = {},

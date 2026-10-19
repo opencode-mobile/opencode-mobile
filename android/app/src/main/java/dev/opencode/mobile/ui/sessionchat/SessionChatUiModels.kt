@@ -125,7 +125,23 @@ enum class ComposerDictationPhase {
     Finishing,
     PermissionDenied,
     ModelNotInstalled,
+    ModelDownloading,
+    ModelDownloadQueued,
+    ModelDownloadFailed,
     RecognizerError,
+    ;
+
+    /** A card about the on-device speech model; download updates may replace it. */
+    val isModelPhase: Boolean
+        get() =
+            this == ModelNotInstalled ||
+                this == ModelDownloading ||
+                this == ModelDownloadQueued ||
+                this == ModelDownloadFailed
+
+    /** Phases that open the card without listening. */
+    val isUnavailable: Boolean
+        get() = this == PermissionDenied || this == RecognizerError || isModelPhase
 }
 
 data class ComposerDictationUiState(
@@ -137,6 +153,8 @@ data class ComposerDictationUiState(
     val onDevice: Boolean = true,
     val startedAtEpochMs: Long = 0L,
     val errorMessage: String? = null,
+    /** Model download progress, 0..1, while [phase] is ModelDownloading; null when unknown. */
+    val downloadProgress: Float? = null,
 )
 
 data class SessionChatUiState(

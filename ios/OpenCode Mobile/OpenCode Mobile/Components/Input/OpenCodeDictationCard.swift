@@ -9,17 +9,40 @@ enum OpenCodeDictationCardVariant: Equatable {
 enum OpenCodeDictationUnavailableReason: Equatable {
     case permissionDenied
     case modelNotInstalled
+    /// iOS is fetching the speech model. `progress` is 0...1, or nil before iOS reports any.
+    case modelDownloading(progress: Double?)
+    case modelDownloadFailed
     case recognizerError(String)
 
-    var message: String {
+    /// Model copy names iOS, so a slow system download is not read as an app fault.
+    func title(languageLabel: String) -> String {
+        let model = languageLabel.isEmpty ? "speech model" : "\(languageLabel) speech model"
         switch self {
         case .permissionDenied:
             return "Microphone access is off"
         case .modelNotInstalled:
-            return "The on-device speech model is not installed"
+            return "iOS needs its \(model)"
+        case .modelDownloading:
+            return "iOS is downloading the \(model)"
+        case .modelDownloadFailed:
+            return "iOS couldn't download the \(model)"
         case let .recognizerError(message):
             let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
             return trimmed.isEmpty ? "Dictation stopped" : trimmed
+        }
+    }
+
+    var detail: String? {
+        switch self {
+        case .permissionDenied, .recognizerError:
+            return nil
+        case .modelNotInstalled:
+            return "Dictation runs on this device, so your voice is never uploaded. "
+                + "iOS downloads the model once and keeps it for every app."
+        case .modelDownloading:
+            return "This is a system download. It keeps going if you close this card."
+        case .modelDownloadFailed:
+            return "Check the connection and free storage on this device, then try again."
         }
     }
 
@@ -29,9 +52,18 @@ enum OpenCodeDictationUnavailableReason: Equatable {
             return "Open Settings"
         case .modelNotInstalled:
             return "Download"
+        case .modelDownloading:
+            return "Downloading…"
+        case .modelDownloadFailed:
+            return "Try Again"
         case .recognizerError:
             return "Retry"
         }
+    }
+
+    var actionEnabled: Bool {
+        if case .modelDownloading = self { return false }
+        return true
     }
 }
 
@@ -44,9 +76,14 @@ struct OpenCodeDictationCard: View {
     var level: Double = 0
     var status: String = ""
     var elapsed: String = ""
+    /// Names the speech model in the model-not-installed and download states.
+    var languageLabel: String = ""
     var onCancel: () -> Void
     var onInsert: () -> Void
     var onUnavailableAction: () -> Void = {}
+    /// A host with a pinned footer hides these and places `OpenCodeDictationCardActions` there,
+    /// so a long transcript never pushes Insert out of reach.
+    var showsActions: Bool = true
 
     var body: some View {
         VStack(spacing: 16) {
@@ -54,16 +91,64 @@ struct OpenCodeDictationCard: View {
             case .listening, .finishing:
                 listeningBody
             case let .unavailable(reason):
-                Text(reason.message)
-                    .font(OpenCodeTypography.body)
-                    .foregroundStyle(OpenCodeColors.textStrong)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 28)
+                unavailableBody(reason)
             }
-            actionRow
+            if showsActions {
+                OpenCodeDictationCardActions(
+                    variant: variant,
+                    committed: committed,
+                    volatileText: volatileText,
+                    onCancel: onCancel,
+                    onInsert: onInsert,
+                    onUnavailableAction: onUnavailableAction
+                )
+            }
         }
         .accessibilityElement(children: .contain)
+    }
+
+    private func unavailableBody(_ reason: OpenCodeDictationUnavailableReason) -> some View {
+        VStack(spacing: 8) {
+            Text(reason.title(languageLabel: languageLabel))
+                .font(OpenCodeTypography.body)
+                .foregroundStyle(OpenCodeColors.textStrong)
+                .multilineTextAlignment(.center)
+            if case let .modelDownloading(progress) = reason {
+                downloadProgress(progress)
+            }
+            if let detail = reason.detail {
+                Text(detail)
+                    .font(OpenCodeTypography.bodySecondary)
+                    .foregroundStyle(OpenCodeColors.textWeak)
+                    .multilineTextAlignment(.center)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 20)
+    }
+
+    private func downloadProgress(_ progress: Double?) -> some View {
+        let clamped = progress.map { min(1, max(0, $0.isFinite ? $0 : 0)) }
+        let label = clamped.map { "\(Int(($0 * 100).rounded()))%" } ?? "Starting…"
+        return VStack(spacing: 6) {
+            Group {
+                if let clamped {
+                    ProgressView(value: clamped)
+                } else {
+                    ProgressView()
+                        .progressViewStyle(.linear)
+                }
+            }
+            .tint(OpenCodeColors.interactive)
+            .accessibilityLabel("Downloading speech model")
+            .accessibilityValue(label)
+            Text(label)
+                .font(OpenCodeTypography.bodySecondary)
+                .foregroundStyle(OpenCodeColors.textWeak)
+                .monospacedDigit()
+                .accessibilityHidden(true)
+        }
+        .padding(.vertical, 4)
     }
 
     private var listeningBody: some View {
@@ -127,7 +212,21 @@ struct OpenCodeDictationCard: View {
     }
 
     @ViewBuilder
-    private var actionRow: some View {
+    private var clampedLevel: Double {
+        min(1, max(0, level.isFinite ? level : 0))
+    }
+}
+
+/// Cancel plus Insert or the recovery action for `OpenCodeDictationCard`.
+struct OpenCodeDictationCardActions: View {
+    let variant: OpenCodeDictationCardVariant
+    var committed: String = ""
+    var volatileText: String = ""
+    var onCancel: () -> Void
+    var onInsert: () -> Void
+    var onUnavailableAction: () -> Void = {}
+
+    var body: some View {
         VStack(spacing: 8) {
             OpenCodeButton(
                 variant: .fullWidthText(title: "Cancel"),
@@ -147,6 +246,7 @@ struct OpenCodeDictationCard: View {
             case let .unavailable(reason):
                 OpenCodeButton(
                     variant: .fullWidthText(title: reason.actionTitle),
+                    enabled: reason.actionEnabled,
                     action: onUnavailableAction
                 )
             }
@@ -155,10 +255,6 @@ struct OpenCodeDictationCard: View {
 
     private var hasTranscript: Bool {
         !(committed + volatileText).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
-    private var clampedLevel: Double {
-        min(1, max(0, level.isFinite ? level : 0))
     }
 }
 

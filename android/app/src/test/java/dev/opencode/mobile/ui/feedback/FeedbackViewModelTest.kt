@@ -389,6 +389,25 @@ class FeedbackViewModelTest {
     }
 
     @Test
+    fun dictationModelDownload_updatesOnlyAModelCard() {
+        val viewModel = viewModel()
+        viewModel.open(FeedbackScreen.Settings)
+
+        viewModel.dictationModelDownload(ComposerDictationPhase.ModelDownloading, 0.3f)
+        assertEquals(null, viewModel.state.value.dictation)
+
+        viewModel.beginDictationUnavailable(ComposerDictationPhase.ModelNotInstalled, languageLabel = "English")
+        viewModel.dictationModelDownload(ComposerDictationPhase.ModelDownloading, 0.3f)
+        assertEquals(ComposerDictationPhase.ModelDownloading, viewModel.state.value.dictation?.phase)
+        assertEquals(0.3f, viewModel.state.value.dictation?.downloadProgress)
+        assertEquals("English", viewModel.state.value.dictation?.languageLabel)
+
+        viewModel.beginDictation(languageLabel = "English", onDevice = true)
+        viewModel.dictationModelDownload(ComposerDictationPhase.ModelDownloadFailed)
+        assertEquals(ComposerDictationPhase.Listening, viewModel.state.value.dictation?.phase)
+    }
+
+    @Test
     fun dictationStopped_keepsTheListeningTitle() {
         val viewModel = viewModel()
         viewModel.open(FeedbackScreen.Settings)

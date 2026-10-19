@@ -5805,6 +5805,30 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun dictationModelDownload_updatesOnlyAModelCard() =
+        runTest(testDispatcher) {
+            val viewModel = dictationViewModel()
+            advanceUntilIdle()
+
+            viewModel.dictationModelDownload(ComposerDictationPhase.ModelDownloading, 0.3f)
+            assertNull(viewModel.uiState.value.dictation)
+
+            viewModel.beginDictationUnavailable(ComposerDictationPhase.ModelNotInstalled, languageLabel = "English")
+            viewModel.dictationModelDownload(ComposerDictationPhase.ModelDownloading, 0.3f)
+            val downloading = viewModel.uiState.value.dictation
+            assertEquals(ComposerDictationPhase.ModelDownloading, downloading?.phase)
+            assertEquals(0.3f, downloading?.downloadProgress)
+            assertEquals("English", downloading?.languageLabel)
+
+            viewModel.dictationModelDownload(ComposerDictationPhase.ModelDownloadQueued)
+            assertEquals(ComposerDictationPhase.ModelDownloadQueued, viewModel.uiState.value.dictation?.phase)
+
+            viewModel.dictationCancel()
+            viewModel.dictationModelDownload(ComposerDictationPhase.ModelDownloadFailed)
+            assertNull(viewModel.uiState.value.dictation)
+        }
+
+    @Test
     fun dictationUnavailable_duringFinishing_stillInserts() =
         runTest(testDispatcher) {
             val viewModel = dictationViewModel()

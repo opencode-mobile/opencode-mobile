@@ -590,14 +590,9 @@ class SessionChatViewModel
         fun beginDictationUnavailable(
             phase: ComposerDictationPhase,
             message: String? = null,
+            languageLabel: String = "",
         ) {
-            if (
-                phase != ComposerDictationPhase.PermissionDenied &&
-                phase != ComposerDictationPhase.ModelNotInstalled &&
-                phase != ComposerDictationPhase.RecognizerError
-            ) {
-                return
-            }
+            if (!phase.isUnavailable) return
             // A recognizer error can arrive after Insert has already been confirmed.
             // Dropping the card here would cancel the splice.
             if (dictation?.phase == ComposerDictationPhase.Finishing) return
@@ -605,9 +600,21 @@ class SessionChatViewModel
             dictation =
                 ComposerDictationUiState(
                     phase = phase,
-                    errorMessage = message,
+                    languageLabel = languageLabel,
                     startedAtEpochMs = nowMs(),
+                    errorMessage = message,
                 )
+            publishUiState()
+        }
+
+        /** Applies a model download update only while the card still shows the model. */
+        fun dictationModelDownload(
+            phase: ComposerDictationPhase,
+            progress: Float? = null,
+        ) {
+            val current = dictation ?: return
+            if (!phase.isModelPhase || !current.phase.isModelPhase) return
+            dictation = current.copy(phase = phase, downloadProgress = progress)
             publishUiState()
         }
 

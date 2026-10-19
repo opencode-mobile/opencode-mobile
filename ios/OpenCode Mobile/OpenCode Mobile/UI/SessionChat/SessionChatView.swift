@@ -1350,7 +1350,8 @@ struct SessionChatView: View {
             volatileText: state.volatile,
             level: state.level,
             status: dictationStatus(state),
-            startedAt: state.startedAt
+            startedAt: state.startedAt,
+            languageLabel: state.languageLabel
         )
     }
 
@@ -1364,6 +1365,10 @@ struct SessionChatView: View {
             .unavailable(.permissionDenied)
         case .modelNotInstalled:
             .unavailable(.modelNotInstalled)
+        case .modelDownloading:
+            .unavailable(.modelDownloading(progress: state.downloadProgress))
+        case .modelDownloadFailed:
+            .unavailable(.modelDownloadFailed)
         case .recognizerError:
             .unavailable(.recognizerError(state.errorMessage ?? ""))
         }
@@ -1391,11 +1396,11 @@ struct SessionChatView: View {
                 .permissionDenied,
                 message: "Microphone access is off"
             )
-        case .modelNotInstalled:
-            viewModel.beginDictationUnavailable(
-                .modelNotInstalled,
-                message: "The on-device speech model is not installed"
-            )
+        case let .modelNotInstalled(languageLabel):
+            viewModel.beginDictationUnavailable(.modelNotInstalled, languageLabel: languageLabel)
+        case let .modelDownloading(languageLabel):
+            viewModel.beginDictationUnavailable(.modelNotInstalled, languageLabel: languageLabel)
+            await downloadDictationModel()
         case let .ready(languageLabel, onDevice):
             let granted = await requestMicrophoneAccess()
             guard granted else {
@@ -1414,7 +1419,16 @@ struct SessionChatView: View {
     }
 
     private func downloadDictationModel() async {
-        await dictationSession.downloadModel()
+        viewModel.dictationModelDownload(.modelDownloading)
+        let installed = await dictationSession.downloadModel { progress in
+            viewModel.dictationModelDownload(.modelDownloading, progress: progress)
+        }
+        // Cancel closes the card; the system download carries on without it.
+        guard viewModel.uiState.dictation?.phase.isModelPhase == true else { return }
+        guard installed else {
+            viewModel.dictationModelDownload(.modelDownloadFailed)
+            return
+        }
         let support = await dictationSession.probe()
         dictationSupport = support
         switch support {
@@ -1428,11 +1442,8 @@ struct SessionChatView: View {
                 .permissionDenied,
                 message: "Microphone access is off"
             )
-        case .modelNotInstalled:
-            viewModel.beginDictationUnavailable(
-                .modelNotInstalled,
-                message: "The on-device speech model is not installed"
-            )
+        case .modelNotInstalled, .modelDownloading:
+            viewModel.dictationModelDownload(.modelDownloadFailed)
         case .hidden:
             viewModel.dictationCancel()
         }

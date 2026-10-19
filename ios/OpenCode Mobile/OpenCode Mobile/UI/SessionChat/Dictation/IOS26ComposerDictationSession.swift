@@ -80,8 +80,8 @@ final class IOS26ComposerDictationSession: ComposerDictationSession {
         }
     }
 
-    func downloadModel() async {
-        await IOS26DictationCatalog.download()
+    func downloadModel(onProgress: @escaping @MainActor @Sendable (Double) -> Void) async -> Bool {
+        await IOS26DictationCatalog.download(onProgress: onProgress)
     }
 
     private func run(runID: UUID) async {
@@ -235,24 +235,41 @@ private enum IOS26DictationCatalog {
         if SpeechTranscriber.isAvailable,
            let locale = await SpeechTranscriber.supportedLocale(equivalentTo: Locale.current) {
             let installed = await SpeechTranscriber.installedLocales
-            return support(locale: locale, installed: contains(locale, installed), permission: permission)
+            return await support(
+                locale: locale,
+                installed: contains(locale, installed),
+                permission: permission,
+                module: SpeechTranscriber(locale: locale, preset: .progressiveTranscription)
+            )
         }
         if let locale = await DictationTranscriber.supportedLocale(equivalentTo: Locale.current) {
             let installed = await DictationTranscriber.installedLocales
-            return support(locale: locale, installed: contains(locale, installed), permission: permission)
+            return await support(
+                locale: locale,
+                installed: contains(locale, installed),
+                permission: permission,
+                module: DictationTranscriber(locale: locale, preset: .progressiveLongDictation)
+            )
         }
         return .hidden
     }
 
-    static func download() async {
-        guard let engine = await makeEngine() else { return }
+    static func download(onProgress: @escaping @MainActor @Sendable (Double) -> Void) async -> Bool {
+        guard let engine = await makeEngine() else { return false }
         do {
+            // nil means the assets are already installed.
             guard let request = try await AssetInventory.assetInstallationRequest(supporting: [engine.module]) else {
-                return
+                return true
             }
+            let observation = request.progress.observe(\.fractionCompleted, options: [.initial, .new]) { progress, _ in
+                let fraction = progress.fractionCompleted
+                Task { @MainActor in onProgress(fraction) }
+            }
+            defer { observation.invalidate() }
             try await request.downloadAndInstall()
+            return true
         } catch {
-            return
+            return false
         }
     }
 
@@ -274,9 +291,16 @@ private enum IOS26DictationCatalog {
     private static func support(
         locale: Locale,
         installed: Bool,
-        permission: AVAudioApplication.recordPermission
-    ) -> DictationSupport {
-        if !installed { return .modelNotInstalled }
+        permission: AVAudioApplication.recordPermission,
+        module: any SpeechModule
+    ) async -> DictationSupport {
+        if !installed {
+            let label = languageLabel(for: locale)
+            if await AssetInventory.status(forModules: [module]) == .downloading {
+                return .modelDownloading(languageLabel: label)
+            }
+            return .modelNotInstalled(languageLabel: label)
+        }
         if permission == .denied { return .permissionDenied }
         return .ready(languageLabel: languageLabel(for: locale), onDevice: true)
     }

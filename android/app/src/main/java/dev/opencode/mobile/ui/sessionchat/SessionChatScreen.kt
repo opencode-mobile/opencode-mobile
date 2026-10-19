@@ -125,6 +125,8 @@ import dev.opencode.mobile.ui.sessionchat.dictation.ComposerDictationSession
 import dev.opencode.mobile.ui.sessionchat.dictation.DictationModelDownloader
 import dev.opencode.mobile.ui.sessionchat.dictation.DictationSupport
 import dev.opencode.mobile.ui.sessionchat.dictation.SystemComposerDictationSession
+import dev.opencode.mobile.ui.sessionchat.dictation.cardPhase
+import dev.opencode.mobile.ui.sessionchat.dictation.dictationLanguageLabel
 import dev.opencode.mobile.ui.sessionchat.dictation.formatDictationElapsed
 import dev.opencode.mobile.ui.sessionchat.dictation.probeDictationSupport
 import dev.opencode.mobile.ui.sessionchat.view.toActionTileBadge
@@ -272,7 +274,8 @@ fun SessionChatScreen(
             ingestAttachments(uris)
         }
     val dictationSession = remember(context) { SystemComposerDictationSession(context) }
-    val dictationModelDownloader = remember(context) { DictationModelDownloader(context) }
+    val dictationModelDownloader =
+        remember(context, coroutineScope) { DictationModelDownloader.system(context, coroutineScope) }
     var dictationSupport by remember { mutableStateOf<DictationSupport>(DictationSupport.Hidden) }
     var dictationNowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
     val dictationPhase = uiState.dictation?.phase
@@ -306,8 +309,19 @@ fun SessionChatScreen(
                     viewModel.beginDictationUnavailable(phase, message)
                 }
             },
+            languageTag = support.languageTag,
         )
     }
+
+    fun showDictationModelCard(downloading: Boolean) {
+        viewModel.beginDictationUnavailable(
+            if (downloading) ComposerDictationPhase.ModelDownloading else ComposerDictationPhase.ModelNotInstalled,
+            languageLabel = dictationLanguageLabel(),
+        )
+    }
+
+    // Assigned below: an installed model re-enters applyProbedDictation, which can start a watch.
+    lateinit var startDictationModelDownload: (Boolean) -> Unit
 
     fun applyProbedDictation(
         support: DictationSupport,
@@ -317,11 +331,30 @@ fun SessionChatScreen(
         if (!startIfReady) return
         when (support) {
             is DictationSupport.Ready -> startReadyDictation(support)
-            DictationSupport.ModelNotInstalled ->
-                viewModel.beginDictationUnavailable(ComposerDictationPhase.ModelNotInstalled)
+            is DictationSupport.ModelNotInstalled -> showDictationModelCard(downloading = false)
+            is DictationSupport.ModelDownloading -> {
+                showDictationModelCard(downloading = true)
+                startDictationModelDownload(true)
+            }
             DictationSupport.PermissionDenied ->
                 viewModel.beginDictationUnavailable(ComposerDictationPhase.PermissionDenied)
             DictationSupport.Hidden -> viewModel.dictationCancel()
+        }
+    }
+
+    startDictationModelDownload = { alreadyPending ->
+        dictationModelDownloader.start(dictationSupport.languageTag, alreadyPending) { update ->
+            val card = update.cardPhase()
+            if (card != null) {
+                viewModel.dictationModelDownload(card.first, card.second)
+            } else if (viewModel.uiState.value.dictation
+                    ?.phase
+                    ?.isModelPhase == true
+            ) {
+                coroutineScope.launch {
+                    applyProbedDictation(probeDictationSupport(context), startIfReady = true)
+                }
+            }
         }
     }
 
@@ -339,8 +372,11 @@ fun SessionChatScreen(
     fun requestDictationOrStart() {
         when (val support = dictationSupport) {
             DictationSupport.Hidden -> Unit
-            DictationSupport.ModelNotInstalled ->
-                viewModel.beginDictationUnavailable(ComposerDictationPhase.ModelNotInstalled)
+            is DictationSupport.ModelNotInstalled -> showDictationModelCard(downloading = false)
+            is DictationSupport.ModelDownloading -> {
+                showDictationModelCard(downloading = true)
+                startDictationModelDownload(true)
+            }
             DictationSupport.PermissionDenied,
             is DictationSupport.Ready,
             -> {
@@ -362,6 +398,8 @@ fun SessionChatScreen(
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
         viewModel.cancelDictationForBackground()
     }
+    LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) { dictationModelDownloader.setHostPaused(true) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { dictationModelDownloader.setHostPaused(false) }
     LaunchedEffect(Unit) {
         dictationSupport = probeDictationSupport(context)
     }
@@ -1095,17 +1133,19 @@ fun SessionChatScreen(
                                         )
                                     }
                                     OpenCodeSessionComposerAction.DictationDownload ->
-                                        dictationModelDownloader.trigger()
+                                        startDictationModelDownload(false)
                                     OpenCodeSessionComposerAction.DictationRetry -> {
                                         coroutineScope.launch {
                                             val support = probeDictationSupport(context)
                                             dictationSupport = support
                                             when (support) {
                                                 is DictationSupport.Ready -> requestDictationOrStart()
-                                                DictationSupport.ModelNotInstalled ->
-                                                    viewModel.beginDictationUnavailable(
-                                                        ComposerDictationPhase.ModelNotInstalled,
-                                                    )
+                                                is DictationSupport.ModelNotInstalled ->
+                                                    showDictationModelCard(downloading = false)
+                                                is DictationSupport.ModelDownloading -> {
+                                                    showDictationModelCard(downloading = true)
+                                                    startDictationModelDownload(true)
+                                                }
                                                 DictationSupport.PermissionDenied -> requestDictationOrStart()
                                                 DictationSupport.Hidden -> viewModel.dictationCancel()
                                             }
@@ -1453,6 +1493,12 @@ private fun ComposerDictationUiState.toCardModel(elapsedLabel: String): Composer
                 OpenCodeDictationCardVariant.Unavailable to OpenCodeDictationUnavailableReason.PermissionDenied
             ComposerDictationPhase.ModelNotInstalled ->
                 OpenCodeDictationCardVariant.Unavailable to OpenCodeDictationUnavailableReason.ModelNotInstalled
+            ComposerDictationPhase.ModelDownloading ->
+                OpenCodeDictationCardVariant.Unavailable to OpenCodeDictationUnavailableReason.ModelDownloading
+            ComposerDictationPhase.ModelDownloadQueued ->
+                OpenCodeDictationCardVariant.Unavailable to OpenCodeDictationUnavailableReason.ModelDownloadQueued
+            ComposerDictationPhase.ModelDownloadFailed ->
+                OpenCodeDictationCardVariant.Unavailable to OpenCodeDictationUnavailableReason.ModelDownloadFailed
             ComposerDictationPhase.RecognizerError ->
                 OpenCodeDictationCardVariant.Unavailable to OpenCodeDictationUnavailableReason.RecognizerError
         }
@@ -1466,6 +1512,7 @@ private fun ComposerDictationUiState.toCardModel(elapsedLabel: String): Composer
         elapsedLabel = elapsedLabel,
         unavailableReason = reason,
         errorMessage = errorMessage,
+        downloadProgress = downloadProgress,
     )
 }
 

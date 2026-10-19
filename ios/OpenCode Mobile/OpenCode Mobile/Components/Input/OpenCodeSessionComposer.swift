@@ -240,6 +240,7 @@ struct OpenCodeSessionComposerDictation: Equatable {
     var level: Double
     var status: String
     var startedAt: Date
+    var languageLabel: String = ""
 }
 
 /// UIKit text input owned by the composer prompt. Lets keyboard-shortcut focus
@@ -450,6 +451,7 @@ struct OpenCodeSessionComposer: View {
             level: dictation.level,
             status: dictation.status,
             elapsed: elapsed,
+            languageLabel: dictation.languageLabel,
             onCancel: { onAction(.dictationCancel) },
             onInsert: { onAction(.dictationInsert) },
             onUnavailableAction: { onAction(dictationUnavailableAction(dictation.variant)) }
@@ -462,7 +464,7 @@ struct OpenCodeSessionComposer: View {
         switch variant {
         case .unavailable(.permissionDenied):
             .dictationOpenSettings
-        case .unavailable(.modelNotInstalled):
+        case .unavailable(.modelNotInstalled), .unavailable(.modelDownloading), .unavailable(.modelDownloadFailed):
             .dictationDownload
         case .unavailable(.recognizerError):
             .dictationRetry
