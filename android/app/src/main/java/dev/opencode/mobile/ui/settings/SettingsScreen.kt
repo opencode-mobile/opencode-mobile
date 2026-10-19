@@ -416,20 +416,21 @@ fun SettingsScreen(
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
 
-                OpenCodeListItem(
-                    title = "Source Code",
-                    subtitle = "GPL-3.0 on GitHub",
-                    style = OpenCodeListItemStyle.Card,
-                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Code, "Source Code"),
-                    accessory = OpenCodeListItemAccessory.Disclosure,
-                    onClick = {
-                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(SourceCode.URL)))
-                    },
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                )
-
                 if (DeveloperToolsPreferences.unlocked) {
                     OpenCodeSectionHeader(title = "Developer Tools")
+
+                    // Hidden behind Developer Tools until the repository is public.
+                    OpenCodeListItem(
+                        title = "Source Code",
+                        subtitle = "GPL-3.0 on GitHub",
+                        style = OpenCodeListItemStyle.Card,
+                        startDecorator = StartDecorator.Icon(OpenCodeIcons.Code, "Source Code"),
+                        accessory = OpenCodeListItemAccessory.Disclosure,
+                        onClick = {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(SourceCode.URL)))
+                        },
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    )
 
                     OpenCodeListItem(
                         title = "TextMate Highlighting",

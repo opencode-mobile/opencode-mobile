@@ -532,18 +532,19 @@ struct SettingsView: View {
                     )
                     .padding(.horizontal, 16)
 
-                    OpenCodeListItem(
-                        title: "Source Code",
-                        subtitle: "GPL-3.0 on GitHub",
-                        style: .card,
-                        startDecorator: .icon(.code, accessibilityLabel: "Source Code"),
-                        accessory: .disclosure,
-                        action: { openURL(SourceCode.url) }
-                    )
-                    .padding(.horizontal, 16)
-
                     if developerToolsPreferences.unlocked {
                         OpenCodeSectionHeader(title: "Developer Tools")
+
+                        // Hidden behind Developer Tools until the repository is public.
+                        OpenCodeListItem(
+                            title: "Source Code",
+                            subtitle: "GPL-3.0 on GitHub",
+                            style: .card,
+                            startDecorator: .icon(.code, accessibilityLabel: "Source Code"),
+                            accessory: .disclosure,
+                            action: { openURL(SourceCode.url) }
+                        )
+                        .padding(.horizontal, 16)
 
                         OpenCodeListItem(
                             title: "Component Gallery",
