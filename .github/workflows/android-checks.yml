@@ -3,6 +3,15 @@ name: Android Checks
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
+    # Skip when the change cannot affect the Android app.
+    paths:
+      - "android/**"
+      - "shared/**"
+      - "VERSION"
+      - "scripts/read-app-version.sh"
+      - "scripts/ensure-android-platform.sh"
+      - ".github/scripts/**"
+      - ".github/workflows/android-checks.yml"
   workflow_dispatch:
 
 concurrency:

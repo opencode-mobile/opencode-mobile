@@ -3,6 +3,20 @@ name: iOS Checks
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
+    # Skip when the change cannot affect the iOS app. The iOS build compiles
+    # shared/markdown-core through the android/ Gradle build, so Gradle config
+    # counts; the Android app and screenshot modules do not.
+    paths:
+      - "ios/**"
+      - "shared/**"
+      - "android/**"
+      - "!android/app/**"
+      - "!android/screenshot/**"
+      - "VERSION"
+      - "scripts/read-app-version.sh"
+      - "scripts/ensure-android-platform.sh"
+      - ".github/scripts/**"
+      - ".github/workflows/ios-checks.yml"
   workflow_dispatch:
     inputs:
       run_markdown_core_ios_tests:

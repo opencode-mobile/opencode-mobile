@@ -4,6 +4,20 @@ on:
   push:
     branches:
       - main
+    # Skip when the change cannot affect the iOS app. The iOS build compiles
+    # shared/markdown-core through the android/ Gradle build, so Gradle config
+    # counts; the Android app and screenshot modules do not.
+    paths:
+      - "ios/**"
+      - "shared/**"
+      - "android/**"
+      - "!android/app/**"
+      - "!android/screenshot/**"
+      - "VERSION"
+      - "scripts/read-app-version.sh"
+      - "scripts/ensure-android-platform.sh"
+      - ".github/scripts/**"
+      - ".github/workflows/ios-app-distribution.yml"
   workflow_dispatch:
     inputs:
       source_ref:
@@ -14,9 +28,11 @@ on:
 permissions:
   contents: read
 
+# A newer merge to main supersedes a build still in progress; manual dispatches
+# run in their own group and are never cancelled.
 concurrency:
-  group: ios-app-distribution
-  cancel-in-progress: false
+  group: ios-app-distribution-${{ github.event_name }}
+  cancel-in-progress: ${{ github.event_name == 'push' }}
 
 jobs:
   distribute:

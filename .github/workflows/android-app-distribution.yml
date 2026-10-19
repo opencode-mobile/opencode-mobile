@@ -4,6 +4,15 @@ on:
   push:
     branches:
       - main
+    # Skip when the change cannot affect the Android app.
+    paths:
+      - "android/**"
+      - "shared/**"
+      - "VERSION"
+      - "scripts/read-app-version.sh"
+      - "scripts/ensure-android-platform.sh"
+      - ".github/scripts/**"
+      - ".github/workflows/android-app-distribution.yml"
   workflow_dispatch:
     inputs:
       source_ref:
@@ -14,9 +23,11 @@ on:
 permissions:
   contents: read
 
+# A newer merge to main supersedes a build still in progress; manual dispatches
+# run in their own group and are never cancelled.
 concurrency:
-  group: android-app-distribution
-  cancel-in-progress: false
+  group: android-app-distribution-${{ github.event_name }}
+  cancel-in-progress: ${{ github.event_name == 'push' }}
 
 jobs:
   distribute:
