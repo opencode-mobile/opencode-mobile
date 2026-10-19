@@ -70,6 +70,7 @@ enum class ComponentGalleryEntryId {
     InlineNotice,
     CodeSnippet,
     SessionList,
+    SessionListSkeleton,
     SessionListDock,
     SessionStatusBar,
     SessionBranchPill,
@@ -386,6 +387,12 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.SessionList,
             title = "Session List",
             description = "Cross-project recent sessions with status and relative time.",
+            category = ComponentGalleryCategory.Session,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.SessionListSkeleton,
+            title = "Session List Skeleton",
+            description = "Shimmering placeholder session rows while a project's sessions load.",
             category = ComponentGalleryCategory.Session,
         ),
         ComponentGalleryEntry(

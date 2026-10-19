@@ -156,7 +156,9 @@ struct ProjectListHomeView: View {
             }
             .onChange(of: viewModel.pendingSelectedFilterId) { _, worktree in
                 if let worktree {
-                    if selectedSessionFilterId != SessionListFilterTab.allId {
+                    if viewModel.pendingSelectedFilterOverridesAll
+                        || selectedSessionFilterId != SessionListFilterTab.allId
+                    {
                         selectedSessionFilterId = worktree
                     }
                     viewModel.consumePendingSelectedFilter()
@@ -813,7 +815,7 @@ struct ProjectListHomeView: View {
         case let .loaded(sections, _, _, _):
             let sessions = sections.crossProjectSessionListSessions()
             return SessionListHomeChrome.filterTabs(
-                projects: sections.homeChromeProjects(),
+                projects: sections.homeChromeProjects(loadStates: viewModel.projectLoadStates),
                 sessionCount: sessions.count
             )
         default:
@@ -942,7 +944,7 @@ struct ProjectListHomeView: View {
         createError: String?
     ) -> some View {
         let sessions = sections.crossProjectSessionListSessions()
-        let chromeProjects = sections.homeChromeProjects()
+        let chromeProjects = sections.homeChromeProjects(loadStates: viewModel.projectLoadStates)
         let filterTabs = SessionListHomeChrome.filterTabs(
             projects: chromeProjects,
             sessionCount: sessions.count
@@ -1005,6 +1007,9 @@ struct ProjectListHomeView: View {
             ) == .presentPicker
                 ? { presentNewSessionProjectPicker() }
                 : nil,
+            onRetryScopeLoad: { worktree in
+                Task { await viewModel.retryProjectLoad(worktree: worktree) }
+            },
             onRefresh: { await viewModel.pullToRefresh() },
             revealNewestToken: viewModel.revealNewestToken,
             revealSelectedSessionToken: revealSelectedSessionToken,
@@ -1160,13 +1165,16 @@ extension Array where Element == ProjectSectionItem {
         }
     }
 
-    func homeChromeProjects() -> [SessionListHomeChrome.Project] {
+    func homeChromeProjects(
+        loadStates: [String: ProjectLoadState] = [:]
+    ) -> [SessionListHomeChrome.Project] {
         let counts = Dictionary(grouping: crossProjectSessionListSessions(), by: \.worktree).mapValues(\.count)
         return map { section in
             SessionListHomeChrome.Project(
                 worktree: section.worktree,
                 title: section.displayName,
-                sessionCount: counts[section.worktree] ?? 0
+                sessionCount: counts[section.worktree] ?? 0,
+                load: loadStates[section.worktree]?.scopeLoad
             )
         }
     }

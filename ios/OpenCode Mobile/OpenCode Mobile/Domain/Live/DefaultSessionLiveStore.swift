@@ -160,6 +160,11 @@ final class DefaultSessionLiveStore: SessionLiveStore {
                 }
             )
             if outcome == .failed {
+                // Observers learn the server load failed; the coordinator keeps its retry backoff.
+                // A cancelled refresh (superseded or torn down) is not a server failure.
+                if !Task.isCancelled, syncCoordinator.profileGeneration == generation {
+                    loop.publishLoadFailed()
+                }
                 throw URLError(.cannotConnectToHost)
             }
         }
@@ -272,11 +277,29 @@ nonisolated final class SessionListLoopState: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         let published = watermarks.map {
-            SessionListSnapshot(sessions: $0.apply(to: snapshot.sessions), isFromCache: snapshot.isFromCache)
+            SessionListSnapshot(
+                sessions: $0.apply(to: snapshot.sessions),
+                isFromCache: snapshot.isFromCache,
+                loadFailed: snapshot.loadFailed
+            )
         } ?? snapshot
         latest = published
         yield(published)
         onPublish(published.sessions)
+    }
+
+    /// Reports a failed server load: republishes the sessions already known (none before the
+    /// first load) as cached, with `loadFailed` set.
+    func publishLoadFailed() {
+        lock.lock()
+        defer { lock.unlock() }
+        let failed = SessionListSnapshot(
+            sessions: latest?.sessions ?? [],
+            isFromCache: true,
+            loadFailed: true
+        )
+        latest = failed
+        yield(failed)
     }
 
     func session(id: String) -> Session? {
@@ -297,6 +320,7 @@ nonisolated final class SessionListLoopState: @unchecked Sendable {
         guard patchedSession != current.sessions[index] else { return nil }
         var sessions = current.sessions
         sessions[index] = patchedSession
+        // The failure flag belongs to the publish that reported it, not to later patches.
         let patched = SessionListSnapshot(sessions: sessions, isFromCache: current.isFromCache)
         latest = patched
         yield(patched)

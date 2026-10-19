@@ -98,6 +98,7 @@ enum ProductAnalytics {
         static let homeOpenSession = "home_open_session"
         static let homeLongPressSession = "home_long_press_session"
         static let homeCreateSession = "home_create_session"
+        static let homeRetryProjectLoad = "home_retry_project_load"
         static let homeOpenNewSessionProjectPicker = "home_open_new_session_project_picker"
         static let homeOpenProjectPicker = "home_open_project_picker"
         static let homeAddProject = "home_add_project"

@@ -214,7 +214,7 @@ struct SessionListScopeControl: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .geometryGroup()
-            SessionListScopeCountBadge(count: tab.count)
+            SessionListScopeCountBadge(count: tab.count, load: tab.load)
         }
         .padding(.trailing, 26)
     }
@@ -367,6 +367,7 @@ struct SessionListScopeControl: View {
     }
 
     private func displayedSubtitle(_ tab: SessionListFilterTab) -> String {
+        if let load = tab.load { return load.subtitle }
         if tab.isAll { return tab.subtitle }
         return compactHomePath(
             tab.subtitle,
@@ -376,6 +377,10 @@ struct SessionListScopeControl: View {
 
     private var accessibilityLabel: String {
         guard let tab = visibleTab else { return "Project filter" }
+        if let load = tab.load {
+            // Loading or failed replaces the session count, which is not known yet.
+            return "\(tab.pickerTitle), \(load.subtitle)"
+        }
         let subtitle = displayedSubtitle(tab)
         if subtitle.isEmpty {
             return "\(tab.pickerTitle), \(tab.count) sessions"
@@ -412,18 +417,31 @@ struct SessionListScopeMark: View {
     }
 }
 
+/// Session count of a project scope. While the scope is loading a small spinner takes its
+/// place; a failed load hides it (the subtitle says what happened).
 struct SessionListScopeCountBadge: View {
     let count: Int
+    var load: SessionListScopeLoad? = nil
 
     var body: some View {
-        Text("\(count)")
-            .font(OpenCodeTypography.caption.weight(.semibold))
-            .monospacedDigit()
-            .foregroundStyle(OpenCodeColors.textStrong)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 2)
-            .background(OpenCodeColors.textStrong.opacity(0.10), in: Capsule())
-            .accessibilityHidden(true)
+        switch load {
+        case .loading:
+            ProgressView()
+                .controlSize(.small)
+                .accessibilityHidden(true)
+                .accessibilityIdentifier("sessionListScopeLoading")
+        case .failed:
+            EmptyView()
+        case nil:
+            Text("\(count)")
+                .font(OpenCodeTypography.caption.weight(.semibold))
+                .monospacedDigit()
+                .foregroundStyle(OpenCodeColors.textStrong)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 2)
+                .background(OpenCodeColors.textStrong.opacity(0.10), in: Capsule())
+                .accessibilityHidden(true)
+        }
     }
 }
 

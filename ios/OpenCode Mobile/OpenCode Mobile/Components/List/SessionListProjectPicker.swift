@@ -40,7 +40,7 @@ struct SessionListProjectPickerRows: View {
                 subtitle: displayedSubtitle(tab),
                 startDecorator: startDecorator(tab)
             ) {
-                SessionListScopeCountBadge(count: tab.count)
+                SessionListScopeCountBadge(count: tab.count, load: tab.load)
             }
         }
     }

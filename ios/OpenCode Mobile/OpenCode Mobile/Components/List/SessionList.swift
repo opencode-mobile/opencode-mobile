@@ -103,6 +103,35 @@ struct SessionListSession: Identifiable, Hashable {
     }
 }
 
+/// A project scope whose first server load has not landed yet.
+enum SessionListScopeLoad: Hashable {
+    case loading(isSlow: Bool)
+    case failed(message: String)
+
+    static let loadingSubtitle = "Loading sessions\u{2026}"
+    static let slowSubtitle = "Still loading\u{2026}"
+    static let slowListCaption = "Still loading \u{2014} large projects can take a moment"
+    static let failedListMessage = "The server didn\u{2019}t return this project\u{2019}s sessions."
+    static let retryTitle = "Retry"
+
+    /// Dock subtitle in place of the project path.
+    var subtitle: String {
+        switch self {
+        case let .loading(isSlow): isSlow ? Self.slowSubtitle : Self.loadingSubtitle
+        case let .failed(message): message
+        }
+    }
+
+    var isLoading: Bool {
+        if case .loading = self { return true }
+        return false
+    }
+
+    static func failedListTitle(projectTitle: String) -> String {
+        "Couldn\u{2019}t load \(projectTitle)"
+    }
+}
+
 struct SessionListFilterTab: Identifiable, Hashable {
     static let allId = "all"
     static let allTitle = "All"
@@ -114,6 +143,8 @@ struct SessionListFilterTab: Identifiable, Hashable {
     let count: Int
     let letter: Character?
     let accent: LetterAccent?
+    /// Set while this project's sessions are still loading or failed to load.
+    let load: SessionListScopeLoad?
 
     var isAll: Bool { id == Self.allId }
     var pickerTitle: String { isAll ? Self.pickerAllTitle : title }
@@ -124,7 +155,8 @@ struct SessionListFilterTab: Identifiable, Hashable {
         count: Int,
         subtitle: String = "",
         letter: Character? = nil,
-        accent: LetterAccent? = nil
+        accent: LetterAccent? = nil,
+        load: SessionListScopeLoad? = nil
     ) {
         self.id = id
         self.title = title
@@ -132,6 +164,7 @@ struct SessionListFilterTab: Identifiable, Hashable {
         self.count = count
         self.letter = letter
         self.accent = accent
+        self.load = load
     }
 
     static func all(projectCount: Int, sessionCount: Int) -> SessionListFilterTab {
@@ -143,14 +176,20 @@ struct SessionListFilterTab: Identifiable, Hashable {
         )
     }
 
-    static func project(worktree: String, title: String, count: Int) -> SessionListFilterTab {
+    static func project(
+        worktree: String,
+        title: String,
+        count: Int,
+        load: SessionListScopeLoad? = nil
+    ) -> SessionListFilterTab {
         SessionListFilterTab(
             id: worktree,
             title: title,
             count: count,
             subtitle: worktree,
             letter: letterCharacter(for: title),
-            accent: letterAccent(for: worktree)
+            accent: letterAccent(for: worktree),
+            load: load
         )
     }
 }
@@ -169,6 +208,8 @@ struct SessionList<EmptyContent: View>: View {
     let onAddProject: () -> Void
     let onNewSession: () -> Void
     let onNewSessionLongPress: (() -> Void)?
+    /// Retry for a project scope whose load failed; receives the project worktree.
+    let onRetryScopeLoad: ((String) -> Void)?
     let onRefresh: (() async -> Void)?
     let revealNewestToken: Int
     /// Change to scroll `selectedSessionId` into view (keyboard session navigation).
@@ -202,6 +243,7 @@ struct SessionList<EmptyContent: View>: View {
         onAddProject: @escaping () -> Void,
         onNewSession: @escaping () -> Void,
         onNewSessionLongPress: (() -> Void)? = nil,
+        onRetryScopeLoad: ((String) -> Void)? = nil,
         onRefresh: (() async -> Void)? = nil,
         revealNewestToken: Int = 0,
         revealSelectedSessionToken: Int = 0,
@@ -221,6 +263,7 @@ struct SessionList<EmptyContent: View>: View {
         self.onAddProject = onAddProject
         self.onNewSession = onNewSession
         self.onNewSessionLongPress = onNewSessionLongPress
+        self.onRetryScopeLoad = onRetryScopeLoad
         self.onRefresh = onRefresh
         self.revealNewestToken = revealNewestToken
         self.revealSelectedSessionToken = revealSelectedSessionToken
@@ -293,8 +336,21 @@ struct SessionList<EmptyContent: View>: View {
     @ViewBuilder
     private func listBody(filterId: String, isCurrent: Bool) -> some View {
         let visible = sessions.visibleForFilter(filterId)
+        let loadingTab = visible.isEmpty ? filterTabs.first { $0.id == filterId && $0.load != nil } : nil
         Group {
-            if visible.isEmpty, showsEmptyContent {
+            if let loadingTab, let load = loadingTab.load {
+                ScrollView {
+                    scopeLoadContent(tab: loadingTab, load: load)
+                        .padding(.bottom, max(dockHeight, sessionListFallbackBottomSpacer))
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(OpenCodeColors.backgroundBase)
+                .modifier(SessionListRefreshableModifier(onRefresh: isCurrent ? onRefresh : nil))
+                .onAppear {
+                    if isCurrent { onDisplayedSessionsChange?([]) }
+                }
+                .transition(.opacity)
+            } else if visible.isEmpty, showsEmptyContent {
                 ScrollView {
                     emptyContent
                         .frame(maxWidth: .infinity, minHeight: 420)
@@ -326,7 +382,34 @@ struct SessionList<EmptyContent: View>: View {
                     }
                 }
                 .id(filterId)
+                .transition(.opacity)
             }
+        }
+        .animation(.easeInOut(duration: 0.25), value: loadingTab?.load)
+    }
+
+    @ViewBuilder
+    private func scopeLoadContent(tab: SessionListFilterTab, load: SessionListScopeLoad) -> some View {
+        switch load {
+        case let .loading(isSlow):
+            VStack(alignment: .leading, spacing: 0) {
+                OpenCodeSectionHeader(title: tab.title)
+                OpenCodeSessionListSkeleton(
+                    accent: tab.accent,
+                    caption: isSlow ? SessionListScopeLoad.slowListCaption : nil
+                )
+            }
+        case .failed:
+            OpenCodeEmptyState(
+                title: SessionListScopeLoad.failedListTitle(projectTitle: tab.title),
+                message: SessionListScopeLoad.failedListMessage,
+                fillsAvailableSpace: false,
+                primaryAction: onRetryScopeLoad.map { retry in
+                    OpenCodeEmptyStateAction(title: SessionListScopeLoad.retryTitle) { retry(tab.id) }
+                }
+            )
+            .padding(.top, 64)
+            .accessibilityIdentifier("sessionListScopeLoadFailed")
         }
     }
 

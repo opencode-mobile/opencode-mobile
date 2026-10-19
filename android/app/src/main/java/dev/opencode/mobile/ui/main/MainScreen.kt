@@ -56,6 +56,7 @@ import dev.opencode.mobile.ui.components.OpenCodeTopBarSubtitleAccessory
 import dev.opencode.mobile.ui.components.SessionList
 import dev.opencode.mobile.ui.components.SessionListFilterTab
 import dev.opencode.mobile.ui.components.SessionListProjectPickerRows
+import dev.opencode.mobile.ui.components.SessionListScopeLoad
 import dev.opencode.mobile.ui.components.SessionListSession
 import dev.opencode.mobile.ui.components.SessionListStatus
 import dev.opencode.mobile.ui.components.StartDecorator
@@ -109,7 +110,7 @@ fun MainScreen(
     val removalSnackbar by viewModel.removalSnackbar.collectAsStateWithLifecycle()
     val sessionActions by viewModel.sessionActions.collectAsStateWithLifecycle()
     val revealNewestToken by viewModel.revealNewestToken.collectAsStateWithLifecycle()
-    val pendingSelectedFilterId by viewModel.pendingSelectedFilterId.collectAsStateWithLifecycle()
+    val pendingScopeRequest by viewModel.pendingScopeRequest.collectAsStateWithLifecycle()
     val serversChrome by viewModel.serversChrome.collectAsStateWithLifecycle()
     LifecycleEventEffect(Lifecycle.Event.ON_START) {
         viewModel.onHomeRevealed()
@@ -124,8 +125,9 @@ fun MainScreen(
         removalSnackbar = removalSnackbar,
         sessionActions = sessionActions,
         revealNewestToken = revealNewestToken,
-        pendingSelectedFilterId = pendingSelectedFilterId,
-        onConsumePendingSelectedFilter = viewModel::consumePendingSelectedFilter,
+        pendingScopeRequest = pendingScopeRequest,
+        onConsumePendingScopeRequest = viewModel::consumePendingScopeRequest,
+        onRetryProjectLoad = viewModel::retryProjectLoad,
         serversChrome = serversChrome,
         sessionActionsCallbacks =
             HomeSessionActionsCallbacks(
@@ -226,8 +228,9 @@ internal fun MainScreen(
     sessionActions: HomeSessionActionsUiState = HomeSessionActionsUiState(),
     sessionActionsCallbacks: HomeSessionActionsCallbacks = HomeSessionActionsCallbacks(),
     revealNewestToken: Int = 0,
-    pendingSelectedFilterId: String? = null,
-    onConsumePendingSelectedFilter: () -> Unit = {},
+    pendingScopeRequest: HomeScopeRequest? = null,
+    onConsumePendingScopeRequest: () -> Unit = {},
+    onRetryProjectLoad: (String) -> Unit = {},
     serversChrome: HomeServersChrome = HomeServersChrome(),
     onTitleClick: () -> Unit = {},
     onDismissServersSheet: () -> Unit = {},
@@ -393,6 +396,8 @@ internal fun MainScreen(
                         }
                     HomeProjectsContent(
                         sections = sections,
+                        projectLoads = (uiState as? MainScreenUiState.Loaded)?.projectLoads.orEmpty(),
+                        onRetryProjectLoad = onRetryProjectLoad,
                         projectSessionCreateError = projectSessionCreateError,
                         isRefreshing = isRefreshing,
                         onRefresh = onRefresh,
@@ -417,8 +422,8 @@ internal fun MainScreen(
                         removalSnackbar = removalSnackbar,
                         onSessionLongPress = sessionActionsCallbacks.onSessionLongPress,
                         revealNewestToken = revealNewestToken,
-                        pendingSelectedFilterId = pendingSelectedFilterId,
-                        onConsumePendingSelectedFilter = onConsumePendingSelectedFilter,
+                        pendingScopeRequest = pendingScopeRequest,
+                        onConsumePendingScopeRequest = onConsumePendingScopeRequest,
                         selectedFilterId = selectedFilterId,
                         onSelectedFilterIdChange = { selectedFilterId = it },
                         selectedSessionId = selectedSessionId,
@@ -746,6 +751,8 @@ private fun ProbeFailedContent(
 @Composable
 private fun HomeProjectsContent(
     sections: List<ProjectSectionUi>,
+    projectLoads: Map<String, ProjectFirstLoad>,
+    onRetryProjectLoad: (String) -> Unit,
     projectSessionCreateError: String?,
     isRefreshing: Boolean,
     onRefresh: () -> Unit,
@@ -758,8 +765,8 @@ private fun HomeProjectsContent(
     removalSnackbar: OpenCodeSnackbarMessage?,
     onSessionLongPress: (SessionListSession) -> Unit,
     revealNewestToken: Int = 0,
-    pendingSelectedFilterId: String? = null,
-    onConsumePendingSelectedFilter: () -> Unit = {},
+    pendingScopeRequest: HomeScopeRequest? = null,
+    onConsumePendingScopeRequest: () -> Unit = {},
     selectedFilterId: String,
     onSelectedFilterIdChange: (String) -> Unit,
     selectedSessionId: String? = null,
@@ -804,7 +811,7 @@ private fun HomeProjectsContent(
         modifier = modifier.fillMaxSize(),
     ) {
         val sessions = sections.toCrossProjectSessionListSessions()
-        val chromeProjects = sections.toHomeChromeProjects()
+        val chromeProjects = sections.toHomeChromeProjects(projectLoads)
         val filterTabs =
             SessionListHomeChrome.filterTabs(
                 projects = chromeProjects,
@@ -821,12 +828,12 @@ private fun HomeProjectsContent(
                 onSelectedFilterIdChange(resolvedFilterId)
             }
         }
-        LaunchedEffect(pendingSelectedFilterId) {
-            pendingSelectedFilterId?.let { filterId ->
-                if (resolvedFilterId != SessionListFilterTab.ALL_ID) {
-                    onSelectedFilterIdChange(filterId)
+        LaunchedEffect(pendingScopeRequest) {
+            pendingScopeRequest?.let { request ->
+                if (request.evenFromAll || resolvedFilterId != SessionListFilterTab.ALL_ID) {
+                    onSelectedFilterIdChange(request.filterId)
                 }
-                onConsumePendingSelectedFilter()
+                onConsumePendingScopeRequest()
             }
         }
         LaunchedEffect(removalSnackbar) {
@@ -889,6 +896,7 @@ private fun HomeProjectsContent(
             onSessionLongPress = onSessionLongPress,
             revealNewestToken = revealNewestToken,
             selectedSessionId = selectedSessionId,
+            onRetryScopeLoad = onRetryProjectLoad,
             modifier = Modifier.fillMaxSize(),
             emptyContent =
                 if (sections.isEmpty()) {
@@ -978,16 +986,25 @@ internal fun List<ProjectSectionUi>.toCrossProjectSessionListSessions(): List<Se
         }
 }
 
-internal fun List<ProjectSectionUi>.toHomeChromeProjects(): List<SessionListHomeChrome.Project> {
+internal fun List<ProjectSectionUi>.toHomeChromeProjects(
+    projectLoads: Map<String, ProjectFirstLoad> = emptyMap(),
+): List<SessionListHomeChrome.Project> {
     val counts = toCrossProjectSessionListSessions().groupingBy { it.worktree }.eachCount()
     return map { section ->
         SessionListHomeChrome.Project(
             worktree = section.worktree,
             title = section.displayName,
             sessionCount = counts[section.worktree] ?: 0,
+            load = projectLoads[section.worktree]?.toScopeLoad(),
         )
     }
 }
+
+internal fun ProjectFirstLoad.toScopeLoad(): SessionListScopeLoad =
+    when (this) {
+        is ProjectFirstLoad.Loading -> SessionListScopeLoad.Loading(isSlow = isSlow)
+        is ProjectFirstLoad.Failed -> SessionListScopeLoad.Failed
+    }
 
 @Suppress("UNUSED_PARAMETER")
 internal fun SessionSummary.toSessionListStatus(hasPendingPermission: Boolean = false): SessionListStatus =

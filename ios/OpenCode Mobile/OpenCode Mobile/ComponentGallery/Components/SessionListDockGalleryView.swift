@@ -6,11 +6,19 @@ struct SessionListDockGalleryView: View {
     @State private var oneProject = false
     @State private var showProjectPicker = false
     @State private var showNewSessionPicker = false
+    @State private var load: SessionListDockGalleryLoad = .none
 
     private var filterTabs: [SessionListFilterTab] {
-        oneProject
+        let tabs = oneProject
             ? sessionListDockGalleryOneProjectFilterTabs
             : sessionListDockGalleryFilterTabs
+        guard let scopeLoad = load.scopeLoad else { return tabs }
+        // The last project stands in for one that was just added.
+        let loadingID = tabs.last?.id
+        return tabs.map { tab in
+            guard tab.id == loadingID else { return tab }
+            return .project(worktree: tab.id, title: tab.title, count: 0, load: scopeLoad)
+        }
     }
 
     var body: some View {
@@ -36,6 +44,20 @@ struct SessionListDockGalleryView: View {
                         action: { showCreateError.toggle() }
                     )
                 }
+                HStack(spacing: 8) {
+                    ForEach(SessionListDockGalleryLoad.allCases, id: \.self) { option in
+                        OpenCodeChoiceBadge(
+                            label: option.label,
+                            selected: load == option,
+                            action: {
+                                load = option
+                                if option != .none, let loadingID = filterTabs.last?.id {
+                                    selectedFilterId = loadingID
+                                }
+                            }
+                        )
+                    }
+                }
                 Spacer()
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -54,7 +76,8 @@ struct SessionListDockGalleryView: View {
                     : nil
             )
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Room for the option rows above the dock inside the gallery's scroll view.
+        .frame(maxWidth: .infinity, minHeight: 360, maxHeight: .infinity)
         .openCodeBottomSheet(
             isPresented: $showProjectPicker,
             title: "Filter by project",
@@ -86,6 +109,32 @@ struct SessionListDockGalleryView: View {
                     action: { showNewSessionPicker = false }
                 )
             }
+        }
+    }
+}
+
+/// Loading states the dock gallery can put on the last project.
+enum SessionListDockGalleryLoad: CaseIterable {
+    case none
+    case loading
+    case slow
+    case failed
+
+    var label: String {
+        switch self {
+        case .none: "Loaded"
+        case .loading: "Loading"
+        case .slow: "Slow"
+        case .failed: "Failed"
+        }
+    }
+
+    var scopeLoad: SessionListScopeLoad? {
+        switch self {
+        case .none: nil
+        case .loading: .loading(isSlow: false)
+        case .slow: .loading(isSlow: true)
+        case .failed: .failed(message: "Couldn\u{2019}t load sessions")
         }
     }
 }

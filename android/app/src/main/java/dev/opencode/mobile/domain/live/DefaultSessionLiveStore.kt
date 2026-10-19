@@ -197,6 +197,11 @@ class DefaultSessionLiveStore
                                 isCurrent = { syncCoordinator.profileGeneration == generation },
                             )
                         if (outcome == LiveStoreRefreshOutcome.FAILED) {
+                            // Tell observers now; the coordinator keeps retrying with backoff.
+                            publishLock.withLock {
+                                val known = latest?.sessions.orEmpty()
+                                publish(SessionListSnapshot(sessions = known, isFromCache = true, loadFailed = true))
+                            }
                             error("session list refresh failed directory=$directory")
                         }
                     }

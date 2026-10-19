@@ -221,6 +221,9 @@ struct ProjectListHomeViewModelTests {
         #expect(sections.map(\.worktree).contains("/two"))
         #expect(await store.addedWorktrees(serverBaseURL: "http://127.0.0.1:4096/").contains("/two"))
         #expect(viewModel.pendingSelectedFilterId == "/two")
+        #expect(viewModel.pendingSelectedFilterOverridesAll)
+        viewModel.consumePendingSelectedFilter()
+        #expect(!viewModel.pendingSelectedFilterOverridesAll)
     }
 
     @Test func addProject_alreadyAdded_selectsWorktree() async {
@@ -232,6 +235,9 @@ struct ProjectListHomeViewModelTests {
         await viewModel.refresh()
         await viewModel.addProject(worktree: "/two")
         #expect(viewModel.pendingSelectedFilterId == "/two")
+        // Already on home: the scope only moves when a single project is shown, not from All.
+        #expect(!viewModel.pendingSelectedFilterOverridesAll)
+        #expect(viewModel.projectLoadStates["/two"] == nil)
         #expect(viewModel.removalSnackbar?.text == "\"two\" is already on home")
         #expect(await store.addedWorktrees(serverBaseURL: "http://127.0.0.1:4096/") == ["/one", "/two"])
     }
@@ -1616,6 +1622,191 @@ struct ProjectListHomeViewModelTests {
         #expect(ready)
         #expect(homeSession(viewModel, id: "ses-1")?.unreadOutcome == nil)
     }
+
+    // MARK: - First load of a newly added project (#741)
+
+    @Test func addProject_newProject_exposesLoadingAfterGraceThenLoadsRows() async {
+        let stores = ProjectLoadStores()
+        let viewModel = stores.viewModel(
+            initial: ["/one", "/three"],
+            timing: ProjectLoadTiming(grace: .milliseconds(400), minimumVisible: .zero, slowThreshold: .seconds(60), timeout: .seconds(60))
+        )
+        await viewModel.refresh()
+
+        await viewModel.addProject(worktree: "/two")
+        // Home is on All (three projects); the new project takes the scope anyway.
+        #expect(viewModel.pendingSelectedFilterId == "/two")
+        #expect(viewModel.pendingSelectedFilterOverridesAll)
+        // Inside the grace delay nothing reads as loading yet.
+        #expect(viewModel.projectLoadStates["/two"] == nil)
+        #expect(await waitUntil { viewModel.projectLoadStates["/two"] == .loading(isSlow: false) })
+
+        // A cached publish is not the server answer.
+        stores.sessions.emit(directory: "/two", sessions: [], isFromCache: true)
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(viewModel.projectLoadStates["/two"] == .loading(isSlow: false))
+
+        stores.sessions.emit(directory: "/two", sessions: [projectLoadSession("two-1", directory: "/two")])
+        #expect(await waitUntil {
+            viewModel.projectLoadStates["/two"] == nil && homeSession(viewModel, id: "two-1") != nil
+        })
+    }
+
+    @Test func addProject_loadInsideGrace_neverExposesLoading() async {
+        let stores = ProjectLoadStores()
+        let viewModel = stores.viewModel(
+            initial: ["/one"],
+            timing: ProjectLoadTiming(grace: .milliseconds(300), minimumVisible: .milliseconds(500), slowThreshold: .seconds(60), timeout: .seconds(60))
+        )
+        await viewModel.refresh()
+
+        await viewModel.addProject(worktree: "/two")
+        stores.sessions.emit(directory: "/two", sessions: [projectLoadSession("two-1", directory: "/two")])
+
+        var exposed = false
+        let deadline = Date().addingTimeInterval(0.6)
+        while Date() < deadline {
+            if viewModel.projectLoadStates["/two"] != nil { exposed = true }
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+        #expect(!exposed)
+        #expect(homeSession(viewModel, id: "two-1") != nil)
+    }
+
+    @Test func addProject_zeroSessions_clearsLoadingToEmptyProject() async {
+        let stores = ProjectLoadStores()
+        let viewModel = stores.viewModel(initial: ["/one"], timing: .immediate)
+        await viewModel.refresh()
+
+        await viewModel.addProject(worktree: "/two")
+        #expect(await waitUntil { viewModel.projectLoadStates["/two"] == .loading(isSlow: false) })
+
+        stores.sessions.emit(directory: "/two", sessions: [])
+        #expect(await waitUntil { viewModel.projectLoadStates["/two"] == nil })
+        guard case let .loaded(sections, _, _, _) = viewModel.state else {
+            Issue.record("Expected loaded")
+            return
+        }
+        #expect(sections.first { $0.worktree == "/two" }?.allSessions.isEmpty == true)
+    }
+
+    @Test func addProject_exposedLoadingStaysForMinimumVisibleTime() async {
+        let stores = ProjectLoadStores()
+        let viewModel = stores.viewModel(
+            initial: ["/one"],
+            timing: ProjectLoadTiming(grace: .zero, minimumVisible: .milliseconds(300), slowThreshold: .seconds(60), timeout: .seconds(60))
+        )
+        await viewModel.refresh()
+
+        await viewModel.addProject(worktree: "/two")
+        #expect(await waitUntil { viewModel.projectLoadStates["/two"] == .loading(isSlow: false) })
+        let shown = Date()
+
+        stores.sessions.emit(directory: "/two", sessions: [projectLoadSession("two-1", directory: "/two")])
+        // Rows land at once; the loading marker holds for the rest of its minimum time.
+        #expect(await waitUntil { homeSession(viewModel, id: "two-1") != nil })
+        #expect(viewModel.projectLoadStates["/two"] == .loading(isSlow: false))
+        #expect(await waitUntil { viewModel.projectLoadStates["/two"] == nil })
+        #expect(Date().timeIntervalSince(shown) >= 0.25)
+    }
+
+    @Test func addProject_storeFailure_failsThenRetryLoads() async {
+        let stores = ProjectLoadStores()
+        let viewModel = stores.viewModel(initial: ["/one"], timing: .immediate)
+        await viewModel.refresh()
+
+        await viewModel.addProject(worktree: "/two")
+        stores.sessions.emit(directory: "/two", sessions: [], isFromCache: true, loadFailed: true)
+        #expect(await waitUntil {
+            viewModel.projectLoadStates["/two"] == .failed(message: ProjectLoadState.failedMessage)
+        })
+        #expect(ProjectLoadState.failedMessage == "Couldn\u{2019}t load sessions")
+
+        await viewModel.retryProjectLoad(worktree: "/two")
+        #expect(viewModel.projectLoadStates["/two"] == .loading(isSlow: false))
+        #expect(stores.sessions.invalidatedDirectories.contains("/two"))
+
+        stores.sessions.emit(directory: "/two", sessions: [projectLoadSession("two-1", directory: "/two")])
+        #expect(await waitUntil {
+            viewModel.projectLoadStates["/two"] == nil && homeSession(viewModel, id: "two-1") != nil
+        })
+    }
+
+    @Test func addProject_failedThenAutomaticSuccess_loads() async {
+        let stores = ProjectLoadStores()
+        let viewModel = stores.viewModel(initial: ["/one"], timing: .immediate)
+        await viewModel.refresh()
+
+        await viewModel.addProject(worktree: "/two")
+        stores.sessions.emit(directory: "/two", sessions: [], isFromCache: true, loadFailed: true)
+        #expect(await waitUntil {
+            viewModel.projectLoadStates["/two"] == .failed(message: ProjectLoadState.failedMessage)
+        })
+
+        // The coordinator's own retry succeeds later.
+        stores.sessions.emit(directory: "/two", sessions: [])
+        #expect(await waitUntil { viewModel.projectLoadStates["/two"] == nil })
+    }
+
+    @Test func addProject_slowLoad_marksSlowAfterThreshold() async {
+        let stores = ProjectLoadStores()
+        let viewModel = stores.viewModel(
+            initial: ["/one"],
+            timing: ProjectLoadTiming(grace: .zero, minimumVisible: .zero, slowThreshold: .milliseconds(150), timeout: .seconds(60))
+        )
+        await viewModel.refresh()
+
+        await viewModel.addProject(worktree: "/two")
+        #expect(await waitUntil { viewModel.projectLoadStates["/two"] == .loading(isSlow: false) })
+        #expect(await waitUntil { viewModel.projectLoadStates["/two"] == .loading(isSlow: true) })
+    }
+
+    @Test func addProject_noOutcome_failsAfterSafetyTimeout() async {
+        let stores = ProjectLoadStores()
+        let viewModel = stores.viewModel(
+            initial: ["/one"],
+            timing: ProjectLoadTiming(grace: .zero, minimumVisible: .zero, slowThreshold: .seconds(60), timeout: .milliseconds(200))
+        )
+        await viewModel.refresh()
+
+        await viewModel.addProject(worktree: "/two")
+        #expect(await waitUntil { viewModel.projectLoadStates["/two"] == .loading(isSlow: false) })
+        #expect(await waitUntil {
+            viewModel.projectLoadStates["/two"] == .failed(message: ProjectLoadState.failedMessage)
+        })
+    }
+
+    @Test func removeProject_clearsItsLoadState() async {
+        let stores = ProjectLoadStores()
+        let viewModel = stores.viewModel(initial: ["/one"], timing: .immediate)
+        await viewModel.refresh()
+
+        await viewModel.addProject(worktree: "/two")
+        stores.sessions.emit(directory: "/two", sessions: [], isFromCache: true, loadFailed: true)
+        #expect(await waitUntil { viewModel.projectLoadStates["/two"] != nil })
+
+        viewModel.requestRemoveProject(worktree: "/two")
+        await viewModel.confirmRemoveProject()
+        #expect(viewModel.projectLoadStates.isEmpty)
+    }
+
+    @Test func homeChromeProjects_carryLoadIntoScopeTabs() {
+        let section = ProjectSectionItem(
+            id: "/two",
+            worktree: "/two",
+            displayName: "two",
+            pathSubtitle: "/two",
+            letter: "T",
+            letterAccent: .teal,
+            allSessions: [],
+            loadError: nil
+        )
+        let projects = [section].homeChromeProjects(loadStates: ["/two": .loading(isSlow: true)])
+        #expect(projects.first?.load == .loading(isSlow: true))
+        let tabs = SessionListHomeChrome.filterTabs(projects: projects, sessionCount: 0)
+        #expect(tabs.first?.load == .loading(isSlow: true))
+        #expect(tabs.first?.load?.subtitle == "Still loading\u{2026}")
+    }
 }
 
 @MainActor
@@ -1636,7 +1827,8 @@ private func makeViewModel(
     invalidationAckTimeoutMs: Int = LiveStoreRefreshPolicy.invalidationAckTimeoutMs,
     sessionLiveStoreOverride: (any SessionLiveStore)? = nil,
     sessionStatusLiveStoreOverride: (any SessionStatusLiveStore)? = nil,
-    sessionReadyStoreOverride: (any SessionReadyStore)? = nil
+    sessionReadyStoreOverride: (any SessionReadyStore)? = nil,
+    projectLoadTiming: ProjectLoadTiming = .standard
 ) -> ProjectListHomeViewModel {
     let eventStream = eventStream ?? FakeForegroundEventStream()
     // Mutations (createSession) require Connected; default fakes start Idle.
@@ -1676,7 +1868,8 @@ private func makeViewModel(
         sessionStatusLiveStore: sessionStatusLiveStore,
         sessionReadyStore: sessionReadyStore,
         connectionSessionCoordinator: coordinator,
-        addProjectListingDebounce: .zero
+        addProjectListingDebounce: .zero,
+        projectLoadTiming: projectLoadTiming
     )
 }
 
@@ -1924,6 +2117,7 @@ private final class FakeSessionRepository: SessionRepository, @unchecked Sendabl
     private var blockedListContinuation: CheckedContinuation<Void, Never>?
     private let listLock = NSLock()
     private var listSessionsCallCount = 0
+    private var listSessionsFailing = false
 
     var listCallCount: Int {
         listLock.lock()
@@ -1939,6 +2133,13 @@ private final class FakeSessionRepository: SessionRepository, @unchecked Sendabl
 
     func holdNextListSessions() {
         holdNextList = true
+    }
+
+    /// While set, `listSessions` throws (a server that cannot list this project).
+    func setListSessionsFailing(_ failing: Bool) {
+        listLock.lock()
+        listSessionsFailing = failing
+        listLock.unlock()
     }
 
     func resumeListSessions() {
@@ -1981,6 +2182,10 @@ private final class FakeSessionRepository: SessionRepository, @unchecked Sendabl
                 listLock.unlock()
             }
         }
+        listLock.lock()
+        let failing = listSessionsFailing
+        listLock.unlock()
+        if failing { throw TestError.message("List failed") }
         return sessions
     }
 
@@ -2137,11 +2342,16 @@ private func waitUntil(
 private final class ControllableSessionLiveStore: SessionLiveStore {
     private var latest: [String: SessionListSnapshot] = [:]
     private var continuations: [String: [UUID: AsyncStream<SessionListSnapshot>.Continuation]] = [:]
+    private(set) var invalidatedDirectories: [String?] = []
 
-    func emit(directory: String, sessions: [Session]) {
-        let snapshot = SessionListSnapshot(sessions: sessions)
+    func emit(directory: String, sessions: [Session], isFromCache: Bool = false, loadFailed: Bool = false) {
+        let snapshot = SessionListSnapshot(sessions: sessions, isFromCache: isFromCache, loadFailed: loadFailed)
         latest[directory] = snapshot
         continuations[directory]?.values.forEach { $0.yield(snapshot) }
+    }
+
+    func invalidate(directory: String?) async {
+        invalidatedDirectories.append(directory)
     }
 
     func observeSessions(directory: String) -> AsyncStream<SessionListSnapshot> {
@@ -2228,4 +2438,84 @@ private final class ControllableReadyStore: SessionReadyStore {
     func releaseFocusedSession(sessionID: String) {}
     func bindProfile(profileID: String?) {}
     func clearCache() {}
+}
+
+private extension ProjectLoadTiming {
+    /// Loading shows at once and clears at once; slow and timeout stay out of the way.
+    static let immediate = ProjectLoadTiming(grace: .zero, minimumVisible: .zero, slowThreshold: .seconds(60), timeout: .seconds(60))
+}
+
+private func projectLoadSession(_ id: String, directory: String) -> Session {
+    Session(id: id, title: id, slug: nil, projectID: nil, directory: directory, parentID: nil, updatedAtEpochMs: 1)
+}
+
+/// Controllable live stores for first-load tests, with `/one` already listed.
+@MainActor
+private final class ProjectLoadStores {
+    let sessions = ControllableSessionLiveStore()
+    let statuses = ControllableStatusLiveStore()
+    let ready = ControllableReadyStore()
+
+    init() {
+        sessions.emit(directory: "/one", sessions: [projectLoadSession("one-1", directory: "/one")])
+        statuses.emit(directory: "/one", statuses: [:])
+    }
+
+    func viewModel(initial: [String], timing: ProjectLoadTiming) -> ProjectListHomeViewModel {
+        makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            connectionProfileStore: FakeConnectionProfileStore(initial: initial),
+            sessionLiveStoreOverride: sessions,
+            sessionStatusLiveStoreOverride: statuses,
+            sessionReadyStoreOverride: ready,
+            projectLoadTiming: timing
+        )
+    }
+}
+
+@MainActor
+struct SessionLiveStoreLoadOutcomeTests {
+    @Test func failedServerLoadPublishesFailureAndLaterSuccessClearsIt() async {
+        let repository = FakeSessionRepository(sessions: [projectLoadSession("1", directory: "/repo")])
+        repository.setListSessionsFailing(true)
+        let eventStream = FakeForegroundEventStream()
+        eventStream.setConnectionState(.connected)
+        let store = DefaultSessionLiveStore(
+            sessionRepository: repository,
+            eventStream: eventStream,
+            sessionCache: NoOpSessionCache.shared
+        )
+        let collector = SessionListSnapshotCollector(stream: store.observeSessions(directory: "/repo"))
+        defer { collector.cancel() }
+
+        #expect(await waitUntil(timeoutMs: 3_000) { collector.snapshots.contains { $0.loadFailed } })
+        let failed = collector.snapshots.first { $0.loadFailed }
+        #expect(failed?.isFromCache == true)
+        #expect(failed?.sessions.isEmpty == true)
+
+        // The coordinator's backoff retry now succeeds.
+        repository.setListSessionsFailing(false)
+        #expect(await waitUntil(timeoutMs: 5_000) {
+            collector.snapshots.last.map { !$0.loadFailed && !$0.isFromCache } == true
+        })
+        #expect(collector.snapshots.last?.sessions.map(\.id) == ["1"])
+    }
+}
+
+@MainActor
+private final class SessionListSnapshotCollector {
+    private(set) var snapshots: [SessionListSnapshot] = []
+    private var task: Task<Void, Never>?
+
+    init(stream: AsyncStream<SessionListSnapshot>) {
+        task = Task { @MainActor [weak self] in
+            for await snapshot in stream {
+                self?.snapshots.append(snapshot)
+            }
+        }
+    }
+
+    func cancel() {
+        task?.cancel()
+    }
 }

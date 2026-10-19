@@ -1,12 +1,14 @@
 package dev.opencode.mobile.ui.main
 
 import dev.opencode.mobile.ui.components.SessionListFilterTab
+import dev.opencode.mobile.ui.components.SessionListScopeLoad
 
 object SessionListHomeChrome {
     data class Project(
         val worktree: String,
         val title: String,
         val sessionCount: Int,
+        val load: SessionListScopeLoad? = null,
     )
 
     sealed class NewSessionAction {
@@ -35,6 +37,7 @@ object SessionListHomeChrome {
                     worktree = project.worktree,
                     title = project.title,
                     count = project.sessionCount,
+                    load = project.load,
                 )
             }
         if (projects.size < 2) {

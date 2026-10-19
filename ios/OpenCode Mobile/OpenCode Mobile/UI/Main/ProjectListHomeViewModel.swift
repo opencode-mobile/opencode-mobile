@@ -277,6 +277,31 @@ struct HomeServersChrome: Equatable {
     var sheetVisible = false
 }
 
+/// First server load of a project added on home in this session, while it is outstanding.
+/// Absent once the load landed (including an empty project) or the project left home.
+enum ProjectLoadState: Equatable {
+    /// Still waiting on the server. `isSlow` after the slow threshold.
+    case loading(isSlow: Bool)
+    /// The server load failed or never answered; Retry asks again.
+    case failed(message: String)
+
+    static let failedMessage = "Couldn\u{2019}t load sessions"
+}
+
+/// Anti-flicker and safety timing for ``ProjectLoadState``. Tests inject short durations.
+struct ProjectLoadTiming: Equatable {
+    /// Loading is only exposed once the load has run this long.
+    var grace: Duration = .milliseconds(300)
+    /// Once exposed, loading stays at least this long before it clears.
+    var minimumVisible: Duration = .milliseconds(500)
+    /// After this long, loading reads as slow.
+    var slowThreshold: Duration = .seconds(4)
+    /// With no outcome by then, the load counts as failed.
+    var timeout: Duration = .seconds(30)
+
+    static let standard = ProjectLoadTiming()
+}
+
 enum ProjectListHomeState: Equatable {
     case disconnected
     case probing
@@ -311,6 +336,12 @@ final class ProjectListHomeViewModel {
     private var addProjectListingTask: Task<Void, Never>?
     private var addProjectListingsInFlight: Set<String> = []
     private let addProjectListingDebounce: Duration
+    /// Projects added this session whose first server load is outstanding, keyed by worktree.
+    /// Loading appears only after the grace delay; failures appear at once.
+    private(set) var projectLoadStates: [String: ProjectLoadState] = [:]
+    @ObservationIgnored private var projectLoads: [String: ProjectLoadTracker] = [:]
+    @ObservationIgnored private var projectLoadAttempt = 0
+    private let projectLoadTiming: ProjectLoadTiming
     private(set) var pendingProjectRemoval: ProjectRemovalItem?
     /// Shared home snackbar: project removal plus archive / delete failures.
     private(set) var removalSnackbar: OpenCodeSnackbarMessage?
@@ -372,10 +403,12 @@ final class ProjectListHomeViewModel {
         sessionCache: any SessionCache = NoOpSessionCache.shared,
         liveUpdates: any LiveUpdates = FixedLiveUpdates(),
         addProjectListingDebounce: Duration = .milliseconds(250),
+        projectLoadTiming: ProjectLoadTiming = .standard,
         worktreeRepository: any WorktreeRepository = UnavailableWorktreeRepository(),
         foregroundEventStream: (any ForegroundEventStream)? = nil
     ) {
         self.addProjectListingDebounce = addProjectListingDebounce
+        self.projectLoadTiming = projectLoadTiming
         self.projectRepository = projectRepository
         self.filesystemRepository = filesystemRepository
         self.sessionRepository = sessionRepository
@@ -430,12 +463,14 @@ final class ProjectListHomeViewModel {
         sessionReadyStore.bindProfile(profileID: activeConnectionManager.currentProfile()?.id)
         connectionSessionCoordinator.onProfileSaved { [weak self] in
             Task { @MainActor in
+                self?.clearProjectLoads()
                 self?.stopLiveObservations()
                 await self?.refresh()
             }
         }
         connectionSessionCoordinator.onProfileCleared { [weak self] in
             Task { @MainActor in
+                self?.clearProjectLoads()
                 self?.stopLiveObservations()
                 self?.worktreeMarks.onDisconnected()
                 self?.worktreeInventories.removeAll()
@@ -679,14 +714,28 @@ final class ProjectListHomeViewModel {
             // open-project behavior). Non-git dirs resolve /project/current to "/".
             _ = try await projectRepository.getCurrentProject(directory: worktree)
             await connectionProfileStore.addWorktree(serverBaseURL: serverBaseURL, worktree: worktree)
+            beginProjectLoad(worktree, showImmediately: false)
             dismissAddProjectSheet()
             await runHomeLoad(skipProbe: true)
+            // A newly added project always takes the scope, even from All.
+            pendingSelectedFilterOverridesAll = true
             pendingSelectedFilterId = worktree
         } catch {
             addProjectInputs.isValidating = false
             addProjectInputs.fieldError = error.localizedDescription
             publishAddProjectSheet()
         }
+    }
+
+    /// Retry from a project's failed first load: shows loading again and refetches its sessions.
+    func retryProjectLoad(worktree: String) async {
+        guard projectLoads[worktree] != nil else { return }
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.home,
+            actionId: ProductAnalytics.Action.homeRetryProjectLoad
+        )
+        beginProjectLoad(worktree, showImmediately: true)
+        await sessionLiveStore.invalidate(directory: worktree)
     }
 
     func createSession(in worktree: String) async {
@@ -716,6 +765,8 @@ final class ProjectListHomeViewModel {
 
     private(set) var pendingSessionOpen: SessionListItem?
     private(set) var pendingSelectedFilterId: String?
+    /// True when `pendingSelectedFilterId` must replace the All scope too (a newly added project).
+    private(set) var pendingSelectedFilterOverridesAll = false
     private(set) var revealNewestToken = 0
     private var lastHomeHiddenAtEpochMs: Int64?
 
@@ -725,6 +776,7 @@ final class ProjectListHomeViewModel {
 
     func consumePendingSelectedFilter() {
         pendingSelectedFilterId = nil
+        pendingSelectedFilterOverridesAll = false
     }
 
     func markHomeHidden(nowEpochMs: Int64 = Int64(Date().timeIntervalSince1970 * 1000)) {
@@ -812,6 +864,7 @@ final class ProjectListHomeViewModel {
         )
         await connectionProfileStore.removeWorktree(serverBaseURL: serverBaseURL, worktree: pending.worktree)
         await sessionCache.purgeWorktree(serverBaseURL: serverBaseURL, worktree: pending.worktree)
+        clearProjectLoad(pending.worktree)
         pendingProjectRemoval = nil
         await runHomeLoad(skipProbe: true)
         removalSnackbar = OpenCodeSnackbarMessage(text: "Removed \"\(pending.displayName)\" from home")
@@ -1030,12 +1083,16 @@ final class ProjectListHomeViewModel {
 
     private func runHomeLoad(skipProbe: Bool = false, preserveContent: Bool = false) async {
         guard activeConnectionManager.connection != nil else {
+            clearProjectLoads()
             stopLiveObservations()
             state = .disconnected
             return
         }
 
         let worktrees = await connectionProfileStore.addedWorktrees(serverBaseURL: serverBaseURL)
+        for worktree in projectLoads.keys where !worktrees.contains(worktree) {
+            clearProjectLoad(worktree)
+        }
 
         // Disk-first home: local worktrees + Session Cache paint .loaded
         // without .probing/.loading. Live store then SWR-refreshes.
@@ -1483,6 +1540,8 @@ final class ProjectListHomeViewModel {
                 for await snapshot in self.sessionLiveStore.observeSessions(directory: worktree) {
                     self.liveSessionsByWorktree[worktree] = snapshot
                     self.applyLiveUpdate(worktree: worktree)
+                    // Straight from the session list: the combined update waits on all three streams.
+                    self.noteProjectLoad(worktree: worktree, snapshot: snapshot)
                 }
             }
             group.addTask { @MainActor in
@@ -1498,6 +1557,123 @@ final class ProjectListHomeViewModel {
                 }
             }
         }
+    }
+
+    // MARK: - First project load
+
+    private func beginProjectLoad(_ worktree: String, showImmediately: Bool) {
+        projectLoads[worktree]?.timers.forEach { $0.cancel() }
+        projectLoadAttempt += 1
+        let attempt = projectLoadAttempt
+        var tracker = ProjectLoadTracker(attempt: attempt)
+        if showImmediately {
+            tracker.shownAt = .now
+            setProjectLoadState(worktree, .loading(isSlow: false))
+        } else {
+            setProjectLoadState(worktree, nil)
+        }
+        let timing = projectLoadTiming
+        tracker.timers = [
+            projectLoadTimer(worktree, attempt: attempt, after: timing.grace) { $0.exposeProjectLoad(worktree) },
+            projectLoadTimer(worktree, attempt: attempt, after: timing.slowThreshold) { $0.markProjectLoadSlow(worktree) },
+            projectLoadTimer(worktree, attempt: attempt, after: timing.timeout) { $0.failProjectLoad(worktree) },
+        ]
+        projectLoads[worktree] = tracker
+    }
+
+    private func projectLoadTimer(
+        _ worktree: String,
+        attempt: Int,
+        after delay: Duration,
+        fire: @escaping @MainActor (ProjectListHomeViewModel) -> Void
+    ) -> Task<Void, Never> {
+        Task { @MainActor [weak self] in
+            if delay > .zero {
+                try? await Task.sleep(for: delay)
+            } else {
+                await Task.yield()
+            }
+            guard !Task.isCancelled, let self, self.projectLoads[worktree]?.attempt == attempt else { return }
+            fire(self)
+        }
+    }
+
+    private func exposeProjectLoad(_ worktree: String) {
+        guard var tracker = projectLoads[worktree], tracker.isPending, tracker.shownAt == nil else { return }
+        tracker.shownAt = .now
+        projectLoads[worktree] = tracker
+        setProjectLoadState(worktree, .loading(isSlow: tracker.isSlow))
+    }
+
+    private func markProjectLoadSlow(_ worktree: String) {
+        guard var tracker = projectLoads[worktree], tracker.isPending else { return }
+        tracker.isSlow = true
+        projectLoads[worktree] = tracker
+        if tracker.shownAt != nil {
+            setProjectLoadState(worktree, .loading(isSlow: true))
+        }
+    }
+
+    private func failProjectLoad(_ worktree: String) {
+        guard var tracker = projectLoads[worktree], tracker.isPending else { return }
+        tracker.timers.forEach { $0.cancel() }
+        tracker.timers = []
+        tracker.failed = true
+        projectLoads[worktree] = tracker
+        setProjectLoadState(worktree, .failed(message: ProjectLoadState.failedMessage))
+    }
+
+    /// The first server list landed. Loading that was on screen stays for its minimum time.
+    private func completeProjectLoad(_ worktree: String) {
+        guard var tracker = projectLoads[worktree], !tracker.completing else { return }
+        tracker.timers.forEach { $0.cancel() }
+        tracker.timers = []
+        let remaining = tracker.failed ? nil : tracker.shownAt.map { projectLoadTiming.minimumVisible - $0.duration(to: .now) }
+        guard let remaining, remaining > .zero else {
+            clearProjectLoad(worktree)
+            return
+        }
+        tracker.completing = true
+        tracker.timers = [
+            projectLoadTimer(worktree, attempt: tracker.attempt, after: remaining) { $0.clearProjectLoad(worktree) },
+        ]
+        projectLoads[worktree] = tracker
+    }
+
+    private func noteProjectLoad(worktree: String, snapshot: SessionListSnapshot) {
+        guard let tracker = projectLoads[worktree], !tracker.completing else { return }
+        if snapshot.loadFailed {
+            failProjectLoad(worktree)
+        } else if !snapshot.isFromCache {
+            // Rows land with the load even when status or ready ids have not emitted yet.
+            if liveStatusesByWorktree[worktree] == nil || liveReadyIdsByWorktree[worktree] == nil {
+                updateSectionFromLiveData(
+                    worktree: worktree,
+                    sessions: snapshot.sessions,
+                    readyIds: liveReadyIdsByWorktree[worktree] ?? [],
+                    sessionsFromCache: false
+                )
+            }
+            completeProjectLoad(worktree)
+        }
+    }
+
+    private func clearProjectLoad(_ worktree: String) {
+        projectLoads.removeValue(forKey: worktree)?.timers.forEach { $0.cancel() }
+        setProjectLoadState(worktree, nil)
+    }
+
+    private func clearProjectLoads() {
+        projectLoads.values.forEach { $0.timers.forEach { $0.cancel() } }
+        projectLoads = [:]
+        if !projectLoadStates.isEmpty {
+            projectLoadStates = [:]
+        }
+    }
+
+    private func setProjectLoadState(_ worktree: String, _ loadState: ProjectLoadState?) {
+        guard projectLoadStates[worktree] != loadState else { return }
+        projectLoadStates[worktree] = loadState
     }
 
     private func applyLiveUpdate(worktree: String) {
@@ -1601,4 +1777,18 @@ final class ProjectListHomeViewModel {
         }
     }
 
+}
+
+/// Bookkeeping for one project's first load; ``ProjectLoadState`` is what the UI sees.
+private struct ProjectLoadTracker {
+    let attempt: Int
+    /// When loading became visible; nil while inside the grace delay.
+    var shownAt: ContinuousClock.Instant?
+    var isSlow = false
+    var failed = false
+    /// Loaded; only the minimum-visible hold is left.
+    var completing = false
+    var timers: [Task<Void, Never>] = []
+
+    var isPending: Bool { !failed && !completing }
 }

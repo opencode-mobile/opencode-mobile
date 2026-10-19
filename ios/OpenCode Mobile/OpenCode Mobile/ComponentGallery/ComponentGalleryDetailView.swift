@@ -186,6 +186,8 @@ struct ComponentGalleryDetailView: View {
             SessionListGalleryView()
         case .sessionListDock:
             SessionListDockGalleryView()
+        case .sessionListSkeleton:
+            SessionListSkeletonGalleryView()
         case .sessionStatusBar:
             SessionStatusBarGalleryView()
         case .sessionComposer:

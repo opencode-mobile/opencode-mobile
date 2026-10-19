@@ -65,6 +65,7 @@ enum ComponentGalleryEntryID: String, Hashable {
     case codeSnippet
     case sessionList
     case sessionListDock
+    case sessionListSkeleton
     case sessionStatusBar
     case sessionBranchPill
     case sessionComposer
@@ -368,6 +369,12 @@ let componentGalleryEntries = [
         id: .sessionListDock,
         title: "Session List Dock",
         description: "Scope control and Add project / New session actions.",
+        category: .session
+    ),
+    ComponentGalleryEntry(
+        id: .sessionListSkeleton,
+        title: "Session List Skeleton",
+        description: "Shimmering session-row placeholders while a project's sessions load, with an optional slow caption.",
         category: .session
     ),
     ComponentGalleryEntry(

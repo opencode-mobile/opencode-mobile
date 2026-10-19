@@ -5,6 +5,8 @@ enum SessionListHomeChrome {
         let worktree: String
         let title: String
         let sessionCount: Int
+        /// First load still outstanding (loading or failed).
+        var load: SessionListScopeLoad? = nil
     }
 
     enum NewSessionAction: Equatable {
@@ -23,7 +25,8 @@ enum SessionListHomeChrome {
             SessionListFilterTab.project(
                 worktree: project.worktree,
                 title: project.title,
-                count: project.sessionCount
+                count: project.sessionCount,
+                load: project.load
             )
         }
         guard projects.count >= 2 else {
@@ -67,5 +70,14 @@ enum SessionListHomeChrome {
             return .none
         }
         return .presentPicker
+    }
+}
+
+extension ProjectLoadState {
+    var scopeLoad: SessionListScopeLoad {
+        switch self {
+        case let .loading(isSlow): .loading(isSlow: isSlow)
+        case let .failed(message): .failed(message: message)
+        }
     }
 }

@@ -62,6 +62,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flowOf
@@ -868,7 +869,7 @@ class MainScreenViewModelTest {
             assertTrue(projectRepository.validatedDirectories.contains("/home"))
             assertTrue(!loaded.showAddProjectSheet)
             assertNull(loaded.addProjectSheet)
-            assertEquals("/home", viewModel.pendingSelectedFilterId.value)
+            assertEquals(HomeScopeRequest(filterId = "/home", evenFromAll = true), viewModel.pendingScopeRequest.value)
         }
 
     @Test
@@ -893,7 +894,7 @@ class MainScreenViewModelTest {
 
             assertEquals(listOf("/one", "/srv/web"), store.added(serverUrl))
             assertTrue(projectRepository.validatedDirectories.contains("/srv/web"))
-            assertEquals("/srv/web", viewModel.pendingSelectedFilterId.value)
+            assertEquals(HomeScopeRequest(filterId = "/srv/web", evenFromAll = true), viewModel.pendingScopeRequest.value)
         }
 
     @Test
@@ -916,9 +917,235 @@ class MainScreenViewModelTest {
             // Already-added path skips GET /project/current validation before reload.
             // Disk-first home paints from Session Cache and does not revalidate directories.
             assertTrue(projectRepository.validatedDirectories.isEmpty())
-            assertEquals("/two", viewModel.pendingSelectedFilterId.value)
+            assertEquals(HomeScopeRequest(filterId = "/two", evenFromAll = false), viewModel.pendingScopeRequest.value)
             assertEquals("\"two\" is already on home", viewModel.removalSnackbar.value?.text)
         }
+
+    @Test
+    fun addProject_switchesScopeFromAll_showsLoadingAfterGrace_thenRows() =
+        runTest(testDispatcher) {
+            val (viewModel, repository) =
+                viewModelWithOneProject(
+                    newSessions = listOf(Session(id = "n1", title = "N1", updatedAtEpochMs = 2L)),
+                )
+            val gate = CompletableDeferred<Unit>()
+            repository.listGates["/new"] = gate
+
+            viewModel.addProject("/new")
+            runCurrent()
+
+            assertEquals(HomeScopeRequest(filterId = "/new", evenFromAll = true), viewModel.pendingScopeRequest.value)
+            assertTrue("loading stays hidden inside the grace delay", loaded(viewModel).projectLoads.isEmpty())
+
+            advanceTimeBy(ProjectFirstLoadTiming.DEFAULT_GRACE_MS + 1)
+            assertEquals(ProjectFirstLoad.Loading(isSlow = false), loaded(viewModel).projectLoads["/new"])
+
+            gate.complete(Unit)
+            runCurrent()
+            assertEquals(
+                "loading stays for its minimum time once shown",
+                ProjectFirstLoad.Loading(isSlow = false),
+                loaded(viewModel).projectLoads["/new"],
+            )
+
+            advanceTimeBy(ProjectFirstLoadTiming.DEFAULT_MINIMUM_VISIBLE_MS)
+            runCurrent()
+            assertTrue(loaded(viewModel).projectLoads.isEmpty())
+            assertEquals(listOf("n1"), section(viewModel, "/new").allSessions.map { it.id })
+        }
+
+    @Test
+    fun addProject_loadInsideGrace_neverExposesLoading() =
+        runTest(testDispatcher) {
+            val (viewModel, _) = viewModelWithOneProject(newSessions = listOf(Session(id = "n1", title = "N1", updatedAtEpochMs = 2L)))
+            val exposed = mutableListOf<Map<String, ProjectFirstLoad>>()
+            backgroundScope.launch {
+                viewModel.uiState.collect { state -> (state as? MainScreenUiState.Loaded)?.let { exposed += it.projectLoads } }
+            }
+
+            viewModel.addProject("/new")
+            advanceUntilIdle()
+
+            assertTrue(exposed.isNotEmpty())
+            assertTrue("never exposed: $exposed", exposed.all { it.isEmpty() })
+            assertEquals(listOf("n1"), section(viewModel, "/new").allSessions.map { it.id })
+        }
+
+    @Test
+    fun addProject_zeroSessions_clearsLoadingWithoutRows() =
+        runTest(testDispatcher) {
+            val (viewModel, repository) = viewModelWithOneProject(newSessions = emptyList())
+            val gate = CompletableDeferred<Unit>()
+            repository.listGates["/new"] = gate
+
+            viewModel.addProject("/new")
+            advanceTimeBy(ProjectFirstLoadTiming.DEFAULT_GRACE_MS + 1)
+            assertEquals(ProjectFirstLoad.Loading(isSlow = false), loaded(viewModel).projectLoads["/new"])
+
+            gate.complete(Unit)
+            advanceTimeBy(ProjectFirstLoadTiming.DEFAULT_MINIMUM_VISIBLE_MS + 1)
+
+            assertTrue(loaded(viewModel).projectLoads.isEmpty())
+            assertTrue(section(viewModel, "/new").allSessions.isEmpty())
+        }
+
+    @Test
+    fun addProject_storeFailure_failsThenRetryLoads() =
+        runTest(testDispatcher) {
+            val (viewModel, repository) =
+                viewModelWithOneProject(
+                    newSessions = listOf(Session(id = "n1", title = "N1", updatedAtEpochMs = 2L)),
+                )
+            repository.listErrors["/new"] = IllegalStateException("list failed")
+
+            viewModel.addProject("/new")
+            advanceTimeBy(ProjectFirstLoadTiming.DEFAULT_GRACE_MS + 1)
+            assertEquals(
+                ProjectFirstLoad.Failed(ProjectFirstLoad.FAILED_MESSAGE),
+                loaded(viewModel).projectLoads["/new"],
+            )
+
+            repository.listErrors.clear()
+            val gate = CompletableDeferred<Unit>()
+            repository.listGates["/new"] = gate
+            viewModel.retryProjectLoad("/new")
+            runCurrent()
+            assertEquals(ProjectFirstLoad.Loading(isSlow = false), loaded(viewModel).projectLoads["/new"])
+
+            gate.complete(Unit)
+            advanceTimeBy(ProjectFirstLoadTiming.DEFAULT_MINIMUM_VISIBLE_MS + 1)
+            assertTrue(loaded(viewModel).projectLoads.isEmpty())
+            assertEquals(listOf("n1"), section(viewModel, "/new").allSessions.map { it.id })
+        }
+
+    @Test
+    fun addProject_longLoadTurnsSlow() =
+        runTest(testDispatcher) {
+            val (viewModel, repository) = viewModelWithOneProject(newSessions = emptyList())
+            val gate = CompletableDeferred<Unit>()
+            repository.listGates["/new"] = gate
+
+            viewModel.addProject("/new")
+            advanceTimeBy(ProjectFirstLoadTiming.DEFAULT_SLOW_AFTER_MS - 1)
+            assertEquals(ProjectFirstLoad.Loading(isSlow = false), loaded(viewModel).projectLoads["/new"])
+            advanceTimeBy(2)
+            assertEquals(ProjectFirstLoad.Loading(isSlow = true), loaded(viewModel).projectLoads["/new"])
+
+            gate.complete(Unit)
+            advanceUntilIdle()
+            assertTrue(loaded(viewModel).projectLoads.isEmpty())
+        }
+
+    @Test
+    fun addProject_safetyTimeoutFails_thenLateSuccessLoads() =
+        runTest(testDispatcher) {
+            val timing = ProjectFirstLoadTiming(graceMs = 0, minimumVisibleMs = 0, slowAfterMs = 100, timeoutMs = 1_000)
+            val (viewModel, repository) =
+                viewModelWithOneProject(
+                    newSessions = listOf(Session(id = "n1", title = "N1", updatedAtEpochMs = 2L)),
+                    timing = timing,
+                )
+            val gate = CompletableDeferred<Unit>()
+            repository.listGates["/new"] = gate
+
+            viewModel.addProject("/new")
+            advanceTimeBy(150)
+            assertEquals(ProjectFirstLoad.Loading(isSlow = true), loaded(viewModel).projectLoads["/new"])
+            advanceTimeBy(1_000)
+            assertEquals(
+                ProjectFirstLoad.Failed(ProjectFirstLoad.FAILED_MESSAGE),
+                loaded(viewModel).projectLoads["/new"],
+            )
+
+            gate.complete(Unit)
+            advanceUntilIdle()
+            assertTrue(loaded(viewModel).projectLoads.isEmpty())
+            assertEquals(listOf("n1"), section(viewModel, "/new").allSessions.map { it.id })
+        }
+
+    @Test
+    fun addProject_firstServerSnapshotPaintsRowsWhileStatusIsSilent() =
+        runTest(testDispatcher) {
+            val repository =
+                FakeSessionRepository(
+                    mutableMapOf(
+                        "/one" to listOf(Session(id = "a", title = "A", updatedAtEpochMs = 1L)),
+                        "/new" to
+                            listOf(
+                                Session(id = "n1", title = "N1", updatedAtEpochMs = 3L),
+                                Session(id = "n2", title = "N2", updatedAtEpochMs = 2L),
+                                Session(id = "n3", title = "N3", updatedAtEpochMs = 1L),
+                            ),
+                    ),
+                )
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/one")),
+                    sessionRepository = repository,
+                    statusLiveStoreOverride = SilentHomeStatusLiveStore(),
+                )
+            advanceUntilIdle()
+            val gate = CompletableDeferred<Unit>()
+            repository.listGates["/new"] = gate
+
+            viewModel.addProject("/new")
+            advanceTimeBy(ProjectFirstLoadTiming.DEFAULT_GRACE_MS + 1)
+            assertEquals(ProjectFirstLoad.Loading(isSlow = false), loaded(viewModel).projectLoads["/new"])
+
+            gate.complete(Unit)
+            advanceTimeBy(ProjectFirstLoadTiming.DEFAULT_MINIMUM_VISIBLE_MS + 1)
+
+            assertTrue(loaded(viewModel).projectLoads.isEmpty())
+            val newSection = section(viewModel, "/new")
+            assertEquals(listOf("n1", "n2", "n3"), newSection.allSessions.map { it.id })
+            assertFalse(newSection.sessionsFromCache)
+        }
+
+    @Test
+    fun removeProject_clearsItsFirstLoad() =
+        runTest(testDispatcher) {
+            val (viewModel, repository) = viewModelWithOneProject(newSessions = emptyList())
+            val gate = CompletableDeferred<Unit>()
+            repository.listGates["/new"] = gate
+            viewModel.addProject("/new")
+            advanceTimeBy(ProjectFirstLoadTiming.DEFAULT_GRACE_MS + 1)
+            assertEquals(ProjectFirstLoad.Loading(isSlow = false), loaded(viewModel).projectLoads["/new"])
+
+            viewModel.requestRemoveProject("/new")
+            viewModel.confirmRemoveProject()
+            advanceTimeBy(ProjectFirstLoadTiming.DEFAULT_TIMEOUT_MS + 1)
+
+            assertTrue(loaded(viewModel).projectLoads.isEmpty())
+            gate.complete(Unit)
+        }
+
+    private fun kotlinx.coroutines.test.TestScope.viewModelWithOneProject(
+        newSessions: List<Session>,
+        timing: ProjectFirstLoadTiming = ProjectFirstLoadTiming(),
+    ): Pair<MainScreenViewModel, FakeSessionRepository> {
+        val repository =
+            FakeSessionRepository(
+                mutableMapOf(
+                    "/one" to listOf(Session(id = "a", title = "A", updatedAtEpochMs = 1L)),
+                    "/new" to newSessions,
+                ),
+            )
+        val viewModel =
+            createViewModel(
+                connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/one")),
+                sessionRepository = repository,
+                projectFirstLoadTiming = timing,
+            )
+        advanceUntilIdle()
+        return viewModel to repository
+    }
+
+    private fun loaded(viewModel: MainScreenViewModel): MainScreenUiState.Loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+
+    private fun section(
+        viewModel: MainScreenViewModel,
+        worktree: String,
+    ): ProjectSectionUi = loaded(viewModel).sections.single { it.worktree == worktree }
 
     @Test
     fun confirmAddProject_persistsSelectedPathEvenWhenCurrentResolvesGlobal() =
@@ -1011,7 +1238,7 @@ class MainScreenViewModelTest {
             assertEquals("not a project", loaded.addProjectSheet?.fieldError)
             assertFalse(loaded.addProjectSheet?.isValidating == true)
             assertTrue(loaded.addProjectSheet?.addEnabled == true)
-            assertNull(viewModel.pendingSelectedFilterId.value)
+            assertNull(viewModel.pendingScopeRequest.value)
 
             viewModel.updateAddProjectField("/home/x")
             assertNull(currentSheet(viewModel)?.fieldError)
@@ -1931,6 +2158,7 @@ class MainScreenViewModelTest {
         readyStoreOverride: SessionReadyStore? = null,
         serverProtocol: ServerProtocol? = null,
         sessionCache: SessionCache = NoOpSessionCache,
+        projectFirstLoadTiming: ProjectFirstLoadTiming = ProjectFirstLoadTiming(),
         modelRepository: ModelRepository =
             object : ModelRepository {
                 override suspend fun listModelOptions(directory: String?): ModelSelectionCatalog = ModelSelectionCatalog(emptyList(), null)
@@ -2007,6 +2235,7 @@ class MainScreenViewModelTest {
             activeConnectionManager = activeConnectionManager,
             connectionSessionCoordinator = coordinator,
             sessionCache = sessionCache,
+            projectFirstLoadTiming = projectFirstLoadTiming,
         )
     }
 }
@@ -2063,6 +2292,10 @@ private class FakeSessionRepository(
 ) : SessionRepository {
     var listSessionsCallCount = 0
     var nextListGate: CompletableDeferred<Unit>? = null
+
+    /** Per-directory list hooks: a gate holds that directory's list call, an error fails it. */
+    val listGates = mutableMapOf<String, CompletableDeferred<Unit>>()
+    val listErrors = mutableMapOf<String, Throwable>()
     val createdDirectories = mutableListOf<String?>()
     val renamedTitles = mutableListOf<Pair<String, String?>>()
     val archivedIds = mutableListOf<String>()
@@ -2075,6 +2308,8 @@ private class FakeSessionRepository(
             nextListGate = null
             it.await()
         }
+        directory?.let { listGates.remove(it) }?.await()
+        directory?.let { listErrors[it] }?.let { throw it }
         return sessionsByWorktree[directory].orEmpty()
     }
 
@@ -2396,6 +2631,13 @@ private class FakeSessionModelSelectionStore : SessionModelSelectionStore {
     ) {
         preferences["${connectionIdentity.serverBaseUrl}|${connectionIdentity.username}|$worktree"] = selection
     }
+}
+
+/** Status store whose stream never emits, so the combined Home stream stays gated. */
+private class SilentHomeStatusLiveStore : SessionStatusLiveStore {
+    override fun observeActivity(directory: String): Flow<SessionActivitySnapshot> = MutableSharedFlow()
+
+    override fun clearCache() = Unit
 }
 
 private class FakeHomeStatusLiveStore(
