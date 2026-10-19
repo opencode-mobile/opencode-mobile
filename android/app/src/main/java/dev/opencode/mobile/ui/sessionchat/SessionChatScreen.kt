@@ -995,8 +995,7 @@ fun SessionChatScreen(
                                             uiState.composer.followUpDelivery.takeIf {
                                                 uiState.composer.supportsFollowUpDelivery
                                             },
-                                        showDictationButton =
-                                            uiState.composerDictationEnabled && dictationSupport.showsMic,
+                                        showDictationButton = dictationSupport.showsMic,
                                     )
                             }
                         val composerFocus = rememberOpenCodeSessionComposerFocus()

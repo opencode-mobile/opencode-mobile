@@ -9,13 +9,11 @@ nonisolated final class SessionChatDisplayPreferences {
     static let defaultCollapseConsecutiveToolCalls = true
     static let defaultChipTimeline = false
     static let defaultFollowUpDelivery = FollowUpDelivery.steer
-    static let defaultComposerDictation = false
 
     private enum StorageKeys {
         static let collapseConsecutiveToolCalls = "collapseConsecutiveToolCalls"
         static let chipTimeline = "chipTimeline"
         static let followUpDelivery = "followUpDelivery"
-        static let composerDictation = "composerDictation"
         static let chipTimelineIntroDone = "chipTimelineIntroDone"
         static let chipTimelineIntroSnoozedUntilMs = "chipTimelineIntroSnoozedUntilMs"
     }
@@ -51,9 +49,6 @@ nonisolated final class SessionChatDisplayPreferences {
 
     private(set) var followUpDelivery: FollowUpDelivery
 
-    /// Composer microphone. Off until the user turns it on in Settings.
-    private(set) var composerDictation: Bool
-
     init(defaults: UserDefaults = .standard, featureFlags: FeatureFlags = .shared) {
         self.defaults = defaults
         self.featureFlags = featureFlags
@@ -69,11 +64,6 @@ nonisolated final class SessionChatDisplayPreferences {
         }
         followUpDelivery = FollowUpDelivery.fromWire(defaults.string(forKey: StorageKeys.followUpDelivery))
             ?? Self.defaultFollowUpDelivery
-        if defaults.object(forKey: StorageKeys.composerDictation) == nil {
-            composerDictation = Self.defaultComposerDictation
-        } else {
-            composerDictation = defaults.bool(forKey: StorageKeys.composerDictation)
-        }
         chipTimelineIntroDone = defaults.bool(forKey: StorageKeys.chipTimelineIntroDone)
         chipTimelineIntroSnoozedUntilMs =
             (defaults.object(forKey: StorageKeys.chipTimelineIntroSnoozedUntilMs) as? NSNumber)?.int64Value
@@ -137,22 +127,15 @@ nonisolated final class SessionChatDisplayPreferences {
         defaults.set(value.wireValue, forKey: StorageKeys.followUpDelivery)
     }
 
-    func setComposerDictation(_ value: Bool) {
-        composerDictation = value
-        defaults.set(value, forKey: StorageKeys.composerDictation)
-    }
-
     func clear() {
         defaults.removeObject(forKey: StorageKeys.collapseConsecutiveToolCalls)
         defaults.removeObject(forKey: StorageKeys.chipTimeline)
         defaults.removeObject(forKey: StorageKeys.followUpDelivery)
-        defaults.removeObject(forKey: StorageKeys.composerDictation)
         defaults.removeObject(forKey: StorageKeys.chipTimelineIntroDone)
         defaults.removeObject(forKey: StorageKeys.chipTimelineIntroSnoozedUntilMs)
         collapseConsecutiveToolCalls = Self.defaultCollapseConsecutiveToolCalls
         chipTimelinePreference = Self.defaultChipTimeline
         followUpDelivery = Self.defaultFollowUpDelivery
-        composerDictation = Self.defaultComposerDictation
         chipTimelineIntroDone = false
         chipTimelineIntroSnoozedUntilMs = nil
     }

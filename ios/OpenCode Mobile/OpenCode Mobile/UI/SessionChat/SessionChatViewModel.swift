@@ -296,7 +296,6 @@ final class SessionChatViewModel {
     }
 
     func beginDictation(languageLabel: String, onDevice: Bool) {
-        guard SessionChatDisplayPreferences.shared.composerDictation else { return }
         discardDictationInsert()
         dictation = ComposerDictationUiState(
             phase: .listening,
@@ -312,7 +311,6 @@ final class SessionChatViewModel {
     }
 
     func beginDictationUnavailable(_ phase: ComposerDictationPhase, message: String? = nil) {
-        guard SessionChatDisplayPreferences.shared.composerDictation else { return }
         // A recognizer error can arrive after Insert has already been confirmed.
         // Dropping the card here would cancel the splice.
         guard dictation?.phase != .finishing else { return }
@@ -1084,7 +1082,6 @@ final class SessionChatViewModel {
         withObservationTracking {
             _ = SessionChatDisplayPreferences.shared.collapseConsecutiveToolCalls
             _ = SessionChatDisplayPreferences.shared.chipTimeline
-            _ = SessionChatDisplayPreferences.shared.composerDictation
         } onChange: { [weak self] in
             Task { @MainActor in
                 guard let self, self.collapsePreferenceGeneration == generation else { return }
@@ -1092,9 +1089,6 @@ final class SessionChatViewModel {
                     SessionChatDisplayPreferences.shared.collapseConsecutiveToolCalls
                 )
                 self.timeline.updateChipTimeline(SessionChatDisplayPreferences.shared.chipTimeline)
-                if !SessionChatDisplayPreferences.shared.composerDictation {
-                    self.cancelDictationCard()
-                }
                 self.publishUiState()
                 self.observeCollapsePreference()
             }
@@ -1562,7 +1556,6 @@ final class SessionChatViewModel {
             hasPendingRevert: commandsState.hasPendingRevert,
             expandedStepParagraphs: expandedStepParagraphs,
             chipTimelineIntroVisible: chipTimelineIntroVisible,
-            composerDictationEnabled: SessionChatDisplayPreferences.shared.composerDictation,
             dictation: dictation
         )
     }

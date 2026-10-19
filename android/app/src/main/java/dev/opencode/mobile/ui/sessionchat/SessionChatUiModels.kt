@@ -235,8 +235,6 @@ data class SessionChatUiState(
     val expandedStepParagraphs: Map<String, Int> = emptyMap(),
     /** One-time Chip timeline intro sheet (OPE-270). */
     val chipTimelineIntroVisible: Boolean = false,
-    /** Settings gate for the composer mic. Off until the user turns it on. */
-    val composerDictationEnabled: Boolean = false,
     /** Null while idle. A value shows the dictation card in place of prompt entry. */
     val dictation: ComposerDictationUiState? = null,
 ) {

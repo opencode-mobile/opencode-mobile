@@ -194,7 +194,7 @@ struct FeedbackViewModelTests {
     }
 
     @Test func dictationInsert_splicesTheTranscriptAtTheCursor() {
-        let model = makeModel(dictationEnabled: true)
+        let model = makeModel()
         model.dictationFinishDelayNs = 0
         model.updateMessage("Hello world", cursor: 5)
 
@@ -209,7 +209,7 @@ struct FeedbackViewModelTests {
     }
 
     @Test func dictation_morphsTheSheetIntoListening() {
-        let model = makeModel(dictationEnabled: true)
+        let model = makeModel()
         #expect(model.uiState.sheetTitle == "Report a problem")
         #expect(model.uiState.dictationTakesOverCompose == false)
 
@@ -225,7 +225,7 @@ struct FeedbackViewModelTests {
     }
 
     @Test func dictationUnavailable_takesOverWithoutTheListeningTitle() {
-        let model = makeModel(dictationEnabled: true)
+        let model = makeModel()
 
         model.beginDictationUnavailable(.permissionDenied, message: "Microphone access is off")
 
@@ -234,7 +234,7 @@ struct FeedbackViewModelTests {
     }
 
     @Test func dictationInsert_keepsTheListeningTitleWhileFinishing() {
-        let model = makeModel(dictationEnabled: true)
+        let model = makeModel()
         model.dictationFinishDelayNs = 60_000_000_000
         model.beginDictation(languageLabel: "English", onDevice: true)
         model.dictationPartial(committed: "hi", volatile: "")
@@ -245,15 +245,6 @@ struct FeedbackViewModelTests {
         #expect(model.uiState.sheetTitle == "Listening")
         #expect(model.uiState.dictationTakesOverCompose == true)
         model.dictationCancel()
-    }
-
-    @Test func dictation_staysOffWhenTheSettingIsOff() {
-        let model = makeModel(dictationEnabled: false)
-
-        model.beginDictation(languageLabel: "English", onDevice: true)
-
-        #expect(model.uiState.composerDictationEnabled == false)
-        #expect(model.uiState.dictation == nil)
     }
 
     @Test func errorCopy_matchesTheContract() {
@@ -280,8 +271,7 @@ struct FeedbackViewModelTests {
         cooldown: MemoryCooldownStore = MemoryCooldownStore(),
         logBuffer: DiagnosticLogBuffer? = nil,
         clock: TestClock = TestClock(),
-        reportIDs: [String] = ["1f0de9c2-7a41-4b8e-9d3f-0c5e6a7b8c9d"],
-        dictationEnabled: Bool = false
+        reportIDs: [String] = ["1f0de9c2-7a41-4b8e-9d3f-0c5e6a7b8c9d"]
     ) -> FeedbackViewModel {
         let buffer = logBuffer ?? {
             let buffer = DiagnosticLogBuffer(persistDelayMilliseconds: nil)
@@ -297,8 +287,7 @@ struct FeedbackViewModelTests {
             cooldownStore: cooldown,
             logBuffer: buffer,
             now: { clock.now },
-            makeReportID: { ids.isEmpty ? UUID().uuidString.lowercased() : ids.removeFirst() },
-            dictationEnabled: { dictationEnabled }
+            makeReportID: { ids.isEmpty ? UUID().uuidString.lowercased() : ids.removeFirst() }
         )
     }
 }

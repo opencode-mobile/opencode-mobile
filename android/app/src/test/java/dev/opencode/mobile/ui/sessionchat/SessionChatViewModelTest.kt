@@ -5896,7 +5896,6 @@ class SessionChatViewModelTest {
     private fun TestScope.dictationViewModel(): SessionChatViewModel {
         val viewModel = createViewModel(FakeMessageRepository())
         viewModel.dictationFinishDelayMs = 0
-        SessionChatDisplayPreferences.updateComposerDictation(true)
         advanceUntilIdle()
         return viewModel
     }

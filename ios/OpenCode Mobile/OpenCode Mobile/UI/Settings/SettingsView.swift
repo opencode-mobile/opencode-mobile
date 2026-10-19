@@ -394,26 +394,6 @@ struct SettingsView: View {
                     )
                     .padding(.horizontal, 16)
 
-                    OpenCodeListItem(
-                        title: "Composer Dictation",
-                        subtitle: "Speak into the composer. Off until you turn this on.",
-                        style: .card,
-                        startDecorator: .icon(.mic, accessibilityLabel: "Composer Dictation"),
-                        accessory: .toggle(
-                            isOn: Binding(
-                                get: { sessionChatDisplayPreferences.composerDictation },
-                                set: { newValue in
-                                    logSettingsAction(
-                                        ProductAnalytics.Action.settingsToggleComposerDictation
-                                    )
-                                    sessionChatDisplayPreferences.setComposerDictation(newValue)
-                                }
-                            ),
-                            accessibilityLabel: "Composer Dictation"
-                        )
-                    )
-                    .padding(.horizontal, 16)
-
                     if let loadError = themeManager.loadError {
                         OpenCodeInlineNotice(message: loadError, tone: .error)
                             .padding(.horizontal, 16)
