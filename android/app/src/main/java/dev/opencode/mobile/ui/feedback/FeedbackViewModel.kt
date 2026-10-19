@@ -86,6 +86,32 @@ data class FeedbackUiState(
 
     /** From Settings there is no capture, so adding a screenshot opens the Photo Picker. */
     val addScreenshotPicksPhoto: Boolean get() = capturedScreenshot == null
+
+    /** Sheet title. Listening replaces the report title while the orb is up. */
+    val sheetTitle: String
+        get() =
+            when {
+                page == FeedbackPage.HideParts -> "Hide parts"
+                page == FeedbackPage.LogPreview -> "Diagnostic log"
+                showsListeningTitle -> "Listening"
+                else -> "Report a problem"
+            }
+
+    /** The dictation card replaces the compose form, so the sheet is one surface. */
+    val dictationTakesOverCompose: Boolean
+        get() = status !is FeedbackSendStatus.Sent && page == FeedbackPage.Compose && dictation != null
+
+    /** Orb states use the Listening title. An unavailable card still takes over, but it is not listening. */
+    private val showsListeningTitle: Boolean
+        get() =
+            dictationTakesOverCompose &&
+                when (dictation?.phase) {
+                    ComposerDictationPhase.Listening,
+                    ComposerDictationPhase.Finishing,
+                    ComposerDictationPhase.Stopped,
+                    -> true
+                    else -> false
+                }
 }
 
 /**

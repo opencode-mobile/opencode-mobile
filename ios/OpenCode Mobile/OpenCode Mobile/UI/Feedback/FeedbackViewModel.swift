@@ -119,6 +119,31 @@ struct FeedbackUiState {
     var hiddenAreaCount: Int { screenshot?.hiddenRects.count ?? 0 }
 
     var logsChipTitle: String { "Logs · \(logWindow.minutes) min" }
+
+    /// Sheet title. Listening replaces the report title while the orb is up.
+    var sheetTitle: String {
+        switch page {
+        case .hideParts: "Hide parts"
+        case .logPreview: "Diagnostic log"
+        case .compose: showsListeningTitle ? "Listening" : "Report a problem"
+        }
+    }
+
+    /// The dictation card replaces the compose form, so the sheet is one surface.
+    var dictationTakesOverCompose: Bool {
+        guard page == .compose, dictation != nil else { return false }
+        if case .sent = phase { return false }
+        return true
+    }
+
+    /// Orb states use the Listening title. An unavailable card still takes over, but it is not listening.
+    private var showsListeningTitle: Bool {
+        guard dictationTakesOverCompose, let phase = dictation?.phase else { return false }
+        switch phase {
+        case .listening, .finishing: return true
+        case .permissionDenied, .modelNotInstalled, .recognizerError: return false
+        }
+    }
 }
 
 @MainActor

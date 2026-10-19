@@ -31,12 +31,12 @@ private struct FeedbackSheetModifier: ViewModifier {
         content
             .openCodeBottomSheet(
                 isPresented: presented,
-                title: page.title,
+                title: title,
                 leadingAction: backAction,
                 height: .half,
                 keyboard: .expand,
                 pinnedTop: {
-                    if let model {
+                    if let model, !model.uiState.dictationTakesOverCompose {
                         switch model.uiState.page {
                         case .compose: FeedbackSheetPinnedTop(model: model)
                         case .hideParts: EmptyView()
@@ -46,15 +46,19 @@ private struct FeedbackSheetModifier: ViewModifier {
                 },
                 content: {
                     if let model {
-                        switch model.uiState.page {
-                        case .compose: FeedbackSheetBody(model: model)
-                        case .hideParts: FeedbackHidePartsContent(model: model)
-                        case .logPreview: FeedbackLogPreviewContent(model: model)
+                        if model.uiState.dictationTakesOverCompose {
+                            FeedbackDictationTakeover(model: model, onDictationAction: handleDictation)
+                        } else {
+                            switch model.uiState.page {
+                            case .compose: FeedbackSheetBody(model: model)
+                            case .hideParts: FeedbackHidePartsContent(model: model)
+                            case .logPreview: FeedbackLogPreviewContent(model: model)
+                            }
                         }
                     }
                 },
                 pinnedBottom: {
-                    if let model {
+                    if let model, !model.uiState.dictationTakesOverCompose {
                         switch model.uiState.page {
                         case .compose:
                             FeedbackSheetPinnedBottom(
@@ -69,6 +73,7 @@ private struct FeedbackSheetModifier: ViewModifier {
                     }
                 }
             )
+            .animation(.easeInOut(duration: 0.24), value: model?.uiState.dictationTakesOverCompose == true)
             .photosPicker(isPresented: photoPicker, selection: $selectedPhoto, matching: .images)
             .onChange(of: selectedPhoto) { _, item in
                 guard let item else { return }
@@ -91,6 +96,11 @@ private struct FeedbackSheetModifier: ViewModifier {
                 // recognizer error cannot replace a confirmed transcript.
                 if phase != .listening {
                     dictationSession.stop()
+                }
+            }
+            .onChange(of: model?.uiState.dictationTakesOverCompose) { _, takeover in
+                if takeover == true {
+                    resignKeyboard()
                 }
             }
             .onChange(of: scenePhase) { _, phase in
@@ -129,6 +139,11 @@ private struct FeedbackSheetModifier: ViewModifier {
 
     private var page: FeedbackSheetPage {
         model?.uiState.page ?? .compose
+    }
+
+    /// Listening while the orb owns the sheet; otherwise the page title. Close still dismisses.
+    private var title: String {
+        model?.uiState.sheetTitle ?? page.title
     }
 
     /// Back arrow on the Hide parts and Diagnostic log pages.
@@ -411,8 +426,8 @@ private enum FeedbackDictationAction {
     case retry
 }
 
-/// Add attachment, dictation and Send; the Dictation Card while the user
-/// speaks; Done once the report is sent.
+/// Add attachment, dictation and Send; Done once the report is sent.
+/// The Dictation Card is the sheet body while listening, not this footer.
 private struct FeedbackSheetPinnedBottom: View {
     let model: FeedbackViewModel
     let showsMic: Bool
@@ -422,16 +437,11 @@ private struct FeedbackSheetPinnedBottom: View {
     @State private var addMenuOpen = false
 
     var body: some View {
-        Group {
-            if case .sent = model.uiState.phase {
-                OpenCodeButton(variant: .fullWidthText(title: "Done"), action: onDone)
-            } else if let dictation = model.uiState.dictation {
-                dictationContent(dictation)
-            } else {
-                actions
-            }
+        if case .sent = model.uiState.phase {
+            OpenCodeButton(variant: .fullWidthText(title: "Done"), action: onDone)
+        } else {
+            actions
         }
-        .animation(.easeInOut(duration: 0.24), value: model.uiState.dictation != nil)
     }
 
     private var isSending: Bool { model.uiState.phase == .sending }
@@ -503,6 +513,23 @@ private struct FeedbackSheetPinnedBottom: View {
         }
     }
 
+}
+
+/// The Dictation Card as the sheet body. Same frame as Report a problem; the form is gone.
+private struct FeedbackDictationTakeover: View {
+    let model: FeedbackViewModel
+    let onDictationAction: (FeedbackDictationAction) -> Void
+
+    var body: some View {
+        if let dictation = model.uiState.dictation {
+            dictationContent(dictation)
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
+                .frame(maxWidth: .infinity, alignment: .top)
+                .transition(.opacity)
+        }
+    }
+
     private func dictationContent(_ state: ComposerDictationUiState) -> some View {
         let showsClock = state.phase == .listening || state.phase == .finishing
         return Group {
@@ -514,7 +541,6 @@ private struct FeedbackSheetPinnedBottom: View {
                 dictationCard(state, elapsed: Self.elapsedLabel(from: state.startedAt, to: Date()))
             }
         }
-        .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 
     private func dictationCard(_ state: ComposerDictationUiState, elapsed: String) -> some View {
