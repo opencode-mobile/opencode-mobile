@@ -109,26 +109,41 @@ struct OpenCodeSplitPane<Leading: View, Trailing: View>: View {
 
     private func content(geometry: OpenCodeSplitPaneGeometry, fold: OpenCodeSplitPaneFold?) -> some View {
         let collapsed = displayedCollapsed && liveWidth == nil
-        return HStack(spacing: 0) {
-            leading()
-                // Content keeps at least the minimum width and is clipped rather than
-                // squeezed while the pane animates closed or is dragged narrow.
-                .frame(width: max(bounds.minLeading, geometry.leadingWidth))
-                .frame(width: geometry.leadingWidth, alignment: .leading)
-                .clipped()
-                .allowsHitTesting(!collapsed)
-                .accessibilityHidden(collapsed)
-
-            divider(geometry: geometry, collapsed: collapsed, fold: fold)
-                .zIndex(1)
-
-            trailing(
-                OpenCodeSplitPaneDetailControl(
-                    isCollapsed: displayedCollapsed,
-                    toggle: toggle
-                )
+        // The toggle animates the widths through `OpenCodeSplitPaneFrames`, which lays
+        // the panes out afresh on every frame the way a divider drag does. Animating
+        // the frames themselves leaves a UIKit-backed trailing pane (NavigationStack)
+        // on its own faster curve, so its content drifts across the leading pane.
+        return OpenCodeSplitPaneFrames(
+            leadingWidth: geometry.leadingWidth,
+            dividerWidth: geometry.dividerWidth
+        ) { leadingWidth, dividerWidth in
+            let frame = OpenCodeSplitPaneGeometry(
+                leadingWidth: leadingWidth,
+                dividerWidth: dividerWidth,
+                isInFold: geometry.isInFold,
+                isLocked: geometry.isLocked
             )
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            HStack(spacing: 0) {
+                leading()
+                    // Content keeps at least the minimum width and is clipped rather than
+                    // squeezed while the pane animates closed or is dragged narrow.
+                    .frame(width: max(bounds.minLeading, frame.leadingWidth))
+                    .frame(width: frame.leadingWidth, alignment: .leading)
+                    .clipped()
+                    .allowsHitTesting(!collapsed)
+                    .accessibilityHidden(collapsed)
+
+                divider(geometry: frame, collapsed: collapsed, fold: fold)
+                    .zIndex(1)
+
+                trailing(
+                    OpenCodeSplitPaneDetailControl(
+                        isCollapsed: displayedCollapsed,
+                        toggle: toggle
+                    )
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
         }
     }
 
@@ -263,6 +278,27 @@ struct OpenCodeSplitPane<Leading: View, Trailing: View>: View {
             preferences.setState(next, for: screen)
         }
         onCollapsedChange?(next.isCollapsed)
+    }
+}
+
+/// Interpolates the pane widths and rebuilds `content` with each frame's values, so
+/// every pane is laid out at plain widths on every frame instead of animating its
+/// own frame.
+private struct OpenCodeSplitPaneFrames<Content: View>: View, Animatable {
+    var leadingWidth: CGFloat
+    var dividerWidth: CGFloat
+    @ViewBuilder let content: (CGFloat, CGFloat) -> Content
+
+    var animatableData: AnimatablePair<CGFloat, CGFloat> {
+        get { AnimatablePair(leadingWidth, dividerWidth) }
+        set {
+            leadingWidth = newValue.first
+            dividerWidth = newValue.second
+        }
+    }
+
+    var body: some View {
+        content(leadingWidth, dividerWidth)
     }
 }
 
