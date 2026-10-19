@@ -4,13 +4,16 @@
 #
 # A cancelled job on the shared macOS runner can leave DerivedData claiming
 # Firebase binary artifacts (absl.zip, openssl_grpc.zip) that are no longer
-# on disk. Retry once after deleting this project's SourcePackages cache.
+# on disk, and can leave half-written clones in SwiftPM's shared repository
+# cache. Retry once after deleting both, cloning fresh instead of from the
+# shared cache.
 set -euo pipefail
 
 resolve() {
   xcodebuild -resolvePackageDependencies \
     -project "OpenCode Mobile.xcodeproj" \
-    -scheme "OpenCode Mobile"
+    -scheme "OpenCode Mobile" \
+    "$@"
 }
 
 clear_source_packages() {
@@ -22,10 +25,19 @@ clear_source_packages() {
   done
 }
 
+clear_repository_cache() {
+  local dir="${HOME}/Library/Caches/org.swift.swiftpm/repositories"
+  if [[ -d "${dir}" ]]; then
+    echo "Removing SwiftPM repository cache: ${dir}"
+    rm -rf "${dir}"
+  fi
+}
+
 if resolve; then
   exit 0
 fi
 
-echo "Package resolve failed. Clearing the SourcePackages cache and retrying once."
+echo "Package resolve failed. Clearing package caches and retrying once without the shared cache."
 clear_source_packages
-resolve
+clear_repository_cache
+resolve -disablePackageRepositoryCache
