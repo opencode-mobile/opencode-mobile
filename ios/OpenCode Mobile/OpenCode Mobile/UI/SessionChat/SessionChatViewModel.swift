@@ -310,15 +310,29 @@ final class SessionChatViewModel {
         publishUiState()
     }
 
-    func beginDictationUnavailable(_ phase: ComposerDictationPhase, message: String? = nil) {
+    func beginDictationUnavailable(
+        _ phase: ComposerDictationPhase,
+        message: String? = nil,
+        languageLabel: String = ""
+    ) {
         // A recognizer error can arrive after Insert has already been confirmed.
         // Dropping the card here would cancel the splice.
         guard dictation?.phase != .finishing else { return }
         discardDictationInsert()
         dictation = ComposerDictationUiState(
             phase: phase,
+            languageLabel: languageLabel,
             errorMessage: message
         )
+        publishUiState()
+    }
+
+    /// Applies a model download update only while the card still shows the model.
+    func dictationModelDownload(_ phase: ComposerDictationPhase, progress: Double? = nil) {
+        guard phase.isModelPhase, var current = dictation, current.phase.isModelPhase else { return }
+        current.phase = phase
+        current.downloadProgress = progress
+        dictation = current
         publishUiState()
     }
 

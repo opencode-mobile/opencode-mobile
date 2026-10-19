@@ -456,6 +456,7 @@ private fun DictationTakeover(
         elapsedLabel = card.elapsedLabel,
         unavailableReason = card.unavailableReason,
         errorMessage = card.errorMessage,
+        downloadProgress = card.downloadProgress,
         onCancel = { onAction(OpenCodeSessionComposerAction.DictationCancel) },
         onInsert = { onAction(OpenCodeSessionComposerAction.DictationInsert) },
         onOpenSettings = { onAction(OpenCodeSessionComposerAction.DictationOpenSettings) },

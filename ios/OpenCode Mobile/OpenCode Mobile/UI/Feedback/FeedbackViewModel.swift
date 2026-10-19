@@ -140,7 +140,8 @@ struct FeedbackUiState {
         guard dictationTakesOverCompose, let phase = dictation?.phase else { return false }
         switch phase {
         case .listening, .finishing: return true
-        case .permissionDenied, .modelNotInstalled, .recognizerError: return false
+        case .permissionDenied, .modelNotInstalled, .modelDownloading, .modelDownloadFailed, .recognizerError:
+            return false
         }
     }
 }
@@ -421,11 +422,23 @@ final class FeedbackViewModel {
         )
     }
 
-    func beginDictationUnavailable(_ phase: ComposerDictationPhase, message: String? = nil) {
+    func beginDictationUnavailable(
+        _ phase: ComposerDictationPhase,
+        message: String? = nil,
+        languageLabel: String = ""
+    ) {
         // A recognizer error can arrive after Insert has been confirmed.
         guard uiState.dictation?.phase != .finishing else { return }
         discardDictationInsert()
-        uiState.dictation = ComposerDictationUiState(phase: phase, errorMessage: message)
+        uiState.dictation = ComposerDictationUiState(phase: phase, languageLabel: languageLabel, errorMessage: message)
+    }
+
+    /// Applies a model download update only while the card still shows the model.
+    func dictationModelDownload(_ phase: ComposerDictationPhase, progress: Double? = nil) {
+        guard phase.isModelPhase, var current = uiState.dictation, current.phase.isModelPhase else { return }
+        current.phase = phase
+        current.downloadProgress = progress
+        uiState.dictation = current
     }
 
     func dictationPartial(committed: String, volatile: String) {

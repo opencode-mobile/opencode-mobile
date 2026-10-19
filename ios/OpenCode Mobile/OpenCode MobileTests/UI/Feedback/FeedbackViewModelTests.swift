@@ -233,6 +233,24 @@ struct FeedbackViewModelTests {
         #expect(model.uiState.sheetTitle == "Report a problem")
     }
 
+    @Test func dictationModelDownload_updatesOnlyAModelCard() {
+        let model = makeModel()
+
+        model.dictationModelDownload(.modelDownloading, progress: 0.3)
+        #expect(model.uiState.dictation == nil)
+
+        model.beginDictationUnavailable(.modelNotInstalled, languageLabel: "English")
+        model.dictationModelDownload(.modelDownloading, progress: 0.3)
+        #expect(model.uiState.dictation?.phase == .modelDownloading)
+        #expect(model.uiState.dictation?.downloadProgress == 0.3)
+        #expect(model.uiState.dictation?.languageLabel == "English")
+        #expect(model.uiState.sheetTitle == "Report a problem")
+
+        model.beginDictation(languageLabel: "English", onDevice: true)
+        model.dictationModelDownload(.modelDownloadFailed)
+        #expect(model.uiState.dictation?.phase == .listening)
+    }
+
     @Test func dictationInsert_keepsTheListeningTitleWhileFinishing() {
         let model = makeModel()
         model.dictationFinishDelayNs = 60_000_000_000

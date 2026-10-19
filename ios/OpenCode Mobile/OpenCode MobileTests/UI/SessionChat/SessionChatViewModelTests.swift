@@ -4289,6 +4289,27 @@ struct SessionChatViewModelTests {
         #expect(viewModel.uiState.dictation != nil)
     }
 
+    @Test func dictationModelDownload_updatesOnlyAModelCard() {
+        let viewModel = makeViewModel()
+        defer { viewModel.stopObserving() }
+
+        viewModel.dictationModelDownload(.modelDownloading, progress: 0.3)
+        #expect(viewModel.uiState.dictation == nil)
+
+        viewModel.beginDictationUnavailable(.modelNotInstalled, languageLabel: "English")
+        viewModel.dictationModelDownload(.modelDownloading, progress: 0.3)
+        #expect(viewModel.uiState.dictation?.phase == .modelDownloading)
+        #expect(viewModel.uiState.dictation?.downloadProgress == 0.3)
+        #expect(viewModel.uiState.dictation?.languageLabel == "English")
+
+        viewModel.dictationModelDownload(.modelDownloadFailed)
+        #expect(viewModel.uiState.dictation?.phase == .modelDownloadFailed)
+
+        viewModel.dictationCancel()
+        viewModel.dictationModelDownload(.modelDownloading)
+        #expect(viewModel.uiState.dictation == nil)
+    }
+
     @Test func dictationUnavailable_duringFinishingStillInserts() async throws {
         let viewModel = makeViewModel()
         defer { viewModel.stopObserving() }

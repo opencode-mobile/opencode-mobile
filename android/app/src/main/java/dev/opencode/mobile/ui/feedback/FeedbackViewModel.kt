@@ -392,20 +392,37 @@ class FeedbackViewModel
         fun beginDictationUnavailable(
             phase: ComposerDictationPhase,
             message: String? = null,
+            languageLabel: String = "",
         ) {
-            if (
-                phase != ComposerDictationPhase.PermissionDenied &&
-                phase != ComposerDictationPhase.ModelNotInstalled &&
-                phase != ComposerDictationPhase.RecognizerError
-            ) {
-                return
-            }
+            if (!phase.isUnavailable) return
             if (mutableState.value.dictation?.phase == ComposerDictationPhase.Finishing) return
             invalidateDictationInsert()
             mutableState.update {
                 it.copy(
-                    dictation = ComposerDictationUiState(phase = phase, errorMessage = message, startedAtEpochMs = nowMs()),
+                    dictation =
+                        ComposerDictationUiState(
+                            phase = phase,
+                            languageLabel = languageLabel,
+                            startedAtEpochMs = nowMs(),
+                            errorMessage = message,
+                        ),
                 )
+            }
+        }
+
+        /** Applies a model download update only while the card still shows the model. */
+        fun dictationModelDownload(
+            phase: ComposerDictationPhase,
+            progress: Float? = null,
+        ) {
+            if (!phase.isModelPhase) return
+            mutableState.update { state ->
+                val current = state.dictation
+                if (current == null || !current.phase.isModelPhase) {
+                    state
+                } else {
+                    state.copy(dictation = current.copy(phase = phase, downloadProgress = progress))
+                }
             }
         }
 

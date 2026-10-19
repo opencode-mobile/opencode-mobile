@@ -201,7 +201,17 @@ enum ComposerDictationPhase: Equatable {
     case finishing
     case permissionDenied
     case modelNotInstalled
+    case modelDownloading
+    case modelDownloadFailed
     case recognizerError
+
+    /// A card about the on-device speech model; download updates may replace it.
+    var isModelPhase: Bool {
+        switch self {
+        case .modelNotInstalled, .modelDownloading, .modelDownloadFailed: true
+        case .listening, .finishing, .permissionDenied, .recognizerError: false
+        }
+    }
 }
 
 struct ComposerDictationUiState: Equatable {
@@ -213,6 +223,8 @@ struct ComposerDictationUiState: Equatable {
     var onDevice: Bool = true
     var startedAt: Date = .init()
     var errorMessage: String? = nil
+    /// Model download progress, 0...1, while `phase` is `.modelDownloading`; nil when unknown.
+    var downloadProgress: Double? = nil
 }
 
 struct SessionChatUiState: Equatable {

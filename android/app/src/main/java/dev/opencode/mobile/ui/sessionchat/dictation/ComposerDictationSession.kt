@@ -11,7 +11,11 @@ import dev.opencode.mobile.ui.sessionchat.ComposerDictationPhase
 import kotlin.math.sqrt
 
 interface ComposerDictationSession {
-    fun start(listener: Listener)
+    /** [languageTag] is the recognizer pack from the probe; null uses the device locale. */
+    fun start(
+        listener: Listener,
+        languageTag: String? = null,
+    )
 
     fun stop()
 
@@ -44,6 +48,7 @@ class SystemComposerDictationSession(
 ) : ComposerDictationSession {
     private val mainHandler = Handler(Looper.getMainLooper())
     private var recognizer: SpeechRecognizer? = null
+    private var languageTag: String? = null
     private var listener: ComposerDictationSession.Listener? = null
     private var committed: String = ""
     private var volatileHypothesis: String = ""
@@ -51,7 +56,10 @@ class SystemComposerDictationSession(
     private var restartFailures: Int = 0
     private val restartRunnable = Runnable { startListening() }
 
-    override fun start(listener: ComposerDictationSession.Listener) {
+    override fun start(
+        listener: ComposerDictationSession.Listener,
+        languageTag: String?,
+    ) {
         if (Looper.myLooper() != Looper.getMainLooper()) return
         stop()
         if (Build.VERSION.SDK_INT < 31) {
@@ -71,6 +79,7 @@ class SystemComposerDictationSession(
             }
         this.listener = listener
         this.recognizer = recognizer
+        this.languageTag = languageTag
         committed = ""
         volatileHypothesis = ""
         restartFailures = 0
@@ -102,7 +111,7 @@ class SystemComposerDictationSession(
         if (!acceptCallbacks) return
         val recognizer = recognizer ?: return
         try {
-            recognizer.startListening(dictationRecognitionIntent(context))
+            recognizer.startListening(dictationRecognitionIntent(context, languageTag))
         } catch (_: RuntimeException) {
             fail(ComposerDictationPhase.RecognizerError, "Dictation stopped")
         }

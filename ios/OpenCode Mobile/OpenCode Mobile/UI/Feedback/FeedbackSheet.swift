@@ -58,7 +58,9 @@ private struct FeedbackSheetModifier: ViewModifier {
                     }
                 },
                 pinnedBottom: {
-                    if let model, !model.uiState.dictationTakesOverCompose {
+                    if let model, model.uiState.dictationTakesOverCompose {
+                        FeedbackDictationActions(model: model, onDictationAction: handleDictation)
+                    } else if let model {
                         switch model.uiState.page {
                         case .compose:
                             FeedbackSheetPinnedBottom(
@@ -207,8 +209,11 @@ private struct FeedbackSheetModifier: ViewModifier {
             return
         case .permissionDenied:
             model.beginDictationUnavailable(.permissionDenied, message: "Microphone access is off")
-        case .modelNotInstalled:
-            model.beginDictationUnavailable(.modelNotInstalled, message: "The on-device speech model is not installed")
+        case let .modelNotInstalled(languageLabel):
+            model.beginDictationUnavailable(.modelNotInstalled, languageLabel: languageLabel)
+        case let .modelDownloading(languageLabel):
+            model.beginDictationUnavailable(.modelNotInstalled, languageLabel: languageLabel)
+            await downloadDictationModel(model)
         case let .ready(languageLabel, onDevice):
             let granted = await withCheckedContinuation { continuation in
                 AVAudioApplication.requestRecordPermission { continuation.resume(returning: $0) }
@@ -226,7 +231,16 @@ private struct FeedbackSheetModifier: ViewModifier {
     }
 
     private func downloadDictationModel(_ model: FeedbackViewModel) async {
-        await dictationSession.downloadModel()
+        model.dictationModelDownload(.modelDownloading)
+        let installed = await dictationSession.downloadModel { progress in
+            model.dictationModelDownload(.modelDownloading, progress: progress)
+        }
+        // Cancel closes the card; the system download carries on without it.
+        guard model.uiState.dictation?.phase.isModelPhase == true else { return }
+        guard installed else {
+            model.dictationModelDownload(.modelDownloadFailed)
+            return
+        }
         let support = await dictationSession.probe()
         dictationSupport = support
         switch support {
@@ -237,8 +251,8 @@ private struct FeedbackSheetModifier: ViewModifier {
             startDictationSession(model)
         case .permissionDenied:
             model.beginDictationUnavailable(.permissionDenied, message: "Microphone access is off")
-        case .modelNotInstalled:
-            model.beginDictationUnavailable(.modelNotInstalled, message: "The on-device speech model is not installed")
+        case .modelNotInstalled, .modelDownloading:
+            model.dictationModelDownload(.modelDownloadFailed)
         case .hidden:
             model.dictationCancel()
         }
@@ -511,6 +525,26 @@ private struct FeedbackSheetPinnedBottom: View {
 }
 
 /// The Dictation Card as the sheet body. Same frame as Report a problem; the form is gone.
+/// The takeover card's actions, pinned so a long transcript never scrolls Insert out of reach.
+private struct FeedbackDictationActions: View {
+    let model: FeedbackViewModel
+    let onDictationAction: (FeedbackDictationAction) -> Void
+
+    var body: some View {
+        if let state = model.uiState.dictation {
+            let variant = FeedbackDictationTakeover.cardVariant(state)
+            OpenCodeDictationCardActions(
+                variant: variant,
+                committed: state.committed,
+                volatileText: state.volatile,
+                onCancel: { onDictationAction(.cancel) },
+                onInsert: { onDictationAction(.insert) },
+                onUnavailableAction: { onDictationAction(FeedbackDictationTakeover.unavailableAction(variant)) }
+            )
+        }
+    }
+}
+
 private struct FeedbackDictationTakeover: View {
     let model: FeedbackViewModel
     let onDictationAction: (FeedbackDictationAction) -> Void
@@ -539,13 +573,7 @@ private struct FeedbackDictationTakeover: View {
     }
 
     private func dictationCard(_ state: ComposerDictationUiState, elapsed: String) -> some View {
-        let variant: OpenCodeDictationCardVariant = switch state.phase {
-        case .listening: .listening
-        case .finishing: .finishing
-        case .permissionDenied: .unavailable(.permissionDenied)
-        case .modelNotInstalled: .unavailable(.modelNotInstalled)
-        case .recognizerError: .unavailable(.recognizerError(state.errorMessage ?? ""))
-        }
+        let variant = Self.cardVariant(state)
         return OpenCodeDictationCard(
             variant: variant,
             committed: state.committed,
@@ -555,17 +583,34 @@ private struct FeedbackDictationTakeover: View {
                 ? "Listening · \(state.languageLabel) · on-device"
                 : "Listening · \(state.languageLabel)",
             elapsed: elapsed,
+            languageLabel: state.languageLabel,
             onCancel: { onDictationAction(.cancel) },
             onInsert: { onDictationAction(.insert) },
-            onUnavailableAction: {
-                switch variant {
-                case .unavailable(.permissionDenied): onDictationAction(.openSettings)
-                case .unavailable(.modelNotInstalled): onDictationAction(.download)
-                case .unavailable(.recognizerError): onDictationAction(.retry)
-                case .listening, .finishing: onDictationAction(.insert)
-                }
-            }
+            onUnavailableAction: { onDictationAction(Self.unavailableAction(variant)) },
+            showsActions: false
         )
+    }
+
+    static func cardVariant(_ state: ComposerDictationUiState) -> OpenCodeDictationCardVariant {
+        switch state.phase {
+        case .listening: .listening
+        case .finishing: .finishing
+        case .permissionDenied: .unavailable(.permissionDenied)
+        case .modelNotInstalled: .unavailable(.modelNotInstalled)
+        case .modelDownloading: .unavailable(.modelDownloading(progress: state.downloadProgress))
+        case .modelDownloadFailed: .unavailable(.modelDownloadFailed)
+        case .recognizerError: .unavailable(.recognizerError(state.errorMessage ?? ""))
+        }
+    }
+
+    static func unavailableAction(_ variant: OpenCodeDictationCardVariant) -> FeedbackDictationAction {
+        switch variant {
+        case .unavailable(.permissionDenied): .openSettings
+        case .unavailable(.modelNotInstalled), .unavailable(.modelDownloading), .unavailable(.modelDownloadFailed):
+            .download
+        case .unavailable(.recognizerError): .retry
+        case .listening, .finishing: .insert
+        }
     }
 
     static func elapsedLabel(from start: Date, to now: Date) -> String {
