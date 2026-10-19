@@ -211,7 +211,6 @@ struct OpenCodeDictationCard: View {
         }
     }
 
-    @ViewBuilder
     private var clampedLevel: Double {
         min(1, max(0, level.isFinite ? level : 0))
     }
