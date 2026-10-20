@@ -49,6 +49,8 @@ import dev.opencode.mobile.ui.components.OpenCodeSectionHeader
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
 import dev.opencode.mobile.ui.components.StartDecorator
+import dev.opencode.mobile.ui.components.openCodeBottomSheetContentInset
+import dev.opencode.mobile.ui.components.openCodeBottomSheetScrollTarget
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 @Composable
@@ -496,6 +498,7 @@ fun SettingsScreen(
     OpenCodeBottomSheet(
         visible = showRecentWindowPicker,
         title = "Recent Window",
+        scrollTargetKey = recentWindowHours,
         onDismissRequest = {
             ProductAnalytics.logUserAction(
                 screenId = ProductAnalytics.Screen.SETTINGS_RECENT_WINDOW_PICKER,
@@ -508,17 +511,13 @@ fun SettingsScreen(
             text = "Sessions stay in Recent while Running or Ready, or when updated within this window.",
             style = MaterialTheme.typography.bodySmall,
             color = openCodeColor("text-base"),
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            modifier = Modifier.openCodeBottomSheetContentInset().padding(bottom = 8.dp),
         )
         HomeSessionLadder.ALLOWED_WINDOW_HOURS.forEach { hours ->
             OpenCodeBottomSheetEntry(
                 title = HomeSessionLadder.formatWindowHoursLabel(hours),
-                endDecorator =
-                    if (hours == recentWindowHours) {
-                        BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check, "Selected")
-                    } else {
-                        BottomSheetEntryDecorator.None
-                    },
+                selected = hours == recentWindowHours,
+                modifier = Modifier.openCodeBottomSheetScrollTarget(hours),
                 onClick = {
                     ProductAnalytics.logUserAction(
                         screenId = ProductAnalytics.Screen.SETTINGS_RECENT_WINDOW_PICKER,
@@ -542,15 +541,15 @@ fun SettingsScreen(
                 title = if (mode == FollowUpDelivery.Steer) "Steer" else "Queue",
                 startDecorator =
                     BottomSheetEntryDecorator.Icon(
-                        if (mode == FollowUpDelivery.Steer) OpenCodeIcons.ArrowWarmUp else OpenCodeIcons.ArrowUpward,
-                        null,
+                        if (mode ==
+                            FollowUpDelivery.Steer
+                        ) {
+                            OpenCodeIcons.ArrowWarmUp
+                        } else {
+                            OpenCodeIcons.ArrowUpward
+                        },
                     ),
-                endDecorator =
-                    if (mode == followUpDelivery) {
-                        BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check, "Selected")
-                    } else {
-                        BottomSheetEntryDecorator.None
-                    },
+                selected = mode == followUpDelivery,
                 onClick = {
                     onFollowUpDeliveryChange(mode)
                     showFollowUpPicker = false

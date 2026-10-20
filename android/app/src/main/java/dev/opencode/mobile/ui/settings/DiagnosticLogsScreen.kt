@@ -20,7 +20,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -50,10 +49,10 @@ import dev.opencode.mobile.ui.components.OpenCodeInlineNotice
 import dev.opencode.mobile.ui.components.OpenCodeInlineNoticeTone
 import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeListItemStyle
-import dev.opencode.mobile.ui.components.OpenCodeStatusStack
-import dev.opencode.mobile.ui.components.OpenCodeStatusStackStyle
 import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
 import dev.opencode.mobile.ui.components.OpenCodeSplitPaneDetailControl
+import dev.opencode.mobile.ui.components.OpenCodeStatusStack
+import dev.opencode.mobile.ui.components.OpenCodeStatusStackStyle
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.openCodeDetailLeading
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
@@ -382,12 +381,7 @@ fun DiagnosticLogsScreen(
         DiagnosticLogExportWindow.entries.forEach { window ->
             OpenCodeBottomSheetEntry(
                 title = window.label,
-                endDecorator =
-                    if (window == state.exportWindow) {
-                        BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check, "Selected")
-                    } else {
-                        BottomSheetEntryDecorator.None
-                    },
+                selected = window == state.exportWindow,
                 onClick = {
                     onExportWindowChange(window)
                     showExportWindowPicker = false
@@ -403,7 +397,7 @@ fun DiagnosticLogsScreen(
     ) {
         OpenCodeBottomSheetEntry(
             title = "Share via apps",
-            startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Description, "Share"),
+            startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Description),
             onClick = {
                 showExportSheet = false
                 onShareViaApps()
@@ -411,7 +405,7 @@ fun DiagnosticLogsScreen(
         )
         OpenCodeBottomSheetEntry(
             title = "Save to files",
-            startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Folder, "Save to files"),
+            startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Folder),
             onClick = {
                 showExportSheet = false
                 saveLauncher.launch(EXPORT_FILE_NAME)

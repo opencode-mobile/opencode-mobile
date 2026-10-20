@@ -72,7 +72,12 @@ struct SessionChatToolDetailSheetModifier: ViewModifier {
                 isPresented: sheetPresentedBinding,
                 title: target?.title ?? "Tool",
                 content: {
-                    SessionChatToolDetailSheetBody(
+                    SessionChatToolDetailSheetBody(target: target)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .openCodeBottomSheetContentInset()
+                },
+                pinnedBottom: {
+                    SessionChatToolDetailSheetActions(
                         target: target,
                         onFailureAction: { action in
                             if action != .copy {
@@ -82,9 +87,6 @@ struct SessionChatToolDetailSheetModifier: ViewModifier {
                         },
                         onOpenLink: onOpenLink
                     )
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 12)
                 }
             )
     }
@@ -151,21 +153,31 @@ private struct SessionChatToolDetailBody: View {
 
 private struct SessionChatToolDetailSheetBody: View {
     let target: SessionChatToolDetailTarget?
-    let onFailureAction: (FailureAction) -> Void
-    let onOpenLink: (URL) -> Void
 
     var body: some View {
         let text = target?.body ?? ""
         let showsMonospace = target?.monospace == true && !text.isEmpty
         let showsBody = target?.bodyIsMarkdown == true || showsMonospace || !text.isEmpty
-        VStack(alignment: .leading, spacing: 12) {
-            if showsBody {
-                SessionChatToolDetailBody(
-                    text: text,
-                    isMarkdown: target?.bodyIsMarkdown ?? false,
-                    monospace: showsMonospace
-                )
-            }
+        if showsBody {
+            SessionChatToolDetailBody(
+                text: text,
+                isMarkdown: target?.bodyIsMarkdown ?? false,
+                monospace: showsMonospace
+            )
+            .padding(.vertical, 12)
+        }
+    }
+}
+
+/// Failure action and retry link, pinned in the footer so they stay visible
+/// above a long provider response. Renders nothing when there are none.
+private struct SessionChatToolDetailSheetActions: View {
+    let target: SessionChatToolDetailTarget?
+    let onFailureAction: (FailureAction) -> Void
+    let onOpenLink: (URL) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
             if let action = target?.sheetAction,
                let label = target?.sheetActionLabel?.trimmingCharacters(in: .whitespacesAndNewlines),
                !label.isEmpty

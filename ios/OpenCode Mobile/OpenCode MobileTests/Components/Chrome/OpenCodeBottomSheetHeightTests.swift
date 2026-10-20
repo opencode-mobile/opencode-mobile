@@ -319,4 +319,75 @@ final class OpenCodeBottomSheetHeightTests: XCTestCase {
         XCTAssertEqual(OpenCodeBottomSheetLayoutMath.pinnedBottomHeight(contentHeight: 48), 56)
         XCTAssertEqual(OpenCodeBottomSheetLayoutMath.pinnedBottomHeight(contentHeight: 0), 0)
     }
+
+    // MARK: Shared rules with Android
+
+    func testCompactThresholdMatchesAndroid() {
+        XCTAssertEqual(OpenCodeBottomSheetLayoutMath.compactMaxHeight, 420)
+        XCTAssertTrue(OpenCodeBottomSheetLayoutMath.fitsCompact(fitContentHeight: 420))
+        XCTAssertFalse(OpenCodeBottomSheetLayoutMath.fitsCompact(fitContentHeight: 421))
+    }
+
+    func testCompactBodyHeightFollowsTheBodyBothWays() {
+        XCTAssertEqual(
+            OpenCodeBottomSheetLayoutMath.nextContentHeight(current: 300, measured: 120, lockedScrollable: false, containerHeight: 866),
+            120
+        )
+        XCTAssertEqual(
+            OpenCodeBottomSheetLayoutMath.nextContentHeight(current: 120, measured: 300, lockedScrollable: false, containerHeight: 866),
+            300
+        )
+        XCTAssertNil(OpenCodeBottomSheetLayoutMath.nextContentHeight(current: 120, measured: 120, lockedScrollable: false, containerHeight: 866))
+        XCTAssertNil(OpenCodeBottomSheetLayoutMath.nextContentHeight(current: 120, measured: 0, lockedScrollable: false, containerHeight: 866))
+    }
+
+    func testMeasureBeforeTheOverlayHasASizeIsIgnored() {
+        // The first pass lays out at zero size: text wraps at no width and reads far too tall.
+        XCTAssertNil(
+            OpenCodeBottomSheetLayoutMath.nextContentHeight(current: 0, measured: 775, lockedScrollable: false, containerHeight: 0)
+        )
+        XCTAssertEqual(
+            OpenCodeBottomSheetLayoutMath.nextContentHeight(current: 0, measured: 160, lockedScrollable: false, containerHeight: 866),
+            160
+        )
+    }
+
+    func testLockedScrollableSheetStopsMeasuring() {
+        XCTAssertNil(OpenCodeBottomSheetLayoutMath.nextContentHeight(current: 900, measured: 120, lockedScrollable: true, containerHeight: 866))
+    }
+
+    func testDragDismissesPastTheDistanceOrOnAFastFling() {
+        XCTAssertFalse(OpenCodeBottomSheetLayoutMath.dragDismisses(offset: 95, velocity: 0))
+        XCTAssertTrue(OpenCodeBottomSheetLayoutMath.dragDismisses(offset: 96, velocity: 0))
+        XCTAssertTrue(OpenCodeBottomSheetLayoutMath.dragDismisses(offset: 10, velocity: 1200))
+        XCTAssertFalse(OpenCodeBottomSheetLayoutMath.dragDismisses(offset: 10, velocity: 1199))
+        XCTAssertFalse(OpenCodeBottomSheetLayoutMath.dragDismisses(offset: 10, velocity: -3000))
+    }
+
+    func testHiddenOffsetSlidesTheCardJustBelowTheEdge() {
+        XCTAssertEqual(
+            OpenCodeBottomSheetLayoutMath.hiddenOffset(cardHeight: 300, containerHeight: containerHeight, bottomSpace: 8),
+            308
+        )
+        // Before the card measures, half the container keeps it off screen.
+        XCTAssertEqual(
+            OpenCodeBottomSheetLayoutMath.hiddenOffset(cardHeight: 0, containerHeight: containerHeight, bottomSpace: 8),
+            445
+        )
+    }
+
+    // MARK: Display corner radius
+
+    func testDisplayCornerRadiusIsNilWhenThePrivateKeyIsMissing() {
+        XCTAssertNil(BottomSheetDisplayCornerRadius.read(from: NSObject()))
+    }
+
+    func testCardBottomRadiusIsConcentricAndNeverBelowTheMinimum() {
+        XCTAssertEqual(BottomSheetDisplayCornerRadius.cardBottomRadius(displayRadius: 55), 47)
+        XCTAssertEqual(BottomSheetDisplayCornerRadius.cardBottomRadius(displayRadius: 0), 16)
+    }
+
+    func testDisplayCornerRadiusFallsBackWithoutAScreen() {
+        XCTAssertEqual(BottomSheetDisplayCornerRadius.value(for: nil), 55)
+    }
 }

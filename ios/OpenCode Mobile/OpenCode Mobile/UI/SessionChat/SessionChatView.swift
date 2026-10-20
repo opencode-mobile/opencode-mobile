@@ -524,7 +524,7 @@ struct SessionChatView: View {
                 if sources.photos {
                     OpenCodeBottomSheetEntry(
                         title: "Photos",
-                        startDecorator: .icon(.description, accessibilityLabel: "Photos"),
+                        startDecorator: .icon(.description),
                         action: {
                             logAttachmentSourceAction(ProductAnalytics.Action.attachPickPhotos)
                             showAttachmentSources = false
@@ -535,7 +535,7 @@ struct SessionChatView: View {
                 if sources.files {
                     OpenCodeBottomSheetEntry(
                         title: "Files",
-                        startDecorator: .icon(.folder, accessibilityLabel: "Files"),
+                        startDecorator: .icon(.folder),
                         action: {
                             logAttachmentSourceAction(ProductAnalytics.Action.attachPickFiles)
                             showAttachmentSources = false
@@ -546,7 +546,7 @@ struct SessionChatView: View {
                 if sources.logFile {
                     OpenCodeBottomSheetEntry(
                         title: "Log file",
-                        startDecorator: .icon(.list, accessibilityLabel: "Log file"),
+                        startDecorator: .icon(.list),
                         action: {
                             logAttachmentSourceAction(ProductAnalytics.Action.attachPickLogFile)
                             showAttachmentSources = false

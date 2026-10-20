@@ -225,9 +225,7 @@ struct DiagnosticLogsView: View {
             ForEach(DiagnosticLogExportWindow.allCases, id: \.self) { window in
                 OpenCodeBottomSheetEntry(
                     title: window.label,
-                    endDecorator: window == model.exportWindow
-                        ? .icon(.check, accessibilityLabel: "Selected")
-                        : .none,
+                    selected: window == model.exportWindow,
                     action: {
                         model.setExportWindow(window)
                         showExportWindowPicker = false

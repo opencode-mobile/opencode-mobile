@@ -13,7 +13,16 @@ struct SessionChatPendingPromptsSheetModifier: ViewModifier {
             .openCodeBottomSheet(
                 isPresented: sheetPresentedBinding,
                 title: "Up next",
-                content: { sheetContent }
+                pinnedTop: {
+                    OpenCodeSectionHeader(title: "\(prompts.count) waiting", variant: .plain)
+                },
+                content: { sheetContent },
+                pinnedBottom: {
+                    OpenCodeButton(variant: .fullWidthText(title: "Clear all"), contrast: .low) {
+                        logAction(ProductAnalytics.Action.pendingPromptsClear)
+                        onClearAll()
+                    }
+                }
             )
     }
 
@@ -30,22 +39,9 @@ struct SessionChatPendingPromptsSheetModifier: ViewModifier {
     }
 
     private var sheetContent: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            OpenCodeSectionHeader(
-                title: "\(prompts.count) waiting",
-                variant: .plain,
-                trailing: .action("Clear all", {
-                    logAction(ProductAnalytics.Action.pendingPromptsClear)
-                    onClearAll()
-                })
-            )
-
-            ScrollView {
-                VStack(spacing: 0) {
-                    ForEach(prompts) { prompt in
-                        pendingPromptRow(prompt)
-                    }
-                }
+        VStack(spacing: 0) {
+            ForEach(prompts) { prompt in
+                pendingPromptRow(prompt)
             }
         }
     }

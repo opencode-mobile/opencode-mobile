@@ -178,28 +178,27 @@ implementation unless the user explicitly requests documentation.
   popup implementation or if a shared overflow trigger API is added directly to
   `OpenCodeTopBar`.
 
-## Bottom sheet form keyboard presentation
+## Bottom sheet keyboard presentation
 
 - Status: intentional
 - Area: component | motion
-- Shared intent: action lists dismiss the software keyboard so choice sheets
-  get the full bottom of the display. Form sheets keep the keyboard; the
-  presenting screen stays fixed and only the form sheet's available region
-  changes, with a fixed header and a scrollable body so focused controls stay
-  reachable.
-- iOS behavior: action lists resign first responder on present and when content
-  mode becomes `actionList` (in-sheet Back to providers). The window overlay
-  locks `form` mode to the 50% detent. Form sheets seed keyboard overlap from
-  the last known keyboard frame, then shrink available height from
-  `keyboardWillChangeFrame` so only the internal scroll region follows the
-  keyboard.
-- Android behavior: action lists clear focus and hide the IME on present and
-  when content mode becomes `ActionList`. The full-window popup remains over
-  an `adjustNothing` activity; `imePadding()` is applied to the form sheet
-  boundary so it follows current and animated IME insets without resizing the
-  activity content.
-- Reason: native presentation and inset delivery differ, but both implementations
-  preserve the same visible ownership boundary and interaction behavior.
+- Shared intent: `keyboard: dismiss` sheets hide the software keyboard on
+  present and when they switch to that policy, so choice sheets get the full
+  bottom of the display. `keep` and `expand` sheets leave the keyboard up; the
+  presenting screen stays fixed and only the sheet moves. `keep` rides above the
+  keyboard at its resting height; `expand` grows to the space between the top
+  inset and the keyboard, never below its resting height, with header and
+  pinned parts fixed and the body scrolling.
+- iOS behavior: `dismiss` resigns first responder. Keeping sheets seed keyboard
+  overlap from the last known keyboard frame, then follow
+  `keyboardWillChangeFrame`, so the card lifts even when it opens over an
+  already-visible keyboard.
+- Android behavior: `dismiss` clears focus and hides the IME. `keep` applies
+  `imePadding()` to the sheet boundary. `expand` lifts by the IME height and
+  sizes the column from layout-phase inset reads, following IME animation
+  progress, so keyboard frames relayout the sheet without recomposing its body.
+- Reason: keyboard frames reach each platform differently, but both keep the
+  same visible ownership boundary and behavior.
 - Review trigger: revisit if both platforms adopt a shared native modal API with
   equivalent detent and keyboard-inset semantics.
 
@@ -281,9 +280,10 @@ implementation unless the user explicitly requests documentation.
   that inset so they share a center with the device curve. Top corners use
   the smaller `bottomSheet.cornerRadiusTop` (**24**).
 - iOS behavior: Reads the screen display corner radius from the window scene
-  (`_displayCornerRadius`; no public numeric API). Bottom corners use that
-  minus inset. Top corners are 24. Missing or zero values use the 55 − 8
-  fallback.
+  (`_displayCornerRadius`; no public numeric API) once per screen and caches
+  it. The key is checked before it is read, so if UIKit drops it the sheet
+  uses the fallback instead of raising. Bottom corners use that minus inset.
+  Top corners are 24. Missing or zero values use the 55 − 8 fallback.
 - Android behavior: API 31+ reads
   `WindowMetrics.windowInsets.getRoundedCorner()` (bottom leading/trailing;
   radius is px) for the bottom corners. Top corners are 24. Below API 31, or

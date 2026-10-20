@@ -23,7 +23,6 @@ struct SessionChatSkillsSheetModifier: ViewModifier {
                             )
                         }
                     }
-                    .padding(.bottom, 8)
                 }
             )
     }

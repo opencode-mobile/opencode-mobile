@@ -27,6 +27,7 @@ import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeTextInput
 import dev.opencode.mobile.ui.components.OpenCodeTextInputKind
 import dev.opencode.mobile.ui.components.StartDecorator
+import dev.opencode.mobile.ui.components.openCodeBottomSheetContentInset
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 private enum class GalleryBottomSheetDecoratorKind {
@@ -38,6 +39,7 @@ private enum class GalleryBottomSheetDecoratorKind {
 fun BottomSheetGalleryScreen(modifier: Modifier = Modifier) {
     var visible by rememberSaveable { mutableStateOf(false) }
     var enabled by rememberSaveable { mutableStateOf(true) }
+    var selected by rememberSaveable { mutableStateOf(false) }
     var showsHeaderBack by rememberSaveable { mutableStateOf(false) }
     var itemCount by rememberSaveable { mutableStateOf(2) }
     var startDecoratorName by rememberSaveable { mutableStateOf(GalleryBottomSheetDecoratorKind.Icon.name) }
@@ -57,12 +59,12 @@ fun BottomSheetGalleryScreen(modifier: Modifier = Modifier) {
     val startDecorator =
         when (startDecoratorKind) {
             GalleryBottomSheetDecoratorKind.None -> BottomSheetEntryDecorator.None
-            GalleryBottomSheetDecoratorKind.Icon -> BottomSheetEntryDecorator.Icon(OpenCodeIcons.Folder, "Project")
+            GalleryBottomSheetDecoratorKind.Icon -> BottomSheetEntryDecorator.Icon(OpenCodeIcons.Folder)
         }
     val endDecorator =
         when (endDecoratorKind) {
             GalleryBottomSheetDecoratorKind.None -> BottomSheetEntryDecorator.None
-            GalleryBottomSheetDecoratorKind.Icon -> BottomSheetEntryDecorator.Icon(OpenCodeIcons.ChevronRight, null)
+            GalleryBottomSheetDecoratorKind.Icon -> BottomSheetEntryDecorator.Icon(OpenCodeIcons.ChevronRight)
         }
 
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -70,6 +72,7 @@ fun BottomSheetGalleryScreen(modifier: Modifier = Modifier) {
             Text(text = "Bottom sheet", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OpenCodeChoiceBadge(label = "Entry enabled", selected = enabled, onClick = { enabled = !enabled })
+                OpenCodeChoiceBadge(label = "Entry selected", selected = selected, onClick = { selected = !selected })
                 OpenCodeChoiceBadge(label = "Header back", selected = showsHeaderBack, onClick = { showsHeaderBack = !showsHeaderBack })
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -157,12 +160,12 @@ fun BottomSheetGalleryScreen(modifier: Modifier = Modifier) {
             if (showsPinnedTop) {
                 OpenCodeBottomSheetEntry(
                     title = "Go up",
-                    startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.ArrowUpward, null),
+                    startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.ArrowUpward),
                     onClick = {},
                 )
                 OpenCodeBottomSheetEntry(
                     title = "/Users/demo/Projects",
-                    startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.FolderCheck, null),
+                    startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.FolderCheck),
                     onClick = {},
                 )
             }
@@ -186,18 +189,19 @@ fun BottomSheetGalleryScreen(modifier: Modifier = Modifier) {
                 onValueChange = { formValue = it },
                 hint = "Server URL",
                 kind = OpenCodeTextInputKind.Url,
-                modifier = Modifier.padding(horizontal = 20.dp),
+                modifier = Modifier.openCodeBottomSheetContentInset(),
             )
             OpenCodeTextInput(
                 value = "gallery password",
                 onValueChange = {},
                 hint = "Password",
                 kind = OpenCodeTextInputKind.Password,
-                modifier = Modifier.padding(horizontal = 20.dp),
+                modifier = Modifier.openCodeBottomSheetContentInset(),
             )
         }
         ActionSheetEntries(
             enabled = enabled,
+            selected = selected,
             startDecorator = startDecorator,
             endDecorator = endDecorator,
             itemCount = itemCount,
@@ -226,7 +230,7 @@ private fun KeyboardExpandBottomSheet(
                 onValueChange = onFilterChange,
                 hint = "Folder path",
                 kind = OpenCodeTextInputKind.Filter,
-                modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 8.dp),
+                modifier = Modifier.openCodeBottomSheetContentInset().padding(bottom = 8.dp),
             )
         },
     ) {
@@ -243,6 +247,7 @@ private fun KeyboardExpandBottomSheet(
 @Composable
 private fun ActionSheetEntries(
     enabled: Boolean,
+    selected: Boolean,
     startDecorator: BottomSheetEntryDecorator,
     endDecorator: BottomSheetEntryDecorator,
     itemCount: Int,
@@ -253,34 +258,35 @@ private fun ActionSheetEntries(
         enabled = enabled,
         startDecorator = startDecorator,
         endDecorator = endDecorator,
+        selected = selected,
         onClick = onDismiss,
     )
     OpenCodeBottomSheetEntry(
         title = "Create new session",
-        startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Add, "Create new session"),
+        startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Add),
         onClick = onDismiss,
     )
     if (itemCount >= 4) {
         OpenCodeBottomSheetEntry(
             title = "Rename session",
-            startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Edit, "Rename session"),
+            startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Edit),
             onClick = onDismiss,
         )
         OpenCodeBottomSheetEntry(
             title = "Fork session",
-            endDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.ChevronRight, null),
+            endDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.ChevronRight),
             onClick = onDismiss,
         )
     }
     if (itemCount >= 6) {
         OpenCodeBottomSheetEntry(
             title = "Review diff",
-            startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Description, "Review diff"),
+            startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Description),
             onClick = onDismiss,
         )
         OpenCodeBottomSheetEntry(
             title = "Abort active work",
-            startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.StopCircle, "Abort active work"),
+            startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.StopCircle),
             onClick = onDismiss,
         )
     }

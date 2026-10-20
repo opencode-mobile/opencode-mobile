@@ -24,6 +24,7 @@ import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeRenderedMarkdown
 import dev.opencode.mobile.ui.components.OpenCodeRenderedMarkdownVariant
+import dev.opencode.mobile.ui.components.openCodeBottomSheetContentInset
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -98,9 +99,17 @@ internal fun SessionChatToolDetailSheet(
         visible = target != null,
     )
 
+    val clipboard = LocalClipboardManager.current
+    val action = target?.sheetAction
+    val actionLabel = target?.sheetActionLabel?.takeIf { it.isNotBlank() }
+    val linkLabel = target?.sheetLinkLabel?.takeIf { it.isNotBlank() }
+    val link = target?.sheetLink?.takeIf { it.isNotBlank() }
+    val hasAction = action != null && actionLabel != null
+    val hasLink = linkLabel != null && link != null
+
     OpenCodeBottomSheet(
         visible = target != null,
-        title = target?.title.orEmpty(),
+        title = target?.title ?: "Tool",
         onDismissRequest = {
             ProductAnalytics.logUserAction(
                 screenId = ProductAnalytics.Screen.SESSION_TOOL_DETAIL,
@@ -108,12 +117,42 @@ internal fun SessionChatToolDetailSheet(
             )
             onDismiss()
         },
+        pinnedBottom =
+            if (hasAction || hasLink) {
+                {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (action != null && actionLabel != null) {
+                            OpenCodeButton(
+                                variant = OpenCodeButtonVariant.FullWidthText(actionLabel),
+                                onClick = {
+                                    when (action) {
+                                        SessionFailureSheetAction.CopyCaption ->
+                                            clipboard.setText(AnnotatedString(target?.title.orEmpty()))
+                                        SessionFailureSheetAction.PickModel -> {
+                                            onDismiss()
+                                            onFailureAction(FailureAction.PickModel)
+                                        }
+                                        SessionFailureSheetAction.Compact -> {
+                                            onDismiss()
+                                            onFailureAction(FailureAction.Compact)
+                                        }
+                                    }
+                                },
+                            )
+                        }
+                        if (linkLabel != null && link != null) {
+                            OpenCodeButton(
+                                variant = OpenCodeButtonVariant.FullWidthText(linkLabel),
+                                onClick = { onOpenLink(link) },
+                            )
+                        }
+                    }
+                }
+            } else {
+                null
+            },
     ) {
         val body = target?.body.orEmpty()
-        val bodyModifier =
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 12.dp)
         val document by produceState<MarkdownDocument?>(initialValue = null, body, target?.bodyIsMarkdown) {
             value =
                 if (target?.bodyIsMarkdown == true && body.isNotBlank()) {
@@ -127,14 +166,13 @@ internal fun SessionChatToolDetailSheet(
                 }
         }
         val rendered = document
-        val clipboard = LocalClipboardManager.current
-        val action = target?.sheetAction
-        val actionLabel = target?.sheetActionLabel?.takeIf { it.isNotBlank() }
-        val linkLabel = target?.sheetLinkLabel?.takeIf { it.isNotBlank() }
-        val link = target?.sheetLink?.takeIf { it.isNotBlank() }
+        if (rendered == null && body.isBlank()) return@OpenCodeBottomSheet
         Column(
-            modifier = bodyModifier,
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .openCodeBottomSheetContentInset()
+                    .padding(vertical = 12.dp),
         ) {
             when {
                 rendered != null ->
@@ -153,31 +191,6 @@ internal fun SessionChatToolDetailSheet(
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
-            }
-            if (action != null && actionLabel != null) {
-                OpenCodeButton(
-                    variant = OpenCodeButtonVariant.FullWidthText(actionLabel),
-                    onClick = {
-                        when (action) {
-                            SessionFailureSheetAction.CopyCaption ->
-                                clipboard.setText(AnnotatedString(target?.title.orEmpty()))
-                            SessionFailureSheetAction.PickModel -> {
-                                onDismiss()
-                                onFailureAction(FailureAction.PickModel)
-                            }
-                            SessionFailureSheetAction.Compact -> {
-                                onDismiss()
-                                onFailureAction(FailureAction.Compact)
-                            }
-                        }
-                    },
-                )
-            }
-            if (linkLabel != null && link != null) {
-                OpenCodeButton(
-                    variant = OpenCodeButtonVariant.FullWidthText(linkLabel),
-                    onClick = { onOpenLink(link) },
-                )
             }
         }
     }

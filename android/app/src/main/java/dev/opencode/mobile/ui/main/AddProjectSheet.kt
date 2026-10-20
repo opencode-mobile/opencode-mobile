@@ -87,28 +87,27 @@ data class AddProjectSheetCallbacks(
 
 @Composable
 internal fun AddProjectSheet(
+    visible: Boolean,
     sheet: AddProjectSheetUi,
     callbacks: AddProjectSheetCallbacks,
     onDismiss: () -> Unit,
 ) {
-    if (sheet.isBrowsing) {
+    if (visible && sheet.isBrowsing) {
         AddProjectBrowser(sheet = sheet, callbacks = callbacks)
     }
-    if (!sheet.isBrowsing) {
-        OpenCodeBottomSheet(
-            visible = true,
-            title = "Add project",
-            onDismissRequest = {
-                ProductAnalytics.logUserAction(
-                    screenId = ProductAnalytics.Screen.HOME_ADD_PROJECT,
-                    actionId = ProductAnalytics.Action.ADD_PROJECT_DISMISS,
-                )
-                onDismiss()
-            },
-            height = OpenCodeBottomSheetHeight.FitContent,
-        ) {
-            AddProjectSuggestions(sheet = sheet, callbacks = callbacks)
-        }
+    OpenCodeBottomSheet(
+        visible = visible && !sheet.isBrowsing,
+        title = "Add project",
+        onDismissRequest = {
+            ProductAnalytics.logUserAction(
+                screenId = ProductAnalytics.Screen.HOME_ADD_PROJECT,
+                actionId = ProductAnalytics.Action.ADD_PROJECT_DISMISS,
+            )
+            onDismiss()
+        },
+        height = OpenCodeBottomSheetHeight.FitContent,
+    ) {
+        AddProjectSuggestions(sheet = sheet, callbacks = callbacks)
     }
 }
 

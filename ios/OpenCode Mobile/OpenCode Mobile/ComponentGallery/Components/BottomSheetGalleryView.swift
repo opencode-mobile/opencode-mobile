@@ -17,6 +17,7 @@ private enum GalleryBottomSheetDecoratorKind: String, CaseIterable, Identifiable
 struct BottomSheetGalleryView: View {
     @State private var isPresented = false
     @State private var entryEnabled = true
+    @State private var entrySelected = false
     @State private var showsHeaderBack = false
     @State private var itemCount = 2
     @State private var startDecorator: GalleryBottomSheetDecoratorKind = .icon
@@ -34,7 +35,7 @@ struct BottomSheetGalleryView: View {
         case .none:
             .none
         case .icon:
-            .icon(.folder, accessibilityLabel: "Project")
+            .icon(.folder)
         }
     }
 
@@ -59,6 +60,11 @@ struct BottomSheetGalleryView: View {
                         label: "Entry enabled",
                         selected: entryEnabled,
                         action: { entryEnabled.toggle() }
+                    )
+                    OpenCodeChoiceBadge(
+                        label: "Entry selected",
+                        selected: entrySelected,
+                        action: { entrySelected.toggle() }
                     )
                     OpenCodeChoiceBadge(
                         label: "Header back",
@@ -149,7 +155,7 @@ struct BottomSheetGalleryView: View {
                     hint: "Folder path",
                     kind: .filter
                 )
-                .padding(.horizontal, 20)
+                .openCodeBottomSheetContentInset()
                 .padding(.bottom, 8)
             }
         ) {
@@ -197,13 +203,13 @@ struct BottomSheetGalleryView: View {
                         hint: "Server URL",
                         kind: .url
                     )
-                    .padding(.horizontal, 20)
+                    .openCodeBottomSheetContentInset()
                     OpenCodeTextInput(
                         text: .constant("gallery password"),
                         hint: "Password",
                         kind: .password
                     )
-                    .padding(.horizontal, 20)
+                    .openCodeBottomSheetContentInset()
                 }
             },
             pinnedBottom: {
@@ -224,17 +230,18 @@ struct BottomSheetGalleryView: View {
                 enabled: entryEnabled,
                 startDecorator: entryStartDecorator,
                 endDecorator: entryEndDecorator,
+                selected: entrySelected,
                 action: { isPresented = false }
             )
             OpenCodeBottomSheetEntry(
                 title: "Create new session",
-                startDecorator: .icon(.add, accessibilityLabel: "Create new session"),
+                startDecorator: .icon(.add),
                 action: { isPresented = false }
             )
             if itemCount >= 4 {
                 OpenCodeBottomSheetEntry(
                     title: "Rename session",
-                    startDecorator: .icon(.edit, accessibilityLabel: "Rename session"),
+                    startDecorator: .icon(.edit),
                     action: { isPresented = false }
                 )
                 OpenCodeBottomSheetEntry(
@@ -246,12 +253,12 @@ struct BottomSheetGalleryView: View {
             if itemCount >= 6 {
                 OpenCodeBottomSheetEntry(
                     title: "Review diff",
-                    startDecorator: .icon(.description, accessibilityLabel: "Review diff"),
+                    startDecorator: .icon(.description),
                     action: { isPresented = false }
                 )
                 OpenCodeBottomSheetEntry(
                     title: "Abort active work",
-                    startDecorator: .icon(.stopCircle, accessibilityLabel: "Abort active work"),
+                    startDecorator: .icon(.stopCircle),
                     action: { isPresented = false }
                 )
             }

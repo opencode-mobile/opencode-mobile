@@ -39,7 +39,7 @@ struct SessionChatMessageActionsSheetModifier: ViewModifier {
         if target?.showsRevertMessage == true {
             OpenCodeBottomSheetEntry(
                 title: "Revert message",
-                startDecorator: .icon(.undo, accessibilityLabel: "Revert message"),
+                startDecorator: .icon(.undo),
                 action: {
                     logAction(ProductAnalytics.Action.messageActionsRevert)
                     if let target {
@@ -50,7 +50,7 @@ struct SessionChatMessageActionsSheetModifier: ViewModifier {
             )
             OpenCodeBottomSheetEntry(
                 title: "Fork from here",
-                startDecorator: .icon(.callSplit, accessibilityLabel: "Fork from here"),
+                startDecorator: .icon(.callSplit),
                 action: {
                     logAction(ProductAnalytics.Action.messageActionsFork)
                     let messageID = target?.id
@@ -63,7 +63,7 @@ struct SessionChatMessageActionsSheetModifier: ViewModifier {
         }
         OpenCodeBottomSheetEntry(
             title: "Copy message",
-            startDecorator: .icon(.contentCopy, accessibilityLabel: "Copy message"),
+            startDecorator: .icon(.contentCopy),
             action: {
                 logAction(ProductAnalytics.Action.messageActionsCopy)
                 if let target {

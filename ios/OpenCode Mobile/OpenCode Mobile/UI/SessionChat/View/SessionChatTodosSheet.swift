@@ -27,7 +27,7 @@ struct SessionChatTodosSheetModifier: ViewModifier {
                         )
                         .font(OpenCodeTypography.caption)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 20)
+                        .openCodeBottomSheetContentInset()
                         .accessibilityLabel("\(completedCount) of \(totalCount) completed")
 
                         VStack(alignment: .leading, spacing: 0) {
@@ -38,7 +38,6 @@ struct SessionChatTodosSheetModifier: ViewModifier {
                                 )
                             }
                         }
-                        .padding(.bottom, 8)
                     }
                 }
             )

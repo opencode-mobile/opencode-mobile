@@ -189,7 +189,7 @@ struct TerminalsCatalogView: View {
                     .font(OpenCodeTypography.bodySecondary)
                     .foregroundStyle(OpenCodeColors.textWeak)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 16)
+                    .openCodeBottomSheetContentInset()
                     .padding(.bottom, 8)
             }
             if viewModel.projects.isEmpty {
