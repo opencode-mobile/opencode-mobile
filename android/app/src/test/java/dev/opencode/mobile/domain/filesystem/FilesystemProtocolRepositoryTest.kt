@@ -9,6 +9,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.MockRequestHandler
 import io.ktor.client.engine.mock.respond
+import io.ktor.client.plugins.ResponseException
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.HttpRequestData
 import io.ktor.http.HttpHeaders
@@ -18,7 +19,9 @@ import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
 
 class FilesystemProtocolRepositoryTest {
@@ -114,7 +117,7 @@ class FilesystemProtocolRepositoryTest {
                     activeConnectionManager = manager(ServerProtocol.V2),
                 )
 
-            val nodes = repository.listDirectory("/repo")
+            val nodes = repository.listDirectory("/repo").folders
 
             assertEquals(listOf(".github", "docs", "src"), nodes.map { it.name })
             assertEquals(listOf("/repo/.github", "/repo/docs", "/repo/src"), nodes.map { it.absolutePath })
@@ -151,7 +154,7 @@ class FilesystemProtocolRepositoryTest {
                     activeConnectionManager = manager(ServerProtocol.V1),
                 )
 
-            val nodes = repository.listDirectory("/Volumes")
+            val nodes = repository.listDirectory("/Volumes").folders
 
             assertEquals(listOf("OpenChamber 2.3.3"), nodes.map { it.name })
             assertEquals(listOf("/Volumes/OpenChamber 2.3.3"), nodes.map { it.absolutePath })
@@ -206,7 +209,7 @@ class FilesystemProtocolRepositoryTest {
                     activeConnectionManager = manager(ServerProtocol.V2),
                 )
 
-            val nodes = repository.listDirectory("/Volumes")
+            val nodes = repository.listDirectory("/Volumes").folders
 
             assertEquals(listOf("OpenChamber 2.3.3"), nodes.map { it.name })
             assertEquals(listOf("/Volumes/OpenChamber 2.3.3"), nodes.map { it.absolutePath })
@@ -240,7 +243,7 @@ class FilesystemProtocolRepositoryTest {
                     activeConnectionManager = manager(ServerProtocol.V2),
                 )
 
-            val nodes = repository.listDirectory("C:\\Users\\other")
+            val nodes = repository.listDirectory("C:\\Users\\other").folders
 
             assertEquals(listOf("backup", "code"), nodes.map { it.name })
             assertEquals(listOf("E:\\backup", "C:\\Users\\other\\code"), nodes.map { it.absolutePath })
@@ -262,7 +265,7 @@ class FilesystemProtocolRepositoryTest {
                     activeConnectionManager = manager(ServerProtocol.V2),
                 )
 
-            val nodes = repository.listDirectory("C:\\Users\\me")
+            val nodes = repository.listDirectory("C:\\Users\\me").folders
 
             assertEquals(listOf("C:\\Users\\me\\code"), nodes.map { it.absolutePath })
         }
@@ -291,7 +294,7 @@ class FilesystemProtocolRepositoryTest {
                     activeConnectionManager = manager(ServerProtocol.V2),
                 )
 
-            val nodes = repository.listDirectory("/")
+            val nodes = repository.listDirectory("/").folders
 
             assertEquals(listOf("etc", "home"), nodes.map { it.name })
             assertEquals(listOf("/etc", "/home"), nodes.map { it.absolutePath })
@@ -324,11 +327,198 @@ class FilesystemProtocolRepositoryTest {
                     activeConnectionManager = manager(ServerProtocol.V2),
                 )
 
-            val nodes = repository.listDirectory("C:\\Users\\me")
+            val nodes = repository.listDirectory("C:\\Users\\me").folders
 
             assertEquals(listOf("archive", "code"), nodes.map { it.name })
             assertEquals(listOf("D:\\archive", "C:\\Users\\me\\code"), nodes.map { it.absolutePath })
         }
+
+    @Test
+    fun v1ListDirectory_reportsGitAndVisibleFolderCount() =
+        runTest {
+            val client =
+                testClient {
+                    respondJson(
+                        "[" +
+                            """{"name":".git","path":".git","absolute":"/repo/.git","type":"directory"},""" +
+                            """{"name":"src","path":"src","absolute":"/repo/src","type":"directory"},""" +
+                            """{"name":"README.md","path":"README.md","absolute":"/repo/README.md","type":"file"}""" +
+                            "]",
+                    )
+                }
+
+            val listing = repository(client, ServerProtocol.V1).listDirectory("/repo")
+
+            assertTrue(listing.isGitRepository)
+            assertEquals(listOf(".git", "src"), listing.folders.map { it.name })
+            assertEquals(1, listing.visibleFolderCount)
+        }
+
+    @Test
+    fun v2ListDirectory_gitFileInWorktreeCountsAsRepository() =
+        runTest {
+            val client =
+                testClient {
+                    respondJson("""{"data":[{"path":".git","type":"file"},{"path":"src/","type":"directory"}]}""")
+                }
+
+            val listing = repository(client, ServerProtocol.V2).listDirectory("/wt")
+
+            assertTrue(listing.isGitRepository)
+            assertEquals(listOf("src"), listing.folders.map { it.name })
+        }
+
+    @Test
+    fun v1ListDirectory_withoutGitIsNotRepository() =
+        runTest {
+            val client =
+                testClient {
+                    respondJson("""[{"name":".github","path":".github","absolute":"/a/.github","type":"directory"}]""")
+                }
+
+            val listing = repository(client, ServerProtocol.V1).listDirectory("/a")
+
+            assertFalse(listing.isGitRepository)
+            assertEquals(0, listing.visibleFolderCount)
+        }
+
+    @Test
+    fun v2ListDirectory_404IsNotFoundWithoutWalkingUp() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respondError("""{"_tag":"FileNotFoundError"}""", HttpStatusCode.NotFound)
+                }
+
+            val error = listFailure(repository(client, ServerProtocol.V2), "/home/me/gone")
+
+            assertTrue(error is DirectoryNotFoundException)
+            assertEquals(listOf("/home/me/gone"), requests.map { it.url.parameters["path"] })
+        }
+
+    @Test
+    fun v1ListDirectory_500WithMissingSegmentInParentIsNotFound() =
+        runTest {
+            val client =
+                testClient { request ->
+                    when (request.url.parameters["path"]) {
+                        "/home/me" ->
+                            respondJson("""[{"name":"code","path":"code","absolute":"/home/me/code","type":"directory"}]""")
+                        else -> respondError("""{"name":"UnknownError"}""", HttpStatusCode.InternalServerError)
+                    }
+                }
+
+            val error = listFailure(repository(client, ServerProtocol.V1), "/home/me/gone")
+
+            assertTrue(error is DirectoryNotFoundException)
+        }
+
+    @Test
+    fun v1ListDirectory_500ForAFileIsNotFound() =
+        runTest {
+            val client =
+                testClient { request ->
+                    when (request.url.parameters["path"]) {
+                        "/home/me" ->
+                            respondJson("""[{"name":"notes.txt","path":"notes.txt","absolute":"/home/me/notes.txt","type":"file"}]""")
+                        else -> respondError("""{"name":"UnknownError"}""", HttpStatusCode.InternalServerError)
+                    }
+                }
+
+            val error = listFailure(repository(client, ServerProtocol.V1), "/home/me/notes.txt")
+
+            assertTrue(error is DirectoryNotFoundException)
+        }
+
+    @Test
+    fun v1ListDirectory_500ForAnExistingFolderRethrows() =
+        runTest {
+            val client =
+                testClient { request ->
+                    when (request.url.parameters["path"]) {
+                        "/home/me" ->
+                            respondJson("""[{"name":"locked","path":"locked","absolute":"/home/me/locked","type":"directory"}]""")
+                        else -> respondError("""{"name":"UnknownError"}""", HttpStatusCode.InternalServerError)
+                    }
+                }
+
+            val error = listFailure(repository(client, ServerProtocol.V1), "/home/me/locked")
+
+            assertTrue(error is ResponseException)
+            assertEquals(HttpStatusCode.InternalServerError, (error as ResponseException).response.status)
+        }
+
+    @Test
+    fun v1ListDirectory_walksUpToTheNearestListingAncestor() =
+        runTest {
+            val requests = mutableListOf<String?>()
+            val client =
+                testClient { request ->
+                    val path = request.url.parameters["path"]
+                    requests += path
+                    when (path) {
+                        "/home" ->
+                            respondJson("""[{"name":"me","path":"me","absolute":"/home/me","type":"directory"}]""")
+                        else -> respondError("""{"name":"UnknownError"}""", HttpStatusCode.InternalServerError)
+                    }
+                }
+
+            val error = listFailure(repository(client, ServerProtocol.V1), "/home/other/gone")
+
+            assertTrue(error is DirectoryNotFoundException)
+            assertEquals(listOf("/home/other/gone", "/home/other", "/home"), requests)
+        }
+
+    @Test
+    fun v1ListDirectory_windowsSegmentsMatchIgnoringCase() =
+        runTest {
+            val client =
+                testClient { request ->
+                    when (request.url.parameters["path"]) {
+                        "C:\\Users" ->
+                            respondJson("""[{"name":"Me","path":"Me","absolute":"C:\\Users\\Me","type":"directory"}]""")
+                        else -> respondError("""{"name":"UnknownError"}""", HttpStatusCode.InternalServerError)
+                    }
+                }
+
+            val error = listFailure(repository(client, ServerProtocol.V1), "C:\\Users\\me")
+
+            assertTrue(error is ResponseException)
+        }
+
+    @Test
+    fun v1ListDirectory_rethrowsWhenNoAncestorLists() =
+        runTest {
+            val client = testClient { respondError("""{"name":"UnknownError"}""", HttpStatusCode.InternalServerError) }
+
+            val error = listFailure(repository(client, ServerProtocol.V1), "/a/b")
+
+            assertTrue(error is ResponseException)
+        }
+
+    private suspend fun listFailure(
+        repository: DefaultFilesystemRepository,
+        path: String,
+    ): Exception {
+        try {
+            repository.listDirectory(path)
+        } catch (error: Exception) {
+            return error
+        }
+        fail("Expected $path to fail")
+        error("unreachable")
+    }
+
+    private suspend fun repository(
+        client: HttpClient,
+        protocol: ServerProtocol,
+    ) = DefaultFilesystemRepository(
+        FilesystemApi(client),
+        FilesystemDomainAdapter(),
+        activeConnectionManager = manager(protocol),
+    )
 
     private suspend fun manager(protocol: ServerProtocol): ActiveConnectionManager {
         val manager = ActiveConnectionManager(FakeProfileStore())
@@ -352,6 +542,15 @@ private fun io.ktor.client.engine.mock.MockRequestHandleScope.respondJson(conten
         status = HttpStatusCode.OK,
         headers = headersOf(HttpHeaders.ContentType, "application/json"),
     )
+
+private fun io.ktor.client.engine.mock.MockRequestHandleScope.respondError(
+    content: String,
+    status: HttpStatusCode,
+) = respond(
+    content = content,
+    status = status,
+    headers = headersOf(HttpHeaders.ContentType, "application/json"),
+)
 
 private class FakeProfileStore : ConnectionProfileStore {
     private var profile: ConnectionProfile? = null

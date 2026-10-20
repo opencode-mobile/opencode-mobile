@@ -141,71 +141,86 @@ private struct AddProjectSuggestionSkeleton: View {
     }
 }
 
-/// Full-screen folder browser. Back returns to the suggestion sheet.
+/// List items carry 16pt of their own padding; this brings their icon to the screen gutter.
+private let addProjectRowGutterInset = OpenCodeLayout.screenGutter - 16
+/// The top bar pads its back button 12pt from the edge; this brings it to the screen gutter.
+private let addProjectTopBarGutterInset = OpenCodeLayout.screenGutter - 12
+
+/// Full-screen folder browser. Back returns to the suggestion sheet. Rows only navigate; the
+/// pinned action bar adds the folder it names. Every edge sits on one screen gutter.
 struct AddProjectBrowser: View {
     let sheet: AddProjectSheetState
     let onBack: () -> Void
     let onFieldChange: (String) -> Void
+    let onSubmitField: () -> Void
     let onUp: () -> Void
     let onSelectRoot: (String) -> Void
     let onOpenFolder: (String) -> Void
-    let onAddFolder: (String) -> Void
+    let onRowAppeared: (String) -> Void
+    let onRowDisappeared: (String) -> Void
     let onAdd: () -> Void
     let onRetry: () -> Void
 
+    /// The path field has focus, so the software keyboard is up.
+    @State private var isEditingPath = false
+
     var body: some View {
         VStack(spacing: 0) {
-            OpenCodeTopBar(
-                title: browseTitle,
-                leading: .back(action: onBack),
-                actions: [
-                    .label(title: "Add", enabled: sheet.addEnabled, action: onAdd),
-                ],
-                showDivider: true
-            )
-            if !sheet.addEnabled, !sheet.isLoading, sheet.listError == nil {
-                Text(sheet.addTitle)
-                    .font(OpenCodeTypography.caption)
-                    .foregroundStyle(OpenCodeColors.textWeak)
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 20)
-                    .padding(.top, 8)
-            }
+            OpenCodeTopBar(title: "Add project", leading: .back(action: onBack))
+                .padding(.horizontal, addProjectTopBarGutterInset)
+                .background(OpenCodeColors.backgroundBase)
             AddProjectPathChrome(
                 sheet: sheet,
+                isEditing: $isEditingPath,
                 onFieldChange: onFieldChange,
+                onSubmit: onSubmitField,
                 onUp: onUp,
-                onSelectRoot: onSelectRoot,
-                onAdd: onAdd
+                onSelectRoot: onSelectRoot
             )
             ScrollView {
                 AddProjectFolderList(
                     sheet: sheet,
                     onOpenFolder: onOpenFolder,
-                    onAddFolder: onAddFolder,
+                    onRowAppeared: onRowAppeared,
+                    onRowDisappeared: onRowDisappeared,
                     onRetry: onRetry
                 )
             }
+            .scrollDismissesKeyboard(.immediately)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(OpenCodeColors.backgroundBase)
+        // The inset rides the keyboard; while typing only the button stays.
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            OpenCodeActionBar(
+                target: actionBarTarget,
+                actionTitle: sheet.addTitle,
+                enabled: sheet.addEnabled,
+                compact: isEditingPath,
+                action: onAdd
+            )
+        }
     }
 
-    private var browseTitle: String {
-        guard let directory = sheet.directory, !directory.isEmpty else { return "Add project" }
-        let name = ServerPathPolicy.name(directory)
-        return name.isEmpty ? "Add project" : name
+    private var actionBarTarget: OpenCodeActionBarTarget? {
+        guard let target = sheet.barTarget else { return nil }
+        return OpenCodeActionBarTarget(
+            icon: .folder,
+            title: target.name,
+            tag: target.isGitRepository ? AddProjectSheetState.gitTag : nil,
+            subtitle: target.path
+        )
     }
 }
 
 /// Path field, Up, and root chips for the full-screen browser.
 struct AddProjectPathChrome: View {
     let sheet: AddProjectSheetState
+    @Binding var isEditing: Bool
     let onFieldChange: (String) -> Void
+    let onSubmit: () -> Void
     let onUp: () -> Void
     let onSelectRoot: (String) -> Void
-    let onAdd: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -216,7 +231,9 @@ struct AddProjectPathChrome: View {
                     kind: .filter,
                     enabled: !sheet.isValidating,
                     errorMessage: sheet.fieldError,
-                    onSubmit: onAdd
+                    submitAction: .go,
+                    isFocused: $isEditing,
+                    onSubmit: onSubmit
                 )
                 OpenCodeButton(
                     variant: .iconSquare(.arrowUpward, accessibilityLabel: "Up one folder"),
@@ -226,7 +243,7 @@ struct AddProjectPathChrome: View {
                     action: onUp
                 )
             }
-            .padding(.horizontal, 20)
+            .padding(.horizontal, OpenCodeLayout.screenGutter)
 
             if !sheet.roots.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -240,20 +257,22 @@ struct AddProjectPathChrome: View {
                             )
                         }
                     }
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, OpenCodeLayout.screenGutter)
                 }
             }
         }
-        .padding(.top, 8)
+        .padding(.top, 4)
         .padding(.bottom, 8)
     }
 }
 
-/// Folder rows in the browser. The row enters the folder; Add adds it without entering.
+/// Folder rows in the browser. A row enters its folder; each row reports when it is on screen
+/// so its folder count and git tag load lazily.
 struct AddProjectFolderList: View {
     let sheet: AddProjectSheetState
     let onOpenFolder: (String) -> Void
-    let onAddFolder: (String) -> Void
+    let onRowAppeared: (String) -> Void
+    let onRowDisappeared: (String) -> Void
     let onRetry: () -> Void
 
     var body: some View {
@@ -272,32 +291,36 @@ struct AddProjectFolderList: View {
                 fillsAvailableSpace: false,
                 primaryAction: OpenCodeEmptyStateAction(title: "Retry", action: onRetry)
             )
-            .padding(20)
+            .padding(OpenCodeLayout.screenGutter)
         } else if let emptyMessage = sheet.emptyMessage {
-            OpenCodeBottomSheetEntry(title: emptyMessage, enabled: false, action: {})
+            Text(emptyMessage)
+                .font(OpenCodeTypography.body)
+                .foregroundStyle(OpenCodeColors.textWeak)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, OpenCodeLayout.screenGutter)
+                .padding(.vertical, 16)
         } else {
-            VStack(alignment: .leading, spacing: 0) {
+            LazyVStack(alignment: .leading, spacing: 0) {
                 ForEach(sheet.entries) { entry in
                     OpenCodeListItem(
                         title: entry.name,
-                        subtitle: entry.isAdded ? "On home" : nil,
+                        subtitle: entry.subtitle,
+                        titleTag: entry.isGitRepository ? AddProjectSheetState.gitTag : nil,
                         enabled: !sheet.isValidating,
                         startDecorator: .icon(.folder),
-                        accessory: .disclosure,
-                        action: { onOpenFolder(entry.path) },
-                        trailing: {
-                            if !entry.isAdded, !sheet.isValidating {
-                                OpenCodeButton(
-                                    variant: .iconCircle(.add, accessibilityLabel: "Add \(entry.name)"),
-                                    contrast: .low,
-                                    action: { onAddFolder(entry.path) }
-                                )
-                            }
-                        }
+                        action: { onOpenFolder(entry.path) }
                     )
+                    .padding(.horizontal, addProjectRowGutterInset)
+                    .onAppear { onRowAppeared(entry.path) }
+                    .onDisappear { onRowDisappeared(entry.path) }
                 }
                 if let truncationHint = sheet.truncationHint {
-                    OpenCodeBottomSheetEntry(title: truncationHint, enabled: false, action: {})
+                    Text(truncationHint)
+                        .font(OpenCodeTypography.caption)
+                        .foregroundStyle(OpenCodeColors.textWeak)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, OpenCodeLayout.screenGutter)
+                        .padding(.vertical, 12)
                 }
             }
         }

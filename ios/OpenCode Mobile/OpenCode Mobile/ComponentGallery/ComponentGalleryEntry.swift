@@ -18,6 +18,7 @@ enum ComponentGalleryEntryID: String, Hashable {
     case skeletonIllustration
     case pageIndicator
     case bottomFade
+    case actionBar
     case tag
     case keyValueRow
     case attachment
@@ -118,6 +119,12 @@ let componentGalleryEntries = [
         id: .bottomFade,
         title: "Bottom Fade",
         description: "Gradient that fades list content into the background under a dock.",
+        category: .navigation
+    ),
+    ComponentGalleryEntry(
+        id: .actionBar,
+        title: "Action Bar",
+        description: "Bottom-pinned primary action naming what it acts on; disabled titles give the reason.",
         category: .navigation
     ),
     ComponentGalleryEntry(

@@ -193,10 +193,12 @@ struct ProjectListHomeView: View {
                     sheet: viewModel.addProjectSheet,
                     onBack: viewModel.closeAddProjectBrowser,
                     onFieldChange: viewModel.updateAddProjectField,
+                    onSubmitField: { Task { await viewModel.submitAddProjectField() } },
                     onUp: { Task { await viewModel.addProjectUp() } },
                     onSelectRoot: { path in Task { await viewModel.selectAddProjectRoot(path: path) } },
                     onOpenFolder: { path in Task { await viewModel.openAddProjectFolder(path: path) } },
-                    onAddFolder: { path in Task { await viewModel.addProject(worktree: path) } },
+                    onRowAppeared: { path in viewModel.addProjectFolderRowAppeared(path: path) },
+                    onRowDisappeared: { path in viewModel.addProjectFolderRowDisappeared(path: path) },
                     onAdd: { Task { await viewModel.confirmAddProject() } },
                     onRetry: { Task { await viewModel.retryAddProjectListing() } }
                 )
@@ -1251,8 +1253,8 @@ private struct PreviewFilesystemRepository: FilesystemRepository {
         ServerPaths(home: "/demo", directory: "/demo", worktree: "/")
     }
 
-    func listDirectory(path: String) async throws -> [DirectoryNode] {
-        []
+    func listDirectory(path: String) async throws -> DirectoryListing {
+        DirectoryListing(folders: [], isGitRepository: false)
     }
 }
 

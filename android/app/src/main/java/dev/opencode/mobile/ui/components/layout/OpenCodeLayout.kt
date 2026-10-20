@@ -27,6 +27,9 @@ object OpenCodeLayout {
     val ContentMaxWidth = 720.dp
     val SheetMaxWidth = 560.dp
 
+    /** Shared leading and trailing edge of a full-screen page: top bar, fields, chips, rows, and bottom bars. */
+    val ScreenGutter = 20.dp
+
     /** Horizontal inset of bottom sheet content: header, entries, footer, and pinned slots. */
     val SheetContentHorizontalInset = 20.dp
     val CompactMaxWidth = 600.dp

@@ -64,6 +64,8 @@ struct OpenCodeListItem<Trailing: View>: View {
     let subtitleSegments: [OpenCodeListItemSubtitleSegment]?
     let status: OpenCodeListItemStatus?
     let caption: String?
+    /// Small tag after the title, such as "git". The title truncates first; the tag stays.
+    let titleTag: String?
     let selected: Bool
     let enabled: Bool
     let style: OpenCodeListItemStyle
@@ -82,6 +84,7 @@ struct OpenCodeListItem<Trailing: View>: View {
         subtitleSegments: [OpenCodeListItemSubtitleSegment]? = nil,
         status: OpenCodeListItemStatus? = nil,
         caption: String? = nil,
+        titleTag: String? = nil,
         selected: Bool = false,
         enabled: Bool = true,
         style: OpenCodeListItemStyle = .plain,
@@ -97,6 +100,7 @@ struct OpenCodeListItem<Trailing: View>: View {
         self.subtitleSegments = subtitleSegments
         self.status = status
         self.caption = caption
+        self.titleTag = titleTag?.isEmpty == true ? nil : titleTag
         self.selected = selected
         self.enabled = enabled
         self.style = style
@@ -193,10 +197,15 @@ struct OpenCodeListItem<Trailing: View>: View {
             startDecoratorContent
 
             VStack(alignment: .leading, spacing: listItemTitleSubtitleSpacing) {
-                Text(title)
-                    .font(OpenCodeTypography.body.weight(.semibold))
-                    .foregroundStyle(enabled ? OpenCodeColors.textStrong : OpenCodeColors.textWeaker)
-                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    Text(title)
+                        .font(OpenCodeTypography.body.weight(.semibold))
+                        .foregroundStyle(enabled ? OpenCodeColors.textStrong : OpenCodeColors.textWeaker)
+                        .lineLimit(1)
+                    if let titleTag {
+                        OpenCodeTag(titleTag, size: .small)
+                    }
+                }
 
                 if let subtitleSegments {
                     semanticSubtitle(subtitleSegments)
@@ -519,6 +528,12 @@ private struct OpenCodeListItemPressStyle: ButtonStyle {
             title: "All projects",
             subtitle: "8 projects",
             startDecorator: .iconCircle(.widgets)
+        )
+        OpenCodeListItem(
+            title: "opencode-mobile-357-split-view-chat-lifecycle-cache-android",
+            subtitle: "On Home \u{00B7} 12 folders",
+            titleTag: "git",
+            startDecorator: .icon(.folder)
         )
         OpenCodeListItem(
             title: "Card style with border",

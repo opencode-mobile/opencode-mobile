@@ -70,6 +70,7 @@ fun ListItemGalleryScreen(modifier: Modifier = Modifier) {
     var decoratorKindName by rememberSaveable { mutableStateOf(GalleryDecoratorKind.None.name) }
     var letterAccentName by rememberSaveable { mutableStateOf(LetterAccent.Violet.name) }
     var toggleOn by rememberSaveable { mutableStateOf(true) }
+    var showTitleTag by rememberSaveable { mutableStateOf(false) }
 
     val decoratorKind =
         try {
@@ -145,6 +146,7 @@ fun ListItemGalleryScreen(modifier: Modifier = Modifier) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OpenCodeChoiceBadge(label = "Selected", selected = selected, onClick = { selected = !selected })
                 OpenCodeChoiceBadge(label = "Enabled", selected = enabled, onClick = { enabled = !enabled })
+                OpenCodeChoiceBadge(label = "Title tag", selected = showTitleTag, onClick = { showTitleTag = !showTitleTag })
             }
         }
 
@@ -246,11 +248,30 @@ fun ListItemGalleryScreen(modifier: Modifier = Modifier) {
             subtitleSegments = subtitleSegments,
             status = status,
             caption = caption,
+            titleTag = if (showTitleTag) "git" else null,
             selected = selected,
             enabled = enabled,
             style = if (cardStyle) OpenCodeListItemStyle.Card else OpenCodeListItemStyle.Plain,
             startDecorator = startDecorator,
         )
+
+        Text(text = "Title tag", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
+        Column {
+            OpenCodeListItem(
+                title = "opencode-mobile",
+                subtitle = "On Home · 12 folders",
+                titleTag = "git",
+                startDecorator = StartDecorator.Icon(imageVector = OpenCodeIcons.Folder, contentDescription = null),
+                onClick = {},
+            )
+            OpenCodeListItem(
+                title = "a-very-long-repository-name-that-truncates-before-the-tag",
+                subtitle = "Empty",
+                titleTag = "git",
+                startDecorator = StartDecorator.Icon(imageVector = OpenCodeIcons.Folder, contentDescription = null),
+                onClick = {},
+            )
+        }
 
         Text(text = "Plain selection", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
         Column {

@@ -82,6 +82,7 @@ private val ListItemSelectionShape = RoundedCornerShape(OpenCodeRadius.medium)
 private val ListItemVerticalPadding = 12.dp
 private val ListItemTitleSubtitleSpacing = 2.dp
 private val ListItemMetaSpacing = 4.dp
+private val ListItemTitleTagSpacing = 6.dp
 private val StatusChipShape = OpenCodePillShape
 private const val ListItemPressedScale = 0.965f
 private const val ListItemPopPeakScale = 1.035f
@@ -136,6 +137,8 @@ fun OpenCodeListItem(
     subtitleSegments: List<OpenCodeListItemSubtitleSegment>? = null,
     status: OpenCodeListItemStatus? = null,
     caption: String? = null,
+    /** Small tag after the title, such as "git". The title truncates; the tag never does. */
+    titleTag: String? = null,
     selected: Boolean = false,
     enabled: Boolean = true,
     style: OpenCodeListItemStyle = OpenCodeListItemStyle.Plain,
@@ -284,13 +287,27 @@ fun OpenCodeListItem(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(ListItemTitleSubtitleSpacing),
                 ) {
-                    Text(
-                        text = title,
-                        color = if (enabled) textStrong else textWeaker,
-                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    val titleText = @Composable { titleModifier: Modifier ->
+                        Text(
+                            text = title,
+                            color = if (enabled) textStrong else textWeaker,
+                            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = titleModifier,
+                        )
+                    }
+                    if (titleTag.isNullOrBlank()) {
+                        titleText(Modifier)
+                    } else {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(ListItemTitleTagSpacing),
+                        ) {
+                            titleText(Modifier.weight(1f, fill = false))
+                            OpenCodeTag(title = titleTag, size = OpenCodeTagSize.Small)
+                        }
+                    }
                     if (subtitleSegments != null) {
                         val disabledColor = textWeaker
                         Text(

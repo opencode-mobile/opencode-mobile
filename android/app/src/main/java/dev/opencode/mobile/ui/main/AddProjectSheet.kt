@@ -6,21 +6,31 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.isImeVisible
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -28,15 +38,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ProductAnalytics
-import dev.opencode.mobile.domain.filesystem.ServerPathPolicy
 import dev.opencode.mobile.domain.project.ServerProjectSuggestions
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.BottomSheetWindowOverlay
+import dev.opencode.mobile.ui.components.OpenCodeActionBar
+import dev.opencode.mobile.ui.components.OpenCodeActionBarTarget
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
-import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetHeight
 import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonContrast
@@ -53,8 +62,8 @@ import dev.opencode.mobile.ui.components.OpenCodeStatusStack
 import dev.opencode.mobile.ui.components.OpenCodeStatusStackStyle
 import dev.opencode.mobile.ui.components.OpenCodeTextInput
 import dev.opencode.mobile.ui.components.OpenCodeTextInputKind
+import dev.opencode.mobile.ui.components.OpenCodeTextInputSubmitAction
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
-import dev.opencode.mobile.ui.components.OpenCodeTopBarAction
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
 import dev.opencode.mobile.ui.components.StartDecorator
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
@@ -70,7 +79,10 @@ data class AddProjectSheetCallbacks(
     val onConfirm: () -> Unit = {},
     val onBrowse: () -> Unit = {},
     val onCloseBrowser: () -> Unit = {},
-    val onAddFolder: (String) -> Unit = {},
+    /** Return / Go in the path field. */
+    val onSubmitField: () -> Unit = {},
+    val onFolderRowAppeared: (String) -> Unit = {},
+    val onFolderRowDisappeared: (String) -> Unit = {},
 )
 
 @Composable
@@ -274,17 +286,25 @@ private fun AddProjectSuggestionSkeleton(modifier: Modifier = Modifier) {
     }
 }
 
+// List Item rows pad their content 16dp; this brings rows to the shared screen gutter.
+private val BrowserRowExtraInset = OpenCodeLayout.ScreenGutter - 16.dp
+
+// Top Bar pads its back button 12dp; this brings it to the shared screen gutter.
+private val BrowserTopBarExtraInset = OpenCodeLayout.ScreenGutter - 12.dp
+
 /**
- * Full-screen folder browser. Back returns to the suggestion sheet; it does not dismiss Add project.
+ * Full-screen folder browser. Rows only navigate; the pinned action bar adds the folder it
+ * names. Back returns to the suggestion sheet; it does not dismiss Add project.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun AddProjectBrowser(
     sheet: AddProjectSheetUi,
     callbacks: AddProjectSheetCallbacks,
 ) {
-    val title = sheet.directory?.let(ServerPathPolicy::name)?.takeIf { it.isNotEmpty() } ?: "Add project"
-    BottomSheetWindowOverlay(paneTitle = title) {
+    BottomSheetWindowOverlay(paneTitle = AddProjectSheetUi.TITLE) {
         BackHandler(onBack = callbacks.onCloseBrowser)
+        val keyboardVisible = WindowInsets.isImeVisible
         Column(
             modifier =
                 Modifier
@@ -292,44 +312,34 @@ private fun AddProjectBrowser(
                     .background(MaterialTheme.colorScheme.background)
                     .statusBarsPadding()
                     .displayCutoutPadding()
-                    .navigationBarsPadding(),
+                    .windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Horizontal)),
         ) {
             OpenCodeTopBar(
-                title = title,
+                title = AddProjectSheetUi.TITLE,
                 leading = OpenCodeTopBarLeading.Back(onClick = callbacks.onCloseBrowser),
-                actions =
-                    listOf(
-                        OpenCodeTopBarAction.Label(
-                            title = "Add",
-                            enabled = sheet.addEnabled,
-                            onClick = callbacks.onConfirm,
-                        ),
-                    ),
-                showDivider = true,
+                modifier = Modifier.padding(horizontal = BrowserTopBarExtraInset),
             )
-            if (!sheet.addEnabled && !sheet.isLoading && sheet.listError == null) {
-                Text(
-                    text = sheet.addTitle,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = openCodeColor("text-weak"),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = OpenCodeLayout.SheetContentHorizontalInset)
-                            .padding(top = 8.dp),
-                )
-            }
             AddProjectPathChrome(sheet = sheet, callbacks = callbacks)
-            Column(
-                modifier =
-                    Modifier
-                        .weight(1f)
-                        .verticalScroll(rememberScrollState()),
-            ) {
-                AddProjectFolderList(sheet = sheet, callbacks = callbacks)
-            }
+            AddProjectFolderList(
+                sheet = sheet,
+                callbacks = callbacks,
+                modifier = Modifier.weight(1f),
+            )
+            // Rides the keyboard and fills under the navigation bar itself.
+            OpenCodeActionBar(
+                actionTitle = sheet.addTitle,
+                onAction = callbacks.onConfirm,
+                target =
+                    sheet.barTarget?.let { target ->
+                        OpenCodeActionBarTarget(
+                            title = target.name,
+                            subtitle = target.path,
+                            tag = AddProjectSheetUi.GIT_TAG.takeIf { target.isGitRepository },
+                        )
+                    },
+                enabled = sheet.addEnabled,
+                compact = keyboardVisible,
+            )
         }
     }
 }
@@ -343,8 +353,8 @@ private fun AddProjectPathChrome(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = OpenCodeLayout.SheetContentHorizontalInset)
-                .padding(top = 8.dp),
+                .padding(horizontal = OpenCodeLayout.ScreenGutter)
+                .padding(top = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.Top,
     ) {
@@ -355,6 +365,8 @@ private fun AddProjectPathChrome(
             kind = OpenCodeTextInputKind.Filter,
             enabled = !sheet.isValidating,
             errorMessage = sheet.fieldError,
+            submitAction = OpenCodeTextInputSubmitAction.Go,
+            onSubmit = callbacks.onSubmitField,
             modifier = Modifier.weight(1f),
         )
         OpenCodeButton(
@@ -372,7 +384,7 @@ private fun AddProjectPathChrome(
                 Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = OpenCodeLayout.SheetContentHorizontalInset, vertical = 8.dp),
+                    .padding(horizontal = OpenCodeLayout.ScreenGutter, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -392,58 +404,85 @@ private fun AddProjectPathChrome(
 private fun AddProjectFolderList(
     sheet: AddProjectSheetUi,
     callbacks: AddProjectSheetCallbacks,
+    modifier: Modifier = Modifier,
 ) {
     when {
         sheet.isValidating -> {
-            OpenCodeStatusStack(
-                title = "Checking folder",
-                style = OpenCodeStatusStackStyle.Spinner,
-                modifier = Modifier.fillMaxWidth().padding(24.dp),
-            )
-        }
-        sheet.listError != null -> {
-            OpenCodeEmptyState(
-                title = AddProjectSheetUi.LIST_ERROR_TITLE,
-                message = sheet.listError,
-                primaryAction = OpenCodeEmptyStateAction(title = "Retry", onClick = callbacks.onRetry),
-                modifier = Modifier.padding(20.dp),
-            )
-        }
-        sheet.isLoading -> {
-            OpenCodeStatusStack(
-                title = "Loading folders",
-                style = OpenCodeStatusStackStyle.Spinner,
-                modifier = Modifier.fillMaxWidth().padding(24.dp),
-            )
-        }
-        sheet.emptyMessage != null -> {
-            OpenCodeBottomSheetEntry(title = sheet.emptyMessage, enabled = false, onClick = {})
-        }
-        else -> {
-            sheet.entries.forEach { folder ->
-                OpenCodeListItem(
-                    title = folder.name,
-                    subtitle = if (folder.isOnHome) "On home" else null,
-                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Folder, contentDescription = null),
-                    accessory = OpenCodeListItemAccessory.Disclosure,
-                    onClick = { callbacks.onOpenFolder(folder.path) },
-                    trailing =
-                        if (folder.isOnHome || sheet.isValidating) {
-                            null
-                        } else {
-                            {
-                                OpenCodeButton(
-                                    variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Add, "Add ${folder.name}"),
-                                    contrast = OpenCodeButtonContrast.Low,
-                                    onClick = { callbacks.onAddFolder(folder.path) },
-                                )
-                            }
-                        },
+            Box(modifier = modifier.fillMaxWidth()) {
+                OpenCodeStatusStack(
+                    title = "Checking folder",
+                    style = OpenCodeStatusStackStyle.Spinner,
+                    modifier = Modifier.fillMaxWidth().padding(24.dp),
                 )
             }
-            sheet.truncationHint?.let { hint ->
-                OpenCodeBottomSheetEntry(title = hint, enabled = false, onClick = {})
+        }
+        sheet.listError != null -> {
+            Box(modifier = modifier.fillMaxWidth()) {
+                OpenCodeEmptyState(
+                    title = AddProjectSheetUi.LIST_ERROR_TITLE,
+                    message = sheet.listError,
+                    primaryAction = OpenCodeEmptyStateAction(title = "Retry", onClick = callbacks.onRetry),
+                    modifier = Modifier.padding(OpenCodeLayout.ScreenGutter),
+                )
+            }
+        }
+        sheet.isLoading -> {
+            Box(modifier = modifier.fillMaxWidth()) {
+                OpenCodeStatusStack(
+                    title = "Loading folders",
+                    style = OpenCodeStatusStackStyle.Spinner,
+                    modifier = Modifier.fillMaxWidth().padding(24.dp),
+                )
+            }
+        }
+        sheet.emptyMessage != null -> {
+            Box(modifier = modifier.fillMaxWidth()) {
+                Text(
+                    text = sheet.emptyMessage,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = openCodeColor("text-weak"),
+                    modifier = Modifier.padding(horizontal = OpenCodeLayout.ScreenGutter, vertical = 24.dp),
+                )
+            }
+        }
+        else -> {
+            LazyColumn(modifier = modifier.fillMaxWidth()) {
+                items(sheet.entries, key = { it.path }) { folder ->
+                    AddProjectFolderRow(folder = folder, callbacks = callbacks)
+                }
+                sheet.truncationHint?.let { hint ->
+                    item(key = "truncation-hint") {
+                        Text(
+                            text = hint,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = openCodeColor("text-weak"),
+                            modifier = Modifier.padding(horizontal = OpenCodeLayout.ScreenGutter, vertical = 16.dp),
+                        )
+                    }
+                }
             }
         }
     }
+}
+
+/** One folder. Reports on-screen time so its count and git tag load lazily. */
+@Composable
+private fun AddProjectFolderRow(
+    folder: AddProjectFolderUi,
+    callbacks: AddProjectSheetCallbacks,
+) {
+    val onAppeared by rememberUpdatedState(callbacks.onFolderRowAppeared)
+    val onDisappeared by rememberUpdatedState(callbacks.onFolderRowDisappeared)
+    DisposableEffect(folder.path) {
+        onAppeared(folder.path)
+        onDispose { onDisappeared(folder.path) }
+    }
+    OpenCodeListItem(
+        title = folder.name,
+        subtitle = folder.subtitle,
+        titleTag = AddProjectSheetUi.GIT_TAG.takeIf { folder.isGitRepository },
+        startDecorator = StartDecorator.Icon(OpenCodeIcons.Folder, contentDescription = null),
+        onClick = { callbacks.onOpenFolder(folder.path) },
+        modifier = Modifier.padding(horizontal = BrowserRowExtraInset),
+    )
 }
