@@ -9,6 +9,7 @@ import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.MessageStopReason
 import dev.opencode.mobile.domain.message.ThoughtPartChrome
 import dev.opencode.mobile.domain.message.TimelineNotice
+import dev.opencode.mobile.domain.message.ToolArgumentsPreview
 import dev.opencode.mobile.domain.message.ToolPartIdentity
 import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.markdown.MarkdownDocument
@@ -59,6 +60,11 @@ sealed class SessionChatTimelineBlock {
         /** [status] is Error because the user stopped or declined it; render neutral. */
         val isInterrupted: Boolean = false,
         val isMalformed: Boolean = false,
+        /**
+         * v2 is still streaming this tool's arguments: [subtitle] is the value
+         * read so far from the partial input, or a placeholder until one appears.
+         */
+        val isReceivingArguments: Boolean = false,
     ) : SessionChatTimelineBlock()
 
     /** Persistent note that the reply ended early (cut off or interrupted). */
@@ -687,12 +693,16 @@ object SessionChatTimelineBlocks {
         card: SessionChatTimelineBlock.ToolCard,
     ): String =
         when (name) {
-            "read" -> readPathSubtitle(tool.input)?.let(::lastPathComponent)
+            "read" ->
+                readPath(tool)?.let(::lastPathComponent)
+                    ?: card.subtitle.takeIf { card.isReceivingArguments }
             "edit", "write", "apply_patch", "patch" -> card.subtitle?.let(::lastPathComponent)
             "glob", "grep" -> inputString(tool.input, "pattern") ?: inputString(tool.input, "path", "directory")
             "websearch" -> inputString(tool.input, "query")
             "webfetch" -> inputString(tool.input, "url")?.let(::urlHost)
-            "bash", "shell" -> inputString(tool.input, "command")?.let(StepParagraphChips::commandLabel)
+            "bash", "shell" ->
+                shellCommand(tool)?.let(StepParagraphChips::commandLabel)
+                    ?: card.subtitle.takeIf { card.isReceivingArguments }
             "execute" -> card.subtitle?.let(StepParagraphChips::commandLabel)
             "task", "subagent" -> taskAgentName(tool)
             "skill" -> "/" + (skillName(tool) ?: name)
@@ -1227,7 +1237,7 @@ object SessionChatTimelineBlocks {
 
     private fun contextSubtitle(tool: MessagePart.Tool): String? =
         when (tool.toolName.lowercase()) {
-            "read" -> readPathSubtitle(tool.input)
+            "read" -> readPath(tool)
             "glob", "grep" -> patternPathSubtitle(tool.input)
             "websearch" -> inputString(tool.input, "query")
             else -> null
@@ -1308,12 +1318,13 @@ object SessionChatTimelineBlocks {
                 tool.status == ToolStatus.Error -> tool.error?.takeIf { it.isNotEmpty() }
                 else -> null
             }
+        val receivingArguments = ToolArgumentsPreview.isReceiving(tool)
         return SessionChatTimelineBlock.ToolCard(
             blockID = PresentationBlockId.direct(partId),
             toolName = tool.toolName,
             status = status,
             title = chrome.title,
-            subtitle = chrome.subtitle,
+            subtitle = chrome.subtitle ?: receivingArgumentsPlaceholder(name).takeIf { receivingArguments },
             errorText = errorText,
             additions = chrome.additions,
             deletions = chrome.deletions,
@@ -1323,8 +1334,19 @@ object SessionChatTimelineBlocks {
             changesInitialFilePath = chrome.changesInitialFilePath,
             isInterrupted = interrupted,
             isMalformed = tool.isMalformed,
+            isReceivingArguments = receivingArguments,
         )
     }
+
+    /** What a card says while its arguments stream in and none can be read yet (TUI v2 copy). */
+    private fun receivingArgumentsPlaceholder(name: String): String? =
+        when (name) {
+            "bash", "shell" -> "Writing command…"
+            "read" -> "Preparing read…"
+            "edit" -> "Preparing edit…"
+            "write" -> "Preparing write…"
+            else -> null
+        }
 
     /**
      * A shell run the server reports as completed but whose command exited
@@ -1369,7 +1391,7 @@ object SessionChatTimelineBlocks {
     ): Chrome? {
         if (isQuestionTool(tool)) return questionChrome(tool)
         return when (name) {
-            "read" -> contextChrome(tool, subtitle = readPathSubtitle(tool.input))
+            "read" -> contextChrome(tool, subtitle = readPath(tool))
             "glob" -> contextChrome(tool, subtitle = patternPathSubtitle(tool.input))
             "grep" -> contextChrome(tool, subtitle = patternPathSubtitle(tool.input))
             "bash", "shell" -> shellChrome(tool)
@@ -1415,6 +1437,7 @@ object SessionChatTimelineBlocks {
             metadataFilediffString(tool.metadata, "file")
                 ?: singlePatchFile?.path
                 ?: pathSubtitle(tool.input)
+                ?: ToolArgumentsPreview.string(tool, "filePath", "path", "file")
         val additions =
             positiveCount(
                 metadataFilediffInt(tool.metadata, "additions")
@@ -1570,6 +1593,7 @@ object SessionChatTimelineBlocks {
         val command =
             inputString(tool.input, "command")
                 ?: runningTitleOverride(tool)
+                ?: ToolArgumentsPreview.string(tool, "command")
         return Chrome(
             title = "Shell",
             subtitle = command,
@@ -1672,6 +1696,7 @@ object SessionChatTimelineBlocks {
         )?.let { return it }
         val parts =
             input.mapNotNull { (key, value) ->
+                if (key == ToolArgumentsPreview.INPUT_KEY) return@mapNotNull null
                 val primitive = value as? JsonPrimitive ?: return@mapNotNull null
                 val text = primitive.content.takeIf { it.isNotEmpty() && it.length <= 80 } ?: return@mapNotNull null
                 "$key=$text"
@@ -1709,8 +1734,14 @@ object SessionChatTimelineBlocks {
 
     private fun pathSubtitle(input: JsonObject?): String? = inputString(input, "filePath", "path", "file")
 
-    /** Read chrome is the file: v1 sends `filePath`, v2 sends `path`. */
-    private fun readPathSubtitle(input: JsonObject?): String? = inputString(input, "filePath", "file", "path")
+    /** Read chrome is the file, settled or still streaming in: v1 sends `filePath`, v2 sends `path`. */
+    private fun readPath(tool: MessagePart.Tool): String? =
+        inputString(tool.input, "filePath", "file", "path")
+            ?: ToolArgumentsPreview.string(tool, "filePath", "file", "path")
+
+    /** The shell command, settled or still streaming in. */
+    private fun shellCommand(tool: MessagePart.Tool): String? =
+        inputString(tool.input, "command") ?: ToolArgumentsPreview.string(tool, "command")
 
     private fun patternPathSubtitle(input: JsonObject?): String? {
         val pattern = inputString(input, "pattern")

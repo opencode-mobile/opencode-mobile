@@ -172,6 +172,94 @@ struct ActiveConnectionManagerProtocolTests {
         #expect(loaded?.serverURLs == [lan, tailscale])
     }
 
+    @Test func ensureLoaded_sendsThePasswordOnlyToTheChosenAddress() async throws {
+        let lan = "http://192.168.1.2:49374/"
+        let tailscale = "http://100.64.0.3:49374/"
+        let defaults = UserDefaults(suiteName: "ActiveConnectionManagerProtocolTests.\(UUID().uuidString)")!
+        let store = UserDefaultsConnectionProfileStore(
+            defaults: defaults,
+            secureCredentialStore: InMemoryAddressProbeCredentialStore()
+        )
+        try await store.saveProfile(
+            ConnectionProfile(
+                baseURL: lan,
+                serverURLs: [lan, tailscale],
+                username: "opencode",
+                password: "token",
+                id: "profile-1",
+                name: "Mac"
+            )
+        )
+        let probing = CredentialRecordingProbe()
+        let manager = ActiveConnectionManager(connectionProbing: probing, profileStore: store)
+
+        await manager.ensureLoaded(from: store)
+
+        #expect(Set(probing.unauthenticated) == Set([lan, tailscale]))
+        #expect(probing.authenticated == [tailscale])
+        #expect(manager.connection?.baseURL.absoluteString == tailscale)
+        let loaded = await store.activeProfile()
+        #expect(loaded?.baseURL == tailscale)
+    }
+
+    @Test func ensureLoaded_keepsTheStoredAddressWhenTheChosenHostRejectsThePassword() async throws {
+        let lan = "http://192.168.1.2:49374/"
+        let tailscale = "http://100.64.0.3:49374/"
+        let defaults = UserDefaults(suiteName: "ActiveConnectionManagerProtocolTests.\(UUID().uuidString)")!
+        let store = UserDefaultsConnectionProfileStore(
+            defaults: defaults,
+            secureCredentialStore: InMemoryAddressProbeCredentialStore()
+        )
+        try await store.saveProfile(
+            ConnectionProfile(
+                baseURL: lan,
+                serverURLs: [lan, tailscale],
+                username: "opencode",
+                password: "stale",
+                id: "profile-1",
+                name: "Mac"
+            )
+        )
+        let probing = CredentialRecordingProbe(acceptsPassword: false)
+        let manager = ActiveConnectionManager(connectionProbing: probing, profileStore: store)
+
+        await manager.ensureLoaded(from: store)
+
+        #expect(probing.authenticated == [tailscale])
+        #expect(manager.connection?.baseURL.absoluteString == lan)
+        let loaded = await store.activeProfile()
+        #expect(loaded?.baseURL == lan)
+    }
+
+    @Test func ensureLoaded_neverReplacesHttpsWithHttp() async throws {
+        let tunnel = "https://box.opentunnel.xyz/"
+        let lan = "http://192.168.1.2:49374/"
+        let defaults = UserDefaults(suiteName: "ActiveConnectionManagerProtocolTests.\(UUID().uuidString)")!
+        let store = UserDefaultsConnectionProfileStore(
+            defaults: defaults,
+            secureCredentialStore: InMemoryAddressProbeCredentialStore()
+        )
+        try await store.saveProfile(
+            ConnectionProfile(
+                baseURL: tunnel,
+                serverURLs: [tunnel, lan],
+                username: "opencode",
+                password: "token",
+                id: "profile-1",
+                name: "Mac"
+            )
+        )
+        let probing = CredentialRecordingProbe(silentHosts: ["box.opentunnel.xyz"])
+        let manager = ActiveConnectionManager(connectionProbing: probing, profileStore: store)
+
+        await manager.ensureLoaded(from: store)
+
+        #expect(probing.authenticated.isEmpty)
+        #expect(manager.connection?.baseURL.absoluteString == tunnel)
+        let loaded = await store.activeProfile()
+        #expect(loaded?.baseURL == tunnel)
+    }
+
     @Test func currentProtocolOrProbe_doesNotStampProtocolAfterDisconnect() async {
         let probing = GatedProbe(result: .v2)
         let manager = ActiveConnectionManager(connectionProbing: probing)
@@ -405,5 +493,41 @@ private struct VersionedProbe: ConnectionProbing {
 
     func probeServer(connection: ServerConnection) async throws -> ServerProbeOutcome {
         ServerProbeOutcome(serverProtocol: .v1, serverVersion: "1.19.1")
+    }
+}
+
+/// 401 without a password; `acceptsPassword` decides the authenticated answer; `silentHosts` time out.
+private final class CredentialRecordingProbe: ConnectionProbing, @unchecked Sendable {
+    private let lock = NSLock()
+    private var unauthenticatedURLs: [String] = []
+    private var authenticatedURLs: [String] = []
+    private let acceptsPassword: Bool
+    private let silentHosts: Set<String>
+
+    var unauthenticated: [String] { lock.withLock { unauthenticatedURLs } }
+    var authenticated: [String] { lock.withLock { authenticatedURLs } }
+
+    init(acceptsPassword: Bool = true, silentHosts: Set<String> = []) {
+        self.acceptsPassword = acceptsPassword
+        self.silentHosts = silentHosts
+    }
+
+    func probe(connection: ServerConnection) async throws -> ServerProtocol {
+        let url = connection.baseURL.absoluteString
+        let hasPassword = !(connection.password ?? "").isEmpty
+        lock.withLock {
+            if hasPassword {
+                authenticatedURLs.append(url)
+            } else {
+                unauthenticatedURLs.append(url)
+            }
+        }
+        if silentHosts.contains(where: { url.contains($0) }) {
+            throw ServerProbeError.transport("down")
+        }
+        if hasPassword, acceptsPassword {
+            return .v2
+        }
+        throw ServerProbeError.http(statusCode: 401, message: "Unauthorized")
     }
 }

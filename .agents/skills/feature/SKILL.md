@@ -48,6 +48,8 @@ Check what applies and report pass, fail, or not applicable for each:
   is in scope)
 - relevant automated checks have a recorded pass, fail, or explicit skip
 - the pull-request summary states scope, checks, and remaining risks
+- user-visible or live-server changes carry evidence per `AGENTS.md`
+  **Pull Request Evidence**, or the pull request says why not
 
 Repair issue state only when asked; otherwise report the mismatch.
 
@@ -65,6 +67,10 @@ Repair issue state only when asked; otherwise report the mismatch.
 
 ## Checks
 - ...
+
+## Evidence
+<!-- Per AGENTS.md "Pull Request Evidence": link to the published evidence
+     page, or one line saying why none applies. -->
 
 ## Issue
 - #<number>

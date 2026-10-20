@@ -748,7 +748,8 @@ final class SessionChatComposer {
         isSessionBusy: Bool,
         supportsFollowUp: Bool,
         waitToSend: (() async -> Bool)? = nil,
-        serverAlreadyAccepted: () -> Bool = { false }
+        serverAlreadyAccepted: () -> Bool = { false },
+        beforePrompt: () async throws -> Void = {}
     ) async {
         let submittedText = state.composer.text
         let submittedMentions = state.composer.agentMentions
@@ -882,6 +883,7 @@ final class SessionChatComposer {
                     model: ModelSelection,
                     worktree: String?
                 ) async throws {
+                    try await beforePrompt()
                     func send(delivery: FollowUpDelivery) async throws {
                         try await messageRepository.sendPromptAsync(
                             sessionID: sessionID,
@@ -1587,6 +1589,16 @@ final class SessionChatComposer {
         }
         if let commandError = error as? CommandError {
             switch commandError {
+            case let .http(_, message):
+                return message ?? "Request failed"
+            case .transport:
+                return "Unable to reach the server"
+            case .decoding:
+                return "Unable to read server response"
+            }
+        }
+        if let sessionError = error as? SessionError {
+            switch sessionError {
             case let .http(_, message):
                 return message ?? "Request failed"
             case .transport:

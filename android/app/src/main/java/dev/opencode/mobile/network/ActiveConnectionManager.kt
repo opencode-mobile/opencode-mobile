@@ -4,17 +4,11 @@ import dev.opencode.mobile.domain.connection.ConnectionProbing
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileIdentity
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
-import dev.opencode.mobile.domain.connection.PairingQRPayload
-import dev.opencode.mobile.domain.connection.ProbeStatus
+import dev.opencode.mobile.domain.connection.ServerAddressProbe
 import dev.opencode.mobile.domain.connection.ServerCapabilities
 import dev.opencode.mobile.domain.connection.ServerProtocol
-import dev.opencode.mobile.domain.connection.toProbeStatus
-import dev.opencode.mobile.domain.project.ServerProbeError
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import javax.inject.Singleton
@@ -230,46 +224,30 @@ class ActiveConnectionManager(
     }
 
     /**
-     * Probe every saved address and keep the winner on the same profile id.
+     * Resolve the saved address list and keep the winner on the same profile id.
      * Empty [ConnectionProfile.serverUrls] skips this and uses the stored baseUrl.
-     * If none answer, the stored baseUrl stays and the later single-URL probe fails as usual.
+     * Candidates are swept without credentials; the password goes to the one chosen host,
+     * and only a host that accepted it wins. A rejected password or no answer at all leaves
+     * the stored baseUrl alone, and the later single-URL probe fails as usual.
      */
     private suspend fun selectReachableAddress(profile: ConnectionProfile): ConnectionProfile {
-        if (profile.serverUrls.isEmpty() || connectionProbing == null) return profile
+        val probing = connectionProbing ?: return profile
+        if (profile.serverUrls.isEmpty()) return profile
         val urls = ConnectionProfileIdentity.normalizeServerUrls(profile.serverUrls)
         if (urls.isEmpty()) return profile
-        val answered =
-            coroutineScope {
-                urls
-                    .map { url ->
-                        async {
-                            url to addressAnswered(profile, url)
-                        }
-                    }.awaitAll()
-                    .mapNotNull { (url, ok) -> url.takeIf { ok } }
-            }
-        val winner = PairingQRPayload.pickReachableUrl(answered) ?: return profile
+        val resolution =
+            ServerAddressProbe.resolve(
+                urls = urls,
+                username = profile.username,
+                password = profile.password,
+                currentBaseUrl = profile.baseUrl,
+                probing = probing,
+            )
+        val winner = resolution.chosen ?: return profile
+        val detected = resolution.reachableProtocol ?: return profile
         val normalizedWinner = ConnectionProfileIdentity.normalizeBaseUrl(winner)
         if (normalizedWinner == ConnectionProfileIdentity.normalizeBaseUrl(profile.baseUrl)) return profile
-        return profile.copy(baseUrl = normalizedWinner)
-    }
-
-    private suspend fun addressAnswered(
-        profile: ConnectionProfile,
-        url: String,
-    ): Boolean {
-        val probing = connectionProbing ?: return false
-        val connection = ServerConnection.fromProfile(profile.copy(baseUrl = url))
-        return try {
-            probing.probe(connection)
-            true
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (error: ServerProbeError) {
-            error.toProbeStatus() == ProbeStatus.AuthFailed
-        } catch (_: Throwable) {
-            false
-        }
+        return profile.copy(baseUrl = normalizedWinner, serverProtocol = detected)
     }
 
     private suspend fun persistAddressChange(

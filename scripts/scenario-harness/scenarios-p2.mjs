@@ -90,7 +90,7 @@ export const P2 = [
     title: "Write row while large arguments stream",
     category: "tools",
     prompt: "Write a migration guide to docs/MIGRATION.md.",
-    expect: "A Write row appears as soon as the tool input starts (pending, with the path once known), not only after ~8s of argument streaming. Variant pending-then-hang: arguments stop half way; tap Stop and the row ends interrupted. Live input previews are open issue 615 on both protocols.",
+    expect: "A Write row appears as soon as the tool input starts (pending, with the path once known), not only after ~8s of argument streaming. Servers that stream tool input (v2 beta) show the path from the first delta; v1 and older v2 show it once the call settles. Variant pending-then-hang: arguments stop half way; tap Stop and the row ends interrupted. Variant shell-command: a long Shell command streams in slowly; on v2 beta the pending Shell row shows \"Writing command…\" and then the command growing until the call settles.",
     modelCalls: [
       {
         steps: [
@@ -106,6 +106,23 @@ export const P2 = [
       { steps: [say("Wrote `docs/MIGRATION.md`.")] },
     ],
     variants: {
+      "shell-command": {
+        modelCalls: [
+          {
+            steps: [
+              {
+                ...run(
+                  "git log --oneline --max-count=20 -- src/ && git status --short && npm test",
+                  "Check history, status and tests",
+                ),
+                argChunkChars: 4,
+                argDelayMs: 150,
+              },
+            ],
+          },
+          { steps: [say("Checked history, status and tests.")] },
+        ],
+      },
       "pending-then-hang": {
         modelCalls: [
           {

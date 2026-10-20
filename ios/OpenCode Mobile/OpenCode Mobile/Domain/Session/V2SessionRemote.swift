@@ -144,6 +144,10 @@ struct V2SessionRemote: SessionRemote, Sendable {
         try await api.clearRevertV2(id: id)
     }
 
+    func commitRevert(id: String) async throws -> Bool {
+        try await api.commitRevertV2(id: id)
+    }
+
     func respondToPermission(
         sessionID: String,
         permissionID: String,

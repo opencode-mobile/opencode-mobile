@@ -573,6 +573,12 @@ class SessionsApi private constructor(
             .delete("api/session/$id/revert")
             .ensureSuccess()
 
+    suspend fun commitRevertV2(id: String): Boolean =
+        httpClient
+            .get()
+            .post("api/session/$id/revert/commit")
+            .ensureSuccess()
+
     suspend fun getVcsInfoV2(directory: String? = null): V2VcsInfoDto =
         httpClient
             .get()

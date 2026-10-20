@@ -160,6 +160,11 @@ internal class V2SessionRemote(
         directory: String?,
     ): Boolean = api.clearRevertV2(id)
 
+    override suspend fun commitRevert(
+        id: String,
+        directory: String?,
+    ): Boolean = api.commitRevertV2(id)
+
     override suspend fun respondToPermission(
         sessionId: String,
         permissionId: String,

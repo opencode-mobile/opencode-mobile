@@ -35,7 +35,7 @@ class TerminalConnectRequestTest {
     }
 
     @Test
-    fun v2Https_usesWssLocationDirectoryCursorAndAuthToken() {
+    fun v2Https_usesWssLocationDirectoryCursorAndHeaderAuth() {
         val request =
             connectRequest(
                 id = "pty_2",
@@ -55,13 +55,13 @@ class TerminalConnectRequestTest {
         assertNull(url.parameters["directory"])
         val expected =
             Base64.getEncoder().encodeToString("opencode:secret".toByteArray(Charsets.UTF_8))
-        assertEquals(expected, url.parameters["auth_token"])
+        assertNull(url.parameters["auth_token"])
         assertEquals("Basic $expected", request.authorization)
         assertNull(url.parameters["ticket"])
     }
 
     @Test
-    fun v1Http_usesWsAndAuthToken() {
+    fun v1Http_usesWsAndHeaderAuthOnly() {
         val request =
             connectRequest(
                 id = "pty_1",
@@ -78,13 +78,14 @@ class TerminalConnectRequestTest {
         assertEquals("/pty/pty_1/connect", url.encodedPath)
         val expected =
             Base64.getEncoder().encodeToString("opencode:secret".toByteArray(Charsets.UTF_8))
-        assertEquals(expected, url.parameters["auth_token"])
+        assertNull(url.parameters["auth_token"])
+        assertFalse(request.url.contains(expected))
         assertEquals("Basic $expected", request.authorization)
         assertNull(url.parameters["ticket"])
     }
 
     @Test
-    fun ticket_overridesAuthToken() {
+    fun ticket_replacesHeaderAuth() {
         val request =
             connectRequest(
                 id = "pty_1",

@@ -17,6 +17,7 @@ import dev.opencode.mobile.domain.connection.PairingQRError
 import dev.opencode.mobile.domain.connection.PairingQRParseResult
 import dev.opencode.mobile.domain.connection.PairingQRPayload
 import dev.opencode.mobile.domain.connection.ProbeStatus
+import dev.opencode.mobile.domain.connection.ServerAddressProbe
 import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.connection.toProbeStatus
 import dev.opencode.mobile.domain.connection.userMessage
@@ -24,9 +25,6 @@ import dev.opencode.mobile.domain.project.ServerProbeError
 import dev.opencode.mobile.network.ServerConnection
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarMessage
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarVariant
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -432,30 +430,19 @@ class ConnectionSetupViewModel
                     redeemAnsweredHost(pendingCode, generation, onSaved, origin = origin)
                     return@launch
                 }
+                // Unauthenticated sweep first; the password then goes to the one chosen host.
                 val summary = probeAddresses(urlsToProbe())
                 if (generation != addressProbeGeneration) return@launch
                 publishAddressProbe(summary)
                 if (stopForSavedAddressRecovery()) return@launch
-                val winner = summary.winner
-                val winnerOutcome = winner?.let { summary.outcomeFor(it) }
-                if (winnerOutcome is ProbeOutcome.Reachable) {
-                    detectedProtocol = winnerOutcome.protocol
+                val detected = summary.reachableProtocol
+                if (detected != null) {
+                    detectedProtocol = detected
                     persistAfterProbe(onSaved)
                     return@launch
                 }
                 detectedProtocol = null
-                if (winnerOutcome is ProbeOutcome.Failed) {
-                    handleProbeFailure(winnerOutcome.error, origin)
-                    return@launch
-                }
-                val failed = summary.outcomes.mapNotNull { (it as? ProbeOutcome.Failed)?.error }
-                val authError = failed.firstOrNull { it.toProbeStatus() == ProbeStatus.AuthFailed }
-                handleProbeFailure(
-                    authError
-                        ?: failed.lastOrNull()
-                        ?: ServerProbeError.Transport(IllegalStateException("Unable to reach the server")),
-                    origin,
-                )
+                handleProbeFailure(summary.failure ?: unreachableError(), origin)
             }
         }
 
@@ -534,9 +521,9 @@ class ConnectionSetupViewModel
                 if (generation != addressProbeGeneration) return@launch
                 publishAddressProbe(summary)
                 if (stopForSavedAddressRecovery()) return@launch
-                val winnerOutcome = summary.winner?.let { summary.outcomeFor(it) }
-                if (winnerOutcome is ProbeOutcome.Reachable) {
-                    detectedProtocol = winnerOutcome.protocol
+                val detected = summary.reachableProtocol
+                if (detected != null) {
+                    detectedProtocol = detected
                     _uiState.value =
                         _uiState.value.copy(
                             state = ConnectionSetupState.Idle,
@@ -546,18 +533,7 @@ class ConnectionSetupViewModel
                     return@launch
                 }
                 detectedProtocol = null
-                if (winnerOutcome is ProbeOutcome.Failed) {
-                    handleProbeFailure(winnerOutcome.error, ConnectFailureOrigin.ScannedQr)
-                    return@launch
-                }
-                val failed = summary.outcomes.mapNotNull { (it as? ProbeOutcome.Failed)?.error }
-                val authError = failed.firstOrNull { it.toProbeStatus() == ProbeStatus.AuthFailed }
-                handleProbeFailure(
-                    authError
-                        ?: failed.lastOrNull()
-                        ?: ServerProbeError.Transport(IllegalStateException("Unable to reach the server")),
-                    ConnectFailureOrigin.ScannedQr,
-                )
+                handleProbeFailure(summary.failure ?: unreachableError(), ConnectFailureOrigin.ScannedQr)
             }
         }
 
@@ -588,17 +564,15 @@ class ConnectionSetupViewModel
             persistOnSuccess: Boolean = true,
             origin: ConnectFailureOrigin = ConnectFailureOrigin.Manual,
         ) {
-            val summary = probeAddresses(urlsToProbe())
+            // No password yet: the sweep is unauthenticated and the code is redeemed on one host only.
+            val summary = probeAddresses(urlsToProbe(), password = "")
             if (generation != addressProbeGeneration) return
             publishAddressProbe(summary)
             if (stopForSavedAddressRecovery()) return
             val winner = summary.winner
             if (winner == null) {
                 detectedProtocol = null
-                handleProbeFailure(
-                    ServerProbeError.Transport(IllegalStateException("Unable to reach the server")),
-                    origin,
-                )
+                handleProbeFailure(unreachableError(), origin)
                 return
             }
             val token =
@@ -656,18 +630,8 @@ class ConnectionSetupViewModel
             }
         }
 
-        private fun answeredHost(outcome: ProbeOutcome): String? =
-            when (outcome) {
-                is ProbeOutcome.Reachable -> outcome.url
-                is ProbeOutcome.Failed -> {
-                    val http = outcome.error as? ServerProbeError.Http
-                    if (http != null && (http.statusCode == 401 || http.statusCode == 403)) {
-                        outcome.url
-                    } else {
-                        null
-                    }
-                }
-            }
+        private fun unreachableError(): ServerProbeError =
+            ServerProbeError.Transport(IllegalStateException("Unable to reach the server"))
 
         private suspend fun probeOutcome(url: String): ProbeOutcome =
             try {
@@ -692,24 +656,21 @@ class ConnectionSetupViewModel
             ) : ProbeOutcome
         }
 
+        /** One address resolution: who answered without credentials, who got the password, and how it went. */
         private data class AddressProbeSummary(
-            val outcomes: List<ProbeOutcome>,
-            val answered: List<String>,
-            val winner: String?,
+            val resolution: ServerAddressProbe.Resolution,
         ) {
-            val unreachable: Set<String>
-                get() {
-                    val answeredSet = answered.map(ConnectionProfileIdentity::normalizeBaseUrl).toSet()
-                    return outcomes
-                        .map { ConnectionProfileIdentity.normalizeBaseUrl(it.url) }
-                        .filter { it !in answeredSet }
-                        .toSet()
-                }
+            val winner: String?
+                get() = resolution.chosen
 
-            fun outcomeFor(url: String): ProbeOutcome? {
-                val normalized = ConnectionProfileIdentity.normalizeBaseUrl(url)
-                return outcomes.firstOrNull { ConnectionProfileIdentity.normalizeBaseUrl(it.url) == normalized }
-            }
+            val unreachable: Set<String>
+                get() = resolution.unreachable
+
+            val reachableProtocol: ServerProtocol?
+                get() = resolution.reachableProtocol
+
+            val failure: ServerProbeError?
+                get() = resolution.failure
         }
 
         private fun urlsToProbe(): List<String> {
@@ -737,18 +698,19 @@ class ConnectionSetupViewModel
             }
         }
 
-        private suspend fun probeAddresses(urls: List<String>): AddressProbeSummary {
-            val outcomes =
-                coroutineScope {
-                    urls
-                        .map { url -> async { probeOutcome(url) } }
-                        .awaitAll()
-                }
-            val answered = outcomes.mapNotNull(::answeredHost)
+        private suspend fun probeAddresses(
+            urls: List<String>,
+            password: String = _uiState.value.password,
+        ): AddressProbeSummary {
+            val draft = draftProfile()
             return AddressProbeSummary(
-                outcomes = outcomes,
-                answered = answered,
-                winner = PairingQRPayload.pickReachableUrl(answered),
+                ServerAddressProbe.resolve(
+                    urls = urls,
+                    username = draft.username,
+                    password = password,
+                    currentBaseUrl = _uiState.value.baseUrl,
+                    probing = connectionProbeService,
+                ),
             )
         }
 
@@ -773,7 +735,7 @@ class ConnectionSetupViewModel
                 return
             }
             val baseUrl = winner ?: current.baseUrl
-            val recovery = if (isSavedAddressList()) savedAddressRecovery(summary.outcomes) else null
+            val recovery = if (isSavedAddressList()) savedAddressRecovery(summary) else null
             _uiState.value =
                 current.copy(
                     baseUrl = baseUrl,
@@ -792,16 +754,11 @@ class ConnectionSetupViewModel
                 !_uiState.value.qrScanPending &&
                 !pastedConnectLinkUnconfirmed
 
-        private fun savedAddressRecovery(outcomes: List<ProbeOutcome>): SavedAddressRecovery? {
-            if (outcomes.isEmpty() || outcomes.any { it is ProbeOutcome.Reachable }) return null
-            val failures = outcomes.mapNotNull { it as? ProbeOutcome.Failed }
-            if (failures.size != outcomes.size) return null
-            if (failures.any { it.error.isAuthRejection() }) return SavedAddressRecovery.Unauthorized
-            val allUnreachable =
-                failures.all { failure ->
-                    failure.error is ServerProbeError.Transport || failure.error is ServerProbeError.Unhealthy
-                }
-            if (allUnreachable) return SavedAddressRecovery.Unreachable
+        private fun savedAddressRecovery(summary: AddressProbeSummary): SavedAddressRecovery? {
+            val resolution = summary.resolution
+            if (resolution.answers.isEmpty() || resolution.reachableProtocol != null) return null
+            if (resolution.nothingAnswered) return SavedAddressRecovery.Unreachable
+            if (resolution.failure?.isAuthRejection() == true) return SavedAddressRecovery.Unauthorized
             return null
         }
 

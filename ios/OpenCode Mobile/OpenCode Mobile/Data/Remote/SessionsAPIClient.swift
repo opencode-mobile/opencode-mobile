@@ -368,6 +368,10 @@ nonisolated struct SessionsAPIClient: Sendable {
         try await delete(path: "api/session/\(id)/revert")
     }
 
+    func commitRevertV2(id: String) async throws -> Bool {
+        try await postWithoutBody(path: "api/session/\(id)/revert/commit")
+    }
+
     func getVcsInfoV2(directory: String? = nil) async throws -> V2VcsInfoDTO {
         let envelope: APILocatedEnvelope<V2VcsInfoDTO> = try await get(
             path: "api/vcs",

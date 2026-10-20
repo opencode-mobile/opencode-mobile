@@ -427,25 +427,16 @@ final class ConnectionSetupViewModel {
     ) async -> Bool {
         state = .connecting
         snackbar = nil
-        let candidates = urlsToProbe()
-        let outcomes = await probeOrigins(candidates)
-        noteAddressProbe(outcomes)
-        let reachable = outcomes.compactMap { url, result -> (String, ServerProtocol)? in
-            guard case let .success(detected) = result else { return nil }
-            return (url, detected)
-        }
-        if let winnerURL = PairingQRPayload.chooseAnsweredURL(
-            candidates: candidates,
-            answered: reachable.map(\.0)
-        ), let winner = reachable.first(where: {
-            ConnectionProfileIdentity.normalizeBaseURL($0.0) == winnerURL
-        }) {
+        // Unauthenticated sweep first; the password then goes to the one chosen host.
+        let resolution = await resolveAddresses(urlsToProbe(), password: password)
+        noteAddressProbe(resolution)
+        if let winner = resolution.chosen, let detected = resolution.reachableProtocol {
             addressRecovery = nil
-            detectedProtocol = winner.1
-            if ConnectionProfileIdentity.normalizeBaseURL(winner.0) !=
+            detectedProtocol = detected
+            if ConnectionProfileIdentity.normalizeBaseURL(winner) !=
                 ConnectionProfileIdentity.normalizeBaseURL(baseURL)
             {
-                setBaseURLFromSystem(winner.0)
+                setBaseURLFromSystem(winner)
             }
             logConnectionAction(
                 ProductAnalytics.Action.connectionTest,
@@ -454,20 +445,14 @@ final class ConnectionSetupViewModel {
             if persistOnSuccess {
                 return await persist()
             }
-            markQrPaired(winner.1)
+            markQrPaired(detected)
             return true
         }
         detectedProtocol = nil
-        let probeErrors = outcomes.compactMap { _, result -> ServerProbeError? in
-            guard case let .failure(error) = result else { return nil }
-            return error as? ServerProbeError
-        }
         handleProbeFailure(
-            probeErrors.first(where: { $0.probeStatus == .authFailed })
-                ?? probeErrors.last
-                ?? .transport("Unable to reach the server"),
+            resolution.failure ?? .transport("Unable to reach the server"),
             origin: origin,
-            outcomes: outcomes
+            resolution: resolution
         )
         logConnectionAction(
             ProductAnalytics.Action.connectionTest,
@@ -484,22 +469,15 @@ final class ConnectionSetupViewModel {
     ) async -> Bool {
         state = .connecting
         snackbar = nil
-        let candidates = urlsToProbe()
-        let outcomes = await probeOrigins(candidates)
-        noteAddressProbe(outcomes)
-        let answered = outcomes.compactMap { url, result -> String? in
-            ServerAddressProbe.hostAnswered(result) ? url : nil
-        }
-        guard let winner = PairingQRPayload.chooseAnsweredURL(candidates: candidates, answered: answered) else {
+        // No password yet: the sweep is unauthenticated and the code is redeemed on one host only.
+        let resolution = await resolveAddresses(urlsToProbe(), password: "")
+        noteAddressProbe(resolution)
+        guard let winner = resolution.chosen else {
             detectedProtocol = nil
-            let probeErrors = outcomes.compactMap { _, result -> ServerProbeError? in
-                guard case let .failure(error) = result else { return nil }
-                return error as? ServerProbeError
-            }
             handleProbeFailure(
-                probeErrors.last ?? .transport("Unable to reach the server"),
+                .transport("Unable to reach the server"),
                 origin: origin,
-                outcomes: outcomes
+                resolution: resolution
             )
             logConnectionAction(
                 ProductAnalytics.Action.connectionTest,
@@ -613,23 +591,21 @@ final class ConnectionSetupViewModel {
         onFieldChanged()
     }
 
-    private func probeOrigins(
-        _ urls: [String]
-    ) async -> [(String, Result<ServerProtocol, Error>)] {
-        await ServerAddressProbe.probe(
+    private func resolveAddresses(
+        _ urls: [String],
+        password: String
+    ) async -> ServerAddressProbe.Resolution {
+        await ServerAddressProbe.resolve(
             urls: urls,
             username: username,
             password: password,
+            currentBaseURL: baseURL,
             probing: connectionProbeService
         )
     }
 
-    private func noteAddressProbe(_ outcomes: [(String, Result<ServerProtocol, Error>)]) {
-        unreachableAddresses = Set(outcomes.compactMap { url, result in
-            ServerAddressProbe.hostAnswered(result)
-                ? nil
-                : ConnectionProfileIdentity.normalizeBaseURL(url)
-        })
+    private func noteAddressProbe(_ resolution: ServerAddressProbe.Resolution) {
+        unreachableAddresses = resolution.unreachable
         addressProbeFinished = true
     }
 
@@ -703,15 +679,15 @@ final class ConnectionSetupViewModel {
     private func handleProbeFailure(
         _ error: ServerProbeError,
         origin: ConnectFailureOrigin = .manual,
-        outcomes: [(String, Result<ServerProtocol, Error>)]? = nil
+        resolution: ServerAddressProbe.Resolution? = nil
     ) {
         if origin == .scannedQr {
             presentScannedQrFailure()
             return
         }
         let recovery: ConnectionAddressRecovery?
-        if let outcomes {
-            recovery = savedAddressRecovery(from: outcomes)
+        if let resolution {
+            recovery = savedAddressRecovery(from: resolution)
         } else {
             recovery = authRecovery(for: error)
         }
@@ -734,29 +710,16 @@ final class ConnectionSetupViewModel {
 
     /// Pair again only for a saved address list. A pasted link is not saved yet.
     private func savedAddressRecovery(
-        from outcomes: [(String, Result<ServerProtocol, Error>)]
+        from resolution: ServerAddressProbe.Resolution
     ) -> ConnectionAddressRecovery? {
-        guard !serverURLs.isEmpty, !pastedConnectLinkUnconfirmed, !outcomes.isEmpty else { return nil }
-        if outcomes.contains(where: { if case .success = $0.1 { true } else { false } }) {
+        guard !serverURLs.isEmpty, !pastedConnectLinkUnconfirmed, !resolution.answers.isEmpty else { return nil }
+        if resolution.reachableProtocol != nil {
             return nil
         }
-        let errors: [ServerProbeError?] = outcomes.map { _, result in
-            guard case let .failure(error as ServerProbeError) = result else { return nil }
-            return error
+        if resolution.nothingAnswered {
+            return .unreachable
         }
-        if errors.contains(where: { isUnauthorized($0) }) {
-            return .unauthorized
-        }
-        let everyFailureIsUnreachable = errors.allSatisfy { error in
-            guard let error else { return false }
-            switch error {
-            case .transport, .unhealthy:
-                return true
-            case .http:
-                return false
-            }
-        }
-        return everyFailureIsUnreachable ? .unreachable : nil
+        return isUnauthorized(resolution.failure) ? .unauthorized : nil
     }
 
     private func authRecovery(for error: ServerProbeError) -> ConnectionAddressRecovery? {

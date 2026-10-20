@@ -78,6 +78,36 @@ class PairingQRPayloadTest {
     }
 
     @Test
+    fun pickReachableUrl_neverReplacesHttpsWithHttp() {
+        val picked =
+            PairingQRPayload.pickReachableUrl(
+                listOf("http://192.168.0.160:4096/", "http://100.84.57.15:4096/"),
+                currentBaseUrl = "https://box.opentunnel.xyz/",
+            )
+        assertNull(picked)
+    }
+
+    @Test
+    fun pickReachableUrl_httpsCurrentStillPicksAnsweringHttps() {
+        val picked =
+            PairingQRPayload.pickReachableUrl(
+                listOf("https://box.opentunnel.xyz/", "http://100.84.57.15:4096/"),
+                currentBaseUrl = "https://box.opentunnel.xyz/",
+            )
+        assertEquals("https://box.opentunnel.xyz/", picked)
+    }
+
+    @Test
+    fun pickReachableUrl_httpCurrentMayMoveToHttps() {
+        val picked =
+            PairingQRPayload.pickReachableUrl(
+                listOf("https://box.opentunnel.xyz/"),
+                currentBaseUrl = "http://192.168.0.160:4096/",
+            )
+        assertEquals("https://box.opentunnel.xyz/", picked)
+    }
+
+    @Test
     fun pickReachableUrl_usesAnotherAddressWhenTailscaleDidNotAnswer() {
         val picked =
             PairingQRPayload.pickReachableUrl(

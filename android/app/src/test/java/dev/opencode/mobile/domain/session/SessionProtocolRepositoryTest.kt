@@ -863,6 +863,57 @@ class SessionProtocolRepositoryTest {
         }
 
     @Test
+    fun v2CommitRevert_postsCommitWithoutBody() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respond("", HttpStatusCode.NoContent)
+                }
+            val repository =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V2),
+                )
+
+            val ok = repository.commitRevert("ses_1", "/repo")
+
+            assertTrue(ok)
+            assertEquals(HttpMethod.Post, requests.single().method)
+            assertTrue(
+                requests
+                    .single()
+                    .url.encodedPath
+                    .endsWith("/api/session/ses_1/revert/commit"),
+            )
+            assertEquals(0L, requests.single().body.contentLength ?: 0L)
+        }
+
+    @Test
+    fun v1CommitRevert_sendsNoRequest() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respondJson("{}")
+                }
+            val repository =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V1),
+                )
+
+            val ok = repository.commitRevert("ses_1", "/repo")
+
+            assertTrue(ok)
+            assertTrue(requests.isEmpty())
+        }
+
+    @Test
     fun v2ArchiveSession_patchesArchivedThenReloadsSession() =
         runTest {
             val requests = mutableListOf<HttpRequestData>()
