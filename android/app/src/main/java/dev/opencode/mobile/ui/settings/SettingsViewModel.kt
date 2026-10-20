@@ -3,6 +3,7 @@ package dev.opencode.mobile.ui.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.opencode.mobile.OpenCodeReleaseObservability
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogBuffer
 import dev.opencode.mobile.domain.featureflags.FeatureFlags
@@ -133,8 +134,9 @@ class SettingsViewModel
             BlockDecorationCache.clear()
         }
 
+        /** Through the observability seam so Crashlytics and automatic Analytics follow at once. */
         fun setProductAnalyticsConsented(enabled: Boolean) {
-            AnalyticsConsentPreferences.updateProductAnalyticsConsented(enabled)
+            OpenCodeReleaseObservability.setProductAnalyticsConsented(enabled)
         }
     }
 

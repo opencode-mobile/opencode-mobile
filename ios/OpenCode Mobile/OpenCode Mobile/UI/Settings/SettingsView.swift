@@ -452,8 +452,10 @@ struct SettingsView: View {
                                 get: { analyticsConsentPreferences.productAnalyticsConsented },
                                 set: { newValue in
                                     // Log after applying consent: opting out is
-                                    // dropped by the gate rather than reported.
-                                    analyticsConsentPreferences
+                                    // dropped by the gate rather than reported. Goes through
+                                    // the observability seam so Crashlytics and automatic
+                                    // Analytics follow the switch right away.
+                                    OpenCodeReleaseObservability
                                         .setProductAnalyticsConsented(newValue)
                                     logSettingsAction(
                                         ProductAnalytics.Action.settingsToggleProductAnalytics
