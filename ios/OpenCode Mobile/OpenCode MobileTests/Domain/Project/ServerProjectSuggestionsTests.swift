@@ -57,6 +57,24 @@ struct ServerProjectSuggestionsTests {
         #expect(worktrees(projects) == ["/Users/me/app"])
     }
 
+    @Test func excludesArchivedProjects() {
+        let projects = [
+            project("gone", "/Users/me/gone", activity: 3, archived: true),
+            project("app", "/Users/me/app", activity: 2),
+            project("web", "/Users/me/web", activity: 1, archived: false),
+        ]
+        #expect(worktrees(projects) == ["/Users/me/app", "/Users/me/web"])
+    }
+
+    @Test func archivedDuplicateDoesNotHideTheLiveWorktree() {
+        let projects = [
+            project("gone", "/Users/me/app", activity: 5, archived: true),
+            project("live", "/Users/me/app", activity: 1),
+        ]
+        let suggestions = ServerProjectSuggestions.suggestions(from: projects, excluding: [])
+        #expect(suggestions.map(\.id) == ["live"])
+    }
+
     @Test func excludesTempAndHiddenFolders() {
         let projects = [
             project("upload", "/private/var/folders/_p/x/T/opencode/uploads/8d82", activity: 9),
@@ -101,13 +119,20 @@ struct ServerProjectSuggestionsTests {
         #expect(suggestions.map(\.displayName) == ["INSTAX", "homelab", "DiffTest", "opencode-mobile-docs"])
     }
 
-    private func project(_ id: String, _ worktree: String, activity: Int64?, repository: Bool = true) -> Project {
+    private func project(
+        _ id: String,
+        _ worktree: String,
+        activity: Int64?,
+        repository: Bool = true,
+        archived: Bool = false
+    ) -> Project {
         Project(
             id: id,
             worktree: worktree,
             displayName: ProjectDomainAdapter.displayName(from: worktree),
             activityAtEpochMs: activity,
-            isRepository: repository
+            isRepository: repository,
+            isArchived: archived
         )
     }
 

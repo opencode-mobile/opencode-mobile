@@ -9,6 +9,7 @@ import dev.opencode.mobile.network.applyLocationDirectory
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
+import io.ktor.client.request.parameter
 
 class ProjectsApi private constructor(
     private val httpClient: ClientProvider,
@@ -19,11 +20,13 @@ class ProjectsApi private constructor(
 
     suspend fun listProjects(): List<ProjectDto> = httpClient.get().get("project").body()
 
+    /** Asks for unarchived projects; servers before v2.0.27 ignore `archived` and list them all. */
     suspend fun listProjectsV2(): List<ProjectDto> =
         httpClient
             .get()
-            .get("api/project")
-            .body<List<V2ProjectDto>>()
+            .get("api/project") {
+                parameter("archived", "false")
+            }.body<List<V2ProjectDto>>()
             .map { ProjectDto(id = it.id, directory = it.canonical, vcs = it.vcs, time = it.time) }
 
     suspend fun getCurrentProject(directory: String? = null): ProjectDto =

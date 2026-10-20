@@ -331,6 +331,25 @@ struct SessionProtocolRepositoryTests {
         #expect(projects.map(\.isRepository) == [true])
         let url = try #require(ProtocolRoutingURLProtocol.requests.first?.url)
         #expect(url.path.hasSuffix("/api/project"))
+        #expect(queryValue(url, "archived") == "false")
+    }
+
+    @Test func v2ListProjectsMarksArchivedProjects() async throws {
+        // Servers before v2.0.27 ignore `archived=false` and may still list archived projects.
+        ProtocolRoutingURLProtocol.reset(responses: [
+            .json(#"""
+            [
+              {"id":"gone","canonical":"/gone","vcs":"git","time":{"created":1,"updated":2,"active":3,"archived":4}},
+              {"id":"live","canonical":"/live","vcs":"git","time":{"created":1,"updated":2,"active":3}},
+              {"id":"bare","canonical":"/bare","vcs":"git"}
+            ]
+            """#)
+        ])
+        let repository = makeProjectRepository(serverProtocol: .v2)
+
+        let projects = try await repository.listProjects()
+
+        #expect(projects.map(\.isArchived) == [true, false, false])
     }
 
     @Test func v2ListProjectsCarriesActivityTime() async throws {
@@ -373,6 +392,7 @@ struct SessionProtocolRepositoryTests {
         let fallback = try #require(ProtocolRoutingURLProtocol.requests[1].url)
         #expect(fallback.path.hasSuffix("/project"))
         #expect(!fallback.path.hasSuffix("/api/project"))
+        #expect(queryValue(fallback, "archived") == nil)
     }
 
     @Test func v2ListProjectsFallsBackToProjectOnNotFound() async throws {
@@ -413,6 +433,8 @@ struct SessionProtocolRepositoryTests {
         let url = try #require(ProtocolRoutingURLProtocol.requests.first?.url)
         #expect(url.path.hasSuffix("/project"))
         #expect(!url.path.hasSuffix("/api/project"))
+        #expect(queryValue(url, "archived") == nil)
+        #expect(projects.map(\.isArchived) == [false])
     }
 
     @Test func v1ProjectCurrentKeepsDirectoryQuery() async throws {

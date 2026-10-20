@@ -8,6 +8,8 @@ data class Project(
     val activityAtEpochMs: Long? = null,
     /** True when the server tracks the folder with a version control system (`vcs`, e.g. git). */
     val isRepository: Boolean = false,
+    /** True when the server archived the project because its directories are gone (v2 `time.archived`). */
+    val isArchived: Boolean = false,
 )
 
 sealed class ServerProbeError : Exception() {
