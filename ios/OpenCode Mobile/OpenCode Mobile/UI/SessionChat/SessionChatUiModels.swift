@@ -136,8 +136,16 @@ struct SessionChatComposerState: Equatable {
             .sorted { $0.lowerBound < $1.lowerBound }
     }
 
+    /// A leading `!` makes Send run the draft as a shell command; see `ComposerShellCommand`.
+    var isShellMode: Bool {
+        ComposerShellCommand.isShellMode(text)
+    }
+
     var hasSendableContent: Bool {
-        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachments.isEmpty
+        if isShellMode {
+            return ComposerShellCommand.command(text) != nil
+        }
+        return !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachments.isEmpty
     }
 
     var canAttach: Bool {

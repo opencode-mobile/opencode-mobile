@@ -5,6 +5,7 @@ import dev.opencode.mobile.domain.agent.FileMention
 import dev.opencode.mobile.domain.agent.MentionableAgent
 import dev.opencode.mobile.domain.agent.SelectableAgent
 import dev.opencode.mobile.domain.command.ClientSlashAction
+import dev.opencode.mobile.domain.command.ComposerShellCommand
 import dev.opencode.mobile.domain.command.ServerCommand
 import dev.opencode.mobile.domain.command.ServerCommandSource
 import dev.opencode.mobile.domain.event.LiveUpdatesLabel
@@ -62,8 +63,17 @@ data class SessionChatComposerState(
     val canSelectVariant: Boolean
         get() = selectedModel?.option?.supportsVariants == true
 
+    /** A leading `!` makes Send run the draft as a shell command; see [ComposerShellCommand]. */
+    val isShellMode: Boolean
+        get() = ComposerShellCommand.isShellMode(text)
+
     val canSend: Boolean
-        get() = text.isNotBlank() || attachments.isNotEmpty()
+        get() =
+            if (isShellMode) {
+                ComposerShellCommand.command(text) != null
+            } else {
+                text.isNotBlank() || attachments.isNotEmpty()
+            }
 
     val canAttach: Boolean
         get() = selectedModel?.option?.canAttach == true

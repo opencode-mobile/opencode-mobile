@@ -19,6 +19,10 @@ enum OpenCodeSessionComposerState {
         let stopEnabled: Bool
         let followUpDelivery: FollowUpDelivery?
         let showDictationButton: Bool
+        /// The draft starts with `!` and Send runs it as a shell command. The `!` is highlighted
+        /// and a selected Shell badge replaces the model and agent chips; tapping it sends
+        /// `.exitShellMode`.
+        let shellMode: Bool
 
         init(
             text: String,
@@ -37,7 +41,8 @@ enum OpenCodeSessionComposerState {
             showStop: Bool,
             stopEnabled: Bool,
             followUpDelivery: FollowUpDelivery? = nil,
-            showDictationButton: Bool = false
+            showDictationButton: Bool = false,
+            shellMode: Bool = false
         ) {
             self.text = text
             self.mentionRanges = mentionRanges
@@ -56,6 +61,7 @@ enum OpenCodeSessionComposerState {
             self.stopEnabled = stopEnabled
             self.followUpDelivery = followUpDelivery
             self.showDictationButton = showDictationButton
+            self.shellMode = shellMode
         }
     }
 
@@ -209,6 +215,8 @@ enum OpenCodeSessionComposerAction {
     case openCommands
     case removeAttachment(String)
     case cancelRevert
+    /// Drop the leading `!` so the draft is a prompt again.
+    case exitShellMode
     case send
     case toggleFollowUp
     case stop
@@ -349,7 +357,8 @@ struct OpenCodeSessionComposer: View {
 
             OpenCodeMentionTextView(
                 text: prompt.text,
-                mentionRanges: prompt.mentionRanges,
+                // The shell prefix shares the mention highlight so the mode reads in the text itself.
+                mentionRanges: prompt.shellMode ? [0 ..< 1] + prompt.mentionRanges : prompt.mentionRanges,
                 selectionStart: prompt.selectionStart,
                 selectionEnd: prompt.selectionEnd,
                 selectionRevision: prompt.selectionRevision,
@@ -406,7 +415,8 @@ struct OpenCodeSessionComposer: View {
                             prompt.followUpDelivery == .steer ? .arrowWarmUp : .arrowUpward,
                             accessibilityLabel: Self.sendLabel(
                                 followUpDelivery: prompt.followUpDelivery,
-                                hasActiveWork: prompt.showStop
+                                hasActiveWork: prompt.showStop,
+                                shellMode: prompt.shellMode
                             )
                         ),
                         enabled: prompt.sendEnabled,
@@ -527,25 +537,37 @@ struct OpenCodeSessionComposer: View {
     private func pickerChipsRow(_ prompt: OpenCodeSessionComposerState.Prompt) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             let chips = HStack(spacing: 8) {
-                OpenCodeChoiceBadge(
-                    label: prompt.selectedModelLabel,
-                    selected: false,
-                    variant: .glass,
-                    action: { onAction(.selectModel) }
-                )
-                OpenCodeChoiceBadge(
-                    label: prompt.selectedModeLabel,
-                    selected: false,
-                    variant: .glass,
-                    action: { onAction(.selectMode) }
-                )
-                if prompt.showVariant {
+                if prompt.shellMode {
+                    // Like the TUI, shell mode shows "Shell" in place of the agent and model.
                     OpenCodeChoiceBadge(
-                        label: prompt.selectedVariantLabel,
+                        label: "Shell",
+                        selected: true,
+                        variant: .glass,
+                        action: { onAction(.exitShellMode) }
+                    )
+                    .accessibilityLabel("Shell mode")
+                    .accessibilityHint("Leave shell mode")
+                } else {
+                    OpenCodeChoiceBadge(
+                        label: prompt.selectedModelLabel,
                         selected: false,
                         variant: .glass,
-                        action: { onAction(.selectVariant) }
+                        action: { onAction(.selectModel) }
                     )
+                    OpenCodeChoiceBadge(
+                        label: prompt.selectedModeLabel,
+                        selected: false,
+                        variant: .glass,
+                        action: { onAction(.selectMode) }
+                    )
+                    if prompt.showVariant {
+                        OpenCodeChoiceBadge(
+                            label: prompt.selectedVariantLabel,
+                            selected: false,
+                            variant: .glass,
+                            action: { onAction(.selectVariant) }
+                        )
+                    }
                 }
             }
             if #available(iOS 26, *) {
@@ -856,8 +878,13 @@ struct OpenCodeSessionComposer: View {
     private static let shellCornerRadius: CGFloat = 26
 
     /// Send button label. Steer/Queue only describe what Send does while work is running;
-    /// an idle session just sends.
-    nonisolated static func sendLabel(followUpDelivery: FollowUpDelivery?, hasActiveWork: Bool) -> String {
+    /// an idle session just sends. A shell command always runs now.
+    nonisolated static func sendLabel(
+        followUpDelivery: FollowUpDelivery?,
+        hasActiveWork: Bool,
+        shellMode: Bool = false
+    ) -> String {
+        if shellMode { return "Run shell command" }
         guard hasActiveWork, let followUpDelivery else { return "Send" }
         switch followUpDelivery {
         case .steer: return "Send as Steer"
@@ -983,6 +1010,49 @@ private struct QuestionCustomTextField: View {
                 sendEnabled: true,
                 showStop: false,
                 stopEnabled: false
+            )
+        ),
+        onAction: { _ in }
+    )
+    .openCodeTheme()
+    .environment(\.colorScheme, .dark)
+}
+
+#Preview("Shell mode composer") {
+    OpenCodeSessionComposer(
+        state: .prompt(
+            .init(
+                text: "!git status",
+                selectedModelLabel: "Claude Sonnet 4",
+                selectedModeLabel: "Build",
+                selectedVariantLabel: "Default",
+                showVariant: true,
+                sendEnabled: true,
+                attachEnabled: false,
+                showStop: false,
+                stopEnabled: false,
+                shellMode: true
+            )
+        ),
+        onAction: { _ in }
+    )
+    .openCodeTheme()
+}
+
+#Preview("Shell mode composer dark") {
+    OpenCodeSessionComposer(
+        state: .prompt(
+            .init(
+                text: "!git status",
+                selectedModelLabel: "Claude Sonnet 4",
+                selectedModeLabel: "Build",
+                selectedVariantLabel: "Default",
+                showVariant: true,
+                sendEnabled: true,
+                attachEnabled: false,
+                showStop: false,
+                stopEnabled: false,
+                shellMode: true
             )
         ),
         onAction: { _ in }

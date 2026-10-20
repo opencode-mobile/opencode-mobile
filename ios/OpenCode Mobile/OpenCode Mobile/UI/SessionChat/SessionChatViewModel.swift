@@ -295,6 +295,10 @@ final class SessionChatViewModel {
         composer.updateComposerText(text, cursor: cursor)
     }
 
+    func exitShellMode() {
+        composer.exitShellMode()
+    }
+
     func beginDictation(languageLabel: String, onDevice: Bool) {
         discardDictationInsert()
         dictation = ComposerDictationUiState(

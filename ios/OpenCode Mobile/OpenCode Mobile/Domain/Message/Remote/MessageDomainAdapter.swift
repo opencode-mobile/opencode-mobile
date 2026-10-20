@@ -264,6 +264,18 @@ nonisolated struct MessageDomainAdapter: Sendable {
         )
     }
 
+    func v1ShellRequest(options: ShellCommandOptions) -> V1ShellRequestDTO {
+        V1ShellRequestDTO(
+            agent: options.agent,
+            command: options.command,
+            model: options.model.map { SendPromptModelDTO(providerID: $0.providerID, modelID: $0.modelID) }
+        )
+    }
+
+    func v2ShellRequest(options: ShellCommandOptions) -> V2ShellRequestDTO {
+        V2ShellRequestDTO(command: options.command)
+    }
+
     func v2PromptRequest(options: PromptSendOptions) -> V2PromptRequestDTO {
         let files = options.attachments.map {
             V2PromptFileDTO(uri: $0.dataURL, name: $0.filename, mime: $0.mime)

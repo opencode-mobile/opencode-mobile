@@ -962,6 +962,107 @@ struct SessionChatViewModelTests {
         #expect(commandRepository.lastRunOptions?.command == "init")
     }
 
+    @Test func sendPrompt_shellDraft_runsCommandInsteadOfPrompt() async {
+        let repository = FakeMessageRepository()
+        let viewModel = makeViewModel(messageRepository: repository)
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        _ = await waitUntil { viewModel.uiState.timeline == .ready }
+        let rowsBefore = viewModel.uiState.messages.map(\.id)
+
+        viewModel.updateComposerText("!git status")
+        #expect(viewModel.uiState.composer.isShellMode)
+        #expect(viewModel.uiState.composer.hasSendableContent)
+        await viewModel.sendPrompt()
+        let ran = await waitUntil { repository.shellRequests.count == 1 }
+
+        #expect(ran)
+        let request = repository.shellRequests.first
+        #expect(request?.options.command == "git status")
+        #expect(request?.options.agent == viewModel.uiState.composer.selectedMode)
+        #expect(request?.options.model?.modelID == viewModel.uiState.composer.selectedModel?.option.modelID)
+        #expect(request?.directory == "/repo")
+        #expect(!repository.sendPromptAsyncCalled)
+        #expect(viewModel.uiState.composer.text.isEmpty)
+        #expect(!viewModel.uiState.isSending)
+        // Output arrives through shell events; no optimistic prompt row is added.
+        #expect(viewModel.uiState.messages.map(\.id) == rowsBefore)
+    }
+
+    @Test func sendPrompt_bareBang_sendsNothing() async {
+        let repository = FakeMessageRepository()
+        let viewModel = makeViewModel(messageRepository: repository)
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+
+        viewModel.updateComposerText("!")
+        #expect(viewModel.uiState.composer.isShellMode)
+        #expect(!viewModel.uiState.composer.hasSendableContent)
+        await viewModel.sendPrompt()
+        try? await Task.sleep(for: .milliseconds(50))
+
+        #expect(repository.shellRequests.isEmpty)
+        #expect(!repository.sendPromptAsyncCalled)
+        #expect(viewModel.uiState.composer.text == "!")
+    }
+
+    @Test func sendPrompt_leadingWhitespaceBeforeBang_sendsPrompt() async {
+        let repository = FakeMessageRepository()
+        let viewModel = makeViewModel(messageRepository: repository)
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+
+        viewModel.updateComposerText(" !important")
+        #expect(!viewModel.uiState.composer.isShellMode)
+        await viewModel.sendPrompt()
+
+        #expect(repository.shellRequests.isEmpty)
+        #expect(repository.sentOptions?.text == "!important")
+    }
+
+    @Test func sendPrompt_multiLineShellDraft_runsWholeScript() async {
+        let repository = FakeMessageRepository()
+        let viewModel = makeViewModel(messageRepository: repository)
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+
+        viewModel.updateComposerText("!cd app\nls\n")
+        await viewModel.sendPrompt()
+        _ = await waitUntil { repository.shellRequests.count == 1 }
+
+        #expect(repository.shellRequests.first?.options.command == "cd app\nls")
+    }
+
+    @Test func sendPrompt_shellBusyFailure_restoresDraftAndShowsErrorLikeAPrompt() async {
+        let repository = FakeMessageRepository()
+        repository.shellError = MessageError.http(statusCode: 409, message: "Session is busy")
+        let viewModel = makeViewModel(messageRepository: repository)
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        _ = await waitUntil { viewModel.uiState.timeline == .ready }
+
+        viewModel.updateComposerText("!git status")
+        await viewModel.sendPrompt()
+        let failed = await waitUntil { viewModel.uiState.snackbar?.message == "Session is busy" }
+
+        #expect(failed)
+        #expect(repository.shellRequests.count == 1)
+        #expect(viewModel.uiState.composer.text == "!git status")
+        #expect(viewModel.uiState.snackbar?.tone == .error)
+    }
+
+    @Test func exitShellMode_dropsPrefixAndKeepsTheRestOfTheDraft() async {
+        let viewModel = makeViewModel(messageRepository: FakeMessageRepository())
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+
+        viewModel.updateComposerText("!git status")
+        viewModel.exitShellMode()
+
+        #expect(viewModel.uiState.composer.text == "git status")
+        #expect(!viewModel.uiState.composer.isShellMode)
+    }
+
     @Test func sendPrompt_planMode_sendsPlanAgent() async {
         let repository = FakeMessageRepository()
         let viewModel = makeViewModel(messageRepository: repository)
@@ -4631,6 +4732,10 @@ private final class SyncingTestMessageRepository: MessageRepository, @unchecked 
     func sendPromptAsync(sessionID: String, options: PromptSendOptions, directory: String?) async throws {
         try await fake.sendPromptAsync(sessionID: sessionID, options: options, directory: directory)
     }
+
+    func runShellCommand(sessionID: String, options: ShellCommandOptions, directory: String?) async throws {
+        try await fake.runShellCommand(sessionID: sessionID, options: options, directory: directory)
+    }
 }
 
 @MainActor
@@ -4712,6 +4817,8 @@ private final class FakeObservingMessageRepository: MessageRepository, @unchecke
 
     func sendPromptAsync(sessionID: String, options: PromptSendOptions, directory: String?) async throws {}
 
+    func runShellCommand(sessionID: String, options: ShellCommandOptions, directory: String?) async throws {}
+
     func emit(_ messages: [Message]) {
         publish?(.messages(messages, isFromCache: false))
     }
@@ -4779,6 +4886,8 @@ private final class FakeMessageRepository: MessageRepository, @unchecked Sendabl
     let holdSend: Bool
     var sendPromptAsyncCalled = false
     var sentOptions: PromptSendOptions?
+    var shellRequests: [(options: ShellCommandOptions, directory: String?)] = []
+    var shellError: Error?
     private var listMessagesCallCount = 0
     /// Holds `listMessages` until opened.
     var listHold: AsyncGate?
@@ -4888,6 +4997,11 @@ private final class FakeMessageRepository: MessageRepository, @unchecked Sendabl
                 Message(id: "msg-sent", role: .user, text: options.text, model: nil, mode: nil, sentAtEpochMs: nil)
             )
         }
+    }
+
+    func runShellCommand(sessionID: String, options: ShellCommandOptions, directory: String?) async throws {
+        shellRequests.append((options, directory))
+        if let shellError { throw shellError }
     }
 }
 

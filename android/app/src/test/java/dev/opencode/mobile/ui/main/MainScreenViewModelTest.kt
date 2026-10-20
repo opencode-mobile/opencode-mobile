@@ -29,6 +29,7 @@ import dev.opencode.mobile.domain.message.MessageListUpdate
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.PromptSendOptions
+import dev.opencode.mobile.domain.message.ShellCommandOptions
 import dev.opencode.mobile.domain.model.ModelRepository
 import dev.opencode.mobile.domain.model.ModelSelectionCatalog
 import dev.opencode.mobile.domain.model.ModelSelectionConnectionIdentity
@@ -2492,6 +2493,12 @@ private class FakeMessageRepository(
     override suspend fun sendPromptAsync(
         sessionId: String,
         options: PromptSendOptions,
+        directory: String?,
+    ) = Unit
+
+    override suspend fun runShellCommand(
+        sessionId: String,
+        options: ShellCommandOptions,
         directory: String?,
     ) = Unit
 }

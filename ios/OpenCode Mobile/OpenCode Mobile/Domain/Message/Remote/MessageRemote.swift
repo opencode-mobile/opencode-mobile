@@ -4,6 +4,7 @@ protocol MessageRemote: Sendable {
     func listMessages(sessionID: String, directory: String?) async throws -> [Message]
     func listMessagePage(sessionID: String, directory: String?, query: MessageHistoryQuery) async throws -> MessageHistoryPage
     func sendPromptAsync(sessionID: String, options: PromptSendOptions, directory: String?) async throws
+    func runShellCommand(sessionID: String, options: ShellCommandOptions, directory: String?) async throws
 }
 
 extension MessageRemote {
@@ -54,6 +55,10 @@ struct V1MessageRemote: MessageRemote, Sendable {
             attachments: options.attachments,
             directory: directory
         )
+    }
+
+    func runShellCommand(sessionID: String, options: ShellCommandOptions, directory: String?) async throws {
+        try await api.runShell(sessionID: sessionID, body: adapter.v1ShellRequest(options: options), directory: directory)
     }
 }
 
@@ -125,6 +130,12 @@ struct V2MessageRemote: MessageRemote, Sendable {
             directory: directory
         )
     }
+
+    /// Like the TUI, a shell command leaves the session's agent and model alone: v2 runs it
+    /// outside the agent loop.
+    func runShellCommand(sessionID: String, options: ShellCommandOptions, directory _: String?) async throws {
+        try await api.runShellV2(sessionID: sessionID, body: adapter.v2ShellRequest(options: options))
+    }
 }
 
 struct ProtocolSelectedMessageRemote: MessageRemote, Sendable {
@@ -163,5 +174,9 @@ struct ProtocolSelectedMessageRemote: MessageRemote, Sendable {
 
     func sendPromptAsync(sessionID: String, options: PromptSendOptions, directory: String?) async throws {
         try await selected().sendPromptAsync(sessionID: sessionID, options: options, directory: directory)
+    }
+
+    func runShellCommand(sessionID: String, options: ShellCommandOptions, directory: String?) async throws {
+        try await selected().runShellCommand(sessionID: sessionID, options: options, directory: directory)
     }
 }

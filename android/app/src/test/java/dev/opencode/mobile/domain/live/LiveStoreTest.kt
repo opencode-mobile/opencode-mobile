@@ -30,6 +30,7 @@ import dev.opencode.mobile.domain.message.MessageSyncHealth
 import dev.opencode.mobile.domain.message.PromptSendOptions
 import dev.opencode.mobile.domain.message.STREAMING_PREPARE_DEBOUNCE_MS
 import dev.opencode.mobile.domain.message.SessionMessageEngine
+import dev.opencode.mobile.domain.message.ShellCommandOptions
 import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.domain.session.FileDiff
 import dev.opencode.mobile.domain.session.PermissionDecision
@@ -3894,6 +3895,12 @@ private class FakeMessageRepository(
     override suspend fun sendPromptAsync(
         sessionId: String,
         options: PromptSendOptions,
+        directory: String?,
+    ) = Unit
+
+    override suspend fun runShellCommand(
+        sessionId: String,
+        options: ShellCommandOptions,
         directory: String?,
     ) = Unit
 }

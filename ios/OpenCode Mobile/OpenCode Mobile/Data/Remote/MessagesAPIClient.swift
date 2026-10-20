@@ -31,6 +31,8 @@ protocol MessagesAPI: Sendable {
     func switchSessionAgent(sessionID: String, agent: String, directory: String?) async throws
     func switchSessionModel(sessionID: String, body: V2SwitchModelRequestDTO, directory: String?) async throws
     func listInboxV2(sessionID: String) async throws -> [V2InboxItemDTO]
+    func runShell(sessionID: String, body: V1ShellRequestDTO, directory: String?) async throws
+    func runShellV2(sessionID: String, body: V2ShellRequestDTO) async throws
 }
 
 extension MessagesAPI {
@@ -72,6 +74,10 @@ extension MessagesAPI {
     func switchSessionModel(sessionID: String, body: V2SwitchModelRequestDTO, directory: String?) async throws {}
 
     func listInboxV2(sessionID _: String) async throws -> [V2InboxItemDTO] { [] }
+
+    func runShell(sessionID _: String, body _: V1ShellRequestDTO, directory _: String?) async throws {}
+
+    func runShellV2(sessionID _: String, body _: V2ShellRequestDTO) async throws {}
 }
 
 nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
@@ -229,6 +235,19 @@ nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
 
     func switchSessionModel(sessionID: String, body: V2SwitchModelRequestDTO, directory: String? = nil) async throws {
         try await postNoContent(path: "api/session/\(sessionID)/model", body: body, directory: nil)
+    }
+
+    /// v1 runs the command before it answers, so the request stays open for as long as the
+    /// command does. It goes through the durable uploader, like a prompt, instead of the REST
+    /// pool's 60-second resource ceiling.
+    func runShell(sessionID: String, body: V1ShellRequestDTO, directory: String? = nil) async throws {
+        var request = try requireConnection().authorizedRequest(path: "session/\(sessionID)/shell", method: "POST", directory: directory)
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        _ = try await sendBody(request, body: try encoder.encode(body))
+    }
+
+    func runShellV2(sessionID: String, body: V2ShellRequestDTO) async throws {
+        try await postNoContent(path: "api/session/\(sessionID)/shell", body: body, directory: nil)
     }
 
     private func postPrompt(path: String, body: V2PromptRequestDTO, attachments: [Attachment], directory: String?) async throws {

@@ -11,6 +11,7 @@ import dev.opencode.mobile.data.remote.dto.MessageToolStateDto
 import dev.opencode.mobile.data.remote.dto.SendMessagePartDto
 import dev.opencode.mobile.data.remote.dto.SendMessageRequestDto
 import dev.opencode.mobile.data.remote.dto.SendPromptModelDto
+import dev.opencode.mobile.data.remote.dto.V1ShellRequestDto
 import dev.opencode.mobile.data.remote.dto.V2AssistantContentDto
 import dev.opencode.mobile.data.remote.dto.V2FileAttachmentDto
 import dev.opencode.mobile.data.remote.dto.V2InboxItemDto
@@ -22,6 +23,7 @@ import dev.opencode.mobile.data.remote.dto.V2PromptRequestDto
 import dev.opencode.mobile.data.remote.dto.V2PromptSkillDto
 import dev.opencode.mobile.data.remote.dto.V2PromptSourceDto
 import dev.opencode.mobile.data.remote.dto.V2SessionMessageDto
+import dev.opencode.mobile.data.remote.dto.V2ShellRequestDto
 import dev.opencode.mobile.data.remote.dto.V2SwitchModelRequestDto
 import dev.opencode.mobile.data.remote.HttpBodyResponseException
 import dev.opencode.mobile.data.remote.dto.V2ToolStateDto
@@ -237,6 +239,15 @@ class MessageDomainAdapter {
             variant = options.variant,
             agent = options.mode,
         )
+
+    fun toV1ShellRequest(options: ShellCommandOptions): V1ShellRequestDto =
+        V1ShellRequestDto(
+            agent = options.agent,
+            command = options.command,
+            model = options.model?.let { SendPromptModelDto(providerId = it.providerId, modelId = it.modelId) },
+        )
+
+    fun toV2ShellRequest(options: ShellCommandOptions): V2ShellRequestDto = V2ShellRequestDto(command = options.command)
 
     fun toV2PromptRequest(options: PromptSendOptions): V2PromptRequestDto {
         val files =
