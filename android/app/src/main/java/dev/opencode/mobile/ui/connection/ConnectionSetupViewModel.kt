@@ -481,21 +481,8 @@ class ConnectionSetupViewModel
                 updateFields(baseUrl = pastedLink)
                 return
             }
-            val current = _uiState.value
-            _uiState.value =
-                if (current.qrScanPending) {
-                    current.copy(
-                        cleartextWarningHosts = null,
-                        qrScanPending = false,
-                        serverUrls = emptyList(),
-                        addressProbeFinished = false,
-                        unreachableUrls = emptySet(),
-                        chosenUrl = null,
-                        qrPairingReady = false,
-                    )
-                } else {
-                    current.copy(cleartextWarningHosts = null)
-                }
+            _uiState.value = _uiState.value.copy(cleartextWarningHosts = null)
+            if (_uiState.value.qrScanPending) leaveScannedQr(snackbar = null)
         }
 
         private fun probeThenSave(
@@ -930,6 +917,17 @@ class ConnectionSetupViewModel
         }
 
         private fun presentScannedQrFailure() {
+            leaveScannedQr(
+                snackbar =
+                    OpenCodeSnackbarMessage(
+                        text = QrScanFailureMessage,
+                        variant = OpenCodeSnackbarVariant.Error,
+                    ),
+            )
+        }
+
+        /** Back to the host form with the scanned address and password, as after a failed scan. */
+        private fun leaveScannedQr(snackbar: OpenCodeSnackbarMessage?) {
             pendingPairingCode = null
             pastedConnectLinkUnconfirmed = false
             val current = _uiState.value
@@ -949,11 +947,7 @@ class ConnectionSetupViewModel
                     entry = ConnectionSetupEntry.Manual,
                     requestPasswordFocus = false,
                     connectionUnchanged = isConnectionUnchanged(current.baseUrl, current.username, password),
-                    snackbar =
-                        OpenCodeSnackbarMessage(
-                            text = QrScanFailureMessage,
-                            variant = OpenCodeSnackbarVariant.Error,
-                        ),
+                    snackbar = snackbar,
                 )
         }
 

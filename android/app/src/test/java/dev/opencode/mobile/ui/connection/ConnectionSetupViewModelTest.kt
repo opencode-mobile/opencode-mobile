@@ -599,6 +599,38 @@ class ConnectionSetupViewModelTest {
         }
 
     @Test
+    fun applyPairingQR_untrustedHttpAddress_cancelReturnsToTheHostForm() =
+        runTest(dispatcher) {
+            val redeem = RecordingPairingCodeRedeeming(token = "paired-token")
+            val probed = mutableListOf<String>()
+            val viewModel =
+                viewModel(
+                    probe =
+                        ConnectionProbing { connection ->
+                            probed += connection.baseUrl
+                            ServerProtocol.V2
+                        },
+                    redeem = redeem,
+                )
+            viewModel.configure(initialProfile = null, mode = ConnectionSetupMode.Add)
+            viewModel.applyPairingQR("""{"code":"abc_DEF-123","urls":["http://203.0.113.5:49374"]}""")
+            advanceUntilIdle()
+            assertEquals(ConnectionSetupEntry.Instructions, viewModel.uiState.value.entry)
+
+            viewModel.dismissCleartextWarning()
+            advanceUntilIdle()
+            val state = viewModel.uiState.value
+            assertNull(state.cleartextWarningHosts)
+            assertFalse(state.usesQrLayout)
+            assertFalse(state.qrScanPending)
+            assertEquals(ConnectionSetupEntry.Manual, state.entry)
+            assertEquals(ConnectionCredentialSegment.Password, state.credentialSegment)
+            assertNull(state.snackbar)
+            assertTrue(probed.isEmpty())
+            assertTrue(redeem.calls.isEmpty())
+        }
+
+    @Test
     fun submit_pairingQr_sendsThePasswordOnlyToTheChosenHost() =
         runTest(dispatcher) {
             val store = RecordingConnectionProfileStore()
