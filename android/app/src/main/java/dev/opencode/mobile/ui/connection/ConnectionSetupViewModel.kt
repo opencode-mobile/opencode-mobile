@@ -172,6 +172,8 @@ class ConnectionSetupViewModel
         private var addressProbeGeneration = 0
         /** Paste applied an address list that this session has not saved yet. */
         private var pastedConnectLinkUnconfirmed = false
+        /** The link text a pasted connect link replaced, so Cancel on the cleartext warning can put it back. */
+        private var pastedConnectLinkText: String? = null
         private val acknowledgedCleartextHosts = mutableSetOf<String>()
         private var pendingCleartextResume: (() -> Unit)? = null
 
@@ -183,6 +185,9 @@ class ConnectionSetupViewModel
             pendingPairingCode = null
             scannedQrPassword = ""
             pastedConnectLinkUnconfirmed = false
+            pastedConnectLinkText = null
+            acknowledgedCleartextHosts.clear()
+            pendingCleartextResume = null
             addressProbeGeneration += 1
             isEditingExistingProfile = initialProfile != null && mode == ConnectionSetupMode.Edit
             detectedProtocol = initialProfile?.serverProtocol
@@ -463,9 +468,19 @@ class ConnectionSetupViewModel
             resume()
         }
 
-        /** "Cancel": nothing was sent. A scan that was waiting goes back to the host form. */
+        /**
+         * "Cancel": nothing was sent. A scan that was waiting goes back to the host form; a pasted
+         * connect link goes back into the host field so Connect redeems its pairing code again.
+         */
         fun dismissCleartextWarning() {
             pendingCleartextResume = null
+            val pastedLink = pastedConnectLinkText
+            if (pastedConnectLinkUnconfirmed && pastedLink != null) {
+                dropUnconfirmedPastedLayout()
+                _uiState.value = _uiState.value.copy(cleartextWarningHosts = null)
+                updateFields(baseUrl = pastedLink)
+                return
+            }
             val current = _uiState.value
             _uiState.value =
                 if (current.qrScanPending) {
@@ -616,7 +631,9 @@ class ConnectionSetupViewModel
         private fun applySubmittedConnectLink(): Boolean {
             when (val result = PairingQRPayload.parse(_uiState.value.baseUrl.trim())) {
                 is PairingQRParseResult.Ready -> {
-                    applyPairingCredentials(result.credentials)
+                    pastedConnectLinkText = _uiState.value.baseUrl
+                    // No background sweep: the cleartext check runs first, then the submit path probes.
+                    applyPairingCredentials(result.credentials, scheduleProbe = false)
                     pastedConnectLinkUnconfirmed = true
                     return true
                 }
@@ -872,6 +889,7 @@ class ConnectionSetupViewModel
         private fun dropUnconfirmedPastedLayout() {
             if (!pastedConnectLinkUnconfirmed) return
             pastedConnectLinkUnconfirmed = false
+            pastedConnectLinkText = null
             pendingPairingCode = null
             _uiState.value =
                 _uiState.value.copy(

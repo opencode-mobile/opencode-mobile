@@ -498,6 +498,76 @@ class ConnectionSetupViewModelTest {
         }
 
     @Test
+    fun submit_pastedConnectLink_untrustedHttpHost_probesNothingAndCancelKeepsTheLink() =
+        runTest(dispatcher) {
+            val store = RecordingConnectionProfileStore()
+            val redeem = RecordingPairingCodeRedeeming(token = "pasted-token")
+            val probed = mutableListOf<String>()
+            val viewModel =
+                viewModel(
+                    store = store,
+                    probe =
+                        ConnectionProbing { connection ->
+                            probed += connection.baseUrl
+                            if (connection.password.isNullOrEmpty()) throw ServerProbeError.Http(401, "Unauthorized")
+                            ServerProtocol.V2
+                        },
+                    redeem = redeem,
+                )
+            viewModel.configure(initialProfile = null, mode = ConnectionSetupMode.Add)
+            val link = "http://203.0.113.5:4096/auth/connect/XJdLmg9llko9nmn3jN2XLw"
+            viewModel.onBaseUrlChanged(link)
+            var saved = false
+            viewModel.submit { saved = true }
+            advanceUntilIdle()
+            assertFalse(saved)
+            assertEquals(listOf("203.0.113.5:4096"), viewModel.uiState.value.cleartextWarningHosts)
+            assertTrue(probed.isEmpty())
+            assertTrue(redeem.calls.isEmpty())
+
+            viewModel.dismissCleartextWarning()
+            advanceUntilIdle()
+            assertNull(viewModel.uiState.value.cleartextWarningHosts)
+            assertEquals(link, viewModel.uiState.value.baseUrl)
+            assertFalse(viewModel.uiState.value.usesQrLayout)
+            assertTrue(probed.isEmpty())
+
+            viewModel.submit { saved = true }
+            advanceUntilIdle()
+            assertEquals(listOf("203.0.113.5:4096"), viewModel.uiState.value.cleartextWarningHosts)
+            viewModel.confirmCleartextWarning()
+            advanceUntilIdle()
+            assertTrue(saved)
+            assertEquals(listOf("http://203.0.113.5:4096/" to "XJdLmg9llko9nmn3jN2XLw"), redeem.calls)
+            assertEquals("pasted-token", store.saved.last().password)
+        }
+
+    @Test
+    fun configure_forgetsCleartextAcknowledgments() =
+        runTest(dispatcher) {
+            val store = RecordingConnectionProfileStore()
+            val viewModel = viewModel(store = store, probe = ConnectionProbing { ServerProtocol.V2 })
+            viewModel.configure(initialProfile = null, mode = ConnectionSetupMode.Add)
+            viewModel.onBaseUrlChanged("http://203.0.113.5:4096/")
+            viewModel.onPasswordChanged("secret")
+            viewModel.submit {}
+            advanceUntilIdle()
+            viewModel.confirmCleartextWarning()
+            advanceUntilIdle()
+            assertEquals(1, store.saved.size)
+
+            viewModel.configure(initialProfile = null, mode = ConnectionSetupMode.Add)
+            viewModel.onBaseUrlChanged("http://203.0.113.5:4096/")
+            viewModel.onPasswordChanged("secret")
+            var saved = false
+            viewModel.submit { saved = true }
+            advanceUntilIdle()
+            assertFalse(saved)
+            assertEquals(listOf("203.0.113.5:4096"), viewModel.uiState.value.cleartextWarningHosts)
+            assertEquals(1, store.saved.size)
+        }
+
+    @Test
     fun applyPairingQR_untrustedHttpAddress_warnsBeforeRedeeming() =
         runTest(dispatcher) {
             val store = RecordingConnectionProfileStore()

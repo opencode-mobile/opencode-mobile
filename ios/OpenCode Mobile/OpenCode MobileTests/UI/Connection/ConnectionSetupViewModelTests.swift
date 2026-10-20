@@ -379,6 +379,61 @@ struct ConnectionSetupViewModelTests {
         #expect(store.saved.last?.password == "typed-token")
     }
 
+    @Test func submit_pastedConnectLink_untrustedHttpHost_cancelKeepsTheLinkRedeemable() async {
+        let store = RecordingConnectionProfileStore()
+        let redeemer = ScriptedPairingRedeemer(token: "pasted-token")
+        let probe = ScriptedHostProbe()
+        let viewModel = makePairingSetupViewModel(probe: probe, redeemer: redeemer, store: store)
+        let link = "http://203.0.113.5:4096/auth/connect/XJdLmg9llko9nmn3jN2XLw"
+        viewModel.baseURL = link
+        let saved = await viewModel.submit()
+        #expect(saved == false)
+        #expect(viewModel.cleartextWarningHosts == ["203.0.113.5:4096"])
+        #expect(probe.probed.isEmpty)
+        #expect(redeemer.calls.isEmpty)
+
+        viewModel.dismissCleartextWarning()
+        #expect(viewModel.cleartextWarningHosts == nil)
+        #expect(viewModel.baseURL == link)
+        #expect(viewModel.usesQRLayout == false)
+        #expect(probe.probed.isEmpty)
+
+        let retried = await viewModel.submit()
+        #expect(retried == false)
+        #expect(viewModel.cleartextWarningHosts == ["203.0.113.5:4096"])
+        let confirmed = await viewModel.confirmCleartextWarning()
+        #expect(confirmed == true)
+        #expect(redeemer.calls.count == 1)
+        #expect(redeemer.calls.first?.code == "XJdLmg9llko9nmn3jN2XLw")
+        #expect(store.saved.last?.password == "pasted-token")
+    }
+
+    @Test func configure_forgetsCleartextAcknowledgments() async {
+        let store = RecordingConnectionProfileStore()
+        let probe = RecordingURLProbeService(successProtocol: .v2)
+        let viewModel = ConnectionSetupViewModel(
+            connectionProbeService: probe,
+            connectionSessionCoordinator: ConnectionSessionCoordinator(
+                activeConnectionManager: ActiveConnectionManager(),
+                connectionProfileStore: store
+            ),
+            mode: .add
+        )
+        viewModel.baseURL = "http://203.0.113.5:4096/"
+        viewModel.password = "secret"
+        _ = await viewModel.submit()
+        _ = await viewModel.confirmCleartextWarning()
+        #expect(store.saved.count == 1)
+
+        viewModel.configure(initialProfile: nil, mode: .add)
+        viewModel.baseURL = "http://203.0.113.5:4096/"
+        viewModel.password = "secret"
+        let saved = await viewModel.submit()
+        #expect(saved == false)
+        #expect(viewModel.cleartextWarningHosts == ["203.0.113.5:4096"])
+        #expect(store.saved.count == 1)
+    }
+
     @Test func applyPairingQR_untrustedHttpAddress_warnsBeforeRedeeming() async {
         let store = RecordingConnectionProfileStore()
         let redeemer = ScriptedPairingRedeemer(token: "paired-token")

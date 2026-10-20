@@ -137,6 +137,8 @@ final class ConnectionSetupViewModel {
     private var qrScanPending = false
     /// Paste applied an address list that this session has not saved yet.
     private var pastedConnectLinkUnconfirmed = false
+    /// The link text a pasted connect link replaced, so Cancel on the cleartext warning can put it back.
+    private var pastedConnectLinkText: String?
     /// Untrusted `http` hosts waiting for the user's "Connect anyway". `nil` when no warning shows.
     private(set) var cleartextWarningHosts: [String]?
     private var acknowledgedCleartextHosts: Set<String> = []
@@ -196,6 +198,10 @@ final class ConnectionSetupViewModel {
         qrPairingReady = false
         qrScanPending = false
         pastedConnectLinkUnconfirmed = false
+        pastedConnectLinkText = nil
+        cleartextWarningHosts = nil
+        acknowledgedCleartextHosts = []
+        pendingCleartextResume = nil
         pairedProtocol = nil
         detectedProtocol = nil
         state = .idle
@@ -465,10 +471,17 @@ final class ConnectionSetupViewModel {
         return await resume()
     }
 
-    /// "Cancel": nothing was sent. A scan that was waiting goes back to the host form.
+    /// "Cancel": nothing was sent. A scan that was waiting goes back to the host form; a pasted
+    /// connect link goes back into the host field so Connect redeems its pairing code again.
     func dismissCleartextWarning() {
         cleartextWarningHosts = nil
         pendingCleartextResume = nil
+        if pastedConnectLinkUnconfirmed, let pastedLink = pastedConnectLinkText {
+            discardUnconfirmedPastedLayout()
+            setBaseURLFromSystem(pastedLink)
+            onFieldChanged()
+            return
+        }
         if qrScanPending {
             qrScanPending = false
             leaveQRMode()
@@ -620,6 +633,7 @@ final class ConnectionSetupViewModel {
               let code = credentials.code,
               !code.isEmpty
         else { return false }
+        pastedConnectLinkText = baseURL
         apply(credentials)
         pastedConnectLinkUnconfirmed = true
         return true
@@ -725,6 +739,7 @@ final class ConnectionSetupViewModel {
     private func discardUnconfirmedPastedLayout() {
         guard pastedConnectLinkUnconfirmed else { return }
         pastedConnectLinkUnconfirmed = false
+        pastedConnectLinkText = nil
         pendingPairingCode = nil
         serverURLs = []
         unreachableAddresses = []
