@@ -77,8 +77,9 @@ struct AppRootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var rootViewModel = Container.makeAppRootViewModel()
     @State private var appLockPreferences = AppLockPreferences.shared
-    @State private var privacyCoverVisible = false
-    @State private var locked = false
+    // A cold start with App Lock on draws the cover in the very first frame, before any content.
+    @State private var privacyCoverVisible = AppLockPreferences.shared.enabled
+    @State private var locked = AppLockPreferences.shared.enabled
     @State private var wasInBackground = false
     private let appLockAuthenticator: any AppLockAuthenticating = LocalAuthenticationAppLockAuthenticator()
 
@@ -103,17 +104,21 @@ struct AppRootView: View {
             }
         }
         .background(OpenCodeColors.backgroundBase)
+        // Out of reach for VoiceOver while covered, like it is for touch.
+        .accessibilityHidden(privacyCoverVisible)
         .overlay {
             if privacyCoverVisible {
                 PrivacyCoverView(locked: locked) {
                     Task { await unlock() }
                 }
-                .transition(.opacity)
+                // Appears at once so the app-switcher snapshot never catches it mid-fade;
+                // only the reveal is animated.
+                .transition(.asymmetric(insertion: .identity, removal: .opacity))
             }
         }
         .animation(.easeOut(duration: 0.15), value: privacyCoverVisible)
         .task {
-            // A cold start with App Lock on begins locked.
+            // A cold start with App Lock on begins locked (already covered from the first frame).
             if AppLockPolicy.shouldLock(enabled: appLockPreferences.enabled, wasInBackground: true) {
                 locked = true
                 privacyCoverVisible = true

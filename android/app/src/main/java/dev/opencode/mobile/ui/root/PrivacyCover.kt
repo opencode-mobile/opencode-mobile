@@ -1,6 +1,7 @@
 package dev.opencode.mobile.ui.root
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,8 +14,13 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -30,7 +36,8 @@ data class PrivacyCoverState(
 
 /**
  * Opaque surface over the whole window while the app is not in the foreground or the app
- * lock is engaged (#755). Swallows touches so nothing underneath reacts.
+ * lock is engaged (#755). Swallows touches so nothing underneath reacts, and while locked
+ * takes focus so a text field underneath cannot keep receiving keyboard input.
  */
 @Composable
 fun PrivacyCover(
@@ -39,11 +46,25 @@ fun PrivacyCover(
     modifier: Modifier = Modifier,
 ) {
     if (!state.covered && !state.locked) return
+    val focusRequester = remember { FocusRequester() }
+    if (state.locked) {
+        LaunchedEffect(Unit) { focusRequester.requestFocus() }
+    }
     Box(
         modifier =
             modifier
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
+                // Being a pointer-input target stops hit testing from reaching the content
+                // underneath; consuming in the Main pass still lets the Unlock button click first.
+                .pointerInput(Unit) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            awaitPointerEvent().changes.forEach { it.consume() }
+                        }
+                    }
+                }.focusRequester(focusRequester)
+                .focusable()
                 .semantics { contentDescription = if (state.locked) "OpenCode Mobile is locked" else "OpenCode Mobile" },
         contentAlignment = Alignment.Center,
     ) {

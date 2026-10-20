@@ -9,6 +9,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.biometric.BiometricPrompt
 import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.core.content.ContextCompat
@@ -41,6 +43,8 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
+        // Rotation, theme, or locale recreation is not a return from the background.
+        wasInBackground = savedInstanceState?.getBoolean(STATE_UNLOCKED_ACROSS_RECREATE) != true
         worldSignals.register()
 
         enableEdgeToEdge()
@@ -53,9 +57,13 @@ class MainActivity : FragmentActivity() {
                 LocalKeyboardShortcutHost provides keyboardShortcuts,
                 LocalOpenCodeInputFocusRegistry provides keyboardShortcuts.inputFocus,
             ) {
+                val cover = privacyCover.value
                 Box {
-                    MainNavigation()
-                    PrivacyCover(state = privacyCover.value, onUnlock = ::promptUnlock)
+                    // Hidden from accessibility services while covered, like it is from touch.
+                    Box(if (cover.covered || cover.locked) Modifier.clearAndSetSemantics {} else Modifier) {
+                        MainNavigation()
+                    }
+                    PrivacyCover(state = cover, onUnlock = ::promptUnlock)
                 }
             }
         }
@@ -74,15 +82,32 @@ class MainActivity : FragmentActivity() {
     }
 
     override fun onPause() {
+        // Only cover here. On API 29 and below the device-credential screen is a separate
+        // activity that pauses this one, so cancelling the prompt here would end the unlock.
         privacyCover.value = privacyCover.value.copy(covered = true)
-        unlockPrompt?.cancelAuthentication()
-        unlockPrompt = null
         super.onPause()
     }
 
     override fun onStop() {
-        wasInBackground = true
+        if (!isChangingConfigurations) {
+            // From API 30 the credential UI stays inside the system prompt, so a stop means the
+            // app left the foreground. Below that, BiometricPrompt manages its own lifecycle and
+            // a stop during the prompt is the PIN screen, not leaving the app.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                unlockPrompt?.cancelAuthentication()
+                unlockPrompt = null
+            }
+            if (unlockPrompt == null) wasInBackground = true
+        }
         super.onStop()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putBoolean(
+            STATE_UNLOCKED_ACROSS_RECREATE,
+            isChangingConfigurations && !wasInBackground && !privacyCover.value.locked,
+        )
     }
 
     private fun promptUnlock() {
@@ -118,7 +143,7 @@ class MainActivity : FragmentActivity() {
 
     // Runs before the view hierarchy, so Compose focus traversal cannot take Ctrl+Tab first.
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (keyboardShortcuts.handleKeyEvent(event, currentFocus)) return true
+        if (!privacyCover.value.locked && keyboardShortcuts.handleKeyEvent(event, currentFocus)) return true
         return super.dispatchKeyEvent(event)
     }
 
@@ -129,5 +154,9 @@ class MainActivity : FragmentActivity() {
     ) {
         super.onProvideKeyboardShortcuts(data, menu, deviceId)
         keyboardShortcuts.shortcutGroup()?.let { data?.add(it) }
+    }
+
+    private companion object {
+        const val STATE_UNLOCKED_ACROSS_RECREATE = "appLock.unlockedAcrossRecreate"
     }
 }
