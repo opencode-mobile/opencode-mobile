@@ -108,6 +108,25 @@ areas, status column, fold, system bars, simulator pose control) lives in
   `OPE-<number>:`. Use `fix/` instead of `feature/` for bug tickets. Slug is
   lowercase ASCII with single hyphens; whole name at most 80 characters.
 
+## Pull Request Evidence
+
+- Show a change working when the diff and tests alone do not let a reviewer
+  judge it. Skip evidence for refactors, test-only, CI, and tooling changes,
+  and say so under Checks.
+- Match the evidence to the change:
+  - How a screen or component looks: throwaway snapshot tests through
+    `publish-ui-snapshots`. No server needed.
+  - Behavior, flows, or anything that touches the server API or live events:
+    the real app against a real server through `scenario-harness`, shown as
+    screenshots, a short GIF, or a request/event trace.
+- Cover both platforms. Name what was not checked under Risks / Follow-ups.
+- Publish the evidence as one page with the user-level `publish-artifact`
+  skill and link it from the pull request. Do not commit evidence or push it
+  to a branch. If the skill or the artifact server is unavailable, say so in
+  the pull request instead.
+- Capture only harness or mock data: no real passwords or personal
+  transcripts.
+
 ## Skills
 
 Shared skills live under `.agents/skills/<name>/SKILL.md` and are the only
