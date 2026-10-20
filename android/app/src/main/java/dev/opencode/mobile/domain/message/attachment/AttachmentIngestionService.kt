@@ -9,6 +9,7 @@ import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.InputStream
 import java.util.Locale
 import java.util.UUID
 
@@ -48,8 +49,9 @@ class AttachmentIngestionService private constructor(
         val accepted =
             acceptedType(contentResolver.getType(uri), metadata.filename)
                 ?: throw IllegalArgumentException(UNSUPPORTED_ERROR)
+        // Providers may report no size; never buffer more than the limit before deciding.
         val bytes =
-            contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            contentResolver.openInputStream(uri)?.use { readBounded(it, AttachmentLimits.MAX_DECODED_BYTES) }
                 ?: throw IllegalArgumentException(READ_ERROR)
         return ingest(metadata.filename, accepted, bytes)
     }
@@ -162,6 +164,27 @@ class AttachmentIngestionService private constructor(
     )
 
     companion object {
+        /**
+         * Reads at most [limit] bytes; one byte past the limit throws
+         * [AttachmentLimits.TOO_LARGE_ERROR] instead of growing the buffer further (#755).
+         */
+        internal fun readBounded(
+            input: InputStream,
+            limit: Long,
+        ): ByteArray {
+            val output = ByteArrayOutputStream()
+            val buffer = ByteArray(64 * 1024)
+            var total = 0L
+            while (true) {
+                val read = input.read(buffer)
+                if (read < 0) break
+                total += read
+                if (total > limit) throw IllegalArgumentException(AttachmentLimits.TOO_LARGE_ERROR)
+                output.write(buffer, 0, read)
+            }
+            return output.toByteArray()
+        }
+
         const val UNSUPPORTED_ERROR = "Only images, PDFs, or text files can be attached here."
         const val READ_ERROR = "The attachment could not be read."
         internal const val MAX_PREVIEW_BYTES = 128 * 1024

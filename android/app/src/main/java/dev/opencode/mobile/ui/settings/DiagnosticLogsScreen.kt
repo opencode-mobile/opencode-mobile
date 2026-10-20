@@ -213,7 +213,7 @@ class DiagnosticLogsViewModel
             val jsonl = redactedExport()
             val file =
                 withContext(Dispatchers.IO) {
-                    File(context.cacheDir, EXPORT_FILE_NAME).also { it.writeText(jsonl) }
+                    File(File(context.cacheDir, "diagnostic").apply { mkdirs() }, EXPORT_FILE_NAME).also { it.writeText(jsonl) }
                 }
             return FileProvider.getUriForFile(
                 context,

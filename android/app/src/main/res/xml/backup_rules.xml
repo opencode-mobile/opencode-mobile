@@ -7,6 +7,8 @@
 <full-backup-content>
     <exclude domain="sharedpref" path="secure_connection_credentials.xml" />
     <exclude domain="sharedpref" path="secure_feedback_identity.xml" />
+    <exclude domain="sharedpref" path="keystore_connection_credentials.xml" />
+    <exclude domain="sharedpref" path="keystore_feedback_identity.xml" />
     <exclude domain="database" path="opencode_mobile.db" />
     <exclude domain="database" path="opencode_mobile.db-wal" />
     <exclude domain="database" path="opencode_mobile.db-shm" />
