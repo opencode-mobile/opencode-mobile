@@ -4,9 +4,15 @@ struct SessionListGalleryView: View {
     @State private var selectedFilterId = SessionListFilterTab.allId
     @State private var oneProject = false
     @State private var showProjectPicker = false
+    @State private var load: SessionListDockGalleryLoad = .none
+
+    /// The loading project stands in for one just added: it has no sessions yet.
+    private static let loadingWorktree = "/Users/demo/opencode"
 
     private var filterTabs: [SessionListFilterTab] {
-        oneProject ? sessionListGalleryOneProjectFilterTabs : sessionListGalleryFilterTabs
+        let tabs = oneProject ? sessionListGalleryOneProjectFilterTabs : sessionListGalleryFilterTabs
+        guard let scopeLoad = load.scopeLoad else { return tabs }
+        return tabs + [.project(worktree: Self.loadingWorktree, title: "opencode", count: 0, load: scopeLoad)]
     }
 
     var body: some View {
@@ -19,19 +25,36 @@ struct SessionListGalleryView: View {
                 onFilterSelected: { selectedFilterId = $0 },
                 onSessionSelected: { _ in },
                 onAddProject: {},
-                onNewSession: {}
+                onNewSession: {},
+                onRetryScopeLoad: { _ in load = .loading }
             )
-            HStack(spacing: 8) {
-                OpenCodeChoiceBadge(
-                    label: "1 project",
-                    selected: oneProject,
-                    action: {
-                        oneProject.toggle()
-                        selectedFilterId = oneProject
-                            ? sessionListGalleryOneProjectFilterTabs[0].id
-                            : SessionListFilterTab.allId
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    OpenCodeChoiceBadge(
+                        label: "1 project",
+                        selected: oneProject,
+                        action: {
+                            oneProject.toggle()
+                            selectedFilterId = oneProject
+                                ? sessionListGalleryOneProjectFilterTabs[0].id
+                                : SessionListFilterTab.allId
+                        }
+                    )
+                }
+                HStack(spacing: 8) {
+                    ForEach(SessionListDockGalleryLoad.allCases, id: \.self) { option in
+                        OpenCodeChoiceBadge(
+                            label: option.label,
+                            selected: load == option,
+                            action: {
+                                load = option
+                                selectedFilterId = option == .none
+                                    ? (oneProject ? sessionListGalleryOneProjectFilterTabs[0].id : SessionListFilterTab.allId)
+                                    : Self.loadingWorktree
+                            }
+                        )
                     }
-                )
+                }
             }
             .padding(.horizontal, 16)
             .padding(.top, 8)

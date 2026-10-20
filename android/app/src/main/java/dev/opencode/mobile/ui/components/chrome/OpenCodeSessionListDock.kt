@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -175,13 +176,7 @@ fun SessionListScopeControl(
     var shownTabId by remember { mutableStateOf(selectedId) }
     val selectedIndex = tabs.indexOfFirst { it.id == shownTabId }.let { if (it >= 0) it else 0 }
     val visibleTab = tabs.getOrNull(selectedIndex) ?: return
-    val subtitle = displayedScopeSubtitle(visibleTab)
-    val description =
-        if (subtitle.isEmpty()) {
-            "${visibleTab.pickerTitle}, ${visibleTab.count} sessions"
-        } else {
-            "${visibleTab.pickerTitle}, $subtitle, ${visibleTab.count} sessions"
-        }
+    val description = scopeControlDescription(visibleTab)
     val settleOffset = remember { Animatable(0f) }
     val outgoingOffset = remember { Animatable(0f) }
     val incomingOffset = remember { Animatable(0f) }
@@ -458,7 +453,7 @@ private fun SessionListScopeIdentity(
 ) {
     val textStrong = openCodeColor("text-strong")
     val textWeak = openCodeColor("text-weak")
-    val subtitle = displayedScopeSubtitle(tab)
+    val subtitle = scopeControlSubtitle(tab)
     Row(
         modifier = modifier.padding(end = 26.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -483,7 +478,29 @@ private fun SessionListScopeIdentity(
                 )
             }
         }
-        SessionListScopeCountBadge(count = tab.count)
+        SessionListScopeTrailing(tab = tab)
+    }
+}
+
+/**
+ * Trailing mark for a scope: its session count, a small spinner while its first load runs, or
+ * nothing when that load failed (the subtitle says so).
+ */
+@Composable
+fun SessionListScopeTrailing(
+    tab: SessionListFilterTab,
+    modifier: Modifier = Modifier,
+) {
+    when (tab.load) {
+        is SessionListScopeLoad.Loading ->
+            CircularProgressIndicator(
+                modifier = modifier.size(14.dp),
+                strokeWidth = 2.dp,
+                color = openCodeColor("text-base"),
+                trackColor = openCodeColor("border-weaker-base"),
+            )
+        SessionListScopeLoad.Failed -> Unit
+        null -> SessionListScopeCountBadge(count = tab.count, modifier = modifier)
     }
 }
 
@@ -578,7 +595,7 @@ fun SessionListProjectPickerRows(
             title = tab.pickerTitle,
             subtitle = displayedScopeSubtitle(tab),
             startDecorator = pickerStartDecorator(tab),
-            trailing = { SessionListScopeCountBadge(count = tab.count) },
+            trailing = { SessionListScopeTrailing(tab = tab) },
         )
     }
 }
@@ -594,6 +611,26 @@ fun reorderedProjectPickerWorktrees(
         .map { it.id }
 
 private fun displayedScopeSubtitle(tab: SessionListFilterTab): String = if (tab.isAll) tab.subtitle else compactHomePath(tab.subtitle)
+
+/** Scope control subtitle: load progress while the scope's first load is unfinished, else the path. */
+private fun scopeControlSubtitle(tab: SessionListFilterTab): String =
+    when (val load = tab.load) {
+        is SessionListScopeLoad.Loading ->
+            if (load.isSlow) SessionListScopeLoad.SLOW_SUBTITLE else SessionListScopeLoad.LOADING_SUBTITLE
+        SessionListScopeLoad.Failed -> SessionListScopeLoad.FAILED_SUBTITLE
+        null -> displayedScopeSubtitle(tab)
+    }
+
+internal fun scopeControlDescription(tab: SessionListFilterTab): String {
+    val subtitle = scopeControlSubtitle(tab)
+    val parts =
+        buildList {
+            add(tab.pickerTitle)
+            if (subtitle.isNotEmpty()) add(subtitle)
+            if (tab.load == null) add("${tab.count} sessions")
+        }
+    return parts.joinToString(", ")
+}
 
 private fun Modifier.horizontalEdgeAlphaFade(fadeWidthPx: Float): Modifier =
     graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }

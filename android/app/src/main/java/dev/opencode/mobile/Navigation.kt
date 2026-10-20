@@ -101,6 +101,7 @@ import dev.opencode.mobile.ui.componentgallery.components.SessionBranchPillGalle
 import dev.opencode.mobile.ui.componentgallery.components.SessionComposerGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SessionListDockGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SessionListGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.SessionListSkeletonGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SessionStatusBarGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SessionTodoItemGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SessionTodosPillGalleryScreen
@@ -767,6 +768,8 @@ fun MainNavigation() {
                                                             CodeSnippetGalleryScreen()
                                                         ComponentGalleryEntryId.SessionList ->
                                                             SessionListGalleryScreen()
+                                                        ComponentGalleryEntryId.SessionListSkeleton ->
+                                                            SessionListSkeletonGalleryScreen()
                                                         ComponentGalleryEntryId.SessionListDock ->
                                                             SessionListDockGalleryScreen()
                                                         ComponentGalleryEntryId.SessionStatusBar ->

@@ -46,6 +46,7 @@ import dev.opencode.mobile.theme.openCodeColor
 import kotlinx.coroutines.delay
 
 private val SessionListFallbackBottomSpacer = 168.dp
+private const val SCOPE_LOAD_CROSSFADE_MS = 220
 
 enum class SessionListStatus {
     Idle,
@@ -95,6 +96,28 @@ data class SessionListSession(
     val worktreeCheckout: Boolean = false,
 )
 
+/** First load of a project scope's sessions that has not finished yet. */
+sealed interface SessionListScopeLoad {
+    /** Loading; [isSlow] once it has taken long enough to say so. */
+    data class Loading(
+        val isSlow: Boolean = false,
+    ) : SessionListScopeLoad
+
+    /** The server did not return the scope's sessions; the list offers Retry. */
+    data object Failed : SessionListScopeLoad
+
+    companion object {
+        const val LOADING_SUBTITLE = "Loading sessions…"
+        const val SLOW_SUBTITLE = "Still loading…"
+        const val FAILED_SUBTITLE = "Couldn't load sessions"
+        const val SLOW_CAPTION = "Still loading — large projects can take a moment"
+        const val FAILED_MESSAGE = "The server didn't return this project's sessions."
+        const val RETRY_TITLE = "Retry"
+
+        fun failedTitle(scopeTitle: String): String = "Couldn't load $scopeTitle"
+    }
+}
+
 data class SessionListFilterTab(
     val id: String,
     val title: String,
@@ -102,6 +125,8 @@ data class SessionListFilterTab(
     val subtitle: String = "",
     val letter: Char? = null,
     val letterAccent: LetterAccent? = null,
+    /** Unfinished first load; the dock shows it instead of [count] and the list shows a placeholder. */
+    val load: SessionListScopeLoad? = null,
 ) {
     val isAll: Boolean get() = id == ALL_ID
     val pickerTitle: String get() = if (isAll) PICKER_ALL_TITLE else title
@@ -126,6 +151,7 @@ data class SessionListFilterTab(
             worktree: String,
             title: String,
             count: Int,
+            load: SessionListScopeLoad? = null,
         ): SessionListFilterTab =
             SessionListFilterTab(
                 id = worktree,
@@ -134,6 +160,7 @@ data class SessionListFilterTab(
                 subtitle = worktree,
                 letter = letterCharacterForProject(title),
                 letterAccent = letterAccentForWorktree(worktree),
+                load = load,
             )
     }
 }
@@ -157,6 +184,8 @@ fun SessionList(
     selectedSessionId: String? = null,
     /** Rows of [selectedFilterId] in display order (sections flattened, top to bottom). */
     onDisplayedSessionsChange: ((List<SessionListSession>) -> Unit)? = null,
+    /** Retry for a scope whose [SessionListFilterTab.load] failed; receives the tab id. */
+    onRetryScopeLoad: (String) -> Unit = {},
 ) {
     val background = openCodeColor("background-base")
     val borderWeaker = openCodeColor("border-weaker-base")
@@ -190,6 +219,8 @@ fun SessionList(
                 SessionListFeedPage(
                     sessions = sessions,
                     filterId = filterId,
+                    scopeTab = filterTabs.firstOrNull { it.id == filterId },
+                    onRetryScopeLoad = onRetryScopeLoad,
                     listBottomFadeHeight = listBottomFadeHeight,
                     borderWeaker = borderWeaker,
                     background = background,
@@ -236,6 +267,8 @@ fun SessionList(
 private fun SessionListFeedPage(
     sessions: List<SessionListSession>,
     filterId: String,
+    scopeTab: SessionListFilterTab?,
+    onRetryScopeLoad: (String) -> Unit,
     listBottomFadeHeight: Dp,
     borderWeaker: androidx.compose.ui.graphics.Color,
     background: androidx.compose.ui.graphics.Color,
@@ -342,6 +375,8 @@ private fun SessionListFeedPage(
 
     SessionListFeed(
         visibleSessions = visibleSessions,
+        scopeTab = scopeTab,
+        onRetryScopeLoad = onRetryScopeLoad,
         ladderSections = ladderSections,
         listState = listState,
         listBottomFadeHeight = listBottomFadeHeight,
@@ -359,6 +394,74 @@ private fun SessionListFeedPage(
 
 @Composable
 private fun SessionListFeed(
+    visibleSessions: List<SessionListSession>,
+    scopeTab: SessionListFilterTab?,
+    onRetryScopeLoad: (String) -> Unit,
+    ladderSections: List<HomeSessionLadderSection<SessionListSession>>,
+    listState: LazyListState,
+    listBottomFadeHeight: Dp,
+    borderWeaker: androidx.compose.ui.graphics.Color,
+    emptyContent: (@Composable () -> Unit)?,
+    selectedSessionId: String?,
+    onSessionSelected: (SessionListSession) -> Unit,
+    onSessionLongPress: ((SessionListSession) -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
+    // A loading or failed scope shows its placeholder only while it has no rows to show.
+    val placeholder = scopeTab?.load?.takeIf { visibleSessions.isEmpty() }
+    Crossfade(
+        targetState = placeholder?.let { it::class },
+        animationSpec = tween(durationMillis = SCOPE_LOAD_CROSSFADE_MS, easing = EaseInOut),
+        modifier = modifier,
+        label = "sessionListScopeLoad",
+    ) { placeholderKind ->
+        when {
+            placeholderKind == SessionListScopeLoad.Failed::class && scopeTab != null ->
+                Box(
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .padding(bottom = listBottomFadeHeight),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    OpenCodeEmptyState(
+                        title = SessionListScopeLoad.failedTitle(scopeTab.title),
+                        message = SessionListScopeLoad.FAILED_MESSAGE,
+                        primaryAction =
+                            OpenCodeEmptyStateAction(
+                                title = SessionListScopeLoad.RETRY_TITLE,
+                                onClick = { onRetryScopeLoad(scopeTab.id) },
+                            ),
+                    )
+                }
+            placeholderKind != null ->
+                OpenCodeSessionListSkeleton(
+                    accent = scopeTab?.letterAccent,
+                    title = scopeTab?.title,
+                    caption =
+                        SessionListScopeLoad.SLOW_CAPTION.takeIf {
+                            (scopeTab?.load as? SessionListScopeLoad.Loading)?.isSlow == true
+                        },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            else ->
+                SessionListFeedRows(
+                    visibleSessions = visibleSessions,
+                    ladderSections = ladderSections,
+                    listState = listState,
+                    listBottomFadeHeight = listBottomFadeHeight,
+                    borderWeaker = borderWeaker,
+                    emptyContent = emptyContent,
+                    selectedSessionId = selectedSessionId,
+                    onSessionSelected = onSessionSelected,
+                    onSessionLongPress = onSessionLongPress,
+                )
+        }
+    }
+}
+
+@Composable
+private fun SessionListFeedRows(
     visibleSessions: List<SessionListSession>,
     ladderSections: List<HomeSessionLadderSection<SessionListSession>>,
     listState: LazyListState,

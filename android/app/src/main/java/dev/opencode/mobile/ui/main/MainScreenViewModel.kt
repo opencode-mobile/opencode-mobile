@@ -19,6 +19,7 @@ import dev.opencode.mobile.domain.event.namedProjectId
 import dev.opencode.mobile.domain.filesystem.FilesystemRepository
 import dev.opencode.mobile.domain.filesystem.ServerPathPolicy
 import dev.opencode.mobile.domain.live.LiveStoreRefreshPolicy
+import dev.opencode.mobile.domain.live.SessionListSnapshot
 import dev.opencode.mobile.domain.live.SessionLiveStore
 import dev.opencode.mobile.domain.live.SessionReadyStore
 import dev.opencode.mobile.domain.live.SessionStatusLiveStore
@@ -87,6 +88,7 @@ class MainScreenViewModel
         private val liveUpdates: LiveUpdates = FixedLiveUpdates(),
         worktreeRepository: WorktreeRepository = UnavailableWorktreeRepository,
         private val foregroundEventStream: ForegroundEventStream = IdleForegroundEventStream,
+        projectFirstLoadTiming: ProjectFirstLoadTiming = ProjectFirstLoadTiming(),
     ) : ViewModel() {
         private val _uiState = MutableStateFlow<MainScreenUiState>(MainScreenUiState.Probing)
         val uiState: StateFlow<MainScreenUiState> = _uiState.asStateFlow()
@@ -110,8 +112,8 @@ class MainScreenViewModel
         val sessionActions: StateFlow<HomeSessionActionsUiState> = sessionActionsRegion.state
         private val _revealNewestToken = MutableStateFlow(0)
         val revealNewestToken: StateFlow<Int> = _revealNewestToken.asStateFlow()
-        private val _pendingSelectedFilterId = MutableStateFlow<String?>(null)
-        val pendingSelectedFilterId: StateFlow<String?> = _pendingSelectedFilterId.asStateFlow()
+        private val _pendingScopeRequest = MutableStateFlow<HomeScopeRequest?>(null)
+        val pendingScopeRequest: StateFlow<HomeScopeRequest?> = _pendingScopeRequest.asStateFlow()
         private val _serversChrome = MutableStateFlow(HomeServersChrome())
         val serversChrome: StateFlow<HomeServersChrome> = _serversChrome.asStateFlow()
         private var lastHomeHiddenAtEpochMs: Long? = HomeDisplayPreferences.lastHomeHiddenAtEpochMs()
@@ -130,6 +132,10 @@ class MainScreenViewModel
             get() = activeConnectionManager.current()?.baseUrl.orEmpty()
         private var liveObservationJobs: List<Job> = emptyList()
         private var observedWorktrees: List<String> = emptyList()
+
+        /** Worktrees whose combined sessions + status + ready stream has painted since observations started. */
+        private val livePaintedWorktrees = mutableSetOf<String>()
+        private val pendingFirstServerSnapshots = mutableMapOf<String, SessionListSnapshot>()
         private val worktreeMarks =
             HomeWorktreeMarks(
                 repository = worktreeRepository,
@@ -143,6 +149,19 @@ class MainScreenViewModel
                             val summary = sessionDomainAdapter.toSessionSummary(session)
                             if (summary.directory.isNullOrBlank()) summary.copy(directory = directory) else summary
                         }
+                },
+            )
+        private val projectFirstLoads =
+            HomeProjectFirstLoads(
+                scope = viewModelScope,
+                timing = projectFirstLoadTiming,
+                observeSessions = { worktree -> sessionLiveStore.observeSessions(worktree) },
+                refetchSessions = { worktree -> sessionLiveStore.invalidate(worktree) },
+                onServerSnapshot = { worktree, snapshot -> paintFirstServerSnapshot(worktree, snapshot) },
+                onChange = { loads ->
+                    _uiState.update { state ->
+                        if (state is MainScreenUiState.Loaded) state.copy(projectLoads = loads) else state
+                    }
                 },
             )
         private val worktreeInventories = mutableMapOf<String, WorktreeInventory>()
@@ -163,12 +182,16 @@ class MainScreenViewModel
             viewModelScope.launch {
                 connectionSessionCoordinator.profileSaved.collect {
                     stopLiveObservations()
+                    projectFirstLoads.clearAll()
+                    pendingFirstServerSnapshots.clear()
                     refresh()
                 }
             }
             viewModelScope.launch {
                 connectionSessionCoordinator.profileCleared.collect {
                     stopLiveObservations()
+                    projectFirstLoads.clearAll()
+                    pendingFirstServerSnapshots.clear()
                     worktreeMarks.onDisconnected()
                     worktreeInventories.clear()
                     worktreeProjectIds.clear()
@@ -396,7 +419,7 @@ class MainScreenViewModel
                 if (worktree in added) {
                     dismissAddProjectSheet()
                     runHomeLoad(skipProbe = true)
-                    _pendingSelectedFilterId.value = worktree
+                    _pendingScopeRequest.value = HomeScopeRequest(filterId = worktree, evenFromAll = false)
                     _removalSnackbar.value =
                         OpenCodeSnackbarMessage(
                             text =
@@ -411,9 +434,10 @@ class MainScreenViewModel
                         // Persist the selected directory (web open-project behavior), not the
                         // /project/current worktree — non-git dirs resolve to global "/".
                         connectionProfileStore.addWorktree(serverBaseUrl, worktree)
+                        projectFirstLoads.start(worktree)
                         dismissAddProjectSheet()
                         runHomeLoad(skipProbe = true)
-                        _pendingSelectedFilterId.value = worktree
+                        _pendingScopeRequest.value = HomeScopeRequest(filterId = worktree, evenFromAll = true)
                     }.onFailure { error ->
                         updateAddProjectSession {
                             it.copy(
@@ -459,8 +483,14 @@ class MainScreenViewModel
             }
         }
 
-        fun consumePendingSelectedFilter() {
-            _pendingSelectedFilterId.value = null
+        fun consumePendingScopeRequest() {
+            _pendingScopeRequest.value = null
+        }
+
+        /** Failed first load of a newly added project: show loading again and refetch its sessions. */
+        fun retryProjectLoad(worktree: String) {
+            logAction(ProductAnalytics.Screen.HOME, ProductAnalytics.Action.HOME_RETRY_PROJECT_LOAD)
+            projectFirstLoads.retry(worktree)
         }
 
         fun markHomeHidden(nowEpochMs: Long = System.currentTimeMillis()) {
@@ -554,6 +584,8 @@ class MainScreenViewModel
             viewModelScope.launch {
                 runCatching { connectionProfileStore.removeWorktree(serverBaseUrl, pending.worktree) }
                 runCatching { sessionCache.purgeWorktree(serverBaseUrl, pending.worktree) }
+                projectFirstLoads.clear(pending.worktree)
+                pendingFirstServerSnapshots.remove(pending.worktree)
                 logI("remove project worktree=${pending.worktree}")
                 clearPendingProjectRemoval()
                 runHomeLoad(skipProbe = true)
@@ -780,7 +812,8 @@ class MainScreenViewModel
                     return
                 }
                 val sections = loadSectionsFromCache(worktrees)
-                _uiState.value = MainScreenUiState.Loaded(sections = sections)
+                _uiState.value = MainScreenUiState.Loaded(sections = sections, projectLoads = projectFirstLoads.visible)
+                applyPendingFirstServerSnapshots()
                 if (!skipProbe) {
                     runCatching { projectRepository.probeServer() }
                         .onFailure {
@@ -859,8 +892,9 @@ class MainScreenViewModel
                         preserveContent && previous is MainScreenUiState.Loaded ->
                             previous.copy(sections = sections)
                         else ->
-                            MainScreenUiState.Loaded(sections = sections)
+                            MainScreenUiState.Loaded(sections = sections, projectLoads = projectFirstLoads.visible)
                     }
+                applyPendingFirstServerSnapshots()
                 startLiveObservations(worktrees)
                 reloadWorktreeMarks(worktrees)
             } catch (error: Throwable) {
@@ -1092,6 +1126,7 @@ class MainScreenViewModel
             if (liveObservationsRunning(worktrees)) return
             stopLiveObservations()
             observedWorktrees = worktrees
+            livePaintedWorktrees.clear()
             liveObservationJobs =
                 worktrees.map { worktree ->
                     viewModelScope.launch {
@@ -1102,6 +1137,7 @@ class MainScreenViewModel
                         ) { snapshot, statuses, readyIds ->
                             Triple(snapshot, statuses, readyIds)
                         }.collect { (snapshot, statuses, readyIds) ->
+                            livePaintedWorktrees += worktree
                             updateSectionFromLiveData(
                                 worktree,
                                 snapshot.sessions,
@@ -1155,6 +1191,7 @@ class MainScreenViewModel
             liveObservationJobs.forEach { it.cancel() }
             liveObservationJobs = emptyList()
             observedWorktrees = emptyList()
+            livePaintedWorktrees.clear()
             worktreeMarkJob?.cancel()
             worktreeMarkJob = null
         }
@@ -1208,6 +1245,41 @@ class MainScreenViewModel
             _uiState.value = state.copy(sections = updatedSections)
         }
 
+        /**
+         * A newly added project's first server list paints right away, even while its status or
+         * ready-id stream has not emitted (the combined stream waits for all three). Statuses stay
+         * unknown until that stream overwrites the section.
+         */
+        private fun paintFirstServerSnapshot(
+            worktree: String,
+            snapshot: SessionListSnapshot,
+        ) {
+            if (worktree in livePaintedWorktrees) {
+                pendingFirstServerSnapshots.remove(worktree)
+                return
+            }
+            val loaded = _uiState.value as? MainScreenUiState.Loaded
+            if (loaded?.sections?.any { it.worktree == worktree } != true) {
+                // Home has not painted the project's section yet; runHomeLoad applies this after it does.
+                pendingFirstServerSnapshots[worktree] = snapshot
+                return
+            }
+            pendingFirstServerSnapshots.remove(worktree)
+            updateSectionFromLiveData(
+                worktree,
+                snapshot.sessions,
+                SessionActivitySnapshot(),
+                emptySet(),
+                sessionsFromCache = false,
+            )
+        }
+
+        private fun applyPendingFirstServerSnapshots() {
+            pendingFirstServerSnapshots.toMap().forEach { (worktree, snapshot) ->
+                paintFirstServerSnapshot(worktree, snapshot)
+            }
+        }
+
         private fun supportsSessionViewed(): Boolean = activeConnectionManager.currentCapabilities().supportsSessionViewed
 
         private fun clearProjectSessionCreateError() {
@@ -1259,8 +1331,19 @@ sealed interface MainScreenUiState {
         val pendingOpenSession: SessionOpenTarget? = null,
         val projectSessionCreateError: String? = null,
         val pendingProjectRemoval: ProjectRemovalUi? = null,
+        /** Unfinished first loads of projects added this session, keyed by worktree. */
+        val projectLoads: Map<String, ProjectFirstLoad> = emptyMap(),
     ) : MainScreenUiState
 }
+
+/**
+ * One-shot request for Home to switch its project scope. [evenFromAll] also switches away from
+ * "All" (a newly added project); otherwise "All" stays selected.
+ */
+data class HomeScopeRequest(
+    val filterId: String,
+    val evenFromAll: Boolean,
+)
 
 data class ProjectRemovalUi(
     val worktree: String,

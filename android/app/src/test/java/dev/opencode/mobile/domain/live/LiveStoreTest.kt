@@ -2794,6 +2794,36 @@ class SessionLiveStoreTest {
         }
 
     @Test
+    fun observeSessions_publishesLoadFailureUntilALaterLoadSucceeds() =
+        runTest(testDispatcher) {
+            val repository =
+                FakeSessionRepository(
+                    sessions = listOf(testSession(id = "ses-1", title = "First")),
+                    shouldFailList = true,
+                )
+            val eventStream = FakeForegroundEventStream()
+            val store = sessionStore(repository, eventStream, ServerProtocol.V1)
+            val emissions = mutableListOf<SessionListSnapshot>()
+            val collectJob = launch { store.observeSessions("/repo").collect { emissions.add(it) } }
+            advanceUntilIdle()
+
+            val failed = emissions.single()
+            assertTrue(failed.loadFailed)
+            assertTrue(failed.isFromCache)
+            assertTrue(failed.sessions.isEmpty())
+
+            repository.shouldFailList = false
+            store.invalidate("/repo")
+            advanceUntilIdle()
+            collectJob.cancel()
+
+            val loaded = emissions.last()
+            assertFalse(loaded.loadFailed)
+            assertFalse(loaded.isFromCache)
+            assertEquals(listOf("ses-1"), loaded.sessions.map { it.id })
+        }
+
+    @Test
     fun sessionViewed_patchesViewedMonotonicallyWithoutRefetch() =
         runTest(testDispatcher) {
             val unread = testSession(id = "ses-1", title = "First").copy(idleAtEpochMs = 30L, viewedAtEpochMs = 10L)

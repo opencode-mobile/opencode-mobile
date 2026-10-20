@@ -111,6 +111,7 @@ object ProductAnalytics {
         const val HOME_DISMISS_REMOVAL_SNACKBAR = "home_dismiss_removal_snackbar"
         const val HOME_CONNECT = "home_connect"
         const val HOME_RETRY_PROBE = "home_retry_probe"
+        const val HOME_RETRY_PROJECT_LOAD = "home_retry_project_load"
         const val HOME_EDIT_CONNECTION = "home_edit_connection"
 
         // Connection
