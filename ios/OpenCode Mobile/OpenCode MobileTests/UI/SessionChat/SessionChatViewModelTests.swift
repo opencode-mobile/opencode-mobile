@@ -989,6 +989,29 @@ struct SessionChatViewModelTests {
         #expect(viewModel.uiState.messages.map(\.id) == rowsBefore)
     }
 
+    @Test func sendPrompt_shellDraftWithPendingRevert_runsWithoutCommittingTheRevert() async {
+        let messages = [
+            Message(id: "msg-1", role: .user, text: "First", model: nil, mode: nil, sentAtEpochMs: 1),
+            Message(id: "msg-2", role: .assistant, text: "Reply", model: nil, mode: nil, sentAtEpochMs: 2),
+        ]
+        let sessionRepository = FakeChatSessionRepository()
+        let repository = FakeMessageRepository(messages: messages)
+        let viewModel = makeViewModel(messageRepository: repository, sessionRepository: sessionRepository)
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        viewModel.revertMessage("msg-1")
+        await waitUntil { viewModel.uiState.hasPendingRevert }
+
+        viewModel.updateComposerText("!git status")
+        await viewModel.sendPrompt()
+        let ran = await waitUntil { repository.shellRequests.count == 1 }
+
+        // Like the TUI and web app, a shell command leaves a staged revert alone.
+        #expect(ran)
+        #expect(sessionRepository.commitRevertRequests.isEmpty)
+        #expect(viewModel.uiState.hasPendingRevert)
+    }
+
     @Test func sendPrompt_bareBang_sendsNothing() async {
         let repository = FakeMessageRepository()
         let viewModel = makeViewModel(messageRepository: repository)

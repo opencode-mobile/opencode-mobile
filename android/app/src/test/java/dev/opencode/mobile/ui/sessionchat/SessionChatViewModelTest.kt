@@ -2391,6 +2391,33 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun sendPrompt_shellDraftWithPendingRevert_runsWithoutCommittingTheRevert() =
+        runTest(testDispatcher) {
+            val messages =
+                listOf(
+                    Message(id = "msg-1", role = MessageRole.User, text = "First"),
+                    Message(id = "msg-2", role = MessageRole.Assistant, text = "Reply"),
+                )
+            val repository = FakeMessageRepository(messages = messages)
+            val sessionRepository = FakeSessionRepository()
+            val viewModel = createViewModel(repository = repository, sessionRepository = sessionRepository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            viewModel.revertMessage("msg-1")
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.hasPendingRevert)
+
+            viewModel.updateComposerText("!git status")
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+
+            // Like the TUI and web app, a shell command leaves a staged revert alone.
+            assertEquals(1, repository.shellRequests.size)
+            assertTrue(sessionRepository.commitRevertRequests.isEmpty())
+            assertTrue(viewModel.uiState.value.hasPendingRevert)
+        }
+
+    @Test
     fun sendPrompt_bareBang_sendsNothing() =
         runTest(testDispatcher) {
             val repository = FakeMessageRepository()
