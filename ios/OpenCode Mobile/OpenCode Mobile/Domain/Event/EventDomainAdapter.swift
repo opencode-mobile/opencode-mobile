@@ -605,7 +605,7 @@ nonisolated struct EventDomainAdapter: Sendable {
             toolName: name,
             status: status,
             callID: callID,
-            input: objectInput(properties["input"]),
+            input: objectInput(properties["input"]) ?? streamingToolInput(type: type, properties: properties),
             output: output,
             error: error,
             metadata: metadata,
@@ -627,6 +627,20 @@ nonisolated struct EventDomainAdapter: Sendable {
         case (nil, let metadata?): return metadata
         case (let structured?, let metadata?): return structured.merging(metadata) { _, new in new }
         }
+    }
+
+    /// Arguments start streaming with an empty preview that deltas or `ended` fill.
+    private func streamingToolInput(type: String, properties: [String: Any]) -> [String: Any]? {
+        if type.hasSuffix("tool.input.started") { return [ToolArgumentsPreview.inputKey: ""] }
+        if type.hasSuffix("tool.input.ended") { return endedToolInput(properties["text"] as? String) }
+        return nil
+    }
+
+    /// `tool.input.ended` carries the whole argument text. Parsed, it settles the
+    /// arguments; otherwise it replaces the streamed preview with the final text.
+    private func endedToolInput(_ text: String?) -> [String: Any]? {
+        guard let text else { return nil }
+        return objectInput(text) ?? [ToolArgumentsPreview.inputKey: text]
     }
 
     private func toolInputDelta(_ properties: [String: Any]) -> OpencodeEvent {

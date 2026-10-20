@@ -35,10 +35,12 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 
 class MessageDomainAdapter {
     private val json = Json { ignoreUnknownKeys = true }
@@ -734,7 +736,7 @@ class MessageDomainAdapter {
                     title = (metadata?.get("title") as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotEmpty() },
                     error = state?.error?.message?.let(SessionFailure::unwrap)?.takeIf { it.isNotEmpty() },
                     callId = content.id,
-                    input = jsonObjectFromInput(state?.input),
+                    input = jsonObjectFromInput(state?.input) ?: streamingInputPreview(state),
                     output = toolOutput(state),
                     metadata = metadata,
                     id = content.id ?: fallbackId,
@@ -803,6 +805,14 @@ class MessageDomainAdapter {
                 runCatching { json.parseToJsonElement(input.content) as? JsonObject }.getOrNull()
             else -> null
         }
+
+    /** A tool whose arguments are still streaming keeps the partial text as its preview. */
+    private fun streamingInputPreview(state: V2ToolStateDto?): JsonObject? {
+        if (state?.status != "streaming" && state?.status != "pending") return null
+        val raw = state.input as? JsonPrimitive ?: return null
+        if (!raw.isString) return null
+        return buildJsonObject { put(ToolArgumentsPreview.INPUT_KEY, raw.content) }
+    }
 
     private fun toolOutput(state: V2ToolStateDto?): String? {
         val texts =
