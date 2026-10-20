@@ -39,13 +39,13 @@ class EncryptedSecureCredentialStore
             if (openFailure != null) return null
             // One open per process: concurrent first callers must not race a failure over a success.
             synchronized(this) {
-                cachedPreferences?.let { return it }
+                cachedStore?.let { return it }
                 if (openFailure != null) return null
-                return openPreferences()
+                return openStore()
             }
         }
 
-        private fun openPreferences(): SharedPreferences? {
+        private fun openStore(): EncryptedValueStore? {
             val built =
                 runCatching {
                     val key = KeystoreSecretKeys.getOrCreate(KEY_ALIAS)
@@ -75,7 +75,15 @@ class EncryptedSecureCredentialStore
             val store =
                 store()
                     ?: throw SecureCredentialStoreException("keystore credential store unavailable", openFailure)
-            if (!store.write(passwordKey(serverBaseUrl), password)) {
+            val written =
+                try {
+                    store.write(passwordKey(serverBaseUrl), password)
+                } catch (error: Exception) {
+                    // Keystore or cipher failure while sealing: same outcome as a refused write,
+                    // so saveProfile rolls the catalog back and the setup screen explains it.
+                    throw SecureCredentialStoreException("keystore credential store could not seal the password", error)
+                }
+            if (!written) {
                 throw SecureCredentialStoreException("keystore credential store rejected the write")
             }
         }

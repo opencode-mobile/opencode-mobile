@@ -31,6 +31,15 @@ class EncryptedFeedbackIdentityStore
         private fun store(): EncryptedValueStore? {
             cachedStore?.let { return it }
             if (openFailed) return null
+            // One open per process: concurrent first callers must not race a failure over a success.
+            synchronized(this) {
+                cachedStore?.let { return it }
+                if (openFailed) return null
+                return openStore()
+            }
+        }
+
+        private fun openStore(): EncryptedValueStore? {
             val built =
                 runCatching {
                     val key = KeystoreSecretKeys.getOrCreate(KEY_ALIAS)
@@ -55,7 +64,13 @@ class EncryptedFeedbackIdentityStore
 
         override fun writeRefreshToken(token: String?) {
             val store = store() ?: return
-            if (token.isNullOrEmpty()) store.remove(KEY_REFRESH_TOKEN) else store.write(KEY_REFRESH_TOKEN, token)
+            if (token.isNullOrEmpty()) {
+                store.remove(KEY_REFRESH_TOKEN)
+                return
+            }
+            // A Keystore failure while sealing only loses the cached token; the next upload signs in again.
+            runCatching { store.write(KEY_REFRESH_TOKEN, token) }
+                .onFailure { DiagnosticLog.warning(DiagnosticLogArea.Connection, "Unable to seal the feedback refresh token", it) }
         }
 
         private companion object {
