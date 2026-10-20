@@ -69,8 +69,8 @@ Repair issue state only when asked; otherwise report the mismatch.
 - ...
 
 ## Evidence
-<!-- Per AGENTS.md "Pull Request Evidence": screenshots/GIF table or trace,
-     or one line saying why none applies. -->
+<!-- Per AGENTS.md "Pull Request Evidence": link to the published evidence
+     page, or one line saying why none applies. -->
 
 ## Issue
 - #<number>
