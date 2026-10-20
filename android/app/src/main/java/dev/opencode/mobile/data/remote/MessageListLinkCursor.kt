@@ -42,6 +42,7 @@ internal object MessageListLinkCursor {
                 ?.substringAfter('=')
                 ?.takeIf { it.isNotBlank() }
                 ?: return null
-        return runCatching { java.net.URLDecoder.decode(raw, Charsets.UTF_8) }.getOrDefault(raw)
+        // decode(String, Charset) is API 33; the String overload works on minSdk 24.
+        return runCatching { java.net.URLDecoder.decode(raw, Charsets.UTF_8.name()) }.getOrDefault(raw)
     }
 }
