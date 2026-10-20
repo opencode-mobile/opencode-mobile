@@ -120,6 +120,10 @@ struct ProtocolSelectedSessionRemote: SessionRemote, Sendable {
         try await selected().unrevertSession(id: id)
     }
 
+    func commitRevert(id: String) async throws -> Bool {
+        try await selected().commitRevert(id: id)
+    }
+
     func respondToPermission(
         sessionID: String,
         permissionID: String,

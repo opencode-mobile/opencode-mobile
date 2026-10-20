@@ -126,6 +126,11 @@ internal class ProtocolSelectedSessionRemote(
         directory: String?,
     ): Boolean = selected().unrevertSession(id, directory)
 
+    override suspend fun commitRevert(
+        id: String,
+        directory: String?,
+    ): Boolean = selected().commitRevert(id, directory)
+
     override suspend fun respondToPermission(
         sessionId: String,
         permissionId: String,

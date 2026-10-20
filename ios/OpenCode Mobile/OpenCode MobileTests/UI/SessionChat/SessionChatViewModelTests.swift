@@ -3362,6 +3362,80 @@ struct SessionChatViewModelTests {
         #expect(sessionRepository.unrevertRequest == nil)
     }
 
+    @Test func sendPrompt_withPendingRevert_commitsRevertBeforePrompt() async {
+        let messages = [
+            Message(id: "msg-1", role: .user, text: "First", model: nil, mode: nil, sentAtEpochMs: 1),
+            Message(id: "msg-2", role: .assistant, text: "Reply", model: nil, mode: nil, sentAtEpochMs: 2),
+        ]
+        let sessionRepository = FakeChatSessionRepository()
+        let repository = FakeMessageRepository(messages: messages)
+        var promptSentBeforeCommit: Bool?
+        sessionRepository.onCommitRevert = { promptSentBeforeCommit = repository.sendPromptAsyncCalled }
+        let viewModel = makeViewModel(
+            messageRepository: repository,
+            sessionRepository: sessionRepository
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+
+        viewModel.revertMessage("msg-1")
+        await waitUntil { viewModel.uiState.hasPendingRevert }
+
+        viewModel.updateComposerText("Changed")
+        await viewModel.sendPrompt()
+
+        #expect(sessionRepository.commitRevertRequests == ["ses-1"])
+        #expect(promptSentBeforeCommit == false)
+        #expect(repository.sendPromptAsyncCalled)
+        #expect(!viewModel.uiState.hasPendingRevert)
+    }
+
+    @Test func sendPrompt_withoutPendingRevert_doesNotCommit() async {
+        let sessionRepository = FakeChatSessionRepository()
+        let repository = FakeMessageRepository()
+        let viewModel = makeViewModel(
+            messageRepository: repository,
+            sessionRepository: sessionRepository
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+
+        viewModel.updateComposerText("Hello")
+        await viewModel.sendPrompt()
+
+        #expect(repository.sendPromptAsyncCalled)
+        #expect(sessionRepository.commitRevertRequests.isEmpty)
+    }
+
+    @Test func sendPrompt_revertCommitFailure_keepsPromptUnsentAndReportsError() async {
+        let messages = [
+            Message(id: "msg-1", role: .user, text: "First", model: nil, mode: nil, sentAtEpochMs: 1),
+            Message(id: "msg-2", role: .assistant, text: "Reply", model: nil, mode: nil, sentAtEpochMs: 2),
+        ]
+        let sessionRepository = FakeChatSessionRepository(
+            commitRevertError: .http(statusCode: 409, message: "Session is busy")
+        )
+        let repository = FakeMessageRepository(messages: messages)
+        let viewModel = makeViewModel(
+            messageRepository: repository,
+            sessionRepository: sessionRepository
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+
+        viewModel.revertMessage("msg-1")
+        await waitUntil { viewModel.uiState.hasPendingRevert }
+
+        viewModel.updateComposerText("Changed")
+        await viewModel.sendPrompt()
+
+        #expect(sessionRepository.commitRevertRequests == ["ses-1"])
+        #expect(!repository.sendPromptAsyncCalled)
+        #expect(viewModel.uiState.composer.text == "Changed")
+        #expect(viewModel.uiState.snackbar?.message == "Session is busy")
+        #expect(viewModel.uiState.hasPendingRevert)
+    }
+
     @Test func sendPrompt_failure_keepsPendingRevertChip() async {
         let messages = [
             Message(id: "msg-1", role: .user, text: "First", model: nil, mode: nil, sentAtEpochMs: 1),
@@ -5261,12 +5335,16 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
     private(set) var abortSessionIDs: [String] = []
     private(set) var revertRequest: RevertRequest?
     private(set) var unrevertRequest: String?
+    private(set) var commitRevertRequests: [String] = []
+    /// Runs when a revert commit arrives, before it succeeds or fails.
+    var onCommitRevert: (() -> Void)?
     private(set) var summarizeRequest: SummarizeRequest?
     private let getSessionError: SessionError?
     private let createSessionError: SessionError?
     private let forkSessionError: SessionError?
     private let revertError: SessionError?
     private let unrevertError: SessionError?
+    private let commitRevertError: SessionError?
     private let summarizeError: SessionError?
     private let summarizeHold: AsyncGate?
     private let compactStart: CompactionStart
@@ -5298,6 +5376,7 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
         forkSessionError: SessionError? = nil,
         revertError: SessionError? = nil,
         unrevertError: SessionError? = nil,
+        commitRevertError: SessionError? = nil,
         summarizeError: SessionError? = nil,
         summarizeHold: AsyncGate? = nil,
         compactStart: CompactionStart = .finished
@@ -5323,6 +5402,7 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
         self.forkSessionError = forkSessionError
         self.revertError = revertError
         self.unrevertError = unrevertError
+        self.commitRevertError = commitRevertError
         self.summarizeError = summarizeError
         self.summarizeHold = summarizeHold
         self.compactStart = compactStart
@@ -5483,6 +5563,16 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
     func unrevertSession(id: String) async throws -> Bool {
         unrevertRequest = id
         if let unrevertError { throw unrevertError }
+        if var session = getSessionResult {
+            session.revert = nil
+            getSessionResult = session
+        }
+        return true
+    }
+    func commitRevert(id: String) async throws -> Bool {
+        commitRevertRequests.append(id)
+        onCommitRevert?()
+        if let commitRevertError { throw commitRevertError }
         if var session = getSessionResult {
             session.revert = nil
             getSessionResult = session

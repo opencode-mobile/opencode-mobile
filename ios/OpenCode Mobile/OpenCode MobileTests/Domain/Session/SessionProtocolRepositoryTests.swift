@@ -630,6 +630,29 @@ struct SessionProtocolRepositoryTests {
         #expect(request.url?.path.hasSuffix("/api/session/ses_1/revert") == true)
     }
 
+    @Test func v2CommitRevertPostsCommitWithoutBody() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [.noContent])
+        let repository = makeSessionRepository(serverProtocol: .v2)
+
+        let ok = try await repository.commitRevert(id: "ses_1")
+
+        #expect(ok)
+        let request = try #require(ProtocolRoutingURLProtocol.requests.first)
+        #expect(request.httpMethod == "POST")
+        #expect(request.url?.path.hasSuffix("/api/session/ses_1/revert/commit") == true)
+        #expect((ProtocolRoutingURLProtocol.bodies.first.flatMap { $0 } ?? "").isEmpty)
+    }
+
+    @Test func v1CommitRevertSendsNoRequest() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [.json("{}")])
+        let repository = makeSessionRepository(serverProtocol: .v1)
+
+        let ok = try await repository.commitRevert(id: "ses_1")
+
+        #expect(ok)
+        #expect(ProtocolRoutingURLProtocol.requests.isEmpty)
+    }
+
     @Test func v2ListSessionTodosSkipsRestAndSignalsUnavailable() async {
         ProtocolRoutingURLProtocol.reset(responses: [.json("[]")])
         let repository = makeSessionRepository(serverProtocol: .v2)

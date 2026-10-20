@@ -444,6 +444,17 @@ final class SessionChatCommands {
         setRevertBoundary(update.messageID)
     }
 
+    /// Commits a pending revert ahead of the next prompt, as the web app and TUI do. Throws when
+    /// the commit fails so the prompt is not sent.
+    func commitPendingRevert() async throws {
+        guard currentRevertMessageID != nil else { return }
+        let sessionID = sessionID
+        guard try await sessionRepository.commitRevert(id: sessionID) else {
+            throw SessionError.http(statusCode: 0, message: "Couldn't commit revert.")
+        }
+        OpenCodeLog.sessionChat.info("revert committed before prompt session=\(sessionID)")
+    }
+
     func consumePendingRevert() {
         guard currentRevertMessageID != nil else { return }
         setRevertBoundary(nil)
