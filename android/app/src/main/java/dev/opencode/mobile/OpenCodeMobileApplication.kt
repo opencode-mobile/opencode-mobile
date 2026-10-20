@@ -11,6 +11,7 @@ import dev.opencode.mobile.domain.diagnostic.DiagnosticLogBuffer
 import dev.opencode.mobile.domain.diagnostic.MainThreadHangWatchdog
 import dev.opencode.mobile.domain.featureflags.FeatureFlags
 import dev.opencode.mobile.domain.preferences.AnalyticsConsentPreferences
+import dev.opencode.mobile.domain.preferences.AppLockPreferences
 import dev.opencode.mobile.domain.preferences.AppOnboardingPreferences
 import dev.opencode.mobile.domain.preferences.DeveloperToolsPreferences
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
@@ -35,6 +36,7 @@ class OpenCodeMobileApplication : Application() {
         HomeDisplayPreferences.initialize(this)
         MarkdownHighlightPreferences.initialize(this)
         AnalyticsConsentPreferences.initialize(this)
+        AppLockPreferences.initialize(this)
         AppOnboardingPreferences.initialize(this)
         DeveloperToolsPreferences.initialize(this)
         SessionChatDisplayPreferences.initialize(this)

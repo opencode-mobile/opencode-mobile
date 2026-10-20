@@ -84,6 +84,9 @@ fun SettingsScreen(
     onTextMateEnabledChange: (Boolean) -> Unit,
     productAnalyticsConsented: Boolean,
     onProductAnalyticsConsentedChange: (Boolean) -> Unit,
+    appLockEnabled: Boolean = false,
+    appLockAvailable: Boolean = false,
+    onAppLockEnabledChange: (Boolean) -> Unit = {},
     serversSummary: ServersSummary = ServersSummary(),
     modifier: Modifier = Modifier,
     selectedDetail: SettingsDetail? = null,
@@ -316,6 +319,28 @@ fun SettingsScreen(
                 )
 
                 OpenCodeSectionHeader(title = "Privacy")
+
+                OpenCodeListItem(
+                    title = "App Lock",
+                    subtitle =
+                        if (appLockAvailable) {
+                            "Require your fingerprint, face or device PIN when the app returns from the background"
+                        } else {
+                            "Set a screen lock on this device to use App Lock"
+                        },
+                    style = OpenCodeListItemStyle.Card,
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Lock, "App Lock"),
+                    accessory =
+                        OpenCodeListItemAccessory.Toggle(
+                            checked = appLockEnabled,
+                            onCheckedChange = { enabled ->
+                                if (enabled && !appLockAvailable) return@Toggle
+                                onAppLockEnabledChange(enabled)
+                                logSettingsToggle(ProductAnalytics.Action.SETTINGS_TOGGLE_APP_LOCK, enabled)
+                            },
+                        ),
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
 
                 OpenCodeListItem(
                     title = "Privacy Policy",

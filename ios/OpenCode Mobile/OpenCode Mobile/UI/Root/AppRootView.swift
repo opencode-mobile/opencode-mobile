@@ -76,6 +76,11 @@ final class AppRootViewModel {
 struct AppRootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var rootViewModel = Container.makeAppRootViewModel()
+    @State private var appLockPreferences = AppLockPreferences.shared
+    @State private var privacyCoverVisible = false
+    @State private var locked = false
+    @State private var wasInBackground = false
+    private let appLockAuthenticator: any AppLockAuthenticating = LocalAuthenticationAppLockAuthenticator()
 
     var body: some View {
         Group {
@@ -98,6 +103,44 @@ struct AppRootView: View {
             }
         }
         .background(OpenCodeColors.backgroundBase)
+        .overlay {
+            if privacyCoverVisible {
+                PrivacyCoverView(locked: locked) {
+                    Task { await unlock() }
+                }
+                .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.15), value: privacyCoverVisible)
+        .task {
+            // A cold start with App Lock on begins locked.
+            if AppLockPolicy.shouldLock(enabled: appLockPreferences.enabled, wasInBackground: true) {
+                locked = true
+                privacyCoverVisible = true
+                await unlock()
+            }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            // Privacy cover (#755): hide content before the app-switcher snapshot, and engage
+            // the lock when coming back from the background.
+            switch phase {
+            case .inactive:
+                privacyCoverVisible = true
+            case .background:
+                wasInBackground = true
+                privacyCoverVisible = true
+            case .active:
+                if AppLockPolicy.shouldLock(enabled: appLockPreferences.enabled, wasInBackground: wasInBackground) {
+                    locked = true
+                    Task { await unlock() }
+                } else if !locked {
+                    privacyCoverVisible = false
+                }
+                wasInBackground = false
+            @unknown default:
+                break
+            }
+        }
         .task {
             if rootViewModel.state == .loading {
                 ProductAnalytics.logScreenView(
@@ -129,6 +172,17 @@ struct AppRootView: View {
             @unknown default:
                 break
             }
+        }
+    }
+}
+
+extension AppRootView {
+    @MainActor
+    fileprivate func unlock() async {
+        guard locked else { return }
+        if await appLockAuthenticator.authenticate(reason: "Unlock OpenCode Mobile") {
+            locked = false
+            privacyCoverVisible = AppLockPolicy.coverVisible(isForeground: scenePhase == .active, locked: false)
         }
     }
 }

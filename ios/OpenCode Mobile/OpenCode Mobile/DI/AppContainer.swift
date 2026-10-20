@@ -818,6 +818,7 @@ extension Container {
             OpenCodeReleaseObservability.setProductAnalyticsConsented(
                 AnalyticsConsentPreferences.shared.productAnalyticsConsented
             )
+            AppLockPreferences.shared.clear()
             AppOnboardingPreferences.shared.clear()
             DeveloperToolsPreferences.shared.clear()
             SessionChatDisplayPreferences.shared.clear()

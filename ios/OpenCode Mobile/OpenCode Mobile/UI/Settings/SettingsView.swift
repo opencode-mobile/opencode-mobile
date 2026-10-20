@@ -54,6 +54,8 @@ struct SettingsView: View {
     @State private var homeDisplayPreferences = HomeDisplayPreferences.shared
     @State private var markdownHighlightPreferences = MarkdownHighlightPreferences.shared
     @State private var analyticsConsentPreferences = AnalyticsConsentPreferences.shared
+    @State private var appLockPreferences = AppLockPreferences.shared
+    private let appLockAuthenticator: any AppLockAuthenticating = LocalAuthenticationAppLockAuthenticator()
     @State private var sessionChatDisplayPreferences = SessionChatDisplayPreferences.shared
     @State private var developerToolsPreferences = DeveloperToolsPreferences.shared
     @State private var showServers = false
@@ -428,6 +430,27 @@ struct SettingsView: View {
                     .padding(.horizontal, 16)
 
                     OpenCodeSectionHeader(title: "Privacy")
+
+                    OpenCodeListItem(
+                        title: "App Lock",
+                        subtitle: appLockAuthenticator.canAuthenticate()
+                            ? "Require Face ID, Touch ID or your passcode when the app returns from the background"
+                            : "Set a device passcode to use App Lock",
+                        style: .card,
+                        startDecorator: .icon(.lock, accessibilityLabel: "App Lock"),
+                        accessory: .toggle(
+                            isOn: Binding(
+                                get: { appLockPreferences.enabled },
+                                set: { newValue in
+                                    guard !newValue || appLockAuthenticator.canAuthenticate() else { return }
+                                    appLockPreferences.setEnabled(newValue)
+                                    logSettingsAction(ProductAnalytics.Action.settingsToggleAppLock)
+                                }
+                            ),
+                            accessibilityLabel: "App Lock"
+                        )
+                    )
+                    .padding(.horizontal, 16)
 
                     OpenCodeListItem(
                         title: "Privacy Policy",

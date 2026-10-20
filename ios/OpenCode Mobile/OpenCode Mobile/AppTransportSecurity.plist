@@ -14,6 +14,8 @@
 	<false/>
 	<key>OpenCodeVerifyCrashlytics</key>
 	<false/>
+	<key>NSFaceIDUsageDescription</key>
+	<string>OpenCode Mobile uses Face ID to unlock the app when App Lock is on.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>OpenCode Mobile uses the camera to scan an OpenCode 2 pairing QR from your computer.</string>
 	<key>NSMicrophoneUsageDescription</key>

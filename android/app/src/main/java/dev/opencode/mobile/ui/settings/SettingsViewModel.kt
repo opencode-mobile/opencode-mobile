@@ -12,6 +12,7 @@ import dev.opencode.mobile.domain.message.BlockDecorationCache
 import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.message.MessageContentPreparer
 import dev.opencode.mobile.domain.preferences.AnalyticsConsentPreferences
+import dev.opencode.mobile.domain.preferences.AppLockPreferences
 import dev.opencode.mobile.domain.preferences.AppOnboardingPreferences
 import dev.opencode.mobile.domain.preferences.DeveloperToolsPreferences
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
@@ -89,6 +90,7 @@ class SettingsViewModel
                 OpenCodeReleaseObservability.setProductAnalyticsConsented(
                     AnalyticsConsentPreferences.productAnalyticsConsented,
                 )
+                AppLockPreferences.clear()
                 AppOnboardingPreferences.clear()
                 DeveloperToolsPreferences.clear()
                 SessionChatDisplayPreferences.clear()
@@ -141,6 +143,10 @@ class SettingsViewModel
         /** Through the observability seam so Crashlytics and automatic Analytics follow at once. */
         fun setProductAnalyticsConsented(enabled: Boolean) {
             OpenCodeReleaseObservability.setProductAnalyticsConsented(enabled)
+        }
+
+        fun setAppLockEnabled(enabled: Boolean) {
+            AppLockPreferences.updateEnabled(enabled)
         }
     }
 
