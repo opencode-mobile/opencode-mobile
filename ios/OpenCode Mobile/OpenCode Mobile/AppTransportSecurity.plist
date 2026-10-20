@@ -16,6 +16,14 @@
 	<string>OpenCode Mobile uses on-device speech recognition to insert text into the composer. Audio stays on this device.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
+		<!-- Arbitrary loads stay on deliberately. The server lives on the user's own machine,
+		     most often reached as plain http at a LAN or Tailscale IP (100.64.0.0/10). ATS
+		     cannot scope cleartext to IP ranges: with NSAllowsArbitraryLoads off, http to a
+		     Tailscale IP fails with NSURLErrorDomain -1022 (verified on the simulator), and
+		     NSExceptionDomains only takes host names. The scoping therefore lives in
+		     CleartextPolicy: http to loopback, private, link-local and Tailscale ranges and to
+		     .local / .ts.net / private-DNS names connects silently; any other http host shows
+		     an explicit "not encrypted" warning before credentials or a pairing code are sent. -->
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>

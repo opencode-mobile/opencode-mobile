@@ -641,6 +641,8 @@ fun MainNavigation() {
                                                 onShowPairingCodeForm = setupViewModel::showPairingCodeForm,
                                                 onShowHostPasswordForm = setupViewModel::showHostPasswordForm,
                                                 onShowScanInstructions = setupViewModel::showScanInstructions,
+                                                onConfirmCleartext = setupViewModel::confirmCleartextWarning,
+                                                onDismissCleartext = setupViewModel::dismissCleartextWarning,
                                                 onRemove = {
                                                     setupViewModel.removeConnection {
                                                         serversViewModel.refresh()

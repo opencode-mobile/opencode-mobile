@@ -7,6 +7,12 @@ import UIKit
 import UniformTypeIdentifiers
 
 struct SessionChatView: View {
+    /// Server-supplied links (retry cards, failure sheets) open as web pages only.
+    static func openServerLink(_ url: URL) {
+        guard ExternalLinkPolicy.isOpenable(url) else { return }
+        UIApplication.shared.open(url)
+    }
+
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
     @State private var viewModelStorage: SessionChatViewModel?
@@ -483,7 +489,7 @@ struct SessionChatView: View {
                         break
                     }
                 },
-                onOpenLink: { UIApplication.shared.open($0) }
+                onOpenLink: { SessionChatView.openServerLink($0) }
             )
             .sessionChatSkillsSheet(target: $skillsTarget)
             // Waits for any view-owned sheet to close so the intro never stacks on one.
@@ -1229,7 +1235,7 @@ struct SessionChatView: View {
             AnyView(
                 SessionRetryCountdownCard(
                     card: card,
-                    onOpenLink: { UIApplication.shared.open($0) },
+                    onOpenLink: { SessionChatView.openServerLink($0) },
                     onOpenBody: liveBody.map { body in
                         {
                             guard let target = SessionChatToolDetailTarget.failure(
@@ -1579,7 +1585,8 @@ private struct SessionRetryCountdownCard: View {
         let attempt = card.attempt.map { "attempt \($0), " } ?? ""
         let label = card.actionLabel?.trimmingCharacters(in: .whitespacesAndNewlines)
         let link = card.actionLink?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let url = link.flatMap(URL.init(string:))
+        // Server-supplied links open as web pages only; other schemes get no button.
+        let url = ExternalLinkPolicy.openableURL(link)
         HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(card.message)

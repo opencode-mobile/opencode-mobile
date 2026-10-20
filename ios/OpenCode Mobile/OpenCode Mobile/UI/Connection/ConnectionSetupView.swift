@@ -141,6 +141,24 @@ struct ConnectionSetupView: View {
                 showRemoveConfirm = false
             }
         )
+        .openCodeDialog(
+            isPresented: Binding(
+                get: { viewModel.cleartextWarningHosts != nil },
+                set: { shown in if !shown { viewModel.dismissCleartextWarning() } }
+            ),
+            title: CleartextPolicy.warningTitle,
+            subtitle: viewModel.cleartextWarningMessage,
+            primaryOption: OpenCodeDialogOption(title: "Connect anyway") {
+                Task {
+                    if await viewModel.confirmCleartextWarning() {
+                        onDismiss()
+                    }
+                }
+            },
+            secondaryOption: OpenCodeDialogOption(title: "Cancel") {
+                viewModel.dismissCleartextWarning()
+            }
+        )
         .fullScreenCover(isPresented: $showPairingScanner) {
             PairingQRScannerView(
                 onScanned: { raw in

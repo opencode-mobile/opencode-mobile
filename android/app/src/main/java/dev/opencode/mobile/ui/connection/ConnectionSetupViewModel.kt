@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.data.local.ServerConnectionDefaults
+import dev.opencode.mobile.domain.connection.CleartextPolicy
 import dev.opencode.mobile.domain.connection.ConnectionProbing
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileIdentity
@@ -94,7 +95,12 @@ data class ConnectionSetupUiState(
     val qrScanPending: Boolean = false,
     val addressRecovery: SavedAddressRecovery? = null,
     val entry: ConnectionSetupEntry = ConnectionSetupEntry.Instructions,
+    /** Untrusted `http` hosts waiting for the user's "Connect anyway". `null` when no warning shows. */
+    val cleartextWarningHosts: List<String>? = null,
 ) {
+    val cleartextWarningMessage: String
+        get() = CleartextPolicy.warningMessage(cleartextWarningHosts.orEmpty())
+
     val usesQrLayout: Boolean
         get() = serverUrls.isNotEmpty()
 
@@ -166,6 +172,8 @@ class ConnectionSetupViewModel
         private var addressProbeGeneration = 0
         /** Paste applied an address list that this session has not saved yet. */
         private var pastedConnectLinkUnconfirmed = false
+        private val acknowledgedCleartextHosts = mutableSetOf<String>()
+        private var pendingCleartextResume: (() -> Unit)? = null
 
         fun configure(
             initialProfile: ConnectionProfile?,
@@ -379,11 +387,25 @@ class ConnectionSetupViewModel
             }
             if (PairingQRPayload.isConnectLink(_uiState.value.baseUrl)) {
                 if (!applySubmittedConnectLink()) return
+                connectAndSave(onSaved, adoptedLink = true)
+                return
+            }
+            connectAndSave(onSaved, adoptedLink = false)
+        }
+
+        /** Everything after the pasted-link adoption, so the cleartext warning can resume here. */
+        private fun connectAndSave(
+            onSaved: () -> Unit,
+            adoptedLink: Boolean,
+        ) {
+            val resume = { connectAndSave(onSaved, adoptedLink) }
+            if (adoptedLink) {
                 val redeeming = pendingPairingCode != null && _uiState.value.password.isEmpty()
                 if (_uiState.value.canSubmitWithoutProbe && !redeeming) {
                     persist(onSaved)
                     return
                 }
+                if (requiresCleartextConfirmation(resume)) return
                 probeThenSave(onSaved)
                 return
             }
@@ -393,6 +415,7 @@ class ConnectionSetupViewModel
                         persist(onSaved)
                         return
                     }
+                    if (requiresCleartextConfirmation(resume)) return
                     probeThenSave(onSaved, redeemPendingCode = false)
                 }
                 ConnectionCredentialSegment.PairingCode -> {
@@ -403,9 +426,61 @@ class ConnectionSetupViewModel
                     }
                     // Typed codes redeem for user opencode. The username field is hidden here.
                     updateFields(username = ServerConnectionDefaults.USERNAME)
+                    if (requiresCleartextConfirmation(resume)) return
                     redeemTypedPairingCode(code, onSaved)
                 }
             }
+        }
+
+        /**
+         * Shows the "not encrypted" warning when any address about to be contacted is plain `http`
+         * outside loopback, private, or Tailscale ranges. Nothing (password, pairing code, probe)
+         * is sent until the user confirms; [resume] continues where the caller stopped.
+         */
+        private fun requiresCleartextConfirmation(resume: () -> Unit): Boolean {
+            val hosts =
+                CleartextPolicy
+                    .untrustedCleartextHosts(urlsToProbe())
+                    .filter { it !in acknowledgedCleartextHosts }
+            if (hosts.isEmpty()) return false
+            pendingCleartextResume = resume
+            _uiState.value =
+                _uiState.value.copy(
+                    state = ConnectionSetupState.Idle,
+                    snackbar = null,
+                    cleartextWarningHosts = hosts,
+                )
+            return true
+        }
+
+        /** "Connect anyway": remembers the hosts for this screen and continues the interrupted action. */
+        fun confirmCleartextWarning() {
+            val hosts = _uiState.value.cleartextWarningHosts ?: return
+            val resume = pendingCleartextResume ?: return
+            acknowledgedCleartextHosts += hosts
+            pendingCleartextResume = null
+            _uiState.value = _uiState.value.copy(cleartextWarningHosts = null)
+            resume()
+        }
+
+        /** "Cancel": nothing was sent. A scan that was waiting goes back to the host form. */
+        fun dismissCleartextWarning() {
+            pendingCleartextResume = null
+            val current = _uiState.value
+            _uiState.value =
+                if (current.qrScanPending) {
+                    current.copy(
+                        cleartextWarningHosts = null,
+                        qrScanPending = false,
+                        serverUrls = emptyList(),
+                        addressProbeFinished = false,
+                        unreachableUrls = emptySet(),
+                        chosenUrl = null,
+                        qrPairingReady = false,
+                    )
+                } else {
+                    current.copy(cleartextWarningHosts = null)
+                }
         }
 
         private fun probeThenSave(
@@ -497,6 +572,7 @@ class ConnectionSetupViewModel
         }
 
         private fun pairScannedQr() {
+            if (requiresCleartextConfirmation(resume = ::pairScannedQr)) return
             val generation = ++addressProbeGeneration
             viewModelScope.launch {
                 if (generation != addressProbeGeneration) return@launch
