@@ -62,6 +62,9 @@ enum class OpenCodeTextInputKind {
 enum class OpenCodeTextInputSubmitAction {
     Next,
     Done,
+
+    /** Opens what the field names, such as a typed folder; keeps focus so typing continues. */
+    Go,
 }
 
 @Composable
@@ -75,6 +78,8 @@ fun OpenCodeTextInput(
     enabled: Boolean = true,
     errorMessage: String? = null,
     submitAction: OpenCodeTextInputSubmitAction = OpenCodeTextInputSubmitAction.Done,
+    /** Called on Go, and on Done after the field loses focus. */
+    onSubmit: (() -> Unit)? = null,
     /** Above 1, the field is multi-line: it starts this tall, Return adds a line, and [submitAction] is unused. */
     minLines: Int = 1,
     /** The field grows up to this many lines, then scrolls. */
@@ -175,12 +180,7 @@ fun OpenCodeTextInput(
                             else -> KeyboardCapitalization.None
                         },
                     autoCorrectEnabled = kind == OpenCodeTextInputKind.Text,
-                    imeAction =
-                        when {
-                            multiline -> ImeAction.Default
-                            submitAction == OpenCodeTextInputSubmitAction.Next -> ImeAction.Next
-                            else -> ImeAction.Done
-                        },
+                    imeAction = openCodeTextInputImeAction(submitAction, multiline),
                     keyboardType =
                         when (kind) {
                             // Ascii avoids URI-variation IME quirks that can drop Paste when empty.
@@ -193,7 +193,11 @@ fun OpenCodeTextInput(
             keyboardActions =
                 KeyboardActions(
                     onNext = { focusManager.moveFocus(FocusDirection.Next) },
-                    onDone = { focusManager.clearFocus() },
+                    onDone = {
+                        focusManager.clearFocus()
+                        onSubmit?.invoke()
+                    },
+                    onGo = { onSubmit?.invoke() },
                 ),
             interactionSource = interactionSource,
             decorationBox = { innerTextField ->
@@ -240,6 +244,21 @@ fun OpenCodeTextInput(
         }
     }
 }
+
+/** The keyboard's Return key: a new line when multi-line, else [submitAction]. */
+internal fun openCodeTextInputImeAction(
+    submitAction: OpenCodeTextInputSubmitAction,
+    multiline: Boolean,
+): ImeAction =
+    when {
+        multiline -> ImeAction.Default
+        else ->
+            when (submitAction) {
+                OpenCodeTextInputSubmitAction.Next -> ImeAction.Next
+                OpenCodeTextInputSubmitAction.Done -> ImeAction.Done
+                OpenCodeTextInputSubmitAction.Go -> ImeAction.Go
+            }
+    }
 
 /** Keeps the first [maxLength] characters, with the cursor inside them. */
 internal fun clipOpenCodeTextInput(

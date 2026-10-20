@@ -36,6 +36,7 @@ enum class ComponentGalleryEntryId {
     WorkingIndicator,
     ReasoningRow,
     TopBar,
+    ActionBar,
     SplitPane,
     OverflowMenu,
     BottomSheet,
@@ -122,7 +123,7 @@ val ComponentGalleryEntries =
         ComponentGalleryEntry(
             id = ComponentGalleryEntryId.Tag,
             title = "Tag",
-            description = "Static capsule label.",
+            description = "Static capsule label, regular or small inline.",
             category = ComponentGalleryCategory.Controls,
         ),
         ComponentGalleryEntry(
@@ -297,6 +298,12 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.TopBar,
             title = "Top Bar",
             description = "Page-level navigation bar with leading affordance and actions.",
+            category = ComponentGalleryCategory.Navigation,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.ActionBar,
+            title = "Action Bar",
+            description = "Pinned bottom bar naming its target over one full-width action.",
             category = ComponentGalleryCategory.Navigation,
         ),
         ComponentGalleryEntry(

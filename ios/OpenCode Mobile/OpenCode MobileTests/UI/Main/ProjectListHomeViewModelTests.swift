@@ -490,7 +490,7 @@ struct ProjectListHomeViewModelTests {
         viewModel.updateAddProjectField("/home/code")
         sheet = viewModel.addProjectSheet
         #expect(sheet.addTarget == "/home/code")
-        #expect(sheet.addTitle == "Add code")
+        #expect(sheet.addTitle == AddProjectSheetState.addThisFolderTitle)
         #expect(sheet.addEnabled)
         #expect(filesystem.requestedPaths.filter { $0 == "/home" }.count == 1)
     }
@@ -531,7 +531,7 @@ struct ProjectListHomeViewModelTests {
         sheet = viewModel.addProjectSheet
         #expect(sheet.entries.map(\.name) == ["f249"])
         #expect(sheet.addTarget == "/home/f249")
-        #expect(sheet.addTitle == "Add f249")
+        #expect(sheet.addTitle == AddProjectSheetState.addThisFolderTitle)
         #expect(sheet.addEnabled)
 
         viewModel.updateAddProjectField("/home/.")
@@ -545,7 +545,7 @@ struct ProjectListHomeViewModelTests {
         sheet = viewModel.addProjectSheet
         #expect(sheet.entries.map(\.name) == [".config"])
         #expect(sheet.addTarget == "/home/.config")
-        #expect(sheet.addTitle == "Add .config")
+        #expect(sheet.addTitle == AddProjectSheetState.addThisFolderTitle)
         #expect(sheet.addEnabled)
 
         viewModel.updateAddProjectField("/home/f3")
@@ -606,7 +606,7 @@ struct ProjectListHomeViewModelTests {
         #expect(sheet.entries.isEmpty)
         #expect(sheet.emptyMessage == AddProjectSheetState.noSubfoldersMessage)
         #expect(sheet.addTarget == "/home/code")
-        #expect(sheet.addTitle == "Add code")
+        #expect(sheet.addTitle == AddProjectSheetState.addThisFolderTitle)
         #expect(sheet.upTarget == "/home")
     }
 
@@ -705,7 +705,7 @@ struct ProjectListHomeViewModelTests {
         viewModel.updateAddProjectField(#"D:\CODE"#)
         sheet = viewModel.addProjectSheet
         #expect(sheet.addTarget == #"D:\code"#)
-        #expect(sheet.addTitle == "Add code")
+        #expect(sheet.addTitle == AddProjectSheetState.addThisFolderTitle)
 
         await viewModel.selectAddProjectRoot(path: #"C:\Users\me"#)
         #expect(viewModel.addProjectSheet.fieldText == #"C:\Users\me\"#)
@@ -767,6 +767,239 @@ struct ProjectListHomeViewModelTests {
         #expect(sheet.addEnabled == false)
         await viewModel.confirmAddProject()
         #expect(viewModel.isAddProjectPresented)
+    }
+
+    @Test func addProjectRows_loadCountsAndGitTagsWhenTheyAppear() async {
+        let filesystem = FakeFilesystemRepository(
+            paths: ServerPaths(home: "/home", directory: "/home", worktree: "/"),
+            listings: [
+                "/home": [folder("/home/code"), folder("/home/empty"), folder("/home/web")],
+                "/home/code": [folder("/home/code/a"), folder("/home/code/b"), folder("/home/code/.git")],
+                "/home/web": [folder("/home/web/src")],
+            ],
+            gitPaths: ["/home/code"]
+        )
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(projects: [
+                Project(id: "web", worktree: "/home/web", displayName: "web", activityAtEpochMs: 1, isRepository: true),
+            ]),
+            filesystemRepository: filesystem,
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/home/code"])
+        )
+        await viewModel.refresh()
+        await viewModel.showAddProjectSheet()
+        viewModel.browseAddProjectFolders()
+
+        var rows = viewModel.addProjectSheet.entries
+        #expect(rows.map(\.subtitle) == ["On Home", nil, nil])
+        // A server project tracked by git shows its tag before its listing loads.
+        #expect(rows.map(\.isGitRepository) == [false, false, true])
+
+        for row in rows { viewModel.addProjectFolderRowAppeared(path: row.path) }
+        #expect(await waitUntil { viewModel.addProjectSheet.entries.allSatisfy { $0.folderCount != nil } })
+        rows = viewModel.addProjectSheet.entries
+        #expect(rows.map(\.folderCount) == [2, 0, 1])
+        #expect(rows.map(\.subtitle) == ["On Home \u{00B7} 2 folders", "Empty", "1 folder"])
+        #expect(rows.map(\.isGitRepository) == [true, false, true])
+
+        // Seen again, or entered, the folder comes from the cache.
+        viewModel.addProjectFolderRowAppeared(path: "/home/code")
+        await viewModel.openAddProjectFolder(path: "/home/code")
+        #expect(viewModel.addProjectSheet.entries.map(\.name) == ["a", "b"])
+        #expect(viewModel.addProjectSheet.barTarget == AddProjectBarTarget(name: "code", path: "/home/code", isGitRepository: true))
+        #expect(filesystem.requestedPaths.filter { $0 == "/home/code" }.count == 1)
+    }
+
+    @Test func addProjectRows_loadAtMostFourAtOnceAndSkipRowsThatLeft() async {
+        let names = (1 ... 6).map { "/home/f\($0)" }
+        let filesystem = FakeFilesystemRepository(
+            paths: ServerPaths(home: "/home", directory: "/home", worktree: "/"),
+            listings: ["/home": names.map(folder)]
+        )
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            filesystemRepository: filesystem,
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/one"])
+        )
+        await viewModel.refresh()
+        await viewModel.showAddProjectSheet()
+        viewModel.browseAddProjectFolders()
+        filesystem.heldPaths = Set(names)
+
+        for path in names { viewModel.addProjectFolderRowAppeared(path: path) }
+        #expect(await waitUntil { filesystem.heldCount == 4 })
+        #expect(filesystem.requestedPaths.filter(names.contains) == Array(names.prefix(4)))
+
+        viewModel.addProjectFolderRowDisappeared(path: "/home/f5")
+        filesystem.release("/home/f1")
+        #expect(await waitUntil { filesystem.requestedPaths.contains("/home/f6") })
+        for path in names { filesystem.release(path) }
+        #expect(await waitUntil { viewModel.addProjectSheet.entries.filter { $0.folderCount != nil }.count == 5 })
+        #expect(!filesystem.requestedPaths.contains("/home/f5"))
+        #expect(filesystem.maxInFlight == AddProjectSheetState.folderSummaryConcurrency)
+    }
+
+    @Test func addProjectRows_failedListingIsNotRetriedOrShownAsAnError() async {
+        let filesystem = FakeFilesystemRepository(
+            paths: ServerPaths(home: "/home", directory: "/home", worktree: "/"),
+            listings: ["/home": [folder("/home/locked")]],
+            failingPaths: ["/home/locked"]
+        )
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            filesystemRepository: filesystem,
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/one"])
+        )
+        await viewModel.refresh()
+        await viewModel.showAddProjectSheet()
+        viewModel.browseAddProjectFolders()
+
+        viewModel.addProjectFolderRowAppeared(path: "/home/locked")
+        #expect(await waitUntil { filesystem.requestedPaths.contains("/home/locked") })
+        try? await Task.sleep(for: .milliseconds(20))
+        viewModel.addProjectFolderRowAppeared(path: "/home/locked")
+        #expect(viewModel.addProjectSheet.entries.first?.subtitle == nil)
+        #expect(viewModel.addProjectSheet.listError == nil)
+        #expect(filesystem.requestedPaths.filter { $0 == "/home/locked" }.count == 1)
+
+        // Entering the folder still asks the server, and its failure shows with Retry.
+        await viewModel.openAddProjectFolder(path: "/home/locked")
+        #expect(filesystem.requestedPaths.filter { $0 == "/home/locked" }.count == 2)
+        #expect(viewModel.addProjectSheet.listError == AddProjectSheetState.listErrorMessage)
+        #expect(!viewModel.addProjectSheet.pathNotFound)
+    }
+
+    @Test func submitAddProjectField_opensTheTypedOrOnlyMatchingFolderAndNeverAdds() async {
+        let store = FakeConnectionProfileStore(initial: ["/one"])
+        let filesystem = FakeFilesystemRepository(
+            paths: ServerPaths(home: "/home", directory: "/home", worktree: "/"),
+            listings: [
+                "/home": [folder("/home/code"), folder("/home/Codex"), folder("/home/docs")],
+                "/home/code": [folder("/home/code/app")],
+                "/home/docs": [],
+            ]
+        )
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            filesystemRepository: filesystem,
+            connectionProfileStore: store
+        )
+        await viewModel.refresh()
+        await viewModel.showAddProjectSheet()
+        viewModel.browseAddProjectFolders()
+
+        // No filter: Return has nothing to open.
+        #expect(viewModel.addProjectSheet.goTarget == nil)
+        await viewModel.submitAddProjectField()
+        #expect(viewModel.addProjectSheet.fieldText == "/home/")
+
+        // Several matches: Return stays put.
+        viewModel.updateAddProjectField("/home/co")
+        #expect(viewModel.addProjectSheet.goTarget == nil)
+        await viewModel.submitAddProjectField()
+        #expect(viewModel.addProjectSheet.fieldText == "/home/co")
+
+        // The only match opens.
+        viewModel.updateAddProjectField("/home/d")
+        #expect(viewModel.addProjectSheet.goTarget == "/home/docs")
+        await viewModel.submitAddProjectField()
+        #expect(viewModel.addProjectSheet.fieldText == "/home/docs/")
+        #expect(viewModel.addProjectSheet.directory == "/home/docs")
+
+        // An exact name opens even when other names start with it.
+        viewModel.updateAddProjectField("/home/code")
+        #expect(viewModel.addProjectSheet.goTarget == "/home/code")
+        await viewModel.submitAddProjectField()
+        #expect(viewModel.addProjectSheet.directory == "/home/code")
+        #expect(viewModel.addProjectSheet.entries.map(\.name) == ["app"])
+
+        #expect(viewModel.isAddProjectPresented)
+        #expect(await store.addedWorktrees(serverBaseURL: "http://127.0.0.1:4096/") == ["/one"])
+    }
+
+    @Test func addProjectBar_namesTheTargetAndGivesTheDisabledReason() async {
+        let filesystem = FakeFilesystemRepository(
+            paths: ServerPaths(home: "/home", directory: "/home", worktree: "/"),
+            listings: [
+                "/home": [folder("/home/code"), folder("/home/Codex")],
+                "/home/code": [],
+            ]
+        )
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            filesystemRepository: filesystem,
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/one"])
+        )
+        await viewModel.refresh()
+        await viewModel.showAddProjectSheet()
+        viewModel.browseAddProjectFolders()
+
+        var sheet = viewModel.addProjectSheet
+        #expect(sheet.barTarget == AddProjectBarTarget(name: "home", path: "/home", isGitRepository: false))
+        #expect(sheet.addTitle == AddProjectSheetState.homeFolderTitle)
+        #expect(sheet.addEnabled)
+
+        viewModel.updateAddProjectField("/home/co")
+        sheet = viewModel.addProjectSheet
+        #expect(sheet.barTarget?.path == "/home")
+        #expect(sheet.addTitle == "Pick a folder")
+        #expect(!sheet.addEnabled)
+
+        viewModel.updateAddProjectField("/home/zz")
+        sheet = viewModel.addProjectSheet
+        #expect(sheet.addTitle == "No folder named \u{201C}zz\u{201D}")
+        #expect(sheet.emptyMessage == "Nothing in home starts with \u{201C}zz\u{201D}")
+        #expect(!sheet.addEnabled)
+
+        viewModel.updateAddProjectField("/home/code")
+        sheet = viewModel.addProjectSheet
+        #expect(sheet.barTarget == AddProjectBarTarget(name: "code", path: "/home/code", isGitRepository: false))
+        #expect(sheet.addTitle == "Add this folder")
+        #expect(sheet.addEnabled)
+
+        // While a folder lists, the button keeps its title but waits.
+        filesystem.heldPaths = ["/home/Codex"]
+        viewModel.updateAddProjectField("/home/Codex/")
+        #expect(viewModel.addProjectSheet.isLoading)
+        #expect(viewModel.addProjectSheet.addTitle == "Add this folder")
+        #expect(!viewModel.addProjectSheet.addEnabled)
+        filesystem.release("/home/Codex")
+    }
+
+    @Test func pathNotFound_showsOneLineAndDisablesAdd() async {
+        let filesystem = FakeFilesystemRepository(
+            paths: ServerPaths(home: "/home", directory: "/home", worktree: "/"),
+            listings: ["/home": [folder("/home/code")]],
+            missingPaths: ["/srv/apps"]
+        )
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            filesystemRepository: filesystem,
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/one"])
+        )
+        await viewModel.refresh()
+        await viewModel.showAddProjectSheet()
+        viewModel.browseAddProjectFolders()
+
+        viewModel.updateAddProjectField("/srv/apps/")
+        #expect(await waitUntil { viewModel.addProjectSheet.pathNotFound })
+        var sheet = viewModel.addProjectSheet
+        #expect(sheet.emptyMessage == "Path not found")
+        #expect(sheet.listError == nil)
+        #expect(sheet.isLoading == false)
+        #expect(sheet.entries.isEmpty)
+        #expect(sheet.addTitle == AddProjectSheetState.pathNotFoundTitle)
+        #expect(!sheet.addEnabled)
+        #expect(sheet.goTarget == nil)
+        #expect(sheet.barTarget?.path == "/srv/apps")
+
+        // Typing on inside the missing folder asks the server nothing new.
+        viewModel.updateAddProjectField("/srv/apps/x")
+        try? await Task.sleep(for: .milliseconds(20))
+        sheet = viewModel.addProjectSheet
+        #expect(sheet.pathNotFound)
+        #expect(sheet.addTitle == AddProjectSheetState.pathNotFoundTitle)
+        #expect(filesystem.requestedPaths.filter { $0 == "/srv/apps" }.count == 1)
     }
 
     @Test func confirmAddProject_validatesAndFocuses() async {
@@ -1985,26 +2218,54 @@ private final class FakeProjectRepository: ProjectRepository, @unchecked Sendabl
 
 private final class FakeFilesystemRepository: FilesystemRepository, @unchecked Sendable {
     let paths: ServerPaths
-    let listings: [String: [DirectoryNode]]
+    var listings: [String: [DirectoryNode]]
     var failingPaths: Set<String>
+    var missingPaths: Set<String>
+    var gitPaths: Set<String>
+    /// Listings of these paths wait until `release(_:)`.
+    var heldPaths: Set<String> = []
     private(set) var requestedPaths: [String] = []
+    private(set) var inFlight = 0
+    private(set) var maxInFlight = 0
+    private var held: [String: CheckedContinuation<Void, Never>] = [:]
 
     init(
         paths: ServerPaths = ServerPaths(home: "/home", directory: "/home", worktree: "/"),
         listings: [String: [DirectoryNode]] = [:],
-        failingPaths: Set<String> = []
+        failingPaths: Set<String> = [],
+        missingPaths: Set<String> = [],
+        gitPaths: Set<String> = []
     ) {
         self.paths = paths
         self.listings = listings
         self.failingPaths = failingPaths
+        self.missingPaths = missingPaths
+        self.gitPaths = gitPaths
     }
 
     func getPaths() async throws -> ServerPaths { paths }
 
-    func listDirectory(path: String) async throws -> [DirectoryNode] {
+    func listDirectory(path: String) async throws -> DirectoryListing {
         requestedPaths.append(path)
+        inFlight += 1
+        maxInFlight = max(maxInFlight, inFlight)
+        defer { inFlight -= 1 }
+        if heldPaths.contains(path) {
+            await withCheckedContinuation { held[path] = $0 }
+        }
+        if missingPaths.contains(path) { throw FilesystemError.directoryNotFound }
         if failingPaths.contains(path) { throw TestError.message("Listing failed") }
-        return DirectoryListingPolicy.directories(listings[path] ?? [])
+        return DirectoryListing(
+            folders: DirectoryListingPolicy.directories(listings[path] ?? []),
+            isGitRepository: gitPaths.contains(path)
+        )
+    }
+
+    var heldCount: Int { held.count }
+
+    func release(_ path: String) {
+        heldPaths.remove(path)
+        held.removeValue(forKey: path)?.resume()
     }
 }
 

@@ -16,6 +16,7 @@ import dev.opencode.mobile.domain.event.IdleForegroundEventStream
 import dev.opencode.mobile.domain.event.LiveUpdates
 import dev.opencode.mobile.domain.event.OpencodeEvent
 import dev.opencode.mobile.domain.event.namedProjectId
+import dev.opencode.mobile.domain.filesystem.DirectoryNotFoundException
 import dev.opencode.mobile.domain.filesystem.FilesystemRepository
 import dev.opencode.mobile.domain.filesystem.ServerPathPolicy
 import dev.opencode.mobile.domain.live.LiveStoreRefreshPolicy
@@ -176,6 +177,12 @@ class MainScreenViewModel
         private var addProjectSession: AddProjectSheetSession? = null
         private var addProjectGeneration = 0
         private var addProjectDebounceJob: Job? = null
+
+        // Row summaries (folder count, git) for visible browser rows: FIFO, a few at a time,
+        // each path tried once per sheet session.
+        private val addProjectSummaryQueue = ArrayDeque<String>()
+        private val addProjectSummariesInFlight = mutableSetOf<String>()
+        private val addProjectSummaryFailures = mutableSetOf<String>()
 
         init {
             refresh()
@@ -339,6 +346,36 @@ class MainScreenViewModel
                 ProductAnalytics.Action.ADD_PROJECT_ENTER_DIRECTORY,
             )
             setAddProjectFolder(path)
+        }
+
+        /**
+         * Return in the path field: opens [AddProjectSheetUi.goTarget] (the exact child match, or
+         * the only matching row). Does nothing otherwise; never adds.
+         */
+        fun submitAddProjectField() {
+            if (addProjectSession == null) return
+            val target = currentAddProjectSheet()?.goTarget ?: return
+            openAddProjectFolder(target)
+        }
+
+        /** A browser row came on screen: queue its folder count and git check. */
+        fun addProjectFolderRowAppeared(path: String) {
+            val session = addProjectSession ?: return
+            val key = ServerPathPolicy.canonical(path)
+            if (session.listings.containsKey(key) ||
+                key in addProjectSummariesInFlight ||
+                key in addProjectSummaryQueue ||
+                key in addProjectSummaryFailures
+            ) {
+                return
+            }
+            addProjectSummaryQueue.addLast(key)
+            startAddProjectSummaries()
+        }
+
+        /** A browser row left the screen: drop its summary if it has not started. */
+        fun addProjectFolderRowDisappeared(path: String) {
+            addProjectSummaryQueue.remove(ServerPathPolicy.canonical(path))
         }
 
         fun selectAddProjectSuggestion(path: String) {
@@ -1014,6 +1051,9 @@ class MainScreenViewModel
             addProjectDebounceJob?.cancel()
             addProjectDebounceJob = null
             addProjectSession = null
+            addProjectSummaryQueue.clear()
+            addProjectSummariesInFlight.clear()
+            addProjectSummaryFailures.clear()
         }
 
         /** Chip, row, and Up taps list the folder right away. */
@@ -1048,6 +1088,8 @@ class MainScreenViewModel
                         AddProjectListing.Loaded(filesystemRepository.listDirectory(directory))
                     } catch (cancellation: CancellationException) {
                         throw cancellation
+                    } catch (_: DirectoryNotFoundException) {
+                        AddProjectListing.NotFound
                     } catch (error: Exception) {
                         DiagnosticLog.warning(DiagnosticLogArea.Connection, "add project listing failed", error)
                         AddProjectListing.Failed(AddProjectSheetUi.LIST_ERROR_MESSAGE)
@@ -1057,6 +1099,51 @@ class MainScreenViewModel
                     val updated = session.copy(listings = session.listings + (directory to listing))
                     if (listing is AddProjectListing.Loaded) updated.withListedRoot(directory) else updated
                 }
+            }
+        }
+
+        /** Starts queued row summaries, oldest first, up to [AddProjectSheetModel.FOLDER_SUMMARY_CONCURRENCY]. */
+        private fun startAddProjectSummaries() {
+            while (addProjectSummariesInFlight.size < AddProjectSheetModel.FOLDER_SUMMARY_CONCURRENCY) {
+                val path = addProjectSummaryQueue.removeFirstOrNull() ?: return
+                // The browser may have listed it while it waited.
+                if (addProjectSession?.listings?.containsKey(path) != false) continue
+                loadAddProjectSummary(path)
+            }
+        }
+
+        /**
+         * Lists one row's folder into the browser's listing cache, so opening it is instant. A
+         * failure only hides the row's count: no error, no retry this session.
+         */
+        private fun loadAddProjectSummary(path: String) {
+            val generation = addProjectGeneration
+            addProjectSummariesInFlight += path
+            viewModelScope.launch {
+                val listing =
+                    try {
+                        filesystemRepository.listDirectory(path)
+                    } catch (cancellation: CancellationException) {
+                        throw cancellation
+                    } catch (_: Exception) {
+                        null
+                    }
+                if (generation != addProjectGeneration) return@launch
+                addProjectSummariesInFlight -= path
+                if (listing == null) {
+                    addProjectSummaryFailures += path
+                } else {
+                    updateAddProjectSession { session ->
+                        when (session.listings[path]) {
+                            null, AddProjectListing.Loading ->
+                                session
+                                    .copy(listings = session.listings + (path to AddProjectListing.Loaded(listing)))
+                                    .withListedRoot(path)
+                            else -> session
+                        }
+                    }
+                }
+                startAddProjectSummaries()
             }
         }
 
@@ -1082,7 +1169,7 @@ class MainScreenViewModel
             viewModelScope.launch {
                 val volumes =
                     try {
-                        filesystemRepository.listDirectory(AddProjectSheetModel.VOLUMES_PATH)
+                        filesystemRepository.listDirectory(AddProjectSheetModel.VOLUMES_PATH).folders
                     } catch (cancellation: CancellationException) {
                         throw cancellation
                     } catch (_: Exception) {

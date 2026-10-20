@@ -88,6 +88,8 @@ struct ComponentGalleryDetailView: View {
             PageIndicatorGalleryView()
         case .bottomFade:
             BottomFadeGalleryView()
+        case .actionBar:
+            ActionBarGalleryView()
         case .tag:
             TagGalleryView()
         case .keyValueRow:

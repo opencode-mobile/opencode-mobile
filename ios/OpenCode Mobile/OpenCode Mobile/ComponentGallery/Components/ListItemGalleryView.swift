@@ -274,6 +274,27 @@ struct ListItemGalleryView: View {
                 )
             }
 
+            Text("Title tag")
+                .font(OpenCodeTypography.button)
+                .foregroundStyle(OpenCodeColors.textStrong)
+
+            VStack(spacing: 0) {
+                OpenCodeListItem(
+                    title: "opencode-mobile",
+                    subtitle: "On Home \u{00B7} 5 folders",
+                    titleTag: "git",
+                    startDecorator: .icon(.folder),
+                    action: {}
+                )
+                OpenCodeListItem(
+                    title: "opencode-mobile-357-split-view-chat-lifecycle-cache-android",
+                    subtitle: "Empty",
+                    titleTag: "git",
+                    startDecorator: .icon(.folder),
+                    action: {}
+                )
+            }
+
             Text("Trailing")
                 .font(OpenCodeTypography.button)
                 .foregroundStyle(OpenCodeColors.textStrong)

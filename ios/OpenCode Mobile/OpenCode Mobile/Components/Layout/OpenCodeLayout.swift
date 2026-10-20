@@ -11,6 +11,8 @@ enum OpenCodeLayoutWidth: Equatable, Sendable {
 
 enum OpenCodeLayout {
     static let contentMaxWidth: CGFloat = 720
+    /// Shared leading and trailing edge of a full-screen layout's chrome, fields and rows.
+    static let screenGutter: CGFloat = 20
     static let sheetMaxWidth: CGFloat = 560
     static let compactMaxWidth: CGFloat = 600
     static let assistantMessageMaxWidth: CGFloat = 720

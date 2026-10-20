@@ -50,7 +50,7 @@ struct FilesystemProtocolRepositoryTests {
         ])
         let repository = makeFilesystemRepository(serverProtocol: .v1)
 
-        let nodes = try await repository.listDirectory(path: "/Volumes")
+        let nodes = try await repository.listDirectory(path: "/Volumes").folders
 
         #expect(nodes.map(\.name) == ["OpenChamber 2.3.3"])
         #expect(nodes.map(\.absolutePath) == ["/Volumes/OpenChamber 2.3.3"])
@@ -68,7 +68,7 @@ struct FilesystemProtocolRepositoryTests {
         ])
         let repository = makeFilesystemRepository(serverProtocol: .v1)
 
-        let nodes = try await repository.listDirectory(path: #"C:\Users\me"#)
+        let nodes = try await repository.listDirectory(path: #"C:\Users\me"#).folders
 
         #expect(nodes.map(\.absolutePath) == [#"C:\Users\me\code"#])
         let url = try #require(FilesystemRoutingURLProtocol.requests.first?.url)
@@ -92,7 +92,7 @@ struct FilesystemProtocolRepositoryTests {
         ])
         let repository = makeFilesystemRepository(serverProtocol: .v2)
 
-        let nodes = try await repository.listDirectory(path: "/repo")
+        let nodes = try await repository.listDirectory(path: "/repo").folders
 
         // Hidden folders stay in the listing; the Add project sheet hides them until "." is typed.
         #expect(nodes.filter { !DirectoryListingPolicy.isHidden($0.name) }.map(\.name) == ["docs", "src"])
@@ -112,7 +112,7 @@ struct FilesystemProtocolRepositoryTests {
         ])
         let repository = makeFilesystemRepository(serverProtocol: .v2)
 
-        let nodes = try await repository.listDirectory(path: "/Volumes")
+        let nodes = try await repository.listDirectory(path: "/Volumes").folders
 
         #expect(nodes.map(\.name) == ["OpenChamber 2.3.3"])
         #expect(nodes.map(\.absolutePath) == ["/Volumes/OpenChamber 2.3.3"])
@@ -132,7 +132,7 @@ struct FilesystemProtocolRepositoryTests {
         ])
         let repository = makeFilesystemRepository(serverProtocol: .v2)
 
-        let nodes = try await repository.listDirectory(path: "/")
+        let nodes = try await repository.listDirectory(path: "/").folders
 
         #expect(nodes.map(\.name) == ["etc", "home"])
         #expect(nodes.map(\.absolutePath) == ["/etc", "/home"])
@@ -158,7 +158,7 @@ struct FilesystemProtocolRepositoryTests {
         ])
         let repository = makeFilesystemRepository(serverProtocol: .v2)
 
-        let nodes = try await repository.listDirectory(path: #"C:\Users\me"#)
+        let nodes = try await repository.listDirectory(path: #"C:\Users\me"#).folders
 
         #expect(nodes.map(\.name) == ["archive", "code"])
         #expect(nodes.map(\.absolutePath) == [#"D:\archive"#, #"C:\Users\me\code"#])
@@ -175,9 +175,112 @@ struct FilesystemProtocolRepositoryTests {
         ])
         let repository = makeFilesystemRepository(serverProtocol: .v2)
 
-        let nodes = try await repository.listDirectory(path: #"C:\Users\me"#)
+        let nodes = try await repository.listDirectory(path: #"C:\Users\me"#).folders
 
         #expect(nodes.map(\.absolutePath) == [#"C:\Users\me\code"#])
+    }
+
+    @Test func v1ListDirectoryReportsAGitWorktreeFromItsGitFile() async throws {
+        FilesystemRoutingURLProtocol.reset(responses: [
+            .json(#"""
+            [
+              {"name":"src","path":"wt/src/","absolute":"/wt/src","type":"directory"},
+              {"name":".git","path":"wt/.git","absolute":"/wt/.git","type":"file"}
+            ]
+            """#)
+        ])
+        let repository = makeFilesystemRepository(serverProtocol: .v1)
+
+        let listing = try await repository.listDirectory(path: "/wt")
+
+        #expect(listing.isGitRepository)
+        #expect(listing.folders.map(\.name) == ["src"])
+        #expect(listing.visibleFolderCount == 1)
+    }
+
+    @Test func v2ListDirectoryCountsVisibleFoldersAndFindsTheGitFolder() async throws {
+        FilesystemRoutingURLProtocol.reset(responses: [
+            .json(#"""
+            {"location":{"directory":"/"},"data":[
+              {"path":"repo/.git/","type":"directory"},
+              {"path":"repo/.github/","type":"directory"},
+              {"path":"repo/src/","type":"directory"},
+              {"path":"repo/README.md","type":"file"}
+            ]}
+            """#)
+        ])
+        let repository = makeFilesystemRepository(serverProtocol: .v2)
+
+        let listing = try await repository.listDirectory(path: "/repo")
+
+        #expect(listing.isGitRepository)
+        #expect(listing.visibleFolderCount == 1)
+    }
+
+    @Test func v2ListDirectoryMaps404ToNotFound() async throws {
+        FilesystemRoutingURLProtocol.reset(responses: [
+            FilesystemStubResponse(statusCode: 404, body: #"{"_tag":"FileNotFoundError","message":"Directory not found: /srv/x"}"#)
+        ])
+        let repository = makeFilesystemRepository(serverProtocol: .v2)
+
+        await #expect(throws: FilesystemError.directoryNotFound) {
+            try await repository.listDirectory(path: "/srv/x")
+        }
+        #expect(FilesystemRoutingURLProtocol.requests.count == 1)
+    }
+
+    @Test func v1ListDirectoryIsNotFoundWhenTheParentHasNoSuchFolder() async throws {
+        FilesystemRoutingURLProtocol.reset(responses: [
+            .serverError,
+            .json(#"""
+            [
+              {"name":"code","path":"home/me/code/","absolute":"/home/me/code","type":"directory"},
+              {"name":"notes","path":"home/me/notes","absolute":"/home/me/notes","type":"file"}
+            ]
+            """#)
+        ])
+        let repository = makeFilesystemRepository(serverProtocol: .v1)
+
+        await #expect(throws: FilesystemError.directoryNotFound) {
+            try await repository.listDirectory(path: "/home/me/notes")
+        }
+        let paths = FilesystemRoutingURLProtocol.requests.compactMap { $0.url.flatMap { queryValue($0, "path") } }
+        #expect(paths == ["/home/me/notes", "/home/me"])
+    }
+
+    @Test func v1ListDirectoryWalksUpToTheFirstListableAncestor() async throws {
+        FilesystemRoutingURLProtocol.reset(responses: [
+            .serverError,
+            .serverError,
+            .json(#"[{"name":"opt","path":"opt/","absolute":"/opt","type":"directory"}]"#)
+        ])
+        let repository = makeFilesystemRepository(serverProtocol: .v1)
+
+        await #expect(throws: FilesystemError.directoryNotFound) {
+            try await repository.listDirectory(path: "/srv/apps")
+        }
+        let paths = FilesystemRoutingURLProtocol.requests.compactMap { $0.url.flatMap { queryValue($0, "path") } }
+        #expect(paths == ["/srv/apps", "/srv", "/"])
+    }
+
+    @Test func v1ListDirectoryKeepsTheFailureWhenTheFolderExists() async throws {
+        FilesystemRoutingURLProtocol.reset(responses: [
+            .serverError,
+            .json(#"[{"name":"private","path":"home/private/","absolute":"/home/private","type":"directory"}]"#)
+        ])
+        let repository = makeFilesystemRepository(serverProtocol: .v1)
+
+        do {
+            _ = try await repository.listDirectory(path: "/home/private")
+            Issue.record("Expected a failure")
+        } catch FilesystemError.directoryNotFound {
+            Issue.record("An unreadable folder is not a missing one")
+        } catch {
+            guard case ProjectsAPIError.httpStatus(500, _) = error else {
+                Issue.record("Expected the original 500, got \(error)")
+                return
+            }
+        }
     }
 
     private func makeFilesystemRepository(serverProtocol: ServerProtocol) -> DefaultFilesystemRepository {
@@ -223,6 +326,12 @@ private struct FilesystemStubResponse {
     static func json(_ body: String) -> FilesystemStubResponse {
         FilesystemStubResponse(statusCode: 200, body: body)
     }
+
+    /// What opencode v1 answers for a missing folder, a file, or an unreadable folder.
+    static let serverError = FilesystemStubResponse(
+        statusCode: 500,
+        body: #"{"name":"UnknownError","data":{"message":"Unexpected server error."}}"#
+    )
 }
 
 private final class FilesystemRoutingURLProtocol: URLProtocol {

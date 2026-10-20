@@ -10,8 +10,10 @@ import dev.opencode.mobile.domain.event.EventStreamConnectionState
 import dev.opencode.mobile.domain.event.FakeForegroundEventStream
 import dev.opencode.mobile.domain.event.OpencodeEvent
 import dev.opencode.mobile.domain.event.SilentWorldSignals
+import dev.opencode.mobile.domain.filesystem.DirectoryListing
 import dev.opencode.mobile.domain.filesystem.DirectoryListingPolicy
 import dev.opencode.mobile.domain.filesystem.DirectoryNode
+import dev.opencode.mobile.domain.filesystem.DirectoryNotFoundException
 import dev.opencode.mobile.domain.filesystem.FilesystemRepository
 import dev.opencode.mobile.domain.filesystem.ServerPaths
 import dev.opencode.mobile.domain.live.DefaultSessionLiveStore
@@ -531,7 +533,7 @@ class MainScreenViewModelTest {
             sheet = requireNotNull(currentSheet(viewModel))
             assertEquals(listOf("f249"), sheet.entries.map { it.name })
             assertEquals("/Users/me/f249", sheet.addTarget)
-            assertEquals("Add f249", sheet.addTitle)
+            assertEquals(AddProjectSheetUi.ADD_THIS_FOLDER, sheet.addTitle)
             assertTrue(sheet.addEnabled)
 
             viewModel.updateAddProjectField("/Users/me/.")
@@ -545,7 +547,7 @@ class MainScreenViewModelTest {
             sheet = requireNotNull(currentSheet(viewModel))
             assertEquals(listOf(".config"), sheet.entries.map { it.name })
             assertEquals("/Users/me/.config", sheet.addTarget)
-            assertEquals("Add .config", sheet.addTitle)
+            assertEquals(AddProjectSheetUi.ADD_THIS_FOLDER, sheet.addTitle)
             assertTrue(sheet.addEnabled)
 
             viewModel.updateAddProjectField("/Users/me/f3")
@@ -609,7 +611,7 @@ class MainScreenViewModelTest {
             assertEquals("/Users/me/code/", sheet.fieldText)
             assertEquals("/Users/me/code", sheet.directory)
             assertEquals(listOf("app"), sheet.entries.map { it.name })
-            assertEquals("Add code", sheet.addTitle)
+            assertEquals(AddProjectSheetUi.ADD_THIS_FOLDER, sheet.addTitle)
             assertNull(sheet.folderSectionTitle)
         }
 
@@ -782,7 +784,7 @@ class MainScreenViewModelTest {
             advanceUntilIdle()
             sheet = requireNotNull(currentSheet(viewModel))
             assertEquals("/Users/me/code", sheet.addTarget)
-            assertEquals("Add code", sheet.addTitle)
+            assertEquals(AddProjectSheetUi.ADD_THIS_FOLDER, sheet.addTitle)
             assertTrue(sheet.addEnabled)
 
             // POSIX names are case-sensitive.
@@ -814,7 +816,291 @@ class MainScreenViewModelTest {
             advanceUntilIdle()
 
             assertEquals("C:\\Users\\me\\Code", currentSheet(viewModel)?.addTarget)
-            assertEquals("Add Code", currentSheet(viewModel)?.addTitle)
+            assertEquals(AddProjectSheetUi.ADD_THIS_FOLDER, currentSheet(viewModel)?.addTitle)
+        }
+
+    @Test
+    fun submitAddProjectField_opensExactChildOrOnlyMatchAndNeverAdds() =
+        runTest(testDispatcher) {
+            val filesystem =
+                FakeFilesystemRepository(
+                    paths = ServerPaths(home = "/Users/me", directory = "/Users/me", worktree = "/"),
+                    listings =
+                        mapOf(
+                            "/Users/me" to
+                                listOf(
+                                    DirectoryNode("code", "/Users/me/code", true),
+                                    DirectoryNode("code-old", "/Users/me/code-old", true),
+                                    DirectoryNode("docs", "/Users/me/docs", true),
+                                ),
+                            "/Users/me/code" to listOf(DirectoryNode("app", "/Users/me/code/app", true)),
+                        ),
+                )
+            val store = FakeConnectionProfileStore(initial = listOf("/one"))
+            val projectRepository = FakeProjectRepository(bootWorktree = "/one")
+            val viewModel = openSheet(filesystem = filesystem, projectRepository = projectRepository, store = store)
+            viewModel.browseAddProjectFolders()
+
+            // Two matches, neither exact: Return stays.
+            viewModel.updateAddProjectField("/Users/me/co")
+            advanceUntilIdle()
+            assertNull(currentSheet(viewModel)?.goTarget)
+            viewModel.submitAddProjectField()
+            advanceUntilIdle()
+            assertEquals("/Users/me/co", currentSheet(viewModel)?.fieldText)
+
+            // The exact child wins over other prefix matches.
+            viewModel.updateAddProjectField("/Users/me/code")
+            advanceUntilIdle()
+            assertEquals("/Users/me/code", currentSheet(viewModel)?.goTarget)
+            viewModel.submitAddProjectField()
+            runCurrent()
+            var sheet = requireNotNull(currentSheet(viewModel))
+            assertEquals("/Users/me/code/", sheet.fieldText)
+            assertEquals(listOf("app"), sheet.entries.map { it.name })
+            assertNull(sheet.goTarget)
+
+            // The only match opens.
+            viewModel.updateAddProjectField("/Users/me/d")
+            advanceUntilIdle()
+            viewModel.submitAddProjectField()
+            advanceUntilIdle()
+            sheet = requireNotNull(currentSheet(viewModel))
+            assertEquals("/Users/me/docs/", sheet.fieldText)
+            assertEquals(AddProjectSheetUi.NO_SUBFOLDERS, sheet.emptyMessage)
+
+            assertTrue(sheet.isBrowsing)
+            assertEquals(listOf("/one"), store.added(serverUrl))
+            assertTrue(projectRepository.validatedDirectories.none { it?.startsWith("/Users") == true })
+        }
+
+    @Test
+    fun missingFolder_showsPathNotFoundWhileOtherFailuresShowRetry() =
+        runTest(testDispatcher) {
+            val filesystem =
+                FakeFilesystemRepository(
+                    listings = mapOf("/home" to listOf(DirectoryNode("code", "/home/code", true))),
+                    errors =
+                        mutableMapOf(
+                            "/home/gone" to DirectoryNotFoundException("/home/gone"),
+                            "/home/locked" to IllegalStateException("EACCES"),
+                        ),
+                )
+            val viewModel = openSheet(filesystem = filesystem)
+            viewModel.browseAddProjectFolders()
+
+            viewModel.updateAddProjectField("/home/gone/")
+            advanceUntilIdle()
+            var sheet = requireNotNull(currentSheet(viewModel))
+            assertTrue(sheet.pathNotFound)
+            assertNull(sheet.listError)
+            assertFalse(sheet.isLoading)
+            assertEquals(emptyList<AddProjectFolderUi>(), sheet.entries)
+            assertEquals(AddProjectSheetUi.PATH_NOT_FOUND, sheet.emptyMessage)
+            assertEquals(AddProjectSheetUi.PATH_NOT_FOUND, sheet.addTitle)
+            assertFalse(sheet.addEnabled)
+            assertNull(sheet.goTarget)
+            assertEquals(AddProjectBarTargetUi(name = "gone", path = "/home/gone", isGitRepository = false), sheet.barTarget)
+
+            viewModel.updateAddProjectField("/home/locked/")
+            advanceUntilIdle()
+            sheet = requireNotNull(currentSheet(viewModel))
+            assertFalse(sheet.pathNotFound)
+            assertEquals(AddProjectSheetUi.LIST_ERROR_MESSAGE, sheet.listError)
+            assertEquals(AddProjectSheetUi.ADD_THIS_FOLDER, sheet.addTitle)
+            assertFalse(sheet.addEnabled)
+        }
+
+    @Test
+    fun rowSummaries_showCountsAndGitAndFillTheListingCache() =
+        runTest(testDispatcher) {
+            val filesystem =
+                FakeFilesystemRepository(
+                    listings =
+                        mapOf(
+                            "/home" to
+                                listOf(
+                                    DirectoryNode("app", "/home/app", true),
+                                    DirectoryNode("code", "/home/code", true),
+                                    DirectoryNode("notes", "/home/notes", true),
+                                ),
+                            "/home/app" to
+                                listOf(
+                                    DirectoryNode("src", "/home/app/src", true),
+                                    DirectoryNode(".git", "/home/app/.git", true),
+                                    DirectoryNode("README.md", "/home/app/README.md", false),
+                                ),
+                            "/home/notes" to
+                                listOf(
+                                    DirectoryNode("a", "/home/notes/a", true),
+                                    DirectoryNode("b", "/home/notes/b", true),
+                                ),
+                        ),
+                )
+            val projectRepository =
+                FakeProjectRepository(
+                    bootWorktree = "/one",
+                    projects = listOf(Project(id = "n", worktree = "/home/notes", displayName = "notes", isRepository = true)),
+                )
+            val viewModel =
+                openSheet(filesystem = filesystem, projectRepository = projectRepository, added = listOf("/one", "/home/code"))
+            viewModel.browseAddProjectFolders()
+
+            // Before any summary: a server repository shows git right away.
+            var rows = requireNotNull(currentSheet(viewModel)).entries
+            assertEquals(listOf(null, "On Home", null), rows.map { it.subtitle })
+            assertEquals(listOf(false, false, true), rows.map { it.isGitRepository })
+
+            rows.forEach { viewModel.addProjectFolderRowAppeared(it.path) }
+            advanceUntilIdle()
+            rows = requireNotNull(currentSheet(viewModel)).entries
+            assertEquals(listOf(1, 0, 2), rows.map { it.folderCount })
+            assertEquals(listOf("1 folder", "On Home · Empty", "2 folders"), rows.map { it.subtitle })
+            assertEquals(listOf(true, false, true), rows.map { it.isGitRepository })
+
+            // Entering a summarised folder reuses its listing.
+            viewModel.openAddProjectFolder("/home/app")
+            runCurrent()
+            val sheet = requireNotNull(currentSheet(viewModel))
+            assertFalse(sheet.isLoading)
+            assertEquals(listOf("src"), sheet.entries.map { it.name })
+            assertEquals(AddProjectBarTargetUi(name = "app", path = "/home/app", isGitRepository = true), sheet.barTarget)
+            assertEquals(1, filesystem.listCalls.count { it == "/home/app" })
+        }
+
+    @Test
+    fun rowSummaries_runFourAtATimeInOrderAndDisappearDequeues() =
+        runTest(testDispatcher) {
+            val names = (1..6).map { "f$it" }
+            val filesystem =
+                FakeFilesystemRepository(
+                    listings = mapOf("/home" to names.map { DirectoryNode(it, "/home/$it", true) }),
+                )
+            names.forEach { filesystem.gates["/home/$it"] = CompletableDeferred() }
+            val viewModel = openSheet(filesystem = filesystem)
+            viewModel.browseAddProjectFolders()
+
+            fun summaryCalls() = filesystem.listCalls.filter { it.startsWith("/home/") }
+
+            names.forEach { viewModel.addProjectFolderRowAppeared("/home/$it") }
+            names.forEach { viewModel.addProjectFolderRowAppeared("/home/$it") }
+            runCurrent()
+            assertEquals(listOf("/home/f1", "/home/f2", "/home/f3", "/home/f4"), summaryCalls())
+            assertEquals(AddProjectSheetModel.FOLDER_SUMMARY_CONCURRENCY, filesystem.inFlight)
+
+            viewModel.addProjectFolderRowDisappeared("/home/f5")
+            filesystem.gates.getValue("/home/f1").complete(Unit)
+            runCurrent()
+            assertEquals(listOf("/home/f1", "/home/f2", "/home/f3", "/home/f4", "/home/f6"), summaryCalls())
+
+            filesystem.gates.values.forEach { it.complete(Unit) }
+            advanceUntilIdle()
+            assertEquals(AddProjectSheetModel.FOLDER_SUMMARY_CONCURRENCY, filesystem.maxInFlight)
+            val rows = requireNotNull(currentSheet(viewModel)).entries
+            assertEquals(listOf("Empty", "Empty", "Empty", "Empty", null, "Empty"), rows.map { it.subtitle })
+
+            // Scrolled back into view, the dropped row loads.
+            viewModel.addProjectFolderRowAppeared("/home/f5")
+            advanceUntilIdle()
+            assertEquals("Empty", currentSheet(viewModel)?.entries?.single { it.name == "f5" }?.subtitle)
+            assertEquals(1, filesystem.listCalls.count { it == "/home/f5" })
+        }
+
+    @Test
+    fun rowSummaryFailures_areNotRetriedOrShownAsErrors() =
+        runTest(testDispatcher) {
+            val filesystem =
+                FakeFilesystemRepository(
+                    listings =
+                        mapOf(
+                            "/home" to
+                                listOf(
+                                    DirectoryNode("gone", "/home/gone", true),
+                                    DirectoryNode("locked", "/home/locked", true),
+                                ),
+                        ),
+                    errors =
+                        mutableMapOf(
+                            "/home/gone" to DirectoryNotFoundException("/home/gone"),
+                            "/home/locked" to IllegalStateException("EACCES"),
+                        ),
+                )
+            val viewModel = openSheet(filesystem = filesystem)
+            viewModel.browseAddProjectFolders()
+
+            repeat(2) {
+                listOf("/home/gone", "/home/locked").forEach { path ->
+                    viewModel.addProjectFolderRowAppeared(path)
+                    advanceUntilIdle()
+                    viewModel.addProjectFolderRowDisappeared(path)
+                }
+            }
+            var sheet = requireNotNull(currentSheet(viewModel))
+            assertNull(sheet.listError)
+            assertFalse(sheet.pathNotFound)
+            assertEquals(listOf(null, null), sheet.entries.map { it.folderCount })
+            assertEquals(listOf(null, null), sheet.entries.map { it.subtitle })
+            assertEquals(1, filesystem.listCalls.count { it == "/home/gone" })
+            assertEquals(1, filesystem.listCalls.count { it == "/home/locked" })
+
+            // Opening the folder still lists it, and shows its own error.
+            viewModel.openAddProjectFolder("/home/locked")
+            advanceUntilIdle()
+            sheet = requireNotNull(currentSheet(viewModel))
+            assertEquals(AddProjectSheetUi.LIST_ERROR_MESSAGE, sheet.listError)
+            assertEquals(2, filesystem.listCalls.count { it == "/home/locked" })
+        }
+
+    @Test
+    fun folderListing_doesNotWaitForRowSummaries() =
+        runTest(testDispatcher) {
+            val names = (1..5).map { "f$it" }
+            val filesystem =
+                FakeFilesystemRepository(
+                    listings =
+                        mapOf(
+                            "/home" to names.map { DirectoryNode(it, "/home/$it", true) },
+                            "/home/f5" to listOf(DirectoryNode("inner", "/home/f5/inner", true)),
+                        ),
+                )
+            names.take(4).forEach { filesystem.gates["/home/$it"] = CompletableDeferred() }
+            val viewModel = openSheet(filesystem = filesystem)
+            viewModel.browseAddProjectFolders()
+            names.take(4).forEach { viewModel.addProjectFolderRowAppeared("/home/$it") }
+            runCurrent()
+
+            viewModel.openAddProjectFolder("/home/f5")
+            runCurrent()
+
+            val sheet = requireNotNull(currentSheet(viewModel))
+            assertFalse(sheet.isLoading)
+            assertEquals(listOf("inner"), sheet.entries.map { it.name })
+            filesystem.gates.values.forEach { it.complete(Unit) }
+            advanceUntilIdle()
+        }
+
+    @Test
+    fun rowSummaries_fromAnEarlierSheetAreDropped() =
+        runTest(testDispatcher) {
+            val filesystem =
+                FakeFilesystemRepository(
+                    listings = mapOf("/home" to listOf(DirectoryNode("code", "/home/code", true))),
+                )
+            filesystem.gates["/home/code"] = CompletableDeferred()
+            val viewModel = openSheet(filesystem = filesystem)
+            viewModel.browseAddProjectFolders()
+            viewModel.addProjectFolderRowAppeared("/home/code")
+            runCurrent()
+
+            viewModel.dismissAddProjectSheet()
+            viewModel.showAddProjectSheet()
+            advanceUntilIdle()
+            filesystem.gates.getValue("/home/code").complete(Unit)
+            advanceUntilIdle()
+
+            val row = requireNotNull(currentSheet(viewModel)).entries.single()
+            assertNull(row.folderCount)
+            assertNull(row.subtitle)
         }
 
     @Test
@@ -1210,7 +1496,7 @@ class MainScreenViewModelTest {
                 )
             viewModel.openAddProjectFolder("/repo/android")
             advanceUntilIdle()
-            assertEquals("Add android", currentSheet(viewModel)?.addTitle)
+            assertEquals(AddProjectSheetUi.ADD_THIS_FOLDER, currentSheet(viewModel)?.addTitle)
             viewModel.confirmAddProject()
             advanceUntilIdle()
             val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
@@ -2273,12 +2559,24 @@ private class FakeFilesystemRepository(
 ) : FilesystemRepository {
     val listCalls = mutableListOf<String>()
 
+    /** A gate holds that path's listing until completed. */
+    val gates = mutableMapOf<String, CompletableDeferred<Unit>>()
+    var inFlight = 0
+    var maxInFlight = 0
+
     override suspend fun getPaths(): ServerPaths = paths
 
-    override suspend fun listDirectory(path: String): List<DirectoryNode> {
+    override suspend fun listDirectory(path: String): DirectoryListing {
         listCalls += path
-        errors[path]?.let { throw it }
-        return DirectoryListingPolicy.directories(listings[path].orEmpty())
+        inFlight++
+        maxInFlight = maxOf(maxInFlight, inFlight)
+        try {
+            gates[path]?.await()
+            errors[path]?.let { throw it }
+            return DirectoryListing.from(listings[path].orEmpty())
+        } finally {
+            inFlight--
+        }
     }
 }
 

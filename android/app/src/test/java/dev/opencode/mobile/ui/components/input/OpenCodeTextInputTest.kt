@@ -1,6 +1,7 @@
 package dev.opencode.mobile.ui.components
 
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -37,5 +38,12 @@ class OpenCodeTextInputTest {
         assertEquals("4500/5000", openCodeTextInputLengthLabel(4_500, 5_000))
         assertEquals("5000/5000", openCodeTextInputLengthLabel(5_000, 5_000))
         assertNull(openCodeTextInputLengthLabel(10, null))
+    }
+
+    @Test fun submitActionMapsToTheImeKey() {
+        assertEquals(ImeAction.Next, openCodeTextInputImeAction(OpenCodeTextInputSubmitAction.Next, multiline = false))
+        assertEquals(ImeAction.Done, openCodeTextInputImeAction(OpenCodeTextInputSubmitAction.Done, multiline = false))
+        assertEquals(ImeAction.Go, openCodeTextInputImeAction(OpenCodeTextInputSubmitAction.Go, multiline = false))
+        assertEquals(ImeAction.Default, openCodeTextInputImeAction(OpenCodeTextInputSubmitAction.Go, multiline = true))
     }
 }

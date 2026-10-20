@@ -63,6 +63,7 @@ import dev.opencode.mobile.ui.componentgallery.ComponentGalleryEntries
 import dev.opencode.mobile.ui.componentgallery.ComponentGalleryEntryId
 import dev.opencode.mobile.ui.componentgallery.ComponentGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.ComponentGalleryThemeMode
+import dev.opencode.mobile.ui.componentgallery.components.ActionBarGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ActionPillGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ActionTileGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.AssistantMessageGalleryScreen
@@ -738,6 +739,7 @@ fun MainNavigation() {
                                                             WorkingIndicatorGalleryScreen()
                                                         ComponentGalleryEntryId.ReasoningRow -> ReasoningRowGalleryScreen()
                                                         ComponentGalleryEntryId.TopBar -> TopBarGalleryScreen()
+                                                        ComponentGalleryEntryId.ActionBar -> ActionBarGalleryScreen()
                                                         ComponentGalleryEntryId.SplitPane -> SplitPaneGalleryScreen()
                                                         ComponentGalleryEntryId.OverflowMenu -> OverflowMenuGalleryScreen()
                                                         ComponentGalleryEntryId.BottomSheet -> BottomSheetGalleryScreen()

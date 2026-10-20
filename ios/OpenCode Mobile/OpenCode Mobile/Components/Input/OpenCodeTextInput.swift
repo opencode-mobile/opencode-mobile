@@ -12,6 +12,8 @@ enum OpenCodeTextInputKind: CaseIterable {
 enum OpenCodeTextInputSubmitAction {
     case next
     case done
+    /// Return opens what the field names (a folder, a page) rather than finishing the form.
+    case go
 }
 
 struct OpenCodeTextInput: View {
@@ -200,10 +202,18 @@ private struct SubmitBehavior: ViewModifier {
     let submitAction: OpenCodeTextInputSubmitAction
     let onSubmit: (() -> Void)?
 
+    private var submitLabel: SubmitLabel {
+        switch submitAction {
+        case .next: .next
+        case .done: .done
+        case .go: .go
+        }
+    }
+
     func body(content: Content) -> some View {
         if enabled {
             content
-                .submitLabel(submitAction == .next ? .next : .done)
+                .submitLabel(submitLabel)
                 .onSubmit { onSubmit?() }
         } else {
             content
