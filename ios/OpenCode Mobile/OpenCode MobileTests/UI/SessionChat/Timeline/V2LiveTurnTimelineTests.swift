@@ -363,6 +363,119 @@ struct V2LiveTurnTimelineTests {
         #expect(restTool?.isInterrupted == true)
     }
 
+    @Test func streamingShellArguments_growOnThePendingCardUntilCalledSettlesThem() throws {
+        apply(prompt("u1", "List files", at: 1_000))
+        apply(step("a1", at: 1_100))
+        let fields = #""assistantMessageID":"a1","id":"call_sh","name":"bash""#
+        apply([envelope("session.tool.input.started", 1_120, fields)])
+        // Servers that do not stream tool input still show the placeholder until `ended`.
+        #expect(liveToolCard("a1")?.subtitle == "Writing command…")
+        apply([inputDelta(fields, #"{"comm"#, at: 1_121)])
+
+        let waiting = try #require(liveToolCard("a1"))
+        #expect(waiting.status == .pending)
+        #expect(waiting.isReceivingArguments)
+        #expect(waiting.subtitle == "Writing command…")
+
+        apply([inputDelta(fields, #"and":"ls -la /tm"#, at: 1_122)])
+        #expect(liveToolCard("a1")?.subtitle == "ls -la /tm")
+        apply([inputDelta(fields, #"p/scratch","description":"List"#, at: 1_123)])
+        #expect(liveToolCard("a1")?.subtitle == "ls -la /tmp/scratch")
+        let frame = chipFrame(store.messages(sessionID: Self.session))
+        let chip = try #require(stepParagraphs(frame.messages[1].blocks).first?.paragraph.chips.first)
+        #expect(chip.label == "ls -la /tmp/scratch")
+
+        apply([
+            envelope(
+                "session.tool.called",
+                1_130,
+                fields + #","input":{"command":"ls -la /tmp","description":"List"}"#
+            ),
+        ])
+        #expect(liveTool("a1")?.input?[ToolArgumentsPreview.inputKey] == nil)
+        let called = try #require(liveToolCard("a1"))
+        #expect(called.status == .running)
+        #expect(!called.isReceivingArguments)
+        #expect(called.subtitle == "ls -la /tmp")
+
+        apply([envelope("session.tool.success", 1_140, fields + #","content":[{"type":"text","text":"ok"}]"#)])
+        let done = try #require(liveToolCard("a1"))
+        #expect(done.status == .completed)
+        #expect(!done.isReceivingArguments)
+        #expect(done.subtitle == "ls -la /tmp")
+        #expect(done.detailText == "ok")
+    }
+
+    @Test func streamingFileArguments_showThePathOnReadEditAndWriteCards() throws {
+        apply(prompt("u1", "Change files", at: 1_000))
+        apply(step("a1", at: 1_100))
+        let cases: [(name: String, placeholder: String, partial: String, path: String)] = [
+            ("read", "Preparing read…", #""filePath":"/repo/src/app.ts"#, "/repo/src/app.ts"),
+            ("edit", "Preparing edit…", #""filePath":"/repo/src/app.ts","oldString":"a"#, "/repo/src/app.ts"),
+            ("write", "Preparing write…", #""content":"line 1\nline 2","filePath":"/repo/NOTES"#, "/repo/NOTES"),
+        ]
+        for (index, item) in cases.enumerated() {
+            let fields = #""assistantMessageID":"a1","id":"call_\#(item.name)","name":"\#(item.name)""#
+            let at = Int64(1_200 + index * 10)
+            apply([envelope("session.tool.input.started", at, fields), inputDelta(fields, "{", at: at + 1)])
+            #expect(liveToolCard("a1", callID: "call_\(item.name)")?.subtitle == item.placeholder)
+            apply([inputDelta(fields, item.partial, at: at + 2)])
+            let card = try #require(liveToolCard("a1", callID: "call_\(item.name)"))
+            #expect(card.isReceivingArguments)
+            #expect(card.subtitle == item.path)
+            #expect(!card.opensChangesReview)
+        }
+    }
+
+    @Test func inputEnded_replacesThePreviewWithTheSettledArguments() throws {
+        apply(prompt("u1", "List files", at: 1_000))
+        apply(step("a1", at: 1_100))
+        let fields = #""assistantMessageID":"a1","id":"call_sh","name":"bash""#
+        apply([
+            envelope("session.tool.input.started", 1_120, fields),
+            inputDelta(fields, #"{"command":"ls -l"#, at: 1_121),
+            envelope("session.tool.input.ended", 1_122, fields + #","text":"{\"command\":\"ls -la\"}""#),
+        ])
+
+        #expect(liveTool("a1")?.input == ["command": .string("ls -la")])
+        let card = try #require(liveToolCard("a1"))
+        #expect(card.status == .pending)
+        #expect(!card.isReceivingArguments)
+        #expect(card.subtitle == "ls -la")
+    }
+
+    @Test func restReloadMidStream_keepsTheStreamingArgumentsAsThePreview() throws {
+        let rest = try restMessages(
+            #"""
+            [
+              {"id":"a1","type":"assistant","content":[
+                {"type":"tool","id":"call_sh","name":"bash","state":{"status":"streaming","input":"{\"command\":\"git st"}}],
+               "time":{"created":1100}}
+            ]
+            """#
+        )
+        let card = try #require(toolCards(rest[0].parts).first)
+        #expect(card.isReceivingArguments)
+        #expect(card.subtitle == "git st")
+    }
+
+    @Test func v1AndSettledCards_keepTodaysChrome() {
+        let v1Pending = ToolPart(id: "call_v1", toolName: "bash", status: .pending)
+        let v1Card = toolCards([.tool(v1Pending)]).first
+        #expect(v1Card?.isReceivingArguments == false)
+        #expect(v1Card?.subtitle == nil)
+
+        // A settled card ignores a stray preview the server never replaced.
+        let stray: [String: AnyCodable] = [ToolArgumentsPreview.inputKey: .string(#"{"command":"rm"#)]
+        for status in [ToolStatus.completed, .error] {
+            let card = toolCards([.tool(ToolPart(id: "call_\(status)", toolName: "bash", status: status, input: stray))]).first
+            #expect(card?.isReceivingArguments == false)
+            #expect(card?.subtitle == nil)
+        }
+        let generic = ToolPart(id: "call_g", toolName: "sim_task", status: .pending, input: stray)
+        #expect(toolCards([.tool(generic)]).first?.subtitle == nil)
+    }
+
     @Test func realToolFailure_staysAnError() throws {
         apply(prompt("u1", "Run it", at: 1_000))
         apply(step("a1", at: 1_100))
@@ -691,6 +804,35 @@ struct V2LiveTurnTimelineTests {
             envelope("session.tool.called", at + 1, fields + #","input":{"pattern":"*"}"#),
             envelope("session.tool.success", at + 2, fields + #","content":[{"type":"text","text":"ok"}]"#),
         ]
+    }
+
+    private func inputDelta(_ fields: String, _ delta: String, at: Int64) -> String {
+        envelope("session.tool.input.delta", at, "\(fields),\"delta\":\(jsonString(delta))")
+    }
+
+    private func liveTool(_ messageID: String) -> ToolPart? {
+        store.messages(sessionID: Self.session).first { $0.id == messageID }?.parts.compactMap { part -> ToolPart? in
+            if case .tool(let tool) = part { return tool }
+            return nil
+        }.first
+    }
+
+    private func liveToolCard(_ messageID: String, callID: String? = nil) -> SessionChatToolCardBlock? {
+        guard let message = store.messages(sessionID: Self.session).first(where: { $0.id == messageID }) else { return nil }
+        let result = SessionChatTimelineBlocks.build(role: .assistant, parts: message.parts)
+        guard case .ok(let blocks) = result else { return nil }
+        return blocks.compactMap { block -> SessionChatToolCardBlock? in
+            guard case .toolCard(let blockID, let card) = block else { return nil }
+            return callID == nil || blockID == PresentationBlockId.direct(callID!) ? card : nil
+        }.first
+    }
+
+    private func toolCards(_ parts: [MessagePart]) -> [SessionChatToolCardBlock] {
+        guard case .ok(let blocks) = SessionChatTimelineBlocks.build(role: .assistant, parts: parts) else { return [] }
+        return blocks.compactMap { block in
+            guard case .toolCard(_, let card) = block else { return nil }
+            return card
+        }
     }
 
     private func stepEnded(_ id: String, finish: String, at: Int64) -> [String] {

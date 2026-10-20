@@ -605,7 +605,7 @@ class InMemoryMessageStore
             if (existing is MessagePart.Tool) {
                 val previous =
                     existing.input
-                        ?.get("preview")
+                        ?.get(ToolArgumentsPreview.INPUT_KEY)
                         ?.jsonPrimitive
                         ?.contentOrNull
                         .orEmpty()
@@ -613,8 +613,8 @@ class InMemoryMessageStore
                     existing.copy(
                         input =
                             buildJsonObject {
-                                existing.input?.forEach { (key, value) -> if (key != "preview") put(key, value) }
-                                put("preview", previous + delta)
+                                existing.input?.forEach { (key, value) -> if (key != ToolArgumentsPreview.INPUT_KEY) put(key, value) }
+                                put(ToolArgumentsPreview.INPUT_KEY, previous + delta)
                             },
                     )
                 return SessionChangeSet(
@@ -1056,7 +1056,7 @@ class InMemoryMessageStore
             val merged =
                 when {
                     existing is MessagePart.Tool && incoming is MessagePart.Tool -> {
-                        val mergedInput = mergeJson(existing.input, incoming.input)
+                        val mergedInput = ToolArgumentsPreview.mergedInput(existing.input, incoming.input)
                         existing.copy(
                             toolName =
                                 ToolPartIdentity.resolvedName(
