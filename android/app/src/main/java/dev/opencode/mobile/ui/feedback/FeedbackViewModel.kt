@@ -60,7 +60,7 @@ data class FeedbackUiState(
     val kind: FeedbackKind = FeedbackKind.Bug,
     val message: String = "",
     val screenshot: FeedbackScreenshot? = null,
-    /** The screen captured before the sheet opened; "+ Screenshot" re-attaches it. */
+    /** The screen captured before the sheet opened; "+ Screenshot" attaches it. Off by default. */
     val capturedScreenshot: FeedbackScreenshot? = null,
     val includeLogs: Boolean = true,
     val logWindow: DiagnosticLogExportWindow = DiagnosticLogExportWindow.DEFAULT,
@@ -161,12 +161,13 @@ class FeedbackViewModel
                     screen = screen,
                     kind = if (keepDraft) current.kind else FeedbackKind.Bug,
                     message = if (keepDraft) current.message else "",
+                    // The capture is kept for "+ Screenshot" but never attached on its own: a
+                    // transcript or terminal screenshot leaves the phone only when the user adds it (#755).
                     screenshot =
-                        when {
-                            captured != null -> captured
-                            keepDraft && screen == FeedbackScreen.Settings && current.capturedScreenshot == null ->
-                                current.screenshot
-                            else -> null
+                        if (keepDraft && screen == FeedbackScreen.Settings && current.capturedScreenshot == null) {
+                            current.screenshot
+                        } else {
+                            null
                         },
                     capturedScreenshot = captured,
                     includeLogs = if (keepDraft) current.includeLogs else true,

@@ -333,8 +333,8 @@ fun SettingsScreen(
                 )
 
                 OpenCodeListItem(
-                    title = "Product Analytics",
-                    subtitle = "Allow optional product usage events. Crash reporting is unchanged.",
+                    title = "Analytics & crash reports",
+                    subtitle = "Allow optional product usage events and crash reports. Off sends nothing to Firebase.",
                     style = OpenCodeListItemStyle.Card,
                     startDecorator = StartDecorator.Icon(OpenCodeIcons.Description, "Product Analytics"),
                     accessory =

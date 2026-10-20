@@ -16,17 +16,21 @@ struct FeedbackViewModelTests {
         #expect(FeedbackKind.feedback.label == "Idea")
     }
 
-    @Test func capturedScreenshot_isAttachedAndCanBeRemovedAndRestored() {
+    @Test func capturedScreenshot_isOffByDefaultAndAttachedOnlyWhenAdded() {
         let model = makeModel(screen: .sessionChat, screenshot: Self.screenshotData)
-        #expect(model.uiState.screenshot != nil)
+        #expect(model.uiState.screenshot == nil)
+        #expect(model.uiState.screenshotPreview == nil)
+
+        model.addScreenshot()
+        #expect(model.uiState.screenshot?.imageData == Self.screenshotData)
         #expect(model.uiState.screenshotPreview != nil)
+        #expect(model.uiState.photoPickerRequested == false)
 
         model.removeScreenshot()
         #expect(model.uiState.screenshot == nil)
 
         model.addScreenshot()
         #expect(model.uiState.screenshot?.imageData == Self.screenshotData)
-        #expect(model.uiState.photoPickerRequested == false)
     }
 
     @Test func addScreenshotWithoutCapture_requestsThePhotoPicker() {
@@ -43,6 +47,7 @@ struct FeedbackViewModelTests {
 
     @Test func hideParts_addsAndUndoesBoxes() {
         let model = makeModel(screenshot: Self.screenshotData)
+        model.addScreenshot()
 
         model.openHideParts()
         model.hidePart(at: CGPoint(x: 0.5, y: 0.5))
@@ -103,6 +108,7 @@ struct FeedbackViewModelTests {
         let cooldown = MemoryCooldownStore()
         let clock = TestClock()
         let model = makeModel(screenshot: Self.screenshotData, submitter: submitter, cooldown: cooldown, clock: clock)
+        model.addScreenshot()
         model.updateMessage("  Approval card missing.  ", cursor: 0)
 
         await model.send()

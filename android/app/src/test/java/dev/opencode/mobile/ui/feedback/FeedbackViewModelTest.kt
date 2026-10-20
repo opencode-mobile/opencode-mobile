@@ -74,12 +74,14 @@ class FeedbackViewModelTest {
     }
 
     @Test
-    fun sessionChat_preattachesCaptureAndRestoresItAfterRemoval() {
+    fun sessionChat_keepsTheCaptureForAddButDoesNotPreattachIt() {
         val viewModel = viewModel()
         viewModel.open(FeedbackScreen.SessionChat, capturedJpeg = byteArrayOf(9))
 
-        assertNotNull(viewModel.state.value.screenshot)
+        assertNull(viewModel.state.value.screenshot)
         assertFalse(viewModel.state.value.addScreenshotPicksPhoto)
+        viewModel.addCapturedScreenshot()
+        assertEquals(FeedbackScreenshot(byteArrayOf(9)), viewModel.state.value.screenshot)
         viewModel.removeScreenshot()
         assertNull(viewModel.state.value.screenshot)
         viewModel.addCapturedScreenshot()
@@ -101,6 +103,7 @@ class FeedbackViewModelTest {
     fun hideParts_addsAndUndoesBoxes() {
         val viewModel = viewModel()
         viewModel.open(FeedbackScreen.SessionChat, capturedJpeg = byteArrayOf(1))
+        viewModel.addCapturedScreenshot()
         viewModel.openHideParts()
         assertEquals(FeedbackPage.HideParts, viewModel.state.value.page)
 
@@ -154,6 +157,7 @@ class FeedbackViewModelTest {
                     FeedbackSubmitResult.Sent(report.reference)
                 }
             viewModel.open(FeedbackScreen.SessionChat, capturedJpeg = byteArrayOf(1, 2))
+            viewModel.addCapturedScreenshot()
             viewModel.hideArea(0.5f, 0.5f)
             viewModel.updateMessage("  It froze.  ")
 
@@ -182,6 +186,7 @@ class FeedbackViewModelTest {
                     FeedbackSubmitResult.Sent(report.reference)
                 }
             viewModel.open(FeedbackScreen.SessionChat, capturedJpeg = byteArrayOf(1, 2))
+            viewModel.addCapturedScreenshot()
             viewModel.updateMessage("It froze.")
             viewModel.send()
             runCurrent()
@@ -209,6 +214,7 @@ class FeedbackViewModelTest {
                     FeedbackSubmitResult.Offline
                 }
             viewModel.open(FeedbackScreen.SessionChat, capturedJpeg = byteArrayOf(1, 2))
+            viewModel.addCapturedScreenshot()
             viewModel.updateMessage("It froze.")
             viewModel.send()
             runCurrent()
@@ -321,6 +327,7 @@ class FeedbackViewModelTest {
         runTest(dispatcher) {
             val viewModel = viewModel(ShareFeedbackSubmitter())
             viewModel.open(FeedbackScreen.SessionChat, capturedJpeg = byteArrayOf(1))
+            viewModel.addCapturedScreenshot()
             viewModel.updateMessage("Debug report")
             viewModel.send()
             advanceUntilIdle()

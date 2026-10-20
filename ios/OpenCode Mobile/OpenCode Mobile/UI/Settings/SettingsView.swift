@@ -443,8 +443,8 @@ struct SettingsView: View {
                     .padding(.horizontal, 16)
 
                     OpenCodeListItem(
-                        title: "Product Analytics",
-                        subtitle: "Allow optional product usage events. Crash reporting is unchanged.",
+                        title: "Analytics & crash reports",
+                        subtitle: "Allow optional product usage events and crash reports. Off sends nothing to Firebase.",
                         style: .card,
                         startDecorator: .icon(.description, accessibilityLabel: "Product Analytics"),
                         accessory: .toggle(

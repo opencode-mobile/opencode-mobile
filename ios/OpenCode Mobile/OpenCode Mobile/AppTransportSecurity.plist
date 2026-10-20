@@ -4,6 +4,12 @@
 <dict>
 	<key>FirebaseAutomaticScreenReportingEnabled</key>
 	<false/>
+	<!-- Collection starts disabled; OpenCodeReleaseObservability enables it per the
+	     analytics consent setting right after FirebaseApp.configure() (#755). -->
+	<key>FirebaseCrashlyticsCollectionEnabled</key>
+	<false/>
+	<key>FIREBASE_ANALYTICS_COLLECTION_ENABLED</key>
+	<false/>
 	<key>GOOGLE_ANALYTICS_DEFAULT_ALLOW_AD_PERSONALIZATION_SIGNALS</key>
 	<false/>
 	<key>OpenCodeVerifyCrashlytics</key>

@@ -162,7 +162,7 @@ final class FeedbackViewModel {
     @ObservationIgnored private let logRedactor: () -> FeedbackLogRedactor
     @ObservationIgnored private let now: () -> Date
     @ObservationIgnored private let makeReportID: () -> String
-    /// The screen captured before the sheet opened; "+ Screenshot" restores it.
+    /// The screen captured before the sheet opened; "+ Screenshot" attaches it. Off by default.
     @ObservationIgnored private let capturedScreenshot: Data?
     @ObservationIgnored private var screenshotImage: UIImage?
     @ObservationIgnored private var dictationInsertGeneration: UInt64 = 0
@@ -190,9 +190,8 @@ final class FeedbackViewModel {
         self.makeReportID = makeReportID
         self.capturedScreenshot = capturedScreenshot
         uiState = FeedbackUiState(screen: screen)
-        if let capturedScreenshot {
-            setScreenshot(FeedbackScreenshot(imageData: capturedScreenshot))
-        }
+        // The captured screen is kept for "+ Screenshot" but never attached on its own: a
+        // transcript or terminal screenshot leaves the phone only when the user adds it (#755).
     }
 
     var draft: FeedbackDraft {
@@ -233,7 +232,7 @@ final class FeedbackViewModel {
         screenshotImage = nil
     }
 
-    /// "+ Screenshot": restores the captured screen, or asks for the photo picker.
+    /// "+ Screenshot": attaches the captured screen, or asks for the photo picker.
     func addScreenshot() {
         if let capturedScreenshot {
             setScreenshot(FeedbackScreenshot(imageData: capturedScreenshot))

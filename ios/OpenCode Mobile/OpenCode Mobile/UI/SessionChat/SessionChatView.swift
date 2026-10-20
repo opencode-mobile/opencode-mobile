@@ -1096,8 +1096,8 @@ struct SessionChatView: View {
         return entries
     }
 
-    /// Captures this screen once the menu is gone, then opens the report sheet
-    /// with the screenshot attached (the sheet itself draws over the window).
+    /// Captures this screen once the menu is gone, then opens the report sheet. The capture
+    /// is only attached when the user taps "+ Screenshot" (the sheet itself draws over the window).
     private func reportProblem() {
         resignComposerKeyboard()
         Task { @MainActor in
