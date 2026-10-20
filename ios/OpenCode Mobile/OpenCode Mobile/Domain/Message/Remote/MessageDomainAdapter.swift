@@ -707,7 +707,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
                         return unwrapped.isEmpty ? nil : unwrapped
                     },
                     callID: content.id,
-                    input: dictionaryFromInput(state?.input),
+                    input: dictionaryFromInput(state?.input) ?? streamingInputPreview(state),
                     output: toolOutput(state),
                     metadata: metadata,
                     timeStartEpochMs: content.time?.created,
@@ -788,6 +788,14 @@ nonisolated struct MessageDomainAdapter: Sendable {
         default:
             return nil
         }
+    }
+
+    /// A tool whose arguments are still streaming keeps the partial text as its preview.
+    private func streamingInputPreview(_ state: V2ToolStateDTO?) -> [String: AnyCodable]? {
+        guard state?.status == "streaming" || state?.status == "pending",
+              case let .string(raw)? = state?.input
+        else { return nil }
+        return [ToolArgumentsPreview.inputKey: .string(raw)]
     }
 
     private func toolOutput(_ state: V2ToolStateDTO?) -> String? {

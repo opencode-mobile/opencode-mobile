@@ -946,6 +946,9 @@ final class SessionChatViewModel {
             waitToSend: waitToSend,
             serverAlreadyAccepted: { [weak self] in
                 self?.serverAlreadyAccepted() ?? false
+            },
+            beforePrompt: { [weak self] in
+                try await self?.commands.commitPendingRevert()
             }
         )
         DiagnosticLog.info(.chat, "sendPrompt end session=\(sessionID)")

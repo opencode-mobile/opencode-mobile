@@ -126,6 +126,16 @@ interface SessionRepository {
         directory: String? = null,
     ): Boolean
 
+    /**
+     * Settles a pending revert before the next prompt. v2 only stages a revert and needs an
+     * explicit commit; v1 applies the revert itself when the next prompt arrives, so it has
+     * nothing to commit.
+     */
+    suspend fun commitRevert(
+        id: String,
+        directory: String? = null,
+    ): Boolean = true
+
     suspend fun respondToPermission(
         sessionId: String,
         permissionId: String,

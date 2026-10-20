@@ -749,7 +749,7 @@ class MessageDomainAdapter {
                     title = (metadata?.get("title") as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotEmpty() },
                     error = state?.error?.message?.let(SessionFailure::unwrap)?.takeIf { it.isNotEmpty() },
                     callId = content.id,
-                    input = jsonObjectFromInput(state?.input),
+                    input = jsonObjectFromInput(state?.input) ?: streamingInputPreview(state),
                     output = toolOutput(state),
                     metadata = metadata,
                     id = content.id ?: fallbackId,
@@ -818,6 +818,14 @@ class MessageDomainAdapter {
                 runCatching { json.parseToJsonElement(input.content) as? JsonObject }.getOrNull()
             else -> null
         }
+
+    /** A tool whose arguments are still streaming keeps the partial text as its preview. */
+    private fun streamingInputPreview(state: V2ToolStateDto?): JsonObject? {
+        if (state?.status != "streaming" && state?.status != "pending") return null
+        val raw = state.input as? JsonPrimitive ?: return null
+        if (!raw.isString) return null
+        return buildJsonObject { put(ToolArgumentsPreview.INPUT_KEY, raw.content) }
+    }
 
     private fun toolOutput(state: V2ToolStateDto?): String? {
         val texts =

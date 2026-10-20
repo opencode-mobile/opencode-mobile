@@ -584,9 +584,9 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
         let baseText: String
         switch existing {
         case .tool(let tool):
-            let previous = tool.input?["preview"]?.stringValue ?? ""
+            let previous = tool.input?[ToolArgumentsPreview.inputKey]?.stringValue ?? ""
             var input = tool.input ?? [:]
-            input["preview"] = .string(previous + delta)
+            input[ToolArgumentsPreview.inputKey] = .string(previous + delta)
             partsCache[sessionID]?[messageID]?[partID] = .tool(
                 ToolPart(
                     id: tool.id,
@@ -1170,7 +1170,7 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
         let merged: MessagePart
         switch (existing, incoming) {
         case (.tool(let prior), .tool(let next)):
-            let mergedInput = mergeDict(prior.input, next.input)
+            let mergedInput = ToolArgumentsPreview.mergedInput(prior.input, next.input)
             merged = .tool(
                 ToolPart(
                     id: prior.id,

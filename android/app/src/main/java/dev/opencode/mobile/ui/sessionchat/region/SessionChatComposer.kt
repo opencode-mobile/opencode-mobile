@@ -40,6 +40,7 @@ import dev.opencode.mobile.domain.model.SessionModelSelection
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
+import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.text.TitleCaseIdentifier
 import dev.opencode.mobile.ui.sessionchat.AttachmentPresentationMapper
@@ -868,6 +869,7 @@ class SessionChatComposer(
         supportsFollowUp: Boolean,
         holdUntil: suspend () -> Boolean = { true },
         serverAlreadyAccepted: () -> Boolean = { false },
+        beforePrompt: suspend () -> Unit = {},
     ) {
         if (ComposerShellCommand.isShellMode(_state.value.composer.text)) {
             runShellCommand(
@@ -996,6 +998,7 @@ class SessionChatComposer(
                         mentions: List<dev.opencode.mobile.domain.agent.AgentMention>,
                         fileMentions: List<FileMention>,
                     ) {
+                        beforePrompt()
                         suspend fun send(delivery: FollowUpDelivery) {
                             messageRepository.sendPromptAsync(
                                 sessionId = sessionId,
@@ -1766,6 +1769,9 @@ class SessionChatComposer(
             is CommandError.Http -> throwable.message ?: "Request failed"
             is CommandError.Transport -> "Unable to reach the server"
             is CommandError.Decoding -> "Unable to read server response"
+            is SessionError.Http -> throwable.message ?: "Request failed"
+            is SessionError.Transport -> "Unable to reach the server"
+            is SessionError.Decoding -> "Unable to read server response"
             else -> throwable.message ?: "Something went wrong"
         }
 

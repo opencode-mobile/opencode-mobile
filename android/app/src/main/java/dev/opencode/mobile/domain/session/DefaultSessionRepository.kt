@@ -202,6 +202,13 @@ class DefaultSessionRepository
             runCatching { remote.unrevertSession(id, directory) }
                 .getOrElse { throw adapter.mapError(it) }
 
+        override suspend fun commitRevert(
+            id: String,
+            directory: String?,
+        ): Boolean =
+            runCatching { remote.commitRevert(id, directory) }
+                .getOrElse { throw adapter.mapError(it) }
+
         override suspend fun respondToPermission(
             sessionId: String,
             permissionId: String,

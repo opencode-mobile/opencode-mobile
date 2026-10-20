@@ -4,6 +4,7 @@ import dev.opencode.mobile.domain.message.AttachmentDataUrl
 import dev.opencode.mobile.domain.message.SessionFailure
 import dev.opencode.mobile.domain.message.TimelineNotice
 import dev.opencode.mobile.domain.message.TimelineNoticeCodec
+import dev.opencode.mobile.domain.message.ToolArgumentsPreview
 import dev.opencode.mobile.domain.message.ToolInterruption
 import dev.opencode.mobile.domain.message.ToolPartIdentity
 import dev.opencode.mobile.domain.message.V2ContentPartId
@@ -655,7 +656,14 @@ class EventDomainAdapter(
                             null
                         }
                     }?.takeIf { it.isNotEmpty() }
-        val input = jsonObjectInput(properties["input"])
+        val input =
+            jsonObjectInput(properties["input"])
+                ?: when {
+                    // Arguments start streaming: an empty preview until deltas or `ended` fill it.
+                    type.endsWith("tool.input.started") -> buildJsonObject { put(ToolArgumentsPreview.INPUT_KEY, "") }
+                    type.endsWith("tool.input.ended") -> endedToolInput(properties.string("text"))
+                    else -> null
+                }
         val metadata = toolMetadata(properties)
         return toolLikePartUpdated(
             properties = properties,
@@ -688,6 +696,16 @@ class EventDomainAdapter(
             metadata == null -> structured
             else -> JsonObject(structured + metadata)
         }
+    }
+
+    /**
+     * `tool.input.ended` carries the whole argument text. Parsed, it settles the
+     * arguments; otherwise it replaces the streamed preview with the final text.
+     */
+    private fun endedToolInput(text: String?): JsonObject? {
+        if (text == null) return null
+        return jsonObjectInput(JsonPrimitive(text))
+            ?: buildJsonObject { put(ToolArgumentsPreview.INPUT_KEY, text) }
     }
 
     private fun toolInputDelta(properties: JsonObject): OpencodeEvent {

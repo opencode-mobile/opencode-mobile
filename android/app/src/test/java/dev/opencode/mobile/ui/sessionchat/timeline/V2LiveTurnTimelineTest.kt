@@ -14,9 +14,11 @@ import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.MessageStopReason
 import dev.opencode.mobile.domain.message.NoticeModelRef
 import dev.opencode.mobile.domain.message.TimelineNotice
+import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.markdown.MarkdownDocument
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -431,6 +433,135 @@ class V2LiveTurnTimelineTest {
     }
 
     @Test
+    fun streamingShellArguments_growOnThePendingCardUntilCalledSettlesThem() {
+        apply(prompt("u1", "List files", at = 1_000))
+        apply(step("a1", at = 1_100))
+        val fields = """"assistantMessageID":"a1","id":"call_sh","name":"bash""""
+        apply(listOf(envelope("session.tool.input.started", 1_120, fields)))
+        // Servers that do not stream tool input still show the placeholder until `ended`.
+        assertEquals("Writing command…", toolCard("a1").subtitle)
+        apply(listOf(inputDelta(fields, """{"comm""", at = 1_121)))
+
+        val waiting = toolCard("a1")
+        assertEquals(ToolStatus.Pending, waiting.status)
+        assertTrue(waiting.isReceivingArguments)
+        assertEquals("Writing command…", waiting.subtitle)
+
+        apply(listOf(inputDelta(fields, """and":"ls -la /tm""", at = 1_122)))
+        assertEquals("ls -la /tm", toolCard("a1").subtitle)
+        apply(listOf(inputDelta(fields, """p/scratch","description":"List""", at = 1_123)))
+        assertEquals("ls -la /tmp/scratch", toolCard("a1").subtitle)
+        val chip =
+            chipBodies(store.messages(SESSION))[1]
+                .blocks
+                .stepParagraphs()
+                .single()
+                .chips
+                .single()
+        assertEquals("ls -la /tmp/scratch", chip.label)
+
+        apply(
+            listOf(
+                envelope("session.tool.called", 1_130, """$fields,"input":{"command":"ls -la /tmp","description":"List"}"""),
+            ),
+        )
+        val tool = liveTool("a1")
+        assertFalse(tool.input!!.containsKey("preview"))
+        val called = toolCard("a1")
+        assertEquals(ToolStatus.Running, called.status)
+        assertFalse(called.isReceivingArguments)
+        assertEquals("ls -la /tmp", called.subtitle)
+
+        apply(listOf(envelope("session.tool.success", 1_140, """$fields,"content":[{"type":"text","text":"ok"}]""")))
+        val done = toolCard("a1")
+        assertEquals(ToolStatus.Completed, done.status)
+        assertFalse(done.isReceivingArguments)
+        assertEquals("ls -la /tmp", done.subtitle)
+        assertEquals("ok", done.detailText)
+    }
+
+    @Test
+    fun streamingFileArguments_showThePathOnReadEditAndWriteCards() {
+        apply(prompt("u1", "Change files", at = 1_000))
+        apply(step("a1", at = 1_100))
+        val cases =
+            listOf(
+                Triple("read", "Preparing read…", """{"filePath":"/repo/src/app.ts"""),
+                Triple("edit", "Preparing edit…", """{"filePath":"/repo/src/app.ts","oldString":"a"""),
+                Triple("write", "Preparing write…", """{"content":"line 1\nline 2","filePath":"/repo/NOTES"""),
+            )
+        cases.forEachIndexed { index, (name, placeholder, partial) ->
+            val fields = """"assistantMessageID":"a1","id":"call_$name","name":"$name""""
+            val at = 1_200L + index * 10
+            apply(listOf(envelope("session.tool.input.started", at, fields), inputDelta(fields, "{", at = at + 1)))
+            assertEquals(placeholder, toolCard("a1", "call_$name").subtitle)
+            apply(listOf(inputDelta(fields, partial.removePrefix("{"), at = at + 2)))
+            val card = toolCard("a1", "call_$name")
+            assertTrue(card.isReceivingArguments)
+            assertEquals(if (name == "write") "/repo/NOTES" else "/repo/src/app.ts", card.subtitle)
+            assertFalse(card.opensChangesReview)
+        }
+    }
+
+    @Test
+    fun inputEnded_replacesThePreviewWithTheSettledArguments() {
+        apply(prompt("u1", "List files", at = 1_000))
+        apply(step("a1", at = 1_100))
+        val fields = """"assistantMessageID":"a1","id":"call_sh","name":"bash""""
+        apply(
+            listOf(
+                envelope("session.tool.input.started", 1_120, fields),
+                inputDelta(fields, """{"command":"ls -l""", at = 1_121),
+                envelope("session.tool.input.ended", 1_122, """$fields,"text":"{\"command\":\"ls -la\"}""""),
+            ),
+        )
+
+        val tool = liveTool("a1")
+        assertEquals("""{"command":"ls -la"}""", tool.input.toString())
+        val card = toolCard("a1")
+        assertEquals(ToolStatus.Pending, card.status)
+        assertFalse(card.isReceivingArguments)
+        assertEquals("ls -la", card.subtitle)
+    }
+
+    @Test
+    fun restReloadMidStream_keepsTheStreamingArgumentsAsThePreview() {
+        val rest =
+            restMessages(
+                """
+                [
+                  {"id":"a1","type":"assistant","content":[
+                    {"type":"tool","id":"call_sh","name":"bash","state":{"status":"streaming","input":"{\"command\":\"git st"}}],
+                   "time":{"created":1100}}
+                ]
+                """,
+            )
+        val card = toolCards(rest.single()).single()
+        assertTrue(card.isReceivingArguments)
+        assertEquals("git st", card.subtitle)
+    }
+
+    @Test
+    fun v1AndSettledCards_keepTodaysChrome() {
+        val v1Pending = MessagePart.Tool(toolName = "bash", status = ToolStatus.Pending, id = "call_v1")
+        val v1Card = toolCards(listOf(v1Pending)).single()
+        assertFalse(v1Card.isReceivingArguments)
+        assertEquals(null, v1Card.subtitle)
+
+        // A settled card ignores a stray preview the server never replaced.
+        val stray = JsonObject(mapOf("preview" to JsonPrimitive("""{"command":"rm""")))
+        for (status in listOf(ToolStatus.Completed, ToolStatus.Error)) {
+            val card =
+                toolCards(listOf(MessagePart.Tool(toolName = "bash", status = status, input = stray, id = "call_$status")))
+                    .single()
+            assertFalse(card.isReceivingArguments)
+            assertEquals(null, card.subtitle)
+        }
+        val generic = MessagePart.Tool(toolName = "sim_task", status = ToolStatus.Pending, input = stray, id = "call_g")
+        assertEquals(null, toolCards(listOf(generic)).single().subtitle)
+    }
+
+    @Test
     fun realToolFailure_staysAnError() {
         apply(prompt("u1", "Run it", at = 1_000))
         apply(step("a1", at = 1_100))
@@ -801,6 +932,35 @@ class V2LiveTurnTimelineTest {
             envelope("session.tool.called", at + 1, """$fields,"input":{"pattern":"*"}"""),
             envelope("session.tool.success", at + 2, """$fields,"content":[{"type":"text","text":"ok"}]"""),
         )
+    }
+
+    private fun inputDelta(
+        fields: String,
+        delta: String,
+        at: Long,
+    ): String = envelope("session.tool.input.delta", at, """$fields,"delta":${Json.encodeToString(delta)}""")
+
+    private fun liveTool(messageId: String): MessagePart.Tool =
+        store
+            .messages(SESSION)
+            .single { it.id == messageId }
+            .parts
+            .filterIsInstance<MessagePart.Tool>()
+            .single()
+
+    private fun toolCard(
+        messageId: String,
+        callId: String? = null,
+    ): SessionChatTimelineBlock.ToolCard {
+        val message = store.messages(SESSION).single { it.id == messageId }
+        return toolCards(message).single { callId == null || it.blockID == PresentationBlockId.direct(callId) }
+    }
+
+    private fun toolCards(message: Message): List<SessionChatTimelineBlock.ToolCard> = toolCards(message.parts)
+
+    private fun toolCards(parts: List<MessagePart>): List<SessionChatTimelineBlock.ToolCard> {
+        val result = SessionChatTimelineBlocks.build(role = MessageRole.Assistant, parts = parts)
+        return (result as SessionChatTimelineBlocksResult.Ok).blocks.filterIsInstance<SessionChatTimelineBlock.ToolCard>()
     }
 
     private fun stepEnded(

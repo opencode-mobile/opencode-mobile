@@ -149,6 +149,9 @@ nonisolated struct SessionChatToolCardBlock: Equatable, Sendable {
     let isInterrupted: Bool
     /// The server closed the call without running it.
     let isMalformed: Bool
+    /// v2 is still streaming this tool's arguments: `subtitle` is the value
+    /// read so far from the partial input, or a placeholder until one appears.
+    let isReceivingArguments: Bool
 
     init(
         toolName: String,
@@ -164,7 +167,8 @@ nonisolated struct SessionChatToolCardBlock: Equatable, Sendable {
         opensChangesReview: Bool = false,
         changesInitialFilePath: String? = nil,
         isInterrupted: Bool = false,
-        isMalformed: Bool = false
+        isMalformed: Bool = false,
+        isReceivingArguments: Bool = false
     ) {
         self.toolName = toolName
         self.status = status
@@ -180,6 +184,7 @@ nonisolated struct SessionChatToolCardBlock: Equatable, Sendable {
         self.changesInitialFilePath = changesInitialFilePath
         self.isInterrupted = isInterrupted
         self.isMalformed = isMalformed
+        self.isReceivingArguments = isReceivingArguments
     }
 
     func markingFailed(_ errorText: String) -> SessionChatToolCardBlock {
@@ -1216,7 +1221,7 @@ nonisolated enum SessionChatTimelineBlocks {
             case "read":
                 kind = .file
                 family = .explore
-                label = readPathSubtitle(tool.input).map(lastPathComponent)
+                label = readPath(tool).map(lastPathComponent) ?? (card.isReceivingArguments ? card.subtitle : nil)
             case "glob":
                 kind = .file
                 family = .explore
@@ -1594,7 +1599,7 @@ nonisolated enum SessionChatTimelineBlocks {
 
     private static func contextSubtitle(_ tool: ToolPart) -> String? {
         switch tool.toolName.lowercased() {
-        case "read": return readPathSubtitle(tool.input)
+        case "read": return readPath(tool)
         case "glob", "grep": return patternPathSubtitle(tool.input)
         case "websearch": return inputString(tool.input, keys: "query")
         default: return nil
@@ -1676,13 +1681,14 @@ nonisolated enum SessionChatTimelineBlocks {
             } else {
                 nil
             }
+        let receivingArguments = ToolArgumentsPreview.isReceiving(tool)
         return .toolCard(
             blockID: PresentationBlockId.direct(partId),
             card: SessionChatToolCardBlock(
                 toolName: tool.toolName,
                 status: failedExit != nil ? .error : tool.status,
                 title: chrome.title,
-                subtitle: chrome.subtitle,
+                subtitle: chrome.subtitle ?? (receivingArguments ? receivingArgumentsPlaceholder(name) : nil),
                 errorText: errorText,
                 additions: chrome.additions,
                 deletions: chrome.deletions,
@@ -1691,9 +1697,21 @@ nonisolated enum SessionChatTimelineBlocks {
                 opensChangesReview: chrome.opensChangesReview,
                 changesInitialFilePath: chrome.changesInitialFilePath,
                 isInterrupted: interrupted,
-                isMalformed: tool.isMalformed
+                isMalformed: tool.isMalformed,
+                isReceivingArguments: receivingArguments
             )
         )
+    }
+
+    /// What a card says while its arguments stream in and none can be read yet (TUI v2 copy).
+    private static func receivingArgumentsPlaceholder(_ name: String) -> String? {
+        switch name {
+        case "bash", "shell": "Writing command…"
+        case "read": "Preparing read…"
+        case "edit": "Preparing edit…"
+        case "write": "Preparing write…"
+        default: nil
+        }
     }
 
     /// Neutral copy for a tool the user stopped or declined (never the raw abort text).
@@ -1773,7 +1791,7 @@ nonisolated enum SessionChatTimelineBlocks {
         if isQuestionTool(tool) { return questionChrome(tool) }
         switch name {
         case "read":
-            return contextChrome(tool: tool, subtitle: readPathSubtitle(tool.input))
+            return contextChrome(tool: tool, subtitle: readPath(tool))
         case "glob":
             return contextChrome(tool: tool, subtitle: patternPathSubtitle(tool.input))
         case "grep":
@@ -1832,6 +1850,7 @@ nonisolated enum SessionChatTimelineBlocks {
             metadataFilediffString(tool.metadata, key: "file")
             ?? singlePatchFile?.path
             ?? pathSubtitle(tool.input)
+            ?? ToolArgumentsPreview.string(tool, keys: "filePath", "path", "file")
         let additions = positiveCount(
             metadataFilediffInt(tool.metadata, key: "additions") ?? singlePatchFile?.additions ?? newFileLineCount(tool)
         )
@@ -1985,7 +2004,9 @@ nonisolated enum SessionChatTimelineBlocks {
     }
 
     private static func shellChrome(_ tool: ToolPart) -> Chrome {
-        let command = inputString(tool.input, keys: "command") ?? runningTitleOverride(tool)
+        let command = inputString(tool.input, keys: "command")
+            ?? runningTitleOverride(tool)
+            ?? ToolArgumentsPreview.string(tool, keys: "command")
         return Chrome(title: "Shell", subtitle: command, detailText: settledDetail(tool))
     }
 
@@ -2073,7 +2094,7 @@ nonisolated enum SessionChatTimelineBlocks {
         }
         guard let input else { return nil }
         let parts = input.compactMap { key, value -> String? in
-            guard let text = scalarString(value), !text.isEmpty, text.count <= 80 else { return nil }
+            guard key != ToolArgumentsPreview.inputKey, let text = scalarString(value), !text.isEmpty, text.count <= 80 else { return nil }
             return "\(key)=\(text)"
         }
         return parts.isEmpty ? nil : "[\(parts.joined(separator: ", "))]"
@@ -2129,9 +2150,10 @@ nonisolated enum SessionChatTimelineBlocks {
         inputString(input, keys: "filePath", "path", "file")
     }
 
-    /// Read chrome is the file: v1 sends `filePath`, v2 sends `path`.
-    private static func readPathSubtitle(_ input: [String: AnyCodable]?) -> String? {
-        inputString(input, keys: "filePath", "file", "path")
+    /// Read chrome is the file, settled or still streaming in: v1 sends `filePath`, v2 sends `path`.
+    private static func readPath(_ tool: ToolPart) -> String? {
+        inputString(tool.input, keys: "filePath", "file", "path")
+            ?? ToolArgumentsPreview.string(tool, keys: "filePath", "file", "path")
     }
 
     private static func patternPathSubtitle(_ input: [String: AnyCodable]?) -> String? {
