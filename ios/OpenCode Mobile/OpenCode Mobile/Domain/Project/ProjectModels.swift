@@ -8,6 +8,8 @@ struct Project: Sendable, Equatable {
     var activityAtEpochMs: Int64? = nil
     /// True when the server tracks the folder with a version control system (`vcs`, e.g. git).
     var isRepository = false
+    /// True when the server archived the project because its directories are gone (v2 `time.archived`).
+    var isArchived = false
 }
 
 enum ServerProbeError: Error, Equatable {

@@ -370,6 +370,73 @@ struct MessageProtocolRepositoryTests {
         #expect(MessageProtocolURLProtocol.requests[2].url?.path.hasSuffix("/api/session/ses_2/prompt") == true)
     }
 
+    @Test func v1RunShellPostsAgentCommandAndModelToSessionShell() async throws {
+        MessageProtocolURLProtocol.reset(responses: [.json(#"{"id":"msg_a","role":"assistant"}"#)])
+        let router = makeRouter(serverProtocol: .v1)
+
+        try await router.runShellCommand(
+            sessionID: "ses_1",
+            options: ShellCommandOptions(
+                command: "git status",
+                agent: "build",
+                model: PromptModelSelection(providerID: "openai", modelID: "gpt-5")
+            ),
+            directory: "/repo"
+        )
+
+        let request = try #require(MessageProtocolURLProtocol.requests.first)
+        #expect(MessageProtocolURLProtocol.requests.count == 1)
+        #expect(request.httpMethod == "POST")
+        #expect(request.url?.path.hasSuffix("/session/ses_1/shell") == true)
+        #expect(queryValue(try #require(request.url), "directory") == "/repo")
+        let body = try #require(MessageProtocolURLProtocol.bodies.first ?? nil)
+        let json = try #require(try JSONSerialization.jsonObject(with: Data(body.utf8)) as? NSDictionary)
+        #expect(json == [
+            "agent": "build",
+            "command": "git status",
+            "model": ["providerID": "openai", "modelID": "gpt-5"],
+        ] as NSDictionary)
+    }
+
+    @Test func v1RunShellWithoutModelOmitsIt() async throws {
+        MessageProtocolURLProtocol.reset(responses: [.json("{}")])
+        let router = makeRouter(serverProtocol: .v1)
+
+        try await router.runShellCommand(
+            sessionID: "ses_1",
+            options: ShellCommandOptions(command: "ls", agent: "plan", model: nil),
+            directory: nil
+        )
+
+        let body = try #require(MessageProtocolURLProtocol.bodies.first ?? nil)
+        let json = try #require(try JSONSerialization.jsonObject(with: Data(body.utf8)) as? NSDictionary)
+        #expect(json == ["agent": "plan", "command": "ls"] as NSDictionary)
+    }
+
+    @Test func v2RunShellPostsOnlyTheCommandWithoutSwitchingAgentOrModel() async throws {
+        MessageProtocolURLProtocol.reset(responses: [MessageStubResponse(statusCode: 204, body: "")])
+        let router = makeRouter(serverProtocol: .v2)
+
+        try await router.runShellCommand(
+            sessionID: "ses_2",
+            options: ShellCommandOptions(
+                command: "echo one\necho two",
+                agent: "build",
+                model: PromptModelSelection(providerID: "openai", modelID: "gpt-5")
+            ),
+            directory: "/repo"
+        )
+
+        let request = try #require(MessageProtocolURLProtocol.requests.first)
+        #expect(MessageProtocolURLProtocol.requests.count == 1)
+        #expect(request.httpMethod == "POST")
+        #expect(request.url?.path.hasSuffix("/api/session/ses_2/shell") == true)
+        #expect(queryValue(try #require(request.url), "directory") == nil)
+        let body = try #require(MessageProtocolURLProtocol.bodies.first ?? nil)
+        let json = try #require(try JSONSerialization.jsonObject(with: Data(body.utf8)) as? NSDictionary)
+        #expect(json == ["command": "echo one\necho two"] as NSDictionary)
+    }
+
     @Test func v1SendPrompt_mentionOnlyIncludesFileSource() async throws {
         MessageProtocolURLProtocol.reset(responses: [
             MessageStubResponse(statusCode: 204, body: "")
@@ -536,4 +603,6 @@ private struct UnpagedMessageRemote: MessageRemote {
     }
 
     func sendPromptAsync(sessionID: String, options: PromptSendOptions, directory: String?) async throws {}
+
+    func runShellCommand(sessionID: String, options: ShellCommandOptions, directory: String?) async throws {}
 }

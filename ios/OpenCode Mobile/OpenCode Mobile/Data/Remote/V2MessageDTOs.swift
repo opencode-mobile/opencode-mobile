@@ -21,6 +21,8 @@ nonisolated struct V2SessionMessageDTO: Decodable, Sendable {
     let status: String?
     let command: String?
     let output: String?
+    /// `shell` items: the command's exit code once it ended.
+    let exit: Int?
     let callID: String?
     let name: String?
     let description: String?
@@ -32,7 +34,7 @@ nonisolated struct V2SessionMessageDTO: Decodable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case id, type, text, files, agents, agent, model, content, cost, tokens, error, outcome, retry, finish, time
-        case reason, summary, status, command, output, callID, name, description, previous, location, metadata
+        case reason, summary, status, command, output, exit, callID, name, description, previous, location, metadata
     }
 
     init(from decoder: Decoder) throws {
@@ -57,6 +59,7 @@ nonisolated struct V2SessionMessageDTO: Decodable, Sendable {
         status = try container.decodeIfPresent(String.self, forKey: .status)
         command = try container.decodeIfPresent(String.self, forKey: .command)
         output = Self.decodeOutput(from: container)
+        exit = try? container.decodeIfPresent(Int.self, forKey: .exit)
         callID = try container.decodeIfPresent(String.self, forKey: .callID)
         name = try container.decodeIfPresent(String.self, forKey: .name)
         description = try container.decodeIfPresent(String.self, forKey: .description)

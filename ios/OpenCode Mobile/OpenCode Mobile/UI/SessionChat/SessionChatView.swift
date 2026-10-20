@@ -1217,12 +1217,14 @@ struct SessionChatView: View {
                         viewModel.uiState.pendingSend == nil,
                     attachEnabled: composerAttachmentSources.isAttachEnabled &&
                         !OptimisticSessionCreate.isPlaceholder(viewModel.uiState.sessionID) &&
-                        composer.isModelSelectionReady,
+                        composer.isModelSelectionReady &&
+                        !composer.isShellMode,
                     showStop: viewModel.uiState.sessionStatusLabel != nil,
                     stopEnabled: !viewModel.uiState.isAborting &&
                         viewModel.uiState.canMutate,
                     followUpDelivery: composer.supportsFollowUpDelivery ? composer.followUpDelivery : nil,
-                    showDictationButton: dictationSupport.showsMic
+                    showDictationButton: dictationSupport.showsMic,
+                    shellMode: composer.isShellMode
                 )
             )
         }
@@ -1294,6 +1296,8 @@ struct SessionChatView: View {
                     viewModel.removeAttachment(id: id)
                 case .cancelRevert:
                     viewModel.cancelRevert()
+                case .exitShellMode:
+                    viewModel.exitShellMode()
                 case .openCommands:
                     viewModel.openCommands()
                 case .send:

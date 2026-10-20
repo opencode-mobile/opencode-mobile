@@ -37,6 +37,37 @@ class ServerProjectSuggestionsTest {
     }
 
     @Test
+    fun excludesArchivedProjects() {
+        val result =
+            ServerProjectSuggestions.suggestions(
+                projects =
+                    listOf(
+                        project("gone", "/Users/me/gone", 3, archived = true),
+                        project("app", "/Users/me/app", 2),
+                        project("web", "/Users/me/web", 1, archived = false),
+                    ),
+                addedWorktrees = emptyList(),
+            )
+
+        assertEquals(listOf("/Users/me/app", "/Users/me/web"), result.map { it.worktree })
+    }
+
+    @Test
+    fun archivedDuplicateDoesNotHideTheLiveWorktree() {
+        val result =
+            ServerProjectSuggestions.suggestions(
+                projects =
+                    listOf(
+                        project("gone", "/Users/me/app", 5, archived = true),
+                        project("live", "/Users/me/app", 1),
+                    ),
+                addedWorktrees = emptyList(),
+            )
+
+        assertEquals(listOf("live"), result.map { it.id })
+    }
+
+    @Test
     fun dedupesByWorktreeKeepingNewest() {
         val result =
             ServerProjectSuggestions.suggestions(
@@ -158,6 +189,7 @@ class ServerProjectSuggestionsTest {
         worktree: String,
         activity: Long?,
         repository: Boolean = true,
+        archived: Boolean = false,
     ): Project =
         Project(
             id = id,
@@ -165,5 +197,6 @@ class ServerProjectSuggestionsTest {
             displayName = ProjectDomainAdapter.displayNameFromWorktree(worktree),
             activityAtEpochMs = activity,
             isRepository = repository,
+            isArchived = archived,
         )
 }

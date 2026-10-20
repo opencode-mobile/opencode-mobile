@@ -1168,6 +1168,37 @@ struct MessageDomainAdapterTests {
         #expect(shellTool.output == "/repo")
     }
 
+    @Test func projectV2ShellCarriesCommandInputAndExitCode() throws {
+        let dtos = try decoder.decode(
+            [V2SessionMessageDTO].self,
+            from: Data(
+                """
+                [
+                  {
+                    "id":"msg_shell",
+                    "type":"shell",
+                    "shellID":"sh_1",
+                    "command":"false",
+                    "status":"exited",
+                    "exit":1,
+                    "output":{"output":"","truncated":false},
+                    "time":{"created":1,"completed":2}
+                  }
+                ]
+                """.utf8
+            )
+        )
+        let messages = adapter.messages(fromV2: dtos)
+        #expect(messages.map(\.id) == ["msg_shell", "msg_shell:assistant"])
+        guard case let .tool(shellTool) = messages[1].parts.first else {
+            Issue.record("expected shell tool")
+            return
+        }
+        #expect(shellTool.id == "msg_shell:tool")
+        #expect(shellTool.input?["command"] == .string("false"))
+        #expect(shellTool.metadata?["exit"] == .int(1))
+    }
+
     @Test func mergeInbox_marksExistingUserMessageWaiting() {
         let messages = [
             Message(id: "msg-1", role: .user, text: "Hello", model: nil, mode: nil, sentAtEpochMs: nil),

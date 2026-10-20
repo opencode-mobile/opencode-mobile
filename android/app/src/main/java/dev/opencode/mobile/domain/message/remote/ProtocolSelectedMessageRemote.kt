@@ -39,4 +39,12 @@ class ProtocolSelectedMessageRemote
         ) {
             selected().sendPromptAsync(sessionId, options, directory)
         }
+
+        override suspend fun runShellCommand(
+            sessionId: String,
+            options: ShellCommandOptions,
+            directory: String?,
+        ) {
+            selected().runShellCommand(sessionId, options, directory)
+        }
     }

@@ -44,16 +44,19 @@ nonisolated struct V2ProjectDTO: Decodable, Sendable {
     let time: ProjectTimeDTO?
 }
 
-/// Project `time` in epoch ms. v1 sends `created`/`updated`/`initialized`; v2 adds `active`.
+/// Project `time` in epoch ms. v1 sends `created`/`updated`/`initialized`; v2 adds `active`, and
+/// `archived` once the server archived a project whose directories are gone (v2.0.27+).
 nonisolated struct ProjectTimeDTO: Codable, Sendable, Equatable {
     let created: Double?
     let updated: Double?
     let active: Double?
+    let archived: Double?
 
-    init(created: Double? = nil, updated: Double? = nil, active: Double? = nil) {
+    init(created: Double? = nil, updated: Double? = nil, active: Double? = nil, archived: Double? = nil) {
         self.created = created
         self.updated = updated
         self.active = active
+        self.archived = archived
     }
 
     /// Most recent activity: `active` when present, else `updated`.

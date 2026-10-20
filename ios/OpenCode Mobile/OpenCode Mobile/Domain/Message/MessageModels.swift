@@ -686,6 +686,14 @@ nonisolated struct PromptModelSelection: Equatable, Sendable {
     let modelID: String
 }
 
+/// A shell command typed as `!command` in the composer. v1 records the run under `agent` and
+/// `model`; v2 runs it in the session as it is and ignores both.
+nonisolated struct ShellCommandOptions: Equatable, Sendable {
+    let command: String
+    let agent: String
+    let model: PromptModelSelection?
+}
+
 nonisolated enum MessageRole: String, Sendable {
     case user
     case assistant

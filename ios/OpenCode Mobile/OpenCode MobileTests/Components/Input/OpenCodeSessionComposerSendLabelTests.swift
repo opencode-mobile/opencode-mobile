@@ -13,4 +13,9 @@ struct OpenCodeSessionComposerSendLabelTests {
         #expect(OpenCodeSessionComposer.sendLabel(followUpDelivery: .queue, hasActiveWork: true) == "Send as Queue")
         #expect(OpenCodeSessionComposer.sendLabel(followUpDelivery: nil, hasActiveWork: true) == "Send")
     }
+
+    @Test func shellMode_alwaysRunsNow() {
+        #expect(OpenCodeSessionComposer.sendLabel(followUpDelivery: nil, hasActiveWork: false, shellMode: true) == "Run shell command")
+        #expect(OpenCodeSessionComposer.sendLabel(followUpDelivery: .queue, hasActiveWork: true, shellMode: true) == "Run shell command")
+    }
 }

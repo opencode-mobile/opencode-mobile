@@ -4,6 +4,9 @@ nonisolated struct EventDomainAdapter: Sendable {
     /// v2 compaction item id per session, remembered from `compaction.started`:
     /// `ended` / `failed` carry no id while the server updates the running item.
     private let runningCompactionIDs = RunningCompactionIDs()
+    /// v2 shell item id per shell id, remembered from `shell.started`: `ended`
+    /// carries only the shell while the server updates the item it started.
+    private let runningShellMessageIDs = RunningCompactionIDs()
 
     func parseEvent(dataLine: String) -> OpencodeEvent? {
         parseEvents(dataLine: dataLine).first
@@ -165,7 +168,9 @@ nonisolated struct EventDomainAdapter: Sendable {
             [event(type: "question.rejected", properties: properties)]
         case "session.next.prompt.admitted", "session.inbox.enqueued",
              "session.inbox.delivery.changed":
-            userPromptEvents(properties, waiting: true)
+            // A `synthetic` item is server-injected context (a finished shell command's
+            // output, Plan mode's reminder), not a prompt the user queued: no pending chrome.
+            userPromptEvents(properties, waiting: !isSyntheticInboxItem(properties))
         case "session.next.prompted", "session.inbox.delivered":
             userPromptEvents(properties, waiting: false)
         case "session.inbox.cancelled":
@@ -195,12 +200,20 @@ nonisolated struct EventDomainAdapter: Sendable {
         case "session.next.tool.input.delta", "session.tool.input.delta":
             [toolInputDelta(properties)]
         case "session.next.shell.started", "session.shell.started":
-            [
-                statusEvent(properties, statusType: "busy"),
-                shellPartUpdated(properties, status: "running"),
-            ]
+            if let shell = properties["shell"] as? [String: Any] {
+                shellItemStarted(properties, shell: shell, envelopeID: envelopeID)
+            } else {
+                [
+                    statusEvent(properties, statusType: "busy"),
+                    shellPartUpdated(properties, status: "running"),
+                ]
+            }
         case "session.next.shell.ended", "session.shell.ended":
-            [shellPartUpdated(properties, status: "completed")]
+            if let shell = properties["shell"] as? [String: Any] {
+                shellItemEnded(properties, shell: shell)
+            } else {
+                [shellPartUpdated(properties, status: "completed")]
+            }
         case "session.next.compaction.started", "session.compaction.started":
             [statusEvent(properties, statusType: "busy")]
                 + compactionUpdated(properties, envelopeID: envelopeID, phase: .started)
@@ -334,7 +347,7 @@ nonisolated struct EventDomainAdapter: Sendable {
             info["agent"] = agent
             info["mode"] = agent
         }
-        if let delivery = deliveryValue(in: properties) {
+        if !isSyntheticInboxItem(properties), let delivery = deliveryValue(in: properties) {
             info["delivery"] = delivery
         }
         return event(type: "message.updated", properties: ["info": info])
@@ -671,6 +684,86 @@ nonisolated struct EventDomainAdapter: Sendable {
             output: string(in: properties, key: "output"),
             title: "Shell"
         )
+    }
+
+    private func isSyntheticInboxItem(_ properties: [String: Any]) -> Bool {
+        (properties["item"] as? [String: Any]).flatMap { string(in: $0, key: "type") } == "synthetic"
+    }
+
+    /// A v2 shell run (`{shell: Info}`) is its own transcript item whose id is the
+    /// `started` envelope id with `evt_` swapped for `msg_`. It projects like the
+    /// REST copy: the command as a user message, then a Shell row under
+    /// `<id>:assistant`, so a history load replaces both in place. The shell runs
+    /// beside the agent loop, so it leaves the session status alone.
+    private func shellItemStarted(_ properties: [String: Any], shell: [String: Any], envelopeID: String?) -> [OpencodeEvent] {
+        guard let envelopeID, !envelopeID.isEmpty else { return [] }
+        let messageID = envelopeID.hasPrefix("evt_") ? "msg_" + String(envelopeID.dropFirst("evt_".count)) : envelopeID
+        if let shellID = string(in: shell, key: "id") {
+            runningShellMessageIDs.set(messageID, for: shellID)
+        }
+        let created = (shell["time"] as? [String: Any]).flatMap { int64(in: $0, key: "started") }
+            ?? int64(in: properties, key: "created")
+        return shellItemEvents(properties, shell: shell, messageID: messageID, created: created, completed: nil, output: nil)
+    }
+
+    private func shellItemEnded(_ properties: [String: Any], shell: [String: Any]) -> [OpencodeEvent] {
+        guard let shellID = string(in: shell, key: "id"),
+              let messageID = runningShellMessageIDs.id(for: shellID)
+        else { return [] }
+        runningShellMessageIDs.set(nil, for: shellID)
+        let time = shell["time"] as? [String: Any]
+        let output = (properties["output"] as? [String: Any]).flatMap { string(in: $0, key: "output") }
+            ?? string(in: properties, key: "output")
+        return shellItemEvents(
+            properties,
+            shell: shell,
+            messageID: messageID,
+            created: time.flatMap { int64(in: $0, key: "started") },
+            completed: time.flatMap { int64(in: $0, key: "completed") } ?? int64(in: properties, key: "created"),
+            output: output
+        )
+    }
+
+    private func shellItemEvents(
+        _ properties: [String: Any],
+        shell: [String: Any],
+        messageID: String,
+        created: Int64?,
+        completed: Int64?,
+        output: String?
+    ) -> [OpencodeEvent] {
+        let sessionID = sessionID(from: properties)
+        let command = string(in: shell, key: "command") ?? ""
+        var time: [String: Any] = [:]
+        if let created { time["created"] = created }
+        if let completed { time["completed"] = completed }
+        func info(id: String, role: String) -> [String: Any] {
+            var info: [String: Any] = ["id": id, "role": role]
+            if let sessionID { info["sessionID"] = sessionID }
+            if !time.isEmpty { info["time"] = time }
+            return info
+        }
+        let assistantID = "\(messageID):assistant"
+        var state: [String: Any] = ["status": completed == nil ? "running" : "completed", "title": "Shell"]
+        if !command.isEmpty { state["input"] = ["command": command] }
+        if let output { state["output"] = output }
+        if let exit = int64(in: shell, key: "exit") { state["metadata"] = ["exit": Int(exit)] }
+        if let created { state["time"] = ["start": created] }
+        var tool: [String: Any] = [
+            "id": "\(messageID):tool",
+            "messageID": assistantID,
+            "type": "tool",
+            "tool": "bash",
+            "state": state,
+        ]
+        if let sessionID { tool["sessionID"] = sessionID }
+        var events = [event(type: "message.updated", properties: ["info": info(id: messageID, role: "user")])]
+        if !command.isEmpty {
+            events.append(userTextPartUpdated(sessionID: sessionID, messageID: messageID, text: command))
+        }
+        events.append(event(type: "message.updated", properties: ["info": info(id: assistantID, role: "assistant")]))
+        events.append(event(type: "message.part.updated", properties: ["part": tool]))
+        return events
     }
 
     private enum CompactionPhase { case started, ended, failed }

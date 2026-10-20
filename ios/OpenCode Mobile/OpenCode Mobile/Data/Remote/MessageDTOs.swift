@@ -314,6 +314,18 @@ nonisolated struct V2PromptAgentDTO: Codable, Sendable {
     let mention: V2PromptSourceDTO?
 }
 
+/// v1 `POST /session/{id}/shell`. The server records the run under `agent` and `model`.
+nonisolated struct V1ShellRequestDTO: Codable, Sendable {
+    let agent: String
+    let command: String
+    let model: SendPromptModelDTO?
+}
+
+/// v2 `POST /api/session/{id}/shell`; output streams back as `session.shell.*` events.
+nonisolated struct V2ShellRequestDTO: Codable, Sendable {
+    let command: String
+}
+
 nonisolated struct V2SwitchAgentRequestDTO: Codable, Sendable {
     let agent: String
 }

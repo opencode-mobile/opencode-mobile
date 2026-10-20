@@ -751,6 +751,10 @@ final class SessionChatComposer {
         serverAlreadyAccepted: () -> Bool = { false },
         beforePrompt: () async throws -> Void = {}
     ) async {
+        if ComposerShellCommand.isShellMode(state.composer.text) {
+            runShellCommand(sessionID: sessionID, isSessionBusy: isSessionBusy, supportsFollowUp: supportsFollowUp)
+            return
+        }
         let submittedText = state.composer.text
         let submittedMentions = state.composer.agentMentions
         let submittedFileMentions = state.composer.fileMentions
@@ -995,6 +999,69 @@ final class SessionChatComposer {
             setSendError(message)
             onSendFailed(optimistic.id, message)
         }
+    }
+
+    /// Runs a shell-mode draft (`!command`) instead of sending a prompt, like the TUI and web app.
+    /// The output arrives through the session's shell or message events, so there is no optimistic
+    /// row and no send progress: the server answers only when the command ends, so the request runs in its
+    /// own task and the composer stays free meanwhile. Attachments stay in the composer because a
+    /// command cannot carry them. A failure restores the draft (unless it was edited since) and
+    /// shows the error the way a failed prompt does.
+    private func runShellCommand(sessionID: String, isSessionBusy: Bool, supportsFollowUp: Bool) {
+        let composer = state.composer
+        guard let command = ComposerShellCommand.command(composer.text),
+              !OptimisticSessionCreate.isPlaceholder(sessionID),
+              composer.isModelSelectionReady,
+              !state.isSending
+        else { return }
+        // Like the TUI and web app, a command runs now or not at all; it cannot wait in the queue.
+        if supportsFollowUp, isSessionBusy, composer.followUpDelivery == .queue {
+            state.errorMessage = Self.shellCannotQueueError
+            notifyChange()
+            return
+        }
+        let submittedText = composer.text
+        let submittedMentions = composer.agentMentions
+        let submittedFileMentions = composer.fileMentions
+        let submittedDraftRevision = draftRevision
+        let options = ShellCommandOptions(
+            command: command,
+            agent: composer.selectedMode,
+            model: composer.selectedModel.map {
+                PromptModelSelection(providerID: $0.option.providerID, modelID: $0.option.modelID)
+            }
+        )
+        clearAcceptedSubmission(textRevision: submittedDraftRevision, attachmentRevisions: [:])
+        state.errorMessage = nil
+        notifyChange()
+        let messageRepository = messageRepository
+        let worktree = worktree
+        Task { [weak self] in
+            do {
+                try await messageRepository.runShellCommand(sessionID: sessionID, options: options, directory: worktree)
+                DiagnosticLog.info(.chat, "shell command accepted session=\(sessionID)")
+            } catch {
+                DiagnosticLog.warning(.chat, "runShellCommand failed", error: error)
+                guard let self else { return }
+                self.restoreFailedSubmission(
+                    textRevision: submittedDraftRevision,
+                    submittedText: submittedText,
+                    submittedMentions: submittedMentions,
+                    submittedFileMentions: submittedFileMentions,
+                    submittedAttachments: [],
+                    submittedAttachmentRevisions: [:]
+                )
+                self.state.errorMessage = self.errorMessage(error)
+                self.notifyChange()
+            }
+        }
+    }
+
+    /// Leaves shell mode by dropping the leading `!`; the rest of the draft stays.
+    func exitShellMode() {
+        let composer = state.composer
+        guard ComposerShellCommand.isShellMode(composer.text) else { return }
+        updateComposerText(ComposerShellCommand.exitShellMode(composer.text), cursor: max(0, composer.cursor - 1))
     }
 
     func clearSending() {
@@ -1636,6 +1703,7 @@ final class SessionChatComposer {
     }
 
     private static let draftPersistDebounceMs = 300
+    static let shellCannotQueueError = "Shell commands can't be queued. Switch to Steer to run it now."
 
     private enum InitialSelection {
         case cached(SessionModelSelection)

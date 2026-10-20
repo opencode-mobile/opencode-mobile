@@ -17,4 +17,10 @@ interface MessageRemote {
         options: PromptSendOptions,
         directory: String?,
     )
+
+    suspend fun runShellCommand(
+        sessionId: String,
+        options: ShellCommandOptions,
+        directory: String?,
+    )
 }

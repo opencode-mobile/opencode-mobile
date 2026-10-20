@@ -8,6 +8,7 @@ import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.OlderLoadResult
 import dev.opencode.mobile.domain.message.PromptSendOptions
+import dev.opencode.mobile.domain.message.ShellCommandOptions
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatTimeline
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -134,6 +135,12 @@ private class FakePagedMessageRepository : MessageRepository {
     override suspend fun sendPromptAsync(
         sessionId: String,
         options: PromptSendOptions,
+        directory: String?,
+    ) = Unit
+
+    override suspend fun runShellCommand(
+        sessionId: String,
+        options: ShellCommandOptions,
         directory: String?,
     ) = Unit
 }

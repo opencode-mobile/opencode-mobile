@@ -25,7 +25,10 @@ data class ProjectDto(
                 ?: error("Project requires worktree or directory")
 }
 
-/** Project timestamps in epoch ms; v1 sends `updated`, v2 also `active`. */
+/**
+ * Project timestamps in epoch ms; v1 sends `updated`, v2 also `active`, and `archived` once the
+ * server archived a project whose directories are gone (v2.0.27+).
+ */
 @Serializable
 data class ProjectTimeDto(
     val created: Long? = null,

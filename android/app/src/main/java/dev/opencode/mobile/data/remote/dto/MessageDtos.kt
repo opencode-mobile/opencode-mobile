@@ -152,6 +152,14 @@ data class SendPromptModelDto(
     @SerialName("modelID") val modelId: String,
 )
 
+/** v1 `POST /session/{id}/shell`. The server records the run under [agent] and [model]. */
+@Serializable
+data class V1ShellRequestDto(
+    val agent: String,
+    val command: String,
+    val model: SendPromptModelDto? = null,
+)
+
 @Serializable
 data class SendMessagePartDto(
     val type: String,
@@ -213,6 +221,12 @@ data class V2PromptFileDto(
 data class V2PromptAgentDto(
     val name: String,
     val mention: V2PromptSourceDto? = null,
+)
+
+/** v2 `POST /api/session/{id}/shell`; output streams back as `session.shell.*` events. */
+@Serializable
+data class V2ShellRequestDto(
+    val command: String,
 )
 
 @Serializable

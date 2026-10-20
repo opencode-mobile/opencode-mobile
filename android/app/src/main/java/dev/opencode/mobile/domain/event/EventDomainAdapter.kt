@@ -38,6 +38,12 @@ class EventDomainAdapter(
      */
     private val runningCompactionIds = ConcurrentHashMap<String, String>()
 
+    /**
+     * v2 shell item id per shell id, remembered from `shell.started`: `ended`
+     * carries only the shell, while the server updates the item it started.
+     */
+    private val runningShellMessageIds = ConcurrentHashMap<String, String>()
+
     fun parseEvent(dataLine: String): OpencodeEvent? = parseEvents(dataLine).firstOrNull()
 
     fun parseEvents(dataLine: String): List<OpencodeEvent> = (parse(dataLine) as? EventParseOutcome.Events)?.events ?: emptyList()
@@ -183,7 +189,10 @@ class EventDomainAdapter(
             "session.next.prompt.admitted",
             "session.inbox.enqueued",
             "session.inbox.delivery.changed",
-            -> userPromptEvents(properties, waiting = true)
+            ->
+                // A `synthetic` item is server-injected context (a finished shell command's
+                // output, Plan mode's reminder), not a prompt the user queued: no pending chrome.
+                userPromptEvents(properties, waiting = !isSyntheticInboxItem(properties))
             "session.next.prompted",
             "session.inbox.delivered",
             -> userPromptEvents(properties, waiting = false)
@@ -224,13 +233,16 @@ class EventDomainAdapter(
             "session.next.shell.started",
             "session.shell.started",
             ->
-                listOf(
-                    statusEvent(properties, "busy"),
-                    shellPartUpdated(properties, status = "running"),
-                )
+                (properties["shell"] as? JsonObject)?.let { shellItemStarted(properties, it, envelopeId) }
+                    ?: listOf(
+                        statusEvent(properties, "busy"),
+                        shellPartUpdated(properties, status = "running"),
+                    )
             "session.next.shell.ended",
             "session.shell.ended",
-            -> listOf(shellPartUpdated(properties, status = "completed"))
+            ->
+                (properties["shell"] as? JsonObject)?.let { shellItemEnded(properties, it) }
+                    ?: listOf(shellPartUpdated(properties, status = "completed"))
             "session.next.compaction.started",
             "session.compaction.started",
             ->
@@ -380,7 +392,7 @@ class EventDomainAdapter(
                     put("mode", agent)
                 }
                 put("waiting", waiting)
-                deliveryValue(properties)?.let { put("delivery", it) }
+                if (!isSyntheticInboxItem(properties)) deliveryValue(properties)?.let { put("delivery", it) }
             }
         return event("message.updated", buildJsonObject { put("info", info) })
     }
@@ -723,6 +735,96 @@ class EventDomainAdapter(
             output = properties.string("output"),
             title = "Shell",
         )
+
+    private fun isSyntheticInboxItem(properties: JsonObject): Boolean = (properties["item"] as? JsonObject)?.string("type") == "synthetic"
+
+    /**
+     * A v2 shell run (`{shell: Info}`) is its own transcript item whose id is the
+     * `started` envelope id with `evt_` swapped for `msg_`. It projects like the
+     * REST copy: the command as a user message, then a Shell row under
+     * `<id>:assistant`, so a history load replaces both in place. The shell runs
+     * beside the agent loop, so it leaves the session status alone.
+     */
+    private fun shellItemStarted(
+        properties: JsonObject,
+        shell: JsonObject,
+        envelopeId: String?,
+    ): List<OpencodeEvent> {
+        val messageId = messageIdFromEnvelope(envelopeId) ?: return emptyList()
+        shell.string("id")?.let { runningShellMessageIds[it] = messageId }
+        val created = (shell["time"] as? JsonObject)?.long("started") ?: properties.long("created")
+        return shellItemEvents(properties, shell, messageId, created = created, completed = null, output = null)
+    }
+
+    private fun shellItemEnded(
+        properties: JsonObject,
+        shell: JsonObject,
+    ): List<OpencodeEvent> {
+        val messageId = shell.string("id")?.let { runningShellMessageIds.remove(it) } ?: return emptyList()
+        val time = shell["time"] as? JsonObject
+        val output = (properties["output"] as? JsonObject)?.string("output") ?: properties.string("output")
+        return shellItemEvents(
+            properties,
+            shell,
+            messageId,
+            created = time?.long("started"),
+            completed = time?.long("completed") ?: properties.long("created"),
+            output = output,
+        )
+    }
+
+    private fun shellItemEvents(
+        properties: JsonObject,
+        shell: JsonObject,
+        messageId: String,
+        created: Long?,
+        completed: Long?,
+        output: String?,
+    ): List<OpencodeEvent> {
+        val sessionId = sessionIdFromProperties(properties)
+        val command = shell.string("command").orEmpty()
+        val time =
+            buildJsonObject {
+                created?.let { put("created", it) }
+                completed?.let { put("completed", it) }
+            }
+
+        fun info(
+            id: String,
+            role: String,
+        ) = buildJsonObject {
+            put("id", id)
+            sessionId?.let { put("sessionID", it) }
+            put("role", role)
+            if (time.isNotEmpty()) put("time", time)
+        }
+        val assistantId = "$messageId:assistant"
+        val tool =
+            buildJsonObject {
+                put("id", "$messageId:tool")
+                sessionId?.let { put("sessionID", it) }
+                put("messageID", assistantId)
+                put("type", "tool")
+                put("tool", "bash")
+                put(
+                    "state",
+                    buildJsonObject {
+                        put("status", if (completed == null) "running" else "completed")
+                        put("title", "Shell")
+                        if (command.isNotEmpty()) put("input", buildJsonObject { put("command", command) })
+                        output?.let { put("output", it) }
+                        shell.long("exit")?.let { exit -> put("metadata", buildJsonObject { put("exit", exit) }) }
+                        created?.let { put("time", buildJsonObject { put("start", it) }) }
+                    },
+                )
+            }
+        return buildList {
+            add(event("message.updated", buildJsonObject { put("info", info(messageId, "user")) }))
+            if (command.isNotEmpty()) add(userTextPartUpdated(sessionId, messageId, command))
+            add(event("message.updated", buildJsonObject { put("info", info(assistantId, "assistant")) }))
+            add(event("message.part.updated", buildJsonObject { put("part", tool) }))
+        }
+    }
 
     private enum class CompactionPhase { Started, Ended, Failed }
 

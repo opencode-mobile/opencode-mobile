@@ -228,4 +228,6 @@ private final class PendingPromptMessageRepository: MessageRepository, @unchecke
     }
 
     func sendPromptAsync(sessionID: String, options: PromptSendOptions, directory: String?) async throws {}
+
+    func runShellCommand(sessionID: String, options: ShellCommandOptions, directory: String?) async throws {}
 }
