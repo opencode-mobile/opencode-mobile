@@ -287,8 +287,20 @@ function parseTransform(text) {
   return matrix;
 }
 
-/** Inline `style="a:b"` declarations as attributes for both converters. */
+/**
+ * Upstream draws `currentColor` parts (the default folder, folder-github, ...) in the
+ * surrounding `--icon-base`. Asset catalogs and VectorDrawables cannot inherit a colour
+ * for part of a colour icon, so bake the porcelain icon-base; every preset's icon-base is
+ * a similar mid grey in light and dark.
+ */
+const CURRENT_COLOR = "#8F8F8F";
+
+/** Inline `style="a:b"` declarations as attributes and bake `currentColor`, for both converters. */
 function normalizeSvg(svg) {
+  return inlineStyles(svg).replace(/="currentColor"/gi, `="${CURRENT_COLOR}"`);
+}
+
+function inlineStyles(svg) {
   return svg.replace(/\sstyle="([^"]*)"/g, (_, style) =>
     style
       .split(";")
@@ -346,8 +358,21 @@ async function generateAndroidDrawables(maps) {
       .replace(/android:height="[^"]*"/, 'android:height="24dp"');
     if (!xml.includes("<path")) throw new Error(`Empty VectorDrawable for ${file}`);
     if (/<(use|mask|style)\b/.test(xml)) throw new Error(`Unconverted SVG element in ${file}`);
-    writeFileSync(join(ANDROID_RES, `${assetName(file)}.xml`), `${xml.trim()}\n`, "utf8");
+    writeFileSync(join(ANDROID_RES, `${assetName(file)}.xml`), `${offsetViewBox(xml, svg).trim()}\n`, "utf8");
   }
+}
+
+/**
+ * VectorDrawable viewports start at 0,0 and svg2vectordrawable drops a viewBox origin
+ * (json.svg uses `0 -960 960 960`), so shift the content by it.
+ */
+function offsetViewBox(xml, svg) {
+  const viewBox = svg.match(/<svg\b[^>]*\sviewBox="([^"]*)"/)?.[1]?.trim().split(/[\s,]+/).map(Number);
+  if (!viewBox || (viewBox[0] === 0 && viewBox[1] === 0)) return xml;
+  const open = xml.indexOf(">", xml.indexOf("<vector")) + 1;
+  const close = xml.lastIndexOf("</vector>");
+  const translate = `android:translateX="${-viewBox[0]}" android:translateY="${-viewBox[1]}"`;
+  return `${xml.slice(0, open)}\n    <group ${translate}>${xml.slice(open, close)}</group>\n${xml.slice(close)}`;
 }
 
 function kotlinString(value) {

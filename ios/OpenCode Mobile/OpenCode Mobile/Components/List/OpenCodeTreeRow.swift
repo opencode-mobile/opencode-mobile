@@ -18,6 +18,13 @@ enum OpenCodeTreeRowKind: Equatable {
     case file
 }
 
+/// Leading icon style. `.generic` draws the catalog folder or document glyph; `.fileType`
+/// draws the colour `OpenCodeFileIcon` for `path`, using the open-folder art when expanded.
+enum OpenCodeTreeRowIcon: Equatable {
+    case generic
+    case fileType(path: String)
+}
+
 enum OpenCodeTreeRowState: Equatable {
     case normal
     case selected
@@ -31,6 +38,7 @@ struct OpenCodeTreeRow: View {
     let title: String
     let subtitle: String?
     let kind: OpenCodeTreeRowKind
+    let icon: OpenCodeTreeRowIcon
     let depth: Int
     let state: OpenCodeTreeRowState
     let isDimmed: Bool
@@ -41,6 +49,7 @@ struct OpenCodeTreeRow: View {
         title: String,
         subtitle: String? = nil,
         kind: OpenCodeTreeRowKind,
+        icon: OpenCodeTreeRowIcon = .generic,
         depth: Int = 0,
         state: OpenCodeTreeRowState = .normal,
         isDimmed: Bool = false,
@@ -50,6 +59,7 @@ struct OpenCodeTreeRow: View {
         self.title = title
         self.subtitle = subtitle?.isEmpty == true ? nil : subtitle
         self.kind = kind
+        self.icon = icon
         self.depth = max(0, depth)
         self.state = state
         self.isDimmed = isDimmed
@@ -69,8 +79,7 @@ struct OpenCodeTreeRow: View {
         Button(action: action) {
             HStack(spacing: OpenCodeTreeRowMetrics.spacing) {
                 disclosure
-                OpenCodeIconImage(icon: icon, size: OpenCodeTreeRowMetrics.iconSize)
-                    .foregroundStyle(iconColor)
+                leadingIcon
                 VStack(alignment: .leading, spacing: 1) {
                     Text(title)
                         .font(OpenCodeTypography.bodySecondary)
@@ -135,7 +144,25 @@ struct OpenCodeTreeRow: View {
         }
     }
 
-    private var icon: OpenCodeIcon {
+    @ViewBuilder
+    private var leadingIcon: some View {
+        switch icon {
+        case .generic:
+            OpenCodeIconImage(icon: genericGlyph, size: OpenCodeTreeRowMetrics.iconSize)
+                .foregroundStyle(iconColor)
+        case let .fileType(path):
+            switch kind {
+            case let .folder(isExpanded):
+                OpenCodeFileIcon(path: path, kind: .directory, expanded: isExpanded, size: OpenCodeTreeRowMetrics.iconSize)
+                    .opacity(isDimmed ? OpenCodeTreeRowMetrics.dimmedOpacity : 1)
+            case .file:
+                OpenCodeFileIcon(path: path, kind: .file, size: OpenCodeTreeRowMetrics.iconSize)
+                    .opacity(isDimmed ? OpenCodeTreeRowMetrics.dimmedOpacity : 1)
+            }
+        }
+    }
+
+    private var genericGlyph: OpenCodeIcon {
         switch kind {
         case .folder: .folder
         case .file: .description
@@ -173,6 +200,24 @@ struct OpenCodeTreeRow: View {
         OpenCodeTreeRow(title: "ContentView.swift", kind: .file, depth: 1, state: .selected) {}
         OpenCodeTreeRow(title: "build", kind: .folder(isExpanded: false), isDimmed: true, tag: "ignored") {}
         OpenCodeTreeRow(title: "FilesView.swift", subtitle: "ios/OpenCode Mobile/UI/Files", kind: .file) {}
+    }
+    .padding()
+    .openCodeTheme()
+}
+
+#Preview("File Type Icons") {
+    VStack(spacing: 0) {
+        OpenCodeTreeRow(title: "src", kind: .folder(isExpanded: true), icon: .fileType(path: "src")) {}
+        OpenCodeTreeRow(title: "App.swift", kind: .file, icon: .fileType(path: "src/App.swift"), depth: 1) {}
+        OpenCodeTreeRow(title: "tests", kind: .folder(isExpanded: false), icon: .fileType(path: "tests")) {}
+        OpenCodeTreeRow(title: "package.json", kind: .file, icon: .fileType(path: "package.json"), state: .selected) {}
+        OpenCodeTreeRow(
+            title: "node_modules",
+            kind: .folder(isExpanded: false),
+            icon: .fileType(path: "node_modules"),
+            isDimmed: true,
+            tag: "ignored"
+        ) {}
     }
     .padding()
     .openCodeTheme()
