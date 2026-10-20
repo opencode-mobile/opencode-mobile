@@ -5,6 +5,7 @@ import android.os.Bundle
 import android.view.KeyEvent
 import android.view.KeyboardShortcutGroup
 import android.view.Menu
+import android.view.WindowManager
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.biometric.BiometricPrompt
@@ -13,19 +14,23 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.snapshotFlow
 import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.lifecycleScope
 import dagger.hilt.android.AndroidEntryPoint
 import dev.opencode.mobile.domain.event.WorldSignals
 import dev.opencode.mobile.domain.preferences.AppLockPreferences
 import dev.opencode.mobile.domain.security.AppLockAvailability
 import dev.opencode.mobile.domain.security.AppLockPolicy
+import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.ui.components.LocalOpenCodeInputFocusRegistry
 import dev.opencode.mobile.ui.keyboard.KeyboardShortcutHost
 import dev.opencode.mobile.ui.keyboard.LocalKeyboardShortcutHost
 import dev.opencode.mobile.ui.root.PrivacyCover
 import dev.opencode.mobile.ui.root.PrivacyCoverState
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -34,8 +39,8 @@ class MainActivity : FragmentActivity() {
 
     private val keyboardShortcuts = KeyboardShortcutHost()
 
-    // Privacy cover and optional app lock (#755). The cover goes up in onPause so the recents
-    // snapshot never shows a transcript; the lock engages on the first resume and after onStop.
+    // Privacy cover and optional app lock (#755). The cover goes up in onPause (recents
+    // thumbnails are handled in onCreate); the lock engages on the first resume and after onStop.
     private val privacyCover = mutableStateOf(PrivacyCoverState())
     private var wasInBackground = true
     private var unlockPrompt: BiometricPrompt? = null
@@ -51,6 +56,19 @@ class MainActivity : FragmentActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             // Recents shows the launcher icon instead of a live snapshot of the chat.
             setRecentsScreenshotEnabled(false)
+        } else {
+            // Below API 33 the recents thumbnail is taken before onPause, so the cover can never
+            // be in it. With App Lock on, a secure window gives a blank thumbnail instead (and,
+            // as a side effect, blocks screenshots of the app).
+            lifecycleScope.launch {
+                snapshotFlow { AppLockPreferences.enabled }.collect { enabled ->
+                    if (enabled) {
+                        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                    } else {
+                        window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                    }
+                }
+            }
         }
         setContent {
             CompositionLocalProvider(
@@ -63,7 +81,10 @@ class MainActivity : FragmentActivity() {
                     Box(if (cover.covered || cover.locked) Modifier.clearAndSetSemantics {} else Modifier) {
                         MainNavigation()
                     }
-                    PrivacyCover(state = cover, onUnlock = ::promptUnlock)
+                    // MainNavigation applies the theme inside itself; the cover sits beside it.
+                    OpenCodeTheme {
+                        PrivacyCover(state = cover, onUnlock = ::promptUnlock)
+                    }
                 }
             }
         }
