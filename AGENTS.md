@@ -108,6 +108,27 @@ areas, status column, fold, system bars, simulator pose control) lives in
   `OPE-<number>:`. Use `fix/` instead of `feature/` for bug tickets. Slug is
   lowercase ASCII with single hyphens; whole name at most 80 characters.
 
+## Pull Request Evidence
+
+- A pull request that changes what the user sees, or how the apps talk to a
+  live server, shows it working in the real app. Skip evidence for refactors,
+  test-only, CI, and tooling changes, and say so under Checks.
+- Prefer the real app on a simulator or emulator against a real opencode
+  server: the `scenario-harness` skill for v1/v2 server behavior (streaming,
+  tools, permissions, questions, SSE faults); `publish-ui-snapshots` for
+  isolated component states. Cover both platforms and the protocols the change
+  touches. When a platform or protocol could not be checked live, name it and
+  why under Risks / Follow-ups.
+- Pick what proves the change: before/after screenshots for UI, light and dark
+  when theming changed, a short GIF for motion or multi-step flows, and a
+  request/event trace (harness history or app logs) for protocol changes with
+  little visible UI.
+- Host images on an orphan `evidence/<issue-number>` branch, never on the
+  feature branch or `main`. Embed them in the pull-request body in a table,
+  using `https://github.com/opencode-mobile/opencode-mobile/blob/evidence/<number>/<path>?raw=true`.
+- Capture only harness or seeded test data: no real passwords, private
+  hostnames, or personal transcripts.
+
 ## Skills
 
 Shared skills live under `.agents/skills/<name>/SKILL.md` and are the only
