@@ -23,6 +23,7 @@ import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeSessionTodoItem
 import dev.opencode.mobile.ui.components.OpenCodeSessionTodoItemStatus
+import dev.opencode.mobile.ui.components.openCodeBottomSheetContentInset
 
 @Composable
 internal fun SessionChatTodosSheet(
@@ -50,10 +51,7 @@ internal fun SessionChatTodosSheet(
         },
     ) {
         Column(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 8.dp),
+            modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(0.dp),
         ) {
             Text(
@@ -81,7 +79,7 @@ internal fun SessionChatTodosSheet(
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 20.dp)
+                        .openCodeBottomSheetContentInset()
                         .padding(bottom = 4.dp)
                         .semantics {
                             contentDescription = "$completedCount of $totalCount completed"

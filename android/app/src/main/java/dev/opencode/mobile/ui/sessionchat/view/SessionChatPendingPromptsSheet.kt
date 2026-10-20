@@ -28,7 +28,6 @@ import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonContrast
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeSectionHeader
-import dev.opencode.mobile.ui.components.OpenCodeSectionHeaderTrailing
 import dev.opencode.mobile.ui.components.OpenCodeSectionHeaderVariant
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.sessionchat.PendingPrompt
@@ -60,16 +59,23 @@ internal fun SessionChatPendingPromptsSheet(
             logPendingPromptsAction(ProductAnalytics.Action.PENDING_PROMPTS_DISMISS)
             onDismiss()
         },
-    ) {
-        OpenCodeSectionHeader(
-            title = "${prompts.size} waiting",
-            variant = OpenCodeSectionHeaderVariant.Plain,
-            trailing =
-                OpenCodeSectionHeaderTrailing.Action("Clear all") {
+        pinnedTop = {
+            OpenCodeSectionHeader(
+                title = "${prompts.size} waiting",
+                variant = OpenCodeSectionHeaderVariant.Plain,
+            )
+        },
+        pinnedBottom = {
+            OpenCodeButton(
+                variant = OpenCodeButtonVariant.FullWidthText("Clear all"),
+                contrast = OpenCodeButtonContrast.Low,
+                onClick = {
                     logPendingPromptsAction(ProductAnalytics.Action.PENDING_PROMPTS_CLEAR)
                     onClearAll()
                 },
-        )
+            )
+        },
+    ) {
         var queuedIndex = 0
         prompts.forEach { prompt ->
             val queuePosition =

@@ -149,10 +149,7 @@ fun SessionListDockGalleryScreen(modifier: Modifier = Modifier) {
             OpenCodeBottomSheetEntry(
                 title = tab.title,
                 startDecorator =
-                    BottomSheetEntryDecorator.Icon(
-                        imageVector = OpenCodeIcons.Folder,
-                        contentDescription = null,
-                    ),
+                    BottomSheetEntryDecorator.Icon(OpenCodeIcons.Folder),
                 onClick = { showNewSessionPicker = false },
             )
         }

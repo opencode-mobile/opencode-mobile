@@ -2,55 +2,114 @@
 
 ## Intent
 
-Provide a reusable modal action sheet for compact contextual choices that should
-stay near the user's current screen. Use it for short action menus that need a
-clear title, an explicit close affordance, and one or more tappable entries.
+Provide a reusable modal sheet for contextual choices and short forms that
+should stay near the user's current screen. It has a clear title, an explicit
+close affordance, a scrolling body, and optional parts pinned above and below
+that body.
 
 ## Public API
 
-- Variants: `actionList` and `form` content modes.
-- States:
-  - sheet: presented, dismissed.
-  - entries: enabled, disabled.
-- Required content: sheet `title`, close action, and entry `title`.
-- Optional content:
-  - sheet leading header action: an icon button before the title for in-sheet
-    navigation such as returning to a parent level.
-  - sheet pinned content: fixed content rendered between the header and the
-    scrollable body, such as a filter field.
-  - entry start decorator: `none` or `icon`.
-  - entry end decorator: `none` or `icon`.
-  - entry `destructive` (default false): title (and matching icon tint) use the
-    semantic error color, same product meaning as overflow menu destructive
-    rows.
-  - iOS-only `scrollTargetID` to scroll a specific entry into view inside a
-    scrollable sheet body.
+- `height`: `fitContent` (default) or `half`.
+  - `fitContent` wraps the header, pinned parts, and body while they fit the
+    compact limit (`bottomSheet.compactMaxHeight`, 420). Taller content
+    switches to the half-height detent. A compact sheet follows its body as it
+    grows or shrinks; once a presentation reaches half height it stays there
+    until `height` changes.
+  - `half` rests at half the window height (less the top inset) from the first
+    frame.
+- `keyboard`: `dismiss` (default), `keep`, or `expand`.
+  - `dismiss` clears focus and hides the software keyboard on present and
+    whenever the sheet switches to this policy while presented.
+  - `keep` leaves the keyboard up; the sheet keeps its resting height and rides
+    above it.
+  - `expand` leaves the keyboard up and, while it is visible, grows the sheet to
+    fill the space between the top system inset and the keyboard. It never
+    shrinks below the resting height. Header and pinned parts stay fixed; the
+    body scrolls in the rest.
+- Slots:
+  - `pinnedTop`: fixed under the header, laid out by the caller (filter
+    fields, a section header that should not scroll).
+  - `content`: the scrolling body.
+  - `pinnedBottom`: the footer. Never scrolled, kept above the keyboard and the
+    navigation bar or home indicator. The sheet supplies its horizontal inset,
+    the gap above it, and the clearance below it. Primary actions go here, not
+    at the end of the body.
+- Header: required `title` (a heading for assistive technology), a Close button,
+  and an optional leading header action (an icon button before the title for
+  in-sheet navigation such as returning to a parent level).
+- `scrollTargetID` (iOS) / `scrollTargetKey` (Android): scrolls the body so the
+  row marked with the same identity (`.id(_:)` on iOS,
+  `Modifier.openCodeBottomSheetScrollTarget(key)` on Android) is centered once
+  the sheet is scrollable, and again when the identity changes. Used by Recent
+  Window and the model picker to open on the current choice.
+- Content inset: free-form content in the body or `pinnedTop` (text, fields,
+  filters) takes `openCodeBottomSheetContentInset()`, the same 20 logical px as
+  the header, entries, and footer. Entries and list rows lay out their own inset.
+  Callers do not add bottom padding: the sheet owns the clearance under the last
+  row.
 
-Entries are title-only in this version. Use `OpenCodeListItem` when a row needs
-subtitle content, selected state, or a larger list treatment.
+### Entry
+
+`OpenCodeBottomSheetEntry` is a tappable row:
+
+- `title` (required), wrapping to two lines at large text sizes.
+- `enabled` (default true): disabled entries reduce emphasis and block
+  interaction.
+- `destructive` (default false): title and icon use the semantic error color.
+- `selected` (default false): marks the current choice in a picker. Shows a
+  check in the end slot (replacing the end decorator) and exposes the selected
+  state to VoiceOver and TalkBack.
+- Start and end decorators: `none` or `icon`. Decorators are decorative; the
+  entry title is the row's label.
+
+Use `OpenCodeListItem` when a row needs subtitle content or a larger list
+treatment.
 
 ## Token Usage
 
-- Semantic tokens: `color.background.elevated`, `color.surface.primary`,
-  `color.surface.secondary`, `color.text.primary`, `color.text.disabled`,
-  `color.border.subtle`, `icon-strong-base` for enabled entry icons,
-  `icon-base` for disabled.
-- Component tokens: `bottomSheet.inset`, `bottomSheet.cornerRadiusTop`,
-  `bottomSheet.cornerRadius`, `bottomSheet.displayCornerRadiusFallback`,
-  `bottomSheet.header.padding`,
-  `bottomSheet.entry.minHeight`, `bottomSheet.entry.paddingHorizontal`,
-  `bottomSheet.entry.paddingVertical`, `bottomSheet.entry.decorator.size`, and
-  `bottomSheet.entry.decorator.iconSize`.
-- Typography roles:
-  - `type.heading` for the sheet title.
-  - `type.body` for entry titles.
+- Semantic tokens: `surface-base` for the card, `text-strong` for the title and
+  entry titles, `icon-strong-base` for enabled entry icons, `text-weaker` for
+  disabled entry titles and icons, `error` for destructive entries,
+  `surface-raised-base` for the pressed entry highlight.
+- Component tokens: see the Bottom sheet table in `../tokens.md`.
+- Typography roles: `type.heading` for the sheet title (Android
+  `titleMedium`); `type.body` for entry titles (Android `bodyLarge`).
 
 ## Behavior
 
-The component owns modal presentation and dismissal. The close button dismisses
-the sheet, and outside-tap, drag, back, and accessibility dismissal behavior
-should remain available. The overlay is accessibility-modal so VoiceOver and
-TalkBack stay on the sheet and cannot activate the dimmed presenter.
+### Presentation and dismissal
+
+The sheet is controlled by the caller (`isPresented` on iOS, `visible` on
+Android). A dismiss gesture (scrim tap, Close, back, hardware Escape, or a
+header drag) clears that state at once: the iOS binding becomes false and the
+Android `onDismissRequest` is called immediately. The sheet then plays its exit
+motion on its own, so a caller can present another sheet or navigate straight
+from the dismiss without waiting. While it exits, the sheet keeps showing the
+last content it had while presented, even if the caller cleared the state the
+body reads (a null target, an empty list).
+
+On Android, keep the sheet in composition and drive `visible`. Removing it from
+composition (an `if` around the call) skips the exit motion.
+
+Both platforms use one motion: the card slides up by its own height and fades
+in over `bottomSheet.motion.enterDuration` (320 ms, decelerate
+`cubic-bezier(0.4, 0, 0.2, 1)`), and slides down and fades out over
+`bottomSheet.motion.exitDuration` (280 ms, accelerate
+`cubic-bezier(0.4, 0, 1, 1)`). The scrim fades to `bottomSheet.scrim.alpha`
+with the same timing.
+
+The header follows a downward drag. Releasing past
+`bottomSheet.drag.dismissThreshold` (96) or faster than
+`bottomSheet.drag.dismissVelocity` (1200 per second) dismisses, and the exit
+continues from the dragged position. Otherwise the card springs back. Drag is
+limited to the header so body scrolling is not blocked.
+
+Back (Android system back, including Escape from a hardware keyboard, which
+Android falls back to Back) and hardware Escape on iOS dismiss. VoiceOver's
+escape gesture dismisses on iOS. iPadOS has no system back gesture for an
+overlay; Escape and the scrim cover it.
+
+### Layout
 
 The sheet is a concentric float: **8** logical px from the left, right, and
 bottom of the display on **compact** width. Bottom corners use
@@ -62,119 +121,63 @@ sheet. Side and bottom gutters show the dimmed presenting screen.
 On **regular** width the card is centered, still 8 px from the bottom, and
 capped at `layout.sheetMaxWidth`. All four corners use
 `bottomSheet.cornerRadiusTop` because the card no longer shares a center with
-the display curve. Compact presentation is unchanged.
+the display curve.
 
-When provided, the leading header action appears before the title and performs
-caller-owned in-sheet navigation. It does not dismiss the sheet unless the
-caller action does so. Use a clear accessibility label such as
-`Back to providers` for icon-only navigation.
+The component owns vertical scrolling. Body content does not add its own
+vertical scroll container; use `pinnedTop` for controls that must stay put.
 
-On Android, presentation and dismissal use the component motion tokens: 320 ms
-for entering, 280 ms for exiting, and a scrim alpha of 0.32. The close button,
-scrim tap, and back press call `onDismissRequest`; parent-driven `visible =
-false` changes run the same exit animation after the caller has already cleared
-presentation state.
+While a sheet is presented, the presenting screen ignores keyboard-driven
+resizing so the background stays stable.
 
-Entries trigger their action only when enabled. Disabled entries reduce text and
-icon emphasis and block interaction. Long entry titles truncate to one line.
-Enabled entries use a spring press scale (~0.97) with a soft raised highlight so
-context actions feel clickable.
+### Accessibility
 
-Use `form` mode when the sheet hosts text fields. While the sheet is presented,
-the presenting screen ignores keyboard-driven safe-area resizing so background
-layout stays stable even if the sheet switches content modes. Action lists
-dismiss the software keyboard on present, and again if content mode switches to
-`actionList` while presented (Model picker Back to providers), so choice sheets
-get the full bottom of the display. Form sheets keep the keyboard: the card
-lifts from the current keyboard frame even when no new keyboard notification
-fires (opening a filtered provider model list over an already-visible composer
-keyboard), the header stays fixed, and the body scrolls so focused fields stay
-reachable. This avoids remeasuring compact content against a changing keyboard
-safe area.
+The overlay is accessibility-modal: VoiceOver and TalkBack stay on the sheet and
+cannot reach the dimmed presenter. The title is a heading. The Close button has
+a localized `Close` label. The scrim is not an accessibility element; Close,
+back, and the escape gesture dismiss for assistive input. Entries are buttons,
+and a `selected` entry exposes the selected state.
 
-`actionList` keeps content-measured compact sizing and switches to a fixed
-fraction-height scroll sheet only when the content exceeds the compact
-threshold. Once a presentation is scrollable, it stays at that fixed height for
-the rest of the presentation so filtering or other body changes do not resize
-the sheet. Callers may set `alwaysFixedHeight` to force the 50% scrollable
-detent for the whole presentation (used by Add project). `form` always uses the
-50% scroll detent with a scrollable body so Filter by project, filtered model
-lists, and other form sheets stay the same height on both platforms.
+When provided, the leading header action performs caller-owned in-sheet
+navigation and does not dismiss the sheet unless the caller does so. Give it a
+clear label such as `Back to providers`.
 
-On Android, the component owns vertical scrolling for long content. Feature
-content inside the sheet body should not add its own vertical scroll container.
-Use pinned content for fixed controls above the scrollable body when needed.
-
-Icon decorators use catalog icons (`OpenCodeIcon` on iOS, `ImageVector` from
-`OpenCodeIcons` on Android). Icons are decorative when the
-entry title already describes the action; otherwise callers should provide an
-accessibility label or description using the platform convention.
+Enabled entries use a spring press scale (~0.97) with a soft raised highlight.
 
 ## Platform Notes
 
-- iOS: presented with a window overlay (same pattern as Dialog) so the card can
+- iOS: presented as a window overlay (same pattern as Dialog) so the card can
   inset from the display edge without system sheet chrome. The hosting view is
-  pinned to the window edges (not the safe-area layout guide), is
-  accessibility-modal, and is removed when the host leaves the tree. Form
-  sheets use the 50% scroll detent. Action lists resign first responder on
-  present and when content mode becomes `actionList`. Form sheets seed lift
-  from the last known keyboard frame, then follow `keyboardWillChangeFrame`, so
-  the internal scroll region, not the presenting screen, follows the keyboard.
-  Short entry lists start at content height so the first measure is intrinsic
-  row height. Compact height is header + rows + tight bottom padding. Measured
-  content height is never shrunk after the intrinsic size is known, and updates
-  stop once a presentation has locked to the scrollable height. Longer lists
-  switch to a fixed 50% of the available height with an internal `ScrollView`
-  and do not fall back to compact when body content shrinks. Overlay tap, close,
-  and accessibility dismiss stay available. The overlay hosting controller
-  reports no safe-area regions so `bottomSheet.inset` is measured from the
-  display edge, not from the home indicator. The home indicator sits on the
-  card. The card shape matches Android: top corners are
-  `bottomSheet.cornerRadiusTop`, bottom corners are the screen display radius
-  minus inset (fallback 55 − 8).
-- Android: presented as an activity-window overlay (same idea as the iOS
-  overlay) so the card can sit 8dp from the display edge. The overlay is
-  attached to the activity decor view with system-bar and display-cutout insets
-  consumed so the 8dp gutter is measured from the display. Sibling decor views
-  are hidden from TalkBack while it is attached. Compose `Dialog` and
-  `Popup` windows stay above the nav inset and turn the sheet into an island.
-  Action lists clear focus and hide the IME on present. Form mode applies
-  `imePadding()` to the sheet boundary—not its measured content—so the sheet
-  follows IME animation while its body scrolls. The app
-  navigation host pads status bars, horizontal system bars, and display cutouts
-  explicitly rather than using `safeDrawing`, because `safeDrawing` includes the
-  IME and would resize every route behind a focused form. Bottom navigation-bar
-  inset is left to floating chrome on Home and Session Chat, or to the route
-  surface on other screens. The component can use its own bottom-sheet
-  motion timing while preserving close, scrim tap, back press, and downward drag
-  dismissal. The overlay card is inset by `bottomSheet.inset` on the left, right,
-  and bottom. Bottom corners use
-  `WindowMetrics.windowInsets.getRoundedCorner()` (API 31+) minus inset, or the
-  same fallback as iOS. Top corners use `bottomSheet.cornerRadiusTop`. Gesture
-  navigation keeps the card 8dp from the display edge so the handle sits
-  on the card. Compact lists wrap to content and do not add a nav-bar spacer
-  inside the card. Three-button navigation (`navigation_mode` != gestural) adds
-  the nav-bar height under that 8dp gap so the buttons stay uncovered.
-  Short action lists wrap to content height. Longer action lists and every form
-  sheet use a fixed 50% of screen height and scroll inside the sheet body.
-  Drag-to-dismiss is limited to the header so list scrolling is not blocked.
+  pinned to the window edges, reports no safe-area regions, is
+  accessibility-modal, and is removed when the host leaves the tree. The
+  hosting controller owns the Escape key command; it takes focus on present
+  unless another text input still holds it (a sheet that keeps the composer
+  keyboard), in which case Escape works once focus moves into the sheet.
+  Keeping sheets seed keyboard overlap from the last known keyboard frame, then
+  follow `keyboardWillChangeFrame`.
+- Android: presented as an activity-window overlay so the card can sit 8dp from
+  the display edge, with system-bar and display-cutout insets consumed. Sibling
+  decor views are hidden from TalkBack while it is attached. The body is
+  composed once in every height mode: it always sits in the scroll container,
+  which measures it at its natural height. Three-button navigation is detected
+  from the tappable bottom inset (`WindowInsets.tappableElement`); it adds the
+  navigation-bar height under the 8dp gap so the buttons stay uncovered, while
+  gesture navigation keeps the handle on the card. `keep` applies `imePadding()`
+  to the sheet boundary; `expand` lifts by the keyboard height and sizes the
+  column from layout so keyboard frames do not recompose the body.
 
 ## Previews
 
-- Light: included.
-- Dark: included.
-- Default: included.
+- Light, dark, and default: included.
 - Pressed: covered through platform interaction behavior.
-- Disabled: included.
-- Loading: not applicable for this component version.
-- Error: not applicable for this component version.
-- Decorators: start icon, end icon, and both icon positions are included.
-- Header leading action: included.
+- Disabled and selected entries: included.
+- Loading and error: not applicable for this component.
+- Decorators: start icon, end icon, and both positions are included.
+- Header leading action, pinned top, pinned bottom, and each height and keyboard
+  policy: included in the Component Gallery.
 
 ## Parity And Divergence
 
-Shared semantics for title, close behavior, entry states, decorator roles, 8px
-inset, compact concentric corners, and regular max-width floating cards are
-aligned across iOS and Android.
-Platform-specific icon identifier inputs and how display corner radius is
-resolved are documented in `../divergences.md`.
+Height, keyboard policies, slots, insets, the compact limit, motion, drag
+thresholds, the dismiss contract, tokens, and accessibility are shared across
+iOS and Android. How each platform hosts the overlay, follows the keyboard, and
+reads the display corner radius is documented in `../divergences.md`.

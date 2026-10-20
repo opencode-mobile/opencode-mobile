@@ -153,9 +153,7 @@ struct SessionChatPickerSheetModifier: ViewModifier {
                 ForEach(filtered) { model in
                     OpenCodeBottomSheetEntry(
                         title: model.modelLabel,
-                        endDecorator: model == composer.selectedModel?.option
-                            ? .icon(.check, accessibilityLabel: "Selected")
-                            : .none,
+                        selected: model == composer.selectedModel?.option,
                         action: {
                             onSelectModel(model)
                             activePicker = nil
@@ -170,9 +168,7 @@ struct SessionChatPickerSheetModifier: ViewModifier {
             ForEach(modelSelectionCatalog.providers) { provider in
                 OpenCodeBottomSheetEntry(
                     title: provider.label,
-                    endDecorator: provider.id == composer.selectedModel?.option.providerID
-                        ? .icon(.check, accessibilityLabel: "Selected")
-                        : .none,
+                    selected: provider.id == composer.selectedModel?.option.providerID,
                     action: {
                         ProductAnalytics.logUserAction(
                             screenId: ProductAnalytics.Screen.sessionModelPicker,
@@ -195,9 +191,7 @@ struct SessionChatPickerSheetModifier: ViewModifier {
             ForEach(composer.selectableAgents) { agent in
                 OpenCodeBottomSheetEntry(
                     title: agent.displayName,
-                    endDecorator: agent.id.compare(composer.selectedMode, options: .caseInsensitive) == .orderedSame
-                        ? .icon(.check, accessibilityLabel: "Selected")
-                        : .none,
+                    selected: agent.id.compare(composer.selectedMode, options: .caseInsensitive) == .orderedSame,
                     action: {
                         onSelectMode(agent.id)
                         activePicker = nil
@@ -208,12 +202,10 @@ struct SessionChatPickerSheetModifier: ViewModifier {
             ForEach(composer.variantOptions, id: \.self) { level in
                 OpenCodeBottomSheetEntry(
                     title: TitleCaseIdentifier.displayName(for: level),
-                    endDecorator: level.compare(
+                    selected: level.compare(
                         composer.selectedVariant ?? ModelSelection.defaultVariantLabel,
                         options: .caseInsensitive
-                    ) == .orderedSame
-                        ? .icon(.check, accessibilityLabel: "Selected")
-                        : .none,
+                    ) == .orderedSame,
                     action: {
                         onSelectVariant(level)
                         activePicker = nil
@@ -242,7 +234,7 @@ private struct ModelPickerFilterField: View {
             loggedEdit = true
             onFirstEdit()
         }
-        .padding(.horizontal, 20)
+        .openCodeBottomSheetContentInset()
         .padding(.bottom, 8)
     }
 }

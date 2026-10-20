@@ -295,25 +295,19 @@ struct ProjectListHomeView: View {
                             )
                         }
                     }
-                    OpenCodeListItem(
-                        title: "Add server",
-                        subtitle: "New Connection Profile",
-                        startDecorator: .icon(.add, accessibilityLabel: "Add server"),
-                        action: {
-                            viewModel.dismissServersSheet()
-                            presentConnectionSetup(mode: .add)
-                        }
-                    )
-                    OpenCodeListItem(
-                        title: "Manage in Settings",
-                        action: {
-                            viewModel.dismissServersSheet()
-                            showSettings = true
-                        }
-                    )
                 }
                 .padding(.horizontal, 16)
-                .padding(.bottom, 8)
+            } pinnedBottom: {
+                VStack(spacing: 8) {
+                    OpenCodeButton(variant: .fullWidthText(title: "Add server")) {
+                        viewModel.dismissServersSheet()
+                        presentConnectionSetup(mode: .add)
+                    }
+                    OpenCodeButton(variant: .fullWidthText(title: "Manage in Settings"), contrast: .low) {
+                        viewModel.dismissServersSheet()
+                        showSettings = true
+                    }
+                }
             }
             .openCodeBottomSheet(
                 isPresented: sessionActionsSheetBinding,

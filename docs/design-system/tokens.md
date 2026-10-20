@@ -619,11 +619,15 @@ entries.
 | `bottomSheet.entry.paddingVertical` | 12 (logical px) |
 | `bottomSheet.entry.decorator.size` | 24 (logical px) |
 | `bottomSheet.entry.decorator.iconSize` | 20 (logical px) |
-| `bottomSheet.motion.enterDuration` | 320 ms |
-| `bottomSheet.motion.exitDuration` | 280 ms |
+| `bottomSheet.motion.enterDuration` | 320 ms, `cubic-bezier(0.4, 0, 0.2, 1)` |
+| `bottomSheet.motion.exitDuration` | 280 ms, `cubic-bezier(0.4, 0, 1, 1)` |
 | `bottomSheet.scrim.alpha` | 0.32 |
 | `bottomSheet.drag.dismissThreshold` | 96 (logical px) |
-| `bottomSheet.formMaxHeight` | 560 (logical px; iOS form detent cap after first measure) |
+| `bottomSheet.drag.dismissVelocity` | 1200 (logical px per second, downward release) |
+| `bottomSheet.compactMaxHeight` | 420 (logical px; tallest `fitContent` sheet that still wraps its content) |
+| `bottomSheet.halfHeight` | 50% of the window height, less `bottomSheet.inset` |
+| `bottomSheet.content.paddingHorizontal` | 20 (logical px; free-form body and pinned-top content, header, entries, and footer) |
+| `bottomSheet.footer.paddingTop` | 8 (logical px; gap above `pinnedBottom`) |
 
 ### Action tile
 

@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.main
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -38,6 +39,9 @@ import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetHeight
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetKeyboard
+import dev.opencode.mobile.ui.components.OpenCodeButton
+import dev.opencode.mobile.ui.components.OpenCodeButtonContrast
+import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeDialog
 import dev.opencode.mobile.ui.components.OpenCodeDialogOption
 import dev.opencode.mobile.ui.components.OpenCodeDialogTextField
@@ -452,6 +456,19 @@ internal fun MainScreen(
         visible = serversChrome.sheetVisible,
         title = "Servers",
         onDismissRequest = onDismissServersSheet,
+        pinnedBottom = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OpenCodeButton(
+                    variant = OpenCodeButtonVariant.FullWidthText("Add server"),
+                    onClick = onAddServerClick,
+                )
+                OpenCodeButton(
+                    variant = OpenCodeButtonVariant.FullWidthText("Manage in Settings"),
+                    contrast = OpenCodeButtonContrast.Low,
+                    onClick = onManageServersClick,
+                )
+            }
+        },
     ) {
         val active = serversChrome.active
         if (active != null) {
@@ -489,21 +506,6 @@ internal fun MainScreen(
                 )
             }
         }
-        OpenCodeListItem(
-            title = "Add server",
-            subtitle = "New Connection Profile",
-            startDecorator = StartDecorator.Icon(OpenCodeIcons.Add, "Add server"),
-            onClick = onAddServerClick,
-            modifier = Modifier.padding(horizontal = 16.dp),
-        )
-        OpenCodeListItem(
-            title = "Manage in Settings",
-            onClick = onManageServersClick,
-            modifier =
-                Modifier
-                    .padding(horizontal = 16.dp)
-                    .padding(bottom = 8.dp),
-        )
     }
 
     val pendingProjectRemoval = (uiState as? MainScreenUiState.Loaded)?.pendingProjectRemoval
@@ -532,47 +534,40 @@ internal fun MainScreen(
 
     HomeSessionActions(state = sessionActions, callbacks = sessionActionsCallbacks)
 
-    if (showAddSheet) {
-        AddProjectSheet(
-            sheet = addProjectSheet ?: AddProjectSheetUi.empty(),
-            callbacks = addProjectCallbacks,
-            onDismiss = onDismissAddProject,
-        )
-    }
+    AddProjectSheet(
+        visible = showAddSheet,
+        sheet = addProjectSheet ?: AddProjectSheetUi.empty(),
+        callbacks = addProjectCallbacks,
+        onDismiss = onDismissAddProject,
+    )
 
-    if (showNewSessionProjectPicker) {
-        OpenCodeBottomSheet(
-            visible = true,
-            title = "New session",
-            onDismissRequest = {
-                ProductAnalytics.logUserAction(
-                    screenId = ProductAnalytics.Screen.HOME_NEW_SESSION_PROJECT_PICKER,
-                    actionId = ProductAnalytics.Action.NEW_SESSION_PICKER_DISMISS,
+    OpenCodeBottomSheet(
+        visible = showNewSessionProjectPicker,
+        title = "New session",
+        onDismissRequest = {
+            ProductAnalytics.logUserAction(
+                screenId = ProductAnalytics.Screen.HOME_NEW_SESSION_PROJECT_PICKER,
+                actionId = ProductAnalytics.Action.NEW_SESSION_PICKER_DISMISS,
+            )
+            showNewSessionProjectPicker = false
+        },
+    ) {
+        if (newSessionPickerProjects.isEmpty()) {
+            OpenCodeBottomSheetEntry(title = "No projects", enabled = false, onClick = {})
+        } else {
+            newSessionPickerProjects.forEach { project ->
+                OpenCodeBottomSheetEntry(
+                    title = project.displayName,
+                    startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Folder),
+                    onClick = {
+                        ProductAnalytics.logUserAction(
+                            screenId = ProductAnalytics.Screen.HOME_NEW_SESSION_PROJECT_PICKER,
+                            actionId = ProductAnalytics.Action.NEW_SESSION_PICKER_SELECT_PROJECT,
+                        )
+                        showNewSessionProjectPicker = false
+                        onNewSession(project.worktree)
+                    },
                 )
-                showNewSessionProjectPicker = false
-            },
-        ) {
-            if (newSessionPickerProjects.isEmpty()) {
-                OpenCodeBottomSheetEntry(title = "No projects", enabled = false, onClick = {})
-            } else {
-                newSessionPickerProjects.forEach { project ->
-                    OpenCodeBottomSheetEntry(
-                        title = project.displayName,
-                        startDecorator =
-                            BottomSheetEntryDecorator.Icon(
-                                imageVector = OpenCodeIcons.Folder,
-                                contentDescription = null,
-                            ),
-                        onClick = {
-                            ProductAnalytics.logUserAction(
-                                screenId = ProductAnalytics.Screen.HOME_NEW_SESSION_PROJECT_PICKER,
-                                actionId = ProductAnalytics.Action.NEW_SESSION_PICKER_SELECT_PROJECT,
-                            )
-                            showNewSessionProjectPicker = false
-                            onNewSession(project.worktree)
-                        },
-                    )
-                }
             }
         }
     }
@@ -583,8 +578,6 @@ private fun HomeSessionActions(
     state: HomeSessionActionsUiState,
     callbacks: HomeSessionActionsCallbacks,
 ) {
-    val target = state.target ?: return
-
     ProductPresentedScreenViewEffect(
         screenId = ProductAnalytics.Screen.HOME_SESSION_ACTIONS,
         presentation = ProductAnalytics.Presentation.SHEET,
@@ -618,19 +611,19 @@ private fun HomeSessionActions(
     ) {
         OpenCodeBottomSheetEntry(
             title = "Rename session",
-            startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Edit, null),
+            startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Edit),
             onClick = callbacks.onChooseRename,
         )
         OpenCodeBottomSheetEntry(
             title = "Fork session",
-            startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.ContentCopy, null),
+            startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.ContentCopy),
             onClick = callbacks.onChooseFork,
         )
         if (state.canArchive) {
             OpenCodeBottomSheetEntry(
                 title = "Archive",
                 enabled = !state.lifecycleInFlight,
-                startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Archive, null),
+                startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Archive),
                 onClick = callbacks.onChooseArchive,
             )
         }
@@ -638,10 +631,13 @@ private fun HomeSessionActions(
             title = "Delete",
             enabled = !state.lifecycleInFlight,
             destructive = true,
-            startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Close, null),
+            startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Close),
             onClick = callbacks.onChooseDelete,
         )
     }
+
+    // The sheet stays composed without a target so it can play its exit motion.
+    val target = state.target ?: return
 
     OpenCodeDialog(
         visible = state.renameVisible,

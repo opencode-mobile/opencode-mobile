@@ -43,7 +43,7 @@ internal fun SessionChatMessageActionsSheet(
         if (target?.showsRevertMessage == true) {
             OpenCodeBottomSheetEntry(
                 title = "Revert message",
-                startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Undo, "Revert message"),
+                startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Undo),
                 onClick = {
                     logMessageActionsAction(ProductAnalytics.Action.MESSAGE_ACTIONS_REVERT)
                     onRevertMessage(target.id)
@@ -52,7 +52,7 @@ internal fun SessionChatMessageActionsSheet(
             )
             OpenCodeBottomSheetEntry(
                 title = "Fork from here",
-                startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.CallSplit, "Fork from here"),
+                startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.CallSplit),
                 onClick = {
                     logMessageActionsAction(ProductAnalytics.Action.MESSAGE_ACTIONS_FORK)
                     onForkFromMessage(target.id, target.text)
@@ -62,7 +62,7 @@ internal fun SessionChatMessageActionsSheet(
         }
         OpenCodeBottomSheetEntry(
             title = "Copy message",
-            startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.ContentCopy, "Copy message"),
+            startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.ContentCopy),
             onClick = {
                 logMessageActionsAction(ProductAnalytics.Action.MESSAGE_ACTIONS_COPY)
                 target?.text?.let { text ->

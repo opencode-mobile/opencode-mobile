@@ -4,15 +4,14 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.os.Build
-import android.provider.Settings
 import android.view.RoundedCorner
 import android.view.View
 import android.view.ViewGroup
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.FastOutLinearInEasing
-import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -20,9 +19,11 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -53,6 +54,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.tappableElement
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentHeight
@@ -65,8 +67,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -77,12 +81,25 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusTarget
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalDensity
@@ -90,12 +107,15 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.dialog
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
@@ -103,9 +123,11 @@ import androidx.compose.ui.unit.constrainHeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.offset
 import androidx.core.view.ViewCompat
+import dev.opencode.mobile.R
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -121,14 +143,20 @@ private const val BottomSheetEnterDurationMillis = 320
 @Suppress("ktlint:standard:property-naming")
 private const val BottomSheetExitDurationMillis = 280
 
+/** Enter curve, shared with iOS: decelerate onto the resting position. */
+private val BottomSheetEnterEasing = CubicBezierEasing(0.4f, 0f, 0.2f, 1f)
+
+/** Exit curve, shared with iOS: accelerate off the bottom edge. */
+private val BottomSheetExitEasing = CubicBezierEasing(0.4f, 0f, 1f, 1f)
+
 @Suppress("ktlint:standard:property-naming")
 private const val BottomSheetScrimAlpha = 0.32f
 
-@Suppress("ktlint:standard:property-naming")
 private val BottomSheetDragDismissThreshold = 96.dp
 
+/** Downward release speed (dp per second) that dismisses a header drag of any length. */
 @Suppress("ktlint:standard:property-naming")
-private const val BottomSheetDragDismissVelocity = 1_200f
+private const val BottomSheetDragDismissVelocityDp = 1_200f
 private val BottomSheetHeaderHorizontalPadding = OpenCodeLayout.SheetContentHorizontalInset
 private val BottomSheetHeaderTopPadding = 12.dp
 private val BottomSheetHeaderBottomPadding = 8.dp
@@ -142,9 +170,13 @@ private val BottomSheetEntryDecoratorSize = 24.dp
 private val BottomSheetEntryIconSize = 20.dp
 
 @Suppress("ktlint:standard:property-naming")
+private const val BottomSheetEntryMaxLines = 2
+
+@Suppress("ktlint:standard:property-naming")
 private const val BottomSheetScrollableHeightFraction = 0.50f
 
-private val BottomSheetCompactMaxHeight = 360.dp
+/** Tallest FitContent sheet that still wraps its content, shared with iOS. */
+internal val BottomSheetCompactMaxHeight = 420.dp
 private val BottomSheetEstimatedHeaderHeight =
     BottomSheetHeaderTopPadding + BottomSheetHeaderBottomPadding + 40.dp
 
@@ -158,7 +190,8 @@ internal enum class BottomSheetLayoutMode {
 enum class OpenCodeBottomSheetHeight {
     /**
      * Compact while the header, pinned slots, and body fit; otherwise the scrollable half height.
-     * Once a sheet reaches half height it stays there until it switches height.
+     * A compact sheet follows its content up and down. Once a sheet reaches half height it stays
+     * there until it switches height.
      */
     FitContent,
 
@@ -182,12 +215,12 @@ enum class OpenCodeBottomSheetKeyboard {
     Expand,
 }
 
+/** Leading or trailing icon of an [OpenCodeBottomSheetEntry]. Decorative: the entry title is its label. */
 sealed class BottomSheetEntryDecorator {
     data object None : BottomSheetEntryDecorator()
 
     data class Icon(
         val imageVector: ImageVector,
-        val contentDescription: String? = null,
     ) : BottomSheetEntryDecorator()
 }
 
@@ -201,10 +234,20 @@ data class OpenCodeBottomSheetHeaderAction(
  * Modal bottom sheet with a header, an optional [pinnedTop] slot under it, a scrolling body
  * ([content]), and an optional [pinnedBottom] footer.
  *
+ * The sheet is controlled: it shows while [visible] is true. A dismiss gesture (scrim, Close,
+ * back, header drag) calls [onDismissRequest] at once, and the sheet plays its exit motion when
+ * the caller sets [visible] to false. A caller can open another sheet or navigate straight from
+ * [onDismissRequest]. Keep the sheet in composition and drive [visible]; removing it skips the
+ * exit motion. While it exits, the sheet keeps showing the last content it had while visible.
+ *
  * [height] sets the resting height and [keyboard] the software keyboard policy; the two are
  * independent. [pinnedBottom] is never scrolled and stays above the keyboard and the navigation
  * bar. The sheet gives it its top spacing, horizontal inset, and bottom clearance, so callers do
- * not pad it. Pass null (the default) for no footer.
+ * not pad it. Pass null (the default) for no footer. Free-form body and [pinnedTop] content takes
+ * the standard inset from [openCodeBottomSheetContentInset]; entries and list rows carry their own.
+ *
+ * [scrollTargetKey] scrolls the body so the row marked with the same key through
+ * [openCodeBottomSheetScrollTarget] sits centered once the sheet is scrollable.
  */
 @Composable
 fun OpenCodeBottomSheet(
@@ -215,6 +258,7 @@ fun OpenCodeBottomSheet(
     headerLeadingAction: OpenCodeBottomSheetHeaderAction? = null,
     height: OpenCodeBottomSheetHeight = OpenCodeBottomSheetHeight.FitContent,
     keyboard: OpenCodeBottomSheetKeyboard = OpenCodeBottomSheetKeyboard.Dismiss,
+    scrollTargetKey: Any? = null,
     pinnedTop: @Composable ColumnScope.() -> Unit = {},
     pinnedBottom: (@Composable ColumnScope.() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
@@ -222,10 +266,19 @@ fun OpenCodeBottomSheet(
     var shouldRender by remember { mutableStateOf(visible) }
     var sheetVisible by remember { mutableStateOf(false) }
     var dragOffsetPx by remember { mutableFloatStateOf(0f) }
-    val coroutineScope = rememberCoroutineScope()
-    val dragDismissThresholdPx = with(LocalDensity.current) { BottomSheetDragDismissThreshold.toPx() }
+    val density = LocalDensity.current
+    val dragDismissThresholdPx = with(density) { BottomSheetDragDismissThreshold.toPx() }
+    val dragDismissVelocityPx = with(density) { BottomSheetDragDismissVelocityDp.dp.toPx() }
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
+    val currentOnDismissRequest by rememberUpdatedState(onDismissRequest)
+
+    // The last slots seen while visible, so the exit motion does not show a body that already
+    // reacted to the caller clearing its state (a null target, an empty list).
+    val shown = remember { BottomSheetShownSlots() }
+    if (visible || !shown.isSet) {
+        shown.update(title, headerLeadingAction, height, keyboard, scrollTargetKey, pinnedTop, pinnedBottom, content)
+    }
 
     LaunchedEffect(visible, keyboard) {
         if (visible && keyboard == OpenCodeBottomSheetKeyboard.Dismiss) {
@@ -236,10 +289,10 @@ fun OpenCodeBottomSheet(
 
     LaunchedEffect(visible) {
         if (visible) {
-            shouldRender = true
             dragOffsetPx = 0f
+            shouldRender = true
             sheetVisible = true
-        } else if (shouldRender && sheetVisible) {
+        } else if (shouldRender) {
             sheetVisible = false
             delay(BottomSheetExitDurationMillis.toLong())
             dragOffsetPx = 0f
@@ -252,16 +305,9 @@ fun OpenCodeBottomSheet(
 
     if (!shouldRender) return
 
-    fun dismissWithAnimation() {
-        coroutineScope.launch {
-            if (sheetVisible) {
-                sheetVisible = false
-                delay(BottomSheetExitDurationMillis.toLong())
-            }
-            dragOffsetPx = 0f
-            shouldRender = false
-            onDismissRequest()
-        }
+    // Only a visible sheet asks to close; one that is already exiting ignores further gestures.
+    val requestDismiss: () -> Unit = {
+        if (sheetVisible) currentOnDismissRequest()
     }
 
     val dragState =
@@ -271,15 +317,17 @@ fun OpenCodeBottomSheet(
 
     val scrimAlpha by animateFloatAsState(
         targetValue = if (sheetVisible) BottomSheetScrimAlpha else 0f,
-        animationSpec = tween(BottomSheetExitDurationMillis),
+        animationSpec =
+            if (sheetVisible) {
+                tween(BottomSheetEnterDurationMillis, easing = BottomSheetEnterEasing)
+            } else {
+                tween(BottomSheetExitDurationMillis, easing = BottomSheetExitEasing)
+            },
         label = "BottomSheetScrimAlpha",
     )
 
-    val scrimInteractionSource = remember { MutableInteractionSource() }
-    val sheetInteractionSource = remember { MutableInteractionSource() }
     val displayCornerRadius = rememberBottomSheetCornerRadius()
-    val view = LocalView.current
-    val threeButtonNav = remember(view) { view.context.usesThreeButtonNavigation() }
+    val threeButtonNav = usesThreeButtonNavigation()
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val sheetBottomInset =
         if (threeButtonNav) {
@@ -288,22 +336,41 @@ fun OpenCodeBottomSheet(
             BottomSheetInset
         }
     val imeInsets = WindowInsets.ime
+    val shownKeyboard = shown.keyboard
 
-    BackHandler(onBack = ::dismissWithAnimation)
-    BottomSheetWindowOverlay(paneTitle = title) {
+    // Hardware Escape closes the sheet like back. The sheet takes key focus so Escape reaches
+    // it, except when it keeps the keyboard: then a field (in the sheet or behind it) holds focus.
+    val keyFocus = remember { FocusRequester() }
+    LaunchedEffect(sheetVisible, shownKeyboard) {
+        if (sheetVisible && shownKeyboard == OpenCodeBottomSheetKeyboard.Dismiss) {
+            runCatching { keyFocus.requestFocus() }
+        }
+    }
+
+    BackHandler(enabled = sheetVisible, onBack = requestDismiss)
+    BottomSheetWindowOverlay(paneTitle = shown.title) {
         BoxWithConstraints(
             modifier =
                 Modifier
                     .fillMaxSize()
                     .consumeWindowInsets(WindowInsets.systemBars.union(WindowInsets.displayCutout))
                     .semantics { dialog() }
-                    .background(MaterialTheme.colorScheme.scrim.copy(alpha = scrimAlpha))
-                    .clickable(
-                        interactionSource = scrimInteractionSource,
-                        indication = null,
-                        onClick = ::dismissWithAnimation,
-                    ),
+                    .onPreviewKeyEvent { event ->
+                        if (event.key != Key.Escape) return@onPreviewKeyEvent false
+                        if (event.type == KeyEventType.KeyUp) requestDismiss()
+                        true
+                    },
         ) {
+            // The scrim sits behind the sheet as a sibling, so taps on the sheet never reach it.
+            // It is hidden from accessibility: Close, back, and escape dismiss for assistive input.
+            Box(
+                modifier =
+                    Modifier
+                        .matchParentSize()
+                        .background(MaterialTheme.colorScheme.scrim.copy(alpha = scrimAlpha))
+                        .clearAndSetSemantics {}
+                        .pointerInput(Unit) { detectTapGestures { requestDismiss() } },
+            )
             val usesFloatingCard = maxWidth >= OpenCodeLayout.CompactMaxWidth
             val sheetCornerRadius =
                 if (usesFloatingCard) {
@@ -317,7 +384,7 @@ fun OpenCodeBottomSheet(
                     Modifier
                         .align(Alignment.BottomCenter)
                         .then(
-                            when (keyboard) {
+                            when (shownKeyboard) {
                                 // Lift by the raw keyboard height so the sheet rests one inset above it.
                                 OpenCodeBottomSheetKeyboard.Expand ->
                                     Modifier.bottomSheetKeyboardLift {
@@ -333,14 +400,14 @@ fun OpenCodeBottomSheet(
                         ),
                 enter =
                     slideInVertically(
-                        animationSpec = tween(BottomSheetEnterDurationMillis, easing = FastOutSlowInEasing),
+                        animationSpec = tween(BottomSheetEnterDurationMillis, easing = BottomSheetEnterEasing),
                         initialOffsetY = { it },
-                    ) + fadeIn(animationSpec = tween(BottomSheetEnterDurationMillis)),
+                    ) + fadeIn(animationSpec = tween(BottomSheetEnterDurationMillis, easing = BottomSheetEnterEasing)),
                 exit =
                     slideOutVertically(
-                        animationSpec = tween(BottomSheetExitDurationMillis, easing = FastOutLinearInEasing),
+                        animationSpec = tween(BottomSheetExitDurationMillis, easing = BottomSheetExitEasing),
                         targetOffsetY = { it },
-                    ) + fadeOut(animationSpec = tween(BottomSheetExitDurationMillis)),
+                    ) + fadeOut(animationSpec = tween(BottomSheetExitDurationMillis, easing = BottomSheetExitEasing)),
             ) {
                 Surface(
                     modifier =
@@ -350,11 +417,8 @@ fun OpenCodeBottomSheet(
                             .padding(start = BottomSheetInset, end = BottomSheetInset, bottom = sheetBottomInset)
                             .then(modifier)
                             .offset { IntOffset(x = 0, y = dragOffsetPx.roundToInt()) }
-                            .clickable(
-                                interactionSource = sheetInteractionSource,
-                                indication = null,
-                                onClick = {},
-                            ),
+                            .focusRequester(keyFocus)
+                            .focusTarget(),
                     shape =
                         RoundedCornerShape(
                             topStart = BottomSheetCornerRadiusTop,
@@ -362,37 +426,158 @@ fun OpenCodeBottomSheet(
                             bottomEnd = sheetCornerRadius,
                             bottomStart = sheetCornerRadius,
                         ),
-                    color = MaterialTheme.colorScheme.surface,
-                    contentColor = MaterialTheme.colorScheme.onSurface,
+                    color = openCodeColor("surface-base"),
+                    contentColor = openCodeColor("text-strong"),
                 ) {
                     BottomSheetContent(
-                        title = title,
-                        headerLeadingAction = headerLeadingAction,
-                        height = height,
-                        keyboard = keyboard,
+                        title = shown.title,
+                        headerLeadingAction = shown.headerLeadingAction,
+                        height = shown.height,
+                        keyboard = shownKeyboard,
+                        scrollTargetKey = shown.scrollTargetKey,
+                        threeButtonNavigation = threeButtonNav,
                         windowHeight = maxHeight,
-                        onDismissRequest = ::dismissWithAnimation,
+                        onDismissRequest = requestDismiss,
                         headerDragModifier =
                             Modifier.draggable(
                                 orientation = Orientation.Vertical,
                                 state = dragState,
+                                enabled = sheetVisible,
                                 onDragStopped = { velocity ->
-                                    if (dragOffsetPx >= dragDismissThresholdPx || velocity >= BottomSheetDragDismissVelocity) {
-                                        dismissWithAnimation()
+                                    if (
+                                        openCodeBottomSheetDragDismisses(
+                                            offset = dragOffsetPx,
+                                            velocity = velocity,
+                                            distanceThreshold = dragDismissThresholdPx,
+                                            velocityThreshold = dragDismissVelocityPx,
+                                        )
+                                    ) {
+                                        // Exit starts from the dragged offset once the caller hides the sheet.
+                                        requestDismiss()
                                     } else {
-                                        dragOffsetPx = 0f
+                                        animate(dragOffsetPx, 0f, animationSpec = BottomSheetDragSettleSpec) { value, _ ->
+                                            dragOffsetPx = value
+                                        }
                                     }
                                 },
                             ),
-                        pinnedTop = pinnedTop,
-                        pinnedBottom = pinnedBottom,
-                        content = content,
+                        pinnedTop = shown.pinnedTop,
+                        pinnedBottom = shown.pinnedBottom,
+                        content = shown.content,
                     )
                 }
             }
         }
     }
 }
+
+private val BottomSheetDragSettleSpec = spring<Float>(dampingRatio = 0.82f, stiffness = Spring.StiffnessMediumLow)
+
+/** Whether a released header drag dismisses: past the distance, or flung down fast enough. */
+internal fun openCodeBottomSheetDragDismisses(
+    offset: Float,
+    velocity: Float,
+    distanceThreshold: Float,
+    velocityThreshold: Float,
+): Boolean = offset >= distanceThreshold || velocity >= velocityThreshold
+
+/** Slots of an [OpenCodeBottomSheet] as last seen while it was visible. */
+private class BottomSheetShownSlots {
+    var isSet = false
+        private set
+    var title: String = ""
+        private set
+    var headerLeadingAction: OpenCodeBottomSheetHeaderAction? = null
+        private set
+    var height: OpenCodeBottomSheetHeight = OpenCodeBottomSheetHeight.FitContent
+        private set
+    var keyboard: OpenCodeBottomSheetKeyboard = OpenCodeBottomSheetKeyboard.Dismiss
+        private set
+    var scrollTargetKey: Any? = null
+        private set
+    var pinnedTop: @Composable ColumnScope.() -> Unit = {}
+        private set
+    var pinnedBottom: (@Composable ColumnScope.() -> Unit)? = null
+        private set
+    var content: @Composable ColumnScope.() -> Unit = {}
+        private set
+
+    fun update(
+        title: String,
+        headerLeadingAction: OpenCodeBottomSheetHeaderAction?,
+        height: OpenCodeBottomSheetHeight,
+        keyboard: OpenCodeBottomSheetKeyboard,
+        scrollTargetKey: Any?,
+        pinnedTop: @Composable ColumnScope.() -> Unit,
+        pinnedBottom: (@Composable ColumnScope.() -> Unit)?,
+        content: @Composable ColumnScope.() -> Unit,
+    ) {
+        isSet = true
+        this.title = title
+        this.headerLeadingAction = headerLeadingAction
+        this.height = height
+        this.keyboard = keyboard
+        this.scrollTargetKey = scrollTargetKey
+        this.pinnedTop = pinnedTop
+        this.pinnedBottom = pinnedBottom
+        this.content = content
+    }
+}
+
+/**
+ * Standard horizontal inset for free-form sheet content (text, fields, filters) in the body or
+ * [OpenCodeBottomSheet]'s pinned top, matching the header, entries, and footer. Entries and list
+ * rows lay out their own inset and do not take it.
+ */
+fun Modifier.openCodeBottomSheetContentInset(): Modifier = padding(horizontal = OpenCodeLayout.SheetContentHorizontalInset)
+
+/**
+ * Marks this row as the one [OpenCodeBottomSheet]'s `scrollTargetKey` scrolls to. The sheet
+ * centers it once when the body becomes scrollable, and again when the key changes.
+ */
+fun Modifier.openCodeBottomSheetScrollTarget(key: Any): Modifier =
+    composed {
+        val registry = LocalBottomSheetScrollTargets.current
+        if (registry == null) {
+            this
+        } else {
+            onGloballyPositioned { coordinates -> registry.onTargetPositioned(key, coordinates) }
+        }
+    }
+
+private val LocalBottomSheetScrollTargets = compositionLocalOf<BottomSheetScrollTargets?> { null }
+
+/** Scrolls a sheet body so the row for [targetKey] is centered, once per key. */
+private class BottomSheetScrollTargets(
+    private val scrollState: ScrollState,
+    private val scope: CoroutineScope,
+) {
+    var targetKey: Any? = null
+    var scrollable: Boolean = false
+    var bodyCoordinates: LayoutCoordinates? = null
+    var viewportHeightPx: Int = 0
+    private var scrolledKey: Any? = null
+
+    fun onTargetPositioned(
+        key: Any,
+        coordinates: LayoutCoordinates,
+    ) {
+        val body = bodyCoordinates ?: return
+        if (key != targetKey || key == scrolledKey || !scrollable) return
+        if (!body.isAttached || !coordinates.isAttached || viewportHeightPx <= 0) return
+        val top = body.localPositionOf(coordinates, Offset.Zero).y
+        val target = openCodeBottomSheetCenteredScroll(top, coordinates.size.height.toFloat(), viewportHeightPx.toFloat())
+        scrolledKey = key
+        scope.launch { scrollState.scrollTo(target.roundToInt().coerceIn(0, scrollState.maxValue)) }
+    }
+}
+
+/** Scroll offset that centers a row starting at [rowTop] with [rowHeight] in [viewportHeight]. */
+internal fun openCodeBottomSheetCenteredScroll(
+    rowTop: Float,
+    rowHeight: Float,
+    viewportHeight: Float,
+): Float = (rowTop + rowHeight / 2f - viewportHeight / 2f).coerceAtLeast(0f)
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -401,6 +586,8 @@ private fun BottomSheetContent(
     headerLeadingAction: OpenCodeBottomSheetHeaderAction?,
     height: OpenCodeBottomSheetHeight,
     keyboard: OpenCodeBottomSheetKeyboard,
+    scrollTargetKey: Any?,
+    threeButtonNavigation: Boolean,
     windowHeight: Dp,
     onDismissRequest: () -> Unit,
     headerDragModifier: Modifier,
@@ -418,14 +605,13 @@ private fun BottomSheetContent(
     var committedToScrollable by remember { mutableStateOf(height == OpenCodeBottomSheetHeight.Half) }
     var previousHeight by remember { mutableStateOf(height) }
     val scrollState = rememberScrollState()
+    val scope = rememberCoroutineScope()
+    val scrollTargets = remember(scrollState) { BottomSheetScrollTargets(scrollState, scope) }
 
     if (height != previousHeight) {
         previousHeight = height
-        // Invalidate the previous body's measured height so layout mode is not chosen
-        // from stale metrics while the new body is already rendering.
-        contentHeight = 0.dp
         // Half locks immediately so the first frame does not expand unconstrained under
-        // Compact; FitContent measures again.
+        // Compact; FitContent measures again from the live body height.
         committedToScrollable = height == OpenCodeBottomSheetHeight.Half
     }
 
@@ -447,14 +633,15 @@ private fun BottomSheetContent(
         }
     }
 
+    scrollTargets.targetKey = scrollTargetKey
+    scrollTargets.scrollable = layoutMode == BottomSheetLayoutMode.Scrollable
+
     val resolvedHeaderHeight = openCodeBottomSheetResolvedHeaderHeight(headerHeight)
     val scrollBodyMaxHeight =
         (maxSheetHeight - resolvedHeaderHeight - pinnedTopHeight - BottomSheetContentBottomPadding)
             .coerceAtLeast(BottomSheetEntryMinHeight)
 
-    val contentView = LocalView.current
-    val threeButtonNav = remember(contentView) { contentView.context.usesThreeButtonNavigation() }
-    val navigationBarsPaddingModifier = if (threeButtonNav) Modifier else Modifier.navigationBarsPadding()
+    val navigationBarsPaddingModifier = if (threeButtonNavigation) Modifier else Modifier.navigationBarsPadding()
 
     // A measuring sheet has no resting height yet, so it does not expand until it settles.
     val restingSheetHeight =
@@ -485,137 +672,125 @@ private fun BottomSheetContent(
             keyboard = keyboard,
         )
     }
-    val bodyModifier =
-        Modifier
-            .fillMaxWidth()
-            .padding(bottom = BottomSheetContentBottomPadding)
 
-    Box(modifier = bodyModifier) {
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(bottom = BottomSheetContentBottomPadding)
+                .then(
+                    when (layoutMode) {
+                        // Cap Compact so a short body that just grew cannot stretch the sheet
+                        // past the compact limit for the frame before it turns scrollable.
+                        BottomSheetLayoutMode.Compact ->
+                            if (expandsWithKeyboard) {
+                                Modifier.bottomSheetFixedHeight(keyboardSheetHeight)
+                            } else {
+                                Modifier
+                                    .heightIn(max = BottomSheetCompactMaxHeight)
+                                    .wrapContentHeight()
+                            }
+                        BottomSheetLayoutMode.Measuring -> Modifier.heightIn(max = maxSheetHeight)
+                        BottomSheetLayoutMode.Scrollable ->
+                            if (expandsWithKeyboard) {
+                                Modifier.bottomSheetFixedHeight(keyboardSheetHeight)
+                            } else {
+                                Modifier.height(maxSheetHeight)
+                            }
+                    },
+                ),
+    ) {
+        BottomSheetHeader(
+            title = title,
+            leadingAction = headerLeadingAction,
+            onDismissRequest = onDismissRequest,
+            modifier =
+                headerDragModifier.onSizeChanged {
+                    headerHeight = with(density) { it.height.toDp() }
+                },
+        )
+
         Column(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .then(
-                        when (layoutMode) {
-                            // Cap Compact so a stale short contentHeight cannot let a newly
-                            // swapped long body expand the sheet to full screen for a frame.
-                            BottomSheetLayoutMode.Compact ->
-                                if (expandsWithKeyboard) {
-                                    Modifier.bottomSheetFixedHeight(keyboardSheetHeight)
-                                } else {
-                                    Modifier
-                                        .heightIn(max = BottomSheetCompactMaxHeight)
-                                        .wrapContentHeight()
-                                }
-                            BottomSheetLayoutMode.Measuring -> Modifier.heightIn(max = maxSheetHeight)
-                            BottomSheetLayoutMode.Scrollable ->
-                                if (expandsWithKeyboard) {
-                                    Modifier.bottomSheetFixedHeight(keyboardSheetHeight)
-                                } else {
-                                    Modifier.height(maxSheetHeight)
-                                }
-                        },
-                    ),
-        ) {
-            BottomSheetHeader(
-                title = title,
-                leadingAction = headerLeadingAction,
-                onDismissRequest = onDismissRequest,
-                modifier =
-                    headerDragModifier.onSizeChanged {
-                        headerHeight = with(density) { it.height.toDp() }
+                    .onSizeChanged {
+                        pinnedTopHeight = with(density) { it.height.toDp() }
                     },
-            )
+        ) {
+            pinnedTop()
+        }
 
-            Column(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .onSizeChanged {
-                            pinnedTopHeight = with(density) { it.height.toDp() }
-                        },
-            ) {
-                pinnedTop()
-            }
-
-            val bodyHeightModifier =
-                if (pinnedBottom != null) {
-                    // The footer sits under the body: a fixed-height sheet gives the body the
-                    // rest of its height, and a sizing sheet lets it shrink to keep the footer.
-                    Modifier.weight(
-                        1f,
-                        fill = layoutMode == BottomSheetLayoutMode.Scrollable || expandsWithKeyboard,
-                    )
-                } else {
-                    when (layoutMode) {
-                        BottomSheetLayoutMode.Compact -> Modifier.wrapContentHeight()
-                        BottomSheetLayoutMode.Measuring,
-                        BottomSheetLayoutMode.Scrollable,
-                        -> {
-                            val scrollBodyHeightModifier =
-                                if (expandsWithKeyboard) {
-                                    Modifier.bottomSheetMaxHeight {
-                                        keyboardSheetHeight() - resolvedHeaderHeight - pinnedTopHeight -
-                                            BottomSheetContentBottomPadding
-                                    }
-                                } else {
-                                    Modifier.heightIn(max = scrollBodyMaxHeight)
+        val bodyHeightModifier =
+            if (pinnedBottom != null) {
+                // The footer sits under the body: a fixed-height sheet gives the body the
+                // rest of its height, and a sizing sheet lets it shrink to keep the footer.
+                Modifier.weight(
+                    1f,
+                    fill = layoutMode == BottomSheetLayoutMode.Scrollable || expandsWithKeyboard,
+                )
+            } else {
+                when (layoutMode) {
+                    BottomSheetLayoutMode.Compact -> Modifier.weight(1f, fill = false)
+                    BottomSheetLayoutMode.Measuring,
+                    BottomSheetLayoutMode.Scrollable,
+                    -> {
+                        val scrollBodyHeightModifier =
+                            if (expandsWithKeyboard) {
+                                Modifier.bottomSheetMaxHeight {
+                                    keyboardSheetHeight() - resolvedHeaderHeight - pinnedTopHeight -
+                                        BottomSheetContentBottomPadding
                                 }
-                            scrollBodyHeightModifier.then(navigationBarsPaddingModifier)
-                        }
+                            } else {
+                                Modifier.heightIn(max = scrollBodyMaxHeight)
+                            }
+                        scrollBodyHeightModifier.then(navigationBarsPaddingModifier)
                     }
                 }
+            }
 
+        // The body is composed once in every mode. It always sits in a scroll container, which
+        // measures it at its natural height, so that height picks the layout mode directly.
+        CompositionLocalProvider(LocalBottomSheetScrollTargets provides scrollTargets) {
             Column(
                 modifier =
                     Modifier
                         .fillMaxWidth()
                         .then(bodyHeightModifier)
-                        .then(
-                            if (layoutMode == BottomSheetLayoutMode.Compact) {
-                                Modifier
-                            } else {
-                                Modifier.verticalScroll(scrollState)
-                            },
-                        ),
+                        .onSizeChanged { scrollTargets.viewportHeightPx = it.height }
+                        .verticalScroll(scrollState, enabled = layoutMode != BottomSheetLayoutMode.Measuring),
             ) {
-                content()
-            }
-
-            if (pinnedBottom != null) {
                 Column(
                     modifier =
                         Modifier
                             .fillMaxWidth()
-                            .onSizeChanged {
-                                measuredPinnedBottomHeight = with(density) { it.height.toDp() }
-                            }.padding(
-                                start = BottomSheetFooterHorizontalPadding,
-                                end = BottomSheetFooterHorizontalPadding,
-                                top = BottomSheetFooterTopPadding,
-                            ).then(navigationBarsPaddingModifier),
+                            .onGloballyPositioned { scrollTargets.bodyCoordinates = it }
+                            .onSizeChanged { size ->
+                                val measured = with(density) { size.height.toDp() }
+                                if (contentHeight != measured) {
+                                    contentHeight = measured
+                                }
+                            },
                 ) {
-                    pinnedBottom()
+                    content()
                 }
             }
         }
 
-        // A fixed-height sheet never reads the measured height. Skipping the second
-        // composition keeps stateful content (a pager) bound to one visible instance.
-        if (height == OpenCodeBottomSheetHeight.FitContent) {
-            Box(
+        if (pinnedBottom != null) {
+            Column(
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .measureContentHeight(density) { measured ->
-                            if (contentHeight != measured) {
-                                contentHeight = measured
-                            }
-                        },
+                        .onSizeChanged {
+                            measuredPinnedBottomHeight = with(density) { it.height.toDp() }
+                        }.padding(
+                            start = BottomSheetFooterHorizontalPadding,
+                            end = BottomSheetFooterHorizontalPadding,
+                            top = BottomSheetFooterTopPadding,
+                        ).then(navigationBarsPaddingModifier),
             ) {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    content()
-                }
+                pinnedBottom()
             }
         }
     }
@@ -652,12 +827,16 @@ private fun BottomSheetHeader(
             text = title,
             modifier = Modifier.weight(1f).semantics { heading() },
             style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface,
+            color = openCodeColor("text-strong"),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
         OpenCodeButton(
-            variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Close, "Close"),
+            variant =
+                OpenCodeButtonVariant.IconCircle(
+                    OpenCodeIcons.Close,
+                    stringResource(R.string.bottom_sheet_close),
+                ),
             contrast = OpenCodeButtonContrast.Low,
             onClick = onDismissRequest,
         )
@@ -761,28 +940,22 @@ private fun Modifier.bottomSheetMaxHeight(maxHeight: Density.() -> Dp): Modifier
         layout(placeable.width, placeable.height) { placeable.place(0, 0) }
     }
 
-private fun Modifier.measureContentHeight(
-    density: Density,
-    onHeight: (Dp) -> Unit,
-): Modifier =
-    layout { measurable, constraints ->
-        val placeable =
-            measurable.measure(
-                constraints.copy(
-                    minHeight = 0,
-                    maxHeight = Constraints.Infinity,
-                ),
-            )
-        onHeight(with(density) { placeable.height.toDp() })
-        layout(0, 0) {}
-    }
+/**
+ * Three-button navigation reserves a tappable bar at the bottom; gesture navigation leaves only
+ * a gesture area there, so its tappable inset is zero.
+ */
+@Composable
+private fun usesThreeButtonNavigation(): Boolean {
+    val density = LocalDensity.current
+    return WindowInsets.tappableElement.getBottom(density) > 0
+}
 
 @Composable
 private fun rememberBottomSheetCornerRadius(): Dp {
     val view = LocalView.current
     val density = LocalDensity.current
     val displayRadius =
-        deviceBottomCornerRadiusPx(view.context)?.let { px ->
+        remember(view) { deviceBottomCornerRadiusPx(view.context) }?.let { px ->
             with(density) { px.toDp() }
         } ?: BottomSheetDisplayCornerRadiusFallback
     return (displayRadius - BottomSheetInset).coerceAtLeast(BottomSheetMinCornerRadius)
@@ -799,13 +972,6 @@ private fun deviceBottomCornerRadiusPx(context: Context): Int? {
     val trailing = insets.getRoundedCorner(RoundedCorner.POSITION_BOTTOM_RIGHT)?.radius
     return listOfNotNull(leading, trailing).maxOrNull()?.takeIf { it > 0 }
 }
-
-@Suppress("ktlint:standard:property-naming")
-private const val NavigationModeGestural = 2
-
-private fun Context.usesThreeButtonNavigation(): Boolean =
-    Settings.Secure.getInt(contentResolver, "navigation_mode", NavigationModeGestural) !=
-        NavigationModeGestural
 
 private tailrec fun Context.findActivity(): Activity? =
     when (this) {
@@ -893,6 +1059,11 @@ private fun restoreDecorSiblingAccessibility(hiddenSiblings: List<Pair<View, Int
     }
 }
 
+/**
+ * Tappable row in a bottom sheet. [selected] marks the current choice in a picker: it shows a
+ * check in the end slot (replacing [endDecorator]) and exposes the selected state to
+ * accessibility. Titles wrap to two lines at large font scales.
+ */
 @Composable
 fun OpenCodeBottomSheetEntry(
     title: String,
@@ -900,6 +1071,7 @@ fun OpenCodeBottomSheetEntry(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     destructive: Boolean = false,
+    selected: Boolean = false,
     startDecorator: BottomSheetEntryDecorator = BottomSheetEntryDecorator.None,
     endDecorator: BottomSheetEntryDecorator = BottomSheetEntryDecorator.None,
 ) {
@@ -912,17 +1084,18 @@ fun OpenCodeBottomSheetEntry(
     )
     val contentColor =
         when {
-            !enabled -> MaterialTheme.colorScheme.onSurfaceVariant
-            destructive -> MaterialTheme.colorScheme.error
-            else -> MaterialTheme.colorScheme.onSurface
+            !enabled -> openCodeColor("text-weaker")
+            destructive -> openCodeColor("error")
+            else -> openCodeColor("text-strong")
         }
     val iconColor =
         when {
-            !enabled -> openCodeColor("icon-base")
+            !enabled -> openCodeColor("text-weaker")
             destructive -> openCodeColor("error")
             else -> openCodeColor("icon-strong-base")
         }
     val entryShape = RoundedCornerShape(10.dp)
+    val resolvedEndDecorator = if (selected) BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check) else endDecorator
 
     Row(
         modifier =
@@ -941,8 +1114,10 @@ fun OpenCodeBottomSheetEntry(
                     interactionSource = interactionSource,
                     indication = ripple(bounded = true),
                     enabled = enabled,
+                    role = Role.Button,
                     onClick = onClick,
-                ).padding(
+                ).semantics { this.selected = selected }
+                .padding(
                     horizontal = BottomSheetEntryHorizontalPadding,
                     vertical = BottomSheetEntryVerticalPadding,
                 ).then(if (enabled) Modifier else Modifier.alpha(0.7f)),
@@ -955,10 +1130,10 @@ fun OpenCodeBottomSheetEntry(
             modifier = Modifier.weight(1f),
             style = MaterialTheme.typography.bodyLarge,
             color = contentColor,
-            maxLines = 1,
+            maxLines = BottomSheetEntryMaxLines,
             overflow = TextOverflow.Ellipsis,
         )
-        BottomSheetEntryDecoration(decorator = endDecorator, tint = iconColor)
+        BottomSheetEntryDecoration(decorator = resolvedEndDecorator, tint = iconColor)
     }
 }
 
@@ -973,7 +1148,7 @@ private fun BottomSheetEntryDecoration(
             Box(modifier = Modifier.size(BottomSheetEntryDecoratorSize), contentAlignment = Alignment.Center) {
                 Icon(
                     imageVector = decorator.imageVector,
-                    contentDescription = decorator.contentDescription,
+                    contentDescription = null,
                     modifier = Modifier.size(BottomSheetEntryIconSize),
                     tint = tint,
                 )
@@ -989,6 +1164,7 @@ private fun OpenCodeBottomSheetScrollablePreview() {
             repeat(24) { index ->
                 OpenCodeBottomSheetEntry(
                     title = "Model ${index + 1} · Provider",
+                    selected = index == 2,
                     onClick = {},
                 )
             }
@@ -1023,13 +1199,13 @@ private fun OpenCodeBottomSheetLightPreview() {
         OpenCodeBottomSheet(visible = true, title = "Session actions", onDismissRequest = {}) {
             OpenCodeBottomSheetEntry(
                 title = "New session",
-                startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Add, "New session"),
+                startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Add),
                 onClick = {},
             )
             OpenCodeBottomSheetEntry(
                 title = "Open project",
-                startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Folder, "Open project"),
-                endDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.ChevronRight, null),
+                startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Folder),
+                endDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.ChevronRight),
                 onClick = {},
             )
         }
@@ -1044,13 +1220,13 @@ private fun OpenCodeBottomSheetDarkPreview() {
             OpenCodeBottomSheetEntry(title = "Rename session", onClick = {})
             OpenCodeBottomSheetEntry(
                 title = "Fork session",
-                endDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.ChevronRight, null),
+                endDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.ChevronRight),
                 onClick = {},
             )
             OpenCodeBottomSheetEntry(
                 title = "Delete session",
                 destructive = true,
-                startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Close, "Delete session"),
+                startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Close),
                 onClick = {},
             )
         }

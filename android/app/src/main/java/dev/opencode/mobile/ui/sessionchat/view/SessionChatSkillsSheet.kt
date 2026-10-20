@@ -2,10 +2,8 @@ package dev.opencode.mobile.ui.sessionchat.view
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
 import dev.opencode.mobile.domain.message.ToolStatus
@@ -42,12 +40,7 @@ internal fun SessionChatSkillsSheet(
             onDismiss()
         },
     ) {
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 8.dp),
-        ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
             target?.skills.orEmpty().forEach { skill ->
                 OpenCodeListItem(
                     title = skill.label,

@@ -21,11 +21,13 @@ private let bottomSheetEstimatedHeaderHeight: CGFloat =
 private let bottomSheetEnterDuration: TimeInterval = 0.32
 private let bottomSheetExitDuration: TimeInterval = 0.28
 private let bottomSheetScrimAlpha: Double = 0.32
-private let bottomSheetDragDismissThreshold: CGFloat = 96
+private let bottomSheetEntryMaxLines = 2
 
+/// Leading or trailing icon of an `OpenCodeBottomSheetEntry`. Decorative: the
+/// entry title is its accessibility label.
 enum BottomSheetEntryDecorator {
     case none
-    case icon(OpenCodeIcon, accessibilityLabel: String? = nil)
+    case icon(OpenCodeIcon)
 }
 
 /// How tall a bottom sheet rests.
@@ -59,8 +61,48 @@ enum OpenCodeBottomSheetLayoutMath {
     /// Fraction of the available height used by the scrollable detent.
     static let scrollableDetentFraction: CGFloat = 0.50
     /// Tallest `.fitContent` card that still wraps its content: five Commands
-    /// rows plus header and bottom clearance.
+    /// rows plus header and bottom clearance. Shared with Android.
     static let compactMaxHeight: CGFloat = 420
+    /// Header drag distance that dismisses on release. Shared with Android.
+    static let dragDismissDistance: CGFloat = 96
+    /// Downward release speed (pt/s) that dismisses a header drag of any
+    /// length. Shared with Android.
+    static let dragDismissVelocity: CGFloat = 1200
+    /// Enter: decelerate onto the resting position. Shared with Android.
+    static let enterAnimation = Animation.timingCurve(0.4, 0, 0.2, 1, duration: bottomSheetEnterDuration)
+    /// Exit: accelerate off the bottom edge. Shared with Android.
+    static let exitAnimation = Animation.timingCurve(0.4, 0, 1, 1, duration: bottomSheetExitDuration)
+    /// Settle back after a header drag that did not dismiss.
+    static let dragSettleAnimation = Animation.spring(response: 0.31, dampingFraction: 0.82)
+
+    /// Whether a released header drag dismisses: past the distance, or flung
+    /// down fast enough.
+    static func dragDismisses(offset: CGFloat, velocity: CGFloat) -> Bool {
+        offset >= dragDismissDistance || velocity >= dragDismissVelocity
+    }
+
+    /// Offset that slides a hidden card just below the bottom edge: its own
+    /// height plus the space under it. Before the card has measured, half the
+    /// container keeps it off screen.
+    static func hiddenOffset(cardHeight: CGFloat, containerHeight: CGFloat, bottomSpace: CGFloat) -> CGFloat {
+        (cardHeight > 0 ? cardHeight : containerHeight / 2) + bottomSpace
+    }
+
+    /// Body height to keep after a measure of a `.fitContent` card. A compact
+    /// card follows its body both ways; once locked to the scrollable detent
+    /// it stops measuring. A measure taken before the overlay has a size
+    /// (`containerHeight` 0) wraps text at no width, so it is ignored rather
+    /// than locking a short body to the scrollable detent. `nil` keeps the
+    /// current value.
+    static func nextContentHeight(
+        current: CGFloat,
+        measured: CGFloat,
+        lockedScrollable: Bool,
+        containerHeight: CGFloat
+    ) -> CGFloat? {
+        guard containerHeight > 0, !lockedScrollable, measured > 0, measured != current else { return nil }
+        return measured
+    }
     /// Tight bottom inset shared with Android, so a short picker (Model,
     /// Commands) does not grow a second empty band.
     static let compactBottomClearance: CGFloat = 20
@@ -245,7 +287,10 @@ private struct OpenCodeBottomSheetSheetBody<PinnedTop: View, SheetContent: View,
     let topSafeArea: CGFloat
     let safeAreaBottom: CGFloat
     let usesFloatingCard: Bool
+    let displayCornerRadius: CGFloat
     let onDismiss: () -> Void
+    let onHeaderDragChanged: (CGFloat) -> Void
+    let onHeaderDragEnded: (CGFloat, CGFloat) -> Void
     @ViewBuilder let pinnedTop: () -> PinnedTop
     @ViewBuilder let sheetContent: () -> SheetContent
     @ViewBuilder let pinnedBottom: () -> PinnedBottom
@@ -267,7 +312,10 @@ private struct OpenCodeBottomSheetSheetBody<PinnedTop: View, SheetContent: View,
         topSafeArea: CGFloat,
         safeAreaBottom: CGFloat,
         usesFloatingCard: Bool,
+        displayCornerRadius: CGFloat,
         onDismiss: @escaping () -> Void,
+        onHeaderDragChanged: @escaping (CGFloat) -> Void,
+        onHeaderDragEnded: @escaping (CGFloat, CGFloat) -> Void,
         @ViewBuilder pinnedTop: @escaping () -> PinnedTop,
         @ViewBuilder sheetContent: @escaping () -> SheetContent,
         @ViewBuilder pinnedBottom: @escaping () -> PinnedBottom
@@ -282,7 +330,10 @@ private struct OpenCodeBottomSheetSheetBody<PinnedTop: View, SheetContent: View,
         self.topSafeArea = topSafeArea
         self.safeAreaBottom = safeAreaBottom
         self.usesFloatingCard = usesFloatingCard
+        self.displayCornerRadius = displayCornerRadius
         self.onDismiss = onDismiss
+        self.onHeaderDragChanged = onHeaderDragChanged
+        self.onHeaderDragEnded = onHeaderDragEnded
         self.pinnedTop = pinnedTop
         self.sheetContent = sheetContent
         self.pinnedBottom = pinnedBottom
@@ -347,6 +398,8 @@ private struct OpenCodeBottomSheetSheetBody<PinnedTop: View, SheetContent: View,
             title: title,
             leadingAction: leadingAction,
             onDismiss: onDismiss,
+            onHeaderDragChanged: onHeaderDragChanged,
+            onHeaderDragEnded: onHeaderDragEnded,
             mode: presentationMode,
             bottomClearance: bottomClearance,
             scrollAreaHeight: scrollAreaHeight,
@@ -357,11 +410,16 @@ private struct OpenCodeBottomSheetSheetBody<PinnedTop: View, SheetContent: View,
             content: sheetContent,
             pinnedBottom: pinnedBottom,
             onContentHeightChange: { newHeight in
-                guard !hasLockedScrollable else { return }
-                // Compact re-layout can report a clipped height; keep the
-                // largest intrinsic size seen for this presentation.
-                guard newHeight > contentHeight else { return }
-                contentHeight = newHeight
+                // The body measures at its intrinsic height, so a compact card
+                // shrinks with it too (Commands to the shorter MCP page).
+                if let next = OpenCodeBottomSheetLayoutMath.nextContentHeight(
+                    current: contentHeight,
+                    measured: newHeight,
+                    lockedScrollable: hasLockedScrollable,
+                    containerHeight: availableHeight
+                ) {
+                    contentHeight = next
+                }
             },
             onHeaderHeightChange: { headerHeight = $0 },
             onPinnedTopHeightChange: { pinnedTopHeight = $0 },
@@ -369,7 +427,7 @@ private struct OpenCodeBottomSheetSheetBody<PinnedTop: View, SheetContent: View,
         )
         .frame(maxWidth: .infinity, alignment: .top)
         .frame(height: cardHeight, alignment: .top)
-        .modifier(BottomSheetCardChrome(usesFloatingCard: usesFloatingCard))
+        .modifier(BottomSheetCardChrome(usesFloatingCard: usesFloatingCard, displayCornerRadius: displayCornerRadius))
         .onChange(of: contentHeight) { _, _ in
             updatePresentationMode()
         }
@@ -432,30 +490,45 @@ private struct OpenCodeBottomSheetSheetBody<PinnedTop: View, SheetContent: View,
     }
 }
 
-private func screenDisplayCornerRadius(window: UIWindow?) -> CGFloat {
-    let screen = window?.windowScene?.screen
-    if let screen, let radius = screen.value(forKey: "_displayCornerRadius") as? CGFloat, radius > 0 {
+/// Display corner radius per screen, read once. UIKit exposes it only through
+/// a private key, so a missing key falls back to a typical modern radius
+/// instead of raising.
+enum BottomSheetDisplayCornerRadius {
+    private static let key = "_displayCornerRadius"
+    private static var cache: [ObjectIdentifier: CGFloat] = [:]
+
+    static func value(for screen: UIScreen?) -> CGFloat {
+        guard let screen else { return bottomSheetDisplayCornerRadiusFallback }
+        let id = ObjectIdentifier(screen)
+        if let cached = cache[id] { return cached }
+        let radius = read(from: screen) ?? bottomSheetDisplayCornerRadiusFallback
+        cache[id] = radius
         return radius
     }
-    return bottomSheetDisplayCornerRadiusFallback
-}
 
-private func bottomSheetBottomCornerRadius(window: UIWindow?) -> CGFloat {
-    max(screenDisplayCornerRadius(window: window) - bottomSheetInset, bottomSheetMinCornerRadius)
+    static func read(from object: NSObject) -> CGFloat? {
+        guard object.responds(to: NSSelectorFromString(key)),
+              let radius = object.value(forKey: key) as? CGFloat,
+              radius > 0
+        else { return nil }
+        return radius
+    }
+
+    /// Bottom corner radius of a phone card: concentric with the display corner
+    /// across the card's inset.
+    static func cardBottomRadius(displayRadius: CGFloat) -> CGFloat {
+        max(displayRadius - bottomSheetInset, bottomSheetMinCornerRadius)
+    }
 }
 
 private struct BottomSheetCardChrome: ViewModifier {
     let usesFloatingCard: Bool
+    let displayCornerRadius: CGFloat
 
     func body(content: Content) -> some View {
         let bottomRadius = usesFloatingCard
             ? bottomSheetCornerRadiusTop
-            : bottomSheetBottomCornerRadius(
-                window: UIApplication.shared.connectedScenes
-                    .compactMap { $0 as? UIWindowScene }
-                    .flatMap(\.windows)
-                    .first(where: \.isKeyWindow)
-            )
+            : BottomSheetDisplayCornerRadius.cardBottomRadius(displayRadius: displayCornerRadius)
         let shape = UnevenRoundedRectangle(
             topLeadingRadius: bottomSheetCornerRadiusTop,
             bottomLeadingRadius: bottomRadius,
@@ -469,6 +542,81 @@ private struct BottomSheetCardChrome: ViewModifier {
     }
 }
 
+/// Shared between the overlay host and its SwiftUI content: whether the card is
+/// on screen, and how far the header drag has pulled it down.
+@Observable
+final class OpenCodeBottomSheetPresentation {
+    var revealed = false
+    var dragOffset: CGFloat = 0
+}
+
+/// Hardware-keyboard Escape for window-level sheets: dismisses the newest
+/// presented sheet. Each sheet's hosting controller carries the command and
+/// takes first responder when nothing else holds it.
+enum OpenCodeBottomSheetEscape {
+    private static var sheets: [(owner: ObjectIdentifier, dismiss: () -> Void)] = []
+
+    static func makeCommand() -> UIKeyCommand {
+        let command = UIKeyCommand(
+            input: UIKeyCommand.inputEscape,
+            modifierFlags: [],
+            action: #selector(UIResponder.openCodeDismissNewestBottomSheet(_:))
+        )
+        command.wantsPriorityOverSystemBehavior = true
+        return command
+    }
+
+    /// Registers (or refreshes) a presented sheet; a new sheet becomes the newest.
+    static func register(_ owner: AnyObject, dismiss: @escaping () -> Void) {
+        let id = ObjectIdentifier(owner)
+        if let index = sheets.firstIndex(where: { $0.owner == id }) {
+            sheets[index].dismiss = dismiss
+        } else {
+            sheets.append((id, dismiss))
+        }
+    }
+
+    static func unregister(_ owner: AnyObject) {
+        sheets.removeAll { $0.owner == ObjectIdentifier(owner) }
+    }
+
+    static func dismissNewest() {
+        sheets.last?.dismiss()
+    }
+}
+
+extension UIResponder {
+    @objc fileprivate func openCodeDismissNewestBottomSheet(_ sender: UIKeyCommand) {
+        OpenCodeBottomSheetEscape.dismissNewest()
+    }
+}
+
+/// Hosts the sheet overlay. It carries the Escape command and takes first
+/// responder when nothing else holds it, so Escape reaches the sheet.
+private final class OpenCodeBottomSheetHostingController<Content: View>: UIHostingController<Content> {
+    private let escapeCommand = OpenCodeBottomSheetEscape.makeCommand()
+
+    override var canBecomeFirstResponder: Bool { true }
+
+    override var keyCommands: [UIKeyCommand]? {
+        [escapeCommand] + (super.keyCommands ?? [])
+    }
+
+    // Claim the Escape action explicitly, so the hosting controller's own action
+    // filtering cannot drop it on the way up the responder chain.
+    override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
+        action == #selector(UIResponder.openCodeDismissNewestBottomSheet(_:))
+            || super.canPerformAction(action, withSender: sender)
+    }
+}
+
+/// Window-level bottom sheet driven by `isPresented`.
+///
+/// Dismiss contract (shared with Android): a dismiss gesture (scrim, Close,
+/// Escape, header drag) sets `isPresented` to false at once, and the card then
+/// plays its exit motion on its own. A caller can present another sheet or
+/// navigate straight from that change. While it exits, the card keeps the last
+/// content it showed while presented.
 struct OpenCodeBottomSheet<PinnedTop: View, SheetContent: View, PinnedBottom: View>: ViewModifier {
     @Binding var isPresented: Bool
     let title: String
@@ -546,7 +694,10 @@ private struct OpenCodeBottomSheetOverlayHost<PinnedTop: View, SheetContent: Vie
     }
 
     final class Coordinator {
-        private var overlayController: UIHostingController<OpenCodeBottomSheetOverlayContent<PinnedTop, SheetContent, PinnedBottom>>?
+        private typealias OverlayContent = OpenCodeBottomSheetOverlayContent<PinnedTop, SheetContent, PinnedBottom>
+
+        private var overlayController: OpenCodeBottomSheetHostingController<OverlayContent>?
+        private let presentation = OpenCodeBottomSheetPresentation()
         private var isAnimatingOut = false
         private var dismissGeneration = 0
         private var wasPresented = false
@@ -573,8 +724,20 @@ private struct OpenCodeBottomSheetOverlayHost<PinnedTop: View, SheetContent: Vie
                 return
             }
 
+            guard isPresented else {
+                wasPresented = false
+                presentedKeyboard = nil
+                // Not updating rootView keeps the last presented content on the
+                // card while it exits.
+                if overlayController != nil, !isAnimatingOut {
+                    dismissOverlay()
+                }
+                return
+            }
+
             let hostFrame = window.convert(window.bounds, to: nil)
-            let content = OpenCodeBottomSheetOverlayContent(
+            let content = OverlayContent(
+                presentation: presentation,
                 title: title,
                 leadingAction: leadingAction,
                 scrollTargetID: scrollTargetID,
@@ -582,6 +745,7 @@ private struct OpenCodeBottomSheetOverlayHost<PinnedTop: View, SheetContent: Vie
                 keyboard: keyboard,
                 displaySafeAreaTop: window.safeAreaInsets.top,
                 displaySafeAreaBottom: window.safeAreaInsets.bottom,
+                displayCornerRadius: BottomSheetDisplayCornerRadius.value(for: window.windowScene?.screen),
                 seededKeyboardOverlap: OpenCodeBottomSheetLayoutMath.tracksKeyboard(keyboard)
                     ? KeyboardOverlap.currentAmount(in: hostFrame)
                     : 0,
@@ -591,42 +755,43 @@ private struct OpenCodeBottomSheetOverlayHost<PinnedTop: View, SheetContent: Vie
                 pinnedBottom: pinnedBottom
             )
 
-            if isPresented {
-                let shouldDismiss = KeyboardOverlap.shouldDismissSheetKeyboard(
-                    isPresented: true,
-                    wasPresented: wasPresented,
-                    keyboard: keyboard,
-                    presentedKeyboard: presentedKeyboard
-                )
-                wasPresented = true
-                presentedKeyboard = keyboard
-                cancelDismissIfNeeded()
-                if let overlayController {
-                    configureOverlay(overlayController)
-                    overlayController.rootView = content
-                    overlayController.view.alpha = 1
-                    OpenCodeWindowOverlayRegistry.shared.attach(overlayController.view)
-                } else {
-                    let controller = UIHostingController(rootView: content)
-                    configureOverlay(controller)
-                    controller.view.alpha = 0
-                    attachOverlay(controller.view, to: window)
-                    OpenCodeWindowOverlayRegistry.shared.attach(controller.view)
-                    overlayController = controller
-                    UIView.animate(withDuration: bottomSheetEnterDuration) {
-                        controller.view.alpha = 1
-                    }
-                }
-                if shouldDismiss {
-                    window.endEditing(true)
+            let shouldDismissKeyboard = KeyboardOverlap.shouldDismissSheetKeyboard(
+                isPresented: true,
+                wasPresented: wasPresented,
+                keyboard: keyboard,
+                presentedKeyboard: presentedKeyboard
+            )
+            wasPresented = true
+            presentedKeyboard = keyboard
+            if let overlayController {
+                configureOverlay(overlayController)
+                overlayController.rootView = content
+                OpenCodeWindowOverlayRegistry.shared.attach(overlayController.view)
+                if isAnimatingOut {
+                    // Presented again mid-exit: turn around from where the card is.
+                    dismissGeneration += 1
+                    isAnimatingOut = false
+                    reveal()
                 }
             } else {
-                wasPresented = false
-                presentedKeyboard = nil
-                if overlayController != nil, !isAnimatingOut {
-                    dismissOverlay()
+                presentation.revealed = false
+                presentation.dragOffset = 0
+                let controller = OpenCodeBottomSheetHostingController(rootView: content)
+                configureOverlay(controller)
+                attachOverlay(controller.view, to: window)
+                OpenCodeWindowOverlayRegistry.shared.attach(controller.view)
+                overlayController = controller
+                // One layout pass hidden, so the card measures before it slides in.
+                DispatchQueue.main.async { [weak self] in
+                    guard let self, self.overlayController === controller, !self.isAnimatingOut else { return }
+                    self.reveal()
                 }
             }
+            if shouldDismissKeyboard {
+                window.endEditing(true)
+            }
+            OpenCodeBottomSheetEscape.register(self, dismiss: onDismiss)
+            takeEscapeFocusIfFree()
         }
 
         func removeOverlayImmediately() {
@@ -637,22 +802,34 @@ private struct OpenCodeBottomSheetOverlayHost<PinnedTop: View, SheetContent: Vie
             if let view = overlayController?.view {
                 OpenCodeWindowOverlayRegistry.shared.detach(view)
             }
-            overlayController?.view.layer.removeAllAnimations()
+            OpenCodeBottomSheetEscape.unregister(self)
+            overlayController?.resignFirstResponder()
             overlayController?.view.removeFromSuperview()
             overlayController = nil
+            presentation.revealed = false
+            presentation.dragOffset = 0
         }
 
-        private func cancelDismissIfNeeded() {
-            guard isAnimatingOut else { return }
-            dismissGeneration += 1
-            overlayController?.view.layer.removeAllAnimations()
-            overlayController?.view.alpha = 1
-            isAnimatingOut = false
+        private func reveal() {
+            withAnimation(OpenCodeBottomSheetLayoutMath.enterAnimation) {
+                presentation.revealed = true
+                presentation.dragOffset = 0
+            }
         }
 
-        private func configureOverlay(
-            _ controller: UIHostingController<OpenCodeBottomSheetOverlayContent<PinnedTop, SheetContent, PinnedBottom>>
-        ) {
+        /// Escape reaches the sheet through the responder chain. A field inside
+        /// the sheet already routes there; otherwise the sheet takes first
+        /// responder, unless another text input still holds it (a sheet that
+        /// keeps the keyboard over the composer).
+        private func takeEscapeFocusIfFree() {
+            guard let overlayController, !overlayController.isFirstResponder else { return }
+            let current = UIResponder.openCodeCurrentFirstResponder()
+            if let view = current as? UIView, view.isDescendant(of: overlayController.view) { return }
+            guard !(current is UITextInput) else { return }
+            overlayController.becomeFirstResponder()
+        }
+
+        private func configureOverlay(_ controller: OpenCodeBottomSheetHostingController<OverlayContent>) {
             controller.safeAreaRegions = []
             controller.additionalSafeAreaInsets = .zero
             controller.view.backgroundColor = .clear
@@ -675,22 +852,26 @@ private struct OpenCodeBottomSheetOverlayHost<PinnedTop: View, SheetContent: Vie
         private func dismissOverlay() {
             guard let overlayController else { return }
             OpenCodeWindowOverlayRegistry.shared.detach(overlayController.view)
+            OpenCodeBottomSheetEscape.unregister(self)
+            overlayController.resignFirstResponder()
             isAnimatingOut = true
             dismissGeneration += 1
             let generation = dismissGeneration
-            UIView.animate(withDuration: bottomSheetExitDuration, animations: {
-                overlayController.view.alpha = 0
-            }, completion: { [weak self] _ in
+            withAnimation(OpenCodeBottomSheetLayoutMath.exitAnimation) {
+                presentation.revealed = false
+            } completion: { [weak self] in
                 guard let self, self.isAnimatingOut, self.dismissGeneration == generation else { return }
                 overlayController.view.removeFromSuperview()
                 self.overlayController = nil
                 self.isAnimatingOut = false
-            })
+                self.presentation.dragOffset = 0
+            }
         }
     }
 }
 
 private struct OpenCodeBottomSheetOverlayContent<PinnedTop: View, SheetContent: View, PinnedBottom: View>: View {
+    let presentation: OpenCodeBottomSheetPresentation
     let title: String
     let leadingAction: OpenCodeBottomSheetHeaderAction?
     let scrollTargetID: String?
@@ -698,14 +879,15 @@ private struct OpenCodeBottomSheetOverlayContent<PinnedTop: View, SheetContent: 
     let keyboard: OpenCodeBottomSheetKeyboard
     let displaySafeAreaTop: CGFloat
     let displaySafeAreaBottom: CGFloat
+    let displayCornerRadius: CGFloat
     let seededKeyboardOverlap: CGFloat
     let onDismiss: () -> Void
     @ViewBuilder let pinnedTop: () -> PinnedTop
     @ViewBuilder let sheetContent: () -> SheetContent
     @ViewBuilder let pinnedBottom: () -> PinnedBottom
-    @State private var revealed = false
     @State private var notifiedKeyboardOverlap: CGFloat = 0
     @State private var receivedKeyboardNotification = false
+    @State private var cardHeight: CGFloat = 0
 
     private var tracksKeyboard: Bool {
         OpenCodeBottomSheetLayoutMath.tracksKeyboard(keyboard)
@@ -724,10 +906,15 @@ private struct OpenCodeBottomSheetOverlayContent<PinnedTop: View, SheetContent: 
                 containerHeight: geometry.size.height,
                 keyboardOverlap: keyboardInset
             )
+            let usesFloatingCard = OpenCodeLayoutWidth.resolve(containerWidth: geometry.size.width) == .regular
+            let revealed = presentation.revealed
             ZStack(alignment: .bottom) {
+                // Hidden from accessibility: Close and the escape gesture dismiss
+                // for assistive input, matching Android.
                 Color.black.opacity(revealed ? bottomSheetScrimAlpha : 0)
                     .contentShape(Rectangle())
                     .onTapGesture(perform: onDismiss)
+                    .accessibilityHidden(true)
 
                 OpenCodeBottomSheetSheetBody(
                     title: title,
@@ -739,20 +926,29 @@ private struct OpenCodeBottomSheetOverlayContent<PinnedTop: View, SheetContent: 
                     keyboardOverlap: keyboardInset,
                     topSafeArea: displaySafeAreaTop,
                     safeAreaBottom: max(0, displaySafeAreaBottom - bottomSheetInset),
-                    usesFloatingCard: OpenCodeLayoutWidth.resolve(containerWidth: geometry.size.width) == .regular,
+                    usesFloatingCard: usesFloatingCard,
+                    displayCornerRadius: displayCornerRadius,
                     onDismiss: onDismiss,
+                    onHeaderDragChanged: headerDragChanged,
+                    onHeaderDragEnded: headerDragEnded,
                     pinnedTop: pinnedTop,
                     sheetContent: sheetContent,
                     pinnedBottom: pinnedBottom
                 )
-                .frame(
-                    maxWidth: OpenCodeLayoutWidth.resolve(containerWidth: geometry.size.width) == .regular
-                        ? OpenCodeLayout.sheetMaxWidth
-                        : .infinity
-                )
+                .frame(maxWidth: usesFloatingCard ? OpenCodeLayout.sheetMaxWidth : .infinity)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { cardHeight = $0 }
                 .padding(.horizontal, bottomSheetInset)
                 .padding(.bottom, bottomSheetInset + keyboardInset)
-                .offset(y: revealed ? 0 : 28)
+                .opacity(revealed ? 1 : 0)
+                .offset(
+                    y: revealed
+                        ? presentation.dragOffset
+                        : OpenCodeBottomSheetLayoutMath.hiddenOffset(
+                            cardHeight: cardHeight,
+                            containerHeight: geometry.size.height,
+                            bottomSpace: bottomSheetInset + keyboardInset
+                        )
+                )
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
             .onChange(of: keyboard) { _, _ in
@@ -775,12 +971,29 @@ private struct OpenCodeBottomSheetOverlayContent<PinnedTop: View, SheetContent: 
         }
         .ignoresSafeArea()
         .animation(.easeOut(duration: 0.25), value: keyboardOverlap)
-        .onAppear {
-            withAnimation(.timingCurve(0.2, 0.8, 0.2, 1, duration: bottomSheetEnterDuration)) {
-                revealed = true
+        .accessibilityAction(.escape, onDismiss)
+    }
+
+    /// The card follows the finger down; it never moves above its resting spot.
+    private func headerDragChanged(_ translation: CGFloat) {
+        guard presentation.revealed else { return }
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            presentation.dragOffset = max(0, translation)
+        }
+    }
+
+    private func headerDragEnded(_ translation: CGFloat, _ velocity: CGFloat) {
+        guard presentation.revealed else { return }
+        if OpenCodeBottomSheetLayoutMath.dragDismisses(offset: max(0, translation), velocity: velocity) {
+            // Exit starts from the dragged offset.
+            onDismiss()
+        } else {
+            withAnimation(OpenCodeBottomSheetLayoutMath.dragSettleAnimation) {
+                presentation.dragOffset = 0
             }
         }
-        .accessibilityAction(.escape, onDismiss)
     }
 }
 
@@ -790,12 +1003,16 @@ private struct BottomSheetKeyboardHostPolicy: ViewModifier {
     }
 }
 
+/// Tappable row in a bottom sheet. `selected` marks the current choice in a
+/// picker: it shows a check in the end slot (replacing `endDecorator`) and
+/// carries the selected trait. Titles wrap to two lines at large Dynamic Type.
 struct OpenCodeBottomSheetEntry: View {
     let title: String
     let enabled: Bool
     let destructive: Bool
     let startDecorator: BottomSheetEntryDecorator
     let endDecorator: BottomSheetEntryDecorator
+    let selected: Bool
     let action: () -> Void
 
     init(
@@ -804,6 +1021,7 @@ struct OpenCodeBottomSheetEntry: View {
         destructive: Bool = false,
         startDecorator: BottomSheetEntryDecorator = .none,
         endDecorator: BottomSheetEntryDecorator = .none,
+        selected: Bool = false,
         action: @escaping () -> Void
     ) {
         self.title = title
@@ -811,6 +1029,7 @@ struct OpenCodeBottomSheetEntry: View {
         self.destructive = destructive
         self.startDecorator = startDecorator
         self.endDecorator = endDecorator
+        self.selected = selected
         self.action = action
     }
 
@@ -837,11 +1056,12 @@ struct OpenCodeBottomSheetEntry: View {
                 Text(title)
                     .font(OpenCodeTypography.body)
                     .foregroundStyle(titleColor)
-                    .lineLimit(1)
+                    .lineLimit(bottomSheetEntryMaxLines)
+                    .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 BottomSheetEntryDecoration(
-                    decorator: endDecorator,
+                    decorator: selected ? .icon(.check) : endDecorator,
                     enabled: enabled,
                     destructive: destructive
                 )
@@ -854,6 +1074,7 @@ struct OpenCodeBottomSheetEntry: View {
         }
         .buttonStyle(OpenCodeBottomSheetEntryPressStyle(enabled: enabled))
         .disabled(!enabled)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
 
@@ -877,6 +1098,8 @@ private struct OpenCodeBottomSheetContainer<PinnedTop: View, SheetContent: View,
     let title: String
     let leadingAction: OpenCodeBottomSheetHeaderAction?
     let onDismiss: () -> Void
+    let onHeaderDragChanged: (CGFloat) -> Void
+    let onHeaderDragEnded: (CGFloat, CGFloat) -> Void
     let mode: BottomSheetPresentationMode
     let bottomClearance: CGFloat
     let scrollAreaHeight: CGFloat
@@ -1015,7 +1238,7 @@ private struct OpenCodeBottomSheetContainer<PinnedTop: View, SheetContent: View,
                 .accessibilityAddTraits(.isHeader)
 
             OpenCodeButton(
-                variant: .iconCircle(.close, accessibilityLabel: "Close"),
+                variant: .iconCircle(.close, accessibilityLabel: String(localized: "Close")),
                 contrast: .low,
                 action: onDismiss
             )
@@ -1032,12 +1255,17 @@ private struct OpenCodeBottomSheetContainer<PinnedTop: View, SheetContent: View,
             guard height > 0 else { return }
             onHeaderHeightChange(height)
         }
+        // The whole header row drags, not only the title glyphs (matches Android).
+        .contentShape(Rectangle())
+        // Global space: the header moves with the drag, so a local translation
+        // would feed back into itself.
         .gesture(
-            DragGesture(minimumDistance: 12)
+            DragGesture(minimumDistance: 8, coordinateSpace: .global)
+                .onChanged { value in
+                    onHeaderDragChanged(value.translation.height)
+                }
                 .onEnded { value in
-                    if value.translation.height >= bottomSheetDragDismissThreshold {
-                        onDismiss()
-                    }
+                    onHeaderDragEnded(value.translation.height, value.velocity.height)
                 }
         )
     }
@@ -1071,12 +1299,11 @@ private struct BottomSheetEntryDecoration: View {
         switch decorator {
         case .none:
             EmptyView()
-        case let .icon(icon, accessibilityLabel):
+        case let .icon(icon):
             OpenCodeIconImage(icon: icon, size: bottomSheetEntryIconSize)
                 .foregroundStyle(tint)
                 .frame(width: bottomSheetEntryDecoratorSize, height: bottomSheetEntryDecoratorSize)
-                .accessibilityHidden(accessibilityLabel == nil)
-                .accessibilityLabel(accessibilityLabel ?? "")
+                .accessibilityHidden(true)
         }
     }
 }
@@ -1190,69 +1417,11 @@ extension View {
         )
     }
 
-    func openCodeBottomSheet<Item: Identifiable, SheetContent: View>(
-        item: Binding<Item?>,
-        title: String,
-        leadingAction: OpenCodeBottomSheetHeaderAction? = nil,
-        scrollTargetID: String? = nil,
-        height: OpenCodeBottomSheetHeight = .fitContent,
-        keyboard: OpenCodeBottomSheetKeyboard = .dismiss,
-        @ViewBuilder content: @escaping (Item) -> SheetContent
-    ) -> some View {
-        modifier(BottomSheetKeyboardHostPolicy())
-            .background {
-                OpenCodeBottomSheetOverlayHost(
-                    isPresented: item.wrappedValue != nil,
-                    title: title,
-                    leadingAction: leadingAction,
-                    scrollTargetID: scrollTargetID,
-                    height: height,
-                    keyboard: keyboard,
-                    onDismiss: { item.wrappedValue = nil },
-                    pinnedTop: { EmptyView() },
-                    sheetContent: {
-                        if let value = item.wrappedValue {
-                            content(value)
-                        }
-                    },
-                    pinnedBottom: { EmptyView() }
-                )
-            }
-    }
-
-    func openCodeBottomSheet<Item: Identifiable, PinnedTop: View, SheetContent: View>(
-        item: Binding<Item?>,
-        title: String,
-        leadingAction: OpenCodeBottomSheetHeaderAction? = nil,
-        scrollTargetID: String? = nil,
-        height: OpenCodeBottomSheetHeight = .fitContent,
-        keyboard: OpenCodeBottomSheetKeyboard = .dismiss,
-        @ViewBuilder pinnedTop: @escaping (Item) -> PinnedTop,
-        @ViewBuilder content: @escaping (Item) -> SheetContent
-    ) -> some View {
-        modifier(BottomSheetKeyboardHostPolicy())
-            .background {
-                OpenCodeBottomSheetOverlayHost(
-                    isPresented: item.wrappedValue != nil,
-                    title: title,
-                    leadingAction: leadingAction,
-                    scrollTargetID: scrollTargetID,
-                    height: height,
-                    keyboard: keyboard,
-                    onDismiss: { item.wrappedValue = nil },
-                    pinnedTop: {
-                        if let value = item.wrappedValue {
-                            pinnedTop(value)
-                        }
-                    },
-                    sheetContent: {
-                        if let value = item.wrappedValue {
-                            content(value)
-                        }
-                    },
-                    pinnedBottom: { EmptyView() }
-                )
-            }
+    /// Standard horizontal inset for free-form sheet content (text, fields,
+    /// filters) in the body or pinned top, matching the header, entries and
+    /// footer. Entries and list rows lay out their own inset.
+    func openCodeBottomSheetContentInset() -> some View {
+        padding(.horizontal, bottomSheetContentHorizontalPadding)
     }
 }
 
@@ -1263,6 +1432,7 @@ extension View {
             ForEach(0 ..< 24, id: \.self) { index in
                 OpenCodeBottomSheetEntry(
                     title: "Model \(index + 1) · Provider",
+                    selected: index == 2,
                     action: {}
                 )
             }
@@ -1276,12 +1446,12 @@ extension View {
         .openCodeBottomSheet(isPresented: .constant(true), title: "Session actions") {
             OpenCodeBottomSheetEntry(
                 title: "New session",
-                startDecorator: .icon(.add, accessibilityLabel: "New session"),
+                startDecorator: .icon(.add),
                 action: {}
             )
             OpenCodeBottomSheetEntry(
                 title: "Open project",
-                startDecorator: .icon(.folder, accessibilityLabel: "Open project"),
+                startDecorator: .icon(.folder),
                 endDecorator: .icon(.chevronRight),
                 action: {}
             )
@@ -1302,7 +1472,7 @@ extension View {
             OpenCodeBottomSheetEntry(
                 title: "Delete session",
                 destructive: true,
-                startDecorator: .icon(.close, accessibilityLabel: "Delete session"),
+                startDecorator: .icon(.close),
                 action: {}
             )
         }

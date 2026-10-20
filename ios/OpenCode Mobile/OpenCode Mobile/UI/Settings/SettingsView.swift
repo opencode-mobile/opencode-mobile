@@ -117,15 +117,13 @@ struct SettingsView: View {
                 .font(OpenCodeTypography.caption)
                 .foregroundStyle(OpenCodeColors.textBase)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 16)
+                .openCodeBottomSheetContentInset()
                 .padding(.bottom, 8)
 
             ForEach(HomeSessionLadder.allowedWindowHours, id: \.self) { hours in
                 OpenCodeBottomSheetEntry(
                     title: HomeSessionLadder.formatWindowHoursLabel(hours),
-                    endDecorator: hours == homeDisplayPreferences.recentWindowHours
-                        ? .icon(.check, accessibilityLabel: "Selected")
-                        : .none,
+                    selected: hours == homeDisplayPreferences.recentWindowHours,
                     action: {
                         ProductAnalytics.logUserAction(
                             screenId: ProductAnalytics.Screen.settingsRecentWindowPicker,
@@ -143,10 +141,8 @@ struct SettingsView: View {
             ForEach(FollowUpDelivery.allCases, id: \.self) { mode in
                 OpenCodeBottomSheetEntry(
                     title: mode == .steer ? "Steer" : "Queue",
-                    startDecorator: .icon(mode == .steer ? .arrowWarmUp : .arrowUpward, accessibilityLabel: nil),
-                    endDecorator: mode == sessionChatDisplayPreferences.followUpDelivery
-                        ? .icon(.check, accessibilityLabel: "Selected")
-                        : .none,
+                    startDecorator: .icon(mode == .steer ? .arrowWarmUp : .arrowUpward),
+                    selected: mode == sessionChatDisplayPreferences.followUpDelivery,
                     action: {
                         sessionChatDisplayPreferences.setFollowUpDelivery(mode)
                         showFollowUpPicker = false
