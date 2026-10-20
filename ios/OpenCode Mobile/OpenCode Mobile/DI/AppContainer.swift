@@ -814,6 +814,10 @@ extension Container {
             HomeDisplayPreferences.shared.clear()
             MarkdownHighlightPreferences.shared.clear()
             AnalyticsConsentPreferences.shared.clear()
+            // Apply the reset default to Crashlytics and Analytics collection now, not at next launch.
+            OpenCodeReleaseObservability.setProductAnalyticsConsented(
+                AnalyticsConsentPreferences.shared.productAnalyticsConsented
+            )
             AppOnboardingPreferences.shared.clear()
             DeveloperToolsPreferences.shared.clear()
             SessionChatDisplayPreferences.shared.clear()

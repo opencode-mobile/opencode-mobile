@@ -85,6 +85,10 @@ class SettingsViewModel
                 HomeDisplayPreferences.clear()
                 MarkdownHighlightPreferences.clear()
                 AnalyticsConsentPreferences.clear()
+                // Apply the reset default to Crashlytics and Analytics collection now, not at next launch.
+                OpenCodeReleaseObservability.setProductAnalyticsConsented(
+                    AnalyticsConsentPreferences.productAnalyticsConsented,
+                )
                 AppOnboardingPreferences.clear()
                 DeveloperToolsPreferences.clear()
                 SessionChatDisplayPreferences.clear()
