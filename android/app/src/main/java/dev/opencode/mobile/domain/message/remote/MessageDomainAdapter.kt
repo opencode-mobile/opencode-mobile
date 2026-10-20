@@ -37,10 +37,12 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 
 class MessageDomainAdapter {
     private val json = Json { ignoreUnknownKeys = true }
@@ -583,7 +585,9 @@ class MessageDomainAdapter {
                             status = if (completed) ToolStatus.Completed else ToolStatus.Running,
                             title = "Shell",
                             callId = dto.callId,
+                            input = command.takeIf { it.isNotEmpty() }?.let { buildJsonObject { put("command", it) } },
                             output = v2ShellOutput(dto.output),
+                            metadata = dto.exit?.let { exit -> buildJsonObject { put("exit", exit) } },
                             id = "${dto.id}:tool",
                         ),
                     ),

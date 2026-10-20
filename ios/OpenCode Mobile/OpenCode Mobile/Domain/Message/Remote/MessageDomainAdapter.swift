@@ -547,7 +547,9 @@ nonisolated struct MessageDomainAdapter: Sendable {
                         status: completed ? .completed : .running,
                         title: "Shell",
                         callID: dto.callID,
-                        output: dto.output
+                        input: command.isEmpty ? nil : ["command": .string(command)],
+                        output: dto.output,
+                        metadata: dto.exit.map { ["exit": .int($0)] }
                     )
                 )
             ],

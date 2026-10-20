@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
@@ -64,6 +65,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.TransformedText
@@ -567,6 +569,13 @@ private fun PromptEntryContent(
         textStyle = MaterialTheme.typography.bodyLarge.copy(color = bodyColor),
         cursorBrush = SolidColor(bodyColor),
         visualTransformation = mentionTransformation,
+        // A shell command must reach the server as typed: no autocorrect or auto-capitalization.
+        keyboardOptions =
+            if (state.shellMode) {
+                KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false)
+            } else {
+                KeyboardOptions.Default
+            },
         maxLines = PromptMaxVisibleLines,
         modifier =
             Modifier

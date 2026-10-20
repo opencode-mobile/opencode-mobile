@@ -1109,7 +1109,7 @@ class SessionChatComposer(
     /**
      * Runs a shell-mode draft (`!command`) instead of sending a prompt, like the TUI and web app.
      * The output arrives through the session's shell or message events, so there is no optimistic
-     * row and no send progress: v1 answers only when the command ends, and the composer stays
+     * row and no send progress: the server answers only when the command ends, and the composer stays
      * free meanwhile. Attachments stay in the composer because a command cannot carry them. A
      * failure restores the draft (unless it was edited since) and shows the error the way a
      * failed prompt does.

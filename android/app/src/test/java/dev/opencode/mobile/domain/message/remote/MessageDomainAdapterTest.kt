@@ -1381,6 +1381,35 @@ class MessageDomainAdapterTest {
     }
 
     @Test
+    fun projectV2_shellCarriesCommandInputAndExitCode() {
+        val dtos =
+            json.decodeFromString<List<dev.opencode.mobile.data.remote.dto.V2SessionMessageDto>>(
+                """
+                [
+                  {
+                    "id":"msg_shell",
+                    "type":"shell",
+                    "shellID":"sh_1",
+                    "command":"false",
+                    "status":"exited",
+                    "exit":1,
+                    "output":{"output":"","truncated":false},
+                    "time":{"created":1,"completed":2}
+                  }
+                ]
+                """.trimIndent(),
+            )
+
+        val projected = adapter.projectV2(dtos)
+        val tool = projected[1].parts.filterIsInstance<MessagePart.Tool>().single()
+
+        assertEquals(listOf("msg_shell", "msg_shell:assistant"), projected.map { it.id })
+        assertEquals("msg_shell:tool", tool.id)
+        assertEquals("false", tool.input?.get("command")?.jsonPrimitive?.content)
+        assertEquals("1", tool.metadata?.get("exit")?.jsonPrimitive?.content)
+    }
+
+    @Test
     fun mergeInbox_marksExistingUserMessageWaiting() {
         val messages =
             listOf(

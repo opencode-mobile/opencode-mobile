@@ -365,6 +365,7 @@ struct OpenCodeSessionComposer: View {
                 placeholder: "Ask anything...",
                 focusRequestToken: focusRequestToken,
                 onFocusChange: onInputFocusChange,
+                literalInput: prompt.shellMode,
                 onChange: { text, selectionStart, selectionEnd in
                     onAction(.textChanged(text: text, selectionStart: selectionStart, selectionEnd: selectionEnd))
                 }

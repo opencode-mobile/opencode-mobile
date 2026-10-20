@@ -896,6 +896,100 @@ class EventDomainAdapterTest {
     }
 
     @Test
+    fun parseEvents_v2ShellStartedProjectsTheRestShellItemWithoutTouchingStatus() {
+        val events =
+            adapter.parseEvents(
+                """{"id":"evt_sh1","type":"session.shell.started","data":{"sessionID":"ses-1","shell":{"id":"sh_1","status":"running","command":"git status","time":{"started":100}}}}""",
+            )
+
+        assertEquals(
+            listOf("message.updated", "message.part.updated", "message.updated", "message.part.updated"),
+            events.map { it.type },
+        )
+        assertTrue(events.none { it.type == "session.status" })
+        val user = events[0].rawProperties?.get("info")?.jsonObject
+        assertEquals("msg_sh1", user?.get("id")?.jsonPrimitive?.content)
+        assertEquals("user", user?.get("role")?.jsonPrimitive?.content)
+        val text = events[1].rawProperties?.get("part")?.jsonObject
+        assertEquals("git status", text?.get("text")?.jsonPrimitive?.content)
+        assertEquals(
+            "msg_sh1:assistant",
+            events[2]
+                .rawProperties
+                ?.get("info")
+                ?.jsonObject
+                ?.get("id")
+                ?.jsonPrimitive
+                ?.content,
+        )
+        val tool = events[3].rawProperties?.get("part")?.jsonObject
+        assertEquals("msg_sh1:tool", tool?.get("id")?.jsonPrimitive?.content)
+        assertEquals("msg_sh1:assistant", tool?.get("messageID")?.jsonPrimitive?.content)
+        assertEquals("bash", tool?.get("tool")?.jsonPrimitive?.content)
+        val state = tool?.get("state")?.jsonObject
+        assertEquals("running", state?.get("status")?.jsonPrimitive?.content)
+        assertEquals(
+            "git status",
+            state
+                ?.get("input")
+                ?.jsonObject
+                ?.get("command")
+                ?.jsonPrimitive
+                ?.content,
+        )
+    }
+
+    @Test
+    fun parseEvents_v2ShellEndedCompletesTheStartedItemWithOutputAndExit() {
+        adapter.parseEvents(
+            """{"id":"evt_sh1","type":"session.shell.started","data":{"sessionID":"ses-1","shell":{"id":"sh_1","status":"running","command":"false","time":{"started":100}}}}""",
+        )
+
+        val events =
+            adapter.parseEvents(
+                """{"id":"evt_sh2","type":"session.shell.ended","data":{"sessionID":"ses-1","shell":{"id":"sh_1","status":"exited","command":"false","exit":1,"time":{"started":100,"completed":150}},"output":{"output":"boom\n","truncated":false}}}""",
+            )
+
+        val tool = events.last().rawProperties?.get("part")?.jsonObject
+        assertEquals("msg_sh1:tool", tool?.get("id")?.jsonPrimitive?.content)
+        val state = tool?.get("state")?.jsonObject
+        assertEquals("completed", state?.get("status")?.jsonPrimitive?.content)
+        assertEquals("boom\n", state?.get("output")?.jsonPrimitive?.content)
+        assertEquals(
+            1L,
+            state
+                ?.get("metadata")
+                ?.jsonObject
+                ?.get("exit")
+                ?.jsonPrimitive
+                ?.longOrNull,
+        )
+        assertTrue(events.none { it.type == "session.status" || it.type == "session.idle" })
+    }
+
+    @Test
+    fun parseEvents_v2ShellEndedWithoutAStartIsLeftToHistory() {
+        val events =
+            adapter.parseEvents(
+                """{"id":"evt_sh2","type":"session.shell.ended","data":{"sessionID":"ses-1","shell":{"id":"sh_unknown","status":"exited","exit":0}}}""",
+            )
+
+        assertTrue(events.isEmpty())
+    }
+
+    @Test
+    fun parseEvents_syntheticInboxItemIsNotAWaitingPrompt() {
+        val events =
+            adapter.parseEvents(
+                """{"type":"session.inbox.enqueued","data":{"sessionID":"ses-1","inboxID":"msg_s","item":{"type":"synthetic","payload":{"text":"The following shell command was executed by the user"}},"delivery":"steer"}}""",
+            )
+
+        val info = events.first().rawProperties?.get("info")?.jsonObject
+        assertEquals("false", info?.get("waiting")?.jsonPrimitive?.content)
+        assertNull(info?.get("delivery"))
+    }
+
+    @Test
     fun parseEvents_projectsLiveCompactionEndedIntoPartNotIdle() {
         val events =
             adapter.parseEvents(

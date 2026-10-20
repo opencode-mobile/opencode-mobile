@@ -166,8 +166,9 @@ class MessagesApi private constructor(
     }
 
     /**
-     * v1 runs the command before it answers, so the request stays open for as long as the
-     * command does. It gets the long prompt-send ceiling instead of the default REST one.
+     * Both protocols run the command before they answer, so the request stays open for as
+     * long as the command does. Both calls get the long prompt-send ceiling instead of the
+     * default REST one ([postSuccess] applies it for v2).
      */
     suspend fun runShell(
         sessionId: String,

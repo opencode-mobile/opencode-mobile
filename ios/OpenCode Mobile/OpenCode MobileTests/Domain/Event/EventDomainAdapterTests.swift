@@ -426,6 +426,62 @@ struct EventDomainAdapterTests {
         #expect(events[1].rawProperties?["part"]?.dictionaryValue?["tool"]?.stringValue == "bash")
     }
 
+    @Test func parseEvents_v2ShellStartedProjectsTheRestShellItemWithoutTouchingStatus() {
+        let adapter = EventDomainAdapter()
+        let events = adapter.parseEvents(
+            dataLine: #"{"id":"evt_sh1","type":"session.shell.started","data":{"sessionID":"ses-1","shell":{"id":"sh_1","status":"running","command":"git status","time":{"started":100}}}}"#
+        )
+        #expect(events.map(\.type) == ["message.updated", "message.part.updated", "message.updated", "message.part.updated"])
+        #expect(!events.contains(where: { $0.type == "session.status" }))
+        let user = events[0].rawProperties?["info"]?.dictionaryValue
+        #expect(user?["id"]?.stringValue == "msg_sh1")
+        #expect(user?["role"]?.stringValue == "user")
+        #expect(events[1].rawProperties?["part"]?.dictionaryValue?["text"]?.stringValue == "git status")
+        #expect(events[2].rawProperties?["info"]?.dictionaryValue?["id"]?.stringValue == "msg_sh1:assistant")
+        let tool = events[3].rawProperties?["part"]?.dictionaryValue
+        #expect(tool?["id"]?.stringValue == "msg_sh1:tool")
+        #expect(tool?["messageID"]?.stringValue == "msg_sh1:assistant")
+        #expect(tool?["tool"]?.stringValue == "bash")
+        let state = tool?["state"]?.dictionaryValue
+        #expect(state?["status"]?.stringValue == "running")
+        #expect(state?["input"]?.dictionaryValue?["command"]?.stringValue == "git status")
+    }
+
+    @Test func parseEvents_v2ShellEndedCompletesTheStartedItemWithOutputAndExit() {
+        let adapter = EventDomainAdapter()
+        _ = adapter.parseEvents(
+            dataLine: #"{"id":"evt_sh1","type":"session.shell.started","data":{"sessionID":"ses-1","shell":{"id":"sh_1","status":"running","command":"false","time":{"started":100}}}}"#
+        )
+        let events = adapter.parseEvents(
+            dataLine: #"{"id":"evt_sh2","type":"session.shell.ended","data":{"sessionID":"ses-1","shell":{"id":"sh_1","status":"exited","command":"false","exit":1,"time":{"started":100,"completed":150}},"output":{"output":"boom","truncated":false}}}"#
+        )
+        let tool = events.last?.rawProperties?["part"]?.dictionaryValue
+        #expect(tool?["id"]?.stringValue == "msg_sh1:tool")
+        let state = tool?["state"]?.dictionaryValue
+        #expect(state?["status"]?.stringValue == "completed")
+        #expect(state?["output"]?.stringValue == "boom")
+        #expect(state?["metadata"]?.dictionaryValue?["exit"]?.int64Value == 1)
+        #expect(!events.contains(where: { $0.type == "session.status" || $0.type == "session.idle" }))
+    }
+
+    @Test func parseEvents_v2ShellEndedWithoutAStartIsLeftToHistory() {
+        let adapter = EventDomainAdapter()
+        let events = adapter.parseEvents(
+            dataLine: #"{"id":"evt_sh2","type":"session.shell.ended","data":{"sessionID":"ses-1","shell":{"id":"sh_unknown","status":"exited","exit":0}}}"#
+        )
+        #expect(events.isEmpty)
+    }
+
+    @Test func parseEvents_syntheticInboxItemIsNotAWaitingPrompt() {
+        let adapter = EventDomainAdapter()
+        let events = adapter.parseEvents(
+            dataLine: #"{"type":"session.inbox.enqueued","data":{"sessionID":"ses-1","inboxID":"msg_s","item":{"type":"synthetic","payload":{"text":"The following shell command was executed by the user"}},"delivery":"steer"}}"#
+        )
+        let info = events.first?.rawProperties?["info"]?.dictionaryValue
+        #expect(info?["waiting"]?.boolValue == false)
+        #expect(info?["delivery"] == nil)
+    }
+
     @Test func parseEvents_projectsLiveCompactionEndedIntoPartNotIdle() {
         let adapter = EventDomainAdapter()
         let events = adapter.parseEvents(

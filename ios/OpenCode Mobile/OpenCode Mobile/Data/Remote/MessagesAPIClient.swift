@@ -237,17 +237,21 @@ nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
         try await postNoContent(path: "api/session/\(sessionID)/model", body: body, directory: nil)
     }
 
-    /// v1 runs the command before it answers, so the request stays open for as long as the
-    /// command does. It goes through the durable uploader, like a prompt, instead of the REST
-    /// pool's 60-second resource ceiling.
+    /// Both protocols run the command before they answer, so the request stays open for as
+    /// long as the command does. It goes through the durable uploader, like a prompt, instead
+    /// of the REST pool's 60-second resource ceiling.
     func runShell(sessionID: String, body: V1ShellRequestDTO, directory: String? = nil) async throws {
-        var request = try requireConnection().authorizedRequest(path: "session/\(sessionID)/shell", method: "POST", directory: directory)
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        _ = try await sendBody(request, body: try encoder.encode(body))
+        try await postShell(path: "session/\(sessionID)/shell", body: body, directory: directory)
     }
 
     func runShellV2(sessionID: String, body: V2ShellRequestDTO) async throws {
-        try await postNoContent(path: "api/session/\(sessionID)/shell", body: body, directory: nil)
+        try await postShell(path: "api/session/\(sessionID)/shell", body: body, directory: nil)
+    }
+
+    private func postShell<B: Encodable>(path: String, body: B, directory: String?) async throws {
+        var request = try requireConnection().authorizedRequest(path: path, method: "POST", directory: directory)
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        _ = try await sendBody(request, body: try encoder.encode(body))
     }
 
     private func postPrompt(path: String, body: V2PromptRequestDTO, attachments: [Attachment], directory: String?) async throws {
