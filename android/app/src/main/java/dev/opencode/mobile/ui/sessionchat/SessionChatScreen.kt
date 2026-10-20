@@ -846,6 +846,7 @@ fun SessionChatScreen(
                                                 id = suggestion.id,
                                                 title = suggestion.title,
                                                 subtitle = suggestion.subtitle,
+                                                leadingIcon = suggestion.leadingIcon,
                                             )
                                         },
                                     onSelect = { item ->

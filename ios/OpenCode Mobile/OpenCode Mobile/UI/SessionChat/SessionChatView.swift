@@ -379,7 +379,8 @@ struct SessionChatView: View {
                                 OpenCodeComposerSuggestionItem(
                                     id: suggestion.id,
                                     title: suggestion.title,
-                                    subtitle: suggestion.subtitle
+                                    subtitle: suggestion.subtitle,
+                                    leadingIcon: suggestion.leadingIcon
                                 )
                             },
                             emptyMessage: "No matches",

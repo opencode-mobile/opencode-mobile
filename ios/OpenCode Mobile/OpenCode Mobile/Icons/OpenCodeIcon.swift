@@ -18,6 +18,7 @@ enum OpenCodeIcon: String, CaseIterable, Hashable {
     case description = "lucide_description"
     case edit = "lucide_edit"
     case expandContent = "lucide_expand_content"
+    case agent = "lucide_agent"
     case folder = "lucide_folder"
     case createNewFolder = "lucide_create_new_folder"
     case folderCheck = "lucide_folder_check"

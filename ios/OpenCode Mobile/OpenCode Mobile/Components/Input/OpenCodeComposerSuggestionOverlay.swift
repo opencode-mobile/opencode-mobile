@@ -1,16 +1,30 @@
 import SwiftUI
 
 struct OpenCodeComposerSuggestionItem: Identifiable, Equatable, Hashable {
+    /// Leading mark before the title: a file-type icon for paths, or a catalog glyph.
+    enum LeadingIcon: Equatable, Hashable {
+        case file(path: String, kind: OpenCodeFileIcon.Kind)
+        case icon(OpenCodeIcon)
+    }
+
     let id: String
     let title: String
     let subtitle: String?
     let badge: String?
+    let leadingIcon: LeadingIcon?
 
-    init(id: String, title: String, subtitle: String? = nil, badge: String? = nil) {
+    init(
+        id: String,
+        title: String,
+        subtitle: String? = nil,
+        badge: String? = nil,
+        leadingIcon: LeadingIcon? = nil
+    ) {
         self.id = id
         self.title = title
         self.subtitle = subtitle
         self.badge = badge
+        self.leadingIcon = leadingIcon
     }
 }
 
@@ -89,25 +103,13 @@ private struct ComposerSuggestionRow: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    if let badge = item.badge, !badge.isEmpty {
-                        Text("[\(badge)]")
-                            .font(OpenCodeTypography.body)
-                            .foregroundStyle(OpenCodeColors.textBase)
-                            .lineLimit(1)
-                    }
-                    Text(item.title)
-                        .font(OpenCodeTypography.body)
-                        .foregroundStyle(OpenCodeColors.textStrong)
-                        .lineLimit(1)
+            HStack(alignment: .top, spacing: Self.iconSpacing) {
+                if let leadingIcon = item.leadingIcon {
+                    leadingIconView(leadingIcon)
+                        // Centre on the title line so the row keeps its height.
+                        .frame(height: Self.titleLineHeight)
                 }
-                if let subtitle = item.subtitle, !subtitle.isEmpty {
-                    Text(subtitle)
-                        .font(OpenCodeTypography.bodySecondary)
-                        .foregroundStyle(OpenCodeColors.textBase)
-                        .lineLimit(1)
-                }
+                textStack
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 16)
@@ -116,6 +118,45 @@ private struct ComposerSuggestionRow: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(accessibilityLabel)
+    }
+
+    private static let iconSize: CGFloat = 16
+    private static let iconSpacing: CGFloat = 8
+    private static let titleLineHeight: CGFloat = 22
+
+    @ViewBuilder
+    private func leadingIconView(_ icon: OpenCodeComposerSuggestionItem.LeadingIcon) -> some View {
+        switch icon {
+        case let .file(path, kind):
+            OpenCodeFileIcon(path: path, kind: kind, size: Self.iconSize)
+        case let .icon(glyph):
+            OpenCodeIconImage(icon: glyph, size: Self.iconSize)
+                .foregroundStyle(OpenCodeColors.iconBase)
+        }
+    }
+
+    private var textStack: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 6) {
+                if let badge = item.badge, !badge.isEmpty {
+                    Text("[\(badge)]")
+                        .font(OpenCodeTypography.body)
+                        .foregroundStyle(OpenCodeColors.textBase)
+                        .lineLimit(1)
+                }
+                Text(item.title)
+                    .font(OpenCodeTypography.body)
+                    .foregroundStyle(OpenCodeColors.textStrong)
+                    .lineLimit(1)
+            }
+            if let subtitle = item.subtitle, !subtitle.isEmpty {
+                Text(subtitle)
+                    .font(OpenCodeTypography.bodySecondary)
+                    .foregroundStyle(OpenCodeColors.textBase)
+                    .lineLimit(1)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var accessibilityLabel: String {
@@ -144,6 +185,34 @@ private struct ComposerSuggestionRow: View {
                 title: "/my-skill",
                 subtitle: "A skill",
                 badge: "skill"
+            ),
+        ],
+        onSelect: { _ in }
+    )
+    .padding()
+    .openCodeTheme()
+}
+
+#Preview("Mentions") {
+    OpenCodeComposerSuggestionOverlay(
+        items: [
+            OpenCodeComposerSuggestionItem(
+                id: "build",
+                title: "@build",
+                subtitle: "Default agent",
+                leadingIcon: .icon(.agent)
+            ),
+            OpenCodeComposerSuggestionItem(
+                id: "file:Package.swift",
+                title: "Package.swift",
+                subtitle: "File",
+                leadingIcon: .file(path: "Package.swift", kind: .file)
+            ),
+            OpenCodeComposerSuggestionItem(
+                id: "file:app/build.gradle.kts",
+                title: "app/build.gradle.kts",
+                subtitle: "File",
+                leadingIcon: .file(path: "app/build.gradle.kts", kind: .file)
             ),
         ],
         onSelect: { _ in }

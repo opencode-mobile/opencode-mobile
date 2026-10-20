@@ -46,6 +46,9 @@ icons:
   - name: expand_content
     lucide: maximize-2
     notes: Outgoing message collapsed state
+  - name: agent
+    lucide: brain
+    notes: Agent mention suggestions in the Session Composer
   - name: folder
     lucide: folder
   - name: create_new_folder

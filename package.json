@@ -6,6 +6,7 @@
     "app-icon:sync": "node scripts/sync-app-icon.mjs",
     "app-icon:sync-store": "node scripts/sync-store-icon.mjs",
     "icons:sync": "node scripts/sync-icons.mjs",
+    "file-icons:sync": "node scripts/sync-file-type-icons.mjs",
     "themes:sync": "node scripts/sync-theme-presets.mjs",
     "themes:check": "node scripts/check-theme-presets.mjs",
     "icons:check": "node scripts/check-icons.mjs",
@@ -31,6 +32,7 @@
     "lucide-static": "^1.55.0",
     "puppeteer-core": "25.14.0",
     "shiki": "^4.5.0",
+    "svg2vectordrawable": "^2.9.1",
     "yaml": "^2.9.1"
   }
 }

@@ -19,6 +19,7 @@ enum class ComponentGalleryEntryId {
     Colors,
     Typography,
     Icons,
+    FileIcon,
     SkeletonIllustration,
     PageIndicator,
     BottomFade,
@@ -99,6 +100,12 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.Icons,
             title = "Icons",
             description = "Lucide catalog synced from icons/manifest.yaml.",
+            category = ComponentGalleryCategory.Foundations,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.FileIcon,
+            title = "File Icon",
+            description = "Colour file-type and folder icons picked from a path, as in opencode.",
             category = ComponentGalleryCategory.Foundations,
         ),
         ComponentGalleryEntry(
