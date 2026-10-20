@@ -133,6 +133,13 @@ class MainActivity : FragmentActivity() {
 
     private fun promptUnlock() {
         if (!privacyCover.value.locked || unlockPrompt != null) return
+        if (AppLockAvailability.cannotEverUnlock(this)) {
+            // The screen lock was removed after App Lock was turned on, so no prompt can pass.
+            // Turn App Lock off instead of locking the user out with no way back to Settings.
+            AppLockPreferences.updateEnabled(false)
+            privacyCover.value = PrivacyCoverState()
+            return
+        }
         val prompt =
             BiometricPrompt(
                 this,
@@ -164,7 +171,27 @@ class MainActivity : FragmentActivity() {
 
     // Runs before the view hierarchy, so Compose focus traversal cannot take Ctrl+Tab first.
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (!privacyCover.value.locked && keyboardShortcuts.handleKeyEvent(event, currentFocus)) return true
+        if (privacyCover.value.locked) {
+            // Nothing under the lock cover may receive keys (Tab would move focus into it).
+            // Confirm keys unlock; Back and volume keep their system behaviour.
+            return when (event.keyCode) {
+                KeyEvent.KEYCODE_ENTER,
+                KeyEvent.KEYCODE_NUMPAD_ENTER,
+                KeyEvent.KEYCODE_SPACE,
+                KeyEvent.KEYCODE_DPAD_CENTER,
+                -> {
+                    if (event.action == KeyEvent.ACTION_UP) promptUnlock()
+                    true
+                }
+                KeyEvent.KEYCODE_BACK,
+                KeyEvent.KEYCODE_VOLUME_UP,
+                KeyEvent.KEYCODE_VOLUME_DOWN,
+                KeyEvent.KEYCODE_VOLUME_MUTE,
+                -> super.dispatchKeyEvent(event)
+                else -> true
+            }
+        }
+        if (keyboardShortcuts.handleKeyEvent(event, currentFocus)) return true
         return super.dispatchKeyEvent(event)
     }
 

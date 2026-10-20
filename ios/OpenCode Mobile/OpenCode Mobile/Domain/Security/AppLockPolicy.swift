@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 
 /// Platform-free rules for the privacy cover and the optional app lock (#755).
 ///
@@ -14,4 +15,13 @@ enum AppLockPolicy {
     static func shouldLock(enabled: Bool, wasInBackground: Bool) -> Bool {
         enabled && wasInBackground
     }
+}
+
+/// Whether the app lock is engaged right now. Keyboard shortcuts stay off while it is, since
+/// they act on the content under the cover.
+@Observable
+final class AppLockState {
+    static let shared = AppLockState()
+
+    var isLocked = false
 }

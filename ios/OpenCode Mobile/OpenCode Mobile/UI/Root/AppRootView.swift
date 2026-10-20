@@ -117,6 +117,9 @@ struct AppRootView: View {
             }
         }
         .animation(.easeOut(duration: 0.15), value: privacyCoverVisible)
+        .onChange(of: locked, initial: true) { _, isLocked in
+            AppLockState.shared.isLocked = isLocked
+        }
         .task {
             // A cold start with App Lock on begins locked (already covered from the first frame).
             if AppLockPolicy.shouldLock(enabled: appLockPreferences.enabled, wasInBackground: true) {
@@ -185,6 +188,14 @@ extension AppRootView {
     @MainActor
     fileprivate func unlock() async {
         guard locked else { return }
+        guard appLockAuthenticator.canAuthenticate() else {
+            // The passcode was removed after App Lock was turned on, so nothing can pass the
+            // prompt. Turn App Lock off instead of locking the user out with no way to Settings.
+            appLockPreferences.setEnabled(false)
+            locked = false
+            privacyCoverVisible = AppLockPolicy.coverVisible(isForeground: scenePhase == .active, locked: false)
+            return
+        }
         if await appLockAuthenticator.authenticate(reason: "Unlock OpenCode Mobile") {
             locked = false
             privacyCoverVisible = AppLockPolicy.coverVisible(isForeground: scenePhase == .active, locked: false)
