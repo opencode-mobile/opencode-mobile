@@ -17,6 +17,7 @@ struct SessionProtocolRepositoryTests {
         let url = try #require(ProtocolRoutingURLProtocol.requests.first?.url)
         #expect(url.path.hasSuffix("/session"))
         #expect(queryValue(url, "directory") == "/repo")
+        #expect(queryValue(url, "archived") == nil)
     }
 
     @Test func v2ListSessionsIncludesWorktreeSessionsOfTheSameProject() async throws {
@@ -57,6 +58,7 @@ struct SessionProtocolRepositoryTests {
         let listed = try #require(ProtocolRoutingURLProtocol.requests.first { $0.url?.path.hasSuffix("/api/session") == true }?.url)
         #expect(queryValue(listed, "project") == "proj")
         #expect(queryValue(listed, "directory") == nil)
+        #expect(queryValue(listed, "archived") == "false")
     }
 
     @Test func v2ListSessionsAcceptsUntitledSessions() async throws {
@@ -206,14 +208,90 @@ struct SessionProtocolRepositoryTests {
         #expect(request.url?.path.hasSuffix("/api/session/ses_1") == true)
     }
 
-    @Test func v2ArchiveSessionReturnsHttp404WithoutCallingArchive() async {
-        ProtocolRoutingURLProtocol.reset(responses: [.noContent])
+    @Test func v2ArchiveSessionPatchesArchivedThenReloadsSession() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [
+            .noContent,
+            .json(sessionEnvelope(id: "ses_1", title: "Done", archived: 7)),
+        ])
         let repository = makeSessionRepository(serverProtocol: .v2)
 
-        await #expect(throws: SessionError.http(statusCode: 404, message: "session archive is not available")) {
+        let session = try await repository.archiveSession(id: "ses_1", directory: "/repo")
+
+        #expect(session.archivedAtEpochMs == 7)
+        let requests = ProtocolRoutingURLProtocol.requests
+        #expect(requests.count == 2)
+        #expect(requests[0].httpMethod == "PATCH")
+        #expect(requests[0].url?.path.hasSuffix("/api/session/ses_1") == true)
+        #expect(queryValue(try #require(requests[0].url), "directory") == nil)
+        let body = try #require(ProtocolRoutingURLProtocol.bodies[0])
+        #expect(jsonObject(body)?["archived"] as? Bool == true)
+        #expect(jsonObject(body)?.count == 1)
+        #expect(requests[1].httpMethod == "GET")
+        #expect(requests[1].url?.path.hasSuffix("/api/session/ses_1") == true)
+    }
+
+    @Test func v2ArchiveSessionMarksArchivedWhenReloadLagsBehind() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [
+            .noContent,
+            .json(sessionEnvelope(id: "ses_1", title: "Done")),
+        ])
+        let repository = makeSessionRepository(serverProtocol: .v2)
+
+        let session = try await repository.archiveSession(id: "ses_1", directory: "/repo")
+
+        #expect(session.isArchived)
+    }
+
+    @Test func v2SetSessionArchivedFalseSendsRestoreBody() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [.noContent])
+        let manager = makeManager(serverProtocol: .v2)
+        let api = SessionsAPIClient(connectionProvider: { manager.connection }, urlSession: makeURLSession())
+
+        try await api.setSessionArchivedV2(id: "ses_1", archived: false)
+
+        let request = try #require(ProtocolRoutingURLProtocol.requests.first)
+        #expect(request.httpMethod == "PATCH")
+        #expect(request.url?.path.hasSuffix("/api/session/ses_1") == true)
+        let body = try #require(ProtocolRoutingURLProtocol.bodies.first ?? nil)
+        #expect(jsonObject(body)?["archived"] as? Bool == false)
+    }
+
+    @Test func v2ArchiveSessionSurfacesServerFailure() async {
+        ProtocolRoutingURLProtocol.reset(responses: [StubResponse(statusCode: 404, body: "Not Found")])
+        let repository = makeSessionRepository(serverProtocol: .v2)
+
+        await #expect(throws: SessionError.self) {
             _ = try await repository.archiveSession(id: "ses_1", directory: "/repo")
         }
-        #expect(ProtocolRoutingURLProtocol.requests.isEmpty)
+    }
+
+    @Test func probeV2SessionArchiveReadsOpenAPIContract() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [.json(V2SessionArchiveContractTests.document(patchBody: V2SessionArchiveContractTests.v21PatchBody))])
+        let service = ConnectionProbeService(urlSession: makeURLSession())
+
+        let supported = try await service.probeV2SessionArchive(connection: try #require(makeManager(serverProtocol: .v2).connection))
+
+        #expect(supported)
+        #expect(ProtocolRoutingURLProtocol.requests.first?.url?.path.hasSuffix("/openapi.json") == true)
+    }
+
+    @Test func probeV2SessionArchiveOlderServerIsUnsupported() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [.json(V2SessionArchiveContractTests.document(patchBody: V2SessionArchiveContractTests.v20PatchBody))])
+        let service = ConnectionProbeService(urlSession: makeURLSession())
+
+        let supported = try await service.probeV2SessionArchive(connection: try #require(makeManager(serverProtocol: .v2).connection))
+
+        #expect(!supported)
+    }
+
+    @Test func probeV2SessionArchiveThrowsWhenContractIsMissing() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [StubResponse(statusCode: 404, body: "Not Found")])
+        let service = ConnectionProbeService(urlSession: makeURLSession())
+        let connection = try #require(makeManager(serverProtocol: .v2).connection)
+
+        await #expect(throws: (any Error).self) {
+            _ = try await service.probeV2SessionArchive(connection: connection)
+        }
     }
 
     @Test func v2ProjectCurrentUsesLocationDirectoryQuery() async throws {

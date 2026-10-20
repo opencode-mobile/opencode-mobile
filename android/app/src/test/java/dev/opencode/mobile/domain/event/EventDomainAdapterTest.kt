@@ -1410,6 +1410,27 @@ class EventDomainAdapterTest {
     }
 
     @Test
+    fun sessionArchiveEvents_refreshHomeLists() {
+        val archived =
+            adapter.parseEvent(
+                """{"id":"evt_1","type":"session.archived","data":{"sessionID":"ses-1"},"durable":{"aggregateID":"ses-1","seq":4,"version":1}}""",
+            )!!
+        val unarchived =
+            adapter.parseEvent(
+                """{"payload":{"type":"sync","syncEvent":{"id":"evt_2","type":"session.unarchived.1","data":{"sessionID":"ses-2"}}}}""",
+            )!!
+
+        assertEquals("session.archived", archived.type)
+        assertEquals("ses-1", archived.sessionId)
+        assertTrue(archived.triggersHomeRefresh)
+        assertEquals("session.unarchived", unarchived.type)
+        assertEquals("ses-2", unarchived.sessionId)
+        assertTrue(unarchived.triggersHomeRefresh)
+        assertNull(adapter.sessionRevertUpdate(archived))
+        assertNull(adapter.sessionTitleUpdate(archived))
+    }
+
+    @Test
     fun sessionViewed_parsesV2PlainEvent() {
         val event =
             adapter.parseEvent(

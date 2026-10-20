@@ -58,6 +58,14 @@ nonisolated struct ProjectsAPIClient: Sendable {
         try await get(path: "api/health")
     }
 
+    /// The v2 server's OpenAPI document, read to learn what this server release supports.
+    func getV2OpenAPIDocument() async throws -> Data {
+        guard let connection = connectionProvider() else {
+            throw ProjectsAPIError.noActiveConnection
+        }
+        return try await data(for: connection.authorizedRequest(path: V2SessionArchiveContract.openAPIPath))
+    }
+
     func getHealth() async throws -> HealthDTO {
         try await getGlobalHealth()
     }

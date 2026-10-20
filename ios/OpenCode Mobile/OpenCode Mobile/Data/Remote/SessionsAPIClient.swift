@@ -266,7 +266,8 @@ nonisolated struct SessionsAPIClient: Sendable {
     func listSessionsV2(
         directory: String? = nil,
         parentID: String? = nil,
-        projectID: String? = nil
+        projectID: String? = nil,
+        archived: Bool? = nil
     ) async throws -> [V2SessionDTO] {
         var sessions: [V2SessionDTO] = []
         var cursor: String?
@@ -278,6 +279,9 @@ nonisolated struct SessionsAPIClient: Sendable {
             }
             if let projectID {
                 query["project"] = projectID
+            }
+            if let archived {
+                query["archived"] = archived ? "true" : "false"
             }
             if let cursor {
                 query["cursor"] = cursor
@@ -319,6 +323,11 @@ nonisolated struct SessionsAPIClient: Sendable {
 
     func renameSessionV2(id: String, title: String) async throws {
         _ = try await patchEmpty(path: "api/session/\(id)", body: V2RenameSessionRequestDTO(title: title))
+    }
+
+    /// Archives or restores a session (opencode 2.1.0+). Repeating the current state is a no-op.
+    func setSessionArchivedV2(id: String, archived: Bool) async throws {
+        _ = try await patchEmpty(path: "api/session/\(id)", body: V2ArchiveSessionRequestDTO(archived: archived))
     }
 
     func deleteSessionV2(id: String) async throws -> Bool {

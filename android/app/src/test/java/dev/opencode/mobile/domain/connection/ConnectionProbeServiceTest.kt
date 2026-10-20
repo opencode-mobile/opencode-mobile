@@ -351,6 +351,44 @@ class ConnectionProbeServiceTest {
         )
     }
 
+    @Test
+    fun probeV2SessionArchive_readsOpenApiContract() =
+        runTest {
+            val paths = mutableListOf<String>()
+            val service =
+                service { request ->
+                    paths += request.url.encodedPath
+                    jsonOk(openApi(V2_1_PATCH_BODY))
+                }
+
+            assertTrue(service.probeV2SessionArchive(connection))
+            assertEquals(listOf("/openapi.json"), paths)
+        }
+
+    @Test
+    fun probeV2SessionArchive_olderServerIsUnsupported() =
+        runTest {
+            val service = service { _ -> jsonOk(openApi(V2_0_PATCH_BODY)) }
+
+            assertEquals(false, service.probeV2SessionArchive(connection))
+        }
+
+    @Test
+    fun probeV2SessionArchive_throwsWhenContractIsMissing() =
+        runTest {
+            val service = service { _ -> jsonNotFound() }
+
+            try {
+                service.probeV2SessionArchive(connection)
+                fail("expected a probe error")
+            } catch (error: ServerProbeError.Http) {
+                assertEquals(404, error.statusCode)
+            }
+        }
+
+    private fun openApi(patchBody: String): String =
+        """{"paths":{"/api/session/{sessionID}":{"patch":{"requestBody":{"content":{"application/json":{"schema":$patchBody}}}}}}}"""
+
     private fun MockRequestHandleScope.jsonOk(content: String) =
         respond(
             content = content,

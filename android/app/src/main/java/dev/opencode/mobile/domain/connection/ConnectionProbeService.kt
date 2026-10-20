@@ -11,6 +11,7 @@ import io.ktor.client.request.get
 import io.ktor.client.statement.HttpResponse
 import io.ktor.http.isSuccess
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 
 class ConnectionProbeService(
     private val json: Json,
@@ -38,6 +39,22 @@ class ConnectionProbeService(
             )
         } catch (error: Throwable) {
             throw if (error is ServerProbeError) error else adapter.mapProbeError(error)
+        } finally {
+            client.close()
+        }
+    }
+
+    override suspend fun probeV2SessionArchive(connection: ServerConnection): Boolean {
+        val client = clientFactory(connection)
+        try {
+            val response: HttpResponse = client.get(V2SessionArchiveContract.OPENAPI_PATH)
+            if (!response.status.isSuccess()) {
+                throw ServerProbeError.Http(
+                    statusCode = response.status.value,
+                    message = response.status.description,
+                )
+            }
+            return V2SessionArchiveContract.isDeclared(response.body<JsonObject>())
         } finally {
             client.close()
         }

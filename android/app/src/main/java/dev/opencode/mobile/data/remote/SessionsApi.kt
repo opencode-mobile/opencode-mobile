@@ -17,6 +17,7 @@ import dev.opencode.mobile.data.remote.dto.SessionDto
 import dev.opencode.mobile.data.remote.dto.SummarizeSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.TodoDto
 import dev.opencode.mobile.data.remote.dto.UpdateSessionRequestDto
+import dev.opencode.mobile.data.remote.dto.V2ArchiveSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.V2CompactSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.V2CreateSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.V2ForkSessionRequestDto
@@ -443,6 +444,7 @@ class SessionsApi private constructor(
         directory: String? = null,
         parentId: String? = null,
         projectId: String? = null,
+        archived: Boolean? = null,
     ): List<V2SessionDto> {
         val sessions = mutableListOf<V2SessionDto>()
         var cursor: String? = null
@@ -458,6 +460,7 @@ class SessionsApi private constructor(
                             applyDirectory(directory)
                         }
                         parentId?.let { parameter("parentID", it) }
+                        archived?.let { parameter("archived", it.toString()) }
                         cursor?.let { parameter("cursor", it) }
                     }.body<ApiListEnvelope<V2SessionDto>>()
             sessions += envelope.data
@@ -506,6 +509,18 @@ class SessionsApi private constructor(
             .get()
             .patch("api/session/$id") {
                 setJsonBody(json, V2RenameSessionRequestDto(title = title))
+            }.ensureSuccess()
+    }
+
+    /** Archives or restores a session (opencode 2.1.0+). Repeating the current state is a no-op. */
+    suspend fun setSessionArchivedV2(
+        id: String,
+        archived: Boolean,
+    ) {
+        httpClient
+            .get()
+            .patch("api/session/$id") {
+                setJsonBody(json, V2ArchiveSessionRequestDto(archived = archived))
             }.ensureSuccess()
     }
 
