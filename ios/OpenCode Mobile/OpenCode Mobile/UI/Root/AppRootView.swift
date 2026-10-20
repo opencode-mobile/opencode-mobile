@@ -119,6 +119,7 @@ struct AppRootView: View {
         .animation(.easeOut(duration: 0.15), value: privacyCoverVisible)
         .onChange(of: locked, initial: true) { _, isLocked in
             AppLockState.shared.isLocked = isLocked
+            if isLocked { resignFirstResponderWhileLocked() }
         }
         .task {
             // A cold start with App Lock on begins locked (already covered from the first frame).
@@ -144,6 +145,9 @@ struct AppRootView: View {
                 } else if !locked {
                     privacyCoverVisible = false
                 }
+                // Focus can come back to a field when the scene reactivates after a cancelled
+                // Face ID prompt; nothing under the cover may take keyboard input.
+                if locked { resignFirstResponderWhileLocked() }
                 wasInBackground = false
             @unknown default:
                 break
@@ -185,6 +189,13 @@ struct AppRootView: View {
 }
 
 extension AppRootView {
+    /// Ends editing in whatever field is under the lock cover, so neither the software nor a
+    /// hardware keyboard can type into it.
+    @MainActor
+    fileprivate func resignFirstResponderWhileLocked() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }
+
     @MainActor
     fileprivate func unlock() async {
         guard locked else { return }

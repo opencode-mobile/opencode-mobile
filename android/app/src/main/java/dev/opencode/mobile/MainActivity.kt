@@ -16,6 +16,8 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.snapshotFlow
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.lifecycleScope
@@ -96,6 +98,8 @@ class MainActivity : FragmentActivity() {
         wasInBackground = false
         if (locked) {
             privacyCover.value = PrivacyCoverState(covered = true, locked = true)
+            // Also hides an IME a View-based field opened; the cover takes Compose focus itself.
+            WindowCompat.getInsetsController(window, window.decorView).hide(WindowInsetsCompat.Type.ime())
             promptUnlock()
         } else if (!privacyCover.value.locked) {
             privacyCover.value = PrivacyCoverState()

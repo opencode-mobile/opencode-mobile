@@ -52,7 +52,7 @@ class EncryptedSecureCredentialStore
                     EncryptedValueStore(
                         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE),
                         AesGcmValueCipher({ key }),
-                    ).also { LegacyEncryptedPreferencesMigration.migrate(context, LEGACY_PREFS_NAME, it) }
+                    )
                 }.getOrElse { error ->
                     DiagnosticLog.warning(
                         DiagnosticLogArea.Connection,
@@ -62,8 +62,16 @@ class EncryptedSecureCredentialStore
                     openFailure = error
                     null
                 }
+            if (built != null) migrateLegacy(built)
             cachedStore = built
             return built
+        }
+
+        // Outside the open: a failure while copying legacy values keeps them in the legacy file for the
+        // next launch, and must not mark a store that opened fine as unavailable.
+        private fun migrateLegacy(store: EncryptedValueStore) {
+            runCatching { LegacyEncryptedPreferencesMigration.migrate(context, LEGACY_PREFS_NAME, store) }
+                .onFailure { DiagnosticLog.warning(DiagnosticLogArea.Connection, "Kept legacy encrypted values; copying them failed", it) }
         }
 
         override fun readPassword(serverBaseUrl: String): String? = store()?.read(passwordKey(serverBaseUrl))

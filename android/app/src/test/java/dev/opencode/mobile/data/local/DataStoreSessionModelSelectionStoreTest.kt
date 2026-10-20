@@ -115,6 +115,25 @@ class DataStoreSessionModelSelectionStoreTest {
             assertEquals("gpt-4", store.loadSession(bob, "/repo", "ses-2")?.modelId)
         }
 
+    @Test
+    fun clearConnection_keepsLegacyEntriesOfAServerUnderAPathOfTheSameHost() =
+        runTest {
+            val dataStore = dataStore(backgroundScope)
+            val store = DataStoreSessionModelSelectionStore(dataStore, Json { ignoreUnknownKeys = true })
+            val removedKey = stringPreferencesKey("http://127.0.0.1:4096/|/repo|ses-1")
+            val keptKey = stringPreferencesKey("http://127.0.0.1:4096/opencode/|/repo|ses-2")
+            dataStore.edit {
+                it[removedKey] = """{"providerId":"openai","modelId":"removed"}"""
+                it[keptKey] = """{"providerId":"openai","modelId":"kept"}"""
+            }
+
+            store.clearConnection(identity("opencode"))
+
+            val prefs = dataStore.data.first()
+            assertNull(prefs[removedKey])
+            assertNotNull(prefs[keptKey])
+        }
+
     private fun store(scope: CoroutineScope) = DataStoreSessionModelSelectionStore(dataStore(scope), Json { ignoreUnknownKeys = true })
 
     private fun dataStore(scope: CoroutineScope) =

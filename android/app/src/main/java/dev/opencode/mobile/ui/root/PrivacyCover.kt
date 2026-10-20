@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -47,8 +48,14 @@ fun PrivacyCover(
 ) {
     if (!state.covered && !state.locked) return
     val focusRequester = remember { FocusRequester() }
-    if (state.locked) {
-        LaunchedEffect(Unit) { focusRequester.requestFocus() }
+    val keyboard = LocalSoftwareKeyboardController.current
+    // Keyed on the lock, so a cover already up from onPause still takes focus when it locks; moving
+    // focus off a text field closes its input connection, so the IME cannot type underneath.
+    LaunchedEffect(state.locked) {
+        if (state.locked) {
+            focusRequester.requestFocus()
+            keyboard?.hide()
+        }
     }
     Box(
         modifier =
