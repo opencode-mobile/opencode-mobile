@@ -67,6 +67,9 @@ struct OpenCodeMentionTextView: View {
     var focusRequestToken: Int = 0
     /// Called with true when the field starts editing and false when it stops.
     var onFocusChange: ((Bool) -> Void)?
+    /// Turns off autocorrect, auto-capitalization and smart quotes and dashes, for text that
+    /// must reach the server exactly as typed, such as a shell command (`--flag` stays `--flag`).
+    var literalInput = false
     let onChange: (_ text: String, _ selectionStart: Int, _ selectionEnd: Int) -> Void
 
     var body: some View {
@@ -79,6 +82,7 @@ struct OpenCodeMentionTextView: View {
             placeholder: placeholder,
             focusRequestToken: focusRequestToken,
             onFocusChange: onFocusChange,
+            literalInput: literalInput,
             onChange: onChange
         )
     }
@@ -93,6 +97,7 @@ private struct Representable: UIViewRepresentable {
     let placeholder: String
     let focusRequestToken: Int
     let onFocusChange: ((Bool) -> Void)?
+    let literalInput: Bool
     let onChange: (String, Int, Int) -> Void
 
     func makeUIView(context: Context) -> PlaceholderTextView {
@@ -119,6 +124,7 @@ private struct Representable: UIViewRepresentable {
         uiView.placeholderLabel.text = placeholder
         uiView.placeholderLabel.textColor = UIColor(OpenCodeColors.textWeak)
         context.coordinator.onFocusChange = onFocusChange
+        applyInputTraits(to: uiView)
         if context.coordinator.lastFocusRequestToken != focusRequestToken {
             context.coordinator.lastFocusRequestToken = focusRequestToken
             uiView.requestFocus()
@@ -133,6 +139,21 @@ private struct Representable: UIViewRepresentable {
             selectionRevision: selectionRevision,
             to: uiView
         )
+    }
+
+    private func applyInputTraits(to view: PlaceholderTextView) {
+        let autocorrection: UITextAutocorrectionType = literalInput ? .no : .default
+        guard view.autocorrectionType != autocorrection else { return }
+        view.autocorrectionType = autocorrection
+        view.spellCheckingType = literalInput ? .no : .default
+        view.autocapitalizationType = literalInput ? .none : .sentences
+        view.smartDashesType = literalInput ? .no : .default
+        view.smartQuotesType = literalInput ? .no : .default
+        view.smartInsertDeleteType = literalInput ? .no : .default
+        // The keyboard reads these traits only when it attaches; refresh it while editing.
+        if view.isFirstResponder {
+            view.reloadInputViews()
+        }
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: PlaceholderTextView, context: Context) -> CGSize? {
@@ -170,6 +191,7 @@ private struct Representable: UIViewRepresentable {
         private var lastRenderedText: String?
         private var lastRenderedMentionRanges: [Range<Int>] = []
         private var lastAppliedSelectionRevision: Int?
+        private var textColor: UIColor = .label
 
         init(focusRequestToken: Int, onChange: @escaping (String, Int, Int) -> Void) {
             lastFocusRequestToken = focusRequestToken
@@ -194,6 +216,7 @@ private struct Representable: UIViewRepresentable {
             selectionRevision: Int,
             to view: PlaceholderTextView
         ) {
+            self.textColor = textColor
             if lastRenderedText != text || lastRenderedMentionRanges != mentionRanges {
                 view.attributedText = OpenCodeMentionTextViewLayout.attributedString(
                     text: text,
@@ -212,6 +235,16 @@ private struct Representable: UIViewRepresentable {
                 view.retryPendingCaretScrollIfNeeded()
             }
             view.placeholderLabel.isHidden = !text.isEmpty
+        }
+
+        /// Typed text starts plain. Without this it inherits the color of the character before the
+        /// caret, so typing right after a highlighted range (a mention, or the `!` of a shell
+        /// command) would paint the new text too until the next full re-render.
+        func textView(_ textView: UITextView, shouldChangeTextIn _: NSRange, replacementText _: String) -> Bool {
+            if textView.markedTextRange == nil {
+                textView.typingAttributes = [.foregroundColor: textColor, .font: OpenCodeMentionTextViewLayout.font]
+            }
+            return true
         }
 
         func textViewDidChange(_ textView: UITextView) {

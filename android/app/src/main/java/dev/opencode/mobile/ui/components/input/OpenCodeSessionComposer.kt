@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
@@ -64,6 +65,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.TransformedText
@@ -99,6 +101,12 @@ sealed interface OpenCodeSessionComposerState {
         val stopEnabled: Boolean,
         val followUpDelivery: FollowUpDelivery? = null,
         val showDictationButton: Boolean = false,
+        /**
+         * The draft starts with `!` and Send runs it as a shell command. The `!` is highlighted
+         * and a selected Shell badge replaces the model and agent chips; tapping it sends
+         * [OpenCodeSessionComposerAction.ExitShellMode].
+         */
+        val shellMode: Boolean = false,
     ) : OpenCodeSessionComposerState
 
     /** A file an edit/write permission would change, with its diff size. */
@@ -181,6 +189,9 @@ sealed interface OpenCodeSessionComposerAction {
     ) : OpenCodeSessionComposerAction
 
     data object CancelRevert : OpenCodeSessionComposerAction
+
+    /** Drop the leading `!` so the draft is a prompt again. */
+    data object ExitShellMode : OpenCodeSessionComposerAction
 
     data object Send : OpenCodeSessionComposerAction
 
@@ -501,9 +512,14 @@ private fun PromptEntryContent(
 
     val mentionColor = openCodeColor("syntax-type")
     val bodyColor = openCodeColor("text-strong")
+    // The shell prefix shares the mention highlight so the mode reads in the text itself.
+    val highlightRanges =
+        remember(state.mentionRanges, state.shellMode) {
+            if (state.shellMode) listOf(0..0) + state.mentionRanges else state.mentionRanges
+        }
     val mentionTransformation =
-        remember(state.mentionRanges, mentionColor) {
-            MentionVisualTransformation(mentionRanges = state.mentionRanges, mentionColor = mentionColor)
+        remember(highlightRanges, mentionColor) {
+            MentionVisualTransformation(mentionRanges = highlightRanges, mentionColor = mentionColor)
         }
 
     // Own TextFieldValue so typing keeps the caret, while programmatic text
@@ -553,6 +569,13 @@ private fun PromptEntryContent(
         textStyle = MaterialTheme.typography.bodyLarge.copy(color = bodyColor),
         cursorBrush = SolidColor(bodyColor),
         visualTransformation = mentionTransformation,
+        // A shell command must reach the server as typed: no autocorrect or auto-capitalization.
+        keyboardOptions =
+            if (state.shellMode) {
+                KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false)
+            } else {
+                KeyboardOptions.Default
+            },
         maxLines = PromptMaxVisibleLines,
         modifier =
             Modifier
@@ -632,6 +655,7 @@ private fun PromptEntryContent(
                             sessionComposerSendLabel(
                                 followUpDelivery = state.followUpDelivery,
                                 hasActiveWork = state.showStop,
+                                shellMode = state.shellMode,
                             ),
                     ),
                 enabled = state.sendEnabled,
@@ -669,16 +693,17 @@ internal fun questionSelectionHint(
 
 /**
  * Send button label. Steer/Queue only describe what Send does while work is running;
- * an idle session just sends.
+ * an idle session just sends. A shell command always runs now.
  */
 internal fun sessionComposerSendLabel(
     followUpDelivery: FollowUpDelivery?,
     hasActiveWork: Boolean,
+    shellMode: Boolean = false,
 ): String =
-    when (followUpDelivery.takeIf { hasActiveWork }) {
+    when (followUpDelivery.takeIf { hasActiveWork && !shellMode }) {
         FollowUpDelivery.Steer -> "Send as Steer"
         FollowUpDelivery.Queue -> "Send as Queue"
-        null -> "Send"
+        null -> if (shellMode) "Run shell command" else "Send"
     }
 
 private class MentionVisualTransformation(
@@ -791,25 +816,36 @@ private fun PickerChipsRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                OpenCodeChoiceBadge(
-                    label = state.selectedModelLabel,
-                    selected = false,
-                    onClick = { onAction(OpenCodeSessionComposerAction.SelectModel) },
-                    variant = OpenCodeChoiceBadgeVariant.Glass,
-                )
-                OpenCodeChoiceBadge(
-                    label = state.selectedModeLabel,
-                    selected = false,
-                    onClick = { onAction(OpenCodeSessionComposerAction.SelectMode) },
-                    variant = OpenCodeChoiceBadgeVariant.Glass,
-                )
-                if (state.showVariant) {
+                if (state.shellMode) {
+                    // Like the TUI, shell mode shows "Shell" in place of the agent and model.
                     OpenCodeChoiceBadge(
-                        label = state.selectedVariantLabel,
+                        label = "Shell",
+                        selected = true,
+                        onClick = { onAction(OpenCodeSessionComposerAction.ExitShellMode) },
+                        variant = OpenCodeChoiceBadgeVariant.Glass,
+                        modifier = Modifier.semantics { contentDescription = "Shell mode. Leave shell mode" },
+                    )
+                } else {
+                    OpenCodeChoiceBadge(
+                        label = state.selectedModelLabel,
                         selected = false,
-                        onClick = { onAction(OpenCodeSessionComposerAction.SelectVariant) },
+                        onClick = { onAction(OpenCodeSessionComposerAction.SelectModel) },
                         variant = OpenCodeChoiceBadgeVariant.Glass,
                     )
+                    OpenCodeChoiceBadge(
+                        label = state.selectedModeLabel,
+                        selected = false,
+                        onClick = { onAction(OpenCodeSessionComposerAction.SelectMode) },
+                        variant = OpenCodeChoiceBadgeVariant.Glass,
+                    )
+                    if (state.showVariant) {
+                        OpenCodeChoiceBadge(
+                            label = state.selectedVariantLabel,
+                            selected = false,
+                            onClick = { onAction(OpenCodeSessionComposerAction.SelectVariant) },
+                            variant = OpenCodeChoiceBadgeVariant.Glass,
+                        )
+                    }
                 }
             }
         }
@@ -1214,6 +1250,40 @@ private fun PendingRevertComposerPreviewContent() {
                     sendEnabled = true,
                     showStop = false,
                     stopEnabled = false,
+                ),
+            onAction = {},
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun ShellModeComposerPreview() {
+    ShellModeComposerPreviewContent()
+}
+
+@Preview(showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun ShellModeComposerDarkPreview() {
+    ShellModeComposerPreviewContent()
+}
+
+@Composable
+private fun ShellModeComposerPreviewContent() {
+    OpenCodeTheme {
+        OpenCodeSessionComposer(
+            state =
+                OpenCodeSessionComposerState.Prompt(
+                    text = "!git status",
+                    selectedModelLabel = "Claude Sonnet 4",
+                    selectedModeLabel = "Build",
+                    selectedVariantLabel = "Default",
+                    showVariant = true,
+                    sendEnabled = true,
+                    attachEnabled = false,
+                    showStop = false,
+                    stopEnabled = false,
+                    shellMode = true,
                 ),
             onAction = {},
         )

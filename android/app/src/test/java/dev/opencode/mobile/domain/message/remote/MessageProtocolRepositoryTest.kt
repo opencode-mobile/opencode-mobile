@@ -16,6 +16,7 @@ import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.HttpRequestData
 import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.OutgoingContent
 import io.ktor.http.headersOf
@@ -168,6 +169,89 @@ class MessageProtocolRepositoryTest {
             assertTrue(!promptBody.contains("\"mime\""))
             assertTrue(!promptBody.contains("\"parts\""))
             assertTrue(!promptBody.contains("\"prompt\""))
+        }
+
+    @Test
+    fun v1RunShell_postsAgentCommandAndModelToSessionShell() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respondJson("""{"id":"msg_a","role":"assistant"}""")
+                }
+            val router = router(client, ServerProtocol.V1)
+
+            router.runShellCommand(
+                "ses_1",
+                ShellCommandOptions(
+                    command = "git status",
+                    agent = "build",
+                    model = PromptModelSelection(providerId = "openai", modelId = "gpt-5"),
+                ),
+                "/repo",
+            )
+
+            val request = requests.single()
+            assertEquals(HttpMethod.Post, request.method)
+            assertTrue(request.url.encodedPath.endsWith("/session/ses_1/shell"))
+            assertEquals("/repo", request.url.parameters["directory"])
+            assertEquals(
+                Json.parseToJsonElement(
+                    """{"agent":"build","command":"git status","model":{"providerID":"openai","modelID":"gpt-5"}}""",
+                ),
+                Json.parseToJsonElement((request.body as io.ktor.http.content.TextContent).text),
+            )
+        }
+
+    @Test
+    fun v1RunShell_withoutModelOmitsIt() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respondJson("{}")
+                }
+            val router = router(client, ServerProtocol.V1)
+
+            router.runShellCommand("ses_1", ShellCommandOptions(command = "ls", agent = "plan"), null)
+
+            assertEquals(
+                Json.parseToJsonElement("""{"agent":"plan","command":"ls"}"""),
+                Json.parseToJsonElement((requests.single().body as io.ktor.http.content.TextContent).text),
+            )
+        }
+
+    @Test
+    fun v2RunShell_postsOnlyTheCommandWithoutSwitchingAgentOrModel() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respond("", HttpStatusCode.NoContent)
+                }
+            val router = router(client, ServerProtocol.V2)
+
+            router.runShellCommand(
+                "ses_2",
+                ShellCommandOptions(
+                    command = "echo one\necho two",
+                    agent = "build",
+                    model = PromptModelSelection(providerId = "openai", modelId = "gpt-5"),
+                ),
+                "/repo",
+            )
+
+            val request = requests.single()
+            assertEquals(HttpMethod.Post, request.method)
+            assertTrue(request.url.encodedPath.endsWith("/api/session/ses_2/shell"))
+            assertEquals(null, request.url.parameters["directory"])
+            assertEquals(
+                Json.parseToJsonElement("""{"command":"echo one\necho two"}"""),
+                Json.parseToJsonElement((request.body as io.ktor.http.content.TextContent).text),
+            )
         }
 
     @Test

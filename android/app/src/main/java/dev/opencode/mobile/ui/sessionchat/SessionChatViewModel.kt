@@ -572,6 +572,10 @@ class SessionChatViewModel
             composer.updateComposerText(text, cursor)
         }
 
+        fun exitShellMode() {
+            composer.exitShellMode()
+        }
+
         fun beginDictation(
             languageLabel: String,
             onDevice: Boolean,

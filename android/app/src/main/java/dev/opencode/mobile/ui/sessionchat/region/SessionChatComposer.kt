@@ -10,6 +10,7 @@ import dev.opencode.mobile.domain.command.CommandError
 import dev.opencode.mobile.domain.command.CommandInvocationCollapser
 import dev.opencode.mobile.domain.command.CommandRepository
 import dev.opencode.mobile.domain.command.CommandRunOptions
+import dev.opencode.mobile.domain.command.ComposerShellCommand
 import dev.opencode.mobile.domain.command.ComposerSubmitIntent
 import dev.opencode.mobile.domain.command.ComposerSubmitRouting
 import dev.opencode.mobile.domain.composer.ComposerDraft
@@ -28,6 +29,7 @@ import dev.opencode.mobile.domain.message.PromptModelSelection
 import dev.opencode.mobile.domain.message.PromptSendOptions
 import dev.opencode.mobile.domain.message.PromptSendProgress
 import dev.opencode.mobile.domain.message.PromptSendProgressReporter
+import dev.opencode.mobile.domain.message.ShellCommandOptions
 import dev.opencode.mobile.domain.model.ModelCatalogStore
 import dev.opencode.mobile.domain.model.ModelSelection
 import dev.opencode.mobile.domain.model.ModelSelectionCatalog
@@ -869,6 +871,15 @@ class SessionChatComposer(
         serverAlreadyAccepted: () -> Boolean = { false },
         beforePrompt: suspend () -> Unit = {},
     ) {
+        if (ComposerShellCommand.isShellMode(_state.value.composer.text)) {
+            runShellCommand(
+                sessionId = sessionId,
+                worktree = worktree,
+                isSessionBusy = isSessionBusy,
+                supportsFollowUp = supportsFollowUp,
+            )
+            return
+        }
         val composer = _state.value.composer
         val submittedText = composer.text
         val submittedMentions = composer.agentMentions
@@ -1096,6 +1107,77 @@ class SessionChatComposer(
                 onSendFailed(display.id, errorMessage(throwable))
             }
         }
+    }
+
+    /**
+     * Runs a shell-mode draft (`!command`) instead of sending a prompt, like the TUI and web app.
+     * The output arrives through the session's shell or message events, so there is no optimistic
+     * row and no send progress: the server answers only when the command ends, and the composer stays
+     * free meanwhile. Attachments stay in the composer because a command cannot carry them. A
+     * failure restores the draft (unless it was edited since) and shows the error the way a
+     * failed prompt does.
+     */
+    private fun runShellCommand(
+        sessionId: String,
+        worktree: String,
+        isSessionBusy: Boolean,
+        supportsFollowUp: Boolean,
+    ) {
+        val composer = _state.value.composer
+        val command = ComposerShellCommand.command(composer.text) ?: return
+        if (OptimisticSessionCreate.isPlaceholder(sessionId)) return
+        if (_state.value.isSending || !composer.isModelSelectionReady) return
+        // Like the TUI and web app, a command runs now or not at all; it cannot wait in the queue.
+        if (supportsFollowUp && isSessionBusy && composer.followUpDelivery == FollowUpDelivery.Queue) {
+            _state.update { it.copy(errorMessage = SHELL_CANNOT_QUEUE_ERROR) }
+            return
+        }
+        val submittedText = composer.text
+        val submittedMentions = composer.agentMentions
+        val submittedFileMentions = composer.fileMentions
+        val submittedDraftRevision = draftRevision
+        val options =
+            ShellCommandOptions(
+                command = command,
+                agent = composer.selectedMode,
+                model =
+                    composer.selectedModel?.let {
+                        PromptModelSelection(it.option.providerId, it.option.modelId)
+                    },
+            )
+        clearAcceptedSubmission(textRevision = submittedDraftRevision, submittedAttachmentRevisions = emptyMap())
+        _state.update { it.copy(errorMessage = null) }
+        scope.launch {
+            try {
+                withContext(NonCancellable) {
+                    messageRepository.runShellCommand(sessionId = sessionId, options = options, directory = worktree)
+                }
+                logI("shell command accepted session=$sessionId")
+            } catch (throwable: CancellationException) {
+                throw throwable
+            } catch (throwable: Throwable) {
+                DiagnosticLog.error(DiagnosticLogArea.Chat, "runShellCommand failed", throwable)
+                restoreFailedSubmission(
+                    textRevision = submittedDraftRevision,
+                    submittedText = submittedText,
+                    submittedMentions = submittedMentions,
+                    submittedFileMentions = submittedFileMentions,
+                    submittedAttachments = emptyList(),
+                    submittedAttachmentRevisions = emptyMap(),
+                )
+                _state.update { it.copy(errorMessage = errorMessage(throwable)) }
+            }
+        }
+    }
+
+    /** Leaves shell mode by dropping the leading `!`; the rest of the draft stays. */
+    fun exitShellMode() {
+        val composer = _state.value.composer
+        if (!ComposerShellCommand.isShellMode(composer.text)) return
+        updateComposerText(
+            text = ComposerShellCommand.exitShellMode(composer.text),
+            cursor = (composer.cursor - 1).coerceAtLeast(0),
+        )
     }
 
     private fun clearAcceptedSubmission(
@@ -1721,6 +1803,7 @@ class SessionChatComposer(
         private const val DRAFT_PERSIST_DEBOUNCE_MS = 300L
         const val ModelFilterThreshold = 10
         const val PENDING_SEND_TIMEOUT_ERROR = "Couldn't send. Try again."
+        const val SHELL_CANNOT_QUEUE_ERROR = "Shell commands can't be queued. Switch to Steer to run it now."
         private val SentTimeFormatter = DateTimeFormatter.ofPattern("h:mm a", Locale.US)
     }
 

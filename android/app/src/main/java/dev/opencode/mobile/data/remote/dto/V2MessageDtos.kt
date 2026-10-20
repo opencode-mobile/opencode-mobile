@@ -27,6 +27,8 @@ data class V2SessionMessageDto(
     val status: String? = null,
     val command: String? = null,
     val output: JsonElement? = null,
+    /** `shell` items: the command's exit code once it ended. */
+    val exit: Int? = null,
     @SerialName("callID") val callId: String? = null,
     val name: String? = null,
     val description: String? = null,

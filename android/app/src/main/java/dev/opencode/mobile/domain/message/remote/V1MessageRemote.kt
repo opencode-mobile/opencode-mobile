@@ -37,4 +37,12 @@ internal class V1MessageRemote(
     ) {
         api.sendPromptAsync(sessionId, adapter.toSendRequest(options), directory, options.attachments)
     }
+
+    override suspend fun runShellCommand(
+        sessionId: String,
+        options: ShellCommandOptions,
+        directory: String?,
+    ) {
+        api.runShell(sessionId, adapter.toV1ShellRequest(options), directory)
+    }
 }

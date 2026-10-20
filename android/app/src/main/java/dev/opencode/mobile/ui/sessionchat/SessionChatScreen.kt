@@ -1024,7 +1024,8 @@ fun SessionChatScreen(
                                         attachEnabled =
                                             attachmentSources.isAttachEnabled &&
                                                 sessionCreated &&
-                                                uiState.composer.isModelSelectionReady,
+                                                uiState.composer.isModelSelectionReady &&
+                                                !uiState.composer.isShellMode,
                                         showStop = uiState.sessionStatusLabel != null,
                                         stopEnabled =
                                             !uiState.isAborting &&
@@ -1034,6 +1035,7 @@ fun SessionChatScreen(
                                                 uiState.composer.supportsFollowUpDelivery
                                             },
                                         showDictationButton = dictationSupport.showsMic,
+                                        shellMode = uiState.composer.isShellMode,
                                     )
                             }
                         val composerFocus = rememberOpenCodeSessionComposerFocus()
@@ -1093,6 +1095,7 @@ fun SessionChatScreen(
                                     }
                                     is OpenCodeSessionComposerAction.RemoveAttachment -> viewModel.removeAttachment(action.id)
                                     OpenCodeSessionComposerAction.CancelRevert -> viewModel.cancelRevert()
+                                    OpenCodeSessionComposerAction.ExitShellMode -> viewModel.exitShellMode()
                                     OpenCodeSessionComposerAction.Send -> viewModel.sendPrompt()
                                     OpenCodeSessionComposerAction.ToggleFollowUp -> viewModel.toggleFollowUp()
                                     OpenCodeSessionComposerAction.Stop -> viewModel.abort()

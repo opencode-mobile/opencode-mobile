@@ -44,6 +44,7 @@ import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.PromptSendOptions
 import dev.opencode.mobile.domain.message.PromptSendProgressReporter
+import dev.opencode.mobile.domain.message.ShellCommandOptions
 import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.domain.model.ModelCatalogStore
 import dev.opencode.mobile.domain.model.ModelRepository
@@ -2348,6 +2349,172 @@ class SessionChatViewModelTest {
             )
             sendGate.complete(Unit)
             advanceUntilIdle()
+        }
+
+    @Test
+    fun sendPrompt_shellDraft_runsCommandInsteadOfPrompt() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val viewModel = createViewModel(repository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            val rowsBefore =
+                viewModel.uiState.value.messages
+                    .map { it.id }
+
+            viewModel.updateComposerText("!git status")
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.composer.isShellMode)
+            assertTrue(viewModel.uiState.value.composer.canSend)
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+
+            val (options, directory) = repository.shellRequests.single()
+            assertEquals("git status", options.command)
+            assertEquals(viewModel.uiState.value.composer.selectedMode, options.agent)
+            assertEquals(
+                viewModel.uiState.value.composer.selectedModel
+                    ?.option
+                    ?.modelId,
+                options.model?.modelId,
+            )
+            assertEquals("/repo", directory)
+            assertFalse(repository.sendPromptAsyncCalled)
+            assertEquals("", viewModel.uiState.value.composer.text)
+            assertFalse(viewModel.uiState.value.isSending)
+            // Output arrives through shell events; no optimistic prompt row is added.
+            assertEquals(
+                rowsBefore,
+                viewModel.uiState.value.messages
+                    .map { it.id },
+            )
+        }
+
+    @Test
+    fun sendPrompt_shellDraftWithPendingRevert_runsWithoutCommittingTheRevert() =
+        runTest(testDispatcher) {
+            val messages =
+                listOf(
+                    Message(id = "msg-1", role = MessageRole.User, text = "First"),
+                    Message(id = "msg-2", role = MessageRole.Assistant, text = "Reply"),
+                )
+            val repository = FakeMessageRepository(messages = messages)
+            val sessionRepository = FakeSessionRepository()
+            val viewModel = createViewModel(repository = repository, sessionRepository = sessionRepository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            viewModel.revertMessage("msg-1")
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.hasPendingRevert)
+
+            viewModel.updateComposerText("!git status")
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+
+            // Like the TUI and web app, a shell command leaves a staged revert alone.
+            assertEquals(1, repository.shellRequests.size)
+            assertTrue(sessionRepository.commitRevertRequests.isEmpty())
+            assertTrue(viewModel.uiState.value.hasPendingRevert)
+        }
+
+    @Test
+    fun sendPrompt_bareBang_sendsNothing() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val viewModel = createViewModel(repository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.updateComposerText("!")
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.composer.isShellMode)
+            assertFalse(viewModel.uiState.value.composer.canSend)
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+
+            assertTrue(repository.shellRequests.isEmpty())
+            assertFalse(repository.sendPromptAsyncCalled)
+            assertEquals("!", viewModel.uiState.value.composer.text)
+        }
+
+    @Test
+    fun sendPrompt_leadingWhitespaceBeforeBang_sendsPrompt() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val viewModel = createViewModel(repository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.updateComposerText(" !important")
+            advanceUntilIdle()
+            assertFalse(viewModel.uiState.value.composer.isShellMode)
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+
+            assertTrue(repository.shellRequests.isEmpty())
+            assertEquals("!important", repository.sentOptions?.text)
+        }
+
+    @Test
+    fun sendPrompt_multiLineShellDraft_runsWholeScript() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val viewModel = createViewModel(repository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.updateComposerText("!cd app\nls\n")
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+
+            assertEquals(
+                "cd app\nls",
+                repository.shellRequests
+                    .single()
+                    .first.command,
+            )
+        }
+
+    @Test
+    fun sendPrompt_shellBusyFailure_restoresDraftAndShowsErrorLikeAPrompt() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            repository.shellError = MessageError.Http(statusCode = 409, message = "Session is busy")
+            val viewModel = createViewModel(repository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.updateComposerText("!git status")
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+
+            assertEquals(1, repository.shellRequests.size)
+            assertEquals("!git status", viewModel.uiState.value.composer.text)
+            assertEquals(
+                "Session is busy",
+                viewModel.uiState.value.snackbar
+                    ?.message,
+            )
+            assertEquals(
+                SessionChatSnackbarTone.Error,
+                viewModel.uiState.value.snackbar
+                    ?.tone,
+            )
+        }
+
+    @Test
+    fun exitShellMode_dropsPrefixAndKeepsTheRestOfTheDraft() =
+        runTest(testDispatcher) {
+            val viewModel = createViewModel(FakeMessageRepository())
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.updateComposerText("!git status")
+            viewModel.exitShellMode()
+            advanceUntilIdle()
+
+            assertEquals("git status", viewModel.uiState.value.composer.text)
+            assertFalse(viewModel.uiState.value.composer.isShellMode)
         }
 
     @Test
@@ -6442,6 +6609,8 @@ private class FakeMessageRepository(
     val catchUpChrome = MutableStateFlow(false)
     var sendPromptAsyncCalled: Boolean = false
     var sentOptions: PromptSendOptions? = null
+    val shellRequests = mutableListOf<Pair<ShellCommandOptions, String?>>()
+    var shellError: Throwable? = null
     private var listMessagesCallCount = 0
 
     override fun observeMessages(
@@ -6551,6 +6720,15 @@ private class FakeMessageRepository(
                     text = options.text,
                 )
         }
+    }
+
+    override suspend fun runShellCommand(
+        sessionId: String,
+        options: ShellCommandOptions,
+        directory: String?,
+    ) {
+        shellRequests += options to directory
+        shellError?.let { throw it }
     }
 }
 

@@ -173,6 +173,8 @@ private final class OlderHistoryMessageRepository: MessageRepository, @unchecked
     }
 
     func sendPromptAsync(sessionID: String, options: PromptSendOptions, directory: String?) async throws {}
+
+    func runShellCommand(sessionID: String, options: ShellCommandOptions, directory: String?) async throws {}
 }
 
 private final class ConfirmableOlderHistoryRepository: MessageRepository, @unchecked Sendable {
@@ -236,4 +238,6 @@ private final class ConfirmableOlderHistoryRepository: MessageRepository, @unche
     }
 
     func sendPromptAsync(sessionID: String, options: PromptSendOptions, directory: String?) async throws {}
+
+    func runShellCommand(sessionID: String, options: ShellCommandOptions, directory: String?) async throws {}
 }

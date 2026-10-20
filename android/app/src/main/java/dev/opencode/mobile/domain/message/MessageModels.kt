@@ -190,6 +190,16 @@ data class PromptModelSelection(
     val modelId: String,
 )
 
+/**
+ * A shell command typed as `!command` in the composer. v1 records the run under [agent] and
+ * [model]; v2 runs it in the session as it is and ignores both.
+ */
+data class ShellCommandOptions(
+    val command: String,
+    val agent: String,
+    val model: PromptModelSelection? = null,
+)
+
 enum class MessageRole {
     User,
     Assistant,

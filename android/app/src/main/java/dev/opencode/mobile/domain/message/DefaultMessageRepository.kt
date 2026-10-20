@@ -100,6 +100,16 @@ class DefaultMessageRepository
                 .getOrElse { throw adapter.mapError(it) }
         }
 
+        override suspend fun runShellCommand(
+            sessionId: String,
+            options: ShellCommandOptions,
+            directory: String?,
+        ) {
+            logI("runShellCommand session=$sessionId directory=${directory ?: "-"}")
+            runCatching { messageRemote.runShellCommand(sessionId, options, directory) }
+                .getOrElse { throw adapter.mapError(it) }
+        }
+
         private fun logI(message: String) {
             DiagnosticLog.info(DiagnosticLogArea.Chat, message)
         }
