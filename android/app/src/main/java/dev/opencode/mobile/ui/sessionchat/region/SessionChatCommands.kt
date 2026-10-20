@@ -17,6 +17,7 @@ import dev.opencode.mobile.domain.model.NewSessionModelSelectionResolver
 import dev.opencode.mobile.domain.session.CompactionStart
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.Session
+import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionForkTitle
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.ui.sessionchat.ChildSessionNavigationTarget
@@ -497,6 +498,20 @@ class SessionChatCommands(
         if (update.sessionId != boundSessionId || update.messageId == currentRevertMessageId) return
         logI("revert boundary update session=${update.sessionId} message=${update.messageId ?: "none"}")
         setRevertBoundary(update.messageId)
+    }
+
+    /**
+     * Commits a pending revert ahead of the next prompt, as the web app and TUI do. Throws when
+     * the commit fails so the prompt is not sent.
+     */
+    suspend fun commitPendingRevert(
+        sessionId: String,
+        worktree: String,
+    ) {
+        if (currentRevertMessageId == null) return
+        val committed = withContext(ioDispatcher) { sessionRepository.commitRevert(sessionId, worktree) }
+        if (!committed) throw SessionError.Http(statusCode = 0, message = "Couldn't commit revert.")
+        logI("revert committed before prompt session=$sessionId")
     }
 
     fun consumePendingRevert() {

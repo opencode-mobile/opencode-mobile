@@ -4386,6 +4386,90 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun sendWithPendingRevert_commitsRevertBeforePrompt() =
+        runTest(testDispatcher) {
+            val messages =
+                listOf(
+                    Message(id = "msg-1", role = MessageRole.User, text = "First"),
+                    Message(id = "msg-2", role = MessageRole.Assistant, text = "Reply"),
+                )
+            val repository = FakeMessageRepository(messages = messages)
+            val sessionRepository = FakeSessionRepository()
+            var promptSentBeforeCommit: Boolean? = null
+            sessionRepository.onCommitRevert = { promptSentBeforeCommit = repository.sendPromptAsyncCalled }
+            val viewModel = createViewModel(repository = repository, sessionRepository = sessionRepository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            viewModel.revertMessage("msg-1")
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.hasPendingRevert)
+
+            viewModel.updateComposerText("Edited")
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+
+            assertEquals(
+                listOf(FakeSessionRepository.LifecycleRequest(id = "ses-1", directory = "/repo")),
+                sessionRepository.commitRevertRequests,
+            )
+            assertEquals(false, promptSentBeforeCommit)
+            assertTrue(repository.sendPromptAsyncCalled)
+            assertEquals("Edited", repository.sentOptions?.text)
+            assertFalse(viewModel.uiState.value.hasPendingRevert)
+        }
+
+    @Test
+    fun sendWithoutPendingRevert_doesNotCommit() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val sessionRepository = FakeSessionRepository()
+            val viewModel = createViewModel(repository = repository, sessionRepository = sessionRepository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.updateComposerText("Hello")
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+
+            assertTrue(repository.sendPromptAsyncCalled)
+            assertTrue(sessionRepository.commitRevertRequests.isEmpty())
+        }
+
+    @Test
+    fun failedRevertCommit_keepsPromptUnsentAndReportsError() =
+        runTest(testDispatcher) {
+            val messages =
+                listOf(
+                    Message(id = "msg-1", role = MessageRole.User, text = "First"),
+                    Message(id = "msg-2", role = MessageRole.Assistant, text = "Reply"),
+                )
+            val repository = FakeMessageRepository(messages = messages)
+            val sessionRepository =
+                FakeSessionRepository(
+                    commitRevertError = SessionError.Http(statusCode = 409, message = "Session is busy"),
+                )
+            val viewModel = createViewModel(repository = repository, sessionRepository = sessionRepository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            viewModel.revertMessage("msg-1")
+            advanceUntilIdle()
+
+            viewModel.updateComposerText("Edited")
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+
+            assertEquals(1, sessionRepository.commitRevertRequests.size)
+            assertFalse(repository.sendPromptAsyncCalled)
+            assertEquals("Edited", viewModel.uiState.value.composer.text)
+            assertEquals(
+                "Session is busy",
+                viewModel.uiState.value.snackbar
+                    ?.message,
+            )
+            assertTrue(viewModel.uiState.value.hasPendingRevert)
+        }
+
+    @Test
     fun revertStagedElsewhere_hidesRevertedTurnsUntilCleared() =
         runTest(testDispatcher) {
             val messages =
@@ -6562,6 +6646,7 @@ private class FakeSessionRepository(
     private val forkSessionError: Throwable? = null,
     private val revertError: Throwable? = null,
     private val unrevertError: Throwable? = null,
+    private val commitRevertError: Throwable? = null,
     private val summarizeError: Throwable? = null,
     private val summarizeHoldUntil: CompletableDeferred<Unit>? = null,
     private val compactStart: CompactionStart = CompactionStart.Finished,
@@ -6644,6 +6729,10 @@ private class FakeSessionRepository(
         private set
     var unrevertRequest: LifecycleRequest? = null
         private set
+    val commitRevertRequests = mutableListOf<LifecycleRequest>()
+
+    /** Runs when a revert commit arrives, before it succeeds or fails. */
+    var onCommitRevert: (() -> Unit)? = null
     var summarizeRequest: SummarizeRequest? = null
         private set
     var abortCallCount: Int = 0
@@ -6836,6 +6925,17 @@ private class FakeSessionRepository(
     ): Boolean {
         unrevertRequest = LifecycleRequest(id = id, directory = directory)
         unrevertError?.let { throw it }
+        getSessionResult = getSessionResult?.copy(revert = null)
+        return true
+    }
+
+    override suspend fun commitRevert(
+        id: String,
+        directory: String?,
+    ): Boolean {
+        commitRevertRequests += LifecycleRequest(id = id, directory = directory)
+        onCommitRevert?.invoke()
+        commitRevertError?.let { throw it }
         getSessionResult = getSessionResult?.copy(revert = null)
         return true
     }

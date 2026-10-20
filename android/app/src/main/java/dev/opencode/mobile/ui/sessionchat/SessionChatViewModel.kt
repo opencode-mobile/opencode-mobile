@@ -1175,6 +1175,7 @@ class SessionChatViewModel
                     publishUiState()
                 },
                 serverAlreadyAccepted = ::serverAlreadyAccepted,
+                beforePrompt = { commands.commitPendingRevert(sessionId, worktree) },
             )
         }
 

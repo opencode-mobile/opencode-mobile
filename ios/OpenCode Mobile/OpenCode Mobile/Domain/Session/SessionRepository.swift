@@ -29,6 +29,10 @@ protocol SessionRepository: Sendable {
     func compactSession(id: String, providerID: String, modelID: String) async throws -> CompactionStart
     func revertSession(id: String, messageID: String, partID: String?) async throws -> Bool
     func unrevertSession(id: String) async throws -> Bool
+    /// Settles a pending revert before the next prompt. v2 only stages a revert and needs an
+    /// explicit commit; v1 applies the revert itself when the next prompt arrives, so it has
+    /// nothing to commit.
+    func commitRevert(id: String) async throws -> Bool
     func respondToPermission(sessionID: String, permissionID: String, decision: PermissionDecision, directory: String?) async throws -> Bool
     func replyToQuestion(questionID: String, answers: [[String]], directory: String?) async throws -> Bool
     func replyToQuestion(questionID: String, answers: [[String]], directory: String?, sessionID: String?) async throws -> Bool
@@ -73,6 +77,7 @@ extension SessionRepository {
     func steerPendingPrompt(sessionID _: String, inboxID _: String) async throws -> Bool { false }
     func queuePendingPrompt(sessionID _: String, inboxID _: String) async throws -> Bool { false }
     func markSessionViewed(sessionId _: String, idleAtEpochMs _: Int64) async throws {}
+    func commitRevert(id _: String) async throws -> Bool { true }
 
     func getSession(id: String) async throws -> Session {
         try await getSession(id: id, directory: nil)
@@ -252,6 +257,10 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
 
     func unrevertSession(id: String) async throws -> Bool {
         try await run { try await remote.unrevertSession(id: id) }
+    }
+
+    func commitRevert(id: String) async throws -> Bool {
+        try await run { try await remote.commitRevert(id: id) }
     }
 
     func respondToPermission(
