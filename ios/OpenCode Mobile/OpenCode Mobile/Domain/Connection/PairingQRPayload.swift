@@ -40,14 +40,27 @@ enum PairingQRPayload {
     }
 
     /// Tailscale wins when it answered. Otherwise the first other answered address, in candidate order.
-    static func chooseAnsweredURL(candidates: [String], answered: [String]) -> String? {
+    /// When `currentBaseURL` is `https`, only `https` candidates are eligible: a saved encrypted
+    /// address is never replaced with a cleartext one.
+    static func chooseAnsweredURL(
+        candidates: [String],
+        answered: [String],
+        currentBaseURL: String? = nil
+    ) -> String? {
         let answeredSet = Set(answered.map { ConnectionProfileIdentity.normalizeBaseURL($0) })
+        let keepEncrypted = currentBaseURL.map(isEncryptedURL) ?? false
         let ordered = ConnectionProfileIdentity.normalizedAddressList(candidates)
             .filter { answeredSet.contains($0) }
+            .filter { !keepEncrypted || isEncryptedURL($0) }
         if let tailscale = ordered.first(where: { isTailscaleURL($0) }) {
             return tailscale
         }
         return ordered.first
+    }
+
+    static func isEncryptedURL(_ raw: String) -> Bool {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return trimmed.hasPrefix("https://") || trimmed.hasPrefix("wss://")
     }
 
     static func isTailscaleURL(_ raw: String) -> Bool {

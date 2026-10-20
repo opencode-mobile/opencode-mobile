@@ -26,7 +26,7 @@ struct TerminalConnectRequestTests {
         #expect(queryValue(components, "ticket") == nil)
     }
 
-    @Test func v2HttpsUsesWssLocationDirectoryCursorAndAuthToken() throws {
+    @Test func v2HttpsUsesWssLocationDirectoryCursorAndHeaderAuth() throws {
         let request = connectRequest(
             id: "pty_2",
             directory: "/repo",
@@ -45,12 +45,12 @@ struct TerminalConnectRequestTests {
         #expect(queryValue(components, "cursor") == "12")
         #expect(queryValue(components, "directory") == nil)
         let expected = Data("opencode:secret".utf8).base64EncodedString()
-        #expect(queryValue(components, "auth_token") == expected)
+        #expect(queryValue(components, "auth_token") == nil)
         #expect(request.authorization == "Basic \(expected)")
         #expect(queryValue(components, "ticket") == nil)
     }
 
-    @Test func v1HttpUsesWsAndAuthToken() throws {
+    @Test func v1HttpUsesWsAndHeaderAuthOnly() throws {
         let request = connectRequest(
             id: "pty_1",
             directory: "/repo",
@@ -66,12 +66,13 @@ struct TerminalConnectRequestTests {
         #expect(components.scheme == "ws")
         #expect(components.path == "/pty/pty_1/connect")
         let expected = Data("opencode:secret".utf8).base64EncodedString()
-        #expect(queryValue(components, "auth_token") == expected)
+        #expect(queryValue(components, "auth_token") == nil)
+        #expect(request.url.contains(expected) == false)
         #expect(request.authorization == "Basic \(expected)")
         #expect(queryValue(components, "ticket") == nil)
     }
 
-    @Test func ticketOverridesAuthToken() throws {
+    @Test func ticketReplacesHeaderAuth() throws {
         let request = connectRequest(
             id: "pty_1",
             directory: "/repo",
