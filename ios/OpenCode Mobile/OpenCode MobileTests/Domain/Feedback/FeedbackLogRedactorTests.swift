@@ -68,19 +68,34 @@ struct FeedbackLogRedactorTests {
         #expect(redactor.redact("auth user opencode") == "auth user opencode")
     }
 
-    @Test func uploadedLogIsRedactedButSettingsExportIsNot() throws {
+    @Test func uploadedLogAndSettingsShareAreBothRedacted() async throws {
         let buffer = DiagnosticLogBuffer(persistDelayMilliseconds: nil)
         buffer.append(area: .connection, level: .warning, message: "Failed to connect to /10.0.2.2:4403")
 
-        let settingsExport = String(decoding: try buffer.exportJSONL(window: .fifteenMinutes), as: UTF8.self)
         let gzipped = try #require(FeedbackLogEncoder.encode(buffer: buffer, window: .fifteenMinutes))
         let uploaded = try #require(
             FeedbackAttachmentEncoderTests.inflate(gzipped.dropFirst(10).dropLast(8), capacity: 64_000)
         )
         let uploadedText = String(decoding: uploaded, as: UTF8.self)
-
-        #expect(settingsExport.contains("10.0.2.2:4403"))
         #expect(!uploadedText.contains("10.0.2.2"))
         #expect(uploadedText.contains("[REDACTED-HOST]"))
+
+        let viewModel = await MainActor.run {
+            DiagnosticLogsViewModel(buffer: buffer, redactor: { FeedbackLogRedactor() })
+        }
+        await MainActor.run { viewModel.prepareShare() }
+        let url = try #require(await MainActor.run { viewModel.shareFileURL })
+        let shared = String(decoding: try Data(contentsOf: url), as: UTF8.self)
+        #expect(!shared.contains("10.0.2.2"))
+        #expect(shared.contains("[REDACTED-HOST]"))
+    }
+
+    @Test func redactsCredentialShapesBeforeAddresses() {
+        let redactor = FeedbackLogRedactor()
+        let line = redactor.redact(#"GET http://opencode:hunter2@192.168.0.5:4096/x {"password":"abc"} key=sk-abcdefghijkl"#)
+        #expect(!line.contains("hunter2"))
+        #expect(!line.contains("\"abc\""))
+        #expect(!line.contains("sk-abcdefghijkl"))
+        #expect(!line.contains("192.168.0.5"))
     }
 }

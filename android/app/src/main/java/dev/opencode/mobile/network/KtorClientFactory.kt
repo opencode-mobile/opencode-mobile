@@ -1,5 +1,6 @@
 package dev.opencode.mobile.network
 
+import dev.opencode.mobile.BuildConfig
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import io.ktor.client.HttpClient
@@ -95,10 +96,14 @@ object KtorClientFactory {
                 if (contentNegotiation) {
                     install(ContentNegotiation) { json(json) }
                 }
-                install(Logging) {
-                    logger = AndroidApiLogger
-                    level = LogLevel.INFO
-                    sanitizeHeader { header -> header == HttpHeaders.Authorization }
+                // Request/response lines (URLs with directories, status, headers) are a debug aid
+                // only; release builds ship without the Logging plugin.
+                if (BuildConfig.DEBUG) {
+                    install(Logging) {
+                        logger = AndroidApiLogger
+                        level = LogLevel.INFO
+                        sanitizeHeader { header -> header == HttpHeaders.Authorization }
+                    }
                 }
                 defaultRequest { url(connection.apiBaseUrl) }
                 val password = connection.password

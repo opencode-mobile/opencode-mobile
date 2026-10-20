@@ -49,14 +49,31 @@ nonisolated struct DiagnosticLogSnapshot: Sendable {
 nonisolated enum DiagnosticLogRedactor: Sendable {
     static let maxMessageLength = 500
 
+    /// Secret shapes, most specific first. `FeedbackLogRedactor` runs these too before it
+    /// masks addresses, so both exports share one definition of "credential".
     private static let patterns: [(NSRegularExpression, String)] = {
+        let secretKeys = "password|passwd|pwd|secret|client_secret|token|access_token|refresh_token|id_token|"
+            + "auth_token|api[_-]?key|apikey|authorization|cookie|set-cookie|private_key|ticket"
         let specs: [(String, String)] = [
+            // URL userinfo: scheme://user:password@host
+            (#"(?i)\b([a-z][a-z0-9+.\-]*://)[^/\s:@]+:[^/\s@]+@"#, "$1[REDACTED]@"),
+            // Quoted JSON keys: "password":"x", "api_key": "x"
+            (#"(?i)("(?:\#(secretKeys))"\s*:\s*")[^"]*(")"#, "$1[REDACTED]$2"),
+            // Query parameters: ?auth_token=x&ticket=y
+            (#"(?i)([?&](?:\#(secretKeys))=)[^&\s"']+"#, "$1[REDACTED]"),
+            // Well-known key formats
+            (#"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b"#, "[REDACTED-JWT]"),
+            (#"\bsk-[A-Za-z0-9_-]{8,}\b"#, "[REDACTED-KEY]"),
+            (#"\bgh[pousr]_[A-Za-z0-9]{20,}\b"#, "[REDACTED-KEY]"),
+            (#"\bgithub_pat_[A-Za-z0-9_]{20,}\b"#, "[REDACTED-KEY]"),
+            (#"\bAKIA[0-9A-Z]{16}\b"#, "[REDACTED-KEY]"),
+            (#"\bxox[baprs]-[A-Za-z0-9-]{10,}\b"#, "[REDACTED-KEY]"),
             (#"(?i)\bBasic\s+[A-Za-z0-9+/=_-]+"#, "Basic [REDACTED]"),
             (#"(?i)\bBearer\s+\S+"#, "Bearer [REDACTED]"),
-            (#"(?i)(password\s*[=:]\s*)\S+"#, "$1[REDACTED]"),
-            (#"(?i)(token\s*[=:]\s*)\S+"#, "$1[REDACTED]"),
             (#"(?i)(authorization\s*[=:]\s*).+"#, "$1[REDACTED]"),
             (#"(?i)(OPENCODE_SERVER_PASSWORD\s*[=:]\s*)\S+"#, "$1[REDACTED]"),
+            // key=value / key: value for every secret key name
+            (#"(?i)\b((?:\#(secretKeys))\s*[=:]\s*)\S+"#, "$1[REDACTED]"),
         ]
         return specs.compactMap { pattern, template in
             guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }

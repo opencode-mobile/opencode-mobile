@@ -2,6 +2,7 @@ package dev.opencode.mobile.domain.feedback
 
 import dev.opencode.mobile.data.local.ServerConnectionDefaults
 import dev.opencode.mobile.domain.connection.ConnectionProfile
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogRedactor
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -11,9 +12,10 @@ import kotlinx.serialization.json.jsonPrimitive
 import java.net.URI
 
 /**
- * Second redaction pass for logs attached to a feedback report (#721). The diagnostic buffer
- * already strips credentials; a report must also never carry the server address, so URLs,
- * IP addresses, `host:port` pairs and the active profile's host, username and name go too.
+ * Second redaction pass for logs that leave the phone (#721, #755): feedback attachments and
+ * the Settings share/save export. The diagnostic buffer already strips credentials; an export
+ * must also never carry the server address, so URLs, IP addresses, `host:port` pairs and the
+ * active profile's host, username and name go too.
  */
 object FeedbackLogRedactor {
     const val HOST = "[REDACTED-HOST]"
@@ -58,7 +60,8 @@ object FeedbackLogRedactor {
         text: String,
         known: List<String> = emptyList(),
     ): String {
-        var result = text
+        // Credentials first (shared definition), then addresses and profile values.
+        var result = DiagnosticLogRedactor.redact(text)
         for ((regex, replacement) in patterns) {
             result = regex.replace(result, replacement)
         }

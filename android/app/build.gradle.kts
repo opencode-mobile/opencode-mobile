@@ -140,7 +140,8 @@ android {
     buildFeatures {
         compose = true
         aidl = false
-        buildConfig = false
+        // BuildConfig.DEBUG gates logcat output and the Ktor Logging plugin (#755).
+        buildConfig = true
         shaders = false
     }
 

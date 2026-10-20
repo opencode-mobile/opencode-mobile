@@ -1,6 +1,7 @@
 package dev.opencode.mobile.domain.diagnostic
 
 import android.util.Log
+import dev.opencode.mobile.BuildConfig
 
 /**
  * Dual-writes redacted diagnostic lines without requiring DI.
@@ -48,14 +49,17 @@ object DiagnosticLog {
             DiagnosticLogBuffer.shared.append(area = area, level = level, message = redacted)
         }
         val tag = "OpenCode.${area.wireValue}"
+        // Release builds log only the redacted line: a raw Throwable carries its unredacted
+        // message (URLs with credentials, server replies) into logcat, and Log.d is stripped by R8.
+        val attachThrowable = BuildConfig.DEBUG
         runCatching {
             when (level) {
-                DiagnosticLogLevel.Debug -> Log.d(tag, redacted)
+                DiagnosticLogLevel.Debug -> if (BuildConfig.DEBUG) Log.d(tag, redacted)
                 DiagnosticLogLevel.Info -> Log.i(tag, redacted)
                 DiagnosticLogLevel.Warning ->
-                    if (throwable == null) Log.w(tag, redacted) else Log.w(tag, redacted, throwable)
+                    if (throwable == null || !attachThrowable) Log.w(tag, redacted) else Log.w(tag, redacted, throwable)
                 DiagnosticLogLevel.Error ->
-                    if (throwable == null) Log.e(tag, redacted) else Log.e(tag, redacted, throwable)
+                    if (throwable == null || !attachThrowable) Log.e(tag, redacted) else Log.e(tag, redacted, throwable)
             }
         }
     }
