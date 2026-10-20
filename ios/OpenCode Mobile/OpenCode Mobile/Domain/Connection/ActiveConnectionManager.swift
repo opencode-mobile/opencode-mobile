@@ -9,6 +9,10 @@ final class ActiveConnectionManager: @unchecked Sendable {
     private var _profile: ConnectionProfile?
     /// Health `version` from the last probe of the active connection (#721).
     private var _serverVersion: String?
+    /// v2 session archive support from the server's API contract; false until a probe reads it.
+    private var _v2SessionArchive = false
+    /// Server version `_v2SessionArchive` was read for, so a re-probe of the same release skips the fetch.
+    private var _v2SessionArchiveVersion: String?
     private var inFlightProbe: Task<Result<ServerProtocol, Error>, Never>?
     private var probeGeneration = 0
     private var probeFailed = false
@@ -41,7 +45,10 @@ final class ActiveConnectionManager: @unchecked Sendable {
     }
 
     var capabilities: ServerCapabilities {
-        connection?.capabilities ?? .forProtocol(.v1)
+        lock.lock()
+        defer { lock.unlock() }
+        guard let connection = _connection else { return .forProtocol(.v1) }
+        return .forProtocol(connection.serverProtocol ?? .v1, v2SessionArchive: _v2SessionArchive)
     }
 
     func ensureLoaded(from store: ConnectionProfileStore) async {
@@ -97,6 +104,7 @@ final class ActiveConnectionManager: @unchecked Sendable {
             && (_connection.map { $0.hasSameIdentity(as: connection) } ?? false)
         if !sameServer {
             _serverVersion = nil
+            forgetV2SessionArchiveLocked()
         }
         _profile = stamped
         _connection = connection
@@ -260,8 +268,16 @@ final class ActiveConnectionManager: @unchecked Sendable {
         }
         do {
             let outcome = try await probing.probeServer(connection: current)
+            let archive = outcome.serverProtocol == .v2
+                ? await probeV2SessionArchive(probing: probing, connection: current, version: outcome.serverVersion)
+                : nil
             return .success(
-                cacheDetectedProtocol(outcome.serverProtocol, serverVersion: outcome.serverVersion, for: current)
+                cacheDetectedProtocol(
+                    outcome.serverProtocol,
+                    serverVersion: outcome.serverVersion,
+                    v2SessionArchive: archive,
+                    for: current
+                )
             )
         } catch is CancellationError {
             return .failure(CancellationError())
@@ -279,6 +295,7 @@ final class ActiveConnectionManager: @unchecked Sendable {
     private func cacheDetectedProtocol(
         _ detected: ServerProtocol,
         serverVersion: String?,
+        v2SessionArchive: Bool?,
         for probed: ServerConnection
     ) -> ServerProtocol {
         lock.lock()
@@ -288,8 +305,34 @@ final class ActiveConnectionManager: @unchecked Sendable {
         }
         _connection = active.withProtocol(detected)
         _serverVersion = serverVersion
+        _v2SessionArchive = v2SessionArchive ?? false
+        _v2SessionArchiveVersion = v2SessionArchive == nil ? nil : serverVersion
         persistLocked()
         return detected
+    }
+
+    /// Reads v2 archive support once per server release. A failed read returns nil and is not
+    /// remembered, so the next probe tries again; until then archive stays hidden.
+    private func probeV2SessionArchive(
+        probing: any ConnectionProbing,
+        connection: ServerConnection,
+        version: String?
+    ) async -> Bool? {
+        lock.lock()
+        let cached = version != nil && _v2SessionArchiveVersion == version ? _v2SessionArchive : nil
+        lock.unlock()
+        if let cached { return cached }
+        do {
+            return try await probing.probeV2SessionArchive(connection: connection)
+        } catch {
+            DiagnosticLog.warning(.connection, "probe /\(V2SessionArchiveContract.openAPIPath) failed")
+            return nil
+        }
+    }
+
+    private func forgetV2SessionArchiveLocked() {
+        _v2SessionArchive = false
+        _v2SessionArchiveVersion = nil
     }
 
     private func persistLocked() {
@@ -321,6 +364,7 @@ final class ActiveConnectionManager: @unchecked Sendable {
         _connection = nil
         _profile = nil
         _serverVersion = nil
+        forgetV2SessionArchiveLocked()
         probeFailed = false
         lock.unlock()
         addressResolution = nil
@@ -555,11 +599,18 @@ protocol ConnectionProbing: Sendable {
     func probe(connection: ServerConnection) async throws -> ServerProtocol
     /// Protocol plus the server's health `version`. Defaults to `probe` with no version.
     func probeServer(connection: ServerConnection) async throws -> ServerProbeOutcome
+    /// Whether a v2 server can archive sessions (opencode 2.1.0+). Throws when the server's
+    /// API contract could not be read, so the caller can retry later. Defaults to false.
+    func probeV2SessionArchive(connection: ServerConnection) async throws -> Bool
 }
 
 extension ConnectionProbing {
     func probeServer(connection: ServerConnection) async throws -> ServerProbeOutcome {
         ServerProbeOutcome(serverProtocol: try await probe(connection: connection), serverVersion: nil)
+    }
+
+    func probeV2SessionArchive(connection _: ServerConnection) async throws -> Bool {
+        false
     }
 }
 
@@ -600,6 +651,11 @@ struct ConnectionProbeService: ConnectionProbing, Sendable {
         } catch {
             throw adapter.mapProbeError(error)
         }
+    }
+
+    func probeV2SessionArchive(connection: ServerConnection) async throws -> Bool {
+        let client = ProjectsAPIClient(fixedConnection: connection, urlSession: urlSession)
+        return try V2SessionArchiveContract.isDeclared(data: try await client.getV2OpenAPIDocument())
     }
 }
 

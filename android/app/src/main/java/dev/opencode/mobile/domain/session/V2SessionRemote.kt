@@ -24,6 +24,7 @@ internal class V2SessionRemote(
             .listSessionsV2(
                 directory = if (projectId == null) directory else null,
                 projectId = projectId,
+                archived = false,
             ).map(adapter::toSession)
     }
 
@@ -59,10 +60,16 @@ internal class V2SessionRemote(
         }
     }
 
+    /** Callers gate on `supportsSessionArchive`; servers before 2.1.0 would ignore the field. */
     override suspend fun archiveSession(
         id: String,
         directory: String?,
-    ): Session = throw SessionError.Http(404, "session archive is not available")
+    ): Session {
+        api.setSessionArchivedV2(id, archived = true)
+        return adapter.toSession(api.getSessionV2(id)).let { session ->
+            if (session.isArchived) session else session.copy(archivedAtEpochMs = System.currentTimeMillis())
+        }
+    }
 
     override suspend fun deleteSession(
         id: String,

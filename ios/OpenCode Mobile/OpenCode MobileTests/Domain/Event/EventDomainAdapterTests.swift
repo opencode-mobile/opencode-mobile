@@ -751,6 +751,22 @@ struct EventDomainAdapterTests {
         #expect(event?.rawProperties?["forkedFromSessionID"]?.stringValue == "ses_src")
     }
 
+    @Test func parseEvent_sessionArchiveEventsRefreshHomeLists() {
+        let adapter = EventDomainAdapter()
+        let archived = adapter.parseEvent(
+            dataLine: #"{"id":"evt_1","type":"session.archived","data":{"sessionID":"ses-1"},"durable":{"aggregateID":"ses-1","seq":4,"version":1}}"#
+        )
+        let unarchived = adapter.parseEvent(
+            dataLine: #"{"payload":{"type":"sync","syncEvent":{"id":"evt_2","type":"session.unarchived.1","data":{"sessionID":"ses-2"}}}}"#
+        )
+        #expect(archived?.type == "session.archived")
+        #expect(archived?.sessionID == "ses-1")
+        #expect(archived?.triggersHomeRefresh == true)
+        #expect(unarchived?.type == "session.unarchived")
+        #expect(unarchived?.sessionID == "ses-2")
+        #expect(unarchived?.triggersHomeRefresh == true)
+    }
+
     @Test func parseEvent_remapsPermissionV2Asked() {
         let adapter = EventDomainAdapter()
         let event = adapter.parseEvent(

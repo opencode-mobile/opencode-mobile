@@ -40,6 +40,9 @@ data class OpencodeEvent(
                 "session.created",
                 "session.updated",
                 "session.deleted",
+                // v2 archive state changes; the list refetch drops or restores the session.
+                "session.archived",
+                "session.unarchived",
             )
 
         val STATUS_REFRESH_TYPES =
