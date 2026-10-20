@@ -42,15 +42,16 @@ nonisolated struct TerminalConnectRequest: Sendable, Equatable {
             pairs.append(("location[directory]", directory))
         }
         pairs.append(("cursor", cursor))
+        // Credentials travel only in the `Authorization` header, which both protocols accept on
+        // the upgrade request. Query strings end up in tunnel, proxy, and server access logs, so
+        // the server's `auth_token` query fallback (meant for browsers) is never used here.
         let token: String?
         if let ticket, !ticket.isEmpty {
             pairs.append(("ticket", ticket))
             token = nil
         } else if !password.isEmpty {
             let user = username.isEmpty ? "opencode" : username
-            let authToken = basicToken(username: user, password: password)
-            token = authToken
-            pairs.append(("auth_token", authToken))
+            token = basicToken(username: user, password: password)
         } else {
             token = nil
         }

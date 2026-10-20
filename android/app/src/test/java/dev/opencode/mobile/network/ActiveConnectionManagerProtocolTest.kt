@@ -15,6 +15,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ActiveConnectionManagerProtocolTest {
@@ -324,6 +325,79 @@ class ActiveConnectionManagerProtocolTest {
         }
 
     @Test
+    fun ensureLoaded_sendsThePasswordOnlyToTheChosenAddress() =
+        runTest {
+            val lan = "http://192.168.0.160:4096/"
+            val tailscale = "http://100.84.57.15:4096/"
+            val store = FakeProfileStore()
+            store.saveProfile(
+                ConnectionProfile(
+                    id = "profile-1",
+                    baseUrl = lan,
+                    username = "opencode",
+                    password = "token",
+                    serverUrls = listOf(lan, tailscale),
+                ),
+            )
+            val probe = CredentialRecordingProbe()
+            val manager = ActiveConnectionManager(store, probe)
+
+            manager.ensureLoaded()
+
+            assertEquals(setOf(lan, tailscale), probe.unauthenticated.toSet())
+            assertEquals(listOf(tailscale), probe.authenticated)
+            assertEquals(tailscale, manager.current()?.baseUrl)
+            assertEquals(tailscale, store.lastSaved?.baseUrl)
+        }
+
+    @Test
+    fun ensureLoaded_keepsTheStoredAddressWhenTheChosenHostRejectsThePassword() =
+        runTest {
+            val lan = "http://192.168.0.160:4096/"
+            val tailscale = "http://100.84.57.15:4096/"
+            val store = FakeProfileStore()
+            store.saveProfile(
+                ConnectionProfile(
+                    id = "profile-1",
+                    baseUrl = lan,
+                    username = "opencode",
+                    password = "stale",
+                    serverUrls = listOf(lan, tailscale),
+                ),
+            )
+            val probe = CredentialRecordingProbe(acceptsPassword = false)
+            val manager = ActiveConnectionManager(store, probe)
+
+            manager.ensureLoaded()
+
+            assertEquals(listOf(tailscale), probe.authenticated)
+            assertEquals(lan, manager.current()?.baseUrl)
+            assertEquals(lan, manager.currentProfile()?.baseUrl)
+        }
+
+    @Test
+    fun applyProfile_neverReplacesHttpsWithHttp() =
+        runTest {
+            val tunnel = "https://box.opentunnel.xyz/"
+            val lan = "http://192.168.0.160:4096/"
+            val probe = CredentialRecordingProbe(silentHosts = setOf("box.opentunnel.xyz"))
+            val manager = ActiveConnectionManager(FakeProfileStore(), probe)
+
+            manager.applyProfile(
+                ConnectionProfile(
+                    id = "profile-1",
+                    baseUrl = tunnel,
+                    username = "opencode",
+                    password = "token",
+                    serverUrls = listOf(tunnel, lan),
+                ),
+            )
+
+            assertTrue(probe.authenticated.isEmpty())
+            assertEquals(tunnel, manager.current()?.baseUrl)
+        }
+
+    @Test
     fun applyProfile_whenNoAddressAnswers_keepsStoredBaseUrl() =
         runTest {
             val lan = "http://192.168.0.160:4096/"
@@ -386,5 +460,27 @@ private class FakeProfileStore : ConnectionProfileStore {
 
     override suspend fun clearAll() {
         profile = null
+    }
+}
+
+/** 401 without a password; [acceptsPassword] decides the authenticated answer; [silentHosts] time out. */
+private class CredentialRecordingProbe(
+    private val acceptsPassword: Boolean = true,
+    private val silentHosts: Set<String> = emptySet(),
+) : ConnectionProbing {
+    val unauthenticated = mutableListOf<String>()
+    val authenticated = mutableListOf<String>()
+
+    override suspend fun probe(connection: ServerConnection): ServerProtocol {
+        val url = connection.baseUrl
+        val hasPassword = !connection.password.isNullOrEmpty()
+        synchronized(this) {
+            if (hasPassword) authenticated += url else unauthenticated += url
+        }
+        if (silentHosts.any { url.contains(it) }) {
+            throw ServerProbeError.Transport(IllegalStateException("down"))
+        }
+        if (hasPassword && acceptsPassword) return ServerProtocol.V2
+        throw ServerProbeError.Http(401, "Unauthorized")
     }
 }

@@ -60,6 +60,46 @@ struct PairingQRPayloadTests {
         #expect(picked == "http://100.84.57.15:4096/")
     }
 
+    @Test func chooseAnsweredURL_neverReplacesHttpsWithHttp() {
+        let picked = PairingQRPayload.chooseAnsweredURL(
+            candidates: [
+                "https://box.opentunnel.xyz/",
+                "http://192.168.0.160:4096/",
+                "http://100.84.57.15:4096/",
+            ],
+            answered: [
+                "http://192.168.0.160:4096/",
+                "http://100.84.57.15:4096/",
+            ],
+            currentBaseURL: "https://box.opentunnel.xyz/"
+        )
+        #expect(picked == nil)
+    }
+
+    @Test func chooseAnsweredURL_httpsCurrentStillPicksAnsweringHttps() {
+        let picked = PairingQRPayload.chooseAnsweredURL(
+            candidates: [
+                "https://box.opentunnel.xyz/",
+                "http://100.84.57.15:4096/",
+            ],
+            answered: [
+                "https://box.opentunnel.xyz/",
+                "http://100.84.57.15:4096/",
+            ],
+            currentBaseURL: "https://box.opentunnel.xyz/"
+        )
+        #expect(picked == "https://box.opentunnel.xyz/")
+    }
+
+    @Test func chooseAnsweredURL_httpCurrentMayMoveToHttps() {
+        let picked = PairingQRPayload.chooseAnsweredURL(
+            candidates: ["http://192.168.0.160:4096/", "https://box.opentunnel.xyz/"],
+            answered: ["https://box.opentunnel.xyz/"],
+            currentBaseURL: "http://192.168.0.160:4096/"
+        )
+        #expect(picked == "https://box.opentunnel.xyz/")
+    }
+
     @Test func chooseAnsweredURL_usesLanWhenTailscaleDidNotAnswer() {
         let picked = PairingQRPayload.chooseAnsweredURL(
             candidates: [

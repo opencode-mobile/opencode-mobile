@@ -122,26 +122,26 @@ final class ActiveConnectionManager: @unchecked Sendable {
         store: ConnectionProfileStore,
         generation: Int
     ) async {
-        let outcomes = await ServerAddressProbe.probe(
+        // Credentials go to one host only, and only a host that accepted them wins.
+        // A 401 (or any other failure) from the chosen host leaves the stored address alone.
+        let resolution = await ServerAddressProbe.resolve(
             urls: urls,
             username: profile.username,
             password: profile.password,
+            currentBaseURL: profile.baseURL,
             probing: probing
         )
-        let answered = outcomes.compactMap { url, result in
-            ServerAddressProbe.hostAnswered(result) ? url : nil
-        }
-        let winner = PairingQRPayload.chooseAnsweredURL(candidates: urls, answered: answered)
         lock.lock()
         let current = addressResolutionGeneration == generation
         lock.unlock()
-        guard current, let winner else { return }
+        guard current, let winner = resolution.chosen, let detected = resolution.reachableProtocol else { return }
         guard ConnectionProfileIdentity.normalizeBaseURL(winner)
             != ConnectionProfileIdentity.normalizeBaseURL(profile.baseURL)
         else { return }
         var updated = profile
         updated.baseURL = winner
-        install(updated, serverProtocol: updated.serverProtocol)
+        updated.serverProtocol = detected
+        install(updated, serverProtocol: detected)
         try? await store.saveProfile(updated)
     }
 

@@ -276,6 +276,34 @@ struct ConnectionSetupViewModelTests {
         #expect(viewModel.usesQRLayout)
     }
 
+    @Test func submit_pairingQR_sendsThePasswordOnlyToTheChosenHost() async {
+        let store = RecordingConnectionProfileStore()
+        let probe = ScriptedHostProbe(authenticated: .success(.v2))
+        let viewModel = ConnectionSetupViewModel(
+            connectionProbeService: probe,
+            connectionSessionCoordinator: ConnectionSessionCoordinator(
+                activeConnectionManager: ActiveConnectionManager(),
+                connectionProfileStore: store
+            ),
+            mode: .add
+        )
+        await viewModel.applyPairingQR(
+            """
+            {"urls":["http://192.168.0.160:4096","http://100.84.57.15:4096"],"username":"opencode","password":"secret"}
+            """
+        )
+        let saved = await viewModel.submit()
+        #expect(saved == true)
+        let withPassword = probe.connections.filter { !($0.password ?? "").isEmpty }
+        #expect(withPassword.map { $0.baseURL.absoluteString } == ["http://100.84.57.15:4096/"])
+        let withoutPassword = probe.connections.filter { ($0.password ?? "").isEmpty }
+        #expect(Set(withoutPassword.map { $0.baseURL.absoluteString }) == Set([
+            "http://192.168.0.160:4096/",
+            "http://100.84.57.15:4096/",
+        ]))
+        #expect(store.saved.last?.baseURL == "http://100.84.57.15:4096/")
+    }
+
     @Test func submit_pairingQR_tailscaleDown_savesLan() async {
         let store = RecordingConnectionProfileStore()
         let probe = RecordingURLProbeService(
