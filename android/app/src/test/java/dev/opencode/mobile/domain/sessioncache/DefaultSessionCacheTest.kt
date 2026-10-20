@@ -411,6 +411,28 @@ class DefaultSessionCacheTest {
             assertEquals(1, store.commits)
         }
 
+    @Test
+    fun purgeConnectionCancelsAPendingActivityFlush() =
+        runTest {
+            val store = CountingSessionCacheStore()
+            val cache =
+                DefaultSessionCache(
+                    store = store,
+                    connectionIdProvider = { "profile-1" },
+                    scope = backgroundScope,
+                    json = json,
+                    clock = { 1_000L },
+                    activityDebounceMs = 1_000L,
+                )
+            cache.rememberActivity("/repo", listOf(SessionActivityCacheEntry("s1", SessionActivity.Running, 1_000L)))
+            testScheduler.runCurrent()
+            cache.purgeConnection(profileId = "profile-1", serverBaseUrl = "http://localhost:4096/")
+            advanceTimeBy(2_000)
+            testScheduler.runCurrent()
+            assertEquals(0, store.commits)
+            assertNull(cache.seedActivity("/repo"))
+        }
+
     private fun TestScope.activityCache(clock: () -> Long) =
         DefaultSessionCache(
             store = InMemorySessionCacheStore(),

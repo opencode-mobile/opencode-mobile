@@ -28,6 +28,10 @@ class DefaultSessionCache(
     private val lastCommittedActivity = ConcurrentHashMap<String, List<SessionActivityCacheEntry>>()
     private val activityDebounceJobs = ConcurrentHashMap<String, Job>()
 
+    /** Bumped by every purge; a remember that started before a purge must not register after it. */
+    @Volatile
+    private var activityGeneration = 0
+
     override suspend fun seedSessions(worktree: String): List<Session>? {
         val connectionId = connectionIdProvider() ?: return null
         val key =
@@ -93,6 +97,7 @@ class DefaultSessionCache(
         directory: String,
         entries: List<SessionActivityCacheEntry>,
     ) {
+        val generation = activityGeneration
         val connectionId = connectionIdProvider() ?: return
         val key =
             SessionCacheKey(
@@ -102,6 +107,7 @@ class DefaultSessionCache(
             )
         val normalized = entries.map { it.normalized() }.sortedBy { it.sessionId }
         activityMutex.withLock {
+            if (generation != activityGeneration) return
             if (normalized == lastCommittedActivity[directory]) {
                 pendingActivity.remove(directory)
                 activityDebounceJobs.remove(directory)?.cancel()
@@ -194,41 +200,45 @@ class DefaultSessionCache(
         directory: String,
         key: SessionCacheKey,
     ) {
-        val entries =
-            activityMutex.withLock {
-                activityDebounceJobs.remove(directory)
-                pendingActivity.remove(directory)
-            } ?: return
-        if (entries == lastCommittedActivity[directory]) return
-        val payload =
-            runCatching { SessionCacheCodec.encodeActivity(entries, json) }
-                .onFailure { logSessionCacheIo("encode activity", it) }
-                .getOrNull() ?: return
-        runCatching {
-            store.commit(
-                key = key,
-                value =
-                    SessionCacheValue(
-                        payloadJson = payload,
-                        schemaVersion = SessionCacheCodec.SCHEMA_VERSION,
-                    ),
-                meta = SessionCacheCommitMeta(syncedAtEpochMs = clock()),
-            )
-            lastCommittedActivity[directory] = entries
-        }.onFailure { logSessionCacheIo("commit activity", it) }
+        // The commit stays under the lock so a purge waits for it and then evicts the row,
+        // instead of the commit landing after the purge.
+        activityMutex.withLock {
+            activityDebounceJobs.remove(directory)
+            val entries = pendingActivity.remove(directory) ?: return
+            if (entries == lastCommittedActivity[directory]) return
+            val payload =
+                runCatching { SessionCacheCodec.encodeActivity(entries, json) }
+                    .onFailure { logSessionCacheIo("encode activity", it) }
+                    .getOrNull() ?: return
+            runCatching {
+                store.commit(
+                    key = key,
+                    value =
+                        SessionCacheValue(
+                            payloadJson = payload,
+                            schemaVersion = SessionCacheCodec.SCHEMA_VERSION,
+                        ),
+                    meta = SessionCacheCommitMeta(syncedAtEpochMs = clock()),
+                )
+                lastCommittedActivity[directory] = entries
+            }.onFailure { logSessionCacheIo("commit activity", it) }
+        }
     }
 
-    private fun dropActivityMemory(worktree: String?) {
-        val directories =
-            if (worktree != null) {
-                listOf(worktree)
-            } else {
-                (lastCommittedActivity.keys + pendingActivity.keys + activityDebounceJobs.keys).toList()
+    private suspend fun dropActivityMemory(worktree: String?) {
+        activityMutex.withLock {
+            activityGeneration += 1
+            val directories =
+                if (worktree != null) {
+                    listOf(worktree)
+                } else {
+                    (lastCommittedActivity.keys + pendingActivity.keys + activityDebounceJobs.keys).toList()
+                }
+            directories.distinct().forEach { directory ->
+                activityDebounceJobs.remove(directory)?.cancel()
+                pendingActivity.remove(directory)
+                lastCommittedActivity.remove(directory)
             }
-        directories.distinct().forEach { directory ->
-            activityDebounceJobs.remove(directory)?.cancel()
-            pendingActivity.remove(directory)
-            lastCommittedActivity.remove(directory)
         }
     }
 
