@@ -11,7 +11,10 @@ import dev.opencode.mobile.domain.connection.ConnectionProfileCatalog
 import dev.opencode.mobile.domain.connection.ConnectionProfileIdentity
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.SecureCredentialStore
+import dev.opencode.mobile.domain.connection.SecureCredentialStoreException
 import dev.opencode.mobile.domain.connection.ServerProtocol
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -37,6 +40,7 @@ class DataStoreConnectionProfileStore
         override suspend fun listProfiles(): List<ConnectionProfile> = migratedCatalog().profiles.map { it.withPassword() }
 
         override suspend fun saveProfile(profile: ConnectionProfile) {
+            val previous = migratedCatalog()
             mutateCatalog { catalog -> catalog.save(profile) }
             val saved =
                 migratedCatalog().profiles.firstOrNull { stored ->
@@ -48,7 +52,13 @@ class DataStoreConnectionProfileStore
                             profile.username,
                         )
                 } ?: return
-            writePassword(saved, profile.password)
+            try {
+                writePassword(saved, profile.password)
+            } catch (error: SecureCredentialStoreException) {
+                // No password, no profile: put the catalog back the way it was.
+                mutateCatalog { previous }
+                throw error
+            }
         }
 
         override suspend fun applyProfile(id: String) {
@@ -160,8 +170,18 @@ class DataStoreConnectionProfileStore
             }
             val password = secureCredentialStore.readPassword(migrated.baseUrl)
             if (password != null) {
-                secureCredentialStore.writePassword(id, password)
-                secureCredentialStore.deletePassword(migrated.baseUrl)
+                // Legacy key migration: if the new key cannot be written, keep the old one so the
+                // password is not lost (reads fall back to it); the next save surfaces the failure.
+                try {
+                    secureCredentialStore.writePassword(id, password)
+                    secureCredentialStore.deletePassword(migrated.baseUrl)
+                } catch (error: SecureCredentialStoreException) {
+                    DiagnosticLog.warning(
+                        DiagnosticLogArea.Connection,
+                        "Kept the legacy password key; the encrypted store rejected the migrated key",
+                        error,
+                    )
+                }
             }
             prefs.remove(ACTIVE_BASE_URL_KEY)
             prefs.remove(ACTIVE_USERNAME_KEY)

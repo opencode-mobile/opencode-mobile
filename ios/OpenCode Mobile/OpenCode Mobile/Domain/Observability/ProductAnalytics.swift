@@ -294,6 +294,7 @@ enum ProductAnalytics {
         static let settingsClearSessionCache = "settings_clear_session_cache"
         static let settingsOpenPrivacyPolicy = "settings_open_privacy_policy"
         static let settingsToggleProductAnalytics = "settings_toggle_product_analytics"
+        static let settingsToggleAppLock = "settings_toggle_app_lock"
         static let settingsClearAllData = "settings_clear_all_data"
         static let themePickerDismiss = "theme_picker_dismiss"
         static let themePickerSelectPreset = "theme_picker_select_preset"

@@ -1,10 +1,11 @@
 package dev.opencode.mobile.data.local
 
 import android.content.Context
-import android.content.SharedPreferences
-import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKey
 import dagger.hilt.android.qualifiers.ApplicationContext
+import dev.opencode.mobile.data.local.secure.AesGcmValueCipher
+import dev.opencode.mobile.data.local.secure.EncryptedValueStore
+import dev.opencode.mobile.data.local.secure.KeystoreSecretKeys
+import dev.opencode.mobile.data.local.secure.LegacyEncryptedPreferencesMigration
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.feedback.FeedbackIdentityStore
@@ -12,7 +13,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * The feedback anonymous user's refresh token, in Keystore-backed encrypted preferences
+ * The feedback anonymous user's refresh token, sealed with an Android Keystore AES-GCM key
  * like the connection credentials ([EncryptedSecureCredentialStore]).
  */
 @Singleton
@@ -22,41 +23,68 @@ class EncryptedFeedbackIdentityStore
         @param:ApplicationContext private val context: Context,
     ) : FeedbackIdentityStore {
         @Volatile
-        private var cachedPreferences: SharedPreferences? = null
+        private var cachedStore: EncryptedValueStore? = null
 
-        private fun preferences(): SharedPreferences? {
-            cachedPreferences?.let { return it }
+        @Volatile
+        private var openFailed = false
+
+        private fun store(): EncryptedValueStore? {
+            cachedStore?.let { return it }
+            if (openFailed) return null
+            // One open per process: concurrent first callers must not race a failure over a success.
+            synchronized(this) {
+                cachedStore?.let { return it }
+                if (openFailed) return null
+                return openStore()
+            }
+        }
+
+        private fun openStore(): EncryptedValueStore? {
             val built =
                 runCatching {
-                    EncryptedSharedPreferences.create(
-                        context,
-                        PREFS_NAME,
-                        MasterKey.Builder(context).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build(),
-                        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
+                    val key = KeystoreSecretKeys.getOrCreate(KEY_ALIAS)
+                    EncryptedValueStore(
+                        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE),
+                        AesGcmValueCipher({ key }),
                     )
                 }.getOrElse { error ->
                     DiagnosticLog.warning(
                         DiagnosticLogArea.Connection,
-                        "Unable to open encrypted feedback identity store",
+                        "Unable to open the Keystore feedback identity store",
                         error,
                     )
+                    openFailed = true
                     null
                 }
-            cachedPreferences = built
+            if (built != null) migrateLegacy(built)
+            cachedStore = built
             return built
         }
 
-        override fun readRefreshToken(): String? = preferences()?.getString(KEY_REFRESH_TOKEN, null)?.takeIf { it.isNotEmpty() }
+        // Outside the open: a failure while copying legacy values keeps them in the legacy file for the
+        // next launch, and must not mark a store that opened fine as unavailable.
+        private fun migrateLegacy(store: EncryptedValueStore) {
+            runCatching { LegacyEncryptedPreferencesMigration.migrate(context, LEGACY_PREFS_NAME, store) }
+                .onFailure { DiagnosticLog.warning(DiagnosticLogArea.Connection, "Kept legacy encrypted values; copying them failed", it) }
+        }
+
+        override fun readRefreshToken(): String? = store()?.read(KEY_REFRESH_TOKEN)
 
         override fun writeRefreshToken(token: String?) {
-            val editor = preferences()?.edit() ?: return
-            if (token.isNullOrEmpty()) editor.remove(KEY_REFRESH_TOKEN) else editor.putString(KEY_REFRESH_TOKEN, token)
-            editor.apply()
+            val store = store() ?: return
+            if (token.isNullOrEmpty()) {
+                store.remove(KEY_REFRESH_TOKEN)
+                return
+            }
+            // A Keystore failure while sealing only loses the cached token; the next upload signs in again.
+            runCatching { store.write(KEY_REFRESH_TOKEN, token) }
+                .onFailure { DiagnosticLog.warning(DiagnosticLogArea.Connection, "Unable to seal the feedback refresh token", it) }
         }
 
         private companion object {
-            const val PREFS_NAME = "secure_feedback_identity"
+            const val PREFS_NAME = "keystore_feedback_identity"
+            const val LEGACY_PREFS_NAME = "secure_feedback_identity"
+            const val KEY_ALIAS = "dev.opencode.mobile.feedback.v1"
             const val KEY_REFRESH_TOKEN = "feedback.refreshToken"
         }
     }

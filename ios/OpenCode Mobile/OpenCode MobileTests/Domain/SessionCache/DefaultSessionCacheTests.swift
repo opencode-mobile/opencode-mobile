@@ -276,6 +276,23 @@ import Testing
         #expect(await cache.seedActivity(directory: "/repo") == nil)
     }
 
+    @Test func purgeConnectionCancelsAPendingActivityFlush() async throws {
+        let store = InMemorySessionCacheStore()
+        var active = "http://203.0.113.5:4096/|opencode"
+        let cache = DefaultSessionCache(
+            store: store,
+            connectionIdProvider: { active },
+            activityDebounceMilliseconds: 40
+        )
+        let entries = [SessionActivityCacheEntry(sessionId: "ses-1", activity: .running, observedAtMs: 1)]
+        await cache.rememberActivity(directory: "/repo", entries: entries)
+        await cache.purgeConnection(profileID: "removed", serverBaseURL: "http://203.0.113.5:4096/")
+        active = "http://192.168.0.2:4096/|opencode"
+        try await Task.sleep(nanoseconds: 120_000_000)
+        let key = SessionCacheKey(connectionId: active, worktree: "/repo", kind: .sessionActivity)
+        #expect(await store.load(key: key) == nil)
+    }
+
     @Test func activityRememberDebouncesAndSkipsUnchanged() async throws {
         let store = InMemorySessionCacheStore()
         var now: Int64 = 1_000

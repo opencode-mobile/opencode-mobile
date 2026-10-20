@@ -308,6 +308,7 @@ object ProductAnalytics {
         const val SETTINGS_CLEAR_SESSION_CACHE = "settings_clear_session_cache"
         const val SETTINGS_OPEN_PRIVACY_POLICY = "settings_open_privacy_policy"
         const val SETTINGS_TOGGLE_PRODUCT_ANALYTICS = "settings_toggle_product_analytics"
+        const val SETTINGS_TOGGLE_APP_LOCK = "settings_toggle_app_lock"
         const val SETTINGS_CLEAR_ALL_DATA = "settings_clear_all_data"
         const val THEME_PICKER_DISMISS = "theme_picker_dismiss"
         const val THEME_PICKER_SELECT_PRESET = "theme_picker_select_preset"

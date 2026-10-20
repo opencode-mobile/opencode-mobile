@@ -16,9 +16,12 @@ nonisolated struct ServerConnection: Sendable {
         ServerCapabilities.forProtocol(serverProtocol ?? .v1)
     }
 
-    init(profile: ConnectionProfile, serverProtocol: ServerProtocol? = nil) {
+    /// `nil` when the profile's address does not parse. There is no default host: a
+    /// password must never travel to an address the user did not enter.
+    init?(profile: ConnectionProfile, serverProtocol: ServerProtocol? = nil) {
         let normalized = profile.normalizedBaseURL
-        self.baseURL = URL(string: normalized) ?? AppConfig.serverBaseURL
+        guard let baseURL = URL(string: normalized), baseURL.host != nil else { return nil }
+        self.baseURL = baseURL
         let trimmedUsername = profile.username.trimmingCharacters(in: .whitespacesAndNewlines)
         self.username = trimmedUsername.isEmpty ? Self.defaultUsername : trimmedUsername
         self.password = profile.password.isEmpty ? nil : profile.password

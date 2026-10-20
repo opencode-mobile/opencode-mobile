@@ -1,9 +1,9 @@
 import Foundation
 
-/// Second redaction pass for diagnostic lines that leave the phone in a report
-/// (#721). The shared buffer only strips credentials; reports also promise to
-/// never include the server address. Used for the log preview and the upload;
-/// the Settings Diagnostic Logs export is unchanged.
+/// Second redaction pass for diagnostic lines that leave the phone (#721, #755).
+/// The shared buffer only strips credentials; anything exported also promises to
+/// never include the server address. Used for the feedback preview and upload and
+/// for the Settings Diagnostic Logs share.
 nonisolated struct FeedbackLogRedactor: Equatable, Sendable {
     static let urlMask = "[REDACTED-URL]"
     static let hostMask = "[REDACTED-HOST]"
@@ -42,7 +42,8 @@ nonisolated struct FeedbackLogRedactor: Equatable, Sendable {
     }
 
     func redact(_ message: String) -> String {
-        var result = message
+        // Credentials first (shared definition), then addresses and profile terms.
+        var result = DiagnosticLogRedactor.redact(message)
         for (regex, template) in Self.patterns {
             result = regex.stringByReplacingMatches(
                 in: result,

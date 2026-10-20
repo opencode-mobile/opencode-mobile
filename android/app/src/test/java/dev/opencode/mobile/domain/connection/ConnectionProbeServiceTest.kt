@@ -19,6 +19,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
+import java.util.Collections
 
 class ConnectionProbeServiceTest {
     private val json = Json { ignoreUnknownKeys = true }
@@ -32,7 +33,7 @@ class ConnectionProbeServiceTest {
     @Test
     fun probe_detectsV1FromGlobalHealthAndSkipsApiHealth() =
         runTest {
-            val paths = mutableListOf<String>()
+            val paths = threadSafePaths()
             val service =
                 service { request ->
                     paths += request.url.encodedPath
@@ -52,7 +53,7 @@ class ConnectionProbeServiceTest {
     @Test
     fun probe_detectsV2FromApiInfoPidWhenGlobalMissing() =
         runTest {
-            val paths = mutableListOf<String>()
+            val paths = threadSafePaths()
             val service =
                 service { request ->
                     paths += request.url.encodedPath
@@ -82,7 +83,7 @@ class ConnectionProbeServiceTest {
     @Test
     fun probe_prefersV1WhenBothHealthEndpointsExist() =
         runTest {
-            val paths = mutableListOf<String>()
+            val paths = threadSafePaths()
             val service =
                 service { request ->
                     paths += request.url.encodedPath
@@ -200,7 +201,7 @@ class ConnectionProbeServiceTest {
     @Test
     fun probe_detectsV2FromOpenCode207ApiInfoWhenHealthPathsMiss() =
         runTest {
-            val paths = mutableListOf<String>()
+            val paths = threadSafePaths()
             val service =
                 service { request ->
                     paths += request.url.encodedPath
@@ -221,7 +222,7 @@ class ConnectionProbeServiceTest {
     @Test
     fun probe_detectsV2FromApiHealthWhenInfoIsMissing() =
         runTest {
-            val paths = mutableListOf<String>()
+            val paths = threadSafePaths()
             val service =
                 service { request ->
                     paths += request.url.encodedPath
@@ -354,7 +355,7 @@ class ConnectionProbeServiceTest {
     @Test
     fun probeV2SessionArchive_readsOpenApiContract() =
         runTest {
-            val paths = mutableListOf<String>()
+            val paths = threadSafePaths()
             val service =
                 service { request ->
                     paths += request.url.encodedPath
@@ -441,6 +442,10 @@ class ConnectionProbeServiceTest {
             assertEquals(DetectedServer(ServerProtocol.V1, "1.18.4"), v1.probeServer(connection))
             assertEquals(DetectedServer(ServerProtocol.V2, "2.0.0"), v2.probeServer(connection))
         }
+
+    // The probe requests its health endpoints concurrently and MockEngine answers on IO threads,
+    // so the handler records paths from several threads at once.
+    private fun threadSafePaths(): MutableList<String> = Collections.synchronizedList(mutableListOf())
 
     private fun service(handler: MockRequestHandler) =
         ConnectionProbeService(

@@ -32,6 +32,9 @@ internal object OpenCodeReleaseObservability {
             return
         }
         this.application = application
+        // Collection is off in the manifest; the consent setting turns it on (or keeps it off)
+        // before anything else runs, so an opted-out user sends no crash or analytics data.
+        applyCollectionConsent(application, isProductAnalyticsConsented())
         // #721: in-app feedback asks App Check for a Play Integrity token per report.
         FirebaseAppCheck.getInstance().installAppCheckProviderFactory(PlayIntegrityAppCheckProviderFactory.getInstance())
         tagFrameworkSdkAlignment()
@@ -98,8 +101,22 @@ internal object OpenCodeReleaseObservability {
 
     fun isProductAnalyticsConsented(): Boolean = AnalyticsConsentPreferences.productAnalyticsConsented
 
+    /**
+     * One switch for everything that leaves the phone through Firebase: product events,
+     * automatic Analytics collection and Crashlytics reports (#755).
+     */
     fun setProductAnalyticsConsented(value: Boolean) {
         AnalyticsConsentPreferences.updateProductAnalyticsConsented(value)
+        application?.let { applyCollectionConsent(it, value) }
+    }
+
+    private fun applyCollectionConsent(
+        application: Application,
+        consented: Boolean,
+    ) {
+        val enabled = ReleaseCollectionPolicy.collectionEnabled(consented)
+        FirebaseCrashlytics.getInstance().isCrashlyticsCollectionEnabled = enabled
+        FirebaseAnalytics.getInstance(application).setAnalyticsCollectionEnabled(enabled)
     }
 
     fun logProductEvent(

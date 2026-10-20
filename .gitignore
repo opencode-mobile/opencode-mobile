@@ -91,3 +91,10 @@ shared/markdown-core/native/oniguruma-src/
 # Store screenshot capture output
 /store-screenshots/
 /launch-graphics/
+
+# Signing material and local agent configuration never belong in the repository (#755)
+*.p8
+*.p12
+*.mobileprovision
+.mcp.json
+.claude/launch.json

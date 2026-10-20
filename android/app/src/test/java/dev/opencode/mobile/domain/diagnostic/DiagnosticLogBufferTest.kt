@@ -65,6 +65,44 @@ class DiagnosticLogBufferTest {
     }
 
     @Test
+    fun redactsUrlUserinfoQuotedJsonKeysAndKnownKeyFormats() {
+        val cases =
+            listOf(
+                "dial http://opencode:hunter2@192.168.0.5:4096/global/health" to "hunter2",
+                """body {"password":"hunter2","username":"opencode"}""" to "hunter2",
+                """body {"api_key": "sk-live-abcdef"}""" to "sk-live-abcdef",
+                """body {"token":"tok_123"}""" to "tok_123",
+                "ws://host/pty/1/connect?cursor=0&auth_token=b3BlbmNvZGU6cGFzcw==" to "b3BlbmNvZGU6cGFzcw",
+                "redeem ?ticket=4f3c2b1a" to "4f3c2b1a",
+                "api_key=sk-1234567890abcdef" to "sk-1234567890abcdef",
+                "apikey: AKIAIOSFODNN7EXAMPLE" to "AKIAIOSFODNN7EXAMPLE",
+                "header ghp_abcdefghijklmnopqrstuvwxyz0123456789" to "ghp_abcdefghijklmnopqrstuvwxyz0123456789",
+                "jwt eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U" to "eyJzdWIi",
+                "slack xoxb-123456789012-abcdefghijkl" to "xoxb-123456789012",
+                "client_secret: s3cr3t" to "s3cr3t",
+            )
+        for ((message, secret) in cases) {
+            val redacted = DiagnosticLogRedactor.redact(message)
+            assertFalse("$message -> $redacted", redacted.contains(secret))
+        }
+        assertTrue(
+            DiagnosticLogRedactor
+                .redact("dial http://opencode:hunter2@192.168.0.5:4096/x")
+                .contains("http://[REDACTED]@192.168.0.5:4096/x"),
+        )
+        assertEquals(
+            """{"password":"[REDACTED]","healthy":true}""",
+            DiagnosticLogRedactor.redact("""{"password":"x","healthy":true}"""),
+        )
+        listOf(
+            "protocol=v2 version=1.19.1",
+            "status=401 for GET /global/health",
+            "session.updated id=ses_123 at 12:30:45",
+            "token count=2048 budget=4096",
+        ).forEach { line -> assertEquals(line, DiagnosticLogRedactor.redact(line)) }
+    }
+
+    @Test
     fun redactsSecretsAndPreservesSafeStatusLines() {
         assertTrue(
             DiagnosticLogRedactor

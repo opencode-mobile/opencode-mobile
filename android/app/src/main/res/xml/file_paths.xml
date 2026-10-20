@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Only the two share directories are exposed through the FileProvider (#755); the rest of
+     the cache (attachments, images) is never reachable through a content URI. -->
 <paths>
-    <cache-path name="diagnostic_logs" path="." />
+    <cache-path name="diagnostic_logs" path="diagnostic/" />
+    <cache-path name="feedback" path="feedback/" />
 </paths>

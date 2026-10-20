@@ -47,6 +47,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.opencode.mobile.ProductAnalytics
+import dev.opencode.mobile.domain.connection.ExternalLinkPolicy
 import dev.opencode.mobile.domain.message.FailureAction
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
 import dev.opencode.mobile.SessionToolGroup
@@ -1437,6 +1438,8 @@ private fun openSessionExternalLink(
     context: android.content.Context,
     link: String,
 ) {
+    // Server-supplied links open as web pages only (http/https), like markdown links.
+    if (!ExternalLinkPolicy.isOpenable(link)) return
     val uri = runCatching { Uri.parse(link) }.getOrNull() ?: return
     runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, uri)) }
 }

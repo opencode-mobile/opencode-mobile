@@ -87,7 +87,7 @@ class DataStoreSessionModelSelectionStore
             sessionId: String,
         ) {
             val sessionSuffix = "|${encode(sessionId)}"
-            val legacyPrefix = normalizeBaseUrl(connectionIdentity.serverBaseUrl)
+            val legacyPrefix = "${normalizeBaseUrl(connectionIdentity.serverBaseUrl)}|"
             dataStore.edit { prefs ->
                 prefs
                     .asMap()
@@ -95,6 +95,24 @@ class DataStoreSessionModelSelectionStore
                     .filter { key ->
                         (key.name.startsWith(sessionPrefix(connectionIdentity)) && key.name.endsWith(sessionSuffix)) ||
                             (key.name.startsWith(legacyPrefix) && key.name.endsWith("|$sessionId"))
+                    }.forEach { key ->
+                        @Suppress("UNCHECKED_CAST")
+                        prefs.remove(key as Preferences.Key<String>)
+                    }
+            }
+        }
+
+        override suspend fun clearConnection(connectionIdentity: ModelSelectionConnectionIdentity) {
+            val identityMarker = "|${identityKey(connectionIdentity)}|"
+            // Legacy keys are `<url>/|worktree|session`: the `|` keeps `http://h/` from matching `http://h/sub/`.
+            val legacyPrefix = "${normalizeBaseUrl(connectionIdentity.serverBaseUrl)}|"
+            dataStore.edit { prefs ->
+                prefs
+                    .asMap()
+                    .keys
+                    .filter { key ->
+                        (key.name.startsWith(VERSION_PREFIX) && key.name.contains(identityMarker)) ||
+                            key.name.startsWith(legacyPrefix)
                     }.forEach { key ->
                         @Suppress("UNCHECKED_CAST")
                         prefs.remove(key as Preferences.Key<String>)

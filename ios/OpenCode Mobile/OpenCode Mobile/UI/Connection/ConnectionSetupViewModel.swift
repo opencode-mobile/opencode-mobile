@@ -137,6 +137,12 @@ final class ConnectionSetupViewModel {
     private var qrScanPending = false
     /// Paste applied an address list that this session has not saved yet.
     private var pastedConnectLinkUnconfirmed = false
+    /// The link text a pasted connect link replaced, so Cancel on the cleartext warning can put it back.
+    private var pastedConnectLinkText: String?
+    /// Untrusted `http` hosts waiting for the user's "Connect anyway". `nil` when no warning shows.
+    private(set) var cleartextWarningHosts: [String]?
+    private var acknowledgedCleartextHosts: Set<String> = []
+    private var pendingCleartextResume: (() async -> Bool)?
     private var pairedProtocol: ServerProtocol?
     private var addressProbeFinished = false
     private var unreachableAddresses = Set<String>()
@@ -192,6 +198,10 @@ final class ConnectionSetupViewModel {
         qrPairingReady = false
         qrScanPending = false
         pastedConnectLinkUnconfirmed = false
+        pastedConnectLinkText = nil
+        cleartextWarningHosts = nil
+        acknowledgedCleartextHosts = []
+        pendingCleartextResume = nil
         pairedProtocol = nil
         detectedProtocol = nil
         state = .idle
@@ -394,13 +404,24 @@ final class ConnectionSetupViewModel {
             snackbar = OpenCodeSnackbarMessage(text: "Enter a host", variant: .error)
             return false
         }
-        if adoptPastedConnectLink() {
+        let adoptedLink = adoptPastedConnectLink()
+        return await connectAndSave(adoptedLink: adoptedLink)
+    }
+
+    /// Everything after the pasted-link adoption, so the cleartext warning can resume here.
+    private func connectAndSave(adoptedLink: Bool) async -> Bool {
+        let resume: () async -> Bool = { [weak self] in
+            await self?.connectAndSave(adoptedLink: adoptedLink) ?? false
+        }
+        if adoptedLink {
             if let code = pendingPairingCode, !code.isEmpty, password.isEmpty {
+                if requiresCleartextConfirmation(resume: resume) { return false }
                 return await redeemThenSave(code: code)
             }
             if canSubmitWithoutProbe {
                 return await persist()
             }
+            if requiresCleartextConfirmation(resume: resume) { return false }
             return await probeThenSave()
         }
         switch credentialSegment {
@@ -408,6 +429,7 @@ final class ConnectionSetupViewModel {
             if canSubmitWithoutProbe {
                 return await persist()
             }
+            if requiresCleartextConfirmation(resume: resume) { return false }
             return await probeThenSave()
         case .pairingCode:
             let code = pairingCode.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -417,7 +439,52 @@ final class ConnectionSetupViewModel {
             }
             // Typed codes redeem for user opencode. The username field is hidden here.
             username = ConnectionProfile.formDefaults.username
+            if requiresCleartextConfirmation(resume: resume) { return false }
             return await redeemThenSave(code: code)
+        }
+    }
+
+    /// Shows the "not encrypted" warning when any address about to be contacted is plain `http`
+    /// outside loopback, private, or Tailscale ranges. Nothing (password, pairing code, probe)
+    /// is sent until the user confirms; `resume` continues where the caller stopped.
+    private func requiresCleartextConfirmation(resume: @escaping () async -> Bool) -> Bool {
+        let hosts = CleartextPolicy.untrustedCleartextHosts(in: urlsToProbe())
+            .filter { !acknowledgedCleartextHosts.contains($0) }
+        guard !hosts.isEmpty else { return false }
+        cleartextWarningHosts = hosts
+        pendingCleartextResume = resume
+        state = .idle
+        snackbar = nil
+        return true
+    }
+
+    var cleartextWarningMessage: String {
+        CleartextPolicy.warningMessage(hosts: cleartextWarningHosts ?? [])
+    }
+
+    /// "Connect anyway": remembers the hosts for this screen and continues the interrupted action.
+    func confirmCleartextWarning() async -> Bool {
+        guard let hosts = cleartextWarningHosts, let resume = pendingCleartextResume else { return false }
+        acknowledgedCleartextHosts.formUnion(hosts)
+        cleartextWarningHosts = nil
+        pendingCleartextResume = nil
+        return await resume()
+    }
+
+    /// "Cancel": nothing was sent. A scan that was waiting goes back to the host form; a pasted
+    /// connect link goes back into the host field so Connect redeems its pairing code again.
+    func dismissCleartextWarning() {
+        cleartextWarningHosts = nil
+        pendingCleartextResume = nil
+        if pastedConnectLinkUnconfirmed, let pastedLink = pastedConnectLinkText {
+            discardUnconfirmedPastedLayout()
+            setBaseURLFromSystem(pastedLink)
+            onFieldChanged()
+            return
+        }
+        if qrScanPending {
+            qrScanPending = false
+            leaveQRMode()
         }
     }
 
@@ -528,7 +595,10 @@ final class ConnectionSetupViewModel {
         }
         password = token
         do {
-            let detected = try await connectionProbeService.probe(connection: draftConnection(baseURL: winner))
+            guard let connection = draftConnection(baseURL: winner) else {
+                throw ServerProbeError.transport("Invalid server address")
+            }
+            let detected = try await connectionProbeService.probe(connection: connection)
             addressRecovery = nil
             detectedProtocol = detected
             logConnectionAction(
@@ -566,6 +636,7 @@ final class ConnectionSetupViewModel {
               let code = credentials.code,
               !code.isEmpty
         else { return false }
+        pastedConnectLinkText = baseURL
         apply(credentials)
         pastedConnectLinkUnconfirmed = true
         return true
@@ -647,6 +718,11 @@ final class ConnectionSetupViewModel {
 
     /// Probe every saved address and redeem a pairing code. Does not store the profile.
     private func completeScannedPairing() async {
+        let resume: () async -> Bool = { [weak self] in
+            await self?.completeScannedPairing()
+            return false
+        }
+        if requiresCleartextConfirmation(resume: resume) { return }
         if let code = pendingPairingCode, !code.isEmpty, password.isEmpty {
             _ = await redeemThenSave(code: code, persistOnSuccess: false, origin: .scannedQr)
             return
@@ -666,6 +742,7 @@ final class ConnectionSetupViewModel {
     private func discardUnconfirmedPastedLayout() {
         guard pastedConnectLinkUnconfirmed else { return }
         pastedConnectLinkUnconfirmed = false
+        pastedConnectLinkText = nil
         pendingPairingCode = nil
         serverURLs = []
         unreachableAddresses = []
@@ -818,7 +895,7 @@ final class ConnectionSetupViewModel {
         )
     }
 
-    private func draftConnection(baseURL: String? = nil) -> ServerConnection {
+    private func draftConnection(baseURL: String? = nil) -> ServerConnection? {
         var profile = draftProfile()
         if let baseURL {
             profile.baseURL = baseURL

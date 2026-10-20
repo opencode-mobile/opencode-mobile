@@ -119,3 +119,6 @@ icons:
   - name: code
     lucide: code
     notes: Source Code row in Settings About
+  - name: lock
+    lucide: lock
+    notes: App lock toggle and the privacy cover shown while the app is in the background

@@ -12,9 +12,24 @@ object CacheUrlNormalizer {
         username: String,
     ): String = "${baseUrl.trim().lowercase()}|${username.trim().lowercase()}"
 
-    /** Prefix for purge matching any username on this server URL. */
+    /**
+     * Server part of [connectionId] for purges that match any username on this server URL. Pair it
+     * with [matchesConnectionIdPrefix], which requires the `|` delimiter next, so `:4096` never
+     * matches `:40960`.
+     */
     fun connectionIdPrefix(baseUrl: String): String =
-        baseUrl.trim().lowercase().let { url ->
-            if (url.endsWith("|")) url else url.trimEnd('/') // strip trailing slash so both forms match
-        }
+        baseUrl
+            .trim()
+            .lowercase()
+            .removeSuffix("|")
+            .trimEnd('/') // strip trailing slash so both forms match
+
+    /** True when [connectionId] is `<prefix>|user` or `<prefix>/|user`. */
+    fun matchesConnectionIdPrefix(
+        connectionId: String,
+        prefix: String,
+    ): Boolean {
+        val id = connectionId.lowercase()
+        return id.startsWith("$prefix|") || id.startsWith("$prefix/|")
+    }
 }

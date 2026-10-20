@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.data.local.ServerConnectionDefaults
+import dev.opencode.mobile.domain.connection.CleartextPolicy
 import dev.opencode.mobile.domain.connection.ConnectionProbing
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileIdentity
@@ -17,6 +18,7 @@ import dev.opencode.mobile.domain.connection.PairingQRError
 import dev.opencode.mobile.domain.connection.PairingQRParseResult
 import dev.opencode.mobile.domain.connection.PairingQRPayload
 import dev.opencode.mobile.domain.connection.ProbeStatus
+import dev.opencode.mobile.domain.connection.SecureCredentialStoreException
 import dev.opencode.mobile.domain.connection.ServerAddressProbe
 import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.connection.toProbeStatus
@@ -94,7 +96,12 @@ data class ConnectionSetupUiState(
     val qrScanPending: Boolean = false,
     val addressRecovery: SavedAddressRecovery? = null,
     val entry: ConnectionSetupEntry = ConnectionSetupEntry.Instructions,
+    /** Untrusted `http` hosts waiting for the user's "Connect anyway". `null` when no warning shows. */
+    val cleartextWarningHosts: List<String>? = null,
 ) {
+    val cleartextWarningMessage: String
+        get() = CleartextPolicy.warningMessage(cleartextWarningHosts.orEmpty())
+
     val usesQrLayout: Boolean
         get() = serverUrls.isNotEmpty()
 
@@ -166,6 +173,10 @@ class ConnectionSetupViewModel
         private var addressProbeGeneration = 0
         /** Paste applied an address list that this session has not saved yet. */
         private var pastedConnectLinkUnconfirmed = false
+        /** The link text a pasted connect link replaced, so Cancel on the cleartext warning can put it back. */
+        private var pastedConnectLinkText: String? = null
+        private val acknowledgedCleartextHosts = mutableSetOf<String>()
+        private var pendingCleartextResume: (() -> Unit)? = null
 
         fun configure(
             initialProfile: ConnectionProfile?,
@@ -175,6 +186,9 @@ class ConnectionSetupViewModel
             pendingPairingCode = null
             scannedQrPassword = ""
             pastedConnectLinkUnconfirmed = false
+            pastedConnectLinkText = null
+            acknowledgedCleartextHosts.clear()
+            pendingCleartextResume = null
             addressProbeGeneration += 1
             isEditingExistingProfile = initialProfile != null && mode == ConnectionSetupMode.Edit
             detectedProtocol = initialProfile?.serverProtocol
@@ -379,11 +393,25 @@ class ConnectionSetupViewModel
             }
             if (PairingQRPayload.isConnectLink(_uiState.value.baseUrl)) {
                 if (!applySubmittedConnectLink()) return
+                connectAndSave(onSaved, adoptedLink = true)
+                return
+            }
+            connectAndSave(onSaved, adoptedLink = false)
+        }
+
+        /** Everything after the pasted-link adoption, so the cleartext warning can resume here. */
+        private fun connectAndSave(
+            onSaved: () -> Unit,
+            adoptedLink: Boolean,
+        ) {
+            val resume = { connectAndSave(onSaved, adoptedLink) }
+            if (adoptedLink) {
                 val redeeming = pendingPairingCode != null && _uiState.value.password.isEmpty()
                 if (_uiState.value.canSubmitWithoutProbe && !redeeming) {
                     persist(onSaved)
                     return
                 }
+                if (requiresCleartextConfirmation(resume)) return
                 probeThenSave(onSaved)
                 return
             }
@@ -393,6 +421,7 @@ class ConnectionSetupViewModel
                         persist(onSaved)
                         return
                     }
+                    if (requiresCleartextConfirmation(resume)) return
                     probeThenSave(onSaved, redeemPendingCode = false)
                 }
                 ConnectionCredentialSegment.PairingCode -> {
@@ -403,9 +432,58 @@ class ConnectionSetupViewModel
                     }
                     // Typed codes redeem for user opencode. The username field is hidden here.
                     updateFields(username = ServerConnectionDefaults.USERNAME)
+                    if (requiresCleartextConfirmation(resume)) return
                     redeemTypedPairingCode(code, onSaved)
                 }
             }
+        }
+
+        /**
+         * Shows the "not encrypted" warning when any address about to be contacted is plain `http`
+         * outside loopback, private, or Tailscale ranges. Nothing (password, pairing code, probe)
+         * is sent until the user confirms; [resume] continues where the caller stopped.
+         */
+        private fun requiresCleartextConfirmation(resume: () -> Unit): Boolean {
+            val hosts =
+                CleartextPolicy
+                    .untrustedCleartextHosts(urlsToProbe())
+                    .filter { it !in acknowledgedCleartextHosts }
+            if (hosts.isEmpty()) return false
+            pendingCleartextResume = resume
+            _uiState.value =
+                _uiState.value.copy(
+                    state = ConnectionSetupState.Idle,
+                    snackbar = null,
+                    cleartextWarningHosts = hosts,
+                )
+            return true
+        }
+
+        /** "Connect anyway": remembers the hosts for this screen and continues the interrupted action. */
+        fun confirmCleartextWarning() {
+            val hosts = _uiState.value.cleartextWarningHosts ?: return
+            val resume = pendingCleartextResume ?: return
+            acknowledgedCleartextHosts += hosts
+            pendingCleartextResume = null
+            _uiState.value = _uiState.value.copy(cleartextWarningHosts = null)
+            resume()
+        }
+
+        /**
+         * "Cancel": nothing was sent. A scan that was waiting goes back to the host form; a pasted
+         * connect link goes back into the host field so Connect redeems its pairing code again.
+         */
+        fun dismissCleartextWarning() {
+            pendingCleartextResume = null
+            val pastedLink = pastedConnectLinkText
+            if (pastedConnectLinkUnconfirmed && pastedLink != null) {
+                dropUnconfirmedPastedLayout()
+                _uiState.value = _uiState.value.copy(cleartextWarningHosts = null)
+                updateFields(baseUrl = pastedLink)
+                return
+            }
+            _uiState.value = _uiState.value.copy(cleartextWarningHosts = null)
+            if (_uiState.value.qrScanPending) leaveScannedQr(snackbar = null)
         }
 
         private fun probeThenSave(
@@ -497,6 +575,7 @@ class ConnectionSetupViewModel
         }
 
         private fun pairScannedQr() {
+            if (requiresCleartextConfirmation(resume = ::pairScannedQr)) return
             val generation = ++addressProbeGeneration
             viewModelScope.launch {
                 if (generation != addressProbeGeneration) return@launch
@@ -540,7 +619,9 @@ class ConnectionSetupViewModel
         private fun applySubmittedConnectLink(): Boolean {
             when (val result = PairingQRPayload.parse(_uiState.value.baseUrl.trim())) {
                 is PairingQRParseResult.Ready -> {
-                    applyPairingCredentials(result.credentials)
+                    pastedConnectLinkText = _uiState.value.baseUrl
+                    // No background sweep: the cleartext check runs first, then the submit path probes.
+                    applyPairingCredentials(result.credentials, scheduleProbe = false)
                     pastedConnectLinkUnconfirmed = true
                     return true
                 }
@@ -796,6 +877,7 @@ class ConnectionSetupViewModel
         private fun dropUnconfirmedPastedLayout() {
             if (!pastedConnectLinkUnconfirmed) return
             pastedConnectLinkUnconfirmed = false
+            pastedConnectLinkText = null
             pendingPairingCode = null
             _uiState.value =
                 _uiState.value.copy(
@@ -836,6 +918,17 @@ class ConnectionSetupViewModel
         }
 
         private fun presentScannedQrFailure() {
+            leaveScannedQr(
+                snackbar =
+                    OpenCodeSnackbarMessage(
+                        text = QrScanFailureMessage,
+                        variant = OpenCodeSnackbarVariant.Error,
+                    ),
+            )
+        }
+
+        /** Back to the host form with the scanned address and password, as after a failed scan. */
+        private fun leaveScannedQr(snackbar: OpenCodeSnackbarMessage?) {
             pendingPairingCode = null
             pastedConnectLinkUnconfirmed = false
             val current = _uiState.value
@@ -855,11 +948,7 @@ class ConnectionSetupViewModel
                     entry = ConnectionSetupEntry.Manual,
                     requestPasswordFocus = false,
                     connectionUnchanged = isConnectionUnchanged(current.baseUrl, current.username, password),
-                    snackbar =
-                        OpenCodeSnackbarMessage(
-                            text = QrScanFailureMessage,
-                            variant = OpenCodeSnackbarVariant.Error,
-                        ),
+                    snackbar = snackbar,
                 )
         }
 
@@ -876,17 +965,19 @@ class ConnectionSetupViewModel
                     _uiState.value = _uiState.value.copy(state = ConnectionSetupState.Idle)
                     onSaved()
                 } catch (_: DuplicateConnectionProfileException) {
-                    _uiState.value =
-                        _uiState.value.copy(
-                            state = ConnectionSetupState.Idle,
-                            snackbar =
-                                OpenCodeSnackbarMessage(
-                                    text = "A server with this host and username is already saved",
-                                    variant = OpenCodeSnackbarVariant.Error,
-                                ),
-                        )
+                    showSaveFailure("A server with this host and username is already saved")
+                } catch (_: SecureCredentialStoreException) {
+                    showSaveFailure(SecureCredentialStoreException.USER_MESSAGE)
                 }
             }
+        }
+
+        private fun showSaveFailure(text: String) {
+            _uiState.value =
+                _uiState.value.copy(
+                    state = ConnectionSetupState.Idle,
+                    snackbar = OpenCodeSnackbarMessage(text = text, variant = OpenCodeSnackbarVariant.Error),
+                )
         }
 
         private suspend fun persistAfterProbe(onSaved: () -> Unit) {
@@ -901,15 +992,9 @@ class ConnectionSetupViewModel
                 _uiState.value = _uiState.value.copy(state = ConnectionSetupState.Idle)
                 onSaved()
             } catch (_: DuplicateConnectionProfileException) {
-                _uiState.value =
-                    _uiState.value.copy(
-                        state = ConnectionSetupState.Idle,
-                        snackbar =
-                            OpenCodeSnackbarMessage(
-                                text = "A server with this host and username is already saved",
-                                variant = OpenCodeSnackbarVariant.Error,
-                            ),
-                    )
+                showSaveFailure("A server with this host and username is already saved")
+            } catch (_: SecureCredentialStoreException) {
+                showSaveFailure(SecureCredentialStoreException.USER_MESSAGE)
             }
         }
 

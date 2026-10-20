@@ -79,6 +79,18 @@ class FeedbackLogRedactorTest {
     }
 
     @Test
+    fun redact_stripsCredentialShapesBeforeAddresses() {
+        val line =
+            FeedbackLogRedactor.redact(
+                """GET http://opencode:hunter2@192.168.0.5:4096/x {"password":"abc"} key=sk-abcdefghijkl""",
+            )
+        assertFalse(line.contains("hunter2"))
+        assertFalse(line.contains("\"abc\""))
+        assertFalse(line.contains("sk-abcdefghijkl"))
+        assertFalse(line.contains("192.168.0.5"))
+    }
+
+    @Test
     fun knownValues_skipDefaultUsername() {
         val known = FeedbackLogRedactor.knownValues(profile.copy(username = "opencode"))
 

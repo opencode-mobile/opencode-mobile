@@ -3,6 +3,7 @@ package dev.opencode.mobile.ui.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.opencode.mobile.OpenCodeReleaseObservability
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogBuffer
 import dev.opencode.mobile.domain.featureflags.FeatureFlags
@@ -11,6 +12,7 @@ import dev.opencode.mobile.domain.message.BlockDecorationCache
 import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.message.MessageContentPreparer
 import dev.opencode.mobile.domain.preferences.AnalyticsConsentPreferences
+import dev.opencode.mobile.domain.preferences.AppLockPreferences
 import dev.opencode.mobile.domain.preferences.AppOnboardingPreferences
 import dev.opencode.mobile.domain.preferences.DeveloperToolsPreferences
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
@@ -84,6 +86,11 @@ class SettingsViewModel
                 HomeDisplayPreferences.clear()
                 MarkdownHighlightPreferences.clear()
                 AnalyticsConsentPreferences.clear()
+                // Apply the reset default to Crashlytics and Analytics collection now, not at next launch.
+                OpenCodeReleaseObservability.setProductAnalyticsConsented(
+                    AnalyticsConsentPreferences.productAnalyticsConsented,
+                )
+                AppLockPreferences.clear()
                 AppOnboardingPreferences.clear()
                 DeveloperToolsPreferences.clear()
                 SessionChatDisplayPreferences.clear()
@@ -133,8 +140,13 @@ class SettingsViewModel
             BlockDecorationCache.clear()
         }
 
+        /** Through the observability seam so Crashlytics and automatic Analytics follow at once. */
         fun setProductAnalyticsConsented(enabled: Boolean) {
-            AnalyticsConsentPreferences.updateProductAnalyticsConsented(enabled)
+            OpenCodeReleaseObservability.setProductAnalyticsConsented(enabled)
+        }
+
+        fun setAppLockEnabled(enabled: Boolean) {
+            AppLockPreferences.updateEnabled(enabled)
         }
     }
 

@@ -15,14 +15,23 @@ struct KeychainCredentialStore: SecureCredentialStore, Sendable {
         return String(data: data, encoding: .utf8)
     }
 
-    func writePassword(serverBaseURL: String, password: String) {
-        let account = account(for: serverBaseURL)
-        deletePassword(serverBaseURL: serverBaseURL)
-
-        var query = baseQuery(account: account)
-        query[kSecValueData as String] = Data(password.utf8)
-        query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-        SecItemAdd(query as CFDictionary, nil)
+    /// Updates the item in place, or adds it when missing, so a failed write never removes the
+    /// password that was already stored.
+    func writePassword(serverBaseURL: String, password: String) throws {
+        let query = baseQuery(account: account(for: serverBaseURL))
+        let attributes: [String: Any] = [
+            kSecValueData as String: Data(password.utf8),
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+        ]
+        var status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+        if status == errSecItemNotFound {
+            let addQuery = query.merging(attributes) { _, new in new }
+            status = SecItemAdd(addQuery as CFDictionary, nil)
+        }
+        guard status == errSecSuccess else {
+            DiagnosticLog.warning(.connection, "keychain write failed status=\(status)")
+            throw SecureCredentialStoreError.writeFailed(status: status)
+        }
     }
 
     func deletePassword(serverBaseURL: String) {

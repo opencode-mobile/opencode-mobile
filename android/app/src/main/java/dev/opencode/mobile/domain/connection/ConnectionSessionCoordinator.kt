@@ -5,8 +5,11 @@ import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.event.StreamOccupancy
 import dev.opencode.mobile.domain.event.WorldSignal
 import dev.opencode.mobile.domain.event.WorldSignals
+import dev.opencode.mobile.domain.feedback.FeedbackIdentityStore
 import dev.opencode.mobile.domain.live.ProjectionCaches
+import dev.opencode.mobile.domain.model.ModelSelectionConnectionIdentity
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
+import dev.opencode.mobile.domain.sessioncache.SessionCache
 import dev.opencode.mobile.domain.sync.SyncCoordinator
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.network.OpencodeHttpClient
@@ -45,6 +48,8 @@ class ConnectionSessionCoordinator
         private val secureCredentialStore: SecureCredentialStore,
         private val sessionModelSelectionStore: SessionModelSelectionStore,
         private val composerDraftStore: ComposerDraftStore,
+        private val sessionCache: SessionCache,
+        private val feedbackIdentityStore: FeedbackIdentityStore,
         private val httpClient: OpencodeHttpClient,
         private val sseHttpClient: OpencodeSseHttpClient,
         private val eventStream: ForegroundEventStream,
@@ -113,12 +118,25 @@ class ConnectionSessionCoordinator
             when (target) {
                 is ProfileChange.Switch -> connectionProfileStore.applyProfile(target.id)
                 is ProfileChange.Saved -> Unit
-                is ProfileChange.Removed -> connectionProfileStore.removeProfile(target.id)
+                is ProfileChange.Removed -> {
+                    // Forget the profile and everything stored under it: password, transcripts
+                    // and activity in the session cache, composer drafts, model selections.
+                    // Re-adding the same server later starts clean.
+                    val removed = connectionProfileStore.listProfiles().firstOrNull { it.id == target.id }
+                    connectionProfileStore.removeProfile(target.id)
+                    if (removed != null) {
+                        val identity = ModelSelectionConnectionIdentity(removed.baseUrl, removed.username)
+                        sessionCache.purgeConnection(profileId = removed.id, serverBaseUrl = removed.baseUrl)
+                        sessionModelSelectionStore.clearConnection(identity)
+                        composerDraftStore.clearConnection(identity)
+                    }
+                }
                 is ProfileChange.Cleared -> {
                     secureCredentialStore.clearAll()
                     connectionProfileStore.clearAll()
                     sessionModelSelectionStore.clearAll()
                     composerDraftStore.clearAll()
+                    feedbackIdentityStore.writeRefreshToken(null)
                 }
             }
             val active =

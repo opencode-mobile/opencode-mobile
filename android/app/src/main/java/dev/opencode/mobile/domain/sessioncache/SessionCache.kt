@@ -39,6 +39,12 @@ interface SessionCache {
         worktree: String,
     )
 
+    /** Everything cached for one removed Connection Profile, under its id and under its URL. */
+    suspend fun purgeConnection(
+        profileId: String,
+        serverBaseUrl: String,
+    ) = Unit
+
     suspend fun clearAll()
 
     suspend fun estimatedSizeBytes(): Long

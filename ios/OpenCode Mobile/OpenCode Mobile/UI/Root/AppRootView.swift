@@ -76,6 +76,12 @@ final class AppRootViewModel {
 struct AppRootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var rootViewModel = Container.makeAppRootViewModel()
+    @State private var appLockPreferences = AppLockPreferences.shared
+    // A cold start with App Lock on draws the cover in the very first frame, before any content.
+    @State private var privacyCoverVisible = AppLockPreferences.shared.enabled
+    @State private var locked = AppLockPreferences.shared.enabled
+    @State private var wasInBackground = false
+    private let appLockAuthenticator: any AppLockAuthenticating = LocalAuthenticationAppLockAuthenticator()
 
     var body: some View {
         Group {
@@ -98,6 +104,55 @@ struct AppRootView: View {
             }
         }
         .background(OpenCodeColors.backgroundBase)
+        // Out of reach for VoiceOver while covered, like it is for touch.
+        .accessibilityHidden(privacyCoverVisible)
+        .overlay {
+            if privacyCoverVisible {
+                PrivacyCoverView(locked: locked) {
+                    Task { await unlock() }
+                }
+                // Appears at once so the app-switcher snapshot never catches it mid-fade;
+                // only the reveal is animated.
+                .transition(.asymmetric(insertion: .identity, removal: .opacity))
+            }
+        }
+        .animation(.easeOut(duration: 0.15), value: privacyCoverVisible)
+        .onChange(of: locked, initial: true) { _, isLocked in
+            AppLockState.shared.isLocked = isLocked
+            if isLocked { resignFirstResponderWhileLocked() }
+        }
+        .task {
+            // A cold start with App Lock on begins locked (already covered from the first frame).
+            if AppLockPolicy.shouldLock(enabled: appLockPreferences.enabled, wasInBackground: true) {
+                locked = true
+                privacyCoverVisible = true
+                await unlock()
+            }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            // Privacy cover (#755): hide content before the app-switcher snapshot, and engage
+            // the lock when coming back from the background.
+            switch phase {
+            case .inactive:
+                privacyCoverVisible = true
+            case .background:
+                wasInBackground = true
+                privacyCoverVisible = true
+            case .active:
+                if AppLockPolicy.shouldLock(enabled: appLockPreferences.enabled, wasInBackground: wasInBackground) {
+                    locked = true
+                    Task { await unlock() }
+                } else if !locked {
+                    privacyCoverVisible = false
+                }
+                // Focus can come back to a field when the scene reactivates after a cancelled
+                // Face ID prompt; nothing under the cover may take keyboard input.
+                if locked { resignFirstResponderWhileLocked() }
+                wasInBackground = false
+            @unknown default:
+                break
+            }
+        }
         .task {
             if rootViewModel.state == .loading {
                 ProductAnalytics.logScreenView(
@@ -129,6 +184,32 @@ struct AppRootView: View {
             @unknown default:
                 break
             }
+        }
+    }
+}
+
+extension AppRootView {
+    /// Ends editing in whatever field is under the lock cover, so neither the software nor a
+    /// hardware keyboard can type into it.
+    @MainActor
+    fileprivate func resignFirstResponderWhileLocked() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }
+
+    @MainActor
+    fileprivate func unlock() async {
+        guard locked else { return }
+        guard appLockAuthenticator.canAuthenticate() else {
+            // The passcode was removed after App Lock was turned on, so nothing can pass the
+            // prompt. Turn App Lock off instead of locking the user out with no way to Settings.
+            appLockPreferences.setEnabled(false)
+            locked = false
+            privacyCoverVisible = AppLockPolicy.coverVisible(isForeground: scenePhase == .active, locked: false)
+            return
+        }
+        if await appLockAuthenticator.authenticate(reason: "Unlock OpenCode Mobile") {
+            locked = false
+            privacyCoverVisible = AppLockPolicy.coverVisible(isForeground: scenePhase == .active, locked: false)
         }
     }
 }

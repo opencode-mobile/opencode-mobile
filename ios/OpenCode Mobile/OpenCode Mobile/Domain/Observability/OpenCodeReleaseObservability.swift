@@ -30,8 +30,13 @@ enum OpenCodeReleaseObservability {
         AnalyticsConsentPreferences.shared.productAnalyticsConsented
     }
 
+    /// One switch for everything that leaves the phone through Firebase: product events,
+    /// automatic Analytics breadcrumbs and Crashlytics reports (#755).
     static func setProductAnalyticsConsented(_ value: Bool) {
         AnalyticsConsentPreferences.shared.setProductAnalyticsConsented(value)
+        #if !DEBUG
+        ReleaseFirebaseBootstrap.applyCollectionConsent(value)
+        #endif
     }
 
     /// Logs a product / custom Analytics event when consent is on (Release only).
@@ -69,6 +74,9 @@ private enum ReleaseFirebaseBootstrap {
             AppCheck.setAppCheckProviderFactory(ReleaseAppAttestProviderFactory())
             FirebaseApp.configure()
         }
+        // Collection is off in the plist; the consent setting turns it on (or keeps it off)
+        // before anything else runs, so an opted-out user sends no crash or analytics data.
+        applyCollectionConsent(OpenCodeReleaseObservability.isProductAnalyticsConsented())
         activateFeatureFlags()
 
         let verificationEnabled = CrashlyticsVerificationPolicy.isEnabled(in: .main)
@@ -95,6 +103,13 @@ private enum ReleaseFirebaseBootstrap {
         Crashlytics.crashlytics().record(error: error)
         defaults.set(true, forKey: markerKey)
         defaults.synchronize()
+    }
+
+    static func applyCollectionConsent(_ consented: Bool) {
+        guard FirebaseApp.app() != nil else { return }
+        let enabled = ReleaseCollectionPolicy.collectionEnabled(consented: consented)
+        Crashlytics.crashlytics().setCrashlyticsCollectionEnabled(enabled)
+        Analytics.setAnalyticsCollectionEnabled(enabled)
     }
 
     /// REST feedback submitter configured from the `FirebaseApp` options, or

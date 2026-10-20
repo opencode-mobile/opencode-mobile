@@ -36,7 +36,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.currentStateAsState
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
 import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavEntryDecorator
@@ -49,10 +51,12 @@ import dev.opencode.mobile.domain.app.AppVersion
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.feedback.FeedbackScreen
 import dev.opencode.mobile.domain.preferences.AnalyticsConsentPreferences
+import dev.opencode.mobile.domain.preferences.AppLockPreferences
 import dev.opencode.mobile.domain.preferences.DeveloperToolsPreferences
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.preferences.MarkdownHighlightPreferences
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
+import dev.opencode.mobile.domain.security.AppLockAvailability
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.ui.componentgallery.ComponentGalleryDetailScreen
 import dev.opencode.mobile.ui.componentgallery.ComponentGalleryEntries
@@ -460,6 +464,7 @@ fun MainNavigation() {
                                             }
                                             val context = LocalContext.current
                                             val appVersion = remember(context) { AppVersion.from(context) }
+                                            val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
                                             val useSplitLayout = currentOpenCodeUsesSplitLayout()
                                             var settingsDetail by rememberSaveable { mutableStateOf(SettingsDetail.Servers) }
                                             val visibleSettingsDetail =
@@ -553,6 +558,13 @@ fun MainNavigation() {
                                                         AnalyticsConsentPreferences.productAnalyticsConsented,
                                                     onProductAnalyticsConsentedChange =
                                                         settingsViewModel::setProductAnalyticsConsented,
+                                                    appLockEnabled = AppLockPreferences.enabled,
+                                                    // Re-checked on resume: the user may have just set a screen lock.
+                                                    appLockAvailable =
+                                                        remember(context, lifecycleState) {
+                                                            AppLockAvailability.canAuthenticate(context)
+                                                        },
+                                                    onAppLockEnabledChange = settingsViewModel::setAppLockEnabled,
                                                 )
                                             }
                                             if (useSplitLayout) {
@@ -641,6 +653,8 @@ fun MainNavigation() {
                                                 onShowPairingCodeForm = setupViewModel::showPairingCodeForm,
                                                 onShowHostPasswordForm = setupViewModel::showHostPasswordForm,
                                                 onShowScanInstructions = setupViewModel::showScanInstructions,
+                                                onConfirmCleartext = setupViewModel::confirmCleartextWarning,
+                                                onDismissCleartext = setupViewModel::dismissCleartextWarning,
                                                 onRemove = {
                                                     setupViewModel.removeConnection {
                                                         serversViewModel.refresh()

@@ -44,6 +44,83 @@ import Testing
         )
     }
 
+    @Test @MainActor func removeProfile_purgesCacheDraftsAndModelSelectionsOfThatServerOnly() async throws {
+        let suite = "ConnectionSessionCoordinatorTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        let profileStore = UserDefaultsConnectionProfileStore(
+            defaults: defaults,
+            secureCredentialStore: InMemorySecureCredentialStore()
+        )
+        let modelStore = UserDefaultsSessionModelSelectionStore(defaults: defaults)
+        let draftStore = UserDefaultsComposerDraftStore(defaults: defaults)
+        let cacheStore = InMemorySessionCacheStore()
+        let manager = ActiveConnectionManager(profileStore: profileStore)
+        let cache = DefaultSessionCache(store: cacheStore, connectionIdProvider: { manager.currentProfile()?.id })
+        let coordinator = ConnectionSessionCoordinator(
+            activeConnectionManager: manager,
+            connectionProfileStore: profileStore,
+            secureCredentialStore: InMemorySecureCredentialStore(),
+            sessionModelSelectionStore: modelStore,
+            composerDraftStore: draftStore,
+            sessionCache: { cache }
+        )
+        try await coordinator.saveProfile(
+            ConnectionProfile(baseURL: "http://10.0.0.1:4096/", username: "opencode", password: "a", name: "A")
+        )
+        try await coordinator.saveProfile(
+            ConnectionProfile(baseURL: "http://10.0.0.2:4096/", username: "opencode", password: "b", name: "B")
+        )
+        let profiles = await profileStore.listProfiles()
+        let a = try #require(profiles.first { $0.name == "A" })
+        let b = try #require(profiles.first { $0.name == "B" })
+        let identityA = ModelSelectionConnectionIdentity(serverBaseURL: a.baseURL, username: a.username)
+        let identityB = ModelSelectionConnectionIdentity(serverBaseURL: b.baseURL, username: b.username)
+        let selection = SessionModelSelection(providerID: "openai", modelID: "gpt-4", variant: nil)
+        await modelStore.saveSession(connectionIdentity: identityA, worktree: "/repo", sessionID: "ses-1", selection: selection)
+        await modelStore.saveNewSessionPreference(connectionIdentity: identityA, worktree: "/repo", selection: selection)
+        await modelStore.saveSession(connectionIdentity: identityB, worktree: "/repo", sessionID: "ses-2", selection: selection)
+        draftStore.save(connectionIdentity: identityA, worktree: "/repo", sessionID: "ses-1", draft: ComposerDraft(text: "a"))
+        draftStore.save(connectionIdentity: identityB, worktree: "/repo", sessionID: "ses-2", draft: ComposerDraft(text: "b"))
+        for (connectionId, worktree) in [(a.id, "/repo"), (a.id, "/other"), (b.id, "/repo")] {
+            await cacheStore.commit(
+                key: SessionCacheKey(connectionId: connectionId, worktree: worktree, kind: .sessionList),
+                value: SessionCacheValue(payloadJSON: "[]", schemaVersion: 1),
+                meta: SessionCacheCommitMeta(syncedAtEpochMs: 1)
+            )
+        }
+
+        await coordinator.removeProfile(id: a.id)
+
+        #expect(await modelStore.loadSession(connectionIdentity: identityA, worktree: "/repo", sessionID: "ses-1") == nil)
+        #expect(await modelStore.loadNewSessionPreference(connectionIdentity: identityA, worktree: "/repo") == nil)
+        #expect(await modelStore.loadSession(connectionIdentity: identityB, worktree: "/repo", sessionID: "ses-2") != nil)
+        #expect(draftStore.load(connectionIdentity: identityA, worktree: "/repo", sessionID: "ses-1") == nil)
+        #expect(draftStore.load(connectionIdentity: identityB, worktree: "/repo", sessionID: "ses-2")?.text == "b")
+        let remainingA = await cacheStore.report(.connection(connectionIdOrUrlPrefix: a.id, matchByUrlPrefix: false))
+        let remainingB = await cacheStore.report(.connection(connectionIdOrUrlPrefix: b.id, matchByUrlPrefix: false))
+        #expect(remainingA.entryCount == 0)
+        #expect(remainingB.entryCount == 1)
+        #expect(await profileStore.listProfiles().map(\.name) == ["B"])
+    }
+
+    @Test @MainActor func clearConnectionData_deletesTheFeedbackToken() async {
+        let tokens = InMemoryFeedbackRefreshTokenStore()
+        tokens.write("refresh-token")
+        let coordinator = ConnectionSessionCoordinator(
+            activeConnectionManager: ActiveConnectionManager(),
+            connectionProfileStore: InMemoryConnectionProfileStore(),
+            secureCredentialStore: InMemorySecureCredentialStore(),
+            sessionModelSelectionStore: InMemorySessionModelSelectionStore(),
+            composerDraftStore: InMemoryComposerDraftStore(),
+            feedbackRefreshTokenStore: tokens
+        )
+
+        await coordinator.clearConnectionData()
+
+        #expect(tokens.read() == nil)
+    }
+
     @Test @MainActor func applyProfileChange_ordersStopCachesRebindSignalStart() async throws {
         let log = TransactionLog()
         let store = CatalogConnectionProfileStore()
@@ -457,4 +534,11 @@ private final class RecordingProjectionCaches: ProjectionCaching {
     func clearLiveProjections() {
         log.append("clear")
     }
+}
+
+private final class InMemoryFeedbackRefreshTokenStore: FeedbackRefreshTokenStore, @unchecked Sendable {
+    private var token: String?
+    func read() -> String? { token }
+    func write(_ token: String) { self.token = token }
+    func delete() { token = nil }
 }

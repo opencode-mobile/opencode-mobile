@@ -54,6 +54,8 @@ struct SettingsView: View {
     @State private var homeDisplayPreferences = HomeDisplayPreferences.shared
     @State private var markdownHighlightPreferences = MarkdownHighlightPreferences.shared
     @State private var analyticsConsentPreferences = AnalyticsConsentPreferences.shared
+    @State private var appLockPreferences = AppLockPreferences.shared
+    private let appLockAuthenticator: any AppLockAuthenticating = LocalAuthenticationAppLockAuthenticator()
     @State private var sessionChatDisplayPreferences = SessionChatDisplayPreferences.shared
     @State private var developerToolsPreferences = DeveloperToolsPreferences.shared
     @State private var showServers = false
@@ -430,6 +432,27 @@ struct SettingsView: View {
                     OpenCodeSectionHeader(title: "Privacy")
 
                     OpenCodeListItem(
+                        title: "App Lock",
+                        subtitle: appLockAuthenticator.canAuthenticate()
+                            ? "Require Face ID, Touch ID or your passcode when the app returns from the background"
+                            : "Set a device passcode to use App Lock",
+                        style: .card,
+                        startDecorator: .icon(.lock, accessibilityLabel: "App Lock"),
+                        accessory: .toggle(
+                            isOn: Binding(
+                                get: { appLockPreferences.enabled },
+                                set: { newValue in
+                                    guard !newValue || appLockAuthenticator.canAuthenticate() else { return }
+                                    appLockPreferences.setEnabled(newValue)
+                                    logSettingsAction(ProductAnalytics.Action.settingsToggleAppLock)
+                                }
+                            ),
+                            accessibilityLabel: "App Lock"
+                        )
+                    )
+                    .padding(.horizontal, 16)
+
+                    OpenCodeListItem(
                         title: "Privacy Policy",
                         subtitle: "How the apps handle data",
                         style: .card,
@@ -443,8 +466,8 @@ struct SettingsView: View {
                     .padding(.horizontal, 16)
 
                     OpenCodeListItem(
-                        title: "Product Analytics",
-                        subtitle: "Allow optional product usage events. Crash reporting is unchanged.",
+                        title: "Analytics & crash reports",
+                        subtitle: "Allow optional product usage events and crash reports. Off sends nothing to Firebase.",
                         style: .card,
                         startDecorator: .icon(.description, accessibilityLabel: "Product Analytics"),
                         accessory: .toggle(
@@ -452,8 +475,10 @@ struct SettingsView: View {
                                 get: { analyticsConsentPreferences.productAnalyticsConsented },
                                 set: { newValue in
                                     // Log after applying consent: opting out is
-                                    // dropped by the gate rather than reported.
-                                    analyticsConsentPreferences
+                                    // dropped by the gate rather than reported. Goes through
+                                    // the observability seam so Crashlytics and automatic
+                                    // Analytics follow the switch right away.
+                                    OpenCodeReleaseObservability
                                         .setProductAnalyticsConsented(newValue)
                                     logSettingsAction(
                                         ProductAnalytics.Action.settingsToggleProductAnalytics

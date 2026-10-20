@@ -60,7 +60,13 @@ protocol ComposerDraftStore: Sendable {
         connectionIdentity: ModelSelectionConnectionIdentity,
         sessionID: String
     )
+    /// Every draft of one connection (profile removal).
+    func clearConnection(connectionIdentity: ModelSelectionConnectionIdentity)
     func clearAll()
+}
+
+extension ComposerDraftStore {
+    func clearConnection(connectionIdentity _: ModelSelectionConnectionIdentity) {}
 }
 
 struct UserDefaultsComposerDraftStore: ComposerDraftStore, @unchecked Sendable {
@@ -111,6 +117,13 @@ struct UserDefaultsComposerDraftStore: ComposerDraftStore, @unchecked Sendable {
         for key in keys {
             defaults.removeObject(forKey: key)
         }
+    }
+
+    func clearConnection(connectionIdentity: ModelSelectionConnectionIdentity) {
+        let identityMarker = "|\(identityKey(connectionIdentity))|"
+        defaults.dictionaryRepresentation().keys
+            .filter { $0.hasPrefix(Self.versionPrefix) && $0.contains(identityMarker) }
+            .forEach(defaults.removeObject)
     }
 
     private func sessionKey(

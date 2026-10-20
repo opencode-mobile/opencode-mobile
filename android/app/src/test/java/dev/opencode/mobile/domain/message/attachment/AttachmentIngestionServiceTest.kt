@@ -6,6 +6,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.ByteArrayInputStream
 
 class AttachmentIngestionServiceTest {
     private val thumbnail = byteArrayOf(9, 8, 7)
@@ -22,6 +23,18 @@ class AttachmentIngestionServiceTest {
 
     @Test
     fun ingest_webp_createsImageAttachment() = assertImage("photo.webp", "image/webp")
+
+    @Test
+    fun readBounded_stopsOneBytePastTheLimit() {
+        val small = AttachmentIngestionService.readBounded(ByteArrayInputStream(ByteArray(10) { 1 }), limit = 10)
+        assertEquals(10, small.size)
+
+        val error =
+            assertThrows(IllegalArgumentException::class.java) {
+                AttachmentIngestionService.readBounded(ByteArrayInputStream(ByteArray(11) { 1 }), limit = 10)
+            }
+        assertEquals(AttachmentLimits.TOO_LARGE_ERROR, error.message)
+    }
 
     @Test
     fun ingest_pdf_createsPdfWithoutPreview() {

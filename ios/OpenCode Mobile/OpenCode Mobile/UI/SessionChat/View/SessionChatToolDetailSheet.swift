@@ -183,8 +183,7 @@ private struct SessionChatToolDetailSheetBody: View {
             }
             if let label = target?.sheetLinkLabel?.trimmingCharacters(in: .whitespacesAndNewlines),
                !label.isEmpty,
-               let link = target?.sheetLink,
-               let url = URL(string: link)
+               let url = ExternalLinkPolicy.openableURL(target?.sheetLink)
             {
                 OpenCodeButton(variant: .fullWidthText(title: label)) {
                     onOpenLink(url)

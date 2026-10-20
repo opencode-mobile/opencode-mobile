@@ -44,6 +44,7 @@ enum OpenCodeIcon: String, CaseIterable, Hashable {
     case mic = "lucide_mic"
     case plug = "lucide_plug"
     case code = "lucide_code"
+    case lock = "lucide_lock"
 
     var accessibilityIdentifier: String { rawValue }
 }
