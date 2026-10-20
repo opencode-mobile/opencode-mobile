@@ -6,7 +6,7 @@ struct TreeRowGalleryView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Interactive").font(OpenCodeTypography.heading)
+            Text("Interactive, file-type icons").font(OpenCodeTypography.heading)
             VStack(spacing: 0) {
                 folder("Sources", depth: 0)
                 if expanded.contains("Sources") {
@@ -24,7 +24,7 @@ struct TreeRowGalleryView: View {
                 file("README.md", depth: 0)
             }
 
-            Text("States").font(OpenCodeTypography.heading)
+            Text("States, generic icons").font(OpenCodeTypography.heading)
             VStack(spacing: 0) {
                 OpenCodeTreeRow(title: "Normal", kind: .file) {}
                 OpenCodeTreeRow(title: "Selected", kind: .file, state: .selected) {}
@@ -39,6 +39,7 @@ struct TreeRowGalleryView: View {
         OpenCodeTreeRow(
             title: path,
             kind: .folder(isExpanded: expanded.contains(path)),
+            icon: .fileType(path: path),
             depth: depth,
             isDimmed: ignored,
             tag: ignored ? "ignored" : nil
@@ -51,6 +52,7 @@ struct TreeRowGalleryView: View {
         OpenCodeTreeRow(
             title: String(path.split(separator: "/").last ?? ""),
             kind: .file,
+            icon: .fileType(path: path),
             depth: depth,
             state: selected == path ? .selected : .normal
         ) {

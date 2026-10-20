@@ -38,6 +38,8 @@ import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.theme.OpenCodeRadius
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
+import dev.opencode.mobile.ui.icons.OpenCodeFileIcon
+import dev.opencode.mobile.ui.icons.OpenCodeFileIconKind
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 /** Indent added per tree depth level. */
@@ -58,6 +60,22 @@ enum class OpenCodeTreeRowDisclosure {
     Expanded,
 }
 
+/** Leading icon of a [OpenCodeTreeRow]. */
+sealed interface OpenCodeTreeRowIcon {
+    /** A catalog glyph tinted with the row's icon colour. */
+    data class Glyph(
+        val icon: ImageVector,
+    ) : OpenCodeTreeRowIcon
+
+    /**
+     * The colour [OpenCodeFileIcon] for [path]. Rows with a disclosure use the folder art,
+     * open when [OpenCodeTreeRowDisclosure.Expanded].
+     */
+    data class FileType(
+        val path: String,
+    ) : OpenCodeTreeRowIcon
+}
+
 enum class OpenCodeTreeRowState {
     Normal,
     Selected,
@@ -69,6 +87,32 @@ enum class OpenCodeTreeRowState {
     Loading,
 }
 
+/** [OpenCodeTreeRow] with a catalog glyph as its leading icon. */
+@Composable
+fun OpenCodeTreeRow(
+    title: String,
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+    depth: Int = 0,
+    subtitle: String? = null,
+    disclosure: OpenCodeTreeRowDisclosure = OpenCodeTreeRowDisclosure.None,
+    state: OpenCodeTreeRowState = OpenCodeTreeRowState.Normal,
+    tag: String? = null,
+    onClick: (() -> Unit)? = null,
+) {
+    OpenCodeTreeRow(
+        title = title,
+        icon = OpenCodeTreeRowIcon.Glyph(icon),
+        modifier = modifier,
+        depth = depth,
+        subtitle = subtitle,
+        disclosure = disclosure,
+        state = state,
+        tag = tag,
+        onClick = onClick,
+    )
+}
+
 /**
  * One row of a hierarchical list (File Browser tree, find results). Depth indents by
  * [OpenCodeTreeRowIndent]; folders show a rotating disclosure chevron.
@@ -76,7 +120,7 @@ enum class OpenCodeTreeRowState {
 @Composable
 fun OpenCodeTreeRow(
     title: String,
-    icon: ImageVector,
+    icon: OpenCodeTreeRowIcon,
     modifier: Modifier = Modifier,
     depth: Int = 0,
     subtitle: String? = null,
@@ -141,15 +185,31 @@ fun OpenCodeTreeRow(
                 )
             }
         }
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            modifier =
-                Modifier
-                    .size(TreeRowIconSize)
-                    .alpha(contentAlpha),
-            tint = if (selected) openCodeColor("icon-strong-base") else openCodeColor("icon-base"),
-        )
+        when (icon) {
+            is OpenCodeTreeRowIcon.Glyph ->
+                Icon(
+                    imageVector = icon.icon,
+                    contentDescription = null,
+                    modifier =
+                        Modifier
+                            .size(TreeRowIconSize)
+                            .alpha(contentAlpha),
+                    tint = if (selected) openCodeColor("icon-strong-base") else openCodeColor("icon-base"),
+                )
+            is OpenCodeTreeRowIcon.FileType ->
+                OpenCodeFileIcon(
+                    path = icon.path,
+                    modifier = Modifier.alpha(contentAlpha),
+                    kind =
+                        if (disclosure == OpenCodeTreeRowDisclosure.None) {
+                            OpenCodeFileIconKind.File
+                        } else {
+                            OpenCodeFileIconKind.Directory
+                        },
+                    expanded = disclosure == OpenCodeTreeRowDisclosure.Expanded,
+                    size = TreeRowIconSize,
+                )
+        }
         Column(
             modifier =
                 Modifier

@@ -10,7 +10,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ui.components.OpenCodeComposerSuggestionItem
+import dev.opencode.mobile.ui.components.OpenCodeComposerSuggestionLeadingIcon
 import dev.opencode.mobile.ui.components.OpenCodeComposerSuggestionOverlay
+import dev.opencode.mobile.ui.icons.OpenCodeFileIconKind
+import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 @Composable
 fun ComposerSuggestionOverlayGalleryScreen(modifier: Modifier = Modifier) {
@@ -38,6 +41,36 @@ fun ComposerSuggestionOverlayGalleryScreen(modifier: Modifier = Modifier) {
                             },
                     )
                 },
+            onSelect = {},
+        )
+
+        Text(
+            text = "Mentions",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        OpenCodeComposerSuggestionOverlay(
+            items =
+                listOf(
+                    OpenCodeComposerSuggestionItem(
+                        id = "build",
+                        title = "@build",
+                        subtitle = "Default agent",
+                        leadingIcon = OpenCodeComposerSuggestionLeadingIcon.Icon(OpenCodeIcons.Agent),
+                    ),
+                ) +
+                    listOf("Package.swift", "app/build.gradle", "src/main.kt", "web/App.tsx", "README.md", "src").map { path ->
+                        OpenCodeComposerSuggestionItem(
+                            id = "file:$path",
+                            title = path,
+                            subtitle = "File",
+                            leadingIcon =
+                                OpenCodeComposerSuggestionLeadingIcon.File(
+                                    path = path,
+                                    kind = if ('.' in path) OpenCodeFileIconKind.File else OpenCodeFileIconKind.Directory,
+                                ),
+                        )
+                    },
             onSelect = {},
         )
 

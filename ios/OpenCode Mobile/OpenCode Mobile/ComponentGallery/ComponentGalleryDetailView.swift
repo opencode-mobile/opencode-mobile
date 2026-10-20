@@ -82,6 +82,8 @@ struct ComponentGalleryDetailView: View {
             TypographyGalleryView()
         case .icons:
             IconsGalleryView()
+        case .fileIcon:
+            FileIconGalleryView()
         case .skeletonIllustration:
             SkeletonIllustrationGalleryView()
         case .pageIndicator:

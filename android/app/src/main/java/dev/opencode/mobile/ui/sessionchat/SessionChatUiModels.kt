@@ -27,6 +27,9 @@ import dev.opencode.mobile.domain.text.TitleCaseIdentifier
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.ui.changes.ChangeSource
 import dev.opencode.mobile.ui.components.OpenCodeAttachmentVariant
+import dev.opencode.mobile.ui.components.OpenCodeComposerSuggestionLeadingIcon
+import dev.opencode.mobile.ui.icons.OpenCodeFileIconKind
+import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 data class SessionChatComposerState(
     val text: String = "",
@@ -533,7 +536,21 @@ data class SessionChatAtSuggestion(
     val subtitle: String?,
     val agentName: String? = null,
     val filePath: String? = null,
-)
+    val isDirectory: Boolean = false,
+) {
+    /** File suggestions show their file-type icon; agent suggestions show the agent glyph. */
+    val leadingIcon: OpenCodeComposerSuggestionLeadingIcon?
+        get() =
+            when {
+                filePath != null ->
+                    OpenCodeComposerSuggestionLeadingIcon.File(
+                        path = filePath,
+                        kind = if (isDirectory) OpenCodeFileIconKind.Directory else OpenCodeFileIconKind.File,
+                    )
+                agentName != null -> OpenCodeComposerSuggestionLeadingIcon.Icon(OpenCodeIcons.Agent)
+                else -> null
+            }
+}
 
 data class SessionChatComposerRegionState(
     val composer: SessionChatComposerState = SessionChatComposerState(),
@@ -581,6 +598,7 @@ fun dev.opencode.mobile.domain.filesystem.ProjectEntry.toFileSuggestion(): Sessi
         title = relativePath,
         subtitle = "File",
         filePath = relativePath,
+        isDirectory = isDirectory,
     )
 
 data class PendingSend(

@@ -3,19 +3,24 @@ package dev.opencode.mobile.ui.components
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -26,13 +31,34 @@ import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.theme.OpenCodeMediumShape
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
+import dev.opencode.mobile.ui.icons.OpenCodeFileIcon
+import dev.opencode.mobile.ui.icons.OpenCodeFileIconKind
+import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 data class OpenCodeComposerSuggestionItem(
     val id: String,
     val title: String,
     val subtitle: String? = null,
     val badge: String? = null,
+    val leadingIcon: OpenCodeComposerSuggestionLeadingIcon? = null,
 )
+
+/** Leading mark before the title: a file-type icon for paths, or a catalog glyph. */
+sealed interface OpenCodeComposerSuggestionLeadingIcon {
+    data class File(
+        val path: String,
+        val kind: OpenCodeFileIconKind = OpenCodeFileIconKind.File,
+    ) : OpenCodeComposerSuggestionLeadingIcon
+
+    data class Icon(
+        val icon: ImageVector,
+    ) : OpenCodeComposerSuggestionLeadingIcon
+}
+
+private val ComposerSuggestionIconSize = 16.dp
+
+/** bodyLarge line height; the icon centres on the title line so rows keep their height. */
+private val ComposerSuggestionTitleLineHeight = 24.dp
 
 /** Visible suggestion rows before the overlay list scrolls. */
 private const val ComposerSuggestionVisibleItemLimit = 4
@@ -95,7 +121,7 @@ private fun ComposerSuggestionRow(
             append(item.title)
             item.subtitle?.takeIf { it.isNotBlank() }?.let { append(", ").append(it) }
         }
-    Column(
+    Row(
         modifier =
             Modifier
                 .fillMaxWidth()
@@ -104,8 +130,38 @@ private fun ComposerSuggestionRow(
                     contentDescription = accessibilityLabel
                 }.clickable(onClick = onClick)
                 .padding(horizontal = 16.dp, vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        item.leadingIcon?.let { icon ->
+            Box(
+                modifier = Modifier.height(ComposerSuggestionTitleLineHeight),
+                contentAlignment = Alignment.Center,
+            ) {
+                ComposerSuggestionLeadingIcon(icon)
+            }
+        }
+        ComposerSuggestionText(item)
+    }
+}
+
+@Composable
+private fun ComposerSuggestionLeadingIcon(icon: OpenCodeComposerSuggestionLeadingIcon) {
+    when (icon) {
+        is OpenCodeComposerSuggestionLeadingIcon.File ->
+            OpenCodeFileIcon(path = icon.path, kind = icon.kind, size = ComposerSuggestionIconSize)
+        is OpenCodeComposerSuggestionLeadingIcon.Icon ->
+            Icon(
+                imageVector = icon.icon,
+                contentDescription = null,
+                tint = openCodeColor("icon-base"),
+                modifier = Modifier.size(ComposerSuggestionIconSize),
+            )
+    }
+}
+
+@Composable
+private fun ComposerSuggestionText(item: OpenCodeComposerSuggestionItem) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -156,6 +212,38 @@ private fun OpenCodeComposerSuggestionOverlayPreview() {
                         title = "/my-skill",
                         subtitle = "A skill",
                         badge = "skill",
+                    ),
+                ),
+            onSelect = {},
+            modifier = Modifier.padding(16.dp),
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun OpenCodeComposerSuggestionOverlayMentionsPreview() {
+    OpenCodeTheme {
+        OpenCodeComposerSuggestionOverlay(
+            items =
+                listOf(
+                    OpenCodeComposerSuggestionItem(
+                        id = "build",
+                        title = "@build",
+                        subtitle = "Default agent",
+                        leadingIcon = OpenCodeComposerSuggestionLeadingIcon.Icon(OpenCodeIcons.Agent),
+                    ),
+                    OpenCodeComposerSuggestionItem(
+                        id = "file:app/build.gradle.kts",
+                        title = "app/build.gradle.kts",
+                        subtitle = "File",
+                        leadingIcon = OpenCodeComposerSuggestionLeadingIcon.File("app/build.gradle.kts"),
+                    ),
+                    OpenCodeComposerSuggestionItem(
+                        id = "file:Main.kt",
+                        title = "Main.kt",
+                        subtitle = "File",
+                        leadingIcon = OpenCodeComposerSuggestionLeadingIcon.File("Main.kt"),
                     ),
                 ),
             onSelect = {},

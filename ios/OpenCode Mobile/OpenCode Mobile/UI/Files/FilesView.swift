@@ -211,6 +211,7 @@ struct FilesView: View {
             OpenCodeTreeRow(
                 title: entry.name,
                 kind: entry.isDirectory ? .folder(isExpanded: isExpanded) : .file,
+                icon: .fileType(path: entry.relativePath),
                 depth: depth,
                 state: isLoading ? .loading : (entry.relativePath == selectedPath ? .selected : .normal),
                 isDimmed: entry.isIgnored,
@@ -274,6 +275,7 @@ struct FilesView: View {
                                 title: entry.name,
                                 subtitle: entry.parentPath.isEmpty ? "/" : entry.parentPath,
                                 kind: .file,
+                                icon: .fileType(path: entry.relativePath),
                                 state: entry.relativePath == selectedPath ? .selected : .normal
                             ) {
                                 logAction(ProductAnalytics.Action.filesOpenFile)

@@ -626,19 +626,32 @@ struct SessionChatAtSuggestion: Equatable, Identifiable {
     let subtitle: String?
     let agentName: String?
     let filePath: String?
+    let isDirectory: Bool
 
     init(
         id: String,
         title: String,
         subtitle: String?,
         agentName: String? = nil,
-        filePath: String? = nil
+        filePath: String? = nil,
+        isDirectory: Bool = false
     ) {
         self.id = id
         self.title = title
         self.subtitle = subtitle
         self.agentName = agentName
         self.filePath = filePath
+        self.isDirectory = isDirectory
+    }
+}
+
+extension SessionChatAtSuggestion {
+    /// File suggestions show their file-type icon; agent suggestions show the agent glyph.
+    var leadingIcon: OpenCodeComposerSuggestionItem.LeadingIcon? {
+        if let filePath {
+            return .file(path: filePath, kind: isDirectory ? .directory : .file)
+        }
+        return agentName == nil ? nil : .icon(.agent)
     }
 }
 
@@ -702,7 +715,8 @@ extension ProjectEntry {
             id: "file:\(relativePath)",
             title: relativePath,
             subtitle: "File",
-            filePath: relativePath
+            filePath: relativePath,
+            isDirectory: isDirectory
         )
     }
 }
