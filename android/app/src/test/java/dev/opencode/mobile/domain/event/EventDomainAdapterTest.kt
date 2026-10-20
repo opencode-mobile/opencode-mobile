@@ -950,7 +950,12 @@ class EventDomainAdapterTest {
                 """{"id":"evt_sh2","type":"session.shell.ended","data":{"sessionID":"ses-1","shell":{"id":"sh_1","status":"exited","command":"false","exit":1,"time":{"started":100,"completed":150}},"output":{"output":"boom\n","truncated":false}}}""",
             )
 
-        val tool = events.last().rawProperties?.get("part")?.jsonObject
+        val tool =
+            events
+                .last()
+                .rawProperties
+                ?.get("part")
+                ?.jsonObject
         assertEquals("msg_sh1:tool", tool?.get("id")?.jsonPrimitive?.content)
         val state = tool?.get("state")?.jsonObject
         assertEquals("completed", state?.get("status")?.jsonPrimitive?.content)
@@ -984,7 +989,12 @@ class EventDomainAdapterTest {
                 """{"type":"session.inbox.enqueued","data":{"sessionID":"ses-1","inboxID":"msg_s","item":{"type":"synthetic","payload":{"text":"The following shell command was executed by the user"}},"delivery":"steer"}}""",
             )
 
-        val info = events.first().rawProperties?.get("info")?.jsonObject
+        val info =
+            events
+                .first()
+                .rawProperties
+                ?.get("info")
+                ?.jsonObject
         assertEquals("false", info?.get("waiting")?.jsonPrimitive?.content)
         assertNull(info?.get("delivery"))
     }

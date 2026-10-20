@@ -2358,7 +2358,9 @@ class SessionChatViewModelTest {
             val viewModel = createViewModel(repository)
             viewModel.bind("ses-1", "Title", "/repo")
             advanceUntilIdle()
-            val rowsBefore = viewModel.uiState.value.messages.map { it.id }
+            val rowsBefore =
+                viewModel.uiState.value.messages
+                    .map { it.id }
 
             viewModel.updateComposerText("!git status")
             advanceUntilIdle()
@@ -2381,7 +2383,11 @@ class SessionChatViewModelTest {
             assertEquals("", viewModel.uiState.value.composer.text)
             assertFalse(viewModel.uiState.value.isSending)
             // Output arrives through shell events; no optimistic prompt row is added.
-            assertEquals(rowsBefore, viewModel.uiState.value.messages.map { it.id })
+            assertEquals(
+                rowsBefore,
+                viewModel.uiState.value.messages
+                    .map { it.id },
+            )
         }
 
     @Test
@@ -2434,7 +2440,12 @@ class SessionChatViewModelTest {
             viewModel.sendPrompt()
             advanceUntilIdle()
 
-            assertEquals("cd app\nls", repository.shellRequests.single().first.command)
+            assertEquals(
+                "cd app\nls",
+                repository.shellRequests
+                    .single()
+                    .first.command,
+            )
         }
 
     @Test

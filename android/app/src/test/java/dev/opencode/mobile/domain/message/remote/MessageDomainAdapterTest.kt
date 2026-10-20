@@ -1405,8 +1405,20 @@ class MessageDomainAdapterTest {
 
         assertEquals(listOf("msg_shell", "msg_shell:assistant"), projected.map { it.id })
         assertEquals("msg_shell:tool", tool.id)
-        assertEquals("false", tool.input?.get("command")?.jsonPrimitive?.content)
-        assertEquals("1", tool.metadata?.get("exit")?.jsonPrimitive?.content)
+        assertEquals(
+            "false",
+            tool.input
+                ?.get("command")
+                ?.jsonPrimitive
+                ?.content,
+        )
+        assertEquals(
+            "1",
+            tool.metadata
+                ?.get("exit")
+                ?.jsonPrimitive
+                ?.content,
+        )
     }
 
     @Test

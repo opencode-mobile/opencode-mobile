@@ -718,8 +718,7 @@ class EventDomainAdapter(
             title = "Shell",
         )
 
-    private fun isSyntheticInboxItem(properties: JsonObject): Boolean =
-        (properties["item"] as? JsonObject)?.string("type") == "synthetic"
+    private fun isSyntheticInboxItem(properties: JsonObject): Boolean = (properties["item"] as? JsonObject)?.string("type") == "synthetic"
 
     /**
      * A v2 shell run (`{shell: Info}`) is its own transcript item whose id is the
@@ -771,6 +770,7 @@ class EventDomainAdapter(
                 created?.let { put("created", it) }
                 completed?.let { put("completed", it) }
             }
+
         fun info(
             id: String,
             role: String,
