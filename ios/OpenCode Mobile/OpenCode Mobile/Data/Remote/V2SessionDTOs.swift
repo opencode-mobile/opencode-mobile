@@ -75,21 +75,25 @@ nonisolated struct V2ViewSessionRequestDTO: Encodable, Sendable {
 }
 
 nonisolated struct V2CreateSessionRequestDTO: Encodable, Sendable {
+    let parentID: String?
     let title: String?
     let location: V2LocationDTO?
 
-    init(title: String? = nil, location: V2LocationDTO? = nil) {
+    init(parentID: String? = nil, title: String? = nil, location: V2LocationDTO? = nil) {
+        self.parentID = parentID
         self.title = title
         self.location = location
     }
 
     private enum CodingKeys: String, CodingKey {
+        case parentID
         case title
         case location
     }
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(parentID, forKey: .parentID)
         try container.encodeIfPresent(title, forKey: .title)
         try container.encodeIfPresent(location, forKey: .location)
     }

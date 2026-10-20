@@ -8,6 +8,7 @@ import dev.opencode.mobile.domain.connection.ServerCapabilities
 import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
+import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.session.FileDiff
 import dev.opencode.mobile.domain.session.FileDiffStatus
 import dev.opencode.mobile.domain.session.SessionError
@@ -141,13 +142,20 @@ class ChangesViewModel(
     private val repository: SessionRepository,
     private val capabilitiesProvider: () -> ServerCapabilities,
     private val lastTurnReviewChangesStore: LastTurnReviewChangesStore = LastTurnReviewChangesStore(),
+    private val foregroundEventStream: ForegroundEventStream? = null,
 ) : ViewModel() {
     @Inject
     constructor(
         repository: SessionRepository,
         activeConnectionManager: ActiveConnectionManager,
         lastTurnReviewChangesStore: LastTurnReviewChangesStore,
-    ) : this(repository, { activeConnectionManager.currentCapabilities() }, lastTurnReviewChangesStore)
+        foregroundEventStream: ForegroundEventStream,
+    ) : this(
+        repository,
+        { activeConnectionManager.currentCapabilities() },
+        lastTurnReviewChangesStore,
+        foregroundEventStream,
+    )
 
     constructor(
         repository: SessionRepository,
@@ -176,6 +184,16 @@ class ChangesViewModel(
     private var filter = ""
     private var filterEditReported = false
     private var loadJob: Job? = null
+
+    init {
+        foregroundEventStream?.let { stream ->
+            viewModelScope.launch {
+                stream.events.collect { event ->
+                    if (event.type == SESSION_IDLE_EVENT) onSessionIdle(event.sessionId)
+                }
+            }
+        }
+    }
 
     fun bind(
         sessionId: String,
@@ -232,6 +250,17 @@ class ChangesViewModel(
     }
 
     fun clearFilter() = updateFilter("")
+
+    /**
+     * Neither protocol pushes a diff for the finished turn, so Last turn refetches when its
+     * session goes idle. A turn still running compares against the working copy until then.
+     */
+    private fun onSessionIdle(sessionId: String?) {
+        val target = target ?: return
+        if (sessionId != target.sessionId || target.messageId == null) return
+        if (_uiState.value.selectedSource != ChangeSource.LastTurn) return
+        refresh()
+    }
 
     private fun load(
         refreshAvailability: Boolean,
@@ -435,6 +464,10 @@ class ChangesViewModel(
         val messageId: String?,
         val initialSource: ChangeSource,
     )
+
+    private companion object {
+        const val SESSION_IDLE_EVENT = "session.idle"
+    }
 }
 
 private fun ChangeSource.logValue() = name.replace(Regex("([a-z])([A-Z])"), "$1-$2").lowercase()

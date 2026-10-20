@@ -38,6 +38,7 @@ data class V2SessionViewRequestDto(
 
 @Serializable
 data class V2CreateSessionRequestDto(
+    @SerialName("parentID") val parentId: String? = null,
     val title: String? = null,
     val location: V2LocationDto? = null,
 )

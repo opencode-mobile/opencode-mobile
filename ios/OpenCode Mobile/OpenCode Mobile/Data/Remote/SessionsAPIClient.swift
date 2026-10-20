@@ -300,12 +300,14 @@ nonisolated struct SessionsAPIClient: Sendable {
         return sessions
     }
 
-    func createSessionV2(directory: String? = nil, title: String? = nil) async throws -> V2SessionDTO {
+    /// A `parentID` creates a linked child at the parent's location, so no location is sent with it.
+    func createSessionV2(directory: String? = nil, title: String? = nil, parentID: String? = nil) async throws -> V2SessionDTO {
         let envelope: APIDataEnvelope<V2SessionDTO> = try await post(
             path: "api/session",
             body: V2CreateSessionRequestDTO(
+                parentID: parentID,
                 title: title.flatMap { $0.isEmpty ? nil : $0 },
-                location: directory.map { V2LocationDTO(directory: $0) }
+                location: parentID == nil ? directory.map { V2LocationDTO(directory: $0) } : nil
             )
         )
         return envelope.data
@@ -394,6 +396,15 @@ nonisolated struct SessionsAPIClient: Sendable {
             locationDirectory: directory,
             query: ["mode": mode, "context": String(context)]
         )
+        return envelope.data
+    }
+
+    /// `GET /api/session/{id}/diff`: the files the turn opened by user message `from` changed.
+    /// Servers before opencode 2.1.0 have no route and answer 404.
+    func getSessionDiffV2(id: String, from: String?, context: Int = 12) async throws -> [FileDiffDTO] {
+        var query = ["context": String(context)]
+        if let from { query["from"] = from }
+        let envelope: APIListEnvelope<FileDiffDTO> = try await get(path: "api/session/\(id)/diff", query: query)
         return envelope.data
     }
 

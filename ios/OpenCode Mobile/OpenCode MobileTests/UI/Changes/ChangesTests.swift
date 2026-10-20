@@ -91,6 +91,54 @@ struct ChangesViewModelTests {
         #expect(viewModel.content?.additions == 0 && viewModel.content?.deletions == 0)
     }
 
+    @Test func lastTurnRefetchesWhenItsSessionGoesIdle() async throws {
+        let repository = ChangesSessionRepository(results: [
+            .success([Self.file("A.swift", additions: 1, deletions: 0)]),
+            .success([Self.file("A.swift", additions: 1, deletions: 0), Self.file("B.swift", additions: 1, deletions: 0)]),
+        ])
+        let events = FakeForegroundEventStream()
+        let viewModel = ChangesViewModel(
+            sessionID: "s",
+            worktree: "/repo",
+            messageID: "m",
+            repository: repository,
+            capabilities: .forProtocol(.v2, v2Features: V2ServerFeatures(sessionTurnDiff: true)),
+            foregroundEventStream: events
+        )
+        await viewModel.load()
+        events.emit(OpencodeEvent(type: "session.idle", sessionID: "other"))
+        events.emit(OpencodeEvent(type: "session.status", sessionID: "s"))
+        events.emit(OpencodeEvent(type: "session.idle", sessionID: "s"))
+
+        let observer = Task { await viewModel.observeSessionIdle() }
+        defer { observer.cancel() }
+        for _ in 0..<200 where viewModel.content?.files.count != 2 {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        #expect(viewModel.content?.files.map(\.path) == ["A.swift", "B.swift"])
+        #expect(repository.requests == [
+            .init(sessionID: "s", messageID: "m", directory: "/repo"),
+            .init(sessionID: "s", messageID: "m", directory: "/repo"),
+        ])
+    }
+
+    @Test func v2WithTurnDiffShowsLastTurn() async {
+        let repository = ChangesSessionRepository(results: [.success([Self.file("A.swift", additions: 1, deletions: 0)])])
+        let viewModel = ChangesViewModel(
+            sessionID: "s",
+            worktree: "/repo",
+            messageID: "m",
+            repository: repository,
+            capabilities: .forProtocol(.v2, v2Features: V2ServerFeatures(sessionTurnDiff: true))
+        )
+        await viewModel.load()
+
+        #expect(viewModel.state.selectedSource == .lastTurn)
+        #expect(viewModel.state.availableSources == [.lastTurn])
+        #expect(repository.requests == [.init(sessionID: "s", messageID: "m", directory: "/repo")])
+    }
+
     @Test func refreshPreservesFilterUntilReplacementSnapshotArrives() async {
         let repository = ChangesSessionRepository(results: [
             .success([Self.file("keep.swift"), Self.file("other.swift")]),

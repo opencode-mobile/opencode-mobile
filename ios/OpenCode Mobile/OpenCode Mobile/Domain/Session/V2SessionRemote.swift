@@ -40,8 +40,8 @@ struct V2SessionRemote: SessionRemote, Sendable {
         return id
     }
 
-    func createSession(parentID _: String?, title: String?, directory: String?) async throws -> Session {
-        var created = adapter.session(from: try await api.createSessionV2(directory: directory, title: title))
+    func createSession(parentID: String?, title: String?, directory: String?) async throws -> Session {
+        var created = adapter.session(from: try await api.createSessionV2(directory: directory, title: title, parentID: parentID))
         if let title, !title.isEmpty, created.title != title {
             created.title = title
         } else if created.title.isEmpty {
@@ -111,8 +111,8 @@ struct V2SessionRemote: SessionRemote, Sendable {
         throw SessionError.http(statusCode: 404, message: "session share is not available")
     }
 
-    func getSessionDiff(id _: String, messageID _: String?, directory _: String?) async throws -> [FileDiff] {
-        throw SessionError.http(statusCode: 404, message: "session message diff is not available")
+    func getSessionDiff(id: String, messageID: String?, directory _: String?) async throws -> [FileDiff] {
+        try await api.getSessionDiffV2(id: id, from: messageID).map(adapter.fileDiff)
     }
 
     func getVcsInfo(directory: String?) async throws -> VcsInfo {

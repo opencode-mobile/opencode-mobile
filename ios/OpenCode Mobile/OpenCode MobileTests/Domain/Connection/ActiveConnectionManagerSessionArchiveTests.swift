@@ -14,12 +14,22 @@ struct ActiveConnectionManagerSessionArchiveTests {
         #expect(probing.archiveProbes == 1)
     }
 
+    @Test func v2ServerDeclaringTurnDiffEnablesLastTurn() async throws {
+        let manager = connected(ArchiveProbe(protocol: .v2) { _ in true })
+
+        #expect(!manager.capabilities.supportsSessionMessageDiff)
+        _ = try await manager.probeActive()
+
+        #expect(manager.capabilities.supportsSessionMessageDiff)
+    }
+
     @Test func olderV2ServerKeepsArchiveHidden() async throws {
         let manager = connected(ArchiveProbe(protocol: .v2) { _ in false })
 
         _ = try await manager.probeActive()
 
         #expect(!manager.capabilities.supportsSessionArchive)
+        #expect(!manager.capabilities.supportsSessionMessageDiff)
     }
 
     @Test func unreadableContractKeepsArchiveHiddenAndRetriesNextProbe() async throws {
@@ -133,12 +143,13 @@ private final class ArchiveProbe: ConnectionProbing, @unchecked Sendable {
         ServerProbeOutcome(serverProtocol: serverProtocol, serverVersion: version)
     }
 
-    func probeV2SessionArchive(connection _: ServerConnection) async throws -> Bool {
+    func probeV2Features(connection _: ServerConnection) async throws -> V2ServerFeatures {
         let (fail, version) = lock.withLock {
             _archiveProbes += 1
             return (_fail, _version)
         }
         if fail { throw ServerProbeError.http(statusCode: 404, message: "Not Found") }
-        return archive(version)
+        let supported = archive(version)
+        return V2ServerFeatures(sessionArchive: supported, sessionTurnDiff: supported)
     }
 }

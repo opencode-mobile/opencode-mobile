@@ -417,9 +417,10 @@ fun SessionChatScreen(
             dictationNowMs = System.currentTimeMillis()
         }
     }
+    val isChildSession = parentId != null || uiState.sessionParentId != null
     val composerKindForDictation =
         SessionChatComposerKind.resolve(
-            isChildSession = parentId != null,
+            isChildSession = isChildSession,
             hasPermission = uiState.permissionRequest != null && !uiState.permissionDockHidden,
             hasQuestion = uiState.questionRequest != null,
         )
@@ -776,7 +777,7 @@ fun SessionChatScreen(
                                     target.toRoute(
                                         sessionId = sessionId,
                                         worktree = worktree,
-                                        parentId = parentId,
+                                        parentId = parentId ?: uiState.sessionParentId,
                                         owningTurnMessageId = uiState.owningTurnMessageId(target.messageId),
                                         supportsSessionMessageDiff = uiState.supportsSessionMessageDiff,
                                     ),
@@ -832,7 +833,7 @@ fun SessionChatScreen(
                 ) {
                     val overlayComposerKind =
                         SessionChatComposerKind.resolve(
-                            isChildSession = parentId != null,
+                            isChildSession = isChildSession,
                             hasPermission = uiState.permissionRequest != null && !uiState.permissionDockHidden,
                             hasQuestion = uiState.questionRequest != null,
                         )
@@ -923,7 +924,7 @@ fun SessionChatScreen(
 
                         val composerKind =
                             SessionChatComposerKind.resolve(
-                                isChildSession = parentId != null,
+                                isChildSession = isChildSession,
                                 hasPermission = uiState.permissionRequest != null && !uiState.permissionDockHidden,
                                 hasQuestion = uiState.questionRequest != null,
                             )

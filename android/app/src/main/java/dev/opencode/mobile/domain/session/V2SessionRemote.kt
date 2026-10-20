@@ -33,7 +33,7 @@ internal class V2SessionRemote(
         title: String?,
         directory: String?,
     ): Session {
-        var created = adapter.toSession(api.createSessionV2(directory, title))
+        var created = adapter.toSession(api.createSessionV2(directory, title, parentId))
         if (!title.isNullOrBlank() && created.title != title) {
             created = created.copy(title = title)
         }
@@ -119,7 +119,7 @@ internal class V2SessionRemote(
         id: String,
         messageId: String?,
         directory: String?,
-    ): List<FileDiff> = throw SessionError.Http(404, "session message diff is not available")
+    ): List<FileDiff> = api.getSessionDiffV2(id, from = messageId).map(adapter::toFileDiff)
 
     override suspend fun getVcsInfo(directory: String?): VcsInfo = adapter.toVcsInfo(api.getVcsInfoV2(directory))
 

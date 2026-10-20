@@ -7,6 +7,7 @@ import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.ServerAddressProbe
 import dev.opencode.mobile.domain.connection.ServerCapabilities
 import dev.opencode.mobile.domain.connection.ServerProtocol
+import dev.opencode.mobile.domain.connection.V2ServerFeatures
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.sync.Mutex
@@ -28,12 +29,12 @@ class ActiveConnectionManager(
     @Volatile
     private var serverVersion: String? = null
 
-    /** v2 session archive support from the server's API contract; false until a probe reads it. */
+    /** Release-dependent v2 features from the server's API contract; all off until a probe reads it. */
     @Volatile
-    private var v2SessionArchive = false
+    private var v2Features = V2ServerFeatures()
 
-    /** Server version [v2SessionArchive] was read for, so a re-probe of the same release skips the fetch. */
-    private var v2SessionArchiveVersion: String? = null
+    /** Server version [v2Features] was read for, so a re-probe of the same release skips the fetch. */
+    private var v2FeaturesVersion: String? = null
 
     suspend fun ensureLoaded() {
         val loaded =
@@ -70,7 +71,7 @@ class ActiveConnectionManager(
         val active = connection ?: return ServerCapabilities.forProtocol(ServerProtocol.V1)
         return ServerCapabilities.forProtocol(
             active.serverProtocol ?: ServerProtocol.V1,
-            v2SessionArchive = v2SessionArchive,
+            v2Features = v2Features,
         )
     }
 
@@ -86,7 +87,7 @@ class ActiveConnectionManager(
             profile = null
             probeFailed = false
             serverVersion = null
-            forgetV2SessionArchive()
+            forgetV2Features()
             completeInFlight(Result.success(ServerProtocol.V1))
         }
     }
@@ -150,13 +151,13 @@ class ActiveConnectionManager(
             try {
                 val server = probing.probeServer(current)
                 val detected = server.protocol
-                val archive = if (detected == ServerProtocol.V2) probeV2SessionArchive(probing, current, server.version) else null
+                val features = if (detected == ServerProtocol.V2) probeV2Features(probing, current, server.version) else null
                 mutex.withLock {
                     val active = connection
                     if (active != null && sameProfileDuringProbe(probedProfile, profile, active, current)) {
                         serverVersion = server.version
-                        v2SessionArchive = archive?.getOrNull() ?: false
-                        v2SessionArchiveVersion = archive?.getOrNull()?.let { server.version }
+                        v2Features = features?.getOrNull() ?: V2ServerFeatures()
+                        v2FeaturesVersion = features?.getOrNull()?.let { server.version }
                         connection = active.withProtocol(detected)
                         persistLocked()
                         Result.success(detected)
@@ -176,18 +177,18 @@ class ActiveConnectionManager(
     }
 
     /**
-     * Reads v2 archive support once per server release. A failed read is not remembered,
-     * so the next probe tries again; until then archive stays hidden.
+     * Reads v2 features once per server release. A failed read is not remembered,
+     * so the next probe tries again; until then archive and Last turn stay hidden.
      */
-    private suspend fun probeV2SessionArchive(
+    private suspend fun probeV2Features(
         probing: ConnectionProbing,
         connection: ServerConnection,
         version: String?,
-    ): Result<Boolean> {
-        val cached = mutex.withLock { v2SessionArchiveVersion?.takeIf { it == version }?.let { v2SessionArchive } }
+    ): Result<V2ServerFeatures> {
+        val cached = mutex.withLock { v2FeaturesVersion?.takeIf { it == version }?.let { v2Features } }
         if (cached != null) return Result.success(cached)
         return try {
-            Result.success(probing.probeV2SessionArchive(connection))
+            Result.success(probing.probeV2Features(connection))
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (error: Throwable) {
@@ -195,9 +196,9 @@ class ActiveConnectionManager(
         }
     }
 
-    private fun forgetV2SessionArchive() {
-        v2SessionArchive = false
-        v2SessionArchiveVersion = null
+    private fun forgetV2Features() {
+        v2Features = V2ServerFeatures()
+        v2FeaturesVersion = null
     }
 
     private fun completeInFlight(result: Result<ServerProtocol>) {
@@ -279,7 +280,7 @@ class ActiveConnectionManager(
     private fun bindLocked(loaded: ConnectionProfile?) {
         if (loaded == null || profile?.hasSameIdentity(loaded) != true) {
             serverVersion = null
-            forgetV2SessionArchive()
+            forgetV2Features()
         }
         profile = loaded
         connection = loaded?.let(ServerConnection::fromProfile)

@@ -472,9 +472,11 @@ class SessionsApi private constructor(
         return sessions
     }
 
+    /** A [parentId] creates a linked child at the parent's location, so no location is sent with it. */
     suspend fun createSessionV2(
         directory: String? = null,
         title: String? = null,
+        parentId: String? = null,
     ): V2SessionDto =
         httpClient
             .get()
@@ -482,8 +484,9 @@ class SessionsApi private constructor(
                 setJsonBody(
                     json,
                     V2CreateSessionRequestDto(
+                        parentId = parentId,
                         title = title?.takeIf { it.isNotBlank() },
-                        location = directory?.let { V2LocationDto(directory = it) },
+                        location = if (parentId == null) directory?.let { V2LocationDto(directory = it) } else null,
                     ),
                 )
             }.decodeV2Session()
@@ -607,6 +610,23 @@ class SessionsApi private constructor(
                 parameter("mode", mode)
                 parameter("context", context)
             }.body<ApiLocatedEnvelope<List<FileDiffDto>>>()
+            .data
+
+    /**
+     * `GET /api/session/{id}/diff`: the files the turn opened by user message [from] changed.
+     * Servers before opencode 2.1.0 have no route and answer 404.
+     */
+    suspend fun getSessionDiffV2(
+        id: String,
+        from: String?,
+        context: Int = 12,
+    ): List<FileDiffDto> =
+        httpClient
+            .get()
+            .get("api/session/$id/diff") {
+                from?.let { parameter("from", it) }
+                parameter("context", context)
+            }.bodyOnSuccess<ApiListEnvelope<FileDiffDto>>()
             .data
 
     private suspend fun HttpResponse.decodeV2Session(): V2SessionDto = json.decodeDataEnvelope(body<JsonElement>())

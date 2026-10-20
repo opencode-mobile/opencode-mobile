@@ -44,17 +44,17 @@ class ConnectionProbeService(
         }
     }
 
-    override suspend fun probeV2SessionArchive(connection: ServerConnection): Boolean {
+    override suspend fun probeV2Features(connection: ServerConnection): V2ServerFeatures {
         val client = clientFactory(connection)
         try {
-            val response: HttpResponse = client.get(V2SessionArchiveContract.OPENAPI_PATH)
+            val response: HttpResponse = client.get(V2ServerContract.OPENAPI_PATH)
             if (!response.status.isSuccess()) {
                 throw ServerProbeError.Http(
                     statusCode = response.status.value,
                     message = response.status.description,
                 )
             }
-            return V2SessionArchiveContract.isDeclared(response.body<JsonObject>())
+            return V2ServerContract.features(response.body<JsonObject>())
         } finally {
             client.close()
         }

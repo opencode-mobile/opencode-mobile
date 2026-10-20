@@ -353,7 +353,7 @@ class ConnectionProbeServiceTest {
     }
 
     @Test
-    fun probeV2SessionArchive_readsOpenApiContract() =
+    fun probeV2Features_readsOpenApiContract() =
         runTest {
             val paths = threadSafePaths()
             val service =
@@ -362,25 +362,25 @@ class ConnectionProbeServiceTest {
                     jsonOk(openApi(V2_1_PATCH_BODY))
                 }
 
-            assertTrue(service.probeV2SessionArchive(connection))
+            assertTrue(service.probeV2Features(connection).sessionArchive)
             assertEquals(listOf("/openapi.json"), paths)
         }
 
     @Test
-    fun probeV2SessionArchive_olderServerIsUnsupported() =
+    fun probeV2Features_olderServerIsUnsupported() =
         runTest {
             val service = service { _ -> jsonOk(openApi(V2_0_PATCH_BODY)) }
 
-            assertEquals(false, service.probeV2SessionArchive(connection))
+            assertEquals(V2ServerFeatures(), service.probeV2Features(connection))
         }
 
     @Test
-    fun probeV2SessionArchive_throwsWhenContractIsMissing() =
+    fun probeV2Features_throwsWhenContractIsMissing() =
         runTest {
             val service = service { _ -> jsonNotFound() }
 
             try {
-                service.probeV2SessionArchive(connection)
+                service.probeV2Features(connection)
                 fail("expected a probe error")
             } catch (error: ServerProbeError.Http) {
                 assertEquals(404, error.statusCode)
