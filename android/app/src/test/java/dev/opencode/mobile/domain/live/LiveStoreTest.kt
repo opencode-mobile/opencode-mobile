@@ -2754,6 +2754,36 @@ class SessionLiveStoreTest {
         }
 
     @Test
+    fun observeSessions_refreshesOnV2ArchiveAndUnarchive() =
+        runTest(testDispatcher) {
+            val first = testSession(id = "ses-1", title = "First")
+            val second = testSession(id = "ses-2", title = "Second")
+            val repository = FakeSessionRepository(sessions = listOf(first, second))
+            val eventStream = FakeForegroundEventStream()
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
+            val store = sessionStore(repository, eventStream, ServerProtocol.V2)
+            val emissions = mutableListOf<List<Session>>()
+            val collectJob = launch { store.observeSessions("/repo").collect { emissions.add(it.sessions) } }
+            advanceUntilIdle()
+
+            // The v2 Home list asks for `archived=false`, so an archived session drops out of the refetch.
+            repository.sessions = listOf(first)
+            eventStream.emit(OpencodeEvent(type = "session.archived", sessionId = "ses-2"))
+            advanceTimeBy(550)
+            advanceUntilIdle()
+            val afterArchive = emissions.last().map { it.id }
+
+            repository.sessions = listOf(first, second)
+            eventStream.emit(OpencodeEvent(type = "session.unarchived", sessionId = "ses-2"))
+            advanceTimeBy(550)
+            advanceUntilIdle()
+            collectJob.cancel()
+
+            assertEquals(listOf("ses-1"), afterArchive)
+            assertEquals(listOf("ses-1", "ses-2"), emissions.last().map { it.id })
+        }
+
+    @Test
     fun observeSessions_keepsLastValueWhenRefreshFails() =
         runTest(testDispatcher) {
             val repository =

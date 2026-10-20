@@ -47,6 +47,12 @@ data class V2RenameSessionRequestDto(
     val title: String,
 )
 
+/** `PATCH /api/session/{id}` body that archives (`true`) or restores (`false`) a session. */
+@Serializable
+data class V2ArchiveSessionRequestDto(
+    val archived: Boolean,
+)
+
 @Serializable
 data class V2InboxDeliveryRequestDto(
     val delivery: String,

@@ -91,6 +91,9 @@ nonisolated struct OpencodeEvent: Sendable, Equatable {
         "session.created",
         "session.updated",
         "session.deleted",
+        // v2 archive state changes; the list refetch drops or restores the session.
+        "session.archived",
+        "session.unarchived",
     ]
 
     private static let statusRefreshTypes: Set<String> = [

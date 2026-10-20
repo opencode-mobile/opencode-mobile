@@ -21,7 +21,8 @@ struct V2SessionRemote: SessionRemote, Sendable {
         let projectID = await listableProjectID(directory: directory)
         return try await api.listSessionsV2(
             directory: projectID == nil ? directory : nil,
-            projectID: projectID
+            projectID: projectID,
+            archived: false
         ).map { adapter.session(from: $0) }
     }
 
@@ -67,8 +68,14 @@ struct V2SessionRemote: SessionRemote, Sendable {
         return renamed
     }
 
-    func archiveSession(id _: String, directory _: String?) async throws -> Session {
-        throw SessionError.http(statusCode: 404, message: "session archive is not available")
+    /// Callers gate on `supportsSessionArchive`; servers before 2.1.0 would ignore the field.
+    func archiveSession(id: String, directory _: String?) async throws -> Session {
+        try await api.setSessionArchivedV2(id: id, archived: true)
+        var archived = adapter.session(from: try await api.getSessionV2(id: id))
+        if !archived.isArchived {
+            archived.archivedAtEpochMs = Int64(Date().timeIntervalSince1970 * 1000)
+        }
+        return archived
     }
 
     func deleteSession(id: String, directory _: String?) async throws -> Bool {

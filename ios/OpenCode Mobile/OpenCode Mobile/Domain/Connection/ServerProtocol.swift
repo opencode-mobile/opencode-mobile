@@ -19,6 +19,9 @@ nonisolated enum ServerProtocol: String, Sendable, Equatable, Hashable {
 
 /// Product capabilities derived from `ServerProtocol`. Screen Models read these
 /// flags instead of branching on protocol themselves.
+///
+/// v2 session archive depends on the server release, not the protocol: pass
+/// `v2SessionArchive` from the server's API contract probe.
 nonisolated struct ServerCapabilities: Sendable, Equatable {
     let supportsSessionMessageDiff: Bool
     let supportsSessionArchive: Bool
@@ -26,7 +29,7 @@ nonisolated struct ServerCapabilities: Sendable, Equatable {
     /// Server-tracked unread state (`time.idle` / `time.viewed`, `POST /view`, `session.viewed`).
     let supportsSessionViewed: Bool
 
-    static func forProtocol(_ serverProtocol: ServerProtocol) -> ServerCapabilities {
+    static func forProtocol(_ serverProtocol: ServerProtocol, v2SessionArchive: Bool = false) -> ServerCapabilities {
         switch serverProtocol {
         case .v1:
             return ServerCapabilities(
@@ -38,7 +41,7 @@ nonisolated struct ServerCapabilities: Sendable, Equatable {
         case .v2:
             return ServerCapabilities(
                 supportsSessionMessageDiff: false,
-                supportsSessionArchive: false,
+                supportsSessionArchive: v2SessionArchive,
                 supportsFollowUpDelivery: true,
                 supportsSessionViewed: true
             )

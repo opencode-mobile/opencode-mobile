@@ -99,6 +99,11 @@ nonisolated struct V2RenameSessionRequestDTO: Encodable, Sendable {
     let title: String
 }
 
+/// `PATCH /api/session/{id}` body that archives (`true`) or restores (`false`) a session.
+nonisolated struct V2ArchiveSessionRequestDTO: Encodable, Sendable {
+    let archived: Bool
+}
+
 nonisolated struct V2InboxDeliveryRequestDTO: Encodable, Sendable {
     let delivery: String
 }

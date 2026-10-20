@@ -58,5 +58,7 @@ struct ServerProtocolClassifierTests {
         #expect(ServerCapabilities.forProtocol(.v2).supportsSessionMessageDiff == false)
         #expect(ServerCapabilities.forProtocol(.v1).supportsSessionArchive == true)
         #expect(ServerCapabilities.forProtocol(.v2).supportsSessionArchive == false)
+        #expect(ServerCapabilities.forProtocol(.v2, v2SessionArchive: true).supportsSessionArchive == true)
+        #expect(ServerCapabilities.forProtocol(.v1, v2SessionArchive: false).supportsSessionArchive == true)
     }
 }
