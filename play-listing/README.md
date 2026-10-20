@@ -7,8 +7,8 @@ Upload kit for Play Console → **OpenCode Mobile — Unofficial**.
 | `icon-512.png` | High-res icon (512×512) |
 | `feature-1024x500.png` | Feature graphic |
 
-Phone screenshots (final): [`../test-screenshots/android_1_*.jpg`](../test-screenshots/)  
-App Store screenshots (final): [`../test-screenshots/ios_1_*.jpg`](../test-screenshots/)
+Play screenshots (final): [`../test-screenshots/android_*.jpg`](../test-screenshots/) (phone, 7-inch and 10-inch tablet)  
+App Store screenshots (final): [`../test-screenshots/ios_1_*.jpg` and `ipad_*.jpg`](../test-screenshots/)
 
 ## Store icon
 
