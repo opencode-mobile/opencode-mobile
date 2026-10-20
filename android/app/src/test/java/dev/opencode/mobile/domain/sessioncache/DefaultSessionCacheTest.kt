@@ -172,6 +172,34 @@ class DefaultSessionCacheTest {
         }
 
     @Test
+    fun purgeConnectionKeepsServersThatOnlyShareAUrlPrefix() =
+        runTest {
+            val store = InMemorySessionCacheStore()
+
+            fun cacheFor(connectionId: String) =
+                DefaultSessionCache(
+                    store = store,
+                    connectionIdProvider = { connectionId },
+                    scope = backgroundScope,
+                    json = json,
+                )
+            val removed = cacheFor("http://localhost:4096/|opencode")
+            val removedNoSlash = cacheFor("http://localhost:4096|other")
+            val otherPort = cacheFor("http://localhost:40960/|opencode")
+            val otherHost = cacheFor("http://localhost:4096.example/|opencode")
+            listOf(removed, removedNoSlash, otherPort, otherHost).forEach {
+                it.rememberSessions("/repo", listOf(Session(id = "s1", title = "One")))
+            }
+
+            removed.purgeConnection(profileId = "", serverBaseUrl = "http://localhost:4096/")
+
+            assertNull(removed.seedSessions("/repo"))
+            assertNull(removedNoSlash.seedSessions("/repo"))
+            assertEquals(1, otherPort.seedSessions("/repo")?.size)
+            assertEquals(1, otherHost.seedSessions("/repo")?.size)
+        }
+
+    @Test
     fun purgeWorktreeRemovesRowsKeyedByProfileId() =
         runTest {
             val cache =

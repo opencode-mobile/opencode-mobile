@@ -112,7 +112,7 @@ class InMemorySessionCacheStore : SessionCacheStore {
         selector: SessionCacheEvictSelector.Connection,
     ): Boolean =
         if (selector.matchByUrlPrefix) {
-            key.connectionId.startsWith(selector.connectionIdOrUrlPrefix, ignoreCase = true)
+            CacheUrlNormalizer.matchesConnectionIdPrefix(key.connectionId, selector.connectionIdOrUrlPrefix)
         } else {
             key.connectionId.equals(selector.connectionIdOrUrlPrefix, ignoreCase = true)
         }
@@ -123,7 +123,7 @@ class InMemorySessionCacheStore : SessionCacheStore {
     ): Boolean {
         if (key.worktree != selector.worktree) return false
         return if (selector.matchByUrlPrefix) {
-            key.connectionId.startsWith(selector.connectionIdOrUrlPrefix, ignoreCase = true)
+            CacheUrlNormalizer.matchesConnectionIdPrefix(key.connectionId, selector.connectionIdOrUrlPrefix)
         } else {
             key.connectionId.equals(selector.connectionIdOrUrlPrefix, ignoreCase = true)
         }

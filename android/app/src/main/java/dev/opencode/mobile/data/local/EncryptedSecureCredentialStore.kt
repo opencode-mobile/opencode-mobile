@@ -32,6 +32,15 @@ class EncryptedSecureCredentialStore
         private fun preferences(): SharedPreferences? {
             cachedPreferences?.let { return it }
             if (openFailure != null) return null
+            // One open per process: concurrent first callers must not race a failure over a success.
+            synchronized(this) {
+                cachedPreferences?.let { return it }
+                if (openFailure != null) return null
+                return openPreferences()
+            }
+        }
+
+        private fun openPreferences(): SharedPreferences? {
             val built =
                 runCatching {
                     EncryptedSharedPreferences.create(
