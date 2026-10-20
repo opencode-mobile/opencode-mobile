@@ -11,6 +11,7 @@ import dev.opencode.mobile.domain.connection.ConnectionProfileCatalog
 import dev.opencode.mobile.domain.connection.ConnectionProfileIdentity
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.SecureCredentialStore
+import dev.opencode.mobile.domain.connection.SecureCredentialStoreException
 import dev.opencode.mobile.domain.connection.ServerProtocol
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -37,6 +38,7 @@ class DataStoreConnectionProfileStore
         override suspend fun listProfiles(): List<ConnectionProfile> = migratedCatalog().profiles.map { it.withPassword() }
 
         override suspend fun saveProfile(profile: ConnectionProfile) {
+            val previous = migratedCatalog()
             mutateCatalog { catalog -> catalog.save(profile) }
             val saved =
                 migratedCatalog().profiles.firstOrNull { stored ->
@@ -48,7 +50,13 @@ class DataStoreConnectionProfileStore
                             profile.username,
                         )
                 } ?: return
-            writePassword(saved, profile.password)
+            try {
+                writePassword(saved, profile.password)
+            } catch (error: SecureCredentialStoreException) {
+                // No password, no profile: put the catalog back the way it was.
+                mutateCatalog { previous }
+                throw error
+            }
         }
 
         override suspend fun applyProfile(id: String) {

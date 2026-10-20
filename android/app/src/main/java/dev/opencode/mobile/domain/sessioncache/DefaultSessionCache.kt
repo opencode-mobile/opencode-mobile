@@ -160,6 +160,25 @@ class DefaultSessionCache(
         }.onFailure { logSessionCacheIo("purge worktree", it) }
     }
 
+    override suspend fun purgeConnection(
+        profileId: String,
+        serverBaseUrl: String,
+    ) {
+        dropActivityMemory(null)
+        if (profileId.isNotBlank()) {
+            runCatching { store.evict(SessionCacheEvictSelector.Connection(connectionIdOrUrlPrefix = profileId)) }
+                .onFailure { logSessionCacheIo("purge connection by profile", it) }
+        }
+        runCatching {
+            store.evict(
+                SessionCacheEvictSelector.Connection(
+                    connectionIdOrUrlPrefix = CacheUrlNormalizer.connectionIdPrefix(serverBaseUrl),
+                    matchByUrlPrefix = true,
+                ),
+            )
+        }.onFailure { logSessionCacheIo("purge connection", it) }
+    }
+
     override suspend fun clearAll() {
         dropActivityMemory(null)
         runCatching { store.evict(SessionCacheEvictSelector.All) }

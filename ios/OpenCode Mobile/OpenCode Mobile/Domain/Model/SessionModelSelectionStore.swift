@@ -44,6 +44,8 @@ protocol SessionModelSelectionStore: Sendable {
         selection: SessionModelSelection
     ) async
     func clearAll() async
+    /// Every session choice and new-session preference of one connection (profile removal).
+    func clearConnection(connectionIdentity: ModelSelectionConnectionIdentity) async
     /// Synchronous reads for a Session Chat's first frame; `nil` when the store only loads asynchronously.
     func peekSession(
         connectionIdentity: ModelSelectionConnectionIdentity,
@@ -57,6 +59,8 @@ protocol SessionModelSelectionStore: Sendable {
 }
 
 extension SessionModelSelectionStore {
+    func clearConnection(connectionIdentity _: ModelSelectionConnectionIdentity) async {}
+
     func peekSession(
         connectionIdentity: ModelSelectionConnectionIdentity,
         worktree: String,
@@ -177,6 +181,14 @@ struct UserDefaultsSessionModelSelectionStore: SessionModelSelectionStore, @unch
         for key in keys {
             defaults.removeObject(forKey: key)
         }
+    }
+
+    func clearConnection(connectionIdentity: ModelSelectionConnectionIdentity) async {
+        let identityMarker = "|\(identityKey(connectionIdentity))|"
+        let legacyPrefix = prefix + normalizedBaseURL(connectionIdentity.serverBaseURL)
+        defaults.dictionaryRepresentation().keys
+            .filter { ($0.hasPrefix(Self.versionPrefix) && $0.contains(identityMarker)) || $0.hasPrefix(legacyPrefix) }
+            .forEach(defaults.removeObject)
     }
 
     func deleteSessionEntries(

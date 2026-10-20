@@ -75,7 +75,7 @@ enum StoreScreenshotSeeder {
             var saved = await store.activeProfile() ?? profile
             saved.password = profile.password
             if !saved.id.isEmpty {
-                Container.shared.secureCredentialStore().writePassword(
+                try Container.shared.secureCredentialStore().writePassword(
                     serverBaseURL: saved.id,
                     password: saved.password
                 )

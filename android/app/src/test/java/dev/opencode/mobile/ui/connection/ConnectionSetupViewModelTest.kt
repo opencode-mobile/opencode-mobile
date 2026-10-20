@@ -8,6 +8,7 @@ import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.connection.PairingCodeRedeemException
 import dev.opencode.mobile.domain.connection.PairingCodeRedeeming
 import dev.opencode.mobile.domain.connection.SecureCredentialStore
+import dev.opencode.mobile.domain.connection.SecureCredentialStoreException
 import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.connection.testConnectionSessionCoordinator
 import dev.opencode.mobile.domain.event.FakeForegroundEventStream
@@ -628,6 +629,23 @@ class ConnectionSetupViewModelTest {
             assertNull(state.snackbar)
             assertTrue(probed.isEmpty())
             assertTrue(redeem.calls.isEmpty())
+        }
+
+    @Test
+    fun submit_whenTheSecureStoreRefusesThePassword_showsTheErrorAndDoesNotSave() =
+        runTest(dispatcher) {
+            val store = RecordingConnectionProfileStore().apply { failWithSecureStoreError = true }
+            val viewModel = viewModel(store = store, probe = ConnectionProbing { ServerProtocol.V2 })
+            viewModel.configure(initialProfile = null, mode = ConnectionSetupMode.Add)
+            viewModel.onBaseUrlChanged("http://192.168.0.5:4096/")
+            viewModel.onPasswordChanged("secret")
+            var saved = false
+            viewModel.submit { saved = true }
+            advanceUntilIdle()
+            assertFalse(saved)
+            assertTrue(store.saved.isEmpty())
+            assertEquals(ConnectionSetupState.Idle, viewModel.uiState.value.state)
+            assertEquals(SecureCredentialStoreException.USER_MESSAGE, viewModel.uiState.value.snackbar?.text)
         }
 
     @Test
@@ -1306,10 +1324,12 @@ class ConnectionSetupViewModelTest {
 
 private class RecordingConnectionProfileStore : ConnectionProfileStore {
     val saved = mutableListOf<ConnectionProfile>()
+    var failWithSecureStoreError = false
 
     override suspend fun activeProfile(): ConnectionProfile? = saved.lastOrNull()
 
     override suspend fun saveProfile(profile: ConnectionProfile) {
+        if (failWithSecureStoreError) throw SecureCredentialStoreException("keystore unavailable")
         saved += profile
     }
 

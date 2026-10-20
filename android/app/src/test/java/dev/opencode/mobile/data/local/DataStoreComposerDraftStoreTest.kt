@@ -116,6 +116,21 @@ class DataStoreComposerDraftStoreTest {
             assertEquals(listOf(file), store.load(identity("alice"), "/repo", "ses-1")?.fileMentions)
         }
 
+    @Test
+    fun clearConnection_removesOnlyThatConnection() =
+        runTest {
+            val store = store(backgroundScope)
+            val alice = identity("alice")
+            val bob = identity("bob")
+            store.save(alice, "/repo", "ses-1", draft("a", timestamp = 2_000))
+            store.save(bob, "/repo", "ses-2", draft("b", timestamp = 2_000))
+
+            store.clearConnection(alice)
+
+            assertNull(store.load(alice, "/repo", "ses-1"))
+            assertEquals("b", store.load(bob, "/repo", "ses-2")?.text)
+        }
+
     private fun store(scope: CoroutineScope) = DataStoreComposerDraftStore(dataStore(scope), Json { ignoreUnknownKeys = true })
 
     private fun dataStore(scope: CoroutineScope) =

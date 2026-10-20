@@ -80,6 +80,20 @@ class DataStoreComposerDraftStore
             }
         }
 
+        override suspend fun clearConnection(connectionIdentity: ModelSelectionConnectionIdentity) {
+            val identityMarker = "|${identityKey(connectionIdentity)}|"
+            dataStore.edit { prefs ->
+                prefs
+                    .asMap()
+                    .keys
+                    .filter { key -> key.name.startsWith(VERSION_PREFIX) && key.name.contains(identityMarker) }
+                    .forEach { key ->
+                        @Suppress("UNCHECKED_CAST")
+                        prefs.remove(key as Preferences.Key<String>)
+                    }
+            }
+        }
+
         override suspend fun clearAll() {
             dataStore.edit { prefs ->
                 prefs.clear()

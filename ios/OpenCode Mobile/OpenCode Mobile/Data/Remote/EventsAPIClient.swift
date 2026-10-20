@@ -8,7 +8,7 @@ nonisolated final class EventsAPIClient: @unchecked Sendable {
         configuration.waitsForConnectivity = false
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
         configuration.urlCache = nil
-        return URLSession(configuration: configuration)
+        return URLSession(configuration: configuration, delegate: RedirectPolicyDelegate.shared, delegateQueue: nil)
     }
 
     private let connectionProvider: @Sendable () -> ServerConnection?

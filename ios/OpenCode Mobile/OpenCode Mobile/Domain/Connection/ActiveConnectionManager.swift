@@ -77,7 +77,19 @@ final class ActiveConnectionManager: @unchecked Sendable {
     private func install(_ profile: ConnectionProfile, serverProtocol: ServerProtocol? = nil) {
         var stamped = profile
         stamped.serverProtocol = serverProtocol ?? profile.serverProtocol
-        let connection = ServerConnection(profile: stamped, serverProtocol: stamped.serverProtocol)
+        guard let connection = ServerConnection(profile: stamped, serverProtocol: stamped.serverProtocol) else {
+            // An unparseable address gets no connection at all. Falling back to a default
+            // host would send this profile's password somewhere the user never chose.
+            DiagnosticLog.warning(.connection, "profile baseURL does not parse; not connecting")
+            lock.lock()
+            _profile = stamped
+            _connection = nil
+            _serverVersion = nil
+            probeFailed = false
+            lock.unlock()
+            invalidateInFlightProbe()
+            return
+        }
         lock.lock()
         // The version belongs to one server: switching profiles, or editing this profile to
         // point at another address or user, must not report the previous machine's version.
@@ -328,6 +340,8 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
     private let secureCredentialStore: SecureCredentialStore
     private let sessionModelSelectionStore: SessionModelSelectionStore
     private let composerDraftStore: ComposerDraftStore
+    private let sessionCache: @Sendable () -> (any SessionCache)?
+    private let feedbackRefreshTokenStore: (any FeedbackRefreshTokenStore)?
     private let eventStream: @Sendable () -> (any ForegroundEventStream)?
     private let syncCoordinator: @Sendable () -> (any SyncCoordinator)?
     private let projectionCaches: @Sendable () -> (any ProjectionCaching)?
@@ -353,6 +367,8 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
         secureCredentialStore: SecureCredentialStore = KeychainCredentialStore(),
         sessionModelSelectionStore: SessionModelSelectionStore = UserDefaultsSessionModelSelectionStore(),
         composerDraftStore: ComposerDraftStore = UserDefaultsComposerDraftStore(),
+        sessionCache: @escaping @Sendable () -> (any SessionCache)? = { nil },
+        feedbackRefreshTokenStore: (any FeedbackRefreshTokenStore)? = nil,
         eventStream: @escaping @Sendable () -> (any ForegroundEventStream)? = { nil },
         syncCoordinator: @escaping @Sendable () -> (any SyncCoordinator)? = { nil },
         projectionCaches: @escaping @Sendable () -> (any ProjectionCaching)? = { nil },
@@ -363,6 +379,8 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
     ) {
         self.activeConnectionManager = activeConnectionManager
         self.connectionProfileStore = connectionProfileStore
+        self.sessionCache = sessionCache
+        self.feedbackRefreshTokenStore = feedbackRefreshTokenStore
         self.secureCredentialStore = secureCredentialStore
         self.sessionModelSelectionStore = sessionModelSelectionStore
         self.composerDraftStore = composerDraftStore
@@ -412,9 +430,22 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
         }
     }
 
+    /// Forgets the profile and everything stored under it: password, transcripts and
+    /// activity in the session cache, composer drafts, and model selections. Re-adding the
+    /// same server later starts clean instead of resurrecting the old state.
     func removeProfile(id: String) async {
         await profileChangeGate.run {
+            let removed = await self.connectionProfileStore.listProfiles().first { $0.id == id }
             await self.connectionProfileStore.removeProfile(id: id)
+            if let removed {
+                let identity = ModelSelectionConnectionIdentity(
+                    serverBaseURL: removed.baseURL,
+                    username: removed.username
+                )
+                await self.sessionCache()?.purgeConnection(profileID: removed.id, serverBaseURL: removed.baseURL)
+                await self.sessionModelSelectionStore.clearConnection(connectionIdentity: identity)
+                self.composerDraftStore.clearConnection(connectionIdentity: identity)
+            }
             if await self.connectionProfileStore.activeProfile() == nil {
                 await self.applyActiveProfileChange(notify: .cleared)
             } else {
@@ -429,6 +460,7 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
             await self.connectionProfileStore.clearAll()
             await self.sessionModelSelectionStore.clearAll()
             self.composerDraftStore.clearAll()
+            self.feedbackRefreshTokenStore?.delete()
             await self.applyActiveProfileChange(notify: .cleared)
         }
     }
@@ -545,7 +577,7 @@ struct ConnectionProbeService: ConnectionProbing, Sendable {
         configuration.waitsForConnectivity = false
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
         configuration.urlCache = nil
-        return URLSession(configuration: configuration)
+        return URLSession(configuration: configuration, delegate: RedirectPolicyDelegate.shared, delegateQueue: nil)
     }()
 
     private let adapter = ProjectDomainAdapter()

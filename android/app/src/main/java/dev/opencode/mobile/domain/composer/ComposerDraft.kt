@@ -36,5 +36,8 @@ interface ComposerDraftStore {
         sessionId: String,
     )
 
+    /** Every draft of one connection (profile removal). */
+    suspend fun clearConnection(connectionIdentity: ModelSelectionConnectionIdentity) = Unit
+
     suspend fun clearAll()
 }

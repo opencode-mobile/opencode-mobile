@@ -1,5 +1,8 @@
 package dev.opencode.mobile.domain.connection
 
+import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import dev.opencode.mobile.data.local.DataStoreComposerDraftStore
+import dev.opencode.mobile.data.local.DataStoreSessionModelSelectionStore
 import dev.opencode.mobile.data.remote.EventsApi
 import dev.opencode.mobile.domain.composer.ComposerDraft
 import dev.opencode.mobile.domain.composer.InMemoryComposerDraftStore
@@ -17,6 +20,13 @@ import dev.opencode.mobile.domain.model.ModelSelectionConnectionIdentity
 import dev.opencode.mobile.domain.model.SessionModelSelection
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
 import dev.opencode.mobile.domain.recovery.RecordingForegroundEventStream
+import dev.opencode.mobile.domain.sessioncache.DefaultSessionCache
+import dev.opencode.mobile.domain.sessioncache.InMemorySessionCacheStore
+import dev.opencode.mobile.domain.sessioncache.SessionCacheCommitMeta
+import dev.opencode.mobile.domain.sessioncache.SessionCacheEvictSelector
+import dev.opencode.mobile.domain.sessioncache.SessionCacheKey
+import dev.opencode.mobile.domain.sessioncache.SessionCacheKind
+import dev.opencode.mobile.domain.sessioncache.SessionCacheValue
 import dev.opencode.mobile.domain.sync.NoOpSyncCoordinator
 import dev.opencode.mobile.domain.sync.SyncCoordinator
 import dev.opencode.mobile.network.ActiveConnectionManager
@@ -29,6 +39,7 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
@@ -43,6 +54,7 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.nio.file.Files
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -99,6 +111,89 @@ class ConnectionSessionCoordinatorTest {
                     "ses-1",
                 ),
             )
+        }
+
+    @Test
+    fun removeProfile_purgesCacheDraftsAndModelSelectionsOfThatServerOnly() =
+        runTest {
+            val json = Json { ignoreUnknownKeys = true }
+            val modelStore = DataStoreSessionModelSelectionStore(preferencesDataStore(backgroundScope, "model"), json)
+            val draftStore = DataStoreComposerDraftStore(preferencesDataStore(backgroundScope, "draft"), json)
+            val cacheStore = InMemorySessionCacheStore()
+            val connectionProfileStore = CatalogConnectionProfileStore()
+            val activeConnectionManager = ActiveConnectionManager(connectionProfileStore)
+            val cache =
+                DefaultSessionCache(
+                    store = cacheStore,
+                    connectionIdProvider = { activeConnectionManager.currentProfile()?.id },
+                    scope = backgroundScope,
+                    json = json,
+                )
+            val coordinator =
+                testConnectionSessionCoordinator(
+                    activeConnectionManager = activeConnectionManager,
+                    connectionProfileStore = connectionProfileStore,
+                    secureCredentialStore = FakeSecureCredentialStore(),
+                    sessionModelSelectionStore = modelStore,
+                    composerDraftStore = draftStore,
+                    httpClient = OpencodeHttpClient(json, activeConnectionManager),
+                    sseHttpClient = OpencodeSseHttpClient(json, activeConnectionManager),
+                    sessionCache = cache,
+                )
+            coordinator.saveProfile(ConnectionProfile(baseUrl = "http://10.0.0.1:4096/", username = "opencode", password = "a", name = "A"))
+            coordinator.saveProfile(ConnectionProfile(baseUrl = "http://10.0.0.2:4096/", username = "opencode", password = "b", name = "B"))
+            val a = connectionProfileStore.listProfiles().first { it.name == "A" }
+            val b = connectionProfileStore.listProfiles().first { it.name == "B" }
+            val identityA = ModelSelectionConnectionIdentity(a.baseUrl, a.username)
+            val identityB = ModelSelectionConnectionIdentity(b.baseUrl, b.username)
+            val selection = SessionModelSelection(providerId = "openai", modelId = "gpt-4", savedAtEpochMs = 2_000)
+            modelStore.saveSession(identityA, "/repo", "ses-1", selection)
+            modelStore.saveNewSessionPreference(identityA, "/repo", selection)
+            modelStore.saveSession(identityB, "/repo", "ses-2", selection)
+            draftStore.save(identityA, "/repo", "ses-1", ComposerDraft(text = "a", savedAtEpochMs = 2_000))
+            draftStore.save(identityB, "/repo", "ses-2", ComposerDraft(text = "b", savedAtEpochMs = 2_000))
+            listOf(a.id to "/repo", a.id to "/other", b.id to "/repo").forEach { (connectionId, worktree) ->
+                cacheStore.commit(
+                    SessionCacheKey(connectionId = connectionId, worktree = worktree, kind = SessionCacheKind.SessionList),
+                    SessionCacheValue(payloadJson = "[]", schemaVersion = 1),
+                    SessionCacheCommitMeta(syncedAtEpochMs = 1),
+                )
+            }
+
+            coordinator.removeProfile(a.id)
+
+            assertNull(modelStore.loadSession(identityA, "/repo", "ses-1"))
+            assertNull(modelStore.loadNewSessionPreference(identityA, "/repo"))
+            assertEquals("gpt-4", modelStore.loadSession(identityB, "/repo", "ses-2")?.modelId)
+            assertNull(draftStore.load(identityA, "/repo", "ses-1"))
+            assertEquals("b", draftStore.load(identityB, "/repo", "ses-2")?.text)
+            assertEquals(0L, cacheStore.report(SessionCacheEvictSelector.Connection(a.id)).entryCount)
+            assertEquals(1L, cacheStore.report(SessionCacheEvictSelector.Connection(b.id)).entryCount)
+            assertEquals(listOf("B"), connectionProfileStore.listProfiles().map { it.name })
+        }
+
+    @Test
+    fun clearConnectionData_deletesTheFeedbackToken() =
+        runTest {
+            val json = Json { ignoreUnknownKeys = true }
+            val connectionProfileStore = FakeConnectionProfileStore()
+            val activeConnectionManager = ActiveConnectionManager(connectionProfileStore)
+            val tokens = InMemoryFeedbackIdentityStore().apply { writeRefreshToken("refresh-token") }
+            val coordinator =
+                testConnectionSessionCoordinator(
+                    activeConnectionManager = activeConnectionManager,
+                    connectionProfileStore = connectionProfileStore,
+                    secureCredentialStore = FakeSecureCredentialStore(),
+                    sessionModelSelectionStore = FakeSessionModelSelectionStore(),
+                    composerDraftStore = InMemoryComposerDraftStore(),
+                    httpClient = OpencodeHttpClient(json, activeConnectionManager),
+                    sseHttpClient = OpencodeSseHttpClient(json, activeConnectionManager),
+                    feedbackIdentityStore = tokens,
+                )
+
+            coordinator.clearConnectionData()
+
+            assertNull(tokens.readRefreshToken())
         }
 
     @Test
@@ -576,3 +671,11 @@ private class FakeSecureCredentialStore : SecureCredentialStore {
 
     override fun clearAll() = Unit
 }
+
+private fun preferencesDataStore(
+    scope: CoroutineScope,
+    name: String,
+) = PreferenceDataStoreFactory.create(
+    scope = scope,
+    produceFile = { Files.createTempDirectory("coordinator-$name").resolve("preferences.preferences_pb").toFile() },
+)

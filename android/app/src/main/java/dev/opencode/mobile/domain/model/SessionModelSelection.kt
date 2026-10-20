@@ -38,6 +38,9 @@ interface SessionModelSelectionStore {
         sessionId: String,
     )
 
+    /** Every session choice and new-session preference of one connection (profile removal). */
+    suspend fun clearConnection(connectionIdentity: ModelSelectionConnectionIdentity) = Unit
+
     suspend fun loadNewSessionPreference(
         connectionIdentity: ModelSelectionConnectionIdentity,
         worktree: String,

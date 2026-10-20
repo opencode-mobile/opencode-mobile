@@ -131,9 +131,9 @@ enum ServerAddressProbe {
         let collected: [(String, Answer)] = await withTaskGroup(of: (String, Answer).self) { group in
             for url in unique {
                 group.addTask {
-                    let connection = ServerConnection(
+                    guard let connection = ServerConnection(
                         profile: ConnectionProfile(baseURL: url, username: username, password: "")
-                    )
+                    ) else { return (url, .silent) }
                     do {
                         return (url, .open(try await probing.probe(connection: connection)))
                     } catch let error as ServerProbeError where error.probeStatus == .authFailed {
@@ -173,9 +173,11 @@ enum ServerAddressProbe {
         password: String,
         probing: any ConnectionProbing
     ) async -> Result<ServerProtocol, Error> {
-        let connection = ServerConnection(
+        guard let connection = ServerConnection(
             profile: ConnectionProfile(baseURL: url, username: username, password: password)
-        )
+        ) else {
+            return .failure(ServerProbeError.transport("Invalid server address"))
+        }
         do {
             return .success(try await probing.probe(connection: connection))
         } catch {

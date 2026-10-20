@@ -595,7 +595,10 @@ final class ConnectionSetupViewModel {
         }
         password = token
         do {
-            let detected = try await connectionProbeService.probe(connection: draftConnection(baseURL: winner))
+            guard let connection = draftConnection(baseURL: winner) else {
+                throw ServerProbeError.transport("Invalid server address")
+            }
+            let detected = try await connectionProbeService.probe(connection: connection)
             addressRecovery = nil
             detectedProtocol = detected
             logConnectionAction(
@@ -892,7 +895,7 @@ final class ConnectionSetupViewModel {
         )
     }
 
-    private func draftConnection(baseURL: String? = nil) -> ServerConnection {
+    private func draftConnection(baseURL: String? = nil) -> ServerConnection? {
         var profile = draftProfile()
         if let baseURL {
             profile.baseURL = baseURL

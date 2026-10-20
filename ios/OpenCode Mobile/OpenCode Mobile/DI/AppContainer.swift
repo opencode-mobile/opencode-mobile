@@ -52,6 +52,8 @@ extension Container {
                 secureCredentialStore: self.secureCredentialStore(),
                 sessionModelSelectionStore: self.sessionModelSelectionStore(),
                 composerDraftStore: self.composerDraftStore(),
+                sessionCache: { Container.shared.sessionCache() },
+                feedbackRefreshTokenStore: KeychainFeedbackRefreshTokenStore(),
                 eventStream: { Container.shared.foregroundEventStream() },
                 syncCoordinator: { Container.shared.syncCoordinator() },
                 projectionCaches: { Container.shared.projectionCaches() },

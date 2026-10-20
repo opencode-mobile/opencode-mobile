@@ -153,6 +153,18 @@ nonisolated final class DefaultSessionCache: SessionCache, @unchecked Sendable {
         )
     }
 
+    func purgeConnection(profileID: String, serverBaseURL: String) async {
+        if !profileID.isEmpty {
+            await store.evict(.connection(connectionIdOrUrlPrefix: profileID, matchByUrlPrefix: false))
+        }
+        await store.evict(
+            .connection(
+                connectionIdOrUrlPrefix: CacheUrlNormalizer.connectionIdPrefix(baseURL: serverBaseURL),
+                matchByUrlPrefix: true
+            )
+        )
+    }
+
     func clearAll() async {
         await store.evict(.all)
     }

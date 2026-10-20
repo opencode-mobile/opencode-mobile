@@ -18,6 +18,7 @@ import dev.opencode.mobile.domain.connection.PairingQRError
 import dev.opencode.mobile.domain.connection.PairingQRParseResult
 import dev.opencode.mobile.domain.connection.PairingQRPayload
 import dev.opencode.mobile.domain.connection.ProbeStatus
+import dev.opencode.mobile.domain.connection.SecureCredentialStoreException
 import dev.opencode.mobile.domain.connection.ServerAddressProbe
 import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.connection.toProbeStatus
@@ -964,17 +965,19 @@ class ConnectionSetupViewModel
                     _uiState.value = _uiState.value.copy(state = ConnectionSetupState.Idle)
                     onSaved()
                 } catch (_: DuplicateConnectionProfileException) {
-                    _uiState.value =
-                        _uiState.value.copy(
-                            state = ConnectionSetupState.Idle,
-                            snackbar =
-                                OpenCodeSnackbarMessage(
-                                    text = "A server with this host and username is already saved",
-                                    variant = OpenCodeSnackbarVariant.Error,
-                                ),
-                        )
+                    showSaveFailure("A server with this host and username is already saved")
+                } catch (_: SecureCredentialStoreException) {
+                    showSaveFailure(SecureCredentialStoreException.USER_MESSAGE)
                 }
             }
+        }
+
+        private fun showSaveFailure(text: String) {
+            _uiState.value =
+                _uiState.value.copy(
+                    state = ConnectionSetupState.Idle,
+                    snackbar = OpenCodeSnackbarMessage(text = text, variant = OpenCodeSnackbarVariant.Error),
+                )
         }
 
         private suspend fun persistAfterProbe(onSaved: () -> Unit) {
@@ -989,15 +992,9 @@ class ConnectionSetupViewModel
                 _uiState.value = _uiState.value.copy(state = ConnectionSetupState.Idle)
                 onSaved()
             } catch (_: DuplicateConnectionProfileException) {
-                _uiState.value =
-                    _uiState.value.copy(
-                        state = ConnectionSetupState.Idle,
-                        snackbar =
-                            OpenCodeSnackbarMessage(
-                                text = "A server with this host and username is already saved",
-                                variant = OpenCodeSnackbarVariant.Error,
-                            ),
-                    )
+                showSaveFailure("A server with this host and username is already saved")
+            } catch (_: SecureCredentialStoreException) {
+                showSaveFailure(SecureCredentialStoreException.USER_MESSAGE)
             }
         }
 

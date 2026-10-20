@@ -15,14 +15,18 @@ struct KeychainCredentialStore: SecureCredentialStore, Sendable {
         return String(data: data, encoding: .utf8)
     }
 
-    func writePassword(serverBaseURL: String, password: String) {
+    func writePassword(serverBaseURL: String, password: String) throws {
         let account = account(for: serverBaseURL)
         deletePassword(serverBaseURL: serverBaseURL)
 
         var query = baseQuery(account: account)
         query[kSecValueData as String] = Data(password.utf8)
         query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-        SecItemAdd(query as CFDictionary, nil)
+        let status = SecItemAdd(query as CFDictionary, nil)
+        guard status == errSecSuccess else {
+            DiagnosticLog.warning(.connection, "keychain write failed status=\(status)")
+            throw SecureCredentialStoreError.writeFailed(status: status)
+        }
     }
 
     func deletePassword(serverBaseURL: String) {

@@ -1,9 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Nothing that belongs to a server leaves the device through cloud backup or
+  device-to-device transfer: the credential stores, the Connection Profiles and
+  per-session state in DataStore, the Room session cache (transcripts), and the debug
+  logs. Only display preferences move with the user.
+-->
 <data-extraction-rules>
     <cloud-backup>
         <exclude domain="sharedpref" path="secure_connection_credentials.xml" />
+        <exclude domain="sharedpref" path="secure_feedback_identity.xml" />
+        <exclude domain="database" path="opencode_mobile.db" />
+        <exclude domain="database" path="opencode_mobile.db-wal" />
+        <exclude domain="database" path="opencode_mobile.db-shm" />
+        <exclude domain="file" path="datastore/" />
+        <exclude domain="file" path="debug/" />
     </cloud-backup>
     <device-transfer>
         <exclude domain="sharedpref" path="secure_connection_credentials.xml" />
+        <exclude domain="sharedpref" path="secure_feedback_identity.xml" />
+        <exclude domain="database" path="opencode_mobile.db" />
+        <exclude domain="database" path="opencode_mobile.db-wal" />
+        <exclude domain="database" path="opencode_mobile.db-shm" />
+        <exclude domain="file" path="datastore/" />
+        <exclude domain="file" path="debug/" />
     </device-transfer>
 </data-extraction-rules>

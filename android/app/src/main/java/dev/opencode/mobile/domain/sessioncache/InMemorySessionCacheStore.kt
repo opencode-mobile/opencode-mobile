@@ -80,6 +80,10 @@ class InMemorySessionCacheStore : SessionCacheStore {
                             }.keys
                     keys.forEach { rows.remove(it) }
                 }
+                is SessionCacheEvictSelector.Connection -> {
+                    val keys = rows.filterValues { row -> matchesConnection(row.key, selector) }.keys
+                    keys.forEach { rows.remove(it) }
+                }
             }
         }
     }
@@ -91,6 +95,8 @@ class InMemorySessionCacheStore : SessionCacheStore {
                     SessionCacheEvictSelector.All -> rows.values
                     is SessionCacheEvictSelector.Worktree ->
                         rows.values.filter { matchesWorktree(it.key, selector) }
+                    is SessionCacheEvictSelector.Connection ->
+                        rows.values.filter { matchesConnection(it.key, selector) }
                 }
             SessionCacheReport(
                 totalBytes =
@@ -99,6 +105,16 @@ class InMemorySessionCacheStore : SessionCacheStore {
                     },
                 entryCount = selected.size.toLong(),
             )
+        }
+
+    private fun matchesConnection(
+        key: SessionCacheKey,
+        selector: SessionCacheEvictSelector.Connection,
+    ): Boolean =
+        if (selector.matchByUrlPrefix) {
+            key.connectionId.startsWith(selector.connectionIdOrUrlPrefix, ignoreCase = true)
+        } else {
+            key.connectionId.equals(selector.connectionIdOrUrlPrefix, ignoreCase = true)
         }
 
     private fun matchesWorktree(

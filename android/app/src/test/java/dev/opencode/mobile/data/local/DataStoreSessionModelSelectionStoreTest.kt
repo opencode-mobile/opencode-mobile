@@ -97,6 +97,24 @@ class DataStoreSessionModelSelectionStoreTest {
             assertNull(store.loadNewSessionPreference(identity, "/repo"))
         }
 
+    @Test
+    fun clearConnection_removesOnlyThatConnection() =
+        runTest {
+            val store = store(backgroundScope)
+            val alice = identity("alice")
+            val bob = identity("bob")
+            val selection = selection("gpt-4", timestamp = 2_000)
+            store.saveSession(alice, "/repo", "ses-1", selection)
+            store.saveNewSessionPreference(alice, "/repo", selection)
+            store.saveSession(bob, "/repo", "ses-2", selection)
+
+            store.clearConnection(alice)
+
+            assertNull(store.loadSession(alice, "/repo", "ses-1"))
+            assertNull(store.loadNewSessionPreference(alice, "/repo"))
+            assertEquals("gpt-4", store.loadSession(bob, "/repo", "ses-2")?.modelId)
+        }
+
     private fun store(scope: CoroutineScope) = DataStoreSessionModelSelectionStore(dataStore(scope), Json { ignoreUnknownKeys = true })
 
     private fun dataStore(scope: CoroutineScope) =

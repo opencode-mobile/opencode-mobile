@@ -102,6 +102,23 @@ class DataStoreSessionModelSelectionStore
             }
         }
 
+        override suspend fun clearConnection(connectionIdentity: ModelSelectionConnectionIdentity) {
+            val identityMarker = "|${identityKey(connectionIdentity)}|"
+            val legacyPrefix = normalizeBaseUrl(connectionIdentity.serverBaseUrl)
+            dataStore.edit { prefs ->
+                prefs
+                    .asMap()
+                    .keys
+                    .filter { key ->
+                        (key.name.startsWith(VERSION_PREFIX) && key.name.contains(identityMarker)) ||
+                            key.name.startsWith(legacyPrefix)
+                    }.forEach { key ->
+                        @Suppress("UNCHECKED_CAST")
+                        prefs.remove(key as Preferences.Key<String>)
+                    }
+            }
+        }
+
         override suspend fun loadNewSessionPreference(
             connectionIdentity: ModelSelectionConnectionIdentity,
             worktree: String,

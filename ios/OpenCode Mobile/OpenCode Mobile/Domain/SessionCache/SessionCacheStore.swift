@@ -68,6 +68,8 @@ nonisolated enum SessionCacheRetainReason: Sendable {
 nonisolated enum SessionCacheEvictSelector: Sendable {
     case all
     case worktree(connectionIdOrUrlPrefix: String, worktree: String, matchByUrlPrefix: Bool)
+    /// Every worktree of one connection: by profile id, or by `normalizedBaseURL|` prefix.
+    case connection(connectionIdOrUrlPrefix: String, matchByUrlPrefix: Bool)
 }
 
 nonisolated struct SessionCacheReport: Sendable, Equatable {

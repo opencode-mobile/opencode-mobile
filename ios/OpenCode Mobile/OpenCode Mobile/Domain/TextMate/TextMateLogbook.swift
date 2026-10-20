@@ -323,19 +323,11 @@ nonisolated final class TextMateLogbook: TextMateLogbookRecording, @unchecked Se
     }
 
     private static func defaultFileURL() -> URL? {
-        guard let applicationSupport =
-            try? FileManager.default.url(
-                for: .applicationSupportDirectory,
-                in: .userDomainMask,
-                appropriateFor: nil,
-                create: true
-            )
-        else {
+        // Backup-excluded and file-protected (see ProtectedStorage).
+        guard let debugDirectory = try? ProtectedStorage.directory("Debug") else {
             return nil
         }
-        return applicationSupport
-            .appendingPathComponent("OpenCodeMobile", isDirectory: true)
-            .appendingPathComponent("Debug", isDirectory: true)
+        return debugDirectory
             .appendingPathComponent("textmate-logbook-v1.jsonl", isDirectory: false)
     }
 

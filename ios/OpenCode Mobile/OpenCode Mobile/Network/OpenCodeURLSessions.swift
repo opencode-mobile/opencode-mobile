@@ -34,6 +34,9 @@ enum OpenCodeURLSessions {
         configuration.timeoutIntervalForRequest = 15
         configuration.timeoutIntervalForResource = 60
         configuration.waitsForConnectivity = false
-        return URLSession(configuration: configuration)
+        // Authenticated responses never touch Library/Caches, and redirects go through RedirectPolicy.
+        configuration.urlCache = nil
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        return URLSession(configuration: configuration, delegate: RedirectPolicyDelegate.shared, delegateQueue: nil)
     }
 }
