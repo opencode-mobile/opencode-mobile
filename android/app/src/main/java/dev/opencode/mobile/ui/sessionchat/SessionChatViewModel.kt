@@ -1672,6 +1672,7 @@ class SessionChatViewModel
                     },
                 reviewChangesMessageId = reviewChangesState.messageId,
                 reviewChangesSummary = reviewChangesState.summary,
+                sessionParentId = infoState.parentId,
                 supportsSessionMessageDiff = activeConnectionManager.currentCapabilities().supportsSessionMessageDiff,
                 supportsSessionArchive = activeConnectionManager.currentCapabilities().supportsSessionArchive,
                 rename = infoState.rename,

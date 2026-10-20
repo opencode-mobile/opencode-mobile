@@ -67,7 +67,7 @@ nonisolated struct ProjectsAPIClient: Sendable {
         guard let connection = connectionProvider() else {
             throw ProjectsAPIError.noActiveConnection
         }
-        return try await data(for: connection.authorizedRequest(path: V2SessionArchiveContract.openAPIPath))
+        return try await data(for: connection.authorizedRequest(path: V2ServerContract.openAPIPath))
     }
 
     func getHealth() async throws -> HealthDTO {

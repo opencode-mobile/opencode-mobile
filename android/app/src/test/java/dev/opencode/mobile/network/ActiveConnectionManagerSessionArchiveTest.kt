@@ -5,6 +5,7 @@ import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.DetectedServer
 import dev.opencode.mobile.domain.connection.ServerProtocol
+import dev.opencode.mobile.domain.connection.V2ServerFeatures
 import dev.opencode.mobile.domain.project.ServerProbeError
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -27,6 +28,17 @@ class ActiveConnectionManagerSessionArchiveTest {
         }
 
     @Test
+    fun v2ServerDeclaringTurnDiff_enablesLastTurn() =
+        runTest {
+            val manager = connected(ArchiveProbing(ServerProtocol.V2, archive = { true }))
+
+            assertFalse(manager.currentCapabilities().supportsSessionMessageDiff)
+            manager.probeActive()
+
+            assertTrue(manager.currentCapabilities().supportsSessionMessageDiff)
+        }
+
+    @Test
     fun olderV2Server_keepsArchiveHidden() =
         runTest {
             val manager = connected(ArchiveProbing(ServerProtocol.V2, archive = { false }))
@@ -34,6 +46,7 @@ class ActiveConnectionManagerSessionArchiveTest {
             manager.probeActive()
 
             assertFalse(manager.currentCapabilities().supportsSessionArchive)
+            assertFalse(manager.currentCapabilities().supportsSessionMessageDiff)
         }
 
     @Test
@@ -127,9 +140,10 @@ private class ArchiveProbing(
 
     override suspend fun probeServer(connection: ServerConnection): DetectedServer = DetectedServer(protocol, version)
 
-    override suspend fun probeV2SessionArchive(connection: ServerConnection): Boolean {
+    override suspend fun probeV2Features(connection: ServerConnection): V2ServerFeatures {
         archiveProbes++
-        return archive(version)
+        val supported = archive(version)
+        return V2ServerFeatures(sessionArchive = supported, sessionTurnDiff = supported)
     }
 }
 

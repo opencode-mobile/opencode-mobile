@@ -845,6 +845,32 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun loadedChildSessionExposesParentWithoutNavigationParent() =
+        runTest(testDispatcher) {
+            val sessionRepository =
+                FakeSessionRepository(
+                    getSessionResult = Session(id = "ses-child", title = "Child", parentId = "ses-parent"),
+                )
+            val viewModel = createViewModel(repository = FakeMessageRepository(), sessionRepository = sessionRepository)
+
+            viewModel.bind("ses-child", "Child", "/repo")
+            advanceUntilIdle()
+
+            assertEquals("ses-parent", viewModel.uiState.value.sessionParentId)
+        }
+
+    @Test
+    fun rootSessionHasNoParent() =
+        runTest(testDispatcher) {
+            val viewModel = createViewModel(repository = FakeMessageRepository(), sessionRepository = FakeSessionRepository())
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertEquals(null, viewModel.uiState.value.sessionParentId)
+        }
+
+    @Test
     fun v2DoesNotLoadLastTurnReviewChangesSummary() =
         runTest(testDispatcher) {
             val sessionRepository =

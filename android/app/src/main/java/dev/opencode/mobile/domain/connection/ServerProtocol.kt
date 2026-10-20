@@ -24,8 +24,8 @@ enum class ServerProtocol(
  * Product capabilities derived from [ServerProtocol]. Screen Models read these
  * flags instead of branching on protocol themselves.
  *
- * v2 session archive depends on the server release, not the protocol: pass
- * [forProtocol]'s `v2SessionArchive` from the server's API contract probe.
+ * v2 session archive and per-turn diff depend on the server release, not the protocol:
+ * pass [forProtocol]'s `v2Features` from the server's API contract probe.
  */
 data class ServerCapabilities(
     val supportsSessionMessageDiff: Boolean,
@@ -37,7 +37,7 @@ data class ServerCapabilities(
     companion object {
         fun forProtocol(
             protocol: ServerProtocol,
-            v2SessionArchive: Boolean = false,
+            v2Features: V2ServerFeatures = V2ServerFeatures(),
         ): ServerCapabilities =
             when (protocol) {
                 ServerProtocol.V1 ->
@@ -49,8 +49,8 @@ data class ServerCapabilities(
                     )
                 ServerProtocol.V2 ->
                     ServerCapabilities(
-                        supportsSessionMessageDiff = false,
-                        supportsSessionArchive = v2SessionArchive,
+                        supportsSessionMessageDiff = v2Features.sessionTurnDiff,
+                        supportsSessionArchive = v2Features.sessionArchive,
                         supportsFollowUpDelivery = true,
                         supportsSessionViewed = true,
                     )

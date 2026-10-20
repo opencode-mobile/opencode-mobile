@@ -300,6 +300,33 @@ class SessionProtocolRepositoryTest {
             assertTrue(requests[0].url.encodedPath.endsWith("/api/session"))
             assertTrue(requests[0].requestBodyText().contains("\"directory\":\"/repo\""))
             assertTrue(requests[0].requestBodyText().contains("\"title\":\"Named\""))
+            assertFalse(requests[0].requestBodyText().contains("parentID"))
+        }
+
+    @Test
+    fun v2CreateSession_withParentSendsParentIdWithoutLocation() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respondJson(
+                        """{"data":{"id":"ses_child","title":"Child","parentID":"ses_parent","time":{"created":1,"updated":2},"location":{"directory":"/repo"}}}""",
+                    )
+                }
+            val repository =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V2),
+                )
+
+            val created = repository.createSession(parentId = "ses_parent", title = "Child", directory = "/repo")
+
+            assertEquals("ses_parent", created.parentId)
+            val body = requests.single().requestBodyText()
+            assertTrue(body.contains("\"parentID\":\"ses_parent\""))
+            assertFalse(body.contains("location"))
         }
 
     @Test
@@ -1153,13 +1180,13 @@ class SessionProtocolRepositoryTest {
         }
 
     @Test
-    fun v2GetSessionDiff_doesNotCallLegacyPath() =
+    fun v2GetSessionDiff_readsTurnFromUserMessage() =
         runTest {
             val requests = mutableListOf<HttpRequestData>()
             val client =
                 testClient { request ->
                     requests += request
-                    respondJson("[]")
+                    respondJson("""{"data":[{"file":"App.kt","patch":"@@","additions":2,"deletions":1,"status":"modified"}]}""")
                 }
             val repository =
                 DefaultSessionRepository(
@@ -1168,13 +1195,30 @@ class SessionProtocolRepositoryTest {
                     activeConnectionManager = manager(ServerProtocol.V2),
                 )
 
-            try {
-                repository.getSessionDiff("ses-1", "msg-1", "/repo")
-                org.junit.Assert.fail("expected session message diff to be unavailable on v2")
-            } catch (error: SessionError.Http) {
-                assertEquals(404, error.statusCode)
-            }
-            assertTrue(requests.isEmpty())
+            val files = repository.getSessionDiff("ses-1", "msg-1", "/repo")
+
+            assertEquals("App.kt", files.single().path)
+            assertEquals(2, files.single().additions)
+            val request = requests.single()
+            assertTrue(request.url.encodedPath.endsWith("/api/session/ses-1/diff"))
+            assertEquals("msg-1", request.url.parameters["from"])
+            assertEquals("12", request.url.parameters["context"])
+        }
+
+    @Test
+    fun v2GetSessionDiff_missingRouteIsHttp404() =
+        runTest {
+            val client = testClient { respond("", HttpStatusCode.NotFound) }
+            val repository =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V2),
+                )
+
+            val error = runCatching { repository.getSessionDiff("ses-1", "msg-1", "/repo") }.exceptionOrNull()
+
+            assertEquals(404, (error as SessionError.Http).statusCode)
         }
 
     @Test

@@ -29,7 +29,8 @@ struct ChangesView: View {
             initialSource: initialSource,
             repository: Container.shared.sessionRepository(),
             capabilitiesProvider: { Container.shared.activeConnectionManager().capabilities },
-            lastTurnReviewChangesStore: Container.shared.lastTurnReviewChangesStore()
+            lastTurnReviewChangesStore: Container.shared.lastTurnReviewChangesStore(),
+            foregroundEventStream: Container.shared.foregroundEventStream()
         ))
     }
 
@@ -63,6 +64,9 @@ struct ChangesView: View {
             )
             await viewModel.load()
             attemptDeepLinkIfNeeded()
+        }
+        .task {
+            await viewModel.observeSessionIdle()
         }
         .onChange(of: viewModel.state.phase) { _, _ in
             attemptDeepLinkIfNeeded()

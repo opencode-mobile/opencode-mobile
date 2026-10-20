@@ -9,8 +9,8 @@ fun interface ConnectionProbing {
     suspend fun probeServer(connection: ServerConnection): DetectedServer = DetectedServer(probe(connection))
 
     /**
-     * Whether a v2 server can archive sessions (opencode 2.1.0+). Throws when the
-     * server's API contract could not be read, so the caller can retry later.
+     * Release-dependent v2 features (opencode 2.1.0+). Throws when the server's API
+     * contract could not be read, so the caller can retry later.
      */
-    suspend fun probeV2SessionArchive(connection: ServerConnection): Boolean = false
+    suspend fun probeV2Features(connection: ServerConnection): V2ServerFeatures = V2ServerFeatures()
 }

@@ -223,6 +223,8 @@ data class SessionChatUiState(
     val questionErrorMessage: String? = null,
     val reviewChangesMessageId: String? = null,
     val reviewChangesSummary: ReviewChangesSummary? = null,
+    /** Parent of the loaded session; a child opened without a navigation parent still locks the composer. */
+    val sessionParentId: String? = null,
     val sessionBranchPill: SessionBranchPillUiState? = null,
     val supportsSessionMessageDiff: Boolean = true,
     val supportsSessionArchive: Boolean = true,
@@ -590,6 +592,8 @@ data class PendingSend(
 data class SessionInfoRegionState(
     val sessionId: String = "",
     val sessionTitle: String = "",
+    /** The loaded session's parent; set even when navigation did not say it is a child. */
+    val parentId: String? = null,
     val sessionStatusLabel: String? = null,
     val retryCard: SessionRetryCard? = null,
     val hasResolvedSessionStatus: Boolean = false,

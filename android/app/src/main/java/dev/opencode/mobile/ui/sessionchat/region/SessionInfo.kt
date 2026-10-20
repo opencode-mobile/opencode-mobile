@@ -22,6 +22,7 @@ import dev.opencode.mobile.ui.sessionchat.SessionInfoRegionState
 import dev.opencode.mobile.ui.sessionchat.SessionRenameUiState
 import dev.opencode.mobile.ui.sessionchat.toSessionConnectionStatus
 import dev.opencode.mobile.ui.sessionchat.withStatus
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
@@ -304,6 +305,7 @@ class SessionInfo(
         observationJob =
             scope.launch {
                 coroutineScope {
+                    launch { loadParent(sessionId, worktree) }
                     launch {
                         sessionStatusLiveStore.observeActivity(worktree).collect { snapshot ->
                             if (!isCurrentBinding(sessionId, worktree)) return@collect
@@ -377,6 +379,24 @@ class SessionInfo(
                     }
                 }
             }
+    }
+
+    /** Child lockout follows the session itself, so a child opened from a deep link or Home still locks. */
+    private suspend fun loadParent(
+        sessionId: String,
+        worktree: String,
+    ) {
+        val parentId =
+            try {
+                sessionRepository.getSession(sessionId, worktree).parentId
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Throwable) {
+                logD("session parent unavailable session=$sessionId error=${error.message}")
+                return
+            } ?: return
+        if (!isCurrentBinding(sessionId, worktree)) return
+        _state.update { it.copy(parentId = parentId) }
     }
 
     private fun applySessionUpdatedTitle(

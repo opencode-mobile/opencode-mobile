@@ -168,6 +168,21 @@ struct SessionProtocolRepositoryTests {
         #expect(createBody.contains(#""title":"Named""#))
         let location = try #require(jsonObject(createBody)?["location"] as? [String: Any])
         #expect(location["directory"] as? String == "/repo")
+        #expect(jsonObject(createBody)?["parentID"] == nil)
+    }
+
+    @Test func v2CreateSessionWithParentSendsParentIDWithoutLocation() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [
+            .json(sessionEnvelope(id: "ses_child", title: "Child")),
+        ])
+        let repository = makeSessionRepository(serverProtocol: .v2)
+
+        _ = try await repository.createSession(parentID: "ses_parent", title: "Child", directory: "/repo")
+
+        let createBody = try #require(ProtocolRoutingURLProtocol.bodies[0])
+        let body = try #require(jsonObject(createBody))
+        #expect(body["parentID"] as? String == "ses_parent")
+        #expect(body["location"] == nil)
     }
 
     @Test func v2CreateSessionAcceptsUntitledCreateResponse() async throws {
@@ -265,32 +280,32 @@ struct SessionProtocolRepositoryTests {
         }
     }
 
-    @Test func probeV2SessionArchiveReadsOpenAPIContract() async throws {
-        ProtocolRoutingURLProtocol.reset(responses: [.json(V2SessionArchiveContractTests.document(patchBody: V2SessionArchiveContractTests.v21PatchBody))])
+    @Test func probeV2FeaturesReadsOpenAPIContract() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [.json(V2ServerContractTests.document(patchBody: V2ServerContractTests.v21PatchBody))])
         let service = ConnectionProbeService(urlSession: makeURLSession())
 
-        let supported = try await service.probeV2SessionArchive(connection: try #require(makeManager(serverProtocol: .v2).connection))
+        let supported = try await service.probeV2Features(connection: try #require(makeManager(serverProtocol: .v2).connection)).sessionArchive
 
         #expect(supported)
         #expect(ProtocolRoutingURLProtocol.requests.first?.url?.path.hasSuffix("/openapi.json") == true)
     }
 
-    @Test func probeV2SessionArchiveOlderServerIsUnsupported() async throws {
-        ProtocolRoutingURLProtocol.reset(responses: [.json(V2SessionArchiveContractTests.document(patchBody: V2SessionArchiveContractTests.v20PatchBody))])
+    @Test func probeV2FeaturesOlderServerIsUnsupported() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [.json(V2ServerContractTests.document(patchBody: V2ServerContractTests.v20PatchBody))])
         let service = ConnectionProbeService(urlSession: makeURLSession())
 
-        let supported = try await service.probeV2SessionArchive(connection: try #require(makeManager(serverProtocol: .v2).connection))
+        let supported = try await service.probeV2Features(connection: try #require(makeManager(serverProtocol: .v2).connection)).sessionArchive
 
         #expect(!supported)
     }
 
-    @Test func probeV2SessionArchiveThrowsWhenContractIsMissing() async throws {
+    @Test func probeV2FeaturesThrowsWhenContractIsMissing() async throws {
         ProtocolRoutingURLProtocol.reset(responses: [StubResponse(statusCode: 404, body: "Not Found")])
         let service = ConnectionProbeService(urlSession: makeURLSession())
         let connection = try #require(makeManager(serverProtocol: .v2).connection)
 
         await #expect(throws: (any Error).self) {
-            _ = try await service.probeV2SessionArchive(connection: connection)
+            _ = try await service.probeV2Features(connection: connection)
         }
     }
 
@@ -804,25 +819,34 @@ struct SessionProtocolRepositoryTests {
         #expect(queryValue(url, "location[directory]") == "/repo")
     }
 
-    @Test func v2GetSessionDiffDoesNotCallLegacyPath() async {
+    @Test func v2GetSessionDiffReadsTurnFromUserMessage() async throws {
         ProtocolRoutingURLProtocol.reset(responses: [
-            .json("[]")
+            .json(#"{"data":[{"file":"App.kt","patch":"@@","additions":2,"deletions":1,"status":"modified"}]}"#)
         ])
+        let repository = makeSessionRepository(serverProtocol: .v2)
+
+        let files = try await repository.getSessionDiff(id: "ses-1", messageID: "msg-1", directory: "/repo")
+
+        #expect(files.map(\.path) == ["App.kt"])
+        #expect(files.first?.additions == 2)
+        let url = try #require(ProtocolRoutingURLProtocol.requests.first?.url)
+        #expect(url.path.hasSuffix("/api/session/ses-1/diff"))
+        #expect(queryValue(url, "from") == "msg-1")
+        #expect(queryValue(url, "context") == "12")
+    }
+
+    @Test func v2GetSessionDiffMissingRouteIsHTTP404() async {
+        ProtocolRoutingURLProtocol.reset(responses: [StubResponse(statusCode: 404, body: "Not Found")])
         let repository = makeSessionRepository(serverProtocol: .v2)
 
         do {
             _ = try await repository.getSessionDiff(id: "ses-1", messageID: "msg-1", directory: "/repo")
-            Issue.record("expected session message diff to be unavailable on v2")
-        } catch let error as SessionError {
-            guard case let .http(statusCode, _) = error else {
-                Issue.record("unexpected session error \(error)")
-                return
-            }
+            Issue.record("expected HTTP 404")
+        } catch let SessionError.http(statusCode, _) {
             #expect(statusCode == 404)
         } catch {
             Issue.record("unexpected error \(error)")
         }
-        #expect(ProtocolRoutingURLProtocol.requests.isEmpty)
     }
 
     @Test func v1ListCommandsAcceptsObjectTemplate() async throws {

@@ -3,19 +3,20 @@ package dev.opencode.mobile.domain.connection
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-class V2SessionArchiveContractTest {
+class V2ServerContractTest {
     @Test
     fun declaredWhenSessionPatchAcceptsArchived() {
-        assertTrue(V2SessionArchiveContract.isDeclared(document(V2_1_PATCH_BODY)))
+        assertTrue(V2ServerContract.declaresSessionArchive(document(V2_1_PATCH_BODY)))
     }
 
     @Test
     fun notDeclaredOnOlderServerPatchBody() {
-        assertFalse(V2SessionArchiveContract.isDeclared(document(V2_0_PATCH_BODY)))
+        assertFalse(V2ServerContract.declaresSessionArchive(document(V2_0_PATCH_BODY)))
     }
 
     @Test
@@ -29,13 +30,27 @@ class V2SessionArchiveContractTest {
                 """.trimIndent(),
             )
 
-        assertTrue(V2SessionArchiveContract.isDeclared(doc))
+        assertTrue(V2ServerContract.declaresSessionArchive(doc))
     }
 
     @Test
     fun notDeclaredWithoutSessionPatch() {
-        assertFalse(V2SessionArchiveContract.isDeclared(parse("""{"paths":{"/api/session":{"get":{}}}}""")))
-        assertFalse(V2SessionArchiveContract.isDeclared(parse("""{}""")))
+        assertFalse(V2ServerContract.declaresSessionArchive(parse("""{"paths":{"/api/session":{"get":{}}}}""")))
+        assertFalse(V2ServerContract.declaresSessionArchive(parse("""{}""")))
+    }
+
+    @Test
+    fun turnDiffDeclaredWhenSessionDiffRouteExists() {
+        val doc = parse("""{"paths":{"/api/session/{sessionID}/diff":{"get":{}}}}""")
+
+        assertTrue(V2ServerContract.declaresSessionTurnDiff(doc))
+        assertEquals(V2ServerFeatures(sessionArchive = false, sessionTurnDiff = true), V2ServerContract.features(doc))
+    }
+
+    @Test
+    fun turnDiffNotDeclaredOnOlderServer() {
+        assertFalse(V2ServerContract.declaresSessionTurnDiff(document(V2_0_PATCH_BODY)))
+        assertFalse(V2ServerContract.declaresSessionTurnDiff(parse("""{}""")))
     }
 
     private fun document(patchBody: String): JsonObject =
