@@ -1,7 +1,7 @@
 import Foundation
 
 /// The server's own project list as Add project suggestions: repositories only, no global project,
-/// nothing already on home, nothing under a temp or hidden folder, one row per worktree (the most
+/// nothing archived, nothing already on home, nothing under a temp or hidden folder, one row per worktree (the most
 /// recently active), newest first. Projects without an activity time sort last, in server order.
 /// At most `limit` rows.
 ///
@@ -22,8 +22,8 @@ nonisolated enum ServerProjectSuggestions {
         var newestByWorktree: [String: Project] = [:]
         for project in projects {
             let worktree = ServerPathPolicy.canonical(project.worktree)
-            guard project.id != globalProjectID, project.isRepository, !worktree.isEmpty, worktree != "/",
-                  !added.contains(worktree), !isScratchLocation(worktree)
+            guard project.id != globalProjectID, project.isRepository, !project.isArchived,
+                  !worktree.isEmpty, worktree != "/", !added.contains(worktree), !isScratchLocation(worktree)
             else { continue }
             guard let current = newestByWorktree[worktree] else {
                 order.append(worktree)

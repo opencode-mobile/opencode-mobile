@@ -8,7 +8,8 @@ struct ProjectDomainAdapter: Sendable {
             worktree: worktree,
             displayName: Self.displayName(from: worktree),
             activityAtEpochMs: dto.time?.activityEpochMs,
-            isRepository: !(dto.vcs ?? "").isEmpty
+            isRepository: !(dto.vcs ?? "").isEmpty,
+            isArchived: dto.time?.archived != nil
         )
     }
 

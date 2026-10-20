@@ -14,6 +14,7 @@ class ProjectDomainAdapter {
             displayName = displayNameFromWorktree(worktree),
             activityAtEpochMs = dto.time?.active ?: dto.time?.updated,
             isRepository = !dto.vcs.isNullOrBlank(),
+            isArchived = dto.time?.archived != null,
         )
     }
 

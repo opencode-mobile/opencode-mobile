@@ -29,8 +29,12 @@ nonisolated struct ProjectsAPIClient: Sendable {
         try await get(path: "project")
     }
 
+    /// Asks for unarchived projects; servers before v2.0.27 ignore `archived` and list them all.
     func listProjectsV2() async throws -> [ProjectDTO] {
-        let projects: [V2ProjectDTO] = try await get(path: "api/project")
+        let projects: [V2ProjectDTO] = try await get(
+            path: "api/project",
+            query: [URLQueryItem(name: "archived", value: "false")]
+        )
         return projects.map { ProjectDTO(id: $0.id, directory: $0.canonical, vcs: $0.vcs, time: $0.time) }
     }
 
@@ -153,16 +157,22 @@ nonisolated struct ProjectsAPIClient: Sendable {
     private func get<T: Decodable>(
         path: String,
         directory: String? = nil,
-        locationDirectory: String? = nil
+        locationDirectory: String? = nil,
+        query: [URLQueryItem] = []
     ) async throws -> T {
         guard let connection = connectionProvider() else {
             throw ProjectsAPIError.noActiveConnection
         }
-        let request = connection.authorizedRequest(
+        var request = connection.authorizedRequest(
             path: path,
             directory: directory,
             locationDirectory: locationDirectory
         )
+        if !query.isEmpty, let url = request.url,
+           var components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
+            components.queryItems = (components.queryItems ?? []) + query
+            request.url = components.url
+        }
         let data = try await data(for: request)
         return try decoder.decode(T.self, from: data)
     }
