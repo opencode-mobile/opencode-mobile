@@ -28,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -45,6 +46,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
@@ -113,6 +116,9 @@ private val ActivityAgentTileSize = 20.dp
 
 /** Agent rows are tap targets; keep them at least this tall. */
 private val ActivityAgentRowMinHeight = 44.dp
+
+/** How far an agent row's press surface extends beyond its content on each side. */
+private val ActivityAgentRowBleed = 8.dp
 private val ActivityAgentTileRadius = 6.dp
 private const val ACTIVITY_AGENT_TILE_ALPHA = 0.08f
 private const val ACTIVITY_AGENT_BORDER_ALPHA = 0.4f
@@ -237,14 +243,17 @@ private fun AgentRow(
         modifier =
             Modifier
                 .fillMaxWidth()
-                // Rounded press feedback instead of a hard-edged ripple against the hairlines.
+                // The press surface bleeds past the content on both sides so the rounded
+                // ripple has breathing room around the tile and chevron, while the content
+                // itself stays aligned with the header text.
+                .bleedHorizontally(ActivityAgentRowBleed)
                 .clip(RoundedCornerShape(OpenCodeRadius.small))
                 .clickable(onClick = onTap)
                 .semantics(mergeDescendants = true) {
                     contentDescription = listOfNotNull(agent.agentName, agent.action, elapsed).joinToString(", ")
                     role = Role.Button
                 }.heightIn(min = ActivityAgentRowMinHeight)
-                .padding(vertical = 9.dp),
+                .padding(horizontal = ActivityAgentRowBleed, vertical = 9.dp),
         horizontalArrangement = Arrangement.spacedBy(ActivitySpacing),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -533,6 +542,23 @@ internal fun OpenCodeActivityStatus.spoken(): String =
         OpenCodeActivityStatus.Completed -> "completed"
         OpenCodeActivityStatus.Failed -> "failed"
         OpenCodeActivityStatus.Interrupted -> "stopped"
+    }
+
+
+/** Lets a row draw (and receive presses) [amount] wider than its slot on each side without moving its content. */
+private fun Modifier.bleedHorizontally(amount: Dp): Modifier =
+    layout { measurable, constraints ->
+        val extra = (amount * 2).roundToPx()
+        val placeable =
+            measurable.measure(
+                constraints.copy(
+                    minWidth = (constraints.minWidth + extra).coerceAtMost(Constraints.Infinity),
+                    maxWidth = if (constraints.hasBoundedWidth) constraints.maxWidth + extra else constraints.maxWidth,
+                ),
+            )
+        layout(width = (placeable.width - extra).coerceAtLeast(0), height = placeable.height) {
+            placeable.place(x = -extra / 2, y = 0)
+        }
     }
 
 /** Gallery and preview samples for the states the contract lists. */
