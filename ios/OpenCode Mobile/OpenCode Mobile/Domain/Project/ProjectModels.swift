@@ -10,6 +10,15 @@ struct Project: Sendable, Equatable {
     var isRepository = false
     /// True when the server archived the project because its directories are gone (v2 `time.archived`).
     var isArchived = false
+    /// User-set project name, when the server sent one.
+    var name: String? = nil
+    /// Main checkout of the project; `worktree` when the server did not say otherwise.
+    var canonical: String? = nil
+
+    var canonicalWorktree: String {
+        if let canonical, !canonical.isEmpty { return canonical }
+        return worktree
+    }
 }
 
 enum ServerProbeError: Error, Equatable {

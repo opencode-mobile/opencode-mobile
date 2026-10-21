@@ -35,7 +35,7 @@ nonisolated struct ProjectsAPIClient: Sendable {
             path: "api/project",
             query: [URLQueryItem(name: "archived", value: "false")]
         )
-        return projects.map { ProjectDTO(id: $0.id, directory: $0.canonical, vcs: $0.vcs, time: $0.time) }
+        return projects.map { ProjectDTO(id: $0.id, directory: $0.canonical, vcs: $0.vcs, time: $0.time, name: $0.name, canonical: $0.canonical) }
     }
 
     func getCurrentProject(directory: String? = nil) async throws -> ProjectDTO {
@@ -47,7 +47,7 @@ nonisolated struct ProjectsAPIClient: Sendable {
         guard let id = location.project?.id, let projectDirectory = location.project?.directory else {
             throw ProjectsAPIError.invalidResponse
         }
-        return ProjectDTO(id: id, directory: projectDirectory)
+        return ProjectDTO(id: id, directory: projectDirectory, canonical: location.project?.canonical)
     }
 
     func getGlobalHealth() async throws -> HealthDTO {
