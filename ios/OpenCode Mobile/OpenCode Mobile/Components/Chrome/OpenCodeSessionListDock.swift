@@ -200,7 +200,7 @@ struct SessionListScopeControl: View {
         HStack(spacing: 10) {
             SessionListScopeMark(tab: tab)
             VStack(alignment: .leading, spacing: 1) {
-                Text(tab.pickerTitle)
+                Text(tab.dockTitle)
                     .font(OpenCodeTypography.bodySecondary.weight(.semibold))
                     .foregroundStyle(OpenCodeColors.textStrong)
                     .lineLimit(1)
@@ -379,13 +379,13 @@ struct SessionListScopeControl: View {
         guard let tab = visibleTab else { return "Project filter" }
         if let load = tab.load {
             // Loading or failed replaces the session count, which is not known yet.
-            return "\(tab.pickerTitle), \(load.subtitle)"
+            return "\(tab.dockTitle), \(load.subtitle)"
         }
         let subtitle = displayedSubtitle(tab)
         if subtitle.isEmpty {
-            return "\(tab.pickerTitle), \(tab.count) sessions"
+            return "\(tab.dockTitle), \(tab.count) sessions"
         }
-        return "\(tab.pickerTitle), \(subtitle), \(tab.count) sessions"
+        return "\(tab.dockTitle), \(subtitle), \(tab.count) sessions"
     }
 
     private var accessibilityHint: String {

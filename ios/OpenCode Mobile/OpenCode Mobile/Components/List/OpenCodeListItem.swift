@@ -11,6 +11,7 @@ private let listItemLetterGlyphSize: CGFloat = 14
 private let listItemLetterStatusDotSize: CGFloat = 10
 private let listItemIconDecoratorSize: CGFloat = 24
 private let listItemIconCircleGlyphSize: CGFloat = 16
+private let listItemSubtitleIconSize: CGFloat = 12
 private let listItemVerticalPadding: CGFloat = 12
 private let listItemTitleSubtitleSpacing: CGFloat = 2
 private let listItemMetaSpacing: CGFloat = 4
@@ -34,6 +35,14 @@ enum OpenCodeListItemSubtitleTone {
 struct OpenCodeListItemSubtitleSegment {
     let text: String
     let tone: OpenCodeListItemSubtitleTone
+    /// Small glyph drawn inline before `text`, such as the branch icon.
+    let icon: OpenCodeIcon?
+
+    init(text: String, tone: OpenCodeListItemSubtitleTone, icon: OpenCodeIcon? = nil) {
+        self.text = text
+        self.tone = tone
+        self.icon = icon
+    }
 }
 
 enum OpenCodeListItemStatusTone: Equatable {
@@ -272,8 +281,12 @@ struct OpenCodeListItem<Trailing: View>: View {
 
     private func semanticSubtitle(_ segments: [OpenCodeListItemSubtitleSegment]) -> Text {
         segments.reduce(Text("")) { result, segment in
-            result + Text(segment.text)
-                .foregroundColor(subtitleColor(segment.tone))
+            let color = subtitleColor(segment.tone)
+            var text = result
+            if let icon = segment.icon, let image = OpenCodeInlineIcon.image(icon, pointSize: listItemSubtitleIconSize) {
+                text = text + Text(image).foregroundColor(color).baselineOffset(-1) + Text("\u{2009}")
+            }
+            return text + Text(segment.text).foregroundColor(color)
         }
     }
 
@@ -544,3 +557,22 @@ private struct OpenCodeListItemPressStyle: ButtonStyle {
     .openCodeTheme()
 }
 #endif
+
+/// Template icons sized for inline use inside `Text`, which draws images at their asset size.
+@MainActor
+enum OpenCodeInlineIcon {
+    private static var cache: [String: Image] = [:]
+
+    static func image(_ icon: OpenCodeIcon, pointSize: CGFloat) -> Image? {
+        let key = "\(icon.rawValue)@\(pointSize)"
+        if let cached = cache[key] { return cached }
+        guard let source = UIImage(named: icon.rawValue) else { return nil }
+        let size = CGSize(width: pointSize, height: pointSize)
+        let scaled = UIGraphicsImageRenderer(size: size).image { _ in
+            source.draw(in: CGRect(origin: .zero, size: size))
+        }
+        let image = Image(uiImage: scaled.withRenderingMode(.alwaysTemplate))
+        cache[key] = image
+        return image
+    }
+}

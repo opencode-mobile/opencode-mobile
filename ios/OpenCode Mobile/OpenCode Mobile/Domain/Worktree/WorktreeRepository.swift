@@ -27,7 +27,7 @@ struct UnavailableWorktreeRepository: WorktreeRepository {
     func onConnection(key: String) {}
 }
 
-enum V1WorkspaceHTTP: Sendable {
+enum V1WorktreeHTTP: Sendable {
     case ok(String)
     case notFound
     case failed(Int)
@@ -36,5 +36,6 @@ enum V1WorkspaceHTTP: Sendable {
 protocol WorktreeRemote: Sendable {
     func listV2(projectID: String) async throws -> [String]
     func refreshV2(projectID: String) async throws
-    func probeV1(directory: String) async -> V1WorkspaceHTTP
+    /// V1 `GET /experimental/worktree?directory=`.
+    func listV1(directory: String) async -> V1WorktreeHTTP
 }

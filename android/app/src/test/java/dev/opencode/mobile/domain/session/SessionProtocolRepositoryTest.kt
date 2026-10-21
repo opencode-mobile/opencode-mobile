@@ -1118,7 +1118,7 @@ class SessionProtocolRepositoryTest {
                         """
                         {
                           "location":{"directory":"/repo","project":{"id":"p","directory":"/repo","canonical":"/repo"}},
-                          "data":{"branch":{"current":"feature/review","default":"main"}}
+                          "data":{"provider":"git","branch":{"current":"feature/review","default":"main"}}
                         }
                         """.trimIndent(),
                     )

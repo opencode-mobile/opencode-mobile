@@ -201,6 +201,9 @@ nonisolated struct V2RevertStageRequestDTO: Encodable, Sendable {
 }
 
 nonisolated struct V2VcsInfoDTO: Decodable, Sendable {
+    /// `git` once the server has detected the repository. A cold server first answers
+    /// `{"branch":{}}` with no provider while detection warms up.
+    let provider: String?
     let branch: V2VcsBranchDTO?
 }
 

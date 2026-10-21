@@ -1,8 +1,13 @@
 package dev.opencode.mobile.ui.main
 
+import dev.opencode.mobile.domain.home.HomeProjectGrouping
+import dev.opencode.mobile.domain.home.HomeScope
+import dev.opencode.mobile.domain.home.ResolvedHomePath
 import dev.opencode.mobile.domain.session.SessionSummary
-import dev.opencode.mobile.domain.worktree.WorktreeInventory
 import dev.opencode.mobile.theme.LetterAccent
+import dev.opencode.mobile.ui.components.SessionListLocationPart
+import dev.opencode.mobile.ui.components.SessionListStatus
+import dev.opencode.mobile.ui.components.visibleForFilter
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -17,7 +22,7 @@ class CrossProjectSessionListSessionsTest {
 
         assertEquals(listOf("ses"), sessions.map { it.id })
         assertEquals("newer", sessions.single().title)
-        assertEquals("/later", sessions.single().worktree)
+        assertEquals("path:/later", sessions.single().worktree)
         assertEquals(20L, sessions.single().updatedAtEpochMs)
     }
 
@@ -31,7 +36,7 @@ class CrossProjectSessionListSessionsTest {
 
         assertEquals(listOf("ses"), sessions.map { it.id })
         assertEquals("first", sessions.single().title)
-        assertEquals("/earlier", sessions.single().worktree)
+        assertEquals("path:/earlier", sessions.single().worktree)
     }
 
     @Test
@@ -47,9 +52,9 @@ class CrossProjectSessionListSessionsTest {
                 section(worktree = "/real", session(id = "ses", title = "dated", updatedAtEpochMs = 50L)),
             ).toCrossProjectSessionListSessions()
 
-        assertEquals("/real", realThenNull.single().worktree)
+        assertEquals("path:/real", realThenNull.single().worktree)
         assertEquals(50L, realThenNull.single().updatedAtEpochMs)
-        assertEquals("/real", nullThenReal.single().worktree)
+        assertEquals("path:/real", nullThenReal.single().worktree)
         assertEquals(50L, nullThenReal.single().updatedAtEpochMs)
     }
 
@@ -112,29 +117,114 @@ class CrossProjectSessionListSessionsTest {
                 ),
             ).toCrossProjectSessionListSessions()
 
-        assertEquals("/repo", sessions.single().worktree)
+        assertEquals("path:/repo", sessions.single().worktree)
         assertEquals("/worktrees/add-project-browse", sessions.single().directory)
-        assertEquals(false, sessions.single().worktreeCheckout)
+        assertEquals(null, sessions.single().location)
+        assertEquals("/repo", sessions.single().subtitle)
     }
 
     @Test
-    fun worktreeSession_badgesOnlyWhenTheDirectoryIsAListedCheckout() {
-        val checkout = "/worktrees/add-project-browse"
-        val sessions =
+    fun mergedProject_listsEachSessionOnceWithItsBranchAndWorktree() {
+        val sections =
+            listOf(
+                // v2 lists the whole project from either added worktree.
+                section(
+                    worktree = "/repo",
+                    session(id = "main", title = "Main", updatedAtEpochMs = 10L, directory = "/repo"),
+                    session(id = "wt", title = "Checkout", updatedAtEpochMs = 20L, directory = "/repo-wt"),
+                ),
+                section(
+                    worktree = "/repo-wt",
+                    session(id = "main", title = "Main", updatedAtEpochMs = 10L, directory = "/repo"),
+                    session(id = "wt", title = "Checkout", updatedAtEpochMs = 20L, directory = "/repo-wt"),
+                ),
+            )
+        val projects = mergedProjects(branches = mapOf("/repo" to "dev", "/repo-wt" to "feature/723-iphone-duo"))
+
+        val sessions = homeSessionListSessions(projects, sections)
+
+        assertEquals(listOf("wt", "main"), sessions.map { it.id })
+        assertEquals(setOf("proj"), sessions.map { it.worktree }.toSet())
+        val checkout = sessions.first { it.id == "wt" }
+        assertEquals(HomeScope.worktreeId("proj", "/repo-wt"), checkout.worktreeScopeId)
+        assertEquals(
+            listOf(SessionListLocationPart("feature/723-iphone-duo", isBranch = true), SessionListLocationPart("repo-wt")),
+            checkout.location,
+        )
+        assertEquals(
+            listOf(
+                SessionListLocationPart("repo"),
+                SessionListLocationPart("feature/723-iphone-duo", isBranch = true),
+                SessionListLocationPart("repo-wt"),
+            ),
+            checkout.locationParts(showsProjectName = true),
+        )
+        assertEquals(listOf(SessionListLocationPart("dev", isBranch = true)), sessions.first { it.id == "main" }.location)
+    }
+
+    @Test
+    fun worktreeScope_filtersByTheSessionDirectory() {
+        val sections =
             listOf(
                 section(
                     worktree = "/repo",
-                    inventory = WorktreeInventory.loaded(listOf("/repo", checkout)),
                     session(id = "main", title = "Main", updatedAtEpochMs = 10L, directory = "/repo"),
-                    session(id = "wt", title = "Checkout", updatedAtEpochMs = 20L, directory = checkout),
-                    session(id = "sub", title = "Subpath", updatedAtEpochMs = 5L, directory = "/repo/packages/app"),
+                    session(id = "wt", title = "Checkout", updatedAtEpochMs = 20L, directory = "/repo-wt"),
+                    session(id = "sub", title = "Subfolder", updatedAtEpochMs = 5L, directory = "/repo/packages/app"),
                 ),
-            ).toCrossProjectSessionListSessions()
+                section(worktree = "/repo-wt"),
+            )
+        val sessions = homeSessionListSessions(mergedProjects(), sections)
 
-        assertEquals(false, sessions.first { it.id == "main" }.worktreeCheckout)
-        assertEquals(true, sessions.first { it.id == "wt" }.worktreeCheckout)
-        assertEquals(false, sessions.first { it.id == "sub" }.worktreeCheckout)
-        assertEquals("/repo", sessions.first { it.id == "wt" }.subtitle)
+        assertEquals(listOf("wt", "main", "sub"), sessions.visibleForFilter("proj").map { it.id })
+        assertEquals(listOf("wt"), sessions.visibleForFilter(HomeScope.worktreeId("proj", "/repo-wt")).map { it.id })
+        assertEquals(listOf("main"), sessions.visibleForFilter(HomeScope.worktreeId("proj", "/repo")).map { it.id })
+    }
+
+    @Test
+    fun extraWorktreeSessions_joinTheirProject() {
+        val projects =
+            HomeProjectGrouping.group(
+                addedPaths = listOf("/repo"),
+                resolved = mapOf("/repo" to ResolvedHomePath("proj", "/repo", isRepository = true)),
+                inventories = mapOf("/repo" to setOf("/repo", "/wt-unadded")),
+            )
+        val sessions =
+            homeSessionListSessions(
+                projects,
+                listOf(section(worktree = "/repo", session(id = "main", title = "Main", updatedAtEpochMs = 1L))),
+                extraSessions =
+                    mapOf("/wt-unadded" to listOf(session(id = "extra", title = "Elsewhere", updatedAtEpochMs = 2L))),
+            )
+
+        assertEquals(listOf("extra", "main"), sessions.map { it.id })
+        assertEquals("/wt-unadded", sessions.first().directory)
+        assertEquals(HomeScope.worktreeId("proj", "/wt-unadded"), sessions.first().worktreeScopeId)
+    }
+
+    @Test
+    fun chromeProjects_countProjectsWorktreesAndRunningSessions() {
+        val sections =
+            listOf(
+                section(
+                    worktree = "/repo",
+                    session(id = "main", title = "Main", updatedAtEpochMs = 10L, directory = "/repo"),
+                    session(id = "wt", title = "Checkout", updatedAtEpochMs = 20L, directory = "/repo-wt", statusLabel = "Working"),
+                ),
+                section(worktree = "/repo-wt"),
+            )
+        val projects = mergedProjects()
+        val sessions = homeSessionListSessions(projects, sections)
+
+        val chrome = homeChromeProjects(projects, sessions).single()
+
+        assertEquals(SessionListStatus.Running, sessions.first { it.id == "wt" }.status)
+        assertEquals("proj", chrome.id)
+        assertEquals("/repo", chrome.worktree)
+        assertEquals(2, chrome.sessionCount)
+        assertEquals(listOf("/repo", "/repo-wt"), chrome.worktrees.map { it.directory })
+        assertEquals(listOf(1, 1), chrome.worktrees.map { it.sessionCount })
+        assertEquals(listOf(0, 1), chrome.worktrees.map { it.runningCount })
     }
 
     @Test
@@ -149,21 +239,29 @@ class CrossProjectSessionListSessionsTest {
                 section(worktree = "/later", session(id = "shared", title = "newer", updatedAtEpochMs = 20L)),
                 section(worktree = "/empty-after-dedupe", session(id = "shared", title = "oldest", updatedAtEpochMs = 1L)),
             )
-        val counts = sections.toHomeChromeProjects().associate { it.worktree to it.sessionCount }
+        val projects = HomeProjectGrouping.group(sections.map { it.worktree }, emptyMap())
+        val counts =
+            homeChromeProjects(projects, sections.toCrossProjectSessionListSessions())
+                .associate { it.worktree to it.sessionCount }
 
         assertEquals(1, counts["/earlier"])
         assertEquals(1, counts["/later"])
         assertEquals(0, counts["/empty-after-dedupe"])
     }
 
-    private fun section(
-        worktree: String,
-        vararg sessions: SessionSummary,
-    ): ProjectSectionUi = section(worktree, WorktreeInventory.Unloaded, *sessions)
+    private fun mergedProjects(branches: Map<String, String> = emptyMap()) =
+        HomeProjectGrouping.group(
+            addedPaths = listOf("/repo", "/repo-wt"),
+            resolved =
+                mapOf(
+                    "/repo" to ResolvedHomePath("proj", "/repo", isRepository = true),
+                    "/repo-wt" to ResolvedHomePath("proj", "/repo", isRepository = true),
+                ),
+            branches = branches,
+        )
 
     private fun section(
         worktree: String,
-        inventory: WorktreeInventory,
         vararg sessions: SessionSummary,
     ): ProjectSectionUi =
         ProjectSectionUi(
@@ -173,7 +271,6 @@ class CrossProjectSessionListSessionsTest {
             letter = 'P',
             letterAccent = LetterAccent.Violet,
             allSessions = sessions.toList(),
-            worktreeInventory = inventory,
         )
 
     private fun session(
@@ -181,11 +278,13 @@ class CrossProjectSessionListSessionsTest {
         title: String,
         updatedAtEpochMs: Long?,
         directory: String? = null,
+        statusLabel: String? = null,
     ): SessionSummary =
         SessionSummary(
             id = id,
             title = title,
             updatedAtEpochMs = updatedAtEpochMs,
             directory = directory,
+            statusLabel = statusLabel,
         )
 }

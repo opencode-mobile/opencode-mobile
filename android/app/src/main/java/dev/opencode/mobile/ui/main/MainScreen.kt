@@ -26,10 +26,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
 import dev.opencode.mobile.domain.connection.ConnectionProfileIdentity
+import dev.opencode.mobile.domain.home.HomeProject
+import dev.opencode.mobile.domain.home.HomeProjectGrouping
+import dev.opencode.mobile.domain.home.HomeScope
+import dev.opencode.mobile.domain.home.HomeSessionLocation
+import dev.opencode.mobile.domain.home.HomeWorktreeCopy
 import dev.opencode.mobile.domain.session.SessionIdleOutcome
 import dev.opencode.mobile.domain.session.SessionSummary
 import dev.opencode.mobile.domain.time.RelativeTimeFormatting
-import dev.opencode.mobile.domain.worktree.WorktreeMark
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.letterAccentForWorktree
@@ -59,6 +63,7 @@ import dev.opencode.mobile.ui.components.OpenCodeTopBarAction
 import dev.opencode.mobile.ui.components.OpenCodeTopBarSubtitleAccessory
 import dev.opencode.mobile.ui.components.SessionList
 import dev.opencode.mobile.ui.components.SessionListFilterTab
+import dev.opencode.mobile.ui.components.SessionListLocationPart
 import dev.opencode.mobile.ui.components.SessionListProjectPickerRows
 import dev.opencode.mobile.ui.components.SessionListScopeLoad
 import dev.opencode.mobile.ui.components.SessionListSession
@@ -267,16 +272,25 @@ internal fun MainScreen(
         }
 
     var showNewSessionProjectPicker by rememberSaveable { mutableStateOf(false) }
+    var runInProjectId by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedFilterId by rememberSaveable { mutableStateOf(SessionListFilterTab.ALL_ID) }
-    val loadedSections = (uiState as? MainScreenUiState.Loaded)?.sections.orEmpty()
-    val chromeProjects = loadedSections.toHomeChromeProjects()
+    val loaded = uiState as? MainScreenUiState.Loaded
+    val homeSessions = remember(loaded) { loaded?.homeSessions().orEmpty() }
+    val chromeProjects =
+        remember(loaded, homeSessions) {
+            loaded?.let { state -> homeChromeProjects(state.projects, homeSessions, state.projectLoads) }.orEmpty()
+        }
     val showTerminalAction =
         SessionListHomeChrome.terminalAction(chromeProjects) is SessionListHomeChrome.TerminalAction.OpenCatalog
-    val newSessionPickerProjects =
-        when (uiState) {
-            is MainScreenUiState.Loaded -> uiState.sections
-            else -> emptyList()
+    val runInProject = chromeProjects.firstOrNull { it.id == runInProjectId }
+    val startNewSession: (SessionListHomeChrome.NewSessionAction) -> Unit = { action ->
+        when (action) {
+            SessionListHomeChrome.NewSessionAction.None -> Unit
+            SessionListHomeChrome.NewSessionAction.PresentPicker -> showNewSessionProjectPicker = true
+            is SessionListHomeChrome.NewSessionAction.ChooseWorktree -> runInProjectId = action.projectId
+            is SessionListHomeChrome.NewSessionAction.Create -> onNewSession(action.worktree)
         }
+    }
 
     ProductPresentedScreenViewEffect(
         screenId = ProductAnalytics.Screen.HOME_CONNECTION_EMPTY,
@@ -296,7 +310,7 @@ internal fun MainScreen(
     ProductPresentedScreenViewEffect(
         screenId = ProductAnalytics.Screen.HOME_NEW_SESSION_PROJECT_PICKER,
         presentation = ProductAnalytics.Presentation.SHEET,
-        visible = showNewSessionProjectPicker,
+        visible = showNewSessionProjectPicker || runInProject != null,
     )
     ProductPresentedScreenViewEffect(
         screenId = ProductAnalytics.Screen.HOME_REMOVE_PROJECT_CONFIRM,
@@ -402,7 +416,8 @@ internal fun MainScreen(
                         }
                     HomeProjectsContent(
                         sections = sections,
-                        projectLoads = (uiState as? MainScreenUiState.Loaded)?.projectLoads.orEmpty(),
+                        sessions = homeSessions,
+                        chromeProjects = chromeProjects,
                         onRetryProjectLoad = onRetryProjectLoad,
                         projectSessionCreateError = projectSessionCreateError,
                         isRefreshing = isRefreshing,
@@ -422,11 +437,12 @@ internal fun MainScreen(
                             )
                             showNewSessionProjectPicker = true
                         },
-                        onCreateSession = onNewSession,
+                        onNewSessionAction = startNewSession,
                         onRemoveProject = onRemoveProject,
                         onReorderProjects = onReorderProjects,
                         removalSnackbar = removalSnackbar,
                         onSessionLongPress = sessionActionsCallbacks.onSessionLongPress,
+                        projects = loaded?.projects.orEmpty(),
                         revealNewestToken = revealNewestToken,
                         pendingScopeRequest = pendingScopeRequest,
                         onConsumePendingScopeRequest = onConsumePendingScopeRequest,
@@ -541,8 +557,13 @@ internal fun MainScreen(
         onDismiss = onDismissAddProject,
     )
 
+    // One New session sheet: the project list, or "Run in" for a project with several worktrees.
+    val newSessionSheetVisible = showNewSessionProjectPicker || runInProject != null
+    // Keeps the shown content while the sheet plays its exit motion.
+    var heldRunInProject by remember { mutableStateOf(runInProject) }
+    if (newSessionSheetVisible) heldRunInProject = runInProject
     OpenCodeBottomSheet(
-        visible = showNewSessionProjectPicker,
+        visible = newSessionSheetVisible,
         title = "New session",
         onDismissRequest = {
             ProductAnalytics.logUserAction(
@@ -550,22 +571,49 @@ internal fun MainScreen(
                 actionId = ProductAnalytics.Action.NEW_SESSION_PICKER_DISMISS,
             )
             showNewSessionProjectPicker = false
+            runInProjectId = null
         },
     ) {
-        if (newSessionPickerProjects.isEmpty()) {
-            OpenCodeBottomSheetEntry(title = "No projects", enabled = false, onClick = {})
-        } else {
-            newSessionPickerProjects.forEach { project ->
-                OpenCodeBottomSheetEntry(
-                    title = project.displayName,
-                    startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Folder),
+        val runIn = heldRunInProject
+        if (runIn != null) {
+            OpenCodeSectionHeader(title = HomeWorktreeCopy.RUN_IN)
+            runIn.worktrees.forEach { worktree ->
+                OpenCodeListItem(
+                    title = worktree.title,
+                    subtitle = worktree.subtitle,
+                    caption = worktree.runningCount.takeIf { it > 0 }?.let(HomeWorktreeCopy::runningCount),
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.CallSplit, null),
                     onClick = {
                         ProductAnalytics.logUserAction(
                             screenId = ProductAnalytics.Screen.HOME_NEW_SESSION_PROJECT_PICKER,
                             actionId = ProductAnalytics.Action.NEW_SESSION_PICKER_SELECT_PROJECT,
                         )
                         showNewSessionProjectPicker = false
-                        onNewSession(project.worktree)
+                        runInProjectId = null
+                        onNewSession(worktree.directory)
+                    },
+                )
+            }
+        } else if (chromeProjects.isEmpty()) {
+            OpenCodeBottomSheetEntry(title = "No projects", enabled = false, onClick = {})
+        } else {
+            chromeProjects.forEach { project ->
+                OpenCodeBottomSheetEntry(
+                    title = project.title,
+                    startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Folder),
+                    onClick = {
+                        ProductAnalytics.logUserAction(
+                            screenId = ProductAnalytics.Screen.HOME_NEW_SESSION_PROJECT_PICKER,
+                            actionId = ProductAnalytics.Action.NEW_SESSION_PICKER_SELECT_PROJECT,
+                        )
+                        when (val action = SessionListHomeChrome.projectAction(project)) {
+                            // Stays open and asks where to run.
+                            is SessionListHomeChrome.NewSessionAction.ChooseWorktree -> runInProjectId = action.projectId
+                            else -> {
+                                showNewSessionProjectPicker = false
+                                startNewSession(action)
+                            }
+                        }
                     },
                 )
             }
@@ -749,7 +797,8 @@ private fun ProbeFailedContent(
 @Composable
 private fun HomeProjectsContent(
     sections: List<ProjectSectionUi>,
-    projectLoads: Map<String, ProjectFirstLoad>,
+    sessions: List<SessionListSession>,
+    chromeProjects: List<SessionListHomeChrome.Project>,
     onRetryProjectLoad: (String) -> Unit,
     projectSessionCreateError: String?,
     isRefreshing: Boolean,
@@ -757,11 +806,12 @@ private fun HomeProjectsContent(
     onBrowseProjectsClick: () -> Unit,
     onSessionClick: (SessionOpenTarget) -> Unit,
     onRequestNewSessionProjectPicker: () -> Unit,
-    onCreateSession: (String) -> Unit,
+    onNewSessionAction: (SessionListHomeChrome.NewSessionAction) -> Unit,
     onRemoveProject: (String) -> Unit,
     onReorderProjects: (List<String>) -> Unit,
     removalSnackbar: OpenCodeSnackbarMessage?,
     onSessionLongPress: (SessionListSession) -> Unit,
+    projects: List<HomeProject> = emptyList(),
     revealNewestToken: Int = 0,
     pendingScopeRequest: HomeScopeRequest? = null,
     onConsumePendingScopeRequest: () -> Unit = {},
@@ -808,17 +858,16 @@ private fun HomeProjectsContent(
         onRefresh = onRefresh,
         modifier = modifier.fillMaxSize(),
     ) {
-        val sessions = sections.toCrossProjectSessionListSessions()
-        val chromeProjects = sections.toHomeChromeProjects(projectLoads)
         val filterTabs =
             SessionListHomeChrome.filterTabs(
                 projects = chromeProjects,
                 sessionCount = sessions.size,
             )
         var showProjectPicker by rememberSaveable { mutableStateOf(false) }
+        // An older scope id (an added path) reads as the project that path now belongs to.
         val resolvedFilterId =
             SessionListHomeChrome.resolvedFilterId(
-                selectedId = selectedFilterId,
+                selectedId = homeScopeId(selectedFilterId, projects),
                 tabs = filterTabs,
             )
         LaunchedEffect(resolvedFilterId) {
@@ -829,7 +878,7 @@ private fun HomeProjectsContent(
         LaunchedEffect(pendingScopeRequest) {
             pendingScopeRequest?.let { request ->
                 if (request.evenFromAll || resolvedFilterId != SessionListFilterTab.ALL_ID) {
-                    onSelectedFilterIdChange(request.filterId)
+                    onSelectedFilterIdChange(homeScopeId(request.filterId, projects))
                 }
                 onConsumePendingScopeRequest()
             }
@@ -874,11 +923,9 @@ private fun HomeProjectsContent(
                             selectedFilterId = resolvedFilterId,
                         )
                 ) {
-                    SessionListHomeChrome.NewSessionAction.None -> Unit
                     SessionListHomeChrome.NewSessionAction.PresentPicker ->
                         onRequestNewSessionProjectPicker()
-                    is SessionListHomeChrome.NewSessionAction.Create ->
-                        onCreateSession(action.worktree)
+                    else -> onNewSessionAction(action)
                 }
             },
             onNewSessionLongPress =
@@ -940,60 +987,122 @@ private class DisplayedSessions {
     var value: List<SessionListSession> = emptyList()
 }
 
-internal fun List<ProjectSectionUi>.toCrossProjectSessionListSessions(): List<SessionListSession> {
+/** Scope id for [id] against [projects]: an added path maps to its project; anything else is kept. */
+internal fun homeScopeId(
+    id: String,
+    projects: List<HomeProject>,
+): String = HomeScope.resolve(id, projects)?.let(HomeScope::id) ?: id
+
+/** Rows for every Home project, one per session id. */
+internal fun MainScreenUiState.Loaded.homeSessions(): List<SessionListSession> =
+    homeSessionListSessions(projects, sections, home.extraSessions)
+
+/** Without project data, each section is its own project (tests and previews). */
+internal fun List<ProjectSectionUi>.toCrossProjectSessionListSessions(): List<SessionListSession> =
+    homeSessionListSessions(HomeProjectGrouping.group(map { it.worktree }, emptyMap()), this)
+
+/**
+ * Home rows: each project's sessions from its added paths' lists and (v1) its other
+ * worktrees' lists. A session listed more than once keeps its newest copy (the earlier
+ * source on a tie); rows are newest first.
+ */
+internal fun homeSessionListSessions(
+    projects: List<HomeProject>,
+    sections: List<ProjectSectionUi>,
+    extraSessions: Map<String, List<SessionSummary>> = emptyMap(),
+): List<SessionListSession> {
+    val sectionsByPath = sections.associateBy { it.worktree }
     val flattened =
-        flatMap { section ->
-            section.allSessions.map { session -> section to session }
+        projects.flatMap { project ->
+            project.memberPaths.flatMap { path ->
+                sectionsByPath[path]?.allSessions.orEmpty().map { HomeRowSource(project, path, it) }
+            } +
+                project.worktrees.flatMap { worktree ->
+                    extraSessions[worktree.directory].orEmpty().map { HomeRowSource(project, worktree.directory, it) }
+                }
         }
     val chosenIndexById = mutableMapOf<String, Int>()
-    flattened.forEachIndexed { index, (_, session) ->
-        val timestamp = session.updatedAtEpochMs ?: 0L
-        val chosenIndex = chosenIndexById[session.id]
-        val chosenTimestamp = chosenIndex?.let { flattened[it].second.updatedAtEpochMs ?: 0L }
+    flattened.forEachIndexed { index, source ->
+        val timestamp = source.session.updatedAtEpochMs ?: 0L
+        val chosenIndex = chosenIndexById[source.session.id]
+        val chosenTimestamp = chosenIndex?.let { flattened[it].session.updatedAtEpochMs ?: 0L }
         if (chosenTimestamp == null || timestamp > chosenTimestamp) {
-            chosenIndexById[session.id] = index
+            chosenIndexById[source.session.id] = index
         }
     }
     return chosenIndexById.values
         .sortedWith(
             compareByDescending<Int> { index ->
-                flattened[index].second.updatedAtEpochMs ?: 0L
+                flattened[index].session.updatedAtEpochMs ?: 0L
             }.thenBy { index -> index },
-        ).map { index ->
-            val (section, session) = flattened[index]
-            SessionListSession(
-                id = session.id,
-                title = session.title,
-                worktree = section.worktree,
-                letter = section.letter,
-                letterAccent = section.letterAccent,
-                subtitle = section.pathSubtitle,
-                directory = session.directory?.takeIf { it.isNotEmpty() } ?: section.worktree,
-                status = session.toSessionListStatus(),
-                caption = session.updatedAtEpochMs?.let(RelativeTimeFormatting::format).orEmpty(),
-                updatedAtEpochMs = session.updatedAtEpochMs,
-                retryAttempt = session.retryAttempt(),
-                statusStale = session.statusStale,
-                worktreeCheckout =
-                    WorktreeMark.showsBadge(
-                        sessionDirectory = session.directory?.takeIf { it.isNotEmpty() } ?: section.worktree,
-                        addedPath = section.worktree,
-                        inventory = section.worktreeInventory,
-                    ),
-            )
-        }
+        ).map { index -> flattened[index].toSessionListSession() }
 }
 
-internal fun List<ProjectSectionUi>.toHomeChromeProjects(
+private data class HomeRowSource(
+    val project: HomeProject,
+    /** The added path or worktree whose list carried the session. */
+    val listedIn: String,
+    val session: SessionSummary,
+) {
+    fun toSessionListSession(): SessionListSession {
+        val directory = session.directory?.takeIf { it.isNotEmpty() } ?: listedIn
+        val worktree = project.worktree(directory)?.takeIf { project.hasManyWorktrees }
+        return SessionListSession(
+            id = session.id,
+            title = session.title,
+            worktree = project.key,
+            letter = letterCharacterForProject(project.displayName),
+            letterAccent = letterAccentForWorktree(project.primaryPath),
+            subtitle = listedIn,
+            directory = directory,
+            status = session.toSessionListStatus(),
+            caption = session.updatedAtEpochMs?.let(RelativeTimeFormatting::format).orEmpty(),
+            updatedAtEpochMs = session.updatedAtEpochMs,
+            retryAttempt = session.retryAttempt(),
+            statusStale = session.statusStale,
+            worktreeScopeId = worktree?.let { HomeScope.worktreeId(project.key, it.directory) },
+            location =
+                HomeSessionLocation
+                    .parts(project, directory, includeProjectName = false)
+                    ?.map { SessionListLocationPart(it.text, isBranch = it.isBranch) },
+            projectName = project.displayName,
+        )
+    }
+}
+
+/** Dock and picker projects: counts per project and per worktree, and unfinished first loads. */
+internal fun homeChromeProjects(
+    projects: List<HomeProject>,
+    sessions: List<SessionListSession>,
     projectLoads: Map<String, ProjectFirstLoad> = emptyMap(),
 ): List<SessionListHomeChrome.Project> {
-    val counts = toCrossProjectSessionListSessions().groupingBy { it.worktree }.eachCount()
-    return map { section ->
+    val counts = sessions.groupingBy { it.worktree }.eachCount()
+    val worktreeCounts = sessions.mapNotNull { it.worktreeScopeId }.groupingBy { it }.eachCount()
+    val runningCounts =
+        sessions
+            .filter { it.status == SessionListStatus.Running || it.status == SessionListStatus.Retrying }
+            .mapNotNull { it.worktreeScopeId }
+            .groupingBy { it }
+            .eachCount()
+    return projects.map { project ->
+        // A path that joined a project already on Home does not put the whole project back into loading.
+        val loads = project.memberPaths.map { projectLoads[it] }
         SessionListHomeChrome.Project(
-            worktree = section.worktree,
-            title = section.displayName,
-            sessionCount = counts[section.worktree] ?: 0,
-            load = projectLoads[section.worktree]?.toScopeLoad(),
+            worktree = project.primaryPath,
+            title = project.displayName,
+            sessionCount = counts[project.key] ?: 0,
+            load = loads.takeIf { all -> all.all { it != null } }?.firstOrNull()?.toScopeLoad(),
+            id = project.key,
+            worktrees =
+                project.worktrees.map { worktree ->
+                    val scopeId = HomeScope.worktreeId(project.key, worktree.directory)
+                    SessionListHomeChrome.Worktree(
+                        worktree = worktree,
+                        sessionCount = worktreeCounts[scopeId] ?: 0,
+                        runningCount = runningCounts[scopeId] ?: 0,
+                        scopeId = scopeId,
+                    )
+                },
         )
     }
 }

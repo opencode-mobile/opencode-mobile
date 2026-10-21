@@ -22,16 +22,17 @@ internal data class WorktreeDirectoryDto(
     val strategy: String? = null,
 )
 
-sealed class V1WorkspaceHttp {
+/** V1 `GET /experimental/worktree` outcome. Servers without the route answer 404. */
+sealed class V1WorktreeHttp {
     data class Ok(
         val body: String,
-    ) : V1WorkspaceHttp()
+    ) : V1WorktreeHttp()
 
-    data object NotFound : V1WorkspaceHttp()
+    data object NotFound : V1WorktreeHttp()
 
     data class Failed(
         val statusCode: Int,
-    ) : V1WorkspaceHttp()
+    ) : V1WorktreeHttp()
 }
 
 interface WorktreeRemote {
@@ -39,7 +40,8 @@ interface WorktreeRemote {
 
     suspend fun refreshV2(projectId: String)
 
-    suspend fun probeV1(directory: String): V1WorkspaceHttp
+    /** The sandboxes (extra git worktrees) of [directory]'s project; never the main checkout. */
+    suspend fun listV1(directory: String): V1WorktreeHttp
 }
 
 class WorktreesApi private constructor(
@@ -68,15 +70,15 @@ class WorktreesApi private constructor(
         }
     }
 
-    override suspend fun probeV1(directory: String): V1WorkspaceHttp {
+    override suspend fun listV1(directory: String): V1WorktreeHttp {
         val response =
-            httpClient.get().get("experimental/workspace") {
+            httpClient.get().get("experimental/worktree") {
                 applyDirectory(directory)
             }
         return when (val status = response.status.value) {
-            404 -> V1WorkspaceHttp.NotFound
-            in 200..299 -> V1WorkspaceHttp.Ok(response.bodyAsText())
-            else -> V1WorkspaceHttp.Failed(status)
+            404 -> V1WorktreeHttp.NotFound
+            in 200..299 -> V1WorktreeHttp.Ok(response.bodyAsText())
+            else -> V1WorktreeHttp.Failed(status)
         }
     }
 

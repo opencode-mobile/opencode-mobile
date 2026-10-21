@@ -69,10 +69,14 @@ struct SessionListSession: Identifiable, Hashable {
     let statusIsStale: Bool
     let caption: String
     let updatedAtEpochMs: Int64?
-    /// Directory the session runs in. `worktree` stays the added project path for filters and counts.
+    /// Directory the session runs in. `worktree` is the Home project key for filters and counts.
     let directory: String
-    /// True when `directory` is a listed worktree other than the added path.
-    let worktreeCheckout: Bool
+    /// Worktree scope this row belongs to, when its project lists more than one worktree.
+    let worktreeScopeID: String?
+    /// Git project subtitle in the All scope (project · branch · folder). Nil keeps `subtitle`.
+    let location: HomeRowLocation?
+    /// Git project subtitle inside a project or worktree scope (branch · folder).
+    let scopedLocation: HomeRowLocation?
 
     init(
         id: String,
@@ -86,7 +90,9 @@ struct SessionListSession: Identifiable, Hashable {
         caption: String,
         updatedAtEpochMs: Int64? = nil,
         directory: String? = nil,
-        worktreeCheckout: Bool = false
+        worktreeScopeID: String? = nil,
+        location: HomeRowLocation? = nil,
+        scopedLocation: HomeRowLocation? = nil
     ) {
         self.id = id
         self.title = title
@@ -99,7 +105,13 @@ struct SessionListSession: Identifiable, Hashable {
         self.caption = caption
         self.updatedAtEpochMs = updatedAtEpochMs
         self.directory = directory ?? worktree
-        self.worktreeCheckout = worktreeCheckout
+        self.worktreeScopeID = worktreeScopeID
+        self.location = location
+        self.scopedLocation = scopedLocation
+    }
+
+    func location(inAllScope: Bool) -> HomeRowLocation? {
+        inAllScope ? location : scopedLocation
     }
 }
 
@@ -145,9 +157,17 @@ struct SessionListFilterTab: Identifiable, Hashable {
     let accent: LetterAccent?
     /// Set while this project's sessions are still loading or failed to load.
     let load: SessionListScopeLoad?
+    /// One worktree of a multi-worktree project: an indented branch row in the picker.
+    let isWorktree: Bool
+    /// Picker row text when it differs from the dock (worktree rows, project worktree counts).
+    let pickerTitleOverride: String?
+    let pickerSubtitleOverride: String?
 
     var isAll: Bool { id == Self.allId }
-    var pickerTitle: String { isAll ? Self.pickerAllTitle : title }
+    var pickerTitle: String { pickerTitleOverride ?? (isAll ? Self.pickerAllTitle : title) }
+    var pickerSubtitle: String { pickerSubtitleOverride ?? subtitle }
+    /// The dock keeps the project identity on a worktree scope; the picker names the worktree.
+    var dockTitle: String { isWorktree ? title : pickerTitle }
 
     init(
         id: String,
@@ -156,7 +176,10 @@ struct SessionListFilterTab: Identifiable, Hashable {
         subtitle: String = "",
         letter: Character? = nil,
         accent: LetterAccent? = nil,
-        load: SessionListScopeLoad? = nil
+        load: SessionListScopeLoad? = nil,
+        isWorktree: Bool = false,
+        pickerTitle: String? = nil,
+        pickerSubtitle: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -165,6 +188,9 @@ struct SessionListFilterTab: Identifiable, Hashable {
         self.letter = letter
         self.accent = accent
         self.load = load
+        self.isWorktree = isWorktree
+        self.pickerTitleOverride = pickerTitle
+        self.pickerSubtitleOverride = pickerSubtitle
     }
 
     static func all(projectCount: Int, sessionCount: Int) -> SessionListFilterTab {
@@ -173,6 +199,52 @@ struct SessionListFilterTab: Identifiable, Hashable {
             title: allTitle,
             count: sessionCount,
             subtitle: projectCount == 1 ? "1 project" : "\(projectCount) projects"
+        )
+    }
+
+    /// A Home project. The dock reads "All N worktrees" (or the path for one worktree); the
+    /// picker reads "N worktrees" (or the path).
+    static func homeProject(
+        _ project: HomeProject,
+        count: Int,
+        load: SessionListScopeLoad? = nil
+    ) -> SessionListFilterTab {
+        let many = project.hasManyWorktrees
+        return SessionListFilterTab(
+            id: HomeScope.project(project.key).id,
+            title: project.displayName,
+            count: count,
+            subtitle: many ? HomeProjectCopy.allWorktrees(project.worktrees.count) : project.primaryPath,
+            letter: letterCharacter(for: project.displayName),
+            accent: letterAccent(for: project.primaryPath),
+            load: load,
+            pickerSubtitle: many ? HomeProjectCopy.worktreeCount(project.worktrees.count) : project.primaryPath
+        )
+    }
+
+    /// One worktree of a multi-worktree project. The dock keeps the project identity and reads
+    /// "branch · folder" ("branch" for the main checkout, the folder when the branch is unknown).
+    static func homeWorktree(
+        _ worktree: HomeWorktree,
+        of project: HomeProject,
+        count: Int
+    ) -> SessionListFilterTab {
+        let dockSubtitle: String
+        if let branch = worktree.branch {
+            dockSubtitle = worktree.isMain ? branch : branch + HomeRowLocation.separator + worktree.folderName
+        } else {
+            dockSubtitle = worktree.folderName
+        }
+        return SessionListFilterTab(
+            id: HomeScope.worktree(projectKey: project.key, directory: worktree.directory).id,
+            title: project.displayName,
+            count: count,
+            subtitle: dockSubtitle,
+            letter: letterCharacter(for: project.displayName),
+            accent: letterAccent(for: project.primaryPath),
+            isWorktree: true,
+            pickerTitle: worktree.title,
+            pickerSubtitle: worktree.subtitle
         )
     }
 
@@ -376,9 +448,9 @@ struct SessionList<EmptyContent: View>: View {
                 ) { section in
                     switch section.kind {
                     case .recent:
-                        recentStack(section)
+                        recentStack(section, filterId: filterId)
                     case .day, .week:
-                        dayOrWeekSection(section)
+                        dayOrWeekSection(section, filterId: filterId)
                     }
                 }
                 .id(filterId)
@@ -414,11 +486,11 @@ struct SessionList<EmptyContent: View>: View {
     }
 
     @ViewBuilder
-    private func recentStack(_ section: HomeSessionLadderSection<SessionListSession>) -> some View {
+    private func recentStack(_ section: HomeSessionLadderSection<SessionListSession>, filterId: String) -> some View {
         OpenCodeSectionHeader(title: "Recent")
 
         ForEach(Array(section.items.enumerated()), id: \.element.id) { index, session in
-            sessionRow(session, showStatusDot: true)
+            sessionRow(session, showStatusDot: true, filterId: filterId)
             if sessionListShowsDivider(after: index, in: section.items, selectedSessionId: selectedSessionId) {
                 Divider()
                     .overlay(OpenCodeColors.borderWeakerBase)
@@ -428,11 +500,11 @@ struct SessionList<EmptyContent: View>: View {
     }
 
     @ViewBuilder
-    private func dayOrWeekSection(_ section: HomeSessionLadderSection<SessionListSession>) -> some View {
+    private func dayOrWeekSection(_ section: HomeSessionLadderSection<SessionListSession>, filterId: String) -> some View {
         OpenCodeSectionHeader(title: section.title)
 
         ForEach(Array(section.items.enumerated()), id: \.element.id) { index, session in
-            sessionRow(session, showStatusDot: false)
+            sessionRow(session, showStatusDot: false, filterId: filterId)
             if sessionListShowsDivider(after: index, in: section.items, selectedSessionId: selectedSessionId) {
                 Divider()
                     .overlay(OpenCodeColors.borderWeakerBase)
@@ -441,21 +513,24 @@ struct SessionList<EmptyContent: View>: View {
         }
     }
 
-    private func sessionRow(_ session: SessionListSession, showStatusDot: Bool) -> some View {
-        OpenCodeListItem(
+    private func sessionRow(_ session: SessionListSession, showStatusDot: Bool, filterId: String) -> some View {
+        let location = session.location(inAllScope: filterId == SessionListFilterTab.allId)
+        return OpenCodeListItem(
             title: session.title,
-            subtitle: compactHomePath(
-                session.subtitle,
-                hideUserDirectoryPrefix: homeDisplayPreferences.hideUserDirectoryPrefix
-            ),
+            subtitle: location == nil
+                ? compactHomePath(
+                    session.subtitle,
+                    hideUserDirectoryPrefix: homeDisplayPreferences.hideUserDirectoryPrefix
+                )
+                : nil,
+            subtitleSegments: location.map(Self.subtitleSegments),
             status: listItemStatus(session.status, isStale: session.statusIsStale),
             caption: session.caption.isEmpty ? nil : session.caption,
             selected: selectedSessionId == session.id,
             startDecorator: .letter(
                 session.letter,
                 session.letterAccent,
-                statusDot: showStatusDot ? listItemStatus(session.status, isStale: session.statusIsStale).tone : nil,
-                worktree: session.worktreeCheckout
+                statusDot: showStatusDot ? listItemStatus(session.status, isStale: session.statusIsStale).tone : nil
             ),
             action: { onSessionSelected(session) },
             onLongPress: onSessionLongPress.map { handler in { handler(session) } }
@@ -474,6 +549,24 @@ struct SessionList<EmptyContent: View>: View {
 
     private func listItemStatus(_ status: SessionListStatus, isStale: Bool) -> OpenCodeListItemStatus {
         status.listItemStatus(isStale: isStale)
+    }
+
+    /// Project, branch (with the branch icon), and folder, joined with " · ".
+    static func subtitleSegments(_ location: HomeRowLocation) -> [OpenCodeListItemSubtitleSegment] {
+        var segments: [OpenCodeListItemSubtitleSegment] = []
+        for (index, part) in location.parts.enumerated() {
+            let prefix = index == 0 ? "" : HomeRowLocation.separator
+            switch part {
+            case let .text(text):
+                segments.append(OpenCodeListItemSubtitleSegment(text: prefix + text, tone: .secondary))
+            case let .branch(branch):
+                if !prefix.isEmpty {
+                    segments.append(OpenCodeListItemSubtitleSegment(text: prefix, tone: .secondary))
+                }
+                segments.append(OpenCodeListItemSubtitleSegment(text: branch, tone: .secondary, icon: .callSplit))
+            }
+        }
+        return segments
     }
 
     private func scheduleListCrossfade(to newId: String) {
@@ -873,7 +966,7 @@ extension Array where Element == SessionListSession {
         if selectedFilterId == SessionListFilterTab.allId {
             return self
         }
-        return filter { $0.worktree == selectedFilterId }
+        return filter { $0.worktree == selectedFilterId || $0.worktreeScopeID == selectedFilterId }
     }
 }
 

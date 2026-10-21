@@ -8,8 +8,8 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.indication
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -26,6 +26,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.InlineTextContent
+import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
@@ -46,10 +48,13 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -58,6 +63,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.OpenCodePillShape
@@ -82,10 +88,14 @@ private val ListItemSelectionShape = RoundedCornerShape(OpenCodeRadius.medium)
 private val ListItemVerticalPadding = 12.dp
 private val ListItemTitleSubtitleSpacing = 2.dp
 private val ListItemMetaSpacing = 4.dp
+private val SubtitleIconWidth = 1.15.em
+private val SubtitleIconHeight = 1.em
 private val ListItemTitleTagSpacing = 6.dp
 private val StatusChipShape = OpenCodePillShape
 private const val ListItemPressedScale = 0.965f
 private const val ListItemPopPeakScale = 1.035f
+
+private fun subtitleIconId(index: Int): String = "subtitle-icon-$index"
 
 enum class OpenCodeListItemStyle {
     Plain,
@@ -101,6 +111,8 @@ enum class OpenCodeListItemSubtitleTone {
 data class OpenCodeListItemSubtitleSegment(
     val text: String,
     val tone: OpenCodeListItemSubtitleTone,
+    /** Small mark drawn before [text] in the segment's color (e.g. a branch). */
+    val icon: ImageVector? = null,
 )
 
 enum class OpenCodeListItemStatusTone {
@@ -310,23 +322,49 @@ fun OpenCodeListItem(
                     }
                     if (subtitleSegments != null) {
                         val disabledColor = textWeaker
+                        val segmentColors =
+                            subtitleSegments.map { segment ->
+                                if (!enabled) {
+                                    disabledColor
+                                } else {
+                                    when (segment.tone) {
+                                        OpenCodeListItemSubtitleTone.Secondary -> textBase
+                                        OpenCodeListItemSubtitleTone.Addition -> openCodeColor("diff-add")
+                                        OpenCodeListItemSubtitleTone.Deletion -> openCodeColor("diff-delete")
+                                    }
+                                }
+                            }
+                        val inlineIcons =
+                            subtitleSegments
+                                .mapIndexedNotNull { index, segment ->
+                                    val icon = segment.icon ?: return@mapIndexedNotNull null
+                                    subtitleIconId(index) to
+                                        InlineTextContent(
+                                            Placeholder(
+                                                width = SubtitleIconWidth,
+                                                height = SubtitleIconHeight,
+                                                placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter,
+                                            ),
+                                        ) {
+                                            Icon(
+                                                imageVector = icon,
+                                                contentDescription = null,
+                                                tint = segmentColors[index],
+                                                modifier = Modifier.fillMaxSize().padding(end = 2.dp),
+                                            )
+                                        }
+                                }.toMap()
                         Text(
                             text =
                                 buildAnnotatedString {
-                                    subtitleSegments.forEach { segment ->
-                                        val color =
-                                            if (!enabled) {
-                                                disabledColor
-                                            } else {
-                                                when (segment.tone) {
-                                                    OpenCodeListItemSubtitleTone.Secondary -> textBase
-                                                    OpenCodeListItemSubtitleTone.Addition -> openCodeColor("diff-add")
-                                                    OpenCodeListItemSubtitleTone.Deletion -> openCodeColor("diff-delete")
-                                                }
-                                            }
-                                        withStyle(SpanStyle(color = color)) { append(segment.text) }
+                                    subtitleSegments.forEachIndexed { index, segment ->
+                                        // Decorative icon: alternate text must be non-empty, so use a zero-width space
+                                        // rather than the default replacement character screen readers announce.
+                                        if (segment.icon != null) appendInlineContent(subtitleIconId(index), "\u200B")
+                                        withStyle(SpanStyle(color = segmentColors[index])) { append(segment.text) }
                                     }
                                 },
+                            inlineContent = inlineIcons,
                             style = MaterialTheme.typography.labelMedium,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,

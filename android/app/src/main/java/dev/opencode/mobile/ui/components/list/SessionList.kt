@@ -43,6 +43,7 @@ import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.letterAccentForWorktree
 import dev.opencode.mobile.theme.letterCharacterForProject
 import dev.opencode.mobile.theme.openCodeColor
+import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import kotlinx.coroutines.delay
 
 private val SessionListFallbackBottomSpacer = 168.dp
@@ -88,12 +89,30 @@ data class SessionListSession(
     /** Cached activity that has not been confirmed by REST yet. */
     val statusStale: Boolean = false,
     /**
-     * Directory the session runs in. [worktree] stays the added project path so project
+     * Directory the session runs in. [worktree] stays the project scope id so project
      * filters and counts keep grouping worktree sessions with that project.
      */
     val directory: String = worktree,
-    /** True when [directory] is a listed worktree other than the added path. */
-    val worktreeCheckout: Boolean = false,
+    /** Scope id of the session's worktree when its project lists more than one. */
+    val worktreeScopeId: String? = null,
+    /** Branch and worktree folder for a repository project; null keeps the [subtitle] path. */
+    val location: List<SessionListLocationPart>? = null,
+    /** Project name shown before [location] when every project is listed. */
+    val projectName: String? = null,
+) {
+    /** Subtitle parts for a row in the All scope ([showsProjectName]) or a project scope. */
+    fun locationParts(showsProjectName: Boolean): List<SessionListLocationPart>? {
+        val parts = location ?: return null
+        val name = projectName?.takeIf { showsProjectName } ?: return parts
+        return listOf(SessionListLocationPart(name)) + parts
+    }
+}
+
+/** One part of a row's location subtitle; parts read joined with " · ". */
+data class SessionListLocationPart(
+    val text: String,
+    /** Drawn with the branch mark. */
+    val isBranch: Boolean = false,
 )
 
 /** First load of a project scope's sessions that has not finished yet. */
@@ -127,8 +146,15 @@ data class SessionListFilterTab(
     val letterAccent: LetterAccent? = null,
     /** Unfinished first load; the dock shows it instead of [count] and the list shows a placeholder. */
     val load: SessionListScopeLoad? = null,
+    /** Set on a worktree row: the id of the project scope it narrows. */
+    val parentId: String? = null,
+    /** Dock title when it differs from the picker row (a worktree shows its project). */
+    val dockTitle: String? = null,
+    /** Dock subtitle when it differs from the picker row. */
+    val dockSubtitle: String? = null,
 ) {
     val isAll: Boolean get() = id == ALL_ID
+    val isWorktree: Boolean get() = parentId != null
     val pickerTitle: String get() = if (isAll) PICKER_ALL_TITLE else title
 
     companion object {
@@ -219,6 +245,7 @@ fun SessionList(
                 SessionListFeedPage(
                     sessions = sessions,
                     filterId = filterId,
+                    showsProjectName = filterId == SessionListFilterTab.ALL_ID,
                     scopeTab = filterTabs.firstOrNull { it.id == filterId },
                     onRetryScopeLoad = onRetryScopeLoad,
                     listBottomFadeHeight = listBottomFadeHeight,
@@ -267,6 +294,7 @@ fun SessionList(
 private fun SessionListFeedPage(
     sessions: List<SessionListSession>,
     filterId: String,
+    showsProjectName: Boolean,
     scopeTab: SessionListFilterTab?,
     onRetryScopeLoad: (String) -> Unit,
     listBottomFadeHeight: Dp,
@@ -375,6 +403,7 @@ private fun SessionListFeedPage(
 
     SessionListFeed(
         visibleSessions = visibleSessions,
+        showsProjectName = showsProjectName,
         scopeTab = scopeTab,
         onRetryScopeLoad = onRetryScopeLoad,
         ladderSections = ladderSections,
@@ -395,6 +424,7 @@ private fun SessionListFeedPage(
 @Composable
 private fun SessionListFeed(
     visibleSessions: List<SessionListSession>,
+    showsProjectName: Boolean,
     scopeTab: SessionListFilterTab?,
     onRetryScopeLoad: (String) -> Unit,
     ladderSections: List<HomeSessionLadderSection<SessionListSession>>,
@@ -447,6 +477,7 @@ private fun SessionListFeed(
             else ->
                 SessionListFeedRows(
                     visibleSessions = visibleSessions,
+                    showsProjectName = showsProjectName,
                     ladderSections = ladderSections,
                     listState = listState,
                     listBottomFadeHeight = listBottomFadeHeight,
@@ -463,6 +494,7 @@ private fun SessionListFeed(
 @Composable
 private fun SessionListFeedRows(
     visibleSessions: List<SessionListSession>,
+    showsProjectName: Boolean,
     ladderSections: List<HomeSessionLadderSection<SessionListSession>>,
     listState: LazyListState,
     listBottomFadeHeight: Dp,
@@ -501,6 +533,7 @@ private fun SessionListFeedRows(
                         ) { index, session ->
                             SessionListRow(
                                 session = session,
+                                showsProjectName = showsProjectName,
                                 showStatusDot = true,
                                 showDivider = sessionListShowsDivider(index, section.items, selectedSessionId),
                                 borderWeaker = borderWeaker,
@@ -522,6 +555,7 @@ private fun SessionListFeedRows(
                         ) { index, session ->
                             SessionListRow(
                                 session = session,
+                                showsProjectName = showsProjectName,
                                 showStatusDot = false,
                                 showDivider = sessionListShowsDivider(index, section.items, selectedSessionId),
                                 borderWeaker = borderWeaker,
@@ -540,6 +574,7 @@ private fun SessionListFeedRows(
 @Composable
 private fun SessionListRow(
     session: SessionListSession,
+    showsProjectName: Boolean,
     showStatusDot: Boolean,
     showDivider: Boolean,
     borderWeaker: androidx.compose.ui.graphics.Color,
@@ -548,9 +583,11 @@ private fun SessionListRow(
     onSessionLongPress: ((SessionListSession) -> Unit)?,
 ) {
     val status = session.status.toListItemStatus(session.retryAttempt, stale = session.statusStale)
+    val location = session.locationParts(showsProjectName)
     OpenCodeListItem(
         title = session.title,
-        subtitle = compactHomePath(session.subtitle),
+        subtitle = if (location == null) compactHomePath(session.subtitle) else null,
+        subtitleSegments = location?.toSubtitleSegments(),
         status = status,
         caption = session.caption.takeIf { it.isNotEmpty() },
         startDecorator =
@@ -558,7 +595,6 @@ private fun SessionListRow(
                 character = session.letter,
                 accent = session.letterAccent,
                 statusDot = if (showStatusDot) status.tone else null,
-                worktree = session.worktreeCheckout,
             ),
         selected = selected,
         onClick = { onSessionSelected(session) },
@@ -649,8 +685,23 @@ fun List<SessionListSession>.visibleForFilter(selectedFilterId: String): List<Se
     if (selectedFilterId == SessionListFilterTab.ALL_ID) {
         this
     } else {
-        filter { it.worktree == selectedFilterId }
+        filter { it.worktree == selectedFilterId || it.worktreeScopeId == selectedFilterId }
     }
+
+/** Location parts as list subtitle segments: the branch carries the branch mark, parts joined with " · ". */
+internal fun List<SessionListLocationPart>.toSubtitleSegments(): List<OpenCodeListItemSubtitleSegment> =
+    flatMapIndexed { index, part ->
+        listOfNotNull(
+            OpenCodeListItemSubtitleSegment(LOCATION_SEPARATOR, OpenCodeListItemSubtitleTone.Secondary).takeIf { index > 0 },
+            OpenCodeListItemSubtitleSegment(
+                text = part.text,
+                tone = OpenCodeListItemSubtitleTone.Secondary,
+                icon = if (part.isBranch) OpenCodeIcons.CallSplit else null,
+            ),
+        )
+    }
+
+private const val LOCATION_SEPARATOR = " · "
 
 internal fun SessionListStatus.toListItemStatus(
     retryAttempt: Int? = null,

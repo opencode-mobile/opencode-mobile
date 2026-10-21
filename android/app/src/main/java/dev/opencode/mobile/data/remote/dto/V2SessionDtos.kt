@@ -101,6 +101,7 @@ data class V2RevertStageRequestDto(
 
 @Serializable
 data class V2VcsInfoDto(
+    val provider: String? = null,
     val branch: V2VcsBranchDto? = null,
 )
 

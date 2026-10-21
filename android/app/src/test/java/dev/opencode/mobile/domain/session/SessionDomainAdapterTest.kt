@@ -7,6 +7,9 @@ import dev.opencode.mobile.data.remote.dto.SessionDto
 import dev.opencode.mobile.data.remote.dto.SessionTimeDto
 import dev.opencode.mobile.data.remote.dto.V2SessionDto
 import dev.opencode.mobile.data.remote.dto.V2SessionForkDto
+import dev.opencode.mobile.data.remote.dto.V2VcsBranchDto
+import dev.opencode.mobile.data.remote.dto.V2VcsInfoDto
+import dev.opencode.mobile.data.remote.dto.VcsInfoDto
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
@@ -182,5 +185,22 @@ class SessionDomainAdapterTest {
         assertEquals("https://example.com", status.raw["actionLink"])
         assertEquals("provider.quota", status.raw["errorType"])
         assertEquals("1", status.raw["attempt"])
+    }
+
+    @Test
+    fun v2VcsWithoutProviderIsNotSettledYet() {
+        val warming = adapter.toVcsInfo(V2VcsInfoDto(branch = V2VcsBranchDto()))
+        val emptyBranch = adapter.toVcsInfo(V2VcsInfoDto(provider = "git", branch = V2VcsBranchDto()))
+        val settled =
+            adapter.toVcsInfo(V2VcsInfoDto(provider = "git", branch = V2VcsBranchDto(current = "feature/tax-rounding", default = "main")))
+        val detached = adapter.toVcsInfo(V2VcsInfoDto(provider = "git", branch = V2VcsBranchDto(default = "main")))
+
+        assertFalse(warming.isSettled)
+        assertFalse(emptyBranch.isSettled)
+        assertTrue(settled.isSettled)
+        assertEquals("feature/tax-rounding", settled.currentBranch)
+        assertTrue(detached.isSettled)
+        assertNull(detached.currentBranch)
+        assertTrue(adapter.toVcsInfo(VcsInfoDto(branch = "dev")).isSettled)
     }
 }

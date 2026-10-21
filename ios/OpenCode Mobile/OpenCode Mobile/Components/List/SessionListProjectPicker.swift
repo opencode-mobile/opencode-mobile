@@ -4,8 +4,8 @@ struct SessionListProjectPickerRows: View {
     let tabs: [SessionListFilterTab]
     let onSelect: (String) -> Void
     let onRemoveProject: ((String) -> Void)?
-    /// Receives the added-project worktrees in their new order after a
-    /// long-press drag. `nil` leaves the rows fixed.
+    /// Receives the project tab ids in their new order after a long-press drag.
+    /// Worktree rows never move. `nil` leaves the rows fixed.
     let onReorderProjects: (([String]) -> Void)?
 
     @State private var homeDisplayPreferences = HomeDisplayPreferences.shared
@@ -25,7 +25,7 @@ struct SessionListProjectPickerRows: View {
     var body: some View {
         OpenCodeReorderableList(
             items: tabs,
-            canMove: { !$0.isAll },
+            canMove: { !$0.isAll && !$0.isWorktree },
             onMove: onReorderProjects.map { reorder in
                 { from, to in
                     reorder(Self.reorderedWorktrees(tabs: tabs, from: from, to: to))
@@ -33,7 +33,7 @@ struct SessionListProjectPickerRows: View {
             },
             onSelect: { onSelect($0.id) },
             onContextAction: onRemoveProject.map { remove in { remove($0.id) } },
-            supportsContextAction: { !$0.isAll }
+            supportsContextAction: { !$0.isAll && !$0.isWorktree }
         ) { tab in
             OpenCodeListItem(
                 title: tab.pickerTitle,
@@ -42,24 +42,31 @@ struct SessionListProjectPickerRows: View {
             ) {
                 SessionListScopeCountBadge(count: tab.count, load: tab.load)
             }
+            .padding(.leading, tab.isWorktree ? Self.worktreeIndent : 0)
         }
     }
 
+    /// Worktree rows sit under their project, indented past its avatar.
+    static let worktreeIndent: CGFloat = 28
+
     static func reorderedWorktrees(tabs: [SessionListFilterTab], from: Int, to: Int) -> [String] {
         OpenCodeReorderableListMath.move(tabs, from: from, to: to)
-            .filter { !$0.isAll }
+            .filter { !$0.isAll && !$0.isWorktree }
             .map(\.id)
     }
 
     private func displayedSubtitle(_ tab: SessionListFilterTab) -> String {
-        if tab.isAll { return tab.subtitle }
+        if tab.isAll || tab.isWorktree { return tab.pickerSubtitle }
         return compactHomePath(
-            tab.subtitle,
+            tab.pickerSubtitle,
             hideUserDirectoryPrefix: homeDisplayPreferences.hideUserDirectoryPrefix
         )
     }
 
     private func startDecorator(_ tab: SessionListFilterTab) -> StartDecorator {
+        if tab.isWorktree {
+            return .icon(.callSplit, accessibilityLabel: nil)
+        }
         if let letter = tab.letter, let accent = tab.accent {
             return .letter(letter, accent)
         }

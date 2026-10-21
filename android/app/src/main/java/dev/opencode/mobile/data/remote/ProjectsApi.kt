@@ -27,7 +27,7 @@ class ProjectsApi private constructor(
             .get("api/project") {
                 parameter("archived", "false")
             }.body<List<V2ProjectDto>>()
-            .map { ProjectDto(id = it.id, directory = it.canonical, vcs = it.vcs, time = it.time) }
+            .map { ProjectDto(id = it.id, directory = it.canonical, vcs = it.vcs, time = it.time, name = it.name) }
 
     suspend fun getCurrentProject(directory: String? = null): ProjectDto =
         httpClient
@@ -44,8 +44,10 @@ class ProjectsApi private constructor(
                     applyLocationDirectory(directory)
                 }.body<V2LocationInfoDto>()
         val project = requireNotNull(location.project)
+        // `canonical` is the main checkout shared by every worktree of the project.
         return ProjectDto(
             id = requireNotNull(project.id),
+            worktree = project.canonical?.takeIf { it.isNotBlank() },
             directory = requireNotNull(project.directory),
         )
     }

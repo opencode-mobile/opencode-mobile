@@ -13,19 +13,27 @@ struct ProjectDTO: Codable, Sendable {
     let directory: String?
     let vcs: String?
     let time: ProjectTimeDTO?
+    /// User-set project name (v1 `name`, v2 `name`). Absent on most projects.
+    let name: String?
+    /// Main checkout of the project. V2 location sends it; v1 `worktree` already is it.
+    let canonical: String?
 
     init(
         id: String,
         worktree: String? = nil,
         directory: String? = nil,
         vcs: String? = nil,
-        time: ProjectTimeDTO? = nil
+        time: ProjectTimeDTO? = nil,
+        name: String? = nil,
+        canonical: String? = nil
     ) {
         self.id = id
         self.worktree = worktree
         self.directory = directory
         self.vcs = vcs
         self.time = time
+        self.name = name
+        self.canonical = canonical
     }
 
     var resolvedWorktree: String {

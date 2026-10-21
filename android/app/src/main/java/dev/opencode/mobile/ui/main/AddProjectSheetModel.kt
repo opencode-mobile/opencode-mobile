@@ -139,6 +139,8 @@ data class AddProjectSheetSession(
     /** True once this presentation's project-list fetch has finished, including a failure. */
     val suggestionsResolved: Boolean = false,
     val addedWorktrees: List<String> = emptyList(),
+    /** Project ids already on Home; their repositories are not suggested again. */
+    val addedProjectIds: Set<String> = emptySet(),
     /** Windows roots of folders listed successfully during this session. */
     val listedRoots: Set<String> = emptySet(),
     val isValidating: Boolean = false,
@@ -254,7 +256,7 @@ object AddProjectSheetModel {
                 )
             }
         val suggestions =
-            ServerProjectSuggestions.suggestions(session.serverProjects, session.addedWorktrees).map { project ->
+            ServerProjectSuggestions.suggestions(session.serverProjects, session.addedWorktrees, session.addedProjectIds).map { project ->
                 AddProjectSuggestionUi(
                     name = project.displayName,
                     path = project.worktree,

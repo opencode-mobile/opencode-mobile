@@ -207,7 +207,12 @@ class SessionDomainAdapter {
             deletions = dto.deletions,
         )
 
-    fun toVcsInfo(dto: V2VcsInfoDto) = VcsInfo(dto.branch?.current, dto.branch?.default)
+    fun toVcsInfo(dto: V2VcsInfoDto) =
+        VcsInfo(
+            currentBranch = dto.branch?.current,
+            defaultBranch = dto.branch?.default,
+            isSettled = !dto.provider.isNullOrBlank() && (dto.branch?.current != null || dto.branch?.default != null),
+        )
 
     fun toPermissionResponse(decision: PermissionDecision): String =
         when (decision) {
