@@ -64,6 +64,12 @@ data class V2ForkSessionRequestDto(
     val before: String? = null,
 )
 
+/** `POST /api/session/{id}/move`: the destination directory only; the server's default delivery (steer) applies. */
+@Serializable
+data class V2MoveSessionRequestDto(
+    val directory: String,
+)
+
 @Serializable
 data class V2PermissionRequestDto(
     val id: String,

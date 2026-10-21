@@ -33,6 +33,8 @@ data class ServerCapabilities(
     val supportsFollowUpDelivery: Boolean,
     /** Server tracks per-session read state (`time.idle`/`time.viewed`, `session.viewed`). */
     val supportsSessionViewed: Boolean = false,
+    /** Server moves a session to another worktree (`POST /api/session/{id}/move`, v2). */
+    val supportsSessionMove: Boolean = false,
 ) {
     companion object {
         fun forProtocol(
@@ -53,6 +55,7 @@ data class ServerCapabilities(
                         supportsSessionArchive = v2Features.sessionArchive,
                         supportsFollowUpDelivery = true,
                         supportsSessionViewed = true,
+                        supportsSessionMove = true,
                     )
             }
     }

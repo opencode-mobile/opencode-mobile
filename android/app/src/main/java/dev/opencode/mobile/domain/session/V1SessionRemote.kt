@@ -94,6 +94,12 @@ internal class V1SessionRemote(
         directory: String?,
     ): Session = adapter.toSession(api.forkSession(id, ForkSessionRequestDto(messageId = atMessageId), directory))
 
+    /** v1 has no move endpoint; the UI keeps the action disabled there. */
+    override suspend fun moveSession(
+        id: String,
+        directory: String,
+    ): Unit = throw SessionError.Http(404, SESSION_MOVE_UNAVAILABLE)
+
     override suspend fun abortSession(
         id: String,
         directory: String?,

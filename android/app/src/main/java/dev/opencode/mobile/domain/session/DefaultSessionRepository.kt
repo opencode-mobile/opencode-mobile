@@ -123,6 +123,12 @@ class DefaultSessionRepository
             runCatching { remote.forkSession(id, atMessageId, directory) }
                 .getOrElse { throw adapter.mapError(it) }
 
+        override suspend fun moveSession(
+            id: String,
+            directory: String,
+        ) = runCatching { remote.moveSession(id, directory) }
+            .getOrElse { throw adapter.mapError(it) }
+
         override suspend fun abortSession(
             id: String,
             directory: String?,

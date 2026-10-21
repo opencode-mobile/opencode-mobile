@@ -100,6 +100,13 @@ internal class V2SessionRemote(
         directory: String?,
     ): Session = adapter.toSession(api.forkSessionV2(id, atMessageId))
 
+    override suspend fun moveSession(
+        id: String,
+        directory: String,
+    ) {
+        api.moveSessionV2(id, directory)
+    }
+
     override suspend fun abortSession(
         id: String,
         directory: String?,

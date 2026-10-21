@@ -280,7 +280,7 @@ class EventDomainAdapter(
             "session.next.moved",
             "session.moved",
             ->
-                listOf(event("session.updated", properties)) +
+                listOf(event("session.updated", properties), event(SESSION_MOVED_EVENT, properties)) +
                     noticeEvents(V2TimelineNotices.moved(properties), properties, envelopeId)
             "session.next.agent.switched",
             "session.agent.selected",
@@ -1389,6 +1389,9 @@ class EventDomainAdapter(
     companion object {
         /** v2 read acknowledgement broadcast after `POST /api/session/{id}/view`. */
         const val SESSION_VIEWED_EVENT = "session.viewed"
+
+        /** v2 `session.moved`: `location.directory` is where the session runs now. */
+        const val SESSION_MOVED_EVENT = "session.moved"
 
         /** Client-only projection of a v2 agent/model switch for the message store. */
         const val MESSAGE_CONTEXT_EVENT = "message.context"

@@ -60,6 +60,15 @@ interface SessionRepository {
         directory: String? = null,
     ): Session
 
+    /**
+     * Moves session [id] to the worktree [directory]. v2 only: callers gate on
+     * `supportsSessionMove`; other servers throw.
+     */
+    suspend fun moveSession(
+        id: String,
+        directory: String,
+    ): Unit = throw SessionError.Http(404, SESSION_MOVE_UNAVAILABLE)
+
     suspend fun abortSession(
         id: String,
         directory: String? = null,
@@ -212,3 +221,5 @@ enum class CompactionStart {
     /** The server only enqueued compaction; it completes later, live. */
     Enqueued,
 }
+
+internal const val SESSION_MOVE_UNAVAILABLE = "session move is not available"

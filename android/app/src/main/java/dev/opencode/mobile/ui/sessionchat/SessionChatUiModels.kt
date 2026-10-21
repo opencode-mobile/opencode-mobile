@@ -30,6 +30,7 @@ import dev.opencode.mobile.ui.components.OpenCodeAttachmentVariant
 import dev.opencode.mobile.ui.components.OpenCodeComposerSuggestionLeadingIcon
 import dev.opencode.mobile.ui.icons.OpenCodeFileIconKind
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
+import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveUiState
 
 data class SessionChatComposerState(
     val text: String = "",
@@ -251,6 +252,8 @@ data class SessionChatUiState(
     val forkResultVisible: Boolean = false,
     val forkedSessionTitle: String = "",
     val pendingSessionReplace: ChildSessionNavigationTarget? = null,
+    /** "Move to worktree…": entry availability, the sheet, and its rows. */
+    val moveToWorktree: SessionChatWorktreeMoveUiState = SessionChatWorktreeMoveUiState(),
     val pendingTerminalOpen: PendingTerminalOpen? = null,
     /** Worktree to open in the File Browser; consumed by the screen once it navigates. */
     val pendingFilesOpen: String? = null,
