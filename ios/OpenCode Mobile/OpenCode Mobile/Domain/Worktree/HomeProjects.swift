@@ -73,6 +73,10 @@ nonisolated struct HomeProject: Identifiable, Equatable, Sendable {
     /// Location for project-level requests.
     var primaryPath: String { memberPaths[0] }
     var hasManyWorktrees: Bool { worktrees.count > 1 }
+    /// Where a tapped New session starts: the main checkout, else the first added path.
+    var mainCheckoutDirectory: String {
+        worktrees.first(where: \.isMain)?.directory ?? primaryPath
+    }
 
     func worktree(at directory: String) -> HomeWorktree? {
         let canonical = ServerPathPolicy.canonical(directory)
@@ -99,6 +103,22 @@ nonisolated enum HomeProjectCopy {
 
     static func running(_ count: Int) -> String {
         "\(count) running"
+    }
+
+    static let otherProjectsTitle = "Other projects"
+    static let showFewer = "Show fewer"
+    static let reorderNote = "Drag to reorder. Worktrees stay with their project."
+
+    static func showAll(_ count: Int) -> String {
+        "Show all \(count)"
+    }
+
+    static func showWorktrees(of projectName: String) -> String {
+        "Show worktrees of \(projectName)"
+    }
+
+    static func hideWorktrees(of projectName: String) -> String {
+        "Hide worktrees of \(projectName)"
     }
 
     static func joinedExisting(_ projectName: String) -> String {
@@ -246,6 +266,15 @@ nonisolated enum HomeScope: Hashable, Sendable {
         }
     }
 
+    /// Project of a project or worktree scope; nil for All.
+    var projectKey: String? {
+        switch self {
+        case .all: nil
+        case let .project(key): key
+        case let .worktree(key, _): key
+        }
+    }
+
     static func worktreeID(projectKey: String, directory: String) -> String {
         worktreePrefix + projectKey + separator + directory
     }
@@ -260,15 +289,16 @@ nonisolated enum HomeScope: Hashable, Sendable {
 
     /// Maps a stored scope id onto the current projects. An added path (or its old `path:` key)
     /// that is now a member of a merged project maps to that project; a worktree scope follows its
-    /// directory into whichever project lists it now. Nil when nothing matches.
-    static func resolve(id: String, projects: [HomeProject]) -> HomeScope? {
+    /// directory into whichever project lists it now. With worktrees off a worktree scope reads
+    /// as its project. Nil when nothing matches.
+    static func resolve(id: String, projects: [HomeProject], worktreesEnabled: Bool = true) -> HomeScope? {
         if id == allID { return .all }
         if projects.contains(where: { $0.key == id }) { return .project(id) }
         if let parts = worktreeParts(id) {
             let owner = projects.first { $0.key == parts.projectKey && $0.worktree(at: parts.directory) != nil }
                 ?? projects.first { $0.worktree(at: parts.directory) != nil }
             guard let owner else { return nil }
-            return owner.hasManyWorktrees
+            return worktreesEnabled && owner.hasManyWorktrees
                 ? .worktree(projectKey: owner.key, directory: ServerPathPolicy.canonical(parts.directory))
                 : .project(owner.key)
         }
@@ -314,9 +344,15 @@ nonisolated struct HomeRowLocation: Hashable, Sendable {
 
     var text: String { parts.map(\.text).joined(separator: Self.separator) }
 
-    /// Nil for a non-repository project, which keeps the path subtitle.
-    static func make(project: HomeProject, sessionDirectory: String?, includesProjectName: Bool) -> HomeRowLocation? {
-        guard project.isRepository else { return nil }
+    /// Nil for a non-repository project, which keeps the path subtitle, and for every project
+    /// while worktrees are off.
+    static func make(
+        project: HomeProject,
+        sessionDirectory: String?,
+        includesProjectName: Bool,
+        worktreesEnabled: Bool = true
+    ) -> HomeRowLocation? {
+        guard worktreesEnabled, project.isRepository else { return nil }
         let raw = sessionDirectory?.trimmingCharacters(in: .whitespacesAndNewlines)
         let directory = ServerPathPolicy.canonical(raw?.isEmpty == false ? raw! : project.primaryPath)
         let worktree = project.worktree(at: directory)
