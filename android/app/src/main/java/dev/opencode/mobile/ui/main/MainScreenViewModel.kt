@@ -47,6 +47,7 @@ import dev.opencode.mobile.domain.session.rootSessions
 import dev.opencode.mobile.domain.sessioncache.SessionCache
 import dev.opencode.mobile.domain.worktree.UnavailableWorktreeRepository
 import dev.opencode.mobile.domain.worktree.WorktreeInventory
+import dev.opencode.mobile.domain.worktree.WorktreeInventoryCache
 import dev.opencode.mobile.domain.worktree.WorktreeRepository
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.theme.LetterAccent
@@ -95,6 +96,7 @@ class MainScreenViewModel
         worktreeRepository: WorktreeRepository = UnavailableWorktreeRepository,
         private val foregroundEventStream: ForegroundEventStream = IdleForegroundEventStream,
         projectFirstLoadTiming: ProjectFirstLoadTiming = ProjectFirstLoadTiming(),
+        private val worktreeInventoryCache: WorktreeInventoryCache = WorktreeInventoryCache(),
     ) : ViewModel() {
         private val _uiState = MutableStateFlow<MainScreenUiState>(MainScreenUiState.Probing)
         val uiState: StateFlow<MainScreenUiState> = _uiState.asStateFlow()
@@ -1298,6 +1300,7 @@ class MainScreenViewModel
         ) {
             worktreeMarkJob?.cancel()
             worktreeLoader.onConnection(serverBaseUrl)
+            worktreeInventoryCache.setAddedPaths(worktrees, serverBaseUrl)
             branchLookups.refresh()
             worktreeMarkJob =
                 viewModelScope.launch {
@@ -1320,6 +1323,7 @@ class MainScreenViewModel
 
         private fun applyPathLoad(load: HomePathLoad) {
             if (load.listsSessions) listsSessionsPaths += load.addedPath else listsSessionsPaths -= load.addedPath
+            worktreeInventoryCache.record(load.inventory, load.addedPath, serverBaseUrl)
             updateHomeIndex { index ->
                 val resolutions = load.resolution?.let { index.resolutions + (load.addedPath to it) } ?: index.resolutions
                 val inventories =
@@ -1346,6 +1350,7 @@ class MainScreenViewModel
 
         private fun resetHomeIndex() {
             worktreeLoader.onDisconnected()
+            worktreeInventoryCache.clear()
             listsSessionsPaths.clear()
             branchLookups.clear()
             homeIndex = HomeWorktreeIndex()
