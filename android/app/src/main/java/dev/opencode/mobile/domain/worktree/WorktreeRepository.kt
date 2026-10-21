@@ -3,13 +3,13 @@ package dev.opencode.mobile.domain.worktree
 sealed class WorktreeLoad {
     data class Loaded(
         val directories: List<String>,
-        /** V1 workspace directories need a session list. V2 sessions are already listed. */
+        /** V1 worktree directories need a session list each. V2 sessions are already listed by project. */
         val listsSessions: Boolean,
     ) : WorktreeLoad()
 
     data object Unloaded : WorktreeLoad()
 
-    /** V1 probe returned 404. Stop until the next connect. */
+    /** V1 list returned 404 and no main checkout is known. Stop until the next connect. */
     data object Stopped : WorktreeLoad()
 
     data class Failed(
@@ -19,13 +19,15 @@ sealed class WorktreeLoad {
 
 interface WorktreeRepository {
     /**
-     * V2 lists `GET /api/worktree?projectID=` when [projectId] is present.
-     * V1 probes `GET /experimental/workspace` for [addedPath]. A missing V2
-     * project id does not call the worktree routes.
+     * V2 lists `GET /api/worktree?projectID=` when [projectId] is present (the main checkout
+     * included). V1 lists `GET /experimental/worktree` for [addedPath] and puts [mainWorktree]
+     * first, since that route lists only the sandboxes; a 404 (older servers) means no extra
+     * worktrees. A missing V2 project id does not call the worktree routes.
      */
     suspend fun load(
         addedPath: String,
         projectId: String?,
+        mainWorktree: String? = null,
     ): WorktreeLoad
 
     /**
@@ -36,6 +38,7 @@ interface WorktreeRepository {
     suspend fun loadRefreshed(
         addedPath: String,
         projectId: String?,
+        mainWorktree: String? = null,
     ): WorktreeLoad
 
     /** V2 `POST /api/worktree/refresh`. Failure is reported and does not clear a list. */
@@ -49,16 +52,18 @@ interface WorktreeRepository {
     fun onConnection(key: String)
 }
 
-/** Tests and previews: never calls the server, so nothing is badged. */
+/** Tests and previews: never calls the server, so nothing is listed. */
 object UnavailableWorktreeRepository : WorktreeRepository {
     override suspend fun load(
         addedPath: String,
         projectId: String?,
+        mainWorktree: String?,
     ): WorktreeLoad = WorktreeLoad.Unloaded
 
     override suspend fun loadRefreshed(
         addedPath: String,
         projectId: String?,
+        mainWorktree: String?,
     ): WorktreeLoad = WorktreeLoad.Unloaded
 
     override suspend fun refresh(projectId: String): Boolean = false
