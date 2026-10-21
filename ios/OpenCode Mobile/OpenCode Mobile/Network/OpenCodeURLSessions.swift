@@ -18,8 +18,16 @@ enum OpenCodeURLSessions {
         let previous = restSession
         restSession = replacement
         lock.unlock()
-        previous.invalidateAndCancel()
+        // A caller may have read `previous` but not yet created its task, and creating a task on an
+        // invalidated session raises an uncatchable NSGenericException (#777). Cancel in-flight work
+        // now; invalidate once such stragglers have had time to start.
+        previous.getAllTasks { tasks in tasks.forEach { $0.cancel() } }
+        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + invalidationGracePeriod) {
+            previous.invalidateAndCancel()
+        }
     }
+
+    private static let invalidationGracePeriod: TimeInterval = 5
 
     /// Nil means the live pool. An injected session stays fixed for tests and the connection probe.
     static func restResolver(injected: URLSession?) -> @Sendable () -> URLSession {
