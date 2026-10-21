@@ -2,16 +2,20 @@ import Foundation
 
 nonisolated struct WorktreesAPIClient: WorktreeRemote, Sendable {
     private let connectionProvider: @Sendable () -> ServerConnection?
-    private let urlSession: URLSession
+    private let resolveURLSession: @Sendable () -> URLSession
     private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
 
     init(
         connectionProvider: @escaping @Sendable () -> ServerConnection?,
-        urlSession: URLSession = OpenCodeURLSessions.rest
+        urlSession: URLSession? = nil
     ) {
         self.connectionProvider = connectionProvider
-        self.urlSession = urlSession
+        self.resolveURLSession = OpenCodeURLSessions.restResolver(injected: urlSession)
+    }
+
+    func resolvedURLSession() -> URLSession {
+        resolveURLSession()
     }
 
     func listV2(projectID: String) async throws -> [String] {
@@ -40,7 +44,7 @@ nonisolated struct WorktreesAPIClient: WorktreeRemote, Sendable {
         guard let connection = connectionProvider() else { return .failed(-1) }
         let request = connection.authorizedRequest(path: "experimental/workspace", directory: directory)
         do {
-            let (data, response) = try await urlSession.data(for: request)
+            let (data, response) = try await resolveURLSession().data(for: request)
             guard let http = response as? HTTPURLResponse else { return .failed(-1) }
             if http.statusCode == 404 { return .notFound }
             guard (200 ..< 300).contains(http.statusCode) else { return .failed(http.statusCode) }
@@ -51,7 +55,7 @@ nonisolated struct WorktreesAPIClient: WorktreeRemote, Sendable {
     }
 
     private func data(for request: URLRequest) async throws -> Data {
-        let (data, response) = try await urlSession.data(for: request)
+        let (data, response) = try await resolveURLSession().data(for: request)
         guard let http = response as? HTTPURLResponse else { throw WorktreesAPIError.invalidResponse }
         guard (200 ..< 300).contains(http.statusCode) else {
             throw WorktreesAPIError.httpStatus(http.statusCode)
