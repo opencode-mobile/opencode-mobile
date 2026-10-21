@@ -73,6 +73,7 @@ import dev.opencode.mobile.ui.componentgallery.components.BottomSheetGalleryScre
 import dev.opencode.mobile.ui.componentgallery.components.ButtonGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ChildSessionRowGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.StepRailGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.ActivityCardGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ChoiceBadgeGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.CodeFileGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.CodeSnippetGalleryScreen
@@ -739,6 +740,7 @@ fun MainNavigation() {
                                                         ComponentGalleryEntryId.TimelineNotice -> TimelineNoticeGalleryScreen()
                                                         ComponentGalleryEntryId.ChildSessionRow -> ChildSessionRowGalleryScreen()
                                                         ComponentGalleryEntryId.StepRail -> StepRailGalleryScreen()
+                                                        ComponentGalleryEntryId.ActivityCard -> ActivityCardGalleryScreen()
                                                         ComponentGalleryEntryId.WorkingIndicator ->
                                                             WorkingIndicatorGalleryScreen()
                                                         ComponentGalleryEntryId.ReasoningRow -> ReasoningRowGalleryScreen()

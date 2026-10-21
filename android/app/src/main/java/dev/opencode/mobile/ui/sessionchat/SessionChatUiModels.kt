@@ -268,6 +268,8 @@ data class SessionChatUiState(
     val expandedStepParagraphs: Map<String, Int> = emptyMap(),
     /** Step rails unfolded past their `N earlier steps` row, by rail id (#779). */
     val unfoldedStepRails: Set<String> = emptySet(),
+    /** Activity cards expanded inline to list finished steps, by card id (#779). */
+    val expandedActivityCards: Set<String> = emptySet(),
     /** One-time Chip timeline intro sheet (OPE-270). */
     val chipTimelineIntroVisible: Boolean = false,
     /** Null while idle. A value shows the dictation card in place of prompt entry. */

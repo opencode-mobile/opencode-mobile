@@ -31,6 +31,7 @@ enum ComponentGalleryEntryID: String, Hashable {
     case timelineNotice
     case childSessionRow
     case stepRail
+    case activityCard
     case workingIndicator
     case reasoningRow
     case topBar
@@ -366,6 +367,12 @@ let componentGalleryEntries = [
         id: .stepRail,
         title: "Step Rail",
         description: "One line per agent step on a vertical rail, live while the agent works.",
+        category: .chat
+    ),
+    ComponentGalleryEntry(
+        id: .activityCard,
+        title: "Activity Card",
+        description: "One live card per run of agent steps that settles into a summary line.",
         category: .chat
     ),
     ComponentGalleryEntry(

@@ -118,6 +118,8 @@ struct ComponentGalleryDetailView: View {
             ChildSessionRowGalleryView()
         case .stepRail:
             StepRailGalleryView()
+        case .activityCard:
+            ActivityCardGalleryView()
         case .workingIndicator:
             WorkingIndicatorGalleryView()
         case .reasoningRow:

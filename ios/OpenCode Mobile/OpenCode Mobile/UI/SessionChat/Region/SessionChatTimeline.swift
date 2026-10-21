@@ -35,6 +35,8 @@ final class SessionChatTimeline {
     private(set) var chipTimeline = false
     /// Step rail timeline preference (#779); one line per step on a rail.
     private(set) var stepRailTimeline = false
+    /// Activity card timeline preference (#779); one live card per run of steps.
+    private(set) var activityCardTimeline = false
     /// First message of a pending revert (v1 `session.revert`, v2 `session.revert.staged`): it and
     /// every later message stay hidden until the revert is cleared or committed (#619).
     private(set) var revertBoundaryMessageID: String?
@@ -130,6 +132,34 @@ final class SessionChatTimeline {
                 expirePendingPromptPatches: false
             )
         }
+    }
+
+    func updateActivityCardTimeline(_ enabled: Bool) {
+        guard enabled != activityCardTimeline else { return }
+        activityCardTimeline = enabled
+        guard !lastLoadedDisplayMessages.isEmpty else { return }
+        let snapshot = lastLoadedDisplayMessages
+        let fromCache = state.messagesFromCache
+        Task {
+            await applyLoadedDisplayMessagesTransform(
+                snapshot,
+                isRefreshing: false,
+                fromQuietRefresh: true,
+                messagesFromCache: fromCache,
+                expirePendingPromptPatches: false
+            )
+        }
+    }
+
+    /// Activity card: expand or collapse one card. Cards start collapsed;
+    /// expansion is presentation keyed by the card's stable id.
+    func toggleActivityCardExpanded(_ cardID: String) {
+        if state.expandedActivityCards.contains(cardID) {
+            state.expandedActivityCards.remove(cardID)
+        } else {
+            state.expandedActivityCards.insert(cardID)
+        }
+        notifyChange()
     }
 
     /// Step rail: show or fold the earlier settled steps of one rail. Fold
@@ -361,6 +391,7 @@ final class SessionChatTimeline {
             collapseConsecutiveToolCalls: collapseConsecutiveToolCalls,
             chipTimeline: chipTimeline,
             stepRail: stepRailTimeline,
+            activityCard: activityCardTimeline,
             childSessions: childSessions
         )
         let stamped = SessionChatTimelineProjector.project(
@@ -552,7 +583,8 @@ final class SessionChatTimeline {
             serverCommands: serverCommands,
             collapseConsecutiveToolCalls: collapseConsecutiveToolCalls,
             chipTimeline: chipTimeline,
-            stepRail: stepRailTimeline
+            stepRail: stepRailTimeline,
+            activityCard: activityCardTimeline
         )
         let displayed = SessionChatTimelineProjector.displayedOptimisticSendRows(rows)
         let hadPriorRows = !state.messages.isEmpty || !timelineFrame.rows.isEmpty
@@ -690,6 +722,7 @@ final class SessionChatTimeline {
             collapseConsecutiveToolCalls: collapseConsecutiveToolCalls,
             chipTimeline: chipTimeline,
             stepRail: stepRailTimeline,
+            activityCard: activityCardTimeline,
             childSessions: childSessions
         )
         guard !frame.messages.isEmpty else { return nil }
@@ -759,6 +792,7 @@ final class SessionChatTimeline {
         let collapse = collapseConsecutiveToolCalls
         let chips = chipTimeline
         let stepRail = stepRailTimeline
+        let activityCard = activityCardTimeline
         let children = childSessions
         let visibleDisplayMessages = Self.hidingReverted(displayMessages, from: revertBoundaryMessageID)
 
@@ -790,6 +824,7 @@ final class SessionChatTimeline {
                 collapseConsecutiveToolCalls: collapse,
                 chipTimeline: chips,
                 stepRail: stepRail,
+                activityCard: activityCard,
                 childSessions: children
             )
             return SessionChatTimelineProjector.project(
@@ -908,6 +943,7 @@ final class SessionChatTimeline {
             collapseConsecutiveToolCalls: collapseConsecutiveToolCalls,
             chipTimeline: chipTimeline,
             stepRail: stepRailTimeline,
+            activityCard: activityCardTimeline,
             childSessions: childSessions
         )
         let stillUnacked = SessionChatTimelineProjector.unmatchedPending(

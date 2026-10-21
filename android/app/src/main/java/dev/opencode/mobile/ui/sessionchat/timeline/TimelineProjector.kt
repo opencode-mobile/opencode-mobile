@@ -377,6 +377,8 @@ object TimelineProjector {
                 "s:${block.blockID}:${block.renderedMarkdown != null}:${stepParagraphChipFingerprint(block)}"
             is SessionChatTimelineBlock.StepRail ->
                 "sr:${block.blockID}:${stepRailFingerprint(block)}:${block.thinking}"
+            is SessionChatTimelineBlock.ActivityCard ->
+                "ac:${block.blockID}:${activityCardFingerprint(block)}:${block.isLive}:${block.thinking}"
             is SessionChatTimelineBlock.StopNote -> "x:${block.blockID}:${block.reason}"
             is SessionChatTimelineBlock.FailureLine ->
                 "f:${block.blockID}:${block.providerBody != null}:${block.isNeutral}:${block.action != null}"
@@ -394,6 +396,10 @@ object TimelineProjector {
         block.steps.joinToString(",") { step ->
             "${step.kind.ordinal}:${step.status.ordinal}:${step.isBranch}:${step.detail != null}"
         }
+
+    /** Step count and status change the card's running lines, footer and settled line. */
+    private fun activityCardFingerprint(block: SessionChatTimelineBlock.ActivityCard): String =
+        block.steps.joinToString(",") { step -> "${step.kind.ordinal}:${step.status.ordinal}" }
 
     private data class LayoutKey(
         val blockCount: Int,
@@ -638,6 +644,7 @@ object TimelineProjector {
             is SessionChatTimelineBlock.StepParagraph ->
                 "s:${block.blockID}:${stepParagraphChipFingerprint(block)}"
             is SessionChatTimelineBlock.StepRail -> "sr:${block.blockID}:${stepRailFingerprint(block)}"
+            is SessionChatTimelineBlock.ActivityCard -> "ac:${block.blockID}:${activityCardFingerprint(block)}"
             is SessionChatTimelineBlock.StopNote -> "x:${block.blockID}:${block.reason}"
             is SessionChatTimelineBlock.FailureLine -> "f:${block.blockID}:${block.providerBody != null}"
             is SessionChatTimelineBlock.Notice -> "o:${block.blockID}:${block.notice.hashCode()}"

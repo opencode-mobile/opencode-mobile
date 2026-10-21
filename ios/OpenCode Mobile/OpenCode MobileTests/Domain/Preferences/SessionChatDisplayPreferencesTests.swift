@@ -252,7 +252,7 @@ import Testing
         #expect(preferences.timelineStyle == .chips)
         #expect(preferences.chipTimeline == false)
         #expect(preferences.effectiveTimelineStyle == .standard)
-        #expect(preferences.availableTimelineStyles == [.standard, .stepRail])
+        #expect(preferences.availableTimelineStyles == [.standard, .stepRail, .activityCard])
 
         preferences.setTimelineStyle(.stepRail)
         #expect(preferences.stepRailTimeline)
@@ -264,7 +264,7 @@ import Testing
             defaults: freshDefaults("flagOn"),
             featureFlags: flags(chipsOn: true, "flagOn")
         )
-        #expect(preferences.availableTimelineStyles == [.standard, .chips, .stepRail])
+        #expect(preferences.availableTimelineStyles == [.standard, .chips, .stepRail, .activityCard])
     }
 
     @Test func timelineStyle_setPersistsEndsIntroAndClearResets() {
@@ -287,6 +287,37 @@ import Testing
         let defaults = freshDefaults("intro")
         defaults.set("step_rail", forKey: "timelineStyle")
         let preferences = SessionChatDisplayPreferences(defaults: defaults, featureFlags: flags(chipsOn: true, "intro"))
+
+        #expect(!preferences.shouldOfferChipTimelineIntro(turnToolCalls: 20, nowMs: 1_000))
+    }
+
+    @Test func timelineStyle_activityCardWireValueRoundTrips() {
+        let defaults = freshDefaults("activityCard")
+        let preferences = SessionChatDisplayPreferences(defaults: defaults)
+
+        preferences.setTimelineStyle(.activityCard)
+
+        #expect(SessionChatTimelineStyle.activityCard.wireValue == "activity_card")
+        #expect(SessionChatTimelineStyle.fromWire("activity_card") == .activityCard)
+        #expect(defaults.string(forKey: "timelineStyle") == "activity_card")
+        #expect(defaults.bool(forKey: "chipTimeline") == false)
+        let reloaded = SessionChatDisplayPreferences(defaults: defaults)
+        #expect(reloaded.timelineStyle == .activityCard)
+        #expect(reloaded.activityCardTimeline)
+        #expect(reloaded.stepRailTimeline == false)
+        #expect(reloaded.chipTimeline == false)
+        #expect(reloaded.effectiveTimelineStyle == .activityCard)
+        #expect(SessionChatTimelineStyle.activityCard.title == "Activity Card")
+        #expect(
+            SessionChatTimelineStyle.activityCard.subtitle
+                == "Running steps on one live card that folds into a summary"
+        )
+    }
+
+    @Test func timelineStyle_activityCardNeverOffersTheChipIntro() {
+        let defaults = freshDefaults("introCard")
+        defaults.set("activity_card", forKey: "timelineStyle")
+        let preferences = SessionChatDisplayPreferences(defaults: defaults, featureFlags: flags(chipsOn: true, "introCard"))
 
         #expect(!preferences.shouldOfferChipTimelineIntro(turnToolCalls: 20, nowMs: 1_000))
     }

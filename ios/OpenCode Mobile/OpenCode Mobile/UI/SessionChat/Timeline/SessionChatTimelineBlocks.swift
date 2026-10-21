@@ -14,6 +14,8 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
     case stepParagraph(blockID: String, paragraph: SessionChatStepParagraphBlock)
     /// Step rail timeline (#779): a run of tools and settled thoughts, one line each.
     case stepRail(blockID: String, rail: SessionChatStepRailBlock)
+    /// Activity card timeline (#779): a run of tools and settled thoughts on one card.
+    case activityCard(blockID: String, card: SessionChatActivityCardBlock)
     /// Persistent note that the reply ended early (cut off or interrupted).
     case stopNote(blockID: String, reason: MessageStopReason)
     /// A failed run under the reply. A provider body or an action opens the detail sheet.
@@ -48,6 +50,8 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
             blockID
         case .stepRail(let blockID, _):
             blockID
+        case .activityCard(let blockID, _):
+            blockID
         case .stopNote(let blockID, _):
             blockID
         case .failureLine(let blockID, _, _, _, _, _, _):
@@ -73,8 +77,8 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
         case .stepParagraph(_, let paragraph):
             guard let textBlockID = paragraph.textBlockID, let text = paragraph.text else { return nil }
             return (textBlockID, text, paragraph.renderedMarkdown)
-        case .attachment, .toolCard, .toolGroup, .childSessionRow, .reasoning, .stepRail, .stopNote, .failureLine,
-             .notice:
+        case .attachment, .toolCard, .toolGroup, .childSessionRow, .reasoning, .stepRail, .activityCard, .stopNote,
+             .failureLine, .notice:
             return nil
         }
     }
@@ -86,8 +90,8 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
             return .text(blockID: blockID, text: text, renderedMarkdown: document)
         case .stepParagraph(let blockID, let paragraph):
             return .stepParagraph(blockID: blockID, paragraph: paragraph.withRenderedMarkdown(document))
-        case .attachment, .toolCard, .toolGroup, .childSessionRow, .reasoning, .stepRail, .stopNote, .failureLine,
-             .notice:
+        case .attachment, .toolCard, .toolGroup, .childSessionRow, .reasoning, .stepRail, .activityCard, .stopNote,
+             .failureLine, .notice:
             return self
         }
     }
@@ -120,6 +124,8 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
             lID == rID && lParagraph == rParagraph
         case let (.stepRail(lID, lRail), .stepRail(rID, rRail)):
             lID == rID && lRail == rRail
+        case let (.activityCard(lID, lCard), .activityCard(rID, rCard)):
+            lID == rID && lCard == rCard
         case let (.stopNote(lID, lReason), .stopNote(rID, rReason)):
             lID == rID && lReason == rReason
         case let (
@@ -496,13 +502,40 @@ nonisolated struct SessionChatStepChildSession: Equatable, Sendable {
     let toolsSoFar: Int?
 }
 
-/// One line on a step rail (#779).
+/// What a step did, for the activity card's family counts (#779).
+nonisolated enum SessionChatStepFamily: String, Sendable {
+    case read
+    case search
+    case fetch
+    case edit
+    case command
+    case thought
+    case agent
+
+    /// "1 read", "2 searches".
+    func counted(_ count: Int) -> String {
+        guard count != 1 else { return "1 \(rawValue)" }
+        switch self {
+        case .search, .fetch: return "\(count) \(rawValue)es"
+        default: return "\(count) \(rawValue)s"
+        }
+    }
+}
+
+/// One step of a run of tools (#779): a line on a step rail or an activity card.
 nonisolated struct SessionChatStep: Equatable, Sendable, Identifiable {
     /// Part id behind the step.
     let id: String
     let kind: SessionChatStepKind
     let status: SessionChatStepStatus
+    /// `runningTitle` while in flight, else `settledTitle`.
     let title: String
+    /// With a verb: "Reading X", "Running cmd".
+    let runningTitle: String
+    /// Without the verb; a shell command keeps "Ran cmd".
+    let settledTitle: String
+    /// Nil for tools outside the counted families (skills, questions, other tools).
+    let family: SessionChatStepFamily?
     /// One short line under or beside the title; nil when there is nothing to add.
     let detail: String?
     let additions: Int?
@@ -524,6 +557,9 @@ nonisolated struct SessionChatStep: Equatable, Sendable, Identifiable {
         kind: SessionChatStepKind,
         status: SessionChatStepStatus,
         title: String,
+        runningTitle: String? = nil,
+        settledTitle: String? = nil,
+        family: SessionChatStepFamily? = nil,
         detail: String? = nil,
         additions: Int? = nil,
         deletions: Int? = nil,
@@ -539,6 +575,9 @@ nonisolated struct SessionChatStep: Equatable, Sendable, Identifiable {
         self.kind = kind
         self.status = status
         self.title = title
+        self.runningTitle = runningTitle ?? title
+        self.settledTitle = settledTitle ?? title
+        self.family = family
         self.detail = detail
         self.additions = additions
         self.deletions = deletions
@@ -557,6 +596,9 @@ nonisolated struct SessionChatStep: Equatable, Sendable, Identifiable {
             kind: kind,
             status: status,
             title: title,
+            runningTitle: runningTitle,
+            settledTitle: settledTitle,
+            family: family,
             detail: detail,
             additions: additions,
             deletions: deletions,
@@ -630,6 +672,73 @@ nonisolated enum SessionChatStepRailRow: Equatable, Sendable, Identifiable {
     }
 }
 
+/// Activity card timeline (#779): the same run of steps as a step rail, shown
+/// as one card. `id` is "ac:" + the first member's part id, so the card keeps
+/// its identity while later steps stream in.
+nonisolated struct SessionChatActivityCardBlock: Equatable, Sendable {
+    let id: String
+    let steps: [SessionChatStep]
+    /// The last card of a turn that is still working. Set at render time from
+    /// session status (`withLive`); blocks built from parts are never live.
+    let isLive: Bool
+    /// Live and nothing in flight: the card shows "Thinking…" instead of running lines.
+    let thinking: Bool
+
+    init(id: String, steps: [SessionChatStep], isLive: Bool = false) {
+        self.id = id
+        self.steps = steps
+        self.isLive = isLive
+        self.thinking = isLive && !steps.contains { $0.status.isInFlight }
+    }
+
+    func withLive(_ isLive: Bool) -> SessionChatActivityCardBlock {
+        guard isLive != self.isLive else { return self }
+        return SessionChatActivityCardBlock(id: id, steps: steps, isLive: isLive)
+    }
+
+    /// Pending and running steps, in order.
+    var running: [SessionChatStep] { steps.filter(\.status.isInFlight) }
+
+    /// Completed, failed and interrupted steps, in order.
+    var done: [SessionChatStep] { steps.filter { !$0.status.isInFlight } }
+
+    /// Failed if any step failed for real (not interrupted), else completed.
+    var worstStatus: SessionChatStepStatus {
+        SessionChatStepRailBlock.worstStatus(of: steps)
+    }
+
+    /// Earliest known start, for the live header's elapsed time.
+    var startedAtMs: Int64? {
+        steps.compactMap(\.startedAtMs).min()
+    }
+
+    /// Live footer: "4 done · 3 reads · 1 search", or "nothing finished yet".
+    static func summary(done: [SessionChatStep]) -> String {
+        guard !done.isEmpty else { return "nothing finished yet" }
+        return joined("\(done.count) done", families(done))
+    }
+
+    /// Finished card: "9 steps · 3 reads · 2 edits".
+    static func settledSummary(_ steps: [SessionChatStep]) -> String {
+        joined(steps.count == 1 ? "1 step" : "\(steps.count) steps", families(steps))
+    }
+
+    /// Family counts in first-seen order: "3 reads · 1 search".
+    static func families(_ steps: [SessionChatStep]) -> String {
+        var order: [SessionChatStepFamily] = []
+        var counts: [SessionChatStepFamily: Int] = [:]
+        for family in steps.compactMap(\.family) {
+            if counts[family] == nil { order.append(family) }
+            counts[family, default: 0] += 1
+        }
+        return order.map { $0.counted(counts[$0] ?? 0) }.joined(separator: " \u{00B7} ")
+    }
+
+    private static func joined(_ head: String, _ tail: String) -> String {
+        tail.isEmpty ? head : "\(head) \u{00B7} \(tail)"
+    }
+}
+
 nonisolated enum SessionChatTimelineBlocks {
     private static let contextToolNames: Set<String> = ["read", "glob", "grep", "websearch"]
 
@@ -638,7 +747,8 @@ nonisolated enum SessionChatTimelineBlocks {
         parts: [MessagePart],
         collapseConsecutiveToolCalls: Bool = false,
         chipTimeline: Bool = false,
-        stepRail: Bool = false
+        stepRail: Bool = false,
+        activityCard: Bool = false
     ) -> SessionChatTimelineBlocksResult {
         guard !parts.isEmpty else { return .ok([]) }
         if role == .notice {
@@ -649,6 +759,9 @@ nonisolated enum SessionChatTimelineBlocks {
         }
         if stepRail, role == .assistant {
             return buildStepRails(parts: parts)
+        }
+        if activityCard, role == .assistant {
+            return buildActivityCards(parts: parts)
         }
 
         let allowToolCards = role == .assistant
@@ -775,7 +888,8 @@ nonisolated enum SessionChatTimelineBlocks {
         fallbackText: String,
         collapseConsecutiveToolCalls: Bool = false,
         chipTimeline: Bool = false,
-        stepRail: Bool = false
+        stepRail: Bool = false,
+        activityCard: Bool = false
     ) -> [SessionChatTimelineBlock] {
         func fallbackBlocks() -> [SessionChatTimelineBlock] {
             let trimmed = fallbackText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -794,7 +908,8 @@ nonisolated enum SessionChatTimelineBlocks {
             parts: parts,
             collapseConsecutiveToolCalls: collapseConsecutiveToolCalls,
             chipTimeline: chipTimeline,
-            stepRail: stepRail
+            stepRail: stepRail,
+            activityCard: activityCard
         ) {
         case .ok(let blocks):
             return blocks.isEmpty ? fallbackBlocks() : blocks
@@ -863,18 +978,20 @@ nonisolated enum SessionChatTimelineBlocks {
     /// With `chipTimeline` every run of consecutive assistant bodies (text
     /// included) merges so a paragraph joins the tools of the next model step.
     /// `stepRail` merges the same way, so one turn is one row and the tools of
-    /// consecutive model steps join one rail.
+    /// consecutive model steps join one rail. `activityCard` merges like `stepRail`.
     static func mergeConsecutiveToolOnlyAssistantBodies(
         _ bodies: [DisplayMessageBody],
         collapseConsecutiveToolCalls: Bool,
         chipTimeline: Bool = false,
-        stepRail: Bool = false
+        stepRail: Bool = false,
+        activityCard: Bool = false
     ) -> [DisplayMessageBody] {
         mergeBodies(
             bodies,
             collapseConsecutiveToolCalls: collapseConsecutiveToolCalls,
             chipTimeline: chipTimeline,
-            stepRail: stepRail && !chipTimeline
+            stepRail: stepRail && !chipTimeline,
+            activityCard: activityCard && !chipTimeline && !stepRail
         )
         .map(withStopNote)
     }
@@ -931,13 +1048,15 @@ nonisolated enum SessionChatTimelineBlocks {
         _ bodies: [DisplayMessageBody],
         collapseConsecutiveToolCalls: Bool,
         chipTimeline: Bool,
-        stepRail: Bool
+        stepRail: Bool,
+        activityCard: Bool
     ) -> [DisplayMessageBody] {
-        guard collapseConsecutiveToolCalls || chipTimeline || stepRail, bodies.count >= 2 else { return bodies }
+        let mergesTurns = chipTimeline || stepRail || activityCard
+        guard collapseConsecutiveToolCalls || mergesTurns, bodies.count >= 2 else { return bodies }
         func isMergeable(_ body: DisplayMessageBody) -> Bool {
             // A message that carries a compaction marker stays its own row.
             if isCompactionBody(body) { return false }
-            if chipTimeline || stepRail {
+            if mergesTurns {
                 return body.message.role == .assistant && !body.blocks.isEmpty
             }
             return isMergeableToolOnlyAssistant(body)
@@ -969,11 +1088,12 @@ nonisolated enum SessionChatTimelineBlocks {
                 fallbackText: "",
                 collapseConsecutiveToolCalls: collapseConsecutiveToolCalls,
                 chipTimeline: chipTimeline,
-                stepRail: stepRail
+                stepRail: stepRail,
+                activityCard: activityCard
             )
             if blocks.isEmpty {
                 blocks = run.flatMap(\.blocks)
-            } else if chipTimeline || stepRail {
+            } else if mergesTurns {
                 blocks = attachMemberRootMarkdown(blocks, members: Array(run))
             }
             var message = first.message
@@ -1071,8 +1191,8 @@ nonisolated enum SessionChatTimelineBlocks {
             true
         case .toolCard(_, let card):
             !Self.isChildSessionTool(card.toolName)
-        case .text, .attachment, .childSessionRow, .reasoning, .stepParagraph, .stepRail, .stopNote, .failureLine,
-             .notice:
+        case .text, .attachment, .childSessionRow, .reasoning, .stepParagraph, .stepRail, .activityCard, .stopNote,
+             .failureLine, .notice:
             false
         }
     }
@@ -1100,6 +1220,27 @@ nonisolated enum SessionChatTimelineBlocks {
     /// text and a streaming thought are see-through: they neither show nor
     /// break a run.
     private static func buildStepRails(parts: [MessagePart]) -> SessionChatTimelineBlocksResult {
+        buildStepRuns(parts: parts) { first, steps in
+            let id = PresentationBlockId.stepRail(first)
+            return .stepRail(blockID: id, rail: SessionChatStepRailBlock(id: id, steps: markBranches(steps)))
+        }
+    }
+
+    /// The same runs as `buildStepRails`, each as one activity card.
+    private static func buildActivityCards(parts: [MessagePart]) -> SessionChatTimelineBlocksResult {
+        buildStepRuns(parts: parts) { first, steps in
+            let id = PresentationBlockId.activityCard(first)
+            return .activityCard(blockID: id, card: SessionChatActivityCardBlock(id: id, steps: steps))
+        }
+    }
+
+    /// Shared by the step rail and the activity card: text and the rest render
+    /// as in the standard timeline; each maximal run of steps becomes one block
+    /// from `makeRun(firstStepId, steps)`.
+    private static func buildStepRuns(
+        parts: [MessagePart],
+        makeRun: (String, [SessionChatStep]) -> SessionChatTimelineBlock
+    ) -> SessionChatTimelineBlocksResult {
         var blocks: [SessionChatTimelineBlock] = []
         var pendingText: [(id: String, text: String)] = []
         var pendingSteps: [SessionChatStep] = []
@@ -1115,8 +1256,7 @@ nonisolated enum SessionChatTimelineBlocks {
 
         func flushRail() {
             guard let first = pendingSteps.first else { return }
-            let id = PresentationBlockId.stepRail(first.id)
-            blocks.append(.stepRail(blockID: id, rail: SessionChatStepRailBlock(id: id, steps: markBranches(pendingSteps))))
+            blocks.append(makeRun(first.id, pendingSteps))
             pendingSteps.removeAll()
         }
 
@@ -1190,6 +1330,7 @@ nonisolated enum SessionChatTimelineBlocks {
             kind: .thought,
             status: .completed,
             title: duration.map { "Thought \u{00B7} \($0)" } ?? "Thought",
+            family: .thought,
             startedAtMs: reasoning.timeStartEpochMs,
             endedAtMs: reasoning.timeEndEpochMs,
             thoughtText: text.isEmpty ? nil : text
@@ -1200,7 +1341,8 @@ nonisolated enum SessionChatTimelineBlocks {
         guard let partId = tool.id, case .toolCard(_, let card)? = toToolCard(tool) else { return nil }
         let status = stepStatus(card.status)
         let inFlight = status.isInFlight
-        let startedAtMs = inFlight ? tool.timeStartEpochMs : nil
+        // Kept after the step settles so an activity card can time the whole run.
+        let startedAtMs = tool.timeStartEpochMs
         if isChildSessionTool(tool.toolName) {
             let agent = taskAgentName(tool)
             let description = (inputString(tool.input, keys: "description", "prompt") ?? childSessionTitle(tool))
@@ -1221,6 +1363,7 @@ nonisolated enum SessionChatTimelineBlocks {
                 kind: .childSession,
                 status: status,
                 title: agent,
+                family: .agent,
                 detail: nonEmpty(detail),
                 startedAtMs: startedAtMs,
                 isInterrupted: card.isInterrupted,
@@ -1252,6 +1395,9 @@ nonisolated enum SessionChatTimelineBlocks {
             kind: .tool,
             status: status,
             title: stepTitle(tool, card: card, running: inFlight),
+            runningTitle: stepTitle(tool, card: card, running: true),
+            settledTitle: stepTitle(tool, card: card, running: false),
+            family: stepFamily(tool),
             detail: stepDetail(tool, card: card, status: status),
             additions: isChange ? card.additions : nil,
             deletions: isChange ? card.deletions : nil,
@@ -1259,6 +1405,18 @@ nonisolated enum SessionChatTimelineBlocks {
             isInterrupted: card.isInterrupted,
             card: card
         )
+    }
+
+    private static func stepFamily(_ tool: ToolPart) -> SessionChatStepFamily? {
+        if isQuestionTool(tool) { return nil }
+        switch tool.toolName.lowercased() {
+        case "read", "list", "ls": return .read
+        case "grep", "glob", "websearch", "codesearch": return .search
+        case "webfetch": return .fetch
+        case "edit", "write", "apply_patch", "patch": return .edit
+        case "bash", "shell": return .command
+        default: return nil
+        }
     }
 
     private static func stepStatus(_ status: ToolStatus) -> SessionChatStepStatus {
@@ -1395,11 +1553,28 @@ nonisolated enum SessionChatTimelineBlocks {
     /// last row, while the session is working. Text after a rail means the turn
     /// moved on, so the Working footer speaks for it instead.
     static func liveStepRailID(in rows: [SessionChatRow], sessionWorking: Bool) -> String? {
+        liveStepRunID(in: rows, sessionWorking: sessionWorking)
+    }
+
+    /// The activity card shown live: the footer's live run, or, while the
+    /// server still reports the turn active (a permission or question hides
+    /// the Working footer), the last run of the last row.
+    static func liveActivityCardID(in rows: [SessionChatRow], footerLiveID: String?, isTurnActive: Bool) -> String? {
+        if let footerLiveID { return footerLiveID }
+        guard isTurnActive else { return nil }
+        return liveStepRunID(in: rows, sessionWorking: true)
+    }
+
+    /// `liveStepRailID` for either step-run style: the id of the live step
+    /// rail or activity card.
+    static func liveStepRunID(in rows: [SessionChatRow], sessionWorking: Bool) -> String? {
         guard sessionWorking, let last = rows.last, last.role == .assistant else { return nil }
         for block in last.blocks.reversed() {
             switch block {
             case .stepRail(_, let rail):
                 return rail.id
+            case .activityCard(_, let card):
+                return card.id
             case .stopNote, .failureLine:
                 return nil
             case .reasoning(_, _, true, _):

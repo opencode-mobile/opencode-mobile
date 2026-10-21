@@ -43,6 +43,25 @@ struct SessionChatTimelineOlderHistoryTests {
         #expect(timeline.state.unfoldedStepRails.isEmpty)
     }
 
+    @Test func toggleActivityCardExpanded_flipsExpandedSet() {
+        let timeline = SessionChatTimeline(
+            sessionID: "ses-1",
+            worktree: "/repo",
+            messageRepository: OlderHistoryMessageRepository(
+                initial: [],
+                older: [],
+                hasOlderInitially: false,
+                hasOlderAfterLoad: false
+            )
+        )
+        #expect(timeline.state.expandedActivityCards.isEmpty)
+        timeline.toggleActivityCardExpanded("ac:r1")
+        #expect(timeline.state.expandedActivityCards == ["ac:r1"])
+        #expect(timeline.state.unfoldedStepRails.isEmpty)
+        timeline.toggleActivityCardExpanded("ac:r1")
+        #expect(timeline.state.expandedActivityCards.isEmpty)
+    }
+
     @Test func loadOlderFailureRetainsRowsAndAllowsRetry() async {
         let repository = OlderHistoryMessageRepository(
             initial: [display("m3", role: .user)],

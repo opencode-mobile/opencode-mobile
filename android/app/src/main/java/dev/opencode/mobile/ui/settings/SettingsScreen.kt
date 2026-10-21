@@ -646,6 +646,7 @@ private fun SessionChatTimelineStyle.settingsTitle(): String =
         SessionChatTimelineStyle.Standard -> "Standard"
         SessionChatTimelineStyle.Chips -> "Chips"
         SessionChatTimelineStyle.StepRail -> "Step Rail"
+        SessionChatTimelineStyle.ActivityCard -> "Activity Card"
     }
 
 private fun SessionChatTimelineStyle.settingsSubtitle(): String =
@@ -653,6 +654,7 @@ private fun SessionChatTimelineStyle.settingsSubtitle(): String =
         SessionChatTimelineStyle.Standard -> "Tool cards and groups between the agent's messages"
         SessionChatTimelineStyle.Chips -> "Tools as chips under the agent's narration"
         SessionChatTimelineStyle.StepRail -> "One line per step on a rail, live while the agent works"
+        SessionChatTimelineStyle.ActivityCard -> "Running steps on one live card that folds into a summary"
     }
 
 private fun logSettingsAction(actionId: String) {

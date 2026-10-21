@@ -10,7 +10,8 @@ import dev.opencode.mobile.domain.message.FollowUpDelivery
 
 /**
  * How Session Chat lays out an assistant turn (#779): tool cards and groups,
- * tools as chips under the narration, or one line per step on a rail.
+ * tools as chips under the narration, one line per step on a rail, or one
+ * live activity card per run of steps.
  */
 enum class SessionChatTimelineStyle(
     val wireValue: String,
@@ -18,6 +19,7 @@ enum class SessionChatTimelineStyle(
     Standard("standard"),
     Chips("chips"),
     StepRail("step_rail"),
+    ActivityCard("activity_card"),
     ;
 
     companion object {
@@ -109,6 +111,10 @@ object SessionChatDisplayPreferences {
     /** Session Chat shows each step as one line on a rail (#779). Not flag-gated. */
     val stepRailTimeline: Boolean
         get() = timelineStyle == SessionChatTimelineStyle.StepRail
+
+    /** Session Chat shows each run of steps as one activity card (#779). Not flag-gated. */
+    val activityCardTimeline: Boolean
+        get() = timelineStyle == SessionChatTimelineStyle.ActivityCard
 
     private var appContext: Context? = null
 
@@ -207,7 +213,9 @@ object SessionChatDisplayPreferences {
         ChipTimelineIntro.shouldShow(
             chipTimelineAvailable = chipTimelineAvailable,
             chipTimelineOn = chipTimelinePreference,
-            timelineStyleChosen = timelineStylePreference == SessionChatTimelineStyle.StepRail,
+            timelineStyleChosen =
+                timelineStylePreference == SessionChatTimelineStyle.StepRail ||
+                    timelineStylePreference == SessionChatTimelineStyle.ActivityCard,
             introDone = chipTimelineIntroDone,
             snoozedUntilMillis = chipTimelineIntroSnoozedUntilMillis,
             nowMillis = nowMillis,

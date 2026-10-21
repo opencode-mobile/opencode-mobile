@@ -346,21 +346,32 @@ struct MessageListTimelineApplyPacket: Equatable, Sendable {
         )
     }
 
-    /// Step rail: fold state and the live rail live in the Screen Model and
-    /// the host, not the projected frame. Rows holding a rail whose fold or
-    /// liveness changed reconfigure as a layout change, and the state folds
-    /// into revision so an unchanged state never re-applies.
+    /// Step rail and activity card: fold / expansion state and the live run
+    /// live in the Screen Model and the host, not the projected frame. Rows
+    /// holding a rail or card whose fold, expansion or liveness changed
+    /// reconfigure as a layout change, and the state folds into revision so an
+    /// unchanged state never re-applies.
     func addingStepRailState(
         rows: [SessionChatRow],
         state: SessionChatStepRailViewState,
         previous: SessionChatStepRailViewState
     ) -> MessageListTimelineApplyPacket {
         var keyed = Dictionary(uniqueKeysWithValues: state.unfolded.map { ($0, 0) })
+        for card in state.expandedCards { keyed["expanded:" + card] = 2 }
         if let live = state.liveRailID { keyed["live:" + live] = 1 }
+        if let live = state.liveCardID { keyed["liveCard:" + live] = 3 }
+        if state.awaitingUser { keyed["awaitingUser"] = 4 }
         let fingerprint = SessionChatStepParagraphExpansion.fingerprint(keyed)
         var toggled = state.unfolded.symmetricDifference(previous.unfolded)
+            .union(state.expandedCards.symmetricDifference(previous.expandedCards))
         if state.liveRailID != previous.liveRailID {
             toggled.formUnion([state.liveRailID, previous.liveRailID].compactMap { $0 })
+        }
+        if state.liveCardID != previous.liveCardID {
+            toggled.formUnion([state.liveCardID, previous.liveCardID].compactMap { $0 })
+        }
+        if state.awaitingUser != previous.awaitingUser, let live = state.liveCardID {
+            toggled.insert(live)
         }
         let rowIDs = SessionChatStepParagraphExpansion.rowIDs(containingStepRails: toggled, in: rows)
         guard fingerprint != 0 || !rowIDs.isEmpty else { return self }
@@ -580,11 +591,16 @@ extension TimelineRow {
     }
 }
 
-/// Step rail presentation state the timeline host threads to each row.
+/// Step rail and activity card presentation state the timeline host threads to each row.
 struct SessionChatStepRailViewState: Equatable {
     var unfolded: Set<String>
-    /// The rail that shows live status, or nil.
+    /// Activity cards the user expanded.
+    var expandedCards: Set<String> = []
+    /// The rail or activity card that shows live status and owns the Working footer, or nil.
     var liveRailID: String?
+    /// The activity card shown live: `liveRailID`, or the last card while the turn waits on the user.
+    var liveCardID: String?
+    var awaitingUser = false
 
     static let empty = SessionChatStepRailViewState(unfolded: [], liveRailID: nil)
 }
@@ -613,14 +629,17 @@ enum SessionChatStepParagraphExpansion {
         return changed
     }
 
-    /// Rows whose blocks hold a step rail with one of `railIDs`.
+    /// Rows whose blocks hold a step rail or activity card with one of `railIDs`.
     static func rowIDs(containingStepRails railIDs: Set<String>, in rows: [SessionChatRow]) -> Set<String> {
         guard !railIDs.isEmpty else { return [] }
         var result: Set<String> = []
         for row in rows {
             let holds = row.blocks.contains { block in
-                guard case .stepRail(_, let rail) = block else { return false }
-                return railIDs.contains(rail.id)
+                switch block {
+                case .stepRail(_, let rail): return railIDs.contains(rail.id)
+                case .activityCard(_, let card): return railIDs.contains(card.id)
+                default: return false
+                }
             }
             if holds { result.insert(row.id) }
         }

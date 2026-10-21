@@ -796,6 +796,11 @@ final class SessionChatViewModel {
         publishUiState()
     }
 
+    /// Activity card: expand or collapse one card.
+    func toggleActivityCardExpanded(_ cardID: String) {
+        timeline.toggleActivityCardExpanded(cardID)
+    }
+
     /// Step rail: show or fold one rail's earlier settled steps.
     func toggleStepRailFold(_ railID: String) {
         timeline.toggleStepRailFold(railID)
@@ -1098,6 +1103,7 @@ final class SessionChatViewModel {
         )
         timeline.updateChipTimeline(SessionChatDisplayPreferences.shared.chipTimeline)
         timeline.updateStepRailTimeline(SessionChatDisplayPreferences.shared.stepRailTimeline)
+        timeline.updateActivityCardTimeline(SessionChatDisplayPreferences.shared.activityCardTimeline)
         observeCollapsePreference()
     }
 
@@ -1110,6 +1116,7 @@ final class SessionChatViewModel {
             _ = SessionChatDisplayPreferences.shared.collapseConsecutiveToolCalls
             _ = SessionChatDisplayPreferences.shared.chipTimeline
             _ = SessionChatDisplayPreferences.shared.stepRailTimeline
+            _ = SessionChatDisplayPreferences.shared.activityCardTimeline
         } onChange: { [weak self] in
             Task { @MainActor in
                 guard let self, self.collapsePreferenceGeneration == generation else { return }
@@ -1118,6 +1125,9 @@ final class SessionChatViewModel {
                 )
                 self.timeline.updateChipTimeline(SessionChatDisplayPreferences.shared.chipTimeline)
                 self.timeline.updateStepRailTimeline(SessionChatDisplayPreferences.shared.stepRailTimeline)
+                self.timeline.updateActivityCardTimeline(
+                    SessionChatDisplayPreferences.shared.activityCardTimeline
+                )
                 self.publishUiState()
                 self.observeCollapsePreference()
             }
@@ -1585,6 +1595,7 @@ final class SessionChatViewModel {
             hasPendingRevert: commandsState.hasPendingRevert,
             expandedStepParagraphs: expandedStepParagraphs,
             unfoldedStepRails: timelineState.unfoldedStepRails,
+            expandedActivityCards: timelineState.expandedActivityCards,
             chipTimelineIntroVisible: chipTimelineIntroVisible,
             dictation: dictation
         )

@@ -48,6 +48,11 @@ nonisolated enum PresentationBlockId {
         "sr:" + firstPartId
     }
 
+    /// Activity card identity (#779): its first member part id, like the step rail.
+    nonisolated static func activityCard(_ firstPartId: String) -> String {
+        "ac:" + firstPartId
+    }
+
     /// Unstructured fallback when displayable parts lack stable IDs.
     nonisolated static func messageFallback(_ messageId: String) -> String {
         "m:\(messageId)"

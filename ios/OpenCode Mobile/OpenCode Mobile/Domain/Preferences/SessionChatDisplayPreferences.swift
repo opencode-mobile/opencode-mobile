@@ -9,6 +9,8 @@ nonisolated enum SessionChatTimelineStyle: String, CaseIterable, Sendable {
     case chips
     /// One short line per step on a vertical rail with live status.
     case stepRail = "step_rail"
+    /// Running steps on one live card per segment that settles into a summary line.
+    case activityCard = "activity_card"
 
     var wireValue: String { rawValue }
 
@@ -21,6 +23,7 @@ nonisolated enum SessionChatTimelineStyle: String, CaseIterable, Sendable {
         case .standard: "Standard"
         case .chips: "Chips"
         case .stepRail: "Step Rail"
+        case .activityCard: "Activity Card"
         }
     }
 
@@ -29,6 +32,7 @@ nonisolated enum SessionChatTimelineStyle: String, CaseIterable, Sendable {
         case .standard: "Tool cards and groups between the agent's messages"
         case .chips: "Tools as chips under the agent's narration"
         case .stepRail: "One line per step on a rail, live while the agent works"
+        case .activityCard: "Running steps on one live card that folds into a summary"
         }
     }
 }
@@ -90,6 +94,11 @@ nonisolated final class SessionChatDisplayPreferences {
     /// When true, Session Chat shows an assistant turn as a step rail (#779). Not flag-gated.
     var stepRailTimeline: Bool {
         timelineStyle == .stepRail
+    }
+
+    /// When true, Session Chat shows each run of steps as one activity card (#779). Not flag-gated.
+    var activityCardTimeline: Bool {
+        timelineStyle == .activityCard
     }
 
     /// The style Session Chat renders: Chips falls back to Standard while the flag is off.
@@ -187,8 +196,8 @@ nonisolated final class SessionChatDisplayPreferences {
     func shouldOfferChipTimelineIntro(turnToolCalls: Int, nowMs: Int64) -> Bool {
         ChipTimelineIntro.shouldShow(
             chipTimelineAvailable: chipTimelineAvailable,
-            // Step Rail is an explicit style choice too: never pitch Chips over it.
-            chipTimelineOn: timelineStyle == .chips || timelineStyle == .stepRail,
+            // Step Rail and Activity Card are explicit style choices too: never pitch Chips over them.
+            chipTimelineOn: timelineStyle != .standard,
             introDone: chipTimelineIntroDone,
             snoozedUntilMs: chipTimelineIntroSnoozedUntilMs,
             nowMs: nowMs,

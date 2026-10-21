@@ -17,6 +17,14 @@ class SessionChatTimelineStyleTest {
     }
 
     @Test
+    fun storedActivityCard_winsOverOldChipKey() {
+        assertEquals(
+            SessionChatTimelineStyle.ActivityCard,
+            SessionChatTimelineStyle.resolveStored("activity_card", storedChipTimeline = true),
+        )
+    }
+
+    @Test
     fun storedStyle_winsOverOldChipKey() {
         assertEquals(SessionChatTimelineStyle.StepRail, SessionChatTimelineStyle.resolveStored("step_rail", storedChipTimeline = true))
     }
@@ -31,7 +39,8 @@ class SessionChatTimelineStyleTest {
     @Test
     fun wireValues_roundTrip() {
         SessionChatTimelineStyle.entries.forEach { assertEquals(it, SessionChatTimelineStyle.fromWire(it.wireValue)) }
-        assertEquals(listOf("standard", "chips", "step_rail"), SessionChatTimelineStyle.entries.map { it.wireValue })
+        assertEquals(listOf("standard", "chips", "step_rail", "activity_card"), SessionChatTimelineStyle.entries.map { it.wireValue })
+        assertEquals(SessionChatTimelineStyle.ActivityCard, SessionChatTimelineStyle.fromWire("activity_card"))
     }
 
     @Test
@@ -39,6 +48,10 @@ class SessionChatTimelineStyleTest {
         assertEquals(SessionChatTimelineStyle.Standard, SessionChatTimelineStyle.effective(SessionChatTimelineStyle.Chips, false))
         assertEquals(SessionChatTimelineStyle.Chips, SessionChatTimelineStyle.effective(SessionChatTimelineStyle.Chips, true))
         assertEquals(SessionChatTimelineStyle.StepRail, SessionChatTimelineStyle.effective(SessionChatTimelineStyle.StepRail, false))
+        assertEquals(
+            SessionChatTimelineStyle.ActivityCard,
+            SessionChatTimelineStyle.effective(SessionChatTimelineStyle.ActivityCard, false),
+        )
     }
 
     @Test
@@ -46,6 +59,7 @@ class SessionChatTimelineStyleTest {
         SessionChatDisplayPreferences.clear()
         assertEquals(SessionChatTimelineStyle.Standard, SessionChatDisplayPreferences.timelineStylePreference)
         assertFalse(SessionChatDisplayPreferences.stepRailTimeline)
+        assertFalse(SessionChatDisplayPreferences.activityCardTimeline)
     }
 
     @Test

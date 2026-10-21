@@ -236,6 +236,9 @@ class SessionChatViewModel
 
         // Step rails the user unfolded past `N earlier steps`, keyed by rail id; reset per session.
         private var unfoldedStepRails: Set<String> = emptySet()
+
+        // Activity cards the user expanded, keyed by card id; cards start collapsed, reset per session.
+        private var expandedActivityCards: Set<String> = emptySet()
         private var liveRailSource: List<SessionChatMessageItem>? = null
         private var liveRailMarked: List<SessionChatMessageItem> = emptyList()
         private var liveRailActive = false
@@ -348,10 +351,11 @@ class SessionChatViewModel
                     }
             }
             viewModelScope.launch {
-                snapshotFlow { SessionChatDisplayPreferences.stepRailTimeline }
-                    .distinctUntilChanged()
-                    .collect { enabled ->
-                        timeline.updateStepRailTimeline(enabled)
+                snapshotFlow {
+                    SessionChatDisplayPreferences.stepRailTimeline to SessionChatDisplayPreferences.activityCardTimeline
+                }.distinctUntilChanged()
+                    .collect { (stepRail, activityCard) ->
+                        timeline.updateStepTimelines(stepRail = stepRail, activityCard = activityCard)
                     }
             }
         }
@@ -389,6 +393,7 @@ class SessionChatViewModel
             snackbarSequence = 0L
             expandedStepParagraphs = emptyMap()
             unfoldedStepRails = emptySet()
+            expandedActivityCards = emptySet()
             resetChipTimelineIntro()
             resetWorkingFooter()
             logI("bind session=$sessionId worktree=$worktree title=$sessionTitle")
@@ -429,6 +434,7 @@ class SessionChatViewModel
             snackbarSequence = 0L
             expandedStepParagraphs = emptyMap()
             unfoldedStepRails = emptySet()
+            expandedActivityCards = emptySet()
             resetChipTimelineIntro()
             resetWorkingFooter()
             logI("bind optimistic create worktree=$worktree title=$sessionTitle")
@@ -1595,7 +1601,7 @@ class SessionChatViewModel
             workingChrome = workingResolution.chrome
             workingHold = workingResolution.hold
             scheduleWorkingFooterWake(workingResolution.wakeAfterMs)
-            // Step rail: the live rail's running or Thinking… step is the indicator (#779).
+            // Step rail / activity card: the live rail's or card's running or Thinking… line is the indicator (#779).
             val workingIndicatorLabel =
                 workingResolution.chrome.label.takeUnless {
                     activeWorkingLabel != null && SessionChatStepRail.hasLiveRail(messages)
@@ -1719,6 +1725,7 @@ class SessionChatViewModel
                 pendingSessionReplace = commandsState.pendingSessionReplace,
                 expandedStepParagraphs = expandedStepParagraphs,
                 unfoldedStepRails = unfoldedStepRails,
+                expandedActivityCards = expandedActivityCards,
                 chipTimelineIntroVisible = chipTimelineIntroVisible,
                 pendingTerminalOpen = commandsState.pendingTerminalOpen,
                 pendingFilesOpen = commandsState.pendingFilesOpen,
@@ -1753,6 +1760,13 @@ class SessionChatViewModel
         fun toggleStepRailFold(railId: String) {
             unfoldedStepRails = if (railId in unfoldedStepRails) unfoldedStepRails - railId else unfoldedStepRails + railId
             _uiState.value = _uiState.value.copy(unfoldedStepRails = unfoldedStepRails)
+        }
+
+        /** Expands an activity card inline to list its finished steps, or collapses it. */
+        fun toggleActivityCardExpanded(cardId: String) {
+            expandedActivityCards =
+                if (cardId in expandedActivityCards) expandedActivityCards - cardId else expandedActivityCards + cardId
+            _uiState.value = _uiState.value.copy(expandedActivityCards = expandedActivityCards)
         }
 
         private fun resolveSnackbar(

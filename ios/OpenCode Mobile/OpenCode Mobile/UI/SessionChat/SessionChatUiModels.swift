@@ -328,6 +328,8 @@ struct SessionChatUiState: Equatable {
     var expandedStepParagraphs: [String: Int] = [:]
     /// Step rails (`SessionChatStepRailBlock.id`) the user unfolded (#779).
     var unfoldedStepRails: Set<String> = []
+    /// Activity cards (`SessionChatActivityCardBlock.id`) the user expanded (#779).
+    var expandedActivityCards: Set<String> = []
     /// One-time Chip timeline intro sheet (OPE-270).
     var chipTimelineIntroVisible = false
     var dictation: ComposerDictationUiState? = nil
@@ -589,6 +591,8 @@ struct SessionChatTimelineRegionState: Equatable {
     var errorMessage: String?
     /// Step rails whose earlier settled steps are shown instead of folded (#779).
     var unfoldedStepRails: Set<String> = []
+    /// Activity cards shown expanded; cards start collapsed (#779).
+    var expandedActivityCards: Set<String> = []
 
     var knownChildSessionIDs: Set<String> {
         Set(
@@ -610,6 +614,10 @@ struct SessionChatTimelineRegionState: Equatable {
                     case .stepRail(_, let rail):
                         // Same set as the standard timeline: child sessions that did not fail.
                         rail.steps.compactMap { step in
+                            step.status == .failed ? nil : step.childSession?.childSessionId
+                        }
+                    case .activityCard(_, let card):
+                        card.steps.compactMap { step in
                             step.status == .failed ? nil : step.childSession?.childSessionId
                         }
                     default:

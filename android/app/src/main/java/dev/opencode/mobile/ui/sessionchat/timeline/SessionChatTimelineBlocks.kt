@@ -223,6 +223,25 @@ sealed class SessionChatTimelineBlock {
     }
 
     /**
+     * Activity card timeline (#779): the same runs of steps as [StepRail], shown
+     * as one card per segment. [blockID] is `ac:` plus the first member part
+     * id, so the card keeps its identity while later steps join. [isLive] and
+     * [thinking] are set by the Screen Model for the trailing card of a
+     * working turn.
+     */
+    data class ActivityCard(
+        override val blockID: String,
+        val steps: List<SessionChatStep>,
+        val isLive: Boolean = false,
+        /** Live with nothing running: the card shows a Thinking… line. */
+        val thinking: Boolean = false,
+    ) : SessionChatTimelineBlock() {
+        /** Failed if any step failed, else completed. */
+        val worstStatus: SessionChatStepStatus
+            get() = SessionChatStepRail.worstStatus(steps)
+    }
+
+    /**
      * False for blocks the timeline paints as nothing (a live thought is footer
      * chrome). Rows must not render empty: see AssistantMessageContent fallback.
      */
@@ -263,6 +282,9 @@ enum class ToolChipKind { File, Command, Agent, Skill }
 
 enum class SessionChatStepKind { Tool, ChildSession, Thought }
 
+/** What a step did, for the activity card's counts (`3 reads · 1 search`). */
+enum class SessionChatStepFamily { Read, Search, Fetch, Edit, Command, Skill, Thought, Agent }
+
 enum class SessionChatStepStatus {
     Pending,
     Running,
@@ -283,7 +305,9 @@ data class SessionChatStepChildSession(
 )
 
 /**
- * One line on a [SessionChatTimelineBlock.StepRail]. [id] is the part id.
+ * One line on a [SessionChatTimelineBlock.StepRail] or
+ * [SessionChatTimelineBlock.ActivityCard]. [id] is the part id. [title] is
+ * [runningTitle] while in flight and [settledTitle] once settled.
  * [card] is the standard tool card for the same part, so a tap opens what the
  * standard timeline opens; null for a thought, whose body is [thoughtText].
  * [isBranch] marks a running step that follows another running step (parallel).
@@ -295,6 +319,9 @@ data class SessionChatStep(
     val kind: SessionChatStepKind,
     val status: SessionChatStepStatus,
     val title: String,
+    val runningTitle: String = title,
+    val settledTitle: String = title,
+    val family: SessionChatStepFamily? = null,
     val detail: String? = null,
     val additions: Int? = null,
     val deletions: Int? = null,
@@ -345,10 +372,26 @@ object SessionChatTimelineBlocks {
         collapseConsecutiveToolCalls: Boolean = false,
         chipTimeline: Boolean = false,
         stepRail: Boolean = false,
+        activityCard: Boolean = false,
     ): SessionChatTimelineBlocksResult {
         if (parts.isEmpty()) return SessionChatTimelineBlocksResult.Ok(emptyList())
         if (chipTimeline && role == MessageRole.Assistant) return buildStepParagraphs(parts)
-        if (stepRail && role == MessageRole.Assistant) return buildStepRails(parts)
+        if (stepRail && role == MessageRole.Assistant) {
+            return buildStepSegments(parts) { steps ->
+                SessionChatTimelineBlock.StepRail(
+                    blockID = PresentationBlockId.stepRail(steps.first().id),
+                    steps = SessionChatStepRail.withBranches(steps),
+                )
+            }
+        }
+        if (activityCard && role == MessageRole.Assistant) {
+            return buildStepSegments(parts) { steps ->
+                SessionChatTimelineBlock.ActivityCard(
+                    blockID = PresentationBlockId.activityCard(steps.first().id),
+                    steps = steps,
+                )
+            }
+        }
 
         val allowToolCards = role == MessageRole.Assistant
         val blocks = mutableListOf<SessionChatTimelineBlock>()
@@ -568,12 +611,16 @@ object SessionChatTimelineBlocks {
     }
 
     /**
-     * Step rail walk: text and attachments become blocks as in the standard
-     * timeline; every maximal run of visible tools and settled thoughts in
-     * between becomes one rail. Hidden parts (hidden tools, live thoughts,
-     * empty or non-display text) are see-through and do not split a run.
+     * Step rail and activity card walk: text and attachments become blocks as
+     * in the standard timeline; every maximal run of visible tools and settled
+     * thoughts in between becomes one [segmentBlock] (a rail or a card).
+     * Hidden parts (hidden tools, live thoughts, empty or non-display text)
+     * are see-through and do not split a run.
      */
-    private fun buildStepRails(parts: List<MessagePart>): SessionChatTimelineBlocksResult {
+    private fun buildStepSegments(
+        parts: List<MessagePart>,
+        segmentBlock: (steps: List<SessionChatStep>) -> SessionChatTimelineBlock,
+    ): SessionChatTimelineBlocksResult {
         val blocks = mutableListOf<SessionChatTimelineBlock>()
         val pendingText = mutableListOf<Pair<String, String>>()
         val pendingSteps = mutableListOf<SessionChatStep>()
@@ -589,13 +636,9 @@ object SessionChatTimelineBlocks {
             pendingText.clear()
         }
 
-        fun flushRail() {
+        fun flushSegment() {
             if (pendingSteps.isEmpty()) return
-            blocks +=
-                SessionChatTimelineBlock.StepRail(
-                    blockID = PresentationBlockId.stepRail(pendingSteps.first().id),
-                    steps = SessionChatStepRail.withBranches(pendingSteps.toList()),
-                )
+            blocks += segmentBlock(pendingSteps.toList())
             pendingSteps.clear()
         }
 
@@ -606,7 +649,7 @@ object SessionChatTimelineBlocks {
                     val trimmed = part.text.trim()
                     if (trimmed.isEmpty()) continue
                     val partId = part.id ?: return SessionChatTimelineBlocksResult.MissingPartIds
-                    flushRail()
+                    flushSegment()
                     pendingText += partId to trimmed
                 }
                 is MessagePart.Tool -> {
@@ -624,7 +667,7 @@ object SessionChatTimelineBlocks {
                 }
                 is MessagePart.File -> {
                     flushText()
-                    flushRail()
+                    flushSegment()
                     blocks +=
                         SessionChatTimelineBlock.Attachment(
                             blockID = PresentationBlockId.direct(part.id),
@@ -633,18 +676,18 @@ object SessionChatTimelineBlocks {
                 }
                 is MessagePart.Compaction -> {
                     flushText()
-                    flushRail()
+                    flushSegment()
                     blocks += compactionCard(part) ?: return SessionChatTimelineBlocksResult.MissingPartIds
                 }
                 is MessagePart.Notice -> {
                     flushText()
-                    flushRail()
+                    flushSegment()
                     blocks += noticeBlock(part)
                 }
             }
         }
         flushText()
-        flushRail()
+        flushSegment()
         return SessionChatTimelineBlocksResult.Ok(blocks)
     }
 
@@ -657,6 +700,7 @@ object SessionChatTimelineBlocks {
             id = partId,
             kind = SessionChatStepKind.Thought,
             status = SessionChatStepStatus.Completed,
+            family = SessionChatStepFamily.Thought,
             title = if (duration != null) "Thought \u00b7 $duration" else "Thought",
             startedAtMs = part.timeStartEpochMs,
             endedAtMs = part.timeEndEpochMs,
@@ -692,6 +736,7 @@ object SessionChatTimelineBlocks {
                 kind = SessionChatStepKind.ChildSession,
                 status = status,
                 title = agent,
+                family = SessionChatStepFamily.Agent,
                 detail = detail,
                 startedAtMs = tool.timeStartEpochMs,
                 isInterrupted = card.isInterrupted,
@@ -711,6 +756,9 @@ object SessionChatTimelineBlocks {
             kind = SessionChatStepKind.Tool,
             status = status,
             title = stepTitle(name, tool, card, running = status.isInFlight),
+            runningTitle = stepTitle(name, tool, card, running = true),
+            settledTitle = stepTitle(name, tool, card, running = false),
+            family = stepFamily(name, tool),
             detail = stepDetail(name, tool, card, status),
             additions = card.additions.takeIf { isChange },
             deletions = card.deletions.takeIf { isChange },
@@ -719,6 +767,20 @@ object SessionChatTimelineBlocks {
             card = card,
         )
     }
+
+    /** Null for a question: it asks the user rather than doing work, so it is not counted. */
+    private fun stepFamily(
+        name: String,
+        tool: MessagePart.Tool,
+    ): SessionChatStepFamily? =
+        when (name) {
+            "read", "list", "ls" -> SessionChatStepFamily.Read
+            "glob", "grep", "websearch" -> SessionChatStepFamily.Search
+            "webfetch" -> SessionChatStepFamily.Fetch
+            "edit", "write", "apply_patch", "patch" -> SessionChatStepFamily.Edit
+            "skill" -> SessionChatStepFamily.Skill
+            else -> if (isQuestionTool(tool)) null else SessionChatStepFamily.Command
+        }
 
     /**
      * Product words for a step: `Reading <file>` while running, `<file>` once
@@ -1068,6 +1130,7 @@ object SessionChatTimelineBlocks {
         collapseConsecutiveToolCalls: Boolean = false,
         chipTimeline: Boolean = false,
         stepRail: Boolean = false,
+        activityCard: Boolean = false,
     ): List<SessionChatTimelineBlock> {
         fun fallbackBlocks(): List<SessionChatTimelineBlock> =
             if (fallbackText.isNotBlank()) {
@@ -1081,7 +1144,7 @@ object SessionChatTimelineBlocks {
                 emptyList()
             }
 
-        return when (val result = build(role, parts, collapseConsecutiveToolCalls, chipTimeline, stepRail)) {
+        return when (val result = build(role, parts, collapseConsecutiveToolCalls, chipTimeline, stepRail, activityCard)) {
             is SessionChatTimelineBlocksResult.Ok ->
                 result.blocks.ifEmpty { fallbackBlocks() }
             SessionChatTimelineBlocksResult.MissingPartIds -> fallbackBlocks()
@@ -1161,7 +1224,9 @@ object SessionChatTimelineBlocks {
         collapseConsecutiveToolCalls: Boolean,
         chipTimeline: Boolean = false,
         stepRail: Boolean = false,
-    ): List<DisplayMessageBody> = mergeBodies(bodies, collapseConsecutiveToolCalls, chipTimeline, stepRail).map(::withStopNote)
+        activityCard: Boolean = false,
+    ): List<DisplayMessageBody> =
+        mergeBodies(bodies, collapseConsecutiveToolCalls, chipTimeline, stepRail, activityCard).map(::withStopNote)
 
     /** An assistant reply that ended early keeps a note under its last block, then any failure caption. */
     private fun withStopNote(body: DisplayMessageBody): DisplayMessageBody {
@@ -1218,9 +1283,13 @@ object SessionChatTimelineBlocks {
         collapseConsecutiveToolCalls: Boolean,
         chipTimeline: Boolean,
         stepRail: Boolean,
+        activityCard: Boolean,
     ): List<DisplayMessageBody> {
         if (chipTimeline) return mergeConsecutiveAssistantBodiesForChips(bodies, collapseConsecutiveToolCalls)
         if (stepRail) return mergeConsecutiveAssistantBodiesForChips(bodies, collapseConsecutiveToolCalls, stepRail = true)
+        if (activityCard) {
+            return mergeConsecutiveAssistantBodiesForChips(bodies, collapseConsecutiveToolCalls, activityCard = true)
+        }
         if (!collapseConsecutiveToolCalls || bodies.size < 2) return bodies
         val merged = mutableListOf<DisplayMessageBody>()
         var index = 0
@@ -1271,11 +1340,13 @@ object SessionChatTimelineBlocks {
      * whose parts lack stable ids is left unmerged rather than dropped.
      * The step rail timeline merges the same way so one turn is one row and
      * tool-only messages join one rail ([stepRail] builds rails instead).
+     * The activity card timeline merges the same way ([activityCard]).
      */
     private fun mergeConsecutiveAssistantBodiesForChips(
         bodies: List<DisplayMessageBody>,
         collapseConsecutiveToolCalls: Boolean,
         stepRail: Boolean = false,
+        activityCard: Boolean = false,
     ): List<DisplayMessageBody> {
         if (bodies.size < 2) return bodies
         val merged = mutableListOf<DisplayMessageBody>()
@@ -1306,8 +1377,9 @@ object SessionChatTimelineBlocks {
                     role = MessageRole.Assistant,
                     parts = parts,
                     collapseConsecutiveToolCalls = collapseConsecutiveToolCalls,
-                    chipTimeline = !stepRail,
+                    chipTimeline = !stepRail && !activityCard,
                     stepRail = stepRail,
+                    activityCard = activityCard,
                 )
             when (result) {
                 // Streaming is derived from parts, so the merged parts carry
@@ -1378,6 +1450,7 @@ object SessionChatTimelineBlocks {
             is SessionChatTimelineBlock.Reasoning,
             is SessionChatTimelineBlock.StepParagraph,
             is SessionChatTimelineBlock.StepRail,
+            is SessionChatTimelineBlock.ActivityCard,
             is SessionChatTimelineBlock.StopNote,
             is SessionChatTimelineBlock.FailureLine,
             is SessionChatTimelineBlock.Notice,

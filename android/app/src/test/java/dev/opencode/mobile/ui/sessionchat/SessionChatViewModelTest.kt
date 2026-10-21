@@ -1213,6 +1213,30 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun toggleActivityCardExpanded_startsCollapsed_toggles_andResetsOnSessionChange() =
+        runTest(testDispatcher) {
+            val viewModel = createViewModel(FakeMessageRepository())
+            viewModel.bind("ses-1", "First", "/repo")
+            advanceUntilIdle()
+            assertEquals(emptySet<String>(), viewModel.uiState.value.expandedActivityCards)
+
+            viewModel.toggleActivityCardExpanded("ac:p1")
+            viewModel.toggleActivityCardExpanded("ac:p7")
+            assertEquals(setOf("ac:p1", "ac:p7"), viewModel.uiState.value.expandedActivityCards)
+            viewModel.toggleActivityCardExpanded("ac:p1")
+            assertEquals(setOf("ac:p7"), viewModel.uiState.value.expandedActivityCards)
+
+            // Region republishes keep the expansion.
+            viewModel.updateComposerText("draft")
+            advanceUntilIdle()
+            assertEquals(setOf("ac:p7"), viewModel.uiState.value.expandedActivityCards)
+
+            viewModel.bind("ses-2", "Second", "/repo")
+            advanceUntilIdle()
+            assertEquals(emptySet<String>(), viewModel.uiState.value.expandedActivityCards)
+        }
+
+    @Test
     fun expandStepParagraph_survivesRepublish_sameSessionRebind_andResetsOnSessionChange() =
         runTest(testDispatcher) {
             val viewModel = createViewModel(FakeMessageRepository())

@@ -255,6 +255,9 @@ struct SessionChatView: View {
                     workingIndicatorLabel: viewModel.uiState.workingIndicatorLabel,
                     workingIndicatorCollapsed: viewModel.uiState.workingIndicatorCollapsed,
                     workingIndicatorFading: viewModel.uiState.workingIndicatorFading,
+                    isTurnActive: viewModel.uiState.sessionStatusLabel != nil,
+                    isAwaitingUser: viewModel.uiState.permissionRequest != nil
+                        || viewModel.uiState.questionRequest != nil,
                     sessionTodosVisible: sessionTodosPillVisible,
                     sessionTodoCompletedCount: viewModel.uiState.sessionTodoCompletedCount,
                     sessionTodoTotalCount: viewModel.uiState.sessionTodoTotalCount,
@@ -349,6 +352,8 @@ struct SessionChatView: View {
                     },
                     unfoldedStepRails: viewModel.uiState.unfoldedStepRails,
                     onToggleStepRailFold: { railID in viewModel.toggleStepRailFold(railID) },
+                    expandedActivityCards: viewModel.uiState.expandedActivityCards,
+                    onToggleActivityCardExpanded: { cardID in viewModel.toggleActivityCardExpanded(cardID) },
                     noticeModelNames: TimelineNoticeModelNames(options: viewModel.uiState.composer.modelOptions)
                 )
             )

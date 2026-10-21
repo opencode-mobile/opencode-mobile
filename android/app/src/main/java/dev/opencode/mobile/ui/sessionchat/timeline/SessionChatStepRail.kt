@@ -63,10 +63,10 @@ object SessionChatStepRail {
     private fun isFoldable(step: SessionChatStep): Boolean = step.kind != SessionChatStepKind.ChildSession && !step.status.isInFlight
 
     /**
-     * Marks the live rail: the trailing block of the last assistant row while
-     * the turn is working. Text after the rail ends its liveness, so the
-     * Working footer comes back for a reply that is only streaming text.
-     * Returns [messages] itself when nothing changes.
+     * Marks the live rail (or activity card, #779): the trailing block of the
+     * last assistant row while the turn is working. Text after it ends its
+     * liveness, so the Working footer comes back for a reply that is only
+     * streaming text. Returns [messages] itself when nothing changes.
      */
     fun markLive(
         messages: List<SessionChatMessageItem>,
@@ -84,7 +84,12 @@ object SessionChatStepRail {
     }
 
     fun hasLiveRail(messages: List<SessionChatMessageItem>): Boolean =
-        messages.any { message -> message.blocks.any { it is SessionChatTimelineBlock.StepRail && it.isLive } }
+        messages.any { message ->
+            message.blocks.any {
+                (it is SessionChatTimelineBlock.StepRail && it.isLive) ||
+                    (it is SessionChatTimelineBlock.ActivityCard && it.isLive)
+            }
+        }
 
     private fun liveMessageIndex(messages: List<SessionChatMessageItem>): Int {
         val index = messages.indexOfLast { it.role == MessageRole.Assistant }
@@ -93,7 +98,8 @@ object SessionChatStepRail {
         val newerPrompt = messages.drop(index + 1).any { it.role == MessageRole.User && !it.isPending }
         if (newerPrompt) return -1
         val trailing = messages[index].blocks.lastOrNull { it.paintsInTimeline }
-        return if (trailing is SessionChatTimelineBlock.StepRail) index else -1
+        val isStepSegment = trailing is SessionChatTimelineBlock.StepRail || trailing is SessionChatTimelineBlock.ActivityCard
+        return if (isStepSegment) index else -1
     }
 
     private fun withLiveRail(
@@ -105,14 +111,27 @@ object SessionChatStepRail {
         var changed = false
         val blocks =
             message.blocks.map { block ->
-                if (block !is SessionChatTimelineBlock.StepRail) return@map block
                 val isLive = block.blockID == liveRailId
-                val thinking = isLive && block.steps.none { it.status.isInFlight }
-                if (block.isLive == isLive && block.thinking == thinking) {
-                    block
-                } else {
-                    changed = true
-                    block.copy(isLive = isLive, thinking = thinking)
+                when (block) {
+                    is SessionChatTimelineBlock.StepRail -> {
+                        val thinking = isLive && block.steps.none { it.status.isInFlight }
+                        if (block.isLive == isLive && block.thinking == thinking) {
+                            block
+                        } else {
+                            changed = true
+                            block.copy(isLive = isLive, thinking = thinking)
+                        }
+                    }
+                    is SessionChatTimelineBlock.ActivityCard -> {
+                        val thinking = isLive && block.steps.none { it.status.isInFlight }
+                        if (block.isLive == isLive && block.thinking == thinking) {
+                            block
+                        } else {
+                            changed = true
+                            block.copy(isLive = isLive, thinking = thinking)
+                        }
+                    }
+                    else -> block
                 }
             }
         return if (changed) message.copy(blocks = blocks) else message

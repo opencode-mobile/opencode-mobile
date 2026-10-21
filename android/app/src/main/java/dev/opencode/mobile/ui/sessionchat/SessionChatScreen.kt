@@ -807,6 +807,8 @@ fun SessionChatScreen(
                             onExpandStepParagraph = viewModel::expandStepParagraph,
                             unfoldedStepRails = uiState.unfoldedStepRails,
                             onToggleStepRailFold = viewModel::toggleStepRailFold,
+                            expandedActivityCards = uiState.expandedActivityCards,
+                            onToggleActivityCardExpanded = viewModel::toggleActivityCardExpanded,
                         ),
                     modifier = Modifier.fillMaxSize(),
                 )

@@ -90,6 +90,12 @@ import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessageContent
 import dev.opencode.mobile.ui.components.OpenCodeSessionBranchPill
 import dev.opencode.mobile.ui.components.OpenCodeSessionTodosPill
 import dev.opencode.mobile.ui.components.OpenCodeStatusStack
+import dev.opencode.mobile.ui.components.OpenCodeActivityCard
+import dev.opencode.mobile.ui.components.OpenCodeActivityCardState
+import dev.opencode.mobile.ui.components.OpenCodeActivityIcon
+import dev.opencode.mobile.ui.components.OpenCodeActivityLine
+import dev.opencode.mobile.ui.components.OpenCodeActivityLineKind
+import dev.opencode.mobile.ui.components.OpenCodeActivityStatus
 import dev.opencode.mobile.ui.components.OpenCodeStepRail
 import dev.opencode.mobile.ui.components.OpenCodeStepRailItem
 import dev.opencode.mobile.ui.components.OpenCodeStepRailStatus
@@ -119,7 +125,9 @@ import dev.opencode.mobile.ui.sessionchat.SessionBranchPillUiState
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import dev.opencode.mobile.ui.sessionchat.SessionChatNoticeCopy
 import dev.opencode.mobile.ui.sessionchat.SessionChatNoticeModelNames
+import dev.opencode.mobile.ui.sessionchat.SessionChatActivityCard
 import dev.opencode.mobile.ui.sessionchat.SessionChatStep
+import dev.opencode.mobile.ui.sessionchat.SessionChatStepFamily
 import dev.opencode.mobile.ui.sessionchat.SessionChatStepKind
 import dev.opencode.mobile.ui.sessionchat.SessionChatStepRail
 import dev.opencode.mobile.ui.sessionchat.SessionChatStepStatus
@@ -185,6 +193,9 @@ internal data class SessionChatTimelineViewProps(
     /** Step rails unfolded past `N earlier steps` (#779); owned by the Session Chat screen model. */
     val unfoldedStepRails: Set<String> = emptySet(),
     val onToggleStepRailFold: (railId: String) -> Unit = {},
+    /** Activity cards expanded inline (#779); owned by the Session Chat screen model. */
+    val expandedActivityCards: Set<String> = emptySet(),
+    val onToggleActivityCardExpanded: (cardId: String) -> Unit = {},
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -273,6 +284,8 @@ internal fun SessionChatTimelineView(
                 onExpandStepParagraph = props.onExpandStepParagraph,
                 unfoldedStepRails = props.unfoldedStepRails,
                 onToggleStepRailFold = props.onToggleStepRailFold,
+                expandedActivityCards = props.expandedActivityCards,
+                onToggleActivityCardExpanded = props.onToggleActivityCardExpanded,
                 modifier = modifier,
             )
             }
@@ -314,6 +327,8 @@ private fun SessionChatTimelineReadyView(
     onExpandStepParagraph: (expansionId: String, chipCount: Int) -> Unit,
     unfoldedStepRails: Set<String>,
     onToggleStepRailFold: (railId: String) -> Unit,
+    expandedActivityCards: Set<String>,
+    onToggleActivityCardExpanded: (cardId: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
@@ -507,6 +522,8 @@ private fun SessionChatTimelineReadyView(
                     onExpandStepParagraph = onExpandStepParagraph,
                     unfoldedStepRails = unfoldedStepRails,
                     onToggleStepRailFold = onToggleStepRailFold,
+                    expandedActivityCards = expandedActivityCards,
+                    onToggleActivityCardExpanded = onToggleActivityCardExpanded,
                     // Streaming height growth is GrowBottom + unanimated layout; do not
                     // animateContentSize on production Session Chat (gallery may still demo it).
                     animateSizeChanges = false,
@@ -614,6 +631,8 @@ private fun SessionChatMessageRow(
     onExpandStepParagraph: (expansionId: String, chipCount: Int) -> Unit,
     unfoldedStepRails: Set<String>,
     onToggleStepRailFold: (railId: String) -> Unit,
+    expandedActivityCards: Set<String>,
+    onToggleActivityCardExpanded: (cardId: String) -> Unit,
     animateSizeChanges: Boolean,
     onContentSizeAnimationFinished: (() -> Unit)?,
     modifier: Modifier = Modifier,
@@ -668,6 +687,8 @@ private fun SessionChatMessageRow(
                     onExpandStepParagraph = onExpandStepParagraph,
                     unfoldedStepRails = unfoldedStepRails,
                     onToggleStepRailFold = onToggleStepRailFold,
+                    expandedActivityCards = expandedActivityCards,
+                    onToggleActivityCardExpanded = onToggleActivityCardExpanded,
                 )
 
             MessageRole.Notice ->
@@ -704,6 +725,7 @@ private fun SessionChatMessageItem.outgoingContent(): List<OpenCodeOutgoingMessa
             is SessionChatTimelineBlock.Reasoning,
             is SessionChatTimelineBlock.StepParagraph,
             is SessionChatTimelineBlock.StepRail,
+            is SessionChatTimelineBlock.ActivityCard,
             is SessionChatTimelineBlock.StopNote,
             is SessionChatTimelineBlock.FailureLine,
             is SessionChatTimelineBlock.Notice,
@@ -726,6 +748,8 @@ private fun AssistantMessageContent(
     onExpandStepParagraph: (expansionId: String, chipCount: Int) -> Unit,
     unfoldedStepRails: Set<String>,
     onToggleStepRailFold: (railId: String) -> Unit,
+    expandedActivityCards: Set<String>,
+    onToggleActivityCardExpanded: (cardId: String) -> Unit,
 ) {
     // Rows never render empty — unpaintable blocks are filtered and an empty
     // result falls back to the live placeholder.
@@ -761,6 +785,19 @@ private fun AssistantMessageContent(
             }
             else -> null
         }
+
+    // A rail or activity card step opens what the standard timeline opens for its tool card.
+    fun stepAction(step: SessionChatStep): (() -> Unit)? {
+        val card = step.card
+        val thoughtText = step.thoughtText
+        return when {
+            card != null -> toolCardAction(card)
+            thoughtText != null -> {
+                { onToolDetailTap(SessionChatToolDetailTarget(title = "Thought", body = thoughtText)) }
+            }
+            else -> null
+        }
+    }
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -893,20 +930,14 @@ private fun AssistantMessageContent(
                             block = block,
                             unfolded = block.blockID in unfoldedStepRails,
                             onToggleFold = { onToggleStepRailFold(block.blockID) },
-                            stepAction = { step ->
-                                val card = step.card
-                                when {
-                                    card != null -> toolCardAction(card)
-                                    step.thoughtText != null -> {
-                                        {
-                                            onToolDetailTap(
-                                                SessionChatToolDetailTarget(title = "Thought", body = step.thoughtText),
-                                            )
-                                        }
-                                    }
-                                    else -> null
-                                }
-                            },
+                            stepAction = ::stepAction,
+                        )
+                    is SessionChatTimelineBlock.ActivityCard ->
+                        ActivityCardBlock(
+                            block = block,
+                            expanded = block.blockID in expandedActivityCards,
+                            onToggleExpanded = { onToggleActivityCardExpanded(block.blockID) },
+                            stepAction = ::stepAction,
                         )
                 }
             }
@@ -979,6 +1010,87 @@ private fun SessionChatStepStatus.toStepRailStatus(): OpenCodeStepRailStatus =
         SessionChatStepStatus.Completed -> OpenCodeStepRailStatus.Completed
         SessionChatStepStatus.Failed -> OpenCodeStepRailStatus.Failed
     }
+
+/**
+ * Activity card timeline (#779): splits the card's steps into running and
+ * done lines and maps them onto [OpenCodeActivityCard]. [stepAction] is the
+ * standard timeline's tap target for the step's tool card.
+ */
+@Composable
+private fun ActivityCardBlock(
+    block: SessionChatTimelineBlock.ActivityCard,
+    expanded: Boolean,
+    onToggleExpanded: () -> Unit,
+    stepAction: (SessionChatStep) -> (() -> Unit)?,
+) {
+    val running = remember(block.steps) { SessionChatActivityCard.running(block.steps) }
+    val done = remember(block.steps) { SessionChatActivityCard.done(block.steps) }
+    val actions = block.steps.associate { it.id to stepAction(it) }
+    val live = block.isLive
+    OpenCodeActivityCard(
+        state = if (live) OpenCodeActivityCardState.Live else OpenCodeActivityCardState.Settled,
+        startedAtMs = block.steps.firstNotNullOfOrNull { it.startedAtMs },
+        endedAtMs = block.steps.takeIf { steps -> steps.all { it.endedAtMs != null } }?.mapNotNull { it.endedAtMs }?.maxOrNull(),
+        thinking = block.thinking,
+        runningLines = running.map { it.toActivityLine(tappable = actions[it.id] != null) },
+        doneLines = done.map { it.toActivityLine(tappable = actions[it.id] != null) },
+        summary =
+            if (live) SessionChatActivityCard.summary(done) else SessionChatActivityCard.settledSummary(block.steps),
+        worstStatus =
+            if (block.worstStatus == SessionChatStepStatus.Failed) OpenCodeActivityStatus.Failed else OpenCodeActivityStatus.Completed,
+        isExpanded = expanded,
+        onToggleExpanded = onToggleExpanded,
+        onLineTap = { id -> actions[id]?.invoke() },
+        onChildSessionTap = { id -> actions[id]?.invoke() },
+    )
+}
+
+private fun SessionChatStep.toActivityLine(tappable: Boolean): OpenCodeActivityLine {
+    val child = childSession
+    val title =
+        when {
+            kind == SessionChatStepKind.ChildSession && child != null ->
+                listOfNotNull(child.agent.replaceFirstChar { it.uppercase() }, child.description).joinToString(" \u00b7 ")
+            status.isInFlight -> runningTitle
+            else -> settledTitle
+        }
+    return OpenCodeActivityLine(
+        id = id,
+        kind =
+            when (kind) {
+                SessionChatStepKind.Tool -> OpenCodeActivityLineKind.Tool
+                SessionChatStepKind.ChildSession -> OpenCodeActivityLineKind.ChildSession
+                SessionChatStepKind.Thought -> OpenCodeActivityLineKind.Thought
+            },
+        icon =
+            when (family) {
+                SessionChatStepFamily.Read -> OpenCodeActivityIcon.Read
+                SessionChatStepFamily.Search -> OpenCodeActivityIcon.Search
+                SessionChatStepFamily.Fetch -> OpenCodeActivityIcon.Fetch
+                SessionChatStepFamily.Edit -> OpenCodeActivityIcon.Edit
+                SessionChatStepFamily.Skill -> OpenCodeActivityIcon.Skill
+                SessionChatStepFamily.Thought -> OpenCodeActivityIcon.Thought
+                SessionChatStepFamily.Agent -> OpenCodeActivityIcon.Agent
+                SessionChatStepFamily.Command, null -> OpenCodeActivityIcon.Command
+            },
+        title = title,
+        // A child session's description is already in its title.
+        detail = detail.takeUnless { kind == SessionChatStepKind.ChildSession },
+        status =
+            when (status) {
+                SessionChatStepStatus.Pending -> OpenCodeActivityStatus.Pending
+                SessionChatStepStatus.Running -> OpenCodeActivityStatus.Running
+                SessionChatStepStatus.Completed -> OpenCodeActivityStatus.Completed
+                SessionChatStepStatus.Failed ->
+                    if (isInterrupted) OpenCodeActivityStatus.Interrupted else OpenCodeActivityStatus.Failed
+            },
+        additions = additions,
+        deletions = deletions,
+        startedAtMs = startedAtMs,
+        endedAtMs = endedAtMs,
+        tappable = tappable,
+    )
+}
 
 /** A v2 timeline notice row; tapping a row with a value expands it in place. */
 @Composable

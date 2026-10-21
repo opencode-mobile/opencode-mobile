@@ -35,6 +35,7 @@ enum class ComponentGalleryEntryId {
     TimelineNotice,
     ChildSessionRow,
     StepRail,
+    ActivityCard,
     WorkingIndicator,
     ReasoningRow,
     TopBar,
@@ -390,6 +391,12 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.StepRail,
             title = "Step Rail",
             description = "One line per step on a vertical rail, live while the agent works.",
+            category = ComponentGalleryCategory.Chat,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.ActivityCard,
+            title = "Activity Card",
+            description = "Running steps on one live card that folds into a summary.",
             category = ComponentGalleryCategory.Chat,
         ),
         ComponentGalleryEntry(
