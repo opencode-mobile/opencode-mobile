@@ -1,6 +1,5 @@
 package dev.opencode.mobile.ui.components
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -73,7 +72,6 @@ private val SheetRowMinHeight = 48.dp
 private val SheetSpacing = 10.dp
 private val SheetIconSize = 16.dp
 private val SheetSubStepInset = 44.dp
-private const val SHEET_AGENT_TINT_ALPHA = 0.06f
 
 /**
  * Activity sheet (#779): everything one activity card segment did, kept live
@@ -162,7 +160,7 @@ private fun AgentRow(
     val running = agent.status.isInFlight
     val elapsed = if (running) SessionChatChildSessionElapsed.format(agent.startedAtMs, nowMs) else null
     val tint = openCodeColor("info")
-    Column(modifier = Modifier.fillMaxWidth().background(tint.copy(alpha = SHEET_AGENT_TINT_ALPHA))) {
+    Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier =
                 Modifier

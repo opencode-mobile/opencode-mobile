@@ -712,7 +712,8 @@ object SessionChatTimelineBlocks {
         return body
             .lineSequence()
             .map { it.trim().trimStart('#', '*', '-', ' ').trimEnd('*') }
-            .firstOrNull { it.isNotEmpty() && !it.startsWith("task_id:") }
+            // Skip the task_id header and wrapper tags such as `<subagent sessionID="…">`.
+            .firstOrNull { it.isNotEmpty() && !it.startsWith("task_id:") && !it.startsWith("<") }
     }
 
     private fun thoughtStep(

@@ -546,4 +546,15 @@ class SessionChatActivityCardTest {
             listOf(tool("c1", "task", ToolStatus.Running, buildJsonObject { put("subagent_type", "explore") }).copy(output = output))
         assertEquals(null, cards(running).single().steps.single().childSession?.result)
     }
+
+    @Test
+    fun childResult_skipsWrapperTags() {
+        val output = "<subagent sessionID=\"ses_2\">\nStandards look fine.\n</subagent>"
+        val parts =
+            listOf(tool("c1", "task", input = buildJsonObject { put("subagent_type", "general") }).copy(output = output))
+        assertEquals("Standards look fine.", cards(parts).single().steps.single().childSession?.result)
+        val tagsOnly =
+            listOf(tool("c1", "task", input = buildJsonObject { put("subagent_type", "general") }).copy(output = "<subagent/>"))
+        assertEquals(null, cards(tagsOnly).single().steps.single().childSession?.result)
+    }
 }
