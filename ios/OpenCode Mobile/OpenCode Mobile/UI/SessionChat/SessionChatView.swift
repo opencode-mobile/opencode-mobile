@@ -352,8 +352,10 @@ struct SessionChatView: View {
                     },
                     unfoldedStepRails: viewModel.uiState.unfoldedStepRails,
                     onToggleStepRailFold: { railID in viewModel.toggleStepRailFold(railID) },
-                    expandedActivityCards: viewModel.uiState.expandedActivityCards,
-                    onToggleActivityCardExpanded: { cardID in viewModel.toggleActivityCardExpanded(cardID) },
+                    presentedActivityCard: viewModel.uiState.presentedActivityCard,
+                    childActivities: viewModel.uiState.childActivities,
+                    onOpenActivityCard: { cardID in viewModel.openActivityCard(cardID) },
+                    onDismissActivityCard: { viewModel.dismissActivityCard() },
                     noticeModelNames: TimelineNoticeModelNames(options: viewModel.uiState.composer.modelOptions)
                 )
             )

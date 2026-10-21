@@ -47,9 +47,12 @@ struct SessionChatTimelineViewProps {
     /// Step rails whose earlier settled steps are unfolded (Screen Model state).
     let unfoldedStepRails: Set<String>
     let onToggleStepRailFold: (String) -> Void
-    /// Activity cards shown expanded (Screen Model state).
-    let expandedActivityCards: Set<String>
-    let onToggleActivityCardExpanded: (String) -> Void
+    /// The activity card whose live sheet is open (Screen Model state).
+    let presentedActivityCard: String?
+    /// Observed activity of running child sessions on activity cards, by child session id.
+    let childActivities: [String: SessionChatChildActivity]
+    let onOpenActivityCard: (String) -> Void
+    let onDismissActivityCard: () -> Void
     /// Catalog names for model-switch notices.
     let noticeModelNames: TimelineNoticeModelNames
 
@@ -92,8 +95,10 @@ struct SessionChatTimelineViewProps {
         onExpandStepParagraph: @escaping (String, Int) -> Void = { _, _ in },
         unfoldedStepRails: Set<String> = [],
         onToggleStepRailFold: @escaping (String) -> Void = { _ in },
-        expandedActivityCards: Set<String> = [],
-        onToggleActivityCardExpanded: @escaping (String) -> Void = { _ in },
+        presentedActivityCard: String? = nil,
+        childActivities: [String: SessionChatChildActivity] = [:],
+        onOpenActivityCard: @escaping (String) -> Void = { _ in },
+        onDismissActivityCard: @escaping () -> Void = {},
         noticeModelNames: TimelineNoticeModelNames = .empty
     ) {
         self.timeline = timeline
@@ -134,8 +139,10 @@ struct SessionChatTimelineViewProps {
         self.onExpandStepParagraph = onExpandStepParagraph
         self.unfoldedStepRails = unfoldedStepRails
         self.onToggleStepRailFold = onToggleStepRailFold
-        self.expandedActivityCards = expandedActivityCards
-        self.onToggleActivityCardExpanded = onToggleActivityCardExpanded
+        self.presentedActivityCard = presentedActivityCard
+        self.childActivities = childActivities
+        self.onOpenActivityCard = onOpenActivityCard
+        self.onDismissActivityCard = onDismissActivityCard
         self.noticeModelNames = noticeModelNames
     }
 }
@@ -259,7 +266,11 @@ private struct SessionChatTimelineReadyView: View {
     private var stepRailState: SessionChatStepRailViewState {
         SessionChatStepRailViewState(
             unfolded: props.unfoldedStepRails,
-            expandedCards: props.expandedActivityCards,
+            childActions: SessionChatActivityCardPresentation.childActions(
+                in: props.messages,
+                liveCardID: liveActivityCardID,
+                activities: props.childActivities
+            ),
             liveRailID: liveStepRailID,
             liveCardID: liveActivityCardID,
             awaitingUser: props.isAwaitingUser
@@ -298,6 +309,22 @@ private struct SessionChatTimelineReadyView: View {
     }
 
     var body: some View {
+        timelineContent
+            .sessionChatActivitySheet(
+                cardID: props.presentedActivityCard,
+                rows: props.messages,
+                liveCardID: liveActivityCardID,
+                childActivities: props.childActivities,
+                awaitingUser: props.isAwaitingUser,
+                supportsSessionMessageDiff: props.supportsSessionMessageDiff,
+                onToolDetailTap: props.onToolDetailTap,
+                onChildSessionTap: props.onChildSessionTap,
+                onChangesReviewTap: props.onChangesReviewTap,
+                onDismiss: props.onDismissActivityCard
+            )
+    }
+
+    private var timelineContent: some View {
         ZStack(alignment: .bottom) {
             MessageListTimelineHost(
                 items: listItems,
@@ -350,7 +377,7 @@ private struct SessionChatTimelineReadyView: View {
                     onExpandStepParagraph: props.onExpandStepParagraph,
                     stepRailState: stepRailState,
                     onToggleStepRailFold: props.onToggleStepRailFold,
-                    onToggleActivityCardExpanded: props.onToggleActivityCardExpanded,
+                    onOpenActivityCard: props.onOpenActivityCard,
                     noticeModelNames: props.noticeModelNames
                 )
             }
@@ -549,7 +576,7 @@ private struct SessionChatTimelineHostRow: View {
     let onExpandStepParagraph: (String, Int) -> Void
     let stepRailState: SessionChatStepRailViewState
     let onToggleStepRailFold: (String) -> Void
-    let onToggleActivityCardExpanded: (String) -> Void
+    let onOpenActivityCard: (String) -> Void
     let noticeModelNames: TimelineNoticeModelNames
 
     var body: some View {
@@ -579,7 +606,7 @@ private struct SessionChatTimelineHostRow: View {
                         onExpandStepParagraph: onExpandStepParagraph,
                         stepRailState: stepRailState,
                         onToggleStepRailFold: onToggleStepRailFold,
-                        onToggleActivityCardExpanded: onToggleActivityCardExpanded
+                        onOpenActivityCard: onOpenActivityCard
                     )
                     Spacer(minLength: 0)
                 } else {
@@ -597,7 +624,7 @@ private struct SessionChatTimelineHostRow: View {
                         onExpandStepParagraph: onExpandStepParagraph,
                         stepRailState: stepRailState,
                         onToggleStepRailFold: onToggleStepRailFold,
-                        onToggleActivityCardExpanded: onToggleActivityCardExpanded
+                        onOpenActivityCard: onOpenActivityCard
                     )
                 }
             }
@@ -618,7 +645,7 @@ private struct SessionChatMessageRow: View {
     let onExpandStepParagraph: (String, Int) -> Void
     let stepRailState: SessionChatStepRailViewState
     let onToggleStepRailFold: (String) -> Void
-    let onToggleActivityCardExpanded: (String) -> Void
+    let onOpenActivityCard: (String) -> Void
 
     private func openMessageActions(showsRevertMessage: Bool) {
         onMessageActionsTap(
@@ -664,7 +691,7 @@ private struct SessionChatMessageRow: View {
                     onExpandStepParagraph: onExpandStepParagraph,
                     stepRailState: stepRailState,
                     onToggleStepRailFold: onToggleStepRailFold,
-                    onToggleActivityCardExpanded: onToggleActivityCardExpanded
+                    onOpenActivityCard: onOpenActivityCard
                 )
                 .frame(maxWidth: .infinity, alignment: .leading)
             case .notice:
@@ -733,7 +760,7 @@ private struct AssistantMessageContent: View {
     let onExpandStepParagraph: (String, Int) -> Void
     let stepRailState: SessionChatStepRailViewState
     let onToggleStepRailFold: (String) -> Void
-    let onToggleActivityCardExpanded: (String) -> Void
+    let onOpenActivityCard: (String) -> Void
 
     /// Rows never render empty — unpaintable blocks are filtered and an empty
     /// result falls back to the live placeholder.
@@ -908,43 +935,67 @@ private struct AssistantMessageContent: View {
         )
     }
 
-    /// Activity card (#779): expansion from the Screen Model; line taps reuse
-    /// the standard card actions, a thought opens its text.
+    /// Activity card (#779): the header, footer and settled line open the live
+    /// activity sheet; an agent row pushes its child session.
     private func activityCard(_ card: SessionChatActivityCardBlock) -> some View {
-        let stepsByID = Dictionary(uniqueKeysWithValues: card.steps.map { ($0.id, $0) })
-        let line = { (step: SessionChatStep) in step.activityLine(actionable: stepAction(for: step) != nil) }
+        let presentation = SessionChatActivityCardPresentation(
+            card: card,
+            childActions: stepRailState.childActions,
+            awaitingUser: stepRailState.awaitingUser
+        )
         return OpenCodeActivityCard(
-            state: card.isLive ? .live : .settled,
-            startedAtMs: ToolStartTime.normalizeEpochMs(card.startedAtMs),
-            // Waiting on a permission or question is not thinking.
-            thinking: card.thinking && !stepRailState.awaitingUser,
-            runningLines: card.running.map(line),
-            doneLines: card.done.map(line),
-            summary: card.isLive
-                ? SessionChatActivityCardBlock.summary(done: card.done)
-                : SessionChatActivityCardBlock.settledSummary(card.steps),
-            worstStatus: card.worstStatus == .failed ? .failed : .completed,
-            isExpanded: stepRailState.expandedCards.contains(card.id),
-            onToggleExpanded: { onToggleActivityCardExpanded(card.id) },
-            onLineTap: { id in stepsByID[id].flatMap(stepAction(for:))?() },
-            onChildSessionTap: { id in stepsByID[id].flatMap(stepAction(for:))?() }
+            state: presentation.state,
+            summary: presentation.summary,
+            agents: presentation.agents,
+            current: presentation.current,
+            idleText: presentation.idleText,
+            onAgentTap: { id in card.steps.first { $0.id == id }.flatMap(stepAction(for:))?() },
+            onOpen: { onOpenActivityCard(card.id) }
+        )
+    }
+
+    private var tapActions: SessionChatStepTapActions {
+        SessionChatStepTapActions(
+            messageID: message.id,
+            supportsSessionMessageDiff: supportsSessionMessageDiff,
+            onToolDetailTap: onToolDetailTap,
+            onChildSessionTap: onChildSessionTap,
+            onChangesReviewTap: onChangesReviewTap
         )
     }
 
     private func stepAction(for step: SessionChatStep) -> (() -> Void)? {
+        tapActions.action(for: step)
+    }
+
+    private func toolCardAction(for card: SessionChatToolCardBlock) -> (() -> Void)? {
+        tapActions.action(for: card)
+    }
+}
+
+/// What tapping a step or tool card does: the same for timeline rows and the
+/// activity sheet.
+struct SessionChatStepTapActions {
+    let messageID: String
+    let supportsSessionMessageDiff: Bool
+    let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
+    let onChildSessionTap: (String, String) -> Void
+    let onChangesReviewTap: (String, String?) -> Void
+
+    func action(for step: SessionChatStep) -> (() -> Void)? {
         if step.kind == .thought {
             guard let text = step.thoughtText else { return nil }
             return { onToolDetailTap(SessionChatToolDetailTarget(title: "Thought", body: text)) }
         }
-        return step.card.flatMap(toolCardAction(for:))
+        return step.card.flatMap(action(for:))
     }
 
-    private func toolCardAction(for card: SessionChatToolCardBlock) -> (() -> Void)? {
+    func action(for card: SessionChatToolCardBlock) -> (() -> Void)? {
         if let childSessionId = card.childSessionId {
             return { onChildSessionTap(childSessionId, card.title) }
         }
         if card.opensChangesReview, supportsSessionMessageDiff {
-            return { onChangesReviewTap(message.id, card.changesInitialFilePath) }
+            return { onChangesReviewTap(messageID, card.changesInitialFilePath) }
         }
         if let detail = card.detailText {
             return {
@@ -958,6 +1009,12 @@ private struct AssistantMessageContent: View {
             }
         }
         return nil
+    }
+
+    /// The tap pushes a screen (child session, Changes) instead of presenting a sheet.
+    func navigates(_ step: SessionChatStep) -> Bool {
+        guard step.kind != .thought, let card = step.card else { return false }
+        return card.childSessionId != nil || (card.opensChangesReview && supportsSessionMessageDiff)
     }
 }
 
@@ -1151,57 +1208,6 @@ private extension SessionChatStepRailRow {
 }
 
 private extension SessionChatStep {
-    func activityLine(actionable: Bool) -> OpenCodeActivityLine {
-        if kind == .childSession {
-            return OpenCodeActivityLine(
-                id: id,
-                kind: .childSession,
-                icon: .agent,
-                title: OpenCodeToolChip.displayAgentName(childSession?.agent ?? title),
-                detail: childSession?.description ?? detail,
-                status: activityStatus,
-                startedAtMs: ToolStartTime.normalizeEpochMs(startedAtMs),
-                endedAtMs: ToolStartTime.normalizeEpochMs(endedAtMs),
-                isActionable: actionable
-            )
-        }
-        return OpenCodeActivityLine(
-            id: id,
-            kind: kind == .thought ? .thought : .tool,
-            icon: activityIcon,
-            title: status.isInFlight ? runningTitle : settledTitle,
-            detail: detail,
-            status: activityStatus,
-            additions: additions,
-            deletions: deletions,
-            startedAtMs: kind == .thought ? nil : ToolStartTime.normalizeEpochMs(startedAtMs),
-            endedAtMs: ToolStartTime.normalizeEpochMs(endedAtMs),
-            isActionable: actionable
-        )
-    }
-
-    var activityIcon: OpenCodeActivityLineIcon {
-        switch family {
-        case .read: .read
-        case .search: .search
-        case .fetch: .fetch
-        case .edit: .edit
-        case .command: .command
-        case .thought: .thought
-        case .agent: .agent
-        case nil: card?.toolName.lowercased() == "skill" ? .skill : .other
-        }
-    }
-
-    var activityStatus: OpenCodeActivityLineStatus {
-        switch status {
-        case .pending: .pending
-        case .running: .running
-        case .completed: .completed
-        case .failed: isInterrupted ? .interrupted : .failed
-        }
-    }
-
     var railStatus: OpenCodeStepRailStatus {
         switch status {
         case .pending: .pending

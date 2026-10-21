@@ -30,6 +30,14 @@ enum BottomSheetEntryDecorator {
     case icon(OpenCodeIcon)
 }
 
+/// How a bottom sheet's title reads.
+enum OpenCodeBottomSheetTitleState: Equatable {
+    case plain
+    /// Live work: the title shimmers like running text (static under Reduce
+    /// Motion) and a monospaced elapsed time since `startedAtMs` ticks at the end.
+    case running(startedAtMs: Int64?)
+}
+
 /// How tall a bottom sheet rests.
 enum OpenCodeBottomSheetHeight: Equatable {
     /// Wraps short content; content taller than the compact limit switches to
@@ -278,6 +286,7 @@ private struct BottomSheetContentHeightKey: PreferenceKey {
 
 private struct OpenCodeBottomSheetSheetBody<PinnedTop: View, SheetContent: View, PinnedBottom: View>: View {
     let title: String
+    let titleState: OpenCodeBottomSheetTitleState
     let leadingAction: OpenCodeBottomSheetHeaderAction?
     let scrollTargetID: String?
     let height: OpenCodeBottomSheetHeight
@@ -303,6 +312,7 @@ private struct OpenCodeBottomSheetSheetBody<PinnedTop: View, SheetContent: View,
 
     init(
         title: String,
+        titleState: OpenCodeBottomSheetTitleState,
         leadingAction: OpenCodeBottomSheetHeaderAction?,
         scrollTargetID: String?,
         height: OpenCodeBottomSheetHeight,
@@ -321,6 +331,7 @@ private struct OpenCodeBottomSheetSheetBody<PinnedTop: View, SheetContent: View,
         @ViewBuilder pinnedBottom: @escaping () -> PinnedBottom
     ) {
         self.title = title
+        self.titleState = titleState
         self.leadingAction = leadingAction
         self.scrollTargetID = scrollTargetID
         self.height = height
@@ -396,6 +407,7 @@ private struct OpenCodeBottomSheetSheetBody<PinnedTop: View, SheetContent: View,
 
         OpenCodeBottomSheetContainer(
             title: title,
+            titleState: titleState,
             leadingAction: leadingAction,
             onDismiss: onDismiss,
             onHeaderDragChanged: onHeaderDragChanged,
@@ -620,6 +632,7 @@ private final class OpenCodeBottomSheetHostingController<Content: View>: UIHosti
 struct OpenCodeBottomSheet<PinnedTop: View, SheetContent: View, PinnedBottom: View>: ViewModifier {
     @Binding var isPresented: Bool
     let title: String
+    let titleState: OpenCodeBottomSheetTitleState
     let leadingAction: OpenCodeBottomSheetHeaderAction?
     let scrollTargetID: String?
     let height: OpenCodeBottomSheetHeight
@@ -638,6 +651,7 @@ struct OpenCodeBottomSheet<PinnedTop: View, SheetContent: View, PinnedBottom: Vi
                 OpenCodeBottomSheetOverlayHost(
                     isPresented: isPresented,
                     title: title,
+                    titleState: titleState,
                     leadingAction: leadingAction,
                     scrollTargetID: scrollTargetID,
                     height: height,
@@ -654,6 +668,7 @@ struct OpenCodeBottomSheet<PinnedTop: View, SheetContent: View, PinnedBottom: Vi
 private struct OpenCodeBottomSheetOverlayHost<PinnedTop: View, SheetContent: View, PinnedBottom: View>: UIViewRepresentable {
     var isPresented: Bool
     var title: String
+    var titleState: OpenCodeBottomSheetTitleState
     var leadingAction: OpenCodeBottomSheetHeaderAction?
     var scrollTargetID: String?
     var height: OpenCodeBottomSheetHeight
@@ -677,6 +692,7 @@ private struct OpenCodeBottomSheetOverlayHost<PinnedTop: View, SheetContent: Vie
         context.coordinator.update(
             isPresented: isPresented,
             title: title,
+            titleState: titleState,
             leadingAction: leadingAction,
             scrollTargetID: scrollTargetID,
             height: height,
@@ -706,6 +722,7 @@ private struct OpenCodeBottomSheetOverlayHost<PinnedTop: View, SheetContent: Vie
         func update(
             isPresented: Bool,
             title: String,
+            titleState: OpenCodeBottomSheetTitleState,
             leadingAction: OpenCodeBottomSheetHeaderAction?,
             scrollTargetID: String?,
             height: OpenCodeBottomSheetHeight,
@@ -739,6 +756,7 @@ private struct OpenCodeBottomSheetOverlayHost<PinnedTop: View, SheetContent: Vie
             let content = OverlayContent(
                 presentation: presentation,
                 title: title,
+                titleState: titleState,
                 leadingAction: leadingAction,
                 scrollTargetID: scrollTargetID,
                 height: height,
@@ -873,6 +891,7 @@ private struct OpenCodeBottomSheetOverlayHost<PinnedTop: View, SheetContent: Vie
 private struct OpenCodeBottomSheetOverlayContent<PinnedTop: View, SheetContent: View, PinnedBottom: View>: View {
     let presentation: OpenCodeBottomSheetPresentation
     let title: String
+    let titleState: OpenCodeBottomSheetTitleState
     let leadingAction: OpenCodeBottomSheetHeaderAction?
     let scrollTargetID: String?
     let height: OpenCodeBottomSheetHeight
@@ -918,6 +937,7 @@ private struct OpenCodeBottomSheetOverlayContent<PinnedTop: View, SheetContent: 
 
                 OpenCodeBottomSheetSheetBody(
                     title: title,
+                    titleState: titleState,
                     leadingAction: leadingAction,
                     scrollTargetID: scrollTargetID,
                     height: height,
@@ -1109,6 +1129,7 @@ private struct OpenCodeBottomSheetEntryPressStyle: ButtonStyle {
 
 private struct OpenCodeBottomSheetContainer<PinnedTop: View, SheetContent: View, PinnedBottom: View>: View {
     let title: String
+    let titleState: OpenCodeBottomSheetTitleState
     let leadingAction: OpenCodeBottomSheetHeaderAction?
     let onDismiss: () -> Void
     let onHeaderDragChanged: (CGFloat) -> Void
@@ -1243,12 +1264,25 @@ private struct OpenCodeBottomSheetContainer<PinnedTop: View, SheetContent: View,
                 )
             }
 
-            Text(title)
-                .font(OpenCodeTypography.heading)
-                .foregroundStyle(OpenCodeColors.textStrong)
-                .lineLimit(1)
+            switch titleState {
+            case .plain:
+                Text(title)
+                    .font(OpenCodeTypography.heading)
+                    .foregroundStyle(OpenCodeColors.textStrong)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityAddTraits(.isHeader)
+            case .running(let startedAtMs):
+                HStack(spacing: 8) {
+                    OpenCodeRunningShimmerText(text: title, font: OpenCodeTypography.heading)
+                        .accessibilityAddTraits(.isHeader)
+                    Spacer(minLength: 0)
+                    if let startedAtMs {
+                        OpenCodeLiveElapsedText(startedAtMs: startedAtMs)
+                    }
+                }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityAddTraits(.isHeader)
+            }
 
             OpenCodeButton(
                 variant: .iconCircle(.close, accessibilityLabel: String(localized: "Close")),
@@ -1336,6 +1370,7 @@ extension View {
     func openCodeBottomSheet<PinnedTop: View, SheetContent: View, PinnedBottom: View>(
         isPresented: Binding<Bool>,
         title: String,
+        titleState: OpenCodeBottomSheetTitleState = .plain,
         leadingAction: OpenCodeBottomSheetHeaderAction? = nil,
         scrollTargetID: String? = nil,
         height: OpenCodeBottomSheetHeight = .fitContent,
@@ -1348,6 +1383,7 @@ extension View {
             OpenCodeBottomSheet(
                 isPresented: isPresented,
                 title: title,
+                titleState: titleState,
                 leadingAction: leadingAction,
                 scrollTargetID: scrollTargetID,
                 height: height,
@@ -1363,6 +1399,7 @@ extension View {
     func openCodeBottomSheet<SheetContent: View>(
         isPresented: Binding<Bool>,
         title: String,
+        titleState: OpenCodeBottomSheetTitleState = .plain,
         leadingAction: OpenCodeBottomSheetHeaderAction? = nil,
         scrollTargetID: String? = nil,
         height: OpenCodeBottomSheetHeight = .fitContent,
@@ -1372,6 +1409,7 @@ extension View {
         openCodeBottomSheet(
             isPresented: isPresented,
             title: title,
+            titleState: titleState,
             leadingAction: leadingAction,
             scrollTargetID: scrollTargetID,
             height: height,

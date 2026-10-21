@@ -1,19 +1,15 @@
 import SwiftUI
 
-/// Live or settled: a live card shows "Working" and its running lines; a
-/// settled card folds into a one-line summary.
+/// Live: "Working", the summary, running child sessions and the latest running
+/// tool. Settled: one "Used N · Read, Edit" line with the worst status.
 enum OpenCodeActivityCardState: Equatable, Sendable {
-    case live
-    case settled
+    /// `startedAtMs`: the run's first start, for the header's elapsed time.
+    case live(startedAtMs: Int64?)
+    /// `stepCount`: every step of the run; `worstStatus` tints the leading dot.
+    case settled(worstStatus: OpenCodeActivityLineStatus, stepCount: Int)
 }
 
-enum OpenCodeActivityLineKind: Equatable, Sendable {
-    case tool
-    case childSession
-    case thought
-}
-
-/// The family glyph in front of a line; callers never pass a raw icon.
+/// The family glyph in front of a tool; callers never pass a raw icon.
 enum OpenCodeActivityLineIcon: Equatable, Sendable {
     case read
     case search
@@ -54,132 +50,67 @@ enum OpenCodeActivityLineStatus: String, CaseIterable, Sendable {
     }
 }
 
-/// One step on an Activity Card.
-struct OpenCodeActivityLine: Equatable, Sendable, Identifiable {
+/// A running child session on a live Activity Card.
+struct OpenCodeActivityAgentRow: Equatable, Sendable, Identifiable {
     let id: String
-    let kind: OpenCodeActivityLineKind
-    let icon: OpenCodeActivityLineIcon
-    let title: String
-    let detail: String?
-    let status: OpenCodeActivityLineStatus
-    let additions: Int?
-    let deletions: Int?
+    let agentName: String
+    /// What the child is doing now, or its description.
+    let action: String?
     let startedAtMs: Int64?
-    let endedAtMs: Int64?
-    let isActionable: Bool
-
-    init(
-        id: String,
-        kind: OpenCodeActivityLineKind = .tool,
-        icon: OpenCodeActivityLineIcon,
-        title: String,
-        detail: String? = nil,
-        status: OpenCodeActivityLineStatus,
-        additions: Int? = nil,
-        deletions: Int? = nil,
-        startedAtMs: Int64? = nil,
-        endedAtMs: Int64? = nil,
-        isActionable: Bool = true
-    ) {
-        self.id = id
-        self.kind = kind
-        self.icon = icon
-        self.title = title
-        self.detail = detail
-        self.status = status
-        self.additions = additions
-        self.deletions = deletions
-        self.startedAtMs = startedAtMs
-        self.endedAtMs = endedAtMs
-        self.isActionable = isActionable
-    }
 }
 
-/// Activity Card (#779): one card per run of an agent's steps. Live, it lists
-/// each running step with a spinner and live elapsed time and folds finished
-/// work into a footer count; settled, it is one summary line. Tapping the
-/// header, footer or settled line expands the card inline to list finished steps.
+/// The live card's footer: the latest running tool.
+struct OpenCodeActivityCurrentRow: Equatable, Sendable {
+    let icon: OpenCodeActivityLineIcon
+    let title: String
+    /// Other tools running at the same time ("+N").
+    let extraRunning: Int
+    let startedAtMs: Int64?
+}
+
+/// Activity Card (#779): one card per run of an agent's steps. Live, a
+/// shimmering "Working" header with elapsed time, a summary line, one row per
+/// running child session, and a footer band with the latest running tool that
+/// opens the live activity sheet. Settled, one "Used N · Read, Edit" line that
+/// opens the same sheet. Nothing expands inline.
 struct OpenCodeActivityCard: View {
     let state: OpenCodeActivityCardState
-    /// Live only: the run's first start, for the header's elapsed time.
-    let startedAtMs: Int64?
-    /// Live with nothing running: an italic "Thinking…" line instead of running lines.
-    let thinking: Bool
-    let runningLines: [OpenCodeActivityLine]
-    let doneLines: [OpenCodeActivityLine]
-    /// Live: the footer ("4 done · 3 reads"). Settled: the one-liner ("9 steps · 3 reads").
+    /// Live: "6 steps · 3 reads · 1 search". Settled: the tool names, "Read, Edit, Agent".
     let summary: String
-    /// Tints the settled card's leading dot: `.failed` or `.completed`.
-    let worstStatus: OpenCodeActivityLineStatus
-    let isExpanded: Bool
-    let onToggleExpanded: () -> Void
-    let onLineTap: (String) -> Void
-    let onChildSessionTap: (String) -> Void
+    /// Live only: running child sessions.
+    let agents: [OpenCodeActivityAgentRow]
+    /// Live only: the latest running tool, or nil while nothing but agents runs.
+    let current: OpenCodeActivityCurrentRow?
+    /// Live only, when `current` is nil: "Waiting for agents" / "Thinking…".
+    let idleText: String?
+    let onAgentTap: (String) -> Void
+    let onOpen: () -> Void
 
     init(
         state: OpenCodeActivityCardState,
-        startedAtMs: Int64? = nil,
-        thinking: Bool = false,
-        runningLines: [OpenCodeActivityLine] = [],
-        doneLines: [OpenCodeActivityLine] = [],
         summary: String,
-        worstStatus: OpenCodeActivityLineStatus = .completed,
-        isExpanded: Bool = false,
-        onToggleExpanded: @escaping () -> Void = {},
-        onLineTap: @escaping (String) -> Void = { _ in },
-        onChildSessionTap: @escaping (String) -> Void = { _ in }
+        agents: [OpenCodeActivityAgentRow] = [],
+        current: OpenCodeActivityCurrentRow? = nil,
+        idleText: String? = nil,
+        onAgentTap: @escaping (String) -> Void = { _ in },
+        onOpen: @escaping () -> Void = {}
     ) {
         self.state = state
-        self.startedAtMs = startedAtMs
-        self.thinking = thinking
-        self.runningLines = runningLines
-        self.doneLines = doneLines
         self.summary = summary
-        self.worstStatus = worstStatus
-        self.isExpanded = isExpanded
-        self.onToggleExpanded = onToggleExpanded
-        self.onLineTap = onLineTap
-        self.onChildSessionTap = onChildSessionTap
+        self.agents = agents
+        self.current = current
+        self.idleText = idleText
+        self.onAgentTap = onAgentTap
+        self.onOpen = onOpen
     }
-
-    /// More than this many running lines show `maxRunningLines - 1` and "+N more running".
-    static let maxRunningLines = 3
 
     var body: some View {
         Group {
-            if state == .settled, !isExpanded {
-                settledLine
-            } else {
-                VStack(alignment: .leading, spacing: 0) {
-                    header
-                    if state == .live, thinking, runningLines.isEmpty {
-                        Text("Thinking\u{2026}")
-                            .font(OpenCodeTypography.caption)
-                            .italic()
-                            .foregroundStyle(OpenCodeColors.textWeak)
-                            .padding(.vertical, ActivityCardMetrics.lineVerticalPadding)
-                            .accessibilityLabel("Thinking")
-                    }
-                    if isExpanded {
-                        ForEach(doneLines) { line in
-                            lineRow(line)
-                        }
-                    }
-                    if state == .live {
-                        ForEach(visibleRunningLines) { line in
-                            lineRow(line)
-                        }
-                        if hiddenRunningCount > 0 {
-                            Text("+\(hiddenRunningCount) more running")
-                                .font(OpenCodeTypography.bodySecondary)
-                                .foregroundStyle(OpenCodeColors.textWeaker)
-                                .padding(.vertical, ActivityCardMetrics.lineVerticalPadding)
-                        }
-                    }
-                    footer
-                }
-                .padding(.horizontal, ActivityCardMetrics.paddingHorizontal)
-                .padding(.vertical, ActivityCardMetrics.paddingVertical)
+            switch state {
+            case .live(let startedAtMs):
+                liveCard(startedAtMs: startedAtMs)
+            case .settled(let worstStatus, let stepCount):
+                settledLine(worstStatus: worstStatus, stepCount: stepCount)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -193,44 +124,46 @@ struct OpenCodeActivityCard: View {
         }
     }
 
-    private var visibleRunningLines: [OpenCodeActivityLine] {
-        guard runningLines.count > Self.maxRunningLines else { return runningLines }
-        return Array(runningLines.prefix(Self.maxRunningLines - 1))
-    }
+    // MARK: - Live
 
-    private var hiddenRunningCount: Int {
-        runningLines.count - visibleRunningLines.count
-    }
-
-    // MARK: - Header and footer
-
-    private var header: some View {
-        Button(action: onToggleExpanded) {
-            HStack(spacing: 8) {
-                if state == .live {
-                    ActivityCardWorkingLabel()
-                } else {
-                    Text("Done")
-                        .font(OpenCodeTypography.caption.weight(.semibold))
-                        .foregroundStyle(OpenCodeColors.textWeaker)
+    private func liveCard(startedAtMs: Int64?) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button(action: onOpen) {
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        OpenCodeRunningShimmerText(text: "Working", font: OpenCodeTypography.bodySecondary.weight(.semibold))
+                        Spacer(minLength: 0)
+                        if let startedAtMs {
+                            OpenCodeLiveElapsedText(startedAtMs: startedAtMs)
+                        }
+                    }
+                    Text(summary)
+                        .font(OpenCodeTypography.caption)
+                        .foregroundStyle(OpenCodeColors.textWeak)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
                 }
-                Spacer(minLength: 0)
-                if state == .live, let startedAtMs {
-                    ActivityCardElapsed(startedAtMs: startedAtMs, endedAtMs: nil)
-                }
+                .padding(.top, ActivityCardMetrics.paddingVertical)
+                .padding(.bottom, ActivityCardMetrics.summaryBottomPadding)
+                .padding(.horizontal, ActivityCardMetrics.paddingHorizontal)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
-            .padding(.bottom, 2)
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(headerAccessibilityLabel(startedAtMs: startedAtMs))
+            .accessibilityHint("Opens activity")
+            .accessibilityAddTraits(.isButton)
+
+            if !agents.isEmpty {
+                agentSection
+            }
+            footer
         }
-        .buttonStyle(.plain)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(headerAccessibilityLabel)
-        .accessibilityAddTraits(.isButton)
     }
 
-    private var headerAccessibilityLabel: String {
-        guard state == .live else { return "Done, \(doneLines.count) steps" }
-        var parts = ["Working", "\(runningLines.count) running", "\(doneLines.count) done"]
+    private func headerAccessibilityLabel(startedAtMs: Int64?) -> String {
+        var parts = ["Working", summary]
         if let startedAtMs {
             parts.append(OpenCodeStepRailElapsed.format(
                 startedAtMs: startedAtMs,
@@ -240,43 +173,109 @@ struct OpenCodeActivityCard: View {
         return parts.joined(separator: ", ")
     }
 
-    private var footer: some View {
-        Button(action: onToggleExpanded) {
-            HStack(spacing: 8) {
-                Text(summary)
-                    .font(OpenCodeTypography.caption)
-                    .foregroundStyle(OpenCodeColors.textWeaker)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                Spacer(minLength: 0)
-                ActivityCardChevron(isExpanded: isExpanded)
+    private var agentSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            OpenCodeHairline()
+            OpenCodeActivitySectionLabel(count: agents.count)
+                .padding(.top, 6)
+                .padding(.bottom, 2)
+                .padding(.horizontal, ActivityCardMetrics.paddingHorizontal)
+            ForEach(Array(agents.enumerated()), id: \.element.id) { index, agent in
+                if index > 0 {
+                    OpenCodeHairline()
+                        .padding(.horizontal, ActivityCardMetrics.paddingHorizontal)
+                }
+                Button { onAgentTap(agent.id) } label: {
+                    ActivityCardAgentRow(agent: agent)
+                        .padding(.horizontal, ActivityCardMetrics.paddingHorizontal)
+                }
+                .buttonStyle(.plain)
             }
-            .padding(.top, ActivityCardMetrics.footerTopPadding)
+        }
+    }
+
+    private var footer: some View {
+        Button(action: onOpen) {
+            HStack(spacing: 8) {
+                if let current {
+                    OpenCodeIconImage(icon: current.icon.icon, size: ActivityCardMetrics.iconSize)
+                        .foregroundStyle(OpenCodeColors.iconWeakBase)
+                        .frame(width: ActivityCardMetrics.iconSize)
+                        .accessibilityHidden(true)
+                    Text(current.title)
+                        .font(OpenCodeTypography.bodySecondary)
+                        .foregroundStyle(OpenCodeColors.textStrong)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    if current.extraRunning > 0 {
+                        Text("+\(current.extraRunning)")
+                            .font(OpenCodeTypography.caption)
+                            .foregroundStyle(OpenCodeColors.textWeak)
+                            .fixedSize()
+                    }
+                    if let startedAtMs = current.startedAtMs {
+                        OpenCodeLiveElapsedText(startedAtMs: startedAtMs)
+                    }
+                } else {
+                    Text(idleText ?? "Thinking\u{2026}")
+                        .font(OpenCodeTypography.bodySecondary)
+                        .italic()
+                        .foregroundStyle(OpenCodeColors.textWeaker)
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                OpenCodeActivityChevron()
+            }
+            .padding(.horizontal, ActivityCardMetrics.paddingHorizontal)
+            .padding(.top, ActivityCardMetrics.footerPaddingTop)
+            .padding(.bottom, ActivityCardMetrics.footerPaddingBottom)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(OpenCodeColors.surfaceRaisedBaseHover)
+            .clipShape(
+                UnevenRoundedRectangle(
+                    bottomLeadingRadius: ActivityCardMetrics.cornerRadius - 1,
+                    bottomTrailingRadius: ActivityCardMetrics.cornerRadius - 1,
+                    style: .continuous
+                )
+            )
+            .padding([.horizontal, .bottom], 1)
+            .padding(.top, ActivityCardMetrics.footerTopMargin)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .overlay(alignment: .top) {
-            Rectangle()
-                .fill(OpenCodeColors.borderWeakBase)
-                .frame(height: 1)
-        }
-        .padding(.top, ActivityCardMetrics.footerTopMargin)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(summary), \(isExpanded ? "collapses" : "expands")")
+        .accessibilityLabel(footerAccessibilityLabel)
+        .accessibilityHint("Opens activity")
         .accessibilityAddTraits(.isButton)
     }
 
-    /// "9 steps" in bold, then the families muted, then a chevron.
-    private var settledLine: some View {
-        Button(action: onToggleExpanded) {
+    private var footerAccessibilityLabel: String {
+        guard let current else { return idleText ?? "Thinking" }
+        var parts = [current.title]
+        if current.extraRunning > 0 { parts.append("\(current.extraRunning) more running") }
+        if let startedAtMs = current.startedAtMs {
+            parts.append(OpenCodeStepRailElapsed.format(
+                startedAtMs: startedAtMs,
+                endMs: OpenCodeStepRailElapsed.nowMs(Date())
+            ))
+        }
+        return parts.joined(separator: ", ")
+    }
+
+    // MARK: - Settled
+
+    /// Dot, "Used" muted, the count semibold, then the tool names muted.
+    private func settledLine(worstStatus: OpenCodeActivityLineStatus, stepCount: Int) -> some View {
+        Button(action: onOpen) {
             HStack(spacing: 8) {
-                ActivityCardDot(status: worstStatus)
-                settledSummaryText
+                OpenCodeActivityStatusDot(status: worstStatus)
+                settledText(stepCount: stepCount)
                     .font(OpenCodeTypography.bodySecondary)
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                ActivityCardChevron(isExpanded: false)
+                OpenCodeActivityChevron()
             }
             .padding(.horizontal, ActivityCardMetrics.paddingHorizontal)
             .padding(.vertical, ActivityCardMetrics.settledPaddingVertical)
@@ -285,42 +284,19 @@ struct OpenCodeActivityCard: View {
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
-            "\(summary), \(worstStatus == .failed ? "failed" : "completed"), expands"
+            ["Used \(stepCount)", summary, worstStatus == .failed ? "failed" : "completed"]
+                .filter { !$0.isEmpty }
+                .joined(separator: ", ")
         )
+        .accessibilityHint("Opens activity")
         .accessibilityAddTraits(.isButton)
     }
 
-    private var settledSummaryText: Text {
-        let separator = " \u{00B7} "
-        guard let range = summary.range(of: separator) else {
-            return Text(summary).fontWeight(.semibold).foregroundColor(OpenCodeColors.textStrong)
-        }
-        let head = String(summary[..<range.lowerBound])
-        let tail = String(summary[range.lowerBound...])
-        return Text(head).fontWeight(.semibold).foregroundColor(OpenCodeColors.textStrong)
-            + Text(tail).foregroundColor(OpenCodeColors.textWeak)
-    }
-
-    // MARK: - Lines
-
-    @ViewBuilder
-    private func lineRow(_ line: OpenCodeActivityLine) -> some View {
-        let row = ActivityCardLineRow(line: line)
-        if line.isActionable {
-            Button {
-                if line.kind == .childSession {
-                    onChildSessionTap(line.id)
-                } else {
-                    onLineTap(line.id)
-                }
-            } label: {
-                row
-            }
-            .buttonStyle(.plain)
-            .accessibilityAddTraits(.isButton)
-        } else {
-            row
-        }
+    private func settledText(stepCount: Int) -> Text {
+        let head = Text("Used ").foregroundColor(OpenCodeColors.textWeak)
+            + Text("\(stepCount)").fontWeight(.semibold).foregroundColor(OpenCodeColors.textStrong)
+        guard !summary.isEmpty else { return head }
+        return head + Text(" \u{00B7} \(summary)").foregroundColor(OpenCodeColors.textWeak)
     }
 }
 
@@ -328,101 +304,161 @@ private enum ActivityCardMetrics {
     static let cornerRadius: CGFloat = 14
     static let paddingHorizontal: CGFloat = 12
     static let paddingVertical: CGFloat = 10
+    static let summaryBottomPadding: CGFloat = 8
     static let settledPaddingVertical: CGFloat = 9
-    static let lineVerticalPadding: CGFloat = 5
-    static let lineSpacing: CGFloat = 8
-    static let spinnerSize: CGFloat = 12
     static let iconSize: CGFloat = 16
-    static let dotSize: CGFloat = 8
-    static let chevronSize: CGFloat = 14
-    static let footerTopMargin: CGFloat = 4
-    static let footerTopPadding: CGFloat = 7
+    static let footerTopMargin: CGFloat = 0
+    static let footerPaddingTop: CGFloat = 9
+    static let footerPaddingBottom: CGFloat = 10
 }
 
-/// One line: a spinner (running) or status dot (done), the family icon, the
-/// title, then a diff stat, "failed" / "stopped" or live elapsed.
-private struct ActivityCardLineRow: View {
-    let line: OpenCodeActivityLine
-
-    private var isRunning: Bool { line.status.isInFlight }
-
-    private var titleText: String {
-        guard line.kind == .childSession, let detail = line.detail, !detail.isEmpty else { return line.title }
-        return "\(line.title) \u{00B7} \(detail)"
-    }
-
-    private var titleColor: Color {
-        if line.kind == .childSession { return OpenCodeColors.info }
-        return isRunning ? OpenCodeColors.textStrong : OpenCodeColors.textWeak
-    }
+/// Letter tile, agent name in the agent tint, current action muted, elapsed, chevron.
+private struct ActivityCardAgentRow: View {
+    let agent: OpenCodeActivityAgentRow
 
     var body: some View {
-        HStack(spacing: ActivityCardMetrics.lineSpacing) {
-            if isRunning {
-                ActivityCardSpinner()
-            } else {
-                ActivityCardDot(status: line.status)
-                    .frame(width: ActivityCardMetrics.spinnerSize)
-            }
-            OpenCodeIconImage(icon: line.icon.icon, size: ActivityCardMetrics.iconSize)
-                .foregroundStyle(line.kind == .childSession ? OpenCodeColors.info : OpenCodeColors.iconWeakBase)
-                .frame(width: ActivityCardMetrics.iconSize)
-            Text(titleText)
+        HStack(spacing: 8) {
+            OpenCodeActivityAgentTile(agentName: agent.agentName)
+            Text(agent.agentName)
+                .font(OpenCodeTypography.bodySecondary.weight(.semibold))
+                .foregroundStyle(OpenCodeColors.info)
+                .lineLimit(1)
+                .fixedSize()
+            Text(agent.action ?? "")
                 .font(OpenCodeTypography.bodySecondary)
-                .foregroundStyle(titleColor)
+                .foregroundStyle(OpenCodeColors.textWeak)
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            if !isRunning, (line.additions ?? 0) > 0 || (line.deletions ?? 0) > 0 {
-                OpenCodeDiffStat(
-                    additions: (line.additions ?? 0) > 0 ? line.additions : nil,
-                    deletions: (line.deletions ?? 0) > 0 ? line.deletions : nil
-                )
-                .fixedSize()
+            if let startedAtMs = agent.startedAtMs {
+                OpenCodeLiveElapsedText(startedAtMs: startedAtMs)
             }
-            if line.status == .failed {
-                Text("failed")
-                    .font(OpenCodeTypography.caption)
-                    .foregroundStyle(OpenCodeColors.error)
-                    .fixedSize()
-            } else if line.status == .interrupted {
-                Text("stopped")
-                    .font(OpenCodeTypography.caption)
-                    .foregroundStyle(OpenCodeColors.textWeaker)
-                    .fixedSize()
-            }
-            if isRunning, let startedAtMs = line.startedAtMs {
-                ActivityCardElapsed(startedAtMs: startedAtMs, endedAtMs: line.endedAtMs)
-            }
+            OpenCodeActivityChevron()
         }
-        .padding(.vertical, ActivityCardMetrics.lineVerticalPadding)
+        .padding(.vertical, 7)
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(accessibilityLabel)
-    }
-
-    private var accessibilityLabel: String {
-        let elapsed = isRunning
-            ? line.startedAtMs.map {
-                OpenCodeStepRailElapsed.format(startedAtMs: $0, endMs: OpenCodeStepRailElapsed.nowMs(Date()))
-            }
-            : nil
-        let status: String =
-            switch line.status {
-            case .pending: "pending"
-            case .running: "running"
-            case .completed: "completed"
-            case .failed: "failed"
-            case .interrupted: "stopped"
-            }
-        return [titleText, status, elapsed].compactMap { $0 }.joined(separator: ", ")
+        .accessibilityLabel(
+            [agent.agentName, agent.action].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
+        )
+        .accessibilityHint("Opens the child session")
+        .accessibilityAddTraits(.isButton)
     }
 }
 
-/// Monospaced `m:ss` that ticks every second until `endedAtMs`.
-private struct ActivityCardElapsed: View {
+// MARK: - Shared pieces (card and activity sheet)
+
+/// "AGENT" / "2 AGENTS": uppercase, tracked, in the weakest text tone.
+struct OpenCodeActivitySectionLabel: View {
+    let text: String
+
+    init(text: String) {
+        self.text = text
+    }
+
+    /// The Agent section's label for `count` child sessions.
+    init(count: Int) {
+        self.text = count == 1 ? "Agent" : "\(count) agents"
+    }
+
+    var body: some View {
+        Text(text.uppercased())
+            .font(.system(size: 10.5, weight: .medium))
+            .tracking(0.8)
+            .foregroundStyle(OpenCodeColors.textWeaker)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityAddTraits(.isHeader)
+    }
+}
+
+/// 20pt rounded tile with the agent's first letter in the agent tint.
+struct OpenCodeActivityAgentTile: View {
+    let agentName: String
+
+    var body: some View {
+        Text(agentName.first.map { String($0).uppercased() } ?? "?")
+            .font(.system(size: 11, weight: .bold))
+            .foregroundStyle(OpenCodeColors.info)
+            .frame(width: 20, height: 20)
+            .background(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(OpenCodeColors.info.opacity(0.14))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .strokeBorder(OpenCodeColors.info.opacity(0.35), lineWidth: 1)
+            )
+            .accessibilityHidden(true)
+    }
+}
+
+/// 1pt divider in the weak border tone.
+struct OpenCodeHairline: View {
+    var body: some View {
+        Rectangle()
+            .fill(OpenCodeColors.borderWeakBase)
+            .frame(height: 1)
+            .accessibilityHidden(true)
+    }
+}
+
+/// Status dot; `pulsing` breathes while running (static under Reduce Motion).
+struct OpenCodeActivityStatusDot: View {
+    let status: OpenCodeActivityLineStatus
+    var size: CGFloat = 8
+    var pulsing = false
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        Group {
+            if pulsing, status.isInFlight, !reduceMotion {
+                TimelineView(.animation) { context in
+                    dot.opacity(Self.pulseOpacity(at: context.date))
+                }
+            } else {
+                dot
+            }
+        }
+        .accessibilityHidden(true)
+    }
+
+    private var dot: some View {
+        Circle()
+            .fill(fill)
+            .frame(width: size, height: size)
+    }
+
+    private var fill: Color {
+        switch status {
+        case .completed: OpenCodeColors.success
+        case .failed: OpenCodeColors.error
+        case .running, .pending: OpenCodeColors.warning
+        case .interrupted: OpenCodeColors.textWeaker
+        }
+    }
+
+    private static let cycle = 1.2
+
+    private static func pulseOpacity(at date: Date) -> Double {
+        let phase = date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: cycle) / cycle
+        return 0.4 + 0.6 * (0.5 + 0.5 * cos(phase * 2 * .pi))
+    }
+}
+
+struct OpenCodeActivityChevron: View {
+    var body: some View {
+        OpenCodeIconImage(icon: .chevronRight, size: 14)
+            .foregroundStyle(OpenCodeColors.textWeaker)
+            .accessibilityHidden(true)
+    }
+}
+
+/// Monospaced `m:ss` since `startedAtMs` that ticks every second, or a fixed
+/// span when `endedAtMs` is known.
+struct OpenCodeLiveElapsedText: View {
     let startedAtMs: Int64
-    let endedAtMs: Int64?
+    var endedAtMs: Int64?
 
     var body: some View {
         if let endedAtMs {
@@ -442,28 +478,31 @@ private struct ActivityCardElapsed: View {
             .font(OpenCodeTypography.caption.monospacedDigit())
             .foregroundStyle(OpenCodeColors.textWeaker)
             .fixedSize()
+            .accessibilityHidden(true)
     }
 }
 
-/// "Working" with a sweeping highlight, the same clock-driven treatment as a
-/// running Tool Chip, so a re-created card never restarts it. Static under
-/// Reduce Motion.
-private struct ActivityCardWorkingLabel: View {
+/// Text with a sweeping highlight, the same clock-driven treatment as a running
+/// Tool Chip, so a re-created view never restarts it. Static under Reduce Motion.
+struct OpenCodeRunningShimmerText: View {
+    let text: String
+    let font: Font
+
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         if reduceMotion {
-            text.foregroundStyle(OpenCodeColors.textWeak)
+            label.foregroundStyle(OpenCodeColors.textStrong)
         } else {
             TimelineView(.animation) { context in
-                text.foregroundStyle(Self.shimmer(at: context.date))
+                label.foregroundStyle(Self.shimmer(at: context.date))
             }
         }
     }
 
-    private var text: some View {
-        Text("Working")
-            .font(OpenCodeTypography.caption.weight(.semibold))
+    private var label: some View {
+        Text(text)
+            .font(font)
             .lineLimit(1)
     }
 
@@ -481,91 +520,27 @@ private struct ActivityCardWorkingLabel: View {
     }
 }
 
-/// 12pt spinner; under Reduce Motion a static warning dot.
-private struct ActivityCardSpinner: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    var body: some View {
-        Group {
-            if reduceMotion {
-                Circle()
-                    .fill(OpenCodeColors.warning)
-                    .frame(width: ActivityCardMetrics.dotSize, height: ActivityCardMetrics.dotSize)
-            } else {
-                ProgressView()
-                    .controlSize(.mini)
-                    .tint(OpenCodeColors.warning)
-            }
-        }
-        .frame(width: ActivityCardMetrics.spinnerSize, height: ActivityCardMetrics.spinnerSize)
-        .accessibilityHidden(true)
-    }
-}
-
-private struct ActivityCardDot: View {
-    let status: OpenCodeActivityLineStatus
-
-    var body: some View {
-        Circle()
-            .fill(fill)
-            .frame(width: ActivityCardMetrics.dotSize, height: ActivityCardMetrics.dotSize)
-            .accessibilityHidden(true)
-    }
-
-    private var fill: Color {
-        switch status {
-        case .completed: OpenCodeColors.success
-        case .failed: OpenCodeColors.error
-        case .running, .pending: OpenCodeColors.warning
-        case .interrupted: OpenCodeColors.textWeaker
-        }
-    }
-}
-
-private struct ActivityCardChevron: View {
-    let isExpanded: Bool
-
-    var body: some View {
-        OpenCodeIconImage(icon: .chevronRight, size: ActivityCardMetrics.chevronSize)
-            .rotationEffect(.degrees(isExpanded ? -90 : 0))
-            .foregroundStyle(OpenCodeColors.textWeaker)
-            .accessibilityHidden(true)
-    }
-}
-
 #if DEBUG
 #Preview("Activity Card") {
     let now = Int64(Date().timeIntervalSince1970 * 1000)
-    let done = [
-        OpenCodeActivityLine(id: "1", icon: .read, title: "SessionChatView.swift", status: .completed),
-        OpenCodeActivityLine(id: "2", icon: .edit, title: "TimelineBlocks.swift", status: .completed, additions: 18, deletions: 4),
-        OpenCodeActivityLine(id: "3", icon: .command, title: "Ran swift test", status: .failed),
-    ]
     ScrollView {
         VStack(alignment: .leading, spacing: 16) {
             OpenCodeActivityCard(
-                state: .live,
-                startedAtMs: now - 64_000,
-                runningLines: [
-                    OpenCodeActivityLine(id: "4", icon: .search, title: "Searching repoStrip", status: .running, startedAtMs: now - 4_000),
-                    OpenCodeActivityLine(
-                        id: "5",
-                        kind: .childSession,
-                        icon: .agent,
-                        title: "Explore",
-                        detail: "Find timeline callers",
-                        status: .running,
-                        startedAtMs: now - 40_000
-                    ),
+                state: .live(startedAtMs: now - 64_000),
+                summary: "6 steps \u{00B7} 3 reads \u{00B7} 1 search \u{00B7} 1 agent \u{00B7} 1 edit",
+                agents: [
+                    OpenCodeActivityAgentRow(id: "c1", agentName: "Explore", action: "Searching \"branch\"", startedAtMs: now - 40_000),
                 ],
-                doneLines: done,
-                summary: "3 done \u{00B7} 1 read \u{00B7} 1 edit \u{00B7} 1 command"
+                current: OpenCodeActivityCurrentRow(
+                    icon: .edit,
+                    title: "Editing SessionChatRepoStrip.swift",
+                    extraRunning: 1,
+                    startedAtMs: now - 4_000
+                )
             )
             OpenCodeActivityCard(
-                state: .settled,
-                doneLines: done,
-                summary: "3 steps \u{00B7} 1 read \u{00B7} 1 edit \u{00B7} 1 command",
-                worstStatus: .failed
+                state: .settled(worstStatus: .failed, stepCount: 7),
+                summary: "Read, Grep, Edit, Shell, Agent"
             )
         }
         .padding()

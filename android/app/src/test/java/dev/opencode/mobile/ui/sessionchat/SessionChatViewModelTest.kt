@@ -3,6 +3,7 @@ package dev.opencode.mobile.ui.sessionchat
 import kotlinx.coroutines.test.TestScope
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.domain.preferences.ChipTimelineIntro
+import dev.opencode.mobile.domain.preferences.SessionChatTimelineStyle
 import dev.opencode.mobile.domain.command.ClientSlashAction
 import dev.opencode.mobile.domain.command.CommandError
 import dev.opencode.mobile.domain.command.CommandRepository
@@ -1213,27 +1214,61 @@ class SessionChatViewModelTest {
         }
 
     @Test
-    fun toggleActivityCardExpanded_startsCollapsed_toggles_andResetsOnSessionChange() =
+    fun openAndDismissActivityCard_resetOnSessionChange() =
         runTest(testDispatcher) {
             val viewModel = createViewModel(FakeMessageRepository())
             viewModel.bind("ses-1", "First", "/repo")
             advanceUntilIdle()
-            assertEquals(emptySet<String>(), viewModel.uiState.value.expandedActivityCards)
+            assertEquals(null, viewModel.uiState.value.presentedActivityCard)
 
-            viewModel.toggleActivityCardExpanded("ac:p1")
-            viewModel.toggleActivityCardExpanded("ac:p7")
-            assertEquals(setOf("ac:p1", "ac:p7"), viewModel.uiState.value.expandedActivityCards)
-            viewModel.toggleActivityCardExpanded("ac:p1")
-            assertEquals(setOf("ac:p7"), viewModel.uiState.value.expandedActivityCards)
+            // A card that is not in the timeline closes at once.
+            viewModel.openActivityCard("ac:gone")
+            assertEquals(null, viewModel.uiState.value.presentedActivityCard)
+        }
 
-            // Region republishes keep the expansion.
-            viewModel.updateComposerText("draft")
+    @Test
+    fun presentedActivityCard_observesItsRunningChild_andClosesWhenTheCardLeaves() =
+        runTest(testDispatcher) {
+            SessionChatDisplayPreferences.updateTimelineStyle(SessionChatTimelineStyle.ActivityCard)
+            val task =
+                MessagePart.Tool(
+                    toolName = "task",
+                    status = ToolStatus.Running,
+                    id = "p1",
+                    input =
+                        buildJsonObject {
+                            put("subagent_type", "explore")
+                            put("description", "Find the pill")
+                        },
+                    metadata = buildJsonObject { put("sessionId", "ses-child") },
+                )
+            val assistant = Message(id = "msg-2", role = MessageRole.Assistant, text = "", parts = listOf(task))
+            val repository = FakeMessageRepository()
+            repository.messages = repository.messages + assistant
+            val viewModel = createViewModel(repository)
+            viewModel.bind("ses-1", "First", "/repo")
             advanceUntilIdle()
-            assertEquals(setOf("ac:p7"), viewModel.uiState.value.expandedActivityCards)
 
+            viewModel.openActivityCard("ac:p1")
+            advanceUntilIdle()
+            assertEquals("ac:p1", viewModel.uiState.value.presentedActivityCard)
+            // The fake serves the same transcript for the child: its one visible tool step.
+            assertEquals(1, viewModel.uiState.value.activityCardChildren["ses-child"]?.toolCount)
+
+            viewModel.dismissActivityCard()
+            assertEquals(null, viewModel.uiState.value.presentedActivityCard)
+
+            viewModel.openActivityCard("ac:p1")
+            repository.messages = repository.messages.filter { it.id != "msg-2" }
+            viewModel.refreshMessages()
+            advanceUntilIdle()
+            assertEquals(null, viewModel.uiState.value.presentedActivityCard)
+
+            viewModel.openActivityCard("ac:p1")
             viewModel.bind("ses-2", "Second", "/repo")
             advanceUntilIdle()
-            assertEquals(emptySet<String>(), viewModel.uiState.value.expandedActivityCards)
+            assertEquals(null, viewModel.uiState.value.presentedActivityCard)
+            assertTrue(viewModel.uiState.value.activityCardChildren.isEmpty())
         }
 
     @Test

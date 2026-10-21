@@ -46,6 +46,9 @@ final class SessionChatTimeline {
     /// Unlinked subagent parts already covered by a child-session lookup.
     private var childSessionLookupPartIDs: Set<String> = []
     private var childSessionLookupTask: Task<Void, Never>?
+    /// Activity card: one observation per running child session the live card
+    /// shows, keyed by child session id (#779).
+    private var childActivityTasks: [String: Task<Void, Never>] = [:]
     /// Test-only: runs after a frame revision is taken, before off-main build.
     static var applyTestGate: (@MainActor () async -> Void)?
     /// Wait before looking up child sessions, so a live `tool.progress` can link
@@ -151,14 +154,17 @@ final class SessionChatTimeline {
         }
     }
 
-    /// Activity card: expand or collapse one card. Cards start collapsed;
-    /// expansion is presentation keyed by the card's stable id.
-    func toggleActivityCardExpanded(_ cardID: String) {
-        if state.expandedActivityCards.contains(cardID) {
-            state.expandedActivityCards.remove(cardID)
-        } else {
-            state.expandedActivityCards.insert(cardID)
-        }
+    /// Activity card: open the live activity sheet for one card. The sheet
+    /// resolves the card from the current rows by id on every render.
+    func openActivityCard(_ cardID: String) {
+        guard state.presentedActivityCard != cardID else { return }
+        state.presentedActivityCard = cardID
+        notifyChange()
+    }
+
+    func dismissActivityCard() {
+        guard state.presentedActivityCard != nil else { return }
+        state.presentedActivityCard = nil
         notifyChange()
     }
 
@@ -502,6 +508,8 @@ final class SessionChatTimeline {
         displayApplyTask = nil
         pendingRequiredDisplayApplies = []
         pendingLiveDisplayUpdate = nil
+        for task in childActivityTasks.values { task.cancel() }
+        childActivityTasks = [:]
     }
 
     private func consumeCatchUpChrome(generation: Int) async {
@@ -1105,7 +1113,55 @@ final class SessionChatTimeline {
     }
 
     private func notifyChange() {
+        syncActivityCards()
         onChange?()
+    }
+
+    /// Activity card (#779): observe each running child session a card shows,
+    /// through the same repository and live-event path its own Session Chat
+    /// uses, and stop once it finishes. Drops a presented card that is gone.
+    private func syncActivityCards() {
+        var running: Set<String> = []
+        var cardIDs: Set<String> = []
+        if activityCardTimeline {
+            for row in state.messages where row.role == .assistant {
+                for case .activityCard(_, let card) in row.blocks {
+                    cardIDs.insert(card.id)
+                    for step in card.runningChildren {
+                        if let id = step.childSession?.childSessionId { running.insert(id) }
+                    }
+                }
+            }
+        }
+        if let presented = state.presentedActivityCard, !cardIDs.contains(presented), state.timeline == .ready {
+            state.presentedActivityCard = nil
+        }
+        for (id, task) in childActivityTasks where !running.contains(id) {
+            task.cancel()
+            childActivityTasks[id] = nil
+            state.childActivities[id] = nil
+        }
+        for id in running where childActivityTasks[id] == nil {
+            childActivityTasks[id] = observeChildActivity(id)
+        }
+    }
+
+    private func observeChildActivity(_ childID: String) -> Task<Void, Never> {
+        let repository = messageRepository
+        let directory = worktree
+        return Task { @MainActor [weak self] in
+            for await update in repository.observeMessages(sessionID: childID, directory: directory) {
+                guard !Task.isCancelled else { return }
+                guard case .messages(let messages, _) = update else { continue }
+                let activity = await Task.detached(priority: .userInitiated) {
+                    SessionChatTimelineBlocks.childActivity(from: messages)
+                }.value
+                guard let self, !Task.isCancelled, self.childActivityTasks[childID] != nil else { return }
+                guard self.state.childActivities[childID] != activity else { continue }
+                self.state.childActivities[childID] = activity
+                self.onChange?()
+            }
+        }
     }
 }
 

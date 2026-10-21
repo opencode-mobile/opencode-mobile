@@ -302,6 +302,8 @@ data class SessionChatStepChildSession(
     val description: String?,
     val childSessionId: String?,
     val toolsSoFar: Int? = null,
+    /** First line of a finished child's result, when the server returned one. */
+    val result: String? = null,
 )
 
 /**
@@ -691,6 +693,28 @@ object SessionChatTimelineBlocks {
         return SessionChatTimelineBlocksResult.Ok(blocks)
     }
 
+    /**
+     * Visible tool steps of [messages] in order, for what a child session is
+     * doing on an activity card (#779). Same steps the rail and card build.
+     */
+    fun toolSteps(messages: List<Message>): List<SessionChatStep> =
+        messages
+            .filter { it.role == MessageRole.Assistant }
+            .flatMap { it.parts }
+            .filterIsInstance<MessagePart.Tool>()
+            .filter(::isVisibleTool)
+            .mapNotNull(::toStep)
+
+    /** First result line of a finished subagent, without the `task_id` header or result tags. */
+    private fun childResult(tool: MessagePart.Tool): String? {
+        val output = tool.output?.takeIf { it.isNotBlank() } ?: return null
+        val body = output.substringAfter("<task_result>", output).substringBefore("</task_result>")
+        return body
+            .lineSequence()
+            .map { it.trim().trimStart('#', '*', '-', ' ').trimEnd('*') }
+            .firstOrNull { it.isNotEmpty() && !it.startsWith("task_id:") }
+    }
+
     private fun thoughtStep(
         partId: String,
         part: MessagePart.Reasoning,
@@ -746,6 +770,7 @@ object SessionChatTimelineBlocks {
                         description = description,
                         childSessionId = childSessionId(tool),
                         toolsSoFar = toolsSoFar,
+                        result = childResult(tool).takeIf { status == SessionChatStepStatus.Completed },
                     ),
                 card = card,
             )

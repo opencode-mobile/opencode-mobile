@@ -261,6 +261,8 @@ fun OpenCodeBottomSheet(
     scrollTargetKey: Any? = null,
     pinnedTop: @Composable ColumnScope.() -> Unit = {},
     pinnedBottom: (@Composable ColumnScope.() -> Unit)? = null,
+    /** Replaces the header's [title] text (a live status, say); [title] stays the pane title. */
+    titleContent: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     var shouldRender by remember { mutableStateOf(visible) }
@@ -277,7 +279,7 @@ fun OpenCodeBottomSheet(
     // reacted to the caller clearing its state (a null target, an empty list).
     val shown = remember { BottomSheetShownSlots() }
     if (visible || !shown.isSet) {
-        shown.update(title, headerLeadingAction, height, keyboard, scrollTargetKey, pinnedTop, pinnedBottom, content)
+        shown.update(title, headerLeadingAction, height, keyboard, scrollTargetKey, pinnedTop, pinnedBottom, content, titleContent)
     }
 
     LaunchedEffect(visible, keyboard) {
@@ -431,6 +433,7 @@ fun OpenCodeBottomSheet(
                 ) {
                     BottomSheetContent(
                         title = shown.title,
+                        titleContent = shown.titleContent,
                         headerLeadingAction = shown.headerLeadingAction,
                         height = shown.height,
                         keyboard = shownKeyboard,
@@ -501,6 +504,8 @@ private class BottomSheetShownSlots {
         private set
     var content: @Composable ColumnScope.() -> Unit = {}
         private set
+    var titleContent: (@Composable () -> Unit)? = null
+        private set
 
     fun update(
         title: String,
@@ -511,8 +516,10 @@ private class BottomSheetShownSlots {
         pinnedTop: @Composable ColumnScope.() -> Unit,
         pinnedBottom: (@Composable ColumnScope.() -> Unit)?,
         content: @Composable ColumnScope.() -> Unit,
+        titleContent: (@Composable () -> Unit)? = null,
     ) {
         isSet = true
+        this.titleContent = titleContent
         this.title = title
         this.headerLeadingAction = headerLeadingAction
         this.height = height
@@ -583,6 +590,7 @@ internal fun openCodeBottomSheetCenteredScroll(
 @Composable
 private fun BottomSheetContent(
     title: String,
+    titleContent: (@Composable () -> Unit)?,
     headerLeadingAction: OpenCodeBottomSheetHeaderAction?,
     height: OpenCodeBottomSheetHeight,
     keyboard: OpenCodeBottomSheetKeyboard,
@@ -702,6 +710,7 @@ private fun BottomSheetContent(
     ) {
         BottomSheetHeader(
             title = title,
+            titleContent = titleContent,
             leadingAction = headerLeadingAction,
             onDismissRequest = onDismissRequest,
             modifier =
@@ -799,6 +808,7 @@ private fun BottomSheetContent(
 @Composable
 private fun BottomSheetHeader(
     title: String,
+    titleContent: (@Composable () -> Unit)?,
     leadingAction: OpenCodeBottomSheetHeaderAction?,
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
@@ -823,14 +833,18 @@ private fun BottomSheetHeader(
                 onClick = action.onClick,
             )
         }
-        Text(
-            text = title,
-            modifier = Modifier.weight(1f).semantics { heading() },
-            style = MaterialTheme.typography.titleMedium,
-            color = openCodeColor("text-strong"),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+        if (titleContent != null) {
+            Box(modifier = Modifier.weight(1f).semantics { heading() }) { titleContent() }
+        } else {
+            Text(
+                text = title,
+                modifier = Modifier.weight(1f).semantics { heading() },
+                style = MaterialTheme.typography.titleMedium,
+                color = openCodeColor("text-strong"),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
         OpenCodeButton(
             variant =
                 OpenCodeButtonVariant.IconCircle(

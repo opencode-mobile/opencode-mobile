@@ -807,8 +807,13 @@ fun SessionChatScreen(
                             onExpandStepParagraph = viewModel::expandStepParagraph,
                             unfoldedStepRails = uiState.unfoldedStepRails,
                             onToggleStepRailFold = viewModel::toggleStepRailFold,
-                            expandedActivityCards = uiState.expandedActivityCards,
-                            onToggleActivityCardExpanded = viewModel::toggleActivityCardExpanded,
+                            presentedActivityCard = uiState.presentedActivityCard,
+                            activityCardChildren = uiState.activityCardChildren,
+                            onOpenActivityCard = { blockId ->
+                                logChatAction(ProductAnalytics.Action.CHAT_OPEN_TOOL_DETAIL)
+                                viewModel.openActivityCard(blockId)
+                            },
+                            onDismissActivityCard = viewModel::dismissActivityCard,
                         ),
                     modifier = Modifier.fillMaxSize(),
                 )

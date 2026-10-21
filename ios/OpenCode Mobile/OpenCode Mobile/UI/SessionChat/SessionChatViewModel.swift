@@ -796,9 +796,13 @@ final class SessionChatViewModel {
         publishUiState()
     }
 
-    /// Activity card: expand or collapse one card.
-    func toggleActivityCardExpanded(_ cardID: String) {
-        timeline.toggleActivityCardExpanded(cardID)
+    /// Activity card: open its live activity sheet.
+    func openActivityCard(_ cardID: String) {
+        timeline.openActivityCard(cardID)
+    }
+
+    func dismissActivityCard() {
+        timeline.dismissActivityCard()
     }
 
     /// Step rail: show or fold one rail's earlier settled steps.
@@ -1595,7 +1599,8 @@ final class SessionChatViewModel {
             hasPendingRevert: commandsState.hasPendingRevert,
             expandedStepParagraphs: expandedStepParagraphs,
             unfoldedStepRails: timelineState.unfoldedStepRails,
-            expandedActivityCards: timelineState.expandedActivityCards,
+            presentedActivityCard: timelineState.presentedActivityCard,
+            childActivities: timelineState.childActivities,
             chipTimelineIntroVisible: chipTimelineIntroVisible,
             dictation: dictation
         )

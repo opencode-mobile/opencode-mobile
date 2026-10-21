@@ -1,0 +1,240 @@
+import SwiftUI
+
+extension View {
+    /// Activity card (#779): the live activity sheet for `cardID`. The card is
+    /// resolved from `rows` on every render, so the sheet keeps updating while
+    /// open and closes once the card is gone.
+    func sessionChatActivitySheet(
+        cardID: String?,
+        rows: [SessionChatRow],
+        liveCardID: String?,
+        childActivities: [String: SessionChatChildActivity],
+        awaitingUser: Bool,
+        supportsSessionMessageDiff: Bool,
+        onToolDetailTap: @escaping (SessionChatToolDetailTarget) -> Void,
+        onChildSessionTap: @escaping (String, String) -> Void,
+        onChangesReviewTap: @escaping (String, String?) -> Void,
+        onDismiss: @escaping () -> Void
+    ) -> some View {
+        let resolved = cardID.flatMap { SessionChatActivityCardPresentation.card(id: $0, in: rows) }
+        let card = resolved.map { $0.card.withLive($0.card.id == liveCardID) }
+        let count = card?.steps.count ?? 0
+        let isLive = card?.isLive == true
+        return openCodeBottomSheet(
+            isPresented: Binding(
+                get: { resolved != nil },
+                set: { presented in if !presented { onDismiss() } }
+            ),
+            title: isLive ? "Working \(count)" : "Used \(count)",
+            titleState: isLive ? .running(startedAtMs: ToolStartTime.normalizeEpochMs(card?.startedAtMs)) : .plain,
+            height: .half
+        ) {
+            if let card, let rowID = resolved?.rowID {
+                SessionChatActivitySheetContent(
+                    card: card,
+                    childActivities: childActivities,
+                    actions: SessionChatStepTapActions(
+                        messageID: rowID,
+                        supportsSessionMessageDiff: supportsSessionMessageDiff,
+                        onToolDetailTap: onToolDetailTap,
+                        onChildSessionTap: onChildSessionTap,
+                        onChangesReviewTap: onChangesReviewTap
+                    ),
+                    onDismiss: onDismiss
+                )
+            }
+        }
+    }
+}
+
+/// Feature-local sheet body composed from the Activity Card's shared pieces:
+/// an Agent section (each child session with its latest steps while it runs)
+/// and a Steps section with every other step in order.
+struct SessionChatActivitySheetContent: View {
+    let card: SessionChatActivityCardBlock
+    let childActivities: [String: SessionChatChildActivity]
+    let actions: SessionChatStepTapActions
+    let onDismiss: () -> Void
+
+    var body: some View {
+        let children = card.childSteps
+        let tools = card.toolSteps
+        VStack(alignment: .leading, spacing: 0) {
+            if !children.isEmpty {
+                OpenCodeActivitySectionLabel(count: children.count)
+                    .modifier(SheetSectionLabelPadding())
+                ForEach(children) { step in
+                    childRow(step)
+                    OpenCodeHairline()
+                }
+            }
+            if !tools.isEmpty {
+                OpenCodeActivitySectionLabel(text: "Steps")
+                    .modifier(SheetSectionLabelPadding())
+                ForEach(tools) { step in
+                    stepRow(step)
+                    if step.id != tools.last?.id {
+                        OpenCodeHairline()
+                    }
+                }
+            }
+        }
+        .padding(.bottom, 8)
+    }
+
+    // MARK: - Agent rows
+
+    private func childRow(_ step: SessionChatStep) -> some View {
+        let childID = step.childSession?.childSessionId
+        let activity = childID.flatMap { childActivities[$0] }
+        let running = step.status.isInFlight
+        return VStack(alignment: .leading, spacing: 0) {
+            tappable(step) {
+                HStack(spacing: 10) {
+                    OpenCodeActivityStatusDot(status: step.activityStatus, pulsing: true)
+                    VStack(alignment: .leading, spacing: 2) {
+                        childTitle(step)
+                            .font(OpenCodeTypography.bodySecondary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                        if let caption = Self.childCaption(step, activity: activity) {
+                            Text(caption)
+                                .font(OpenCodeTypography.caption)
+                                .foregroundStyle(step.activityStatus == .failed ? OpenCodeColors.error : OpenCodeColors.textWeaker)
+                                .lineLimit(1)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    if running, let start = ToolStartTime.normalizeEpochMs(step.startedAtMs) {
+                        OpenCodeLiveElapsedText(startedAtMs: start)
+                    }
+                    if actions.action(for: step) != nil {
+                        OpenCodeActivityChevron()
+                    }
+                }
+                .padding(.vertical, 10)
+            }
+            if running, let recent = activity?.recentSteps, !recent.isEmpty {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(recent) { sub in
+                        HStack(spacing: 8) {
+                            OpenCodeActivityStatusDot(
+                                status: sub.isRunning ? .running : .completed,
+                                size: 6,
+                                pulsing: true
+                            )
+                            Text(sub.title)
+                                .font(OpenCodeTypography.caption)
+                                .foregroundStyle(OpenCodeColors.textWeak)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .padding(.vertical, 3)
+                        .accessibilityElement(children: .combine)
+                    }
+                }
+                .padding(.leading, 18)
+                .padding(.bottom, 8)
+                .openCodeBottomSheetContentInset()
+            }
+        }
+    }
+
+    private func childTitle(_ step: SessionChatStep) -> Text {
+        let name = Text(step.agentDisplayName).fontWeight(.semibold).foregroundColor(OpenCodeColors.info)
+        guard let description = step.childSession?.description, !description.isEmpty else { return name }
+        return name + Text(" \(description)").foregroundColor(OpenCodeColors.textWeak)
+    }
+
+    /// "4 tools so far" while running; the failure, "Stopped" or the tool
+    /// count once finished; nil when nothing is known.
+    static func childCaption(_ step: SessionChatStep, activity: SessionChatChildActivity?) -> String? {
+        let tools = step.childSession?.toolsSoFar ?? activity.map(\.toolCount)
+        switch step.activityStatus {
+        case .pending, .running:
+            guard let tools, tools > 0 else { return nil }
+            return tools == 1 ? "1 tool so far" : "\(tools) tools so far"
+        case .failed:
+            return step.detail
+        case .interrupted:
+            return "Stopped"
+        case .completed:
+            guard let tools, tools > 0 else { return nil }
+            return tools == 1 ? "1 tool" : "\(tools) tools"
+        }
+    }
+
+    // MARK: - Step rows
+
+    private func stepRow(_ step: SessionChatStep) -> some View {
+        tappable(step) {
+            HStack(spacing: 10) {
+                OpenCodeActivityStatusDot(status: step.activityStatus, pulsing: true)
+                OpenCodeIconImage(icon: step.activityIcon.icon, size: 16)
+                    .foregroundStyle(OpenCodeColors.iconWeakBase)
+                    .frame(width: 16)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(step.listTitle)
+                        .font(OpenCodeTypography.bodySecondary)
+                        .foregroundStyle(OpenCodeColors.textStrong)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    if let detail = step.detail, !detail.isEmpty {
+                        Text(detail)
+                            .font(OpenCodeTypography.caption)
+                            .foregroundStyle(step.activityStatus == .failed ? OpenCodeColors.error : OpenCodeColors.textWeaker)
+                            .lineLimit(1)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                if (step.additions ?? 0) > 0 || (step.deletions ?? 0) > 0 {
+                    OpenCodeDiffStat(
+                        additions: (step.additions ?? 0) > 0 ? step.additions : nil,
+                        deletions: (step.deletions ?? 0) > 0 ? step.deletions : nil
+                    )
+                    .fixedSize()
+                }
+                if step.status.isInFlight, step.kind != .thought,
+                   let start = ToolStartTime.normalizeEpochMs(step.startedAtMs)
+                {
+                    OpenCodeLiveElapsedText(startedAtMs: start)
+                }
+            }
+            .padding(.vertical, 10)
+        }
+    }
+
+    /// The row's tap does what the timeline does: a detail sheet opens over
+    /// this one; a push (child session, Changes) closes this sheet first.
+    @ViewBuilder
+    private func tappable(_ step: SessionChatStep, @ViewBuilder label: () -> some View) -> some View {
+        if let action = actions.action(for: step) {
+            Button {
+                if actions.navigates(step) { onDismiss() }
+                action()
+            } label: {
+                label()
+                    .openCodeBottomSheetContentInset()
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isButton)
+        } else {
+            label()
+                .openCodeBottomSheetContentInset()
+                .accessibilityElement(children: .combine)
+        }
+    }
+}
+
+private struct SheetSectionLabelPadding: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .padding(.top, 12)
+            .padding(.bottom, 4)
+            .openCodeBottomSheetContentInset()
+    }
+}

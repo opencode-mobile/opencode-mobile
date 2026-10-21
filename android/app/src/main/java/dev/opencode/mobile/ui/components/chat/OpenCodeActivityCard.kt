@@ -13,14 +13,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.produceState
@@ -28,7 +27,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
@@ -36,6 +34,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
@@ -44,6 +43,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
@@ -51,15 +51,26 @@ import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.sessionchat.SessionChatChildSessionElapsed
 import kotlinx.coroutines.delay
 
-/** Whether an [OpenCodeActivityCard] is the live card of a working turn or a finished segment. */
-enum class OpenCodeActivityCardState { Live, Settled }
+/**
+ * Whether an [OpenCodeActivityCard] is the live card of a working turn
+ * ([Live], timed from [Live.elapsedStartMs]) or a finished segment
+ * ([Settled], [Settled.stepCount] steps in [Settled.worstStatus] tone).
+ */
+sealed interface OpenCodeActivityCardState {
+    data class Live(
+        val elapsedStartMs: Long?,
+    ) : OpenCodeActivityCardState
 
-enum class OpenCodeActivityLineKind { Tool, ChildSession, Thought }
+    data class Settled(
+        val worstStatus: OpenCodeActivityStatus,
+        val stepCount: Int,
+    ) : OpenCodeActivityCardState
+}
 
-/** Leading glyph of an [OpenCodeActivityLine], by what the step did. */
+/** Leading glyph of a step, by what it did. */
 enum class OpenCodeActivityIcon { Read, Search, Edit, Command, Fetch, Agent, Thought, Skill }
 
-/** Status of one line; [Interrupted] is a stop the user caused and renders neutral. */
+/** Status of one step; [Interrupted] is a stop the user caused and renders neutral. */
 enum class OpenCodeActivityStatus {
     Pending,
     Running,
@@ -72,285 +83,285 @@ enum class OpenCodeActivityStatus {
         get() = this == Pending || this == Running
 }
 
-/** One step on an [OpenCodeActivityCard]. [id] is the stable row key and the value tap callbacks get. */
-data class OpenCodeActivityLine(
+/** One running child session on a live [OpenCodeActivityCard]. [id] is what `onAgentTap` gets. */
+data class OpenCodeActivityAgentRow(
     val id: String,
-    val kind: OpenCodeActivityLineKind,
+    val agentName: String,
+    val action: String,
+    val startedAtMs: Long?,
+)
+
+/** The latest running tool in a live card's footer band; [extraRunning] more run beside it. */
+data class OpenCodeActivityCurrentRow(
     val icon: OpenCodeActivityIcon,
     val title: String,
-    val detail: String? = null,
-    val status: OpenCodeActivityStatus,
-    val additions: Int? = null,
-    val deletions: Int? = null,
-    val startedAtMs: Long? = null,
-    val endedAtMs: Long? = null,
-    val tappable: Boolean = true,
+    val extraRunning: Int,
+    val startedAtMs: Long?,
 )
 
 private val ActivityCardRadius = 14.dp
 private val ActivityCardPaddingHorizontal = 12.dp
-private val ActivityCardPaddingVertical = 10.dp
-private val ActivityLineVerticalPadding = 5.dp
-private val ActivityLineMinHeight = 26.dp
-private val ActivityLineSpacing = 8.dp
-private val ActivityStatusSlot = 12.dp
+private val ActivitySpacing = 8.dp
 private val ActivityDotSize = 8.dp
 private val ActivityIconSize = 16.dp
 private val ActivityChevronSize = 16.dp
-private val ActivityDetailMaxWidth = 120.dp
+private val ActivityAgentTileSize = 20.dp
+private val ActivityAgentTileRadius = 6.dp
+private const val ACTIVITY_AGENT_TILE_ALPHA = 0.08f
+private const val ACTIVITY_AGENT_BORDER_ALPHA = 0.4f
 
 /**
- * Activity card timeline (#779): one card per run of steps. Live, it shows a
- * shimmering `Working` header with the segment's elapsed time, one line per
- * running step (at most three, then `+N more running`), and a
- * footer [summary] of what finished. Expanded, finished [doneLines] list above
- * the running ones. Settled and collapsed it is one line: a dot in
- * [worstStatus] tone and [summary] (`9 steps · 3 reads`). Rows are keyed by
- * line id so lines join and leave in place.
+ * Activity card timeline (#779): one compact card per run of steps.
+ *
+ * Live, top to bottom: a shimmering `Working` header with the run's elapsed
+ * time, the [summary] line (`6 steps · 3 reads · 1 agent`), an Agent section
+ * with one row per running child session in [agents] (tap: [onAgentTap]), and
+ * a raised footer band with the [current] running tool, or [idleText] when
+ * none runs. The band opens the live sheet ([onOpen]).
+ *
+ * Settled it is one line: a dot in the worst status tone, `Used N` and
+ * [summary] (the deduplicated tool names); a tap opens the sheet.
+ *
+ * Only the header shimmers; nothing spins or pulses. With animations off the
+ * header is a static `Working`. Agent rows are keyed by id so they join and
+ * leave in place.
  */
 @Composable
 fun OpenCodeActivityCard(
     state: OpenCodeActivityCardState,
-    startedAtMs: Long?,
-    endedAtMs: Long?,
-    thinking: Boolean,
-    runningLines: List<OpenCodeActivityLine>,
-    doneLines: List<OpenCodeActivityLine>,
     summary: String,
-    worstStatus: OpenCodeActivityStatus,
-    isExpanded: Boolean,
-    onToggleExpanded: () -> Unit,
-    onLineTap: (lineId: String) -> Unit,
-    onChildSessionTap: (lineId: String) -> Unit,
+    agents: List<OpenCodeActivityAgentRow>,
+    current: OpenCodeActivityCurrentRow?,
+    idleText: String?,
+    onAgentTap: (id: String) -> Unit,
+    onOpen: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val context = LocalContext.current
-    val animationsOn =
-        remember(context) {
-            Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) != 0f
-        }
-    val live = state == OpenCodeActivityCardState.Live
-    // One clock per card, so every elapsed label on it ticks together.
-    val now by produceState(initialValue = System.currentTimeMillis(), live) {
-        if (!live) return@produceState
-        while (true) {
-            value = System.currentTimeMillis()
-            delay(1_000)
-        }
-    }
     val shape = RoundedCornerShape(ActivityCardRadius)
     val cardModifier =
         modifier
             .fillMaxWidth()
             .clip(shape)
-            .background(openCodeColor("surface-raised-base"))
+            .background(openCodeColor("surface-base"))
             .border(1.dp, openCodeColor("border-weak-base"), shape)
-
-    if (!live && !isExpanded) {
-        SettledLine(summary = summary, worstStatus = worstStatus, onTap = onToggleExpanded, modifier = cardModifier)
-        return
-    }
-
-    val elapsed =
-        when {
-            live -> SessionChatChildSessionElapsed.format(startedAtMs, now)
-            endedAtMs != null -> SessionChatChildSessionElapsed.format(startedAtMs, endedAtMs)
-            else -> null
-        }
-    Column(modifier = cardModifier) {
-        Header(
-            live = live,
-            elapsed = elapsed,
-            runningCount = runningLines.size,
-            doneCount = doneLines.size,
-            shimmer = animationsOn,
-            onTap = onToggleExpanded,
-        )
-        Column(modifier = Modifier.padding(horizontal = ActivityCardPaddingHorizontal)) {
-            if (isExpanded) {
-                doneLines.forEach { line ->
-                    key(line.id) {
-                        ActivityLineRow(
-                            line = line,
-                            nowMs = now,
-                            animated = animationsOn,
-                            onTap = lineTap(line, onLineTap, onChildSessionTap),
-                        )
-                    }
-                }
-            }
-            if (live && thinking && runningLines.isEmpty()) {
+    when (state) {
+        is OpenCodeActivityCardState.Settled ->
+            SettledLine(state = state, names = summary, onTap = onOpen, modifier = cardModifier)
+        is OpenCodeActivityCardState.Live -> {
+            val animationsOn = rememberActivityAnimationsOn()
+            val now by rememberActivityClock(ticking = true)
+            Column(modifier = cardModifier) {
+                Header(
+                    elapsed = SessionChatChildSessionElapsed.format(state.elapsedStartMs, now),
+                    shimmer = animationsOn,
+                )
                 Text(
-                    text = "Thinking…",
-                    style = MaterialTheme.typography.bodyMedium.copy(fontStyle = FontStyle.Italic),
+                    text = summary,
+                    style = MaterialTheme.typography.bodySmall,
                     color = openCodeColor("text-weak"),
                     maxLines = 1,
-                    modifier = Modifier.padding(vertical = ActivityLineVerticalPadding),
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(start = ActivityCardPaddingHorizontal, end = ActivityCardPaddingHorizontal, bottom = 8.dp),
                 )
-            }
-            val visibleRunning =
-                if (runningLines.size > ACTIVITY_CARD_MAX_RUNNING) runningLines.take(ACTIVITY_CARD_MAX_RUNNING - 1) else runningLines
-            visibleRunning.forEach { line ->
-                key(line.id) {
-                    ActivityLineRow(
-                        line = line,
-                        nowMs = now,
-                        animated = animationsOn,
-                        onTap = lineTap(line, onLineTap, onChildSessionTap),
-                    )
+                if (agents.isNotEmpty()) {
+                    AgentSection(agents = agents, nowMs = now, onAgentTap = onAgentTap)
                 }
-            }
-            if (runningLines.size > visibleRunning.size) {
-                Text(
-                    text = "+${runningLines.size - visibleRunning.size} more running",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = openCodeColor("text-weaker"),
-                    maxLines = 1,
-                    modifier =
-                        Modifier
-                            .padding(vertical = ActivityLineVerticalPadding)
-                            .padding(start = ActivityStatusSlot + ActivityLineSpacing),
-                )
+                FooterBand(current = current, idleText = idleText, nowMs = now, onTap = onOpen)
             }
         }
-        Footer(summary = summary, isExpanded = isExpanded, onTap = onToggleExpanded)
     }
 }
 
-/** At most this many running lines show; more collapse into one `+N more running` line. */
-private const val ACTIVITY_CARD_MAX_RUNNING = 3
+/** Section label: `Agent`, or `N agents` past one. */
+fun openCodeActivityAgentSectionLabel(count: Int): String = if (count == 1) "Agent" else "$count agents"
 
-private fun lineTap(
-    line: OpenCodeActivityLine,
-    onLineTap: (String) -> Unit,
-    onChildSessionTap: (String) -> Unit,
-): (() -> Unit)? {
-    if (!line.tappable) return null
-    return if (line.kind == OpenCodeActivityLineKind.ChildSession) {
-        { onChildSessionTap(line.id) }
-    } else {
-        { onLineTap(line.id) }
+@Composable
+private fun Header(
+    elapsed: String?,
+    shimmer: Boolean,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .semantics(mergeDescendants = true) {
+                    contentDescription = listOfNotNull("Working", elapsed).joinToString(", ")
+                }.padding(start = ActivityCardPaddingHorizontal, end = ActivityCardPaddingHorizontal, top = 10.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        OpenCodeActivityWorkingLabel(text = "Working", shimmer = shimmer, style = MaterialTheme.typography.bodyMedium)
+        Box(modifier = Modifier.weight(1f))
+        if (elapsed != null) {
+            Text(text = elapsed, style = activityMonoCaption(), color = openCodeColor("text-weaker"), maxLines = 1)
+        }
     }
 }
 
 @Composable
-private fun Header(
-    live: Boolean,
-    elapsed: String?,
-    runningCount: Int,
-    doneCount: Int,
-    shimmer: Boolean,
+private fun AgentSection(
+    agents: List<OpenCodeActivityAgentRow>,
+    nowMs: Long,
+    onAgentTap: (String) -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = ActivityCardPaddingHorizontal)) {
+        ActivityHairline()
+        OpenCodeActivitySectionLabel(
+            text = openCodeActivityAgentSectionLabel(agents.size),
+            modifier = Modifier.padding(top = 6.dp, bottom = 2.dp),
+        )
+        agents.forEachIndexed { index, agent ->
+            key(agent.id) {
+                if (index > 0) ActivityHairline()
+                AgentRow(agent = agent, nowMs = nowMs, onTap = { onAgentTap(agent.id) })
+            }
+        }
+    }
+}
+
+@Composable
+private fun AgentRow(
+    agent: OpenCodeActivityAgentRow,
+    nowMs: Long,
     onTap: () -> Unit,
 ) {
-    val label =
-        if (live) {
-            listOfNotNull("Working", "$runningCount running", "$doneCount done", elapsed).joinToString(", ")
-        } else {
-            listOfNotNull("Done", "$doneCount steps", elapsed).joinToString(", ")
-        }
+    val elapsed = SessionChatChildSessionElapsed.format(agent.startedAtMs, nowMs)
+    val tint = openCodeColor("info")
     Row(
         modifier =
             Modifier
                 .fillMaxWidth()
                 .clickable(onClick = onTap)
-                .semantics(mergeDescendants = true) { contentDescription = label }
-                .padding(
-                    start = ActivityCardPaddingHorizontal,
-                    end = ActivityCardPaddingHorizontal,
-                    top = ActivityCardPaddingVertical,
-                    bottom = 2.dp,
-                ),
+                .semantics(mergeDescendants = true) {
+                    contentDescription = listOfNotNull(agent.agentName, agent.action, elapsed).joinToString(", ")
+                    role = Role.Button
+                }.padding(vertical = 7.dp),
+        horizontalArrangement = Arrangement.spacedBy(ActivitySpacing),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        val style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold)
-        if (live && shimmer) {
-            val phase = rememberRunningPhase()
-            Text(text = "Working", style = style.copy(brush = runningShimmerBrush(phase.value)), maxLines = 1)
-        } else {
-            Text(
-                text = if (live) "Working" else "Done",
-                style = style,
-                color = if (live) openCodeColor("text-base") else openCodeColor("text-weaker"),
-                maxLines = 1,
-            )
-        }
-        Box(modifier = Modifier.weight(1f))
+        OpenCodeActivityAgentTile(agentName = agent.agentName)
+        Text(
+            text = agent.agentName,
+            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+            color = tint,
+            maxLines = 1,
+        )
+        Text(
+            text = agent.action,
+            style = MaterialTheme.typography.bodyMedium,
+            color = openCodeColor("text-weak"),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
         if (elapsed != null) {
-            Text(text = elapsed, style = monoCaption(), color = openCodeColor("text-weaker"), maxLines = 1)
+            Text(text = elapsed, style = activityMonoCaption(), color = openCodeColor("text-weaker"), maxLines = 1)
         }
+        ActivityChevron()
     }
 }
 
 @Composable
-private fun Footer(
-    summary: String,
-    isExpanded: Boolean,
+private fun FooterBand(
+    current: OpenCodeActivityCurrentRow?,
+    idleText: String?,
+    nowMs: Long,
     onTap: () -> Unit,
 ) {
-    Column(
+    val elapsed = current?.let { SessionChatChildSessionElapsed.format(it.startedAtMs, nowMs) }
+    val label =
+        if (current != null) {
+            listOfNotNull(
+                current.title,
+                current.extraRunning.takeIf { it > 0 }?.let { "$it more running" },
+                elapsed,
+            ).joinToString(", ")
+        } else {
+            idleText.orEmpty()
+        }
+    Row(
         modifier =
             Modifier
+                .padding(top = 6.dp)
                 .fillMaxWidth()
+                .background(openCodeColor("surface-raised-base"))
                 .clickable(onClick = onTap)
                 .semantics(mergeDescendants = true) {
-                    contentDescription = "$summary, ${if (isExpanded) "collapses" else "expands"}"
+                    contentDescription = "$label, opens activity"
                     role = Role.Button
-                }.padding(horizontal = ActivityCardPaddingHorizontal),
+                }.padding(start = ActivityCardPaddingHorizontal, end = ActivityCardPaddingHorizontal, top = 9.dp, bottom = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(ActivitySpacing),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
-            modifier =
-                Modifier
-                    .padding(top = 4.dp)
-                    .fillMaxWidth()
-                    .height(1.dp)
-                    .background(openCodeColor("border-weak-base")),
-        )
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(ActivityLineSpacing),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
+        if (current != null) {
+            Icon(
+                imageVector = current.icon.vector(),
+                contentDescription = null,
+                modifier = Modifier.size(ActivityIconSize),
+                tint = openCodeColor("icon-base"),
+            )
             Text(
-                text = summary,
-                style = MaterialTheme.typography.bodySmall,
+                text = current.title,
+                style = MaterialTheme.typography.bodyMedium,
+                color = openCodeColor("text-strong"),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            if (current.extraRunning > 0) {
+                Text(
+                    text = "+${current.extraRunning}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = openCodeColor("text-weak"),
+                    maxLines = 1,
+                )
+            }
+            if (elapsed != null) {
+                Text(text = elapsed, style = activityMonoCaption(), color = openCodeColor("text-weaker"), maxLines = 1)
+            }
+        } else {
+            Text(
+                text = idleText.orEmpty(),
+                style = MaterialTheme.typography.bodyMedium.copy(fontStyle = FontStyle.Italic),
                 color = openCodeColor("text-weaker"),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
-            Chevron(expanded = isExpanded)
         }
+        ActivityChevron()
     }
 }
 
 @Composable
 private fun SettledLine(
-    summary: String,
-    worstStatus: OpenCodeActivityStatus,
+    state: OpenCodeActivityCardState.Settled,
+    names: String,
     onTap: () -> Unit,
     modifier: Modifier,
 ) {
-    val count = summary.substringBefore(SUMMARY_SEPARATOR)
-    val families = summary.substringAfter(SUMMARY_SEPARATOR, missingDelimiterValue = "")
+    val label = listOf("Used ${state.stepCount}", names).filter { it.isNotEmpty() }.joinToString(" · ")
     Row(
         modifier =
             modifier
                 .clickable(onClick = onTap)
                 .semantics(mergeDescendants = true) {
-                    contentDescription = "$summary, expands"
+                    contentDescription = "$label, ${state.worstStatus.spoken()}, opens activity"
                     role = Role.Button
                 }.heightIn(min = 36.dp)
                 .padding(horizontal = ActivityCardPaddingHorizontal, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(ActivityLineSpacing),
+        horizontalArrangement = Arrangement.spacedBy(ActivitySpacing),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        StatusDot(status = worstStatus)
+        OpenCodeActivityStatusDot(status = state.worstStatus, pulses = false)
         Text(
             text =
                 buildAnnotatedString {
-                    withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = openCodeColor("text-strong"))) { append(count) }
-                    if (families.isNotEmpty()) {
-                        withStyle(SpanStyle(color = openCodeColor("text-weak"))) { append(SUMMARY_SEPARATOR + families) }
+                    withStyle(SpanStyle(color = openCodeColor("text-weak"))) { append("Used ") }
+                    withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = openCodeColor("text-strong"))) {
+                        append(state.stepCount.toString())
+                    }
+                    if (names.isNotEmpty()) {
+                        withStyle(SpanStyle(color = openCodeColor("text-weak"))) { append(" · $names") }
                     }
                 },
             style = MaterialTheme.typography.bodyMedium,
@@ -358,129 +369,129 @@ private fun SettledLine(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
-        Chevron(expanded = false)
+        ActivityChevron()
     }
 }
 
+// Pieces shared with OpenCodeActivitySheet.
+
+/** `Working` with the running text shimmer; static text-base with animations off. */
 @Composable
-private fun ActivityLineRow(
-    line: OpenCodeActivityLine,
-    nowMs: Long,
-    animated: Boolean,
-    onTap: (() -> Unit)?,
+internal fun OpenCodeActivityWorkingLabel(
+    text: String,
+    shimmer: Boolean,
+    style: TextStyle,
 ) {
-    val running = line.status.isInFlight
-    val elapsed = if (running) SessionChatChildSessionElapsed.format(line.startedAtMs, nowMs) else null
-    val isChild = line.kind == OpenCodeActivityLineKind.ChildSession
-    val tint =
-        when {
-            isChild && line.status != OpenCodeActivityStatus.Failed -> openCodeColor("info")
-            running -> openCodeColor("text-strong")
-            else -> openCodeColor("text-weak")
-        }
-    Row(
+    val semiBold = style.copy(fontWeight = FontWeight.SemiBold)
+    if (shimmer) {
+        val phase = rememberRunningPhase()
+        Text(text = text, style = semiBold.copy(brush = runningShimmerBrush(phase.value)), maxLines = 1)
+    } else {
+        Text(text = text, style = semiBold, color = openCodeColor("text-base"), maxLines = 1)
+    }
+}
+
+/** Uppercase, tracked, weakest tone: `AGENT`, `STEPS`. */
+@Composable
+internal fun OpenCodeActivitySectionLabel(
+    text: String,
+    modifier: Modifier = Modifier,
+) {
+    Text(
+        text = text.uppercase(),
+        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.5.sp, letterSpacing = 0.08.em),
+        color = openCodeColor("text-weaker"),
+        maxLines = 1,
+        modifier = modifier,
+    )
+}
+
+/** 20pt rounded tile with the agent's first letter, in the agent tint. */
+@Composable
+internal fun OpenCodeActivityAgentTile(agentName: String) {
+    val tint = openCodeColor("info")
+    val shape = RoundedCornerShape(ActivityAgentTileRadius)
+    Box(
         modifier =
             Modifier
-                .fillMaxWidth()
-                .heightIn(min = ActivityLineMinHeight)
-                .then(if (onTap != null) Modifier.clickable(onClick = onTap) else Modifier)
-                .semantics(mergeDescendants = true) {
-                    contentDescription = listOfNotNull(line.title, line.status.spoken(), elapsed).joinToString(", ")
-                    if (onTap != null) role = Role.Button
-                }.padding(vertical = ActivityLineVerticalPadding),
-        horizontalArrangement = Arrangement.spacedBy(ActivityLineSpacing),
-        verticalAlignment = Alignment.CenterVertically,
+                .size(ActivityAgentTileSize)
+                .clip(shape)
+                .background(tint.copy(alpha = ACTIVITY_AGENT_TILE_ALPHA))
+                .border(1.dp, tint.copy(alpha = ACTIVITY_AGENT_BORDER_ALPHA), shape),
+        contentAlignment = Alignment.Center,
     ) {
-        Box(modifier = Modifier.size(ActivityStatusSlot), contentAlignment = Alignment.Center) {
-            if (running && animated) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(ActivityStatusSlot),
-                    color = openCodeColor("warning"),
-                    trackColor = openCodeColor("border-weaker-base"),
-                    strokeWidth = 1.5.dp,
-                )
-            } else {
-                StatusDot(status = line.status)
-            }
-        }
-        Icon(
-            imageVector = line.icon.vector(),
-            contentDescription = null,
-            modifier = Modifier.size(ActivityIconSize),
-            tint = if (isChild) openCodeColor("info") else openCodeColor("icon-base"),
-        )
         Text(
-            text = line.title,
-            style = MaterialTheme.typography.bodyMedium,
+            text = SessionChatChildSessionElapsed.letter(agentName),
             color = tint,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
         )
-        if (!running && !line.detail.isNullOrEmpty() && line.status == OpenCodeActivityStatus.Completed) {
-            Text(
-                text = line.detail,
-                style = MaterialTheme.typography.bodySmall,
-                color = openCodeColor("text-weaker"),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.widthIn(max = ActivityDetailMaxWidth),
-            )
-        }
-        LineTrailing(line = line, elapsed = elapsed)
     }
 }
 
+/** 8pt dot: success, error, neutral for interrupted, warning in flight (pulsing when [pulses]). */
 @Composable
-private fun LineTrailing(
-    line: OpenCodeActivityLine,
-    elapsed: String?,
+internal fun OpenCodeActivityStatusDot(
+    status: OpenCodeActivityStatus,
+    pulses: Boolean,
+    size: androidx.compose.ui.unit.Dp = ActivityDotSize,
 ) {
-    when {
-        elapsed != null -> Text(text = elapsed, style = monoCaption(), color = openCodeColor("text-weaker"), maxLines = 1)
-        line.status == OpenCodeActivityStatus.Failed ->
-            Text(text = "failed", style = MaterialTheme.typography.labelSmall, color = openCodeColor("error"), maxLines = 1)
-        line.status == OpenCodeActivityStatus.Interrupted ->
-            Text(text = "stopped", style = MaterialTheme.typography.labelSmall, color = openCodeColor("text-weak"), maxLines = 1)
-        (line.additions ?: 0) > 0 || (line.deletions ?: 0) > 0 ->
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                line.additions?.takeIf { it > 0 }?.let {
-                    Text(text = "+$it", style = monoCaption(), color = openCodeColor("diff-add"), maxLines = 1)
+    when (status) {
+        OpenCodeActivityStatus.Pending, OpenCodeActivityStatus.Running ->
+            OpenCodePulsingDot(color = openCodeColor("warning"), size = size, animated = pulses)
+        else -> {
+            val color =
+                when (status) {
+                    OpenCodeActivityStatus.Failed -> openCodeColor("error")
+                    OpenCodeActivityStatus.Interrupted -> openCodeColor("text-weaker")
+                    else -> openCodeColor("success")
                 }
-                line.deletions?.takeIf { it > 0 }?.let {
-                    Text(text = "−$it", style = monoCaption(), color = openCodeColor("diff-delete"), maxLines = 1)
-                }
-            }
+            Box(modifier = Modifier.size(size).background(color, CircleShape))
+        }
     }
 }
 
-/** 8pt dot: success, error, neutral for interrupted, warning while in flight (the Reduce Motion spinner). */
 @Composable
-private fun StatusDot(status: OpenCodeActivityStatus) {
-    val color =
-        when (status) {
-            OpenCodeActivityStatus.Completed -> openCodeColor("success")
-            OpenCodeActivityStatus.Failed -> openCodeColor("error")
-            OpenCodeActivityStatus.Interrupted -> openCodeColor("text-weaker")
-            OpenCodeActivityStatus.Pending, OpenCodeActivityStatus.Running -> openCodeColor("warning")
-        }
-    Box(modifier = Modifier.size(ActivityDotSize).background(color, CircleShape))
+internal fun ActivityHairline(modifier: Modifier = Modifier) {
+    Box(modifier = modifier.fillMaxWidth().height(1.dp).background(openCodeColor("border-weak-base")))
 }
 
 @Composable
-private fun Chevron(expanded: Boolean) {
+internal fun ActivityChevron() {
     Icon(
-        imageVector = if (expanded) OpenCodeIcons.KeyboardArrowDown else OpenCodeIcons.ChevronRight,
+        imageVector = OpenCodeIcons.ChevronRight,
         contentDescription = null,
-        modifier = Modifier.size(ActivityChevronSize).then(if (expanded) Modifier.rotate(180f) else Modifier),
+        modifier = Modifier.size(ActivityChevronSize),
         tint = openCodeColor("text-weaker"),
     )
 }
 
 @Composable
-private fun monoCaption() = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+internal fun activityMonoCaption() = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace, fontSize = 12.sp)
 
-private fun OpenCodeActivityIcon.vector(): ImageVector =
+/** False with the system animator scale at 0 (Remove animations). */
+@Composable
+internal fun rememberActivityAnimationsOn(): Boolean {
+    val context = LocalContext.current
+    return remember(context) {
+        Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) != 0f
+    }
+}
+
+/** One clock per card or sheet, so every elapsed label on it ticks together. */
+@Composable
+internal fun rememberActivityClock(ticking: Boolean): State<Long> =
+    produceState(initialValue = System.currentTimeMillis(), ticking) {
+        value = System.currentTimeMillis()
+        if (!ticking) return@produceState
+        while (true) {
+            delay(1_000)
+            value = System.currentTimeMillis()
+        }
+    }
+
+internal fun OpenCodeActivityIcon.vector(): ImageVector =
     when (this) {
         OpenCodeActivityIcon.Read -> OpenCodeIcons.Description
         OpenCodeActivityIcon.Search -> OpenCodeIcons.Search
@@ -492,7 +503,7 @@ private fun OpenCodeActivityIcon.vector(): ImageVector =
         OpenCodeActivityIcon.Skill -> OpenCodeIcons.List
     }
 
-private fun OpenCodeActivityStatus.spoken(): String =
+internal fun OpenCodeActivityStatus.spoken(): String =
     when (this) {
         OpenCodeActivityStatus.Pending -> "pending"
         OpenCodeActivityStatus.Running -> "running"
@@ -501,99 +512,34 @@ private fun OpenCodeActivityStatus.spoken(): String =
         OpenCodeActivityStatus.Interrupted -> "stopped"
     }
 
-private const val SUMMARY_SEPARATOR = " · "
-
 /** Gallery and preview samples for the states the contract lists. */
 object OpenCodeActivityCardSamples {
-    fun oneRunning(nowMs: Long): List<OpenCodeActivityLine> =
+    const val LIVE_SUMMARY = "6 steps · 3 reads · 1 search · 1 agent · 1 edit"
+
+    fun twoAgents(nowMs: Long): List<OpenCodeActivityAgentRow> =
         listOf(
-            OpenCodeActivityLine(
-                id = "r1",
-                kind = OpenCodeActivityLineKind.Tool,
-                icon = OpenCodeActivityIcon.Command,
-                title = "Running ./gradlew :app:testDebugUnitTest",
-                status = OpenCodeActivityStatus.Running,
-                startedAtMs = nowMs - 12_000,
-            ),
+            OpenCodeActivityAgentRow(id = "c1", agentName = "Explore", action = "Searching \"branchPill\"", startedAtMs = nowMs - 64_000),
+            OpenCodeActivityAgentRow(id = "c2", agentName = "Review", action = "Reading SessionHeader.kt", startedAtMs = nowMs - 21_000),
         )
 
-    fun threeRunningWithChild(nowMs: Long): List<OpenCodeActivityLine> =
-        listOf(
-            OpenCodeActivityLine(
-                id = "r1",
-                kind = OpenCodeActivityLineKind.Tool,
-                icon = OpenCodeActivityIcon.Read,
-                title = "Reading OpenCodeToolChip.kt",
-                status = OpenCodeActivityStatus.Running,
-                startedAtMs = nowMs - 3_000,
-            ),
-            OpenCodeActivityLine(
-                id = "r2",
-                kind = OpenCodeActivityLineKind.Tool,
-                icon = OpenCodeActivityIcon.Search,
-                title = "Searching statusDot",
-                status = OpenCodeActivityStatus.Running,
-                startedAtMs = nowMs - 2_000,
-            ),
-            OpenCodeActivityLine(
-                id = "c1",
-                kind = OpenCodeActivityLineKind.ChildSession,
-                icon = OpenCodeActivityIcon.Agent,
-                title = "Explore · Find where the branch pill is rendered",
-                status = OpenCodeActivityStatus.Running,
-                startedAtMs = nowMs - 64_000,
-            ),
+    fun oneTool(nowMs: Long): OpenCodeActivityCurrentRow =
+        OpenCodeActivityCurrentRow(
+            icon = OpenCodeActivityIcon.Command,
+            title = "Running ./gradlew :app:testDebugUnitTest",
+            extraRunning = 0,
+            startedAtMs = nowMs - 12_000,
         )
 
-    val someDone: List<OpenCodeActivityLine> =
-        listOf(
-            OpenCodeActivityLine(
-                id = "d1",
-                kind = OpenCodeActivityLineKind.Tool,
-                icon = OpenCodeActivityIcon.Read,
-                title = "SessionChatScreen.kt",
-                status = OpenCodeActivityStatus.Completed,
-            ),
-            OpenCodeActivityLine(
-                id = "d2",
-                kind = OpenCodeActivityLineKind.Tool,
-                icon = OpenCodeActivityIcon.Search,
-                title = "branchPill",
-                detail = "4 matches",
-                status = OpenCodeActivityStatus.Completed,
-            ),
-            OpenCodeActivityLine(
-                id = "d3",
-                kind = OpenCodeActivityLineKind.Tool,
-                icon = OpenCodeActivityIcon.Edit,
-                title = "SessionHeader.kt",
-                status = OpenCodeActivityStatus.Completed,
-                additions = 18,
-                deletions = 4,
-            ),
+    fun editPlusOne(nowMs: Long): OpenCodeActivityCurrentRow =
+        OpenCodeActivityCurrentRow(
+            icon = OpenCodeActivityIcon.Edit,
+            title = "Editing SessionChatRepoStrip.kt",
+            extraRunning = 1,
+            startedAtMs = nowMs - 3_000,
         )
 
-    val settledWithFailure: List<OpenCodeActivityLine> =
-        someDone +
-            listOf(
-                OpenCodeActivityLine(
-                    id = "d4",
-                    kind = OpenCodeActivityLineKind.Tool,
-                    icon = OpenCodeActivityIcon.Command,
-                    title = "Ran ./gradlew :app:assembleDebug",
-                    status = OpenCodeActivityStatus.Failed,
-                ),
-                OpenCodeActivityLine(
-                    id = "d5",
-                    kind = OpenCodeActivityLineKind.ChildSession,
-                    icon = OpenCodeActivityIcon.Agent,
-                    title = "Review · Standards review of the diff",
-                    status = OpenCodeActivityStatus.Completed,
-                ),
-            )
-
-    const val SOME_DONE_SUMMARY = "3 done · 1 read · 1 search · 1 edit"
-    const val SETTLED_SUMMARY = "5 steps · 1 read · 1 search · 1 edit · 1 command · 1 agent"
+    const val SETTLED_NAMES = "Read, Grep, Edit, Agent"
+    const val SETTLED_FAILED_NAMES = "Read, Grep, Edit, Shell, Agent"
 }
 
 @Preview(showBackground = true, name = "Activity Card Light")
@@ -613,32 +559,22 @@ private fun ActivityCardPreviewColumn() {
     val now = System.currentTimeMillis()
     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         OpenCodeActivityCard(
-            state = OpenCodeActivityCardState.Live,
-            startedAtMs = now - 64_000,
-            endedAtMs = null,
-            thinking = false,
-            runningLines = OpenCodeActivityCardSamples.threeRunningWithChild(now),
-            doneLines = OpenCodeActivityCardSamples.someDone,
-            summary = OpenCodeActivityCardSamples.SOME_DONE_SUMMARY,
-            worstStatus = OpenCodeActivityStatus.Completed,
-            isExpanded = true,
-            onToggleExpanded = {},
-            onLineTap = {},
-            onChildSessionTap = {},
+            state = OpenCodeActivityCardState.Live(elapsedStartMs = now - 64_000),
+            summary = OpenCodeActivityCardSamples.LIVE_SUMMARY,
+            agents = OpenCodeActivityCardSamples.twoAgents(now),
+            current = OpenCodeActivityCardSamples.editPlusOne(now),
+            idleText = null,
+            onAgentTap = {},
+            onOpen = {},
         )
         OpenCodeActivityCard(
-            state = OpenCodeActivityCardState.Settled,
-            startedAtMs = null,
-            endedAtMs = null,
-            thinking = false,
-            runningLines = emptyList(),
-            doneLines = OpenCodeActivityCardSamples.settledWithFailure,
-            summary = OpenCodeActivityCardSamples.SETTLED_SUMMARY,
-            worstStatus = OpenCodeActivityStatus.Failed,
-            isExpanded = false,
-            onToggleExpanded = {},
-            onLineTap = {},
-            onChildSessionTap = {},
+            state = OpenCodeActivityCardState.Settled(worstStatus = OpenCodeActivityStatus.Failed, stepCount = 7),
+            summary = OpenCodeActivityCardSamples.SETTLED_FAILED_NAMES,
+            agents = emptyList(),
+            current = null,
+            idleText = null,
+            onAgentTap = {},
+            onOpen = {},
         )
     }
 }

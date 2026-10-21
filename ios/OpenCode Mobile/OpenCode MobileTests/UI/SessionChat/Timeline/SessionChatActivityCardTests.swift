@@ -77,15 +77,12 @@ struct SessionChatActivityCardTests {
         #expect(card.steps.map(\.id) == ["r1", "g1", "b1"])
     }
 
-    @Test func thinking_onlyForLiveCardWithNothingRunning() throws {
+    @Test func withLive_onlyChangesLiveness() throws {
         let settled = try cards([read("r1"), grep("g1")])[0]
-        let running = try cards([read("r1"), bash("b1", status: .running)])[0]
-
-        #expect(settled.isLive == false && settled.thinking == false)
-        #expect(settled.withLive(true).thinking)
-        #expect(running.withLive(true).isLive)
-        #expect(running.withLive(true).thinking == false)
-        #expect(settled.withLive(true).withLive(false).thinking == false)
+        #expect(settled.isLive == false)
+        #expect(settled.withLive(true).isLive)
+        #expect(settled.withLive(true).steps == settled.steps)
+        #expect(settled.withLive(true).withLive(false) == settled)
     }
 
     @Test func titles_runningKeepTheVerbSettledDropIt() throws {
@@ -133,28 +130,44 @@ struct SessionChatActivityCardTests {
         #expect(card.startedAtMs == 1_000)
     }
 
-    @Test func runningAndDone_splitInOrder() throws {
+    @Test func sections_splitChildSessionsFromSteps() throws {
         let card = try cards([
             read("r1"),
             bash("b1", status: .running),
             grep("g1"),
             child("c1", status: .running),
+            child("c2"),
             .tool(ToolPart(id: "x1", toolName: "bash", status: .error, error: "aborted", input: ["command": .string("ls")], isInterrupted: true)),
         ])[0]
-        #expect(card.running.map(\.id) == ["b1", "c1"])
-        #expect(card.done.map(\.id) == ["r1", "g1", "x1"])
+        #expect(card.childSteps.map(\.id) == ["c1", "c2"])
+        #expect(card.toolSteps.map(\.id) == ["r1", "b1", "g1", "x1"])
+        #expect(card.runningChildren.map(\.id) == ["c1"])
+        #expect(card.runningTools.map(\.id) == ["b1"])
+    }
+
+    @Test func latestRunningTool_isTheMostRecentlyStartedNonChild() throws {
+        let card = try cards([
+            bash("b1", status: .running, startedAt: 5_000),
+            read("r1", status: .running, startedAt: 9_000),
+            grep("g1", status: .running),
+            child("c1", status: .running, startedAt: 20_000),
+        ])[0]
+        // g1 has no start, so it counts as oldest; the child session never counts.
+        #expect(card.latestRunningTool?.id == "r1")
+        #expect(card.runningTools.count == 3)
+
+        let tie = try cards([bash("b1", status: .running, startedAt: 5_000), bash("b2", status: .running, startedAt: 5_000)])[0]
+        #expect(tie.latestRunningTool?.id == "b2")
+
+        let none = try cards([read("r1"), child("c1", status: .running)])[0]
+        #expect(none.latestRunningTool == nil)
     }
 
     // MARK: - Summary
 
-    @Test func summary_emptyDone() {
-        #expect(SessionChatActivityCardBlock.summary(done: []) == "nothing finished yet")
-    }
-
     @Test func summary_countsFamiliesInFirstSeenOrder() throws {
         let steps = try cards([read("r1"), grep("g1"), read("r2"), edit("e1"), read("r3")])[0].steps
-        #expect(SessionChatActivityCardBlock.summary(done: steps) == "5 done · 3 reads · 1 search · 1 edit")
-        #expect(SessionChatActivityCardBlock.settledSummary(steps) == "5 steps · 3 reads · 1 search · 1 edit")
+        #expect(SessionChatActivityCardBlock.summary(steps) == "5 steps · 3 reads · 1 search · 1 edit")
     }
 
     @Test func summary_singularAndPlural() {
@@ -174,8 +187,7 @@ struct SessionChatActivityCardTests {
 
     @Test func summary_stepsOutsideFamiliesCountButAreNotListed() {
         let skill = SessionChatStep(id: "s1", kind: .tool, status: .completed, title: "Skill feature")
-        #expect(SessionChatActivityCardBlock.settledSummary([skill]) == "1 step")
-        #expect(SessionChatActivityCardBlock.summary(done: [skill]) == "1 done")
+        #expect(SessionChatActivityCardBlock.summary([skill]) == "1 step")
     }
 
     // MARK: - Worst status
@@ -224,7 +236,7 @@ struct SessionChatActivityCardTests {
         #expect(SessionChatTimelineBlocks.liveActivityCardID(in: rows, footerLiveID: "ac:r1", isTurnActive: false) == "ac:r1")
     }
 
-    @Test func expansionRows_findTheRowHoldingTheCard() {
+    @Test func repaintRows_findTheRowHoldingTheCard() {
         let card = SessionChatActivityCardBlock(id: "ac:r1", steps: [])
         let rows = [
             row("u1", role: .user, blocks: [.text(blockID: "p:t", text: "hi", renderedMarkdown: nil)]),
@@ -244,7 +256,205 @@ struct SessionChatActivityCardTests {
         #expect(rail.allSatisfy { if case .stepRail = $0 { true } else { false } })
     }
 
+    // MARK: - Live card presentation
+
+    @Test func liveCard_summaryCountsEveryStep() throws {
+        let card = try cards([read("r1"), grep("g1"), bash("b1", status: .running), child("c1", status: .running)])[0]
+        let live = SessionChatActivityCardPresentation(card: card.withLive(true), childActions: [:], awaitingUser: false)
+        #expect(live.summary == "4 steps · 1 read · 1 search · 1 command · 1 agent")
+    }
+
+    @Test func liveCard_agentsOnlyWhileRunning() throws {
+        let card = try cards([
+            child("c1", status: .running, startedAt: t0 + 10_000, sessionID: "ses-a"),
+            child("c2", sessionID: "ses-b"),
+        ])[0].withLive(true)
+        let live = SessionChatActivityCardPresentation(card: card, childActions: [:], awaitingUser: false)
+        #expect(live.agents.map(\.id) == ["c1"])
+        #expect(live.agents.first?.agentName == "Explore")
+        // Without an observed action the row falls back to the description.
+        #expect(live.agents.first?.action == "Find callers")
+        #expect(live.agents.first?.startedAtMs == t0 + 10_000)
+
+        let observed = SessionChatActivityCardPresentation(
+            card: card,
+            childActions: ["ses-a": "Reading View.swift"],
+            awaitingUser: false
+        )
+        #expect(observed.agents.first?.action == "Reading View.swift")
+    }
+
+    @Test func liveCard_currentIsTheLatestRunningToolWithExtraCount() throws {
+        let card = try cards([
+            bash("b1", status: .running, startedAt: t0 + 5_000),
+            read("r1", status: .running, startedAt: t0 + 9_000),
+            child("c1", status: .running),
+        ])[0].withLive(true)
+        let live = SessionChatActivityCardPresentation(card: card, childActions: [:], awaitingUser: false)
+        #expect(live.current == OpenCodeActivityCurrentRow(
+            icon: .read,
+            title: "Reading View.swift",
+            extraRunning: 1,
+            startedAtMs: t0 + 9_000
+        ))
+        #expect(live.idleText == nil)
+    }
+
+    @Test func liveCard_idleTextChoice() throws {
+        let waiting = try cards([read("r1"), child("c1", status: .running)])[0].withLive(true)
+        let thinking = try cards([read("r1")])[0].withLive(true)
+
+        #expect(SessionChatActivityCardPresentation(card: waiting, childActions: [:], awaitingUser: false).idleText
+            == "Waiting for agents")
+        #expect(SessionChatActivityCardPresentation(card: thinking, childActions: [:], awaitingUser: false).idleText
+            == "Thinking…")
+        #expect(SessionChatActivityCardPresentation(card: thinking, childActions: [:], awaitingUser: true).idleText
+            == "Waiting for you")
+        #expect(SessionChatActivityCardPresentation(card: thinking, childActions: [:], awaitingUser: false).current == nil)
+    }
+
+    @Test func liveCard_stateCarriesTheRunStart() throws {
+        let card = try cards([read("r1", startedAt: t0 + 3_000), bash("b1", status: .running, startedAt: t0 + 4_000)])[0]
+        let live = SessionChatActivityCardPresentation(card: card.withLive(true), childActions: [:], awaitingUser: false)
+        #expect(live.state == .live(startedAtMs: t0 + 3_000))
+    }
+
+    // MARK: - Settled line
+
+    @Test func settledLine_namesDedupedInFirstSeenOrder() throws {
+        let card = try cards([
+            read("r1"),
+            edit("e1"),
+            read("r2"),
+            grep("g1"),
+            .tool(ToolPart(id: "gl", toolName: "glob", status: .completed, input: ["pattern": .string("*.swift")])),
+            .tool(ToolPart(id: "w1", toolName: "write", status: .completed, input: ["filePath": .string("/repo/a.txt")])),
+            .tool(ToolPart(id: "f1", toolName: "webfetch", status: .completed, input: ["url": .string("https://a.dev")])),
+            .tool(ToolPart(id: "ws", toolName: "websearch", status: .completed, input: ["query": .string("swift")])),
+            bash("b1"),
+            child("c1"),
+            .tool(ToolPart(id: "s1", toolName: "skill", status: .completed, input: ["name": .string("feature")])),
+            .reasoning(ReasoningPart(id: "th", text: "Plan", timeStartEpochMs: 1_000, timeEndEpochMs: 2_000)),
+            .tool(ToolPart(id: "m1", toolName: "lint_files", status: .completed)),
+            edit("e2"),
+        ])[0]
+        let settled = SessionChatActivityCardPresentation(card: card, childActions: [:], awaitingUser: false)
+        #expect(settled.summary
+            == "Read, Edit, Grep, Glob, Write, Fetch, Search, Shell, Agent, Skill, Thought, Lint_files")
+        #expect(settled.state == .settled(worstStatus: .completed, stepCount: 14))
+        #expect(settled.agents.isEmpty && settled.current == nil && settled.idleText == nil)
+    }
+
+    @Test func settledLine_worstStatusIgnoresInterrupted() throws {
+        let failed = try cards([read("r1"), bash("b1", status: .error, error: "boom")])[0]
+        let stopped = try cards([
+            read("r1"),
+            .tool(ToolPart(id: "b1", toolName: "bash", status: .error, error: "aborted", input: ["command": .string("ls")], isInterrupted: true)),
+        ])[0]
+        #expect(SessionChatActivityCardPresentation(card: failed, childActions: [:], awaitingUser: false).state
+            == .settled(worstStatus: .failed, stepCount: 2))
+        #expect(SessionChatActivityCardPresentation(card: stopped, childActions: [:], awaitingUser: false).state
+            == .settled(worstStatus: .completed, stepCount: 2))
+    }
+
+    // MARK: - Sheet
+
+    @Test func sheet_resolvesTheCardByIdFromCurrentRows() throws {
+        let first = try cards([read("r1")])[0]
+        let grown = try cards([read("r1"), grep("g1", status: .running)])[0]
+        let rows = [
+            row("a1", role: .assistant, blocks: [.activityCard(blockID: first.id, card: first)]),
+            row("u2", role: .user, blocks: [.text(blockID: "p:t", text: "next", renderedMarkdown: nil)]),
+            row("a2", role: .assistant, blocks: [
+                .text(blockID: "p:x", text: "Looking", renderedMarkdown: nil),
+                .activityCard(blockID: "ac:other", card: SessionChatActivityCardBlock(id: "ac:other", steps: [])),
+            ]),
+        ]
+        let resolved = SessionChatActivityCardPresentation.card(id: "ac:r1", in: rows)
+        #expect(resolved?.rowID == "a1")
+        #expect(resolved?.card.steps.map(\.id) == ["r1"])
+
+        // The same id in a newer frame resolves to the grown card.
+        let updated = [row("a1", role: .assistant, blocks: [.activityCard(blockID: grown.id, card: grown)])]
+        #expect(SessionChatActivityCardPresentation.card(id: "ac:r1", in: updated)?.card.steps.map(\.id) == ["r1", "g1"])
+        #expect(SessionChatActivityCardPresentation.card(id: "ac:gone", in: updated) == nil)
+    }
+
+    @Test func sheet_childCaption() throws {
+        let card = try cards([
+            child("c1", status: .running),
+            child("c2"),
+            .tool(ToolPart(
+                id: "c3",
+                toolName: "task",
+                status: .error,
+                error: "Child crashed",
+                input: ["subagent_type": .string("explore"), "description": .string("Find callers")]
+            )),
+        ])[0]
+        let observed = SessionChatChildActivity(currentAction: nil, recentSteps: [], toolCount: 4)
+        #expect(SessionChatActivitySheetContent.childCaption(card.steps[0], activity: observed) == "4 tools so far")
+        #expect(SessionChatActivitySheetContent.childCaption(card.steps[0], activity: nil) == nil)
+        #expect(SessionChatActivitySheetContent.childCaption(card.steps[1], activity: nil) == nil)
+        #expect(SessionChatActivitySheetContent.childCaption(card.steps[2], activity: nil) == "Child crashed")
+    }
+
+    // MARK: - Child session activity
+
+    @Test func childActivity_currentActionAndRecentSteps() {
+        let messages = [
+            Message(id: "u", role: .user, text: "go", parts: [], model: nil, mode: nil, sentAtEpochMs: nil),
+            Message(
+                id: "m1",
+                role: .assistant,
+                text: "",
+                parts: [read("r1"), grep("g1"), bash("b1", status: .running, startedAt: 3_000)],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: nil
+            ),
+            Message(
+                id: "m2",
+                role: .assistant,
+                text: "",
+                parts: [read("r2", status: .running, startedAt: 2_000), .tool(ToolPart(id: "todo", toolName: "todowrite", status: .completed))],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: nil
+            ),
+        ]
+        let activity = SessionChatTimelineBlocks.childActivity(from: messages)
+        // b1 started last; hidden tools are not steps.
+        #expect(activity.currentAction == "Running npm test")
+        #expect(activity.toolCount == 4)
+        #expect(activity.recentSteps == [
+            SessionChatChildActivityStep(id: "g1", title: "chipTimeline", isRunning: false),
+            SessionChatChildActivityStep(id: "b1", title: "Running npm test", isRunning: true),
+            SessionChatChildActivityStep(id: "r2", title: "View.swift", isRunning: true),
+        ])
+        #expect(SessionChatTimelineBlocks.childActivity(from: []) == .empty)
+    }
+
+    @Test func childActions_onlyForTheLiveCardsRunningChildren() throws {
+        let card = try cards([
+            child("c1", status: .running, sessionID: "ses-a"),
+            child("c2", sessionID: "ses-b"),
+        ])[0]
+        let rows = [row("a1", role: .assistant, blocks: [.activityCard(blockID: card.id, card: card)])]
+        let activities = [
+            "ses-a": SessionChatChildActivity(currentAction: "Reading View.swift", recentSteps: [], toolCount: 1),
+            "ses-b": SessionChatChildActivity(currentAction: "Done", recentSteps: [], toolCount: 2),
+        ]
+        #expect(SessionChatActivityCardPresentation.childActions(in: rows, liveCardID: card.id, activities: activities)
+            == ["ses-a": "Reading View.swift"])
+        #expect(SessionChatActivityCardPresentation.childActions(in: rows, liveCardID: nil, activities: activities)
+            .isEmpty)
+    }
+
     // MARK: - Helpers
+
+    /// A real epoch in ms, so `ToolStartTime.normalizeEpochMs` keeps it.
+    private let t0: Int64 = 1_760_000_000_000
 
     private let questionInput: [String: AnyCodable] = [
         "questions": .array([.dictionary(["question": .string("Which?")])]),
@@ -270,14 +480,14 @@ struct SessionChatActivityCardTests {
         .text(TextPart(id: id, text: value, isStreaming: false))
     }
 
-    private func read(_ id: String, status: ToolStatus = .completed) -> MessagePart {
+    private func read(_ id: String, status: ToolStatus = .completed, startedAt: Int64 = 1_000) -> MessagePart {
         .tool(ToolPart(
             id: id,
             toolName: "read",
             status: status,
             input: ["filePath": .string("/repo/Sources/View.swift")],
             output: status == .completed ? "contents" : nil,
-            timeStartEpochMs: 1_000
+            timeStartEpochMs: startedAt
         ))
     }
 
@@ -297,7 +507,12 @@ struct SessionChatActivityCardTests {
         ))
     }
 
-    private func bash(_ id: String, status: ToolStatus = .completed, error: String? = nil) -> MessagePart {
+    private func bash(
+        _ id: String,
+        status: ToolStatus = .completed,
+        error: String? = nil,
+        startedAt: Int64 = 2_000
+    ) -> MessagePart {
         .tool(ToolPart(
             id: id,
             toolName: "bash",
@@ -305,17 +520,23 @@ struct SessionChatActivityCardTests {
             error: error,
             input: ["command": .string("npm test")],
             output: status == .completed ? "ok" : nil,
-            timeStartEpochMs: 2_000
+            timeStartEpochMs: startedAt
         ))
     }
 
-    private func child(_ id: String, status: ToolStatus = .completed) -> MessagePart {
+    private func child(
+        _ id: String,
+        status: ToolStatus = .completed,
+        startedAt: Int64? = nil,
+        sessionID: String = "ses-child"
+    ) -> MessagePart {
         .tool(ToolPart(
             id: id,
             toolName: "task",
             status: status,
             input: ["subagent_type": .string("explore"), "description": .string("Find callers")],
-            metadata: ["sessionId": .string("ses-child")]
+            metadata: ["sessionId": .string(sessionID)],
+            timeStartEpochMs: startedAt
         ))
     }
 

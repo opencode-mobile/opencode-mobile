@@ -328,8 +328,10 @@ struct SessionChatUiState: Equatable {
     var expandedStepParagraphs: [String: Int] = [:]
     /// Step rails (`SessionChatStepRailBlock.id`) the user unfolded (#779).
     var unfoldedStepRails: Set<String> = []
-    /// Activity cards (`SessionChatActivityCardBlock.id`) the user expanded (#779).
-    var expandedActivityCards: Set<String> = []
+    /// The activity card (`SessionChatActivityCardBlock.id`) whose live sheet is open (#779).
+    var presentedActivityCard: String?
+    /// What each running child session on a live activity card is doing, by child session id.
+    var childActivities: [String: SessionChatChildActivity] = [:]
     /// One-time Chip timeline intro sheet (OPE-270).
     var chipTimelineIntroVisible = false
     var dictation: ComposerDictationUiState? = nil
@@ -339,6 +341,7 @@ struct SessionChatUiState: Equatable {
         permissionRequest != nil
             || questionRequest != nil
             || commandsSheetVisible
+            || presentedActivityCard != nil
             || mcpPageVisible
             || forkDialogVisible
             || forkResultVisible
@@ -591,8 +594,10 @@ struct SessionChatTimelineRegionState: Equatable {
     var errorMessage: String?
     /// Step rails whose earlier settled steps are shown instead of folded (#779).
     var unfoldedStepRails: Set<String> = []
-    /// Activity cards shown expanded; cards start collapsed (#779).
-    var expandedActivityCards: Set<String> = []
+    /// The activity card whose live sheet is open; resolved from `messages` by id (#779).
+    var presentedActivityCard: String?
+    /// Observed activity of running child sessions on activity cards, by child session id.
+    var childActivities: [String: SessionChatChildActivity] = [:]
 
     var knownChildSessionIDs: Set<String> {
         Set(

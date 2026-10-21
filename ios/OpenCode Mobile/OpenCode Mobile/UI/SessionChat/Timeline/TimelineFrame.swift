@@ -357,20 +357,21 @@ struct MessageListTimelineApplyPacket: Equatable, Sendable {
         previous: SessionChatStepRailViewState
     ) -> MessageListTimelineApplyPacket {
         var keyed = Dictionary(uniqueKeysWithValues: state.unfolded.map { ($0, 0) })
-        for card in state.expandedCards { keyed["expanded:" + card] = 2 }
+        for (child, action) in state.childActions { keyed["child:" + child + ":" + action] = 2 }
         if let live = state.liveRailID { keyed["live:" + live] = 1 }
         if let live = state.liveCardID { keyed["liveCard:" + live] = 3 }
         if state.awaitingUser { keyed["awaitingUser"] = 4 }
         let fingerprint = SessionChatStepParagraphExpansion.fingerprint(keyed)
         var toggled = state.unfolded.symmetricDifference(previous.unfolded)
-            .union(state.expandedCards.symmetricDifference(previous.expandedCards))
         if state.liveRailID != previous.liveRailID {
             toggled.formUnion([state.liveRailID, previous.liveRailID].compactMap { $0 })
         }
         if state.liveCardID != previous.liveCardID {
             toggled.formUnion([state.liveCardID, previous.liveCardID].compactMap { $0 })
         }
-        if state.awaitingUser != previous.awaitingUser, let live = state.liveCardID {
+        if state.awaitingUser != previous.awaitingUser || state.childActions != previous.childActions,
+           let live = state.liveCardID
+        {
             toggled.insert(live)
         }
         let rowIDs = SessionChatStepParagraphExpansion.rowIDs(containingStepRails: toggled, in: rows)
@@ -594,8 +595,9 @@ extension TimelineRow {
 /// Step rail and activity card presentation state the timeline host threads to each row.
 struct SessionChatStepRailViewState: Equatable {
     var unfolded: Set<String>
-    /// Activity cards the user expanded.
-    var expandedCards: Set<String> = []
+    /// Current action of each running child session on a live activity card,
+    /// by child session id (#779).
+    var childActions: [String: String] = [:]
     /// The rail or activity card that shows live status and owns the Working footer, or nil.
     var liveRailID: String?
     /// The activity card shown live: `liveRailID`, or the last card while the turn waits on the user.

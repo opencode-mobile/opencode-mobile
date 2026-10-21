@@ -43,7 +43,7 @@ struct SessionChatTimelineOlderHistoryTests {
         #expect(timeline.state.unfoldedStepRails.isEmpty)
     }
 
-    @Test func toggleActivityCardExpanded_flipsExpandedSet() {
+    @Test func openAndDismissActivityCard_setPresentedCard() {
         let timeline = SessionChatTimeline(
             sessionID: "ses-1",
             worktree: "/repo",
@@ -54,12 +54,14 @@ struct SessionChatTimelineOlderHistoryTests {
                 hasOlderAfterLoad: false
             )
         )
-        #expect(timeline.state.expandedActivityCards.isEmpty)
-        timeline.toggleActivityCardExpanded("ac:r1")
-        #expect(timeline.state.expandedActivityCards == ["ac:r1"])
+        #expect(timeline.state.presentedActivityCard == nil)
+        timeline.openActivityCard("ac:r1")
+        #expect(timeline.state.presentedActivityCard == "ac:r1")
         #expect(timeline.state.unfoldedStepRails.isEmpty)
-        timeline.toggleActivityCardExpanded("ac:r1")
-        #expect(timeline.state.expandedActivityCards.isEmpty)
+        timeline.openActivityCard("ac:r2")
+        #expect(timeline.state.presentedActivityCard == "ac:r2")
+        timeline.dismissActivityCard()
+        #expect(timeline.state.presentedActivityCard == nil)
     }
 
     @Test func loadOlderFailureRetainsRowsAndAllowsRetry() async {

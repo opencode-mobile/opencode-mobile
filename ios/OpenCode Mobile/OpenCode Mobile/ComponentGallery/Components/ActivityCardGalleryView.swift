@@ -2,16 +2,17 @@ import SwiftUI
 
 struct ActivityCardGalleryView: View {
     private enum Sample: String, CaseIterable, Identifiable {
-        case oneRunning = "One running"
-        case threeRunning = "Three running + child"
+        case oneTool = "One running tool"
+        case twoAgents = "Two agents, +1"
+        case waiting = "Waiting for agents"
+        case settled = "Settled"
         case settledFailure = "Settled, failed"
-        case thinking = "Thinking"
 
         var id: String { rawValue }
     }
 
-    @State private var sample: Sample = .oneRunning
-    @State private var expanded = false
+    @State private var sample: Sample = .oneTool
+    @State private var lastTap: String?
     @State private var startMs = Int64(Date().timeIntervalSince1970 * 1000)
 
     var body: some View {
@@ -27,7 +28,7 @@ struct ActivityCardGalleryView: View {
                             selected: sample == option,
                             action: {
                                 sample = option
-                                expanded = false
+                                lastTap = nil
                             }
                         )
                     }
@@ -37,113 +38,93 @@ struct ActivityCardGalleryView: View {
             ForEach(Sample.allCases.filter { $0 == sample }) { current in
                 card(for: current)
             }
-            Text("Tap the header, footer or settled line to expand or collapse.")
+            Text(lastTap ?? "Tap the card to open the activity sheet; tap an agent row to open its child session.")
                 .font(OpenCodeTypography.caption)
                 .foregroundStyle(OpenCodeColors.textWeaker)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private var doneLines: [OpenCodeActivityLine] {
-        [
-            OpenCodeActivityLine(id: "read", icon: .read, title: "SessionChatView.swift", status: .completed),
-            OpenCodeActivityLine(id: "grep", icon: .search, title: "chipTimeline", detail: "14 matches", status: .completed),
-            OpenCodeActivityLine(
-                id: "edit",
-                icon: .edit,
-                title: "TimelineBlocks.swift",
-                status: .completed,
-                additions: 18,
-                deletions: 4
-            ),
-        ]
-    }
-
     @ViewBuilder
     private func card(for sample: Sample) -> some View {
         switch sample {
-        case .oneRunning:
+        case .oneTool:
             OpenCodeActivityCard(
-                state: .live,
-                startedAtMs: startMs - 12_000,
-                runningLines: [
-                    OpenCodeActivityLine(
-                        id: "bash",
-                        icon: .command,
-                        title: "Running xcodebuild test -scheme OpenCode…",
-                        status: .running,
-                        startedAtMs: startMs
-                    ),
-                ],
-                doneLines: doneLines,
-                summary: "3 done · 1 read · 1 search · 1 edit",
-                isExpanded: expanded,
-                onToggleExpanded: { expanded.toggle() }
+                state: .live(startedAtMs: startMs - 12_000),
+                summary: "4 steps · 1 read · 1 search · 1 edit · 1 command",
+                current: OpenCodeActivityCurrentRow(
+                    icon: .command,
+                    title: "Running xcodebuild test -scheme OpenCode Mobile",
+                    extraRunning: 0,
+                    startedAtMs: startMs
+                ),
+                onAgentTap: tapped,
+                onOpen: opened
             )
-        case .threeRunning:
+        case .twoAgents:
             OpenCodeActivityCard(
-                state: .live,
-                startedAtMs: startMs - 64_000,
-                runningLines: [
-                    OpenCodeActivityLine(
-                        id: "edit2",
-                        icon: .edit,
-                        title: "Editing SessionChatTimeline.swift",
-                        status: .running,
-                        startedAtMs: startMs - 3_000
-                    ),
-                    OpenCodeActivityLine(
-                        id: "grep2",
-                        icon: .search,
-                        title: "Searching stepRail",
-                        status: .running,
-                        startedAtMs: startMs
-                    ),
-                    OpenCodeActivityLine(
-                        id: "child",
-                        kind: .childSession,
-                        icon: .agent,
-                        title: "Explore",
-                        detail: "Find every timeline caller",
-                        status: .running,
+                state: .live(startedAtMs: startMs - 64_000),
+                summary: "8 steps · 3 reads · 1 search · 2 agents · 2 edits",
+                agents: [
+                    OpenCodeActivityAgentRow(
+                        id: "explore",
+                        agentName: "Explore",
+                        action: "Searching \"branchPill\"",
                         startedAtMs: startMs - 42_000
                     ),
-                    OpenCodeActivityLine(
-                        id: "fetch",
-                        icon: .fetch,
-                        title: "Fetching developer.apple.com",
-                        status: .running,
-                        startedAtMs: startMs
+                    OpenCodeActivityAgentRow(
+                        id: "general",
+                        agentName: "General",
+                        action: "Reading GitStatusRepository.swift",
+                        startedAtMs: startMs - 9_000
                     ),
                 ],
-                doneLines: doneLines,
-                summary: "3 done · 1 read · 1 search · 1 edit",
-                isExpanded: expanded,
-                onToggleExpanded: { expanded.toggle() }
+                current: OpenCodeActivityCurrentRow(
+                    icon: .edit,
+                    title: "Editing SessionChatRepoStrip.swift",
+                    extraRunning: 1,
+                    startedAtMs: startMs - 3_000
+                ),
+                onAgentTap: tapped,
+                onOpen: opened
+            )
+        case .waiting:
+            OpenCodeActivityCard(
+                state: .live(startedAtMs: startMs - 30_000),
+                summary: "3 steps · 2 reads · 1 agent",
+                agents: [
+                    OpenCodeActivityAgentRow(
+                        id: "explore",
+                        agentName: "Explore",
+                        action: "Find where branch names render",
+                        startedAtMs: startMs - 20_000
+                    ),
+                ],
+                idleText: "Waiting for agents",
+                onAgentTap: tapped,
+                onOpen: opened
+            )
+        case .settled:
+            OpenCodeActivityCard(
+                state: .settled(worstStatus: .completed, stepCount: 6),
+                summary: "Read, Grep, Edit, Agent",
+                onOpen: opened
             )
         case .settledFailure:
             OpenCodeActivityCard(
-                state: .settled,
-                doneLines: doneLines + [
-                    OpenCodeActivityLine(id: "bash", icon: .command, title: "Ran swift test", status: .failed),
-                    OpenCodeActivityLine(id: "stop", icon: .command, title: "Ran xcodebuild", status: .interrupted),
-                ],
-                summary: "5 steps · 1 read · 1 search · 1 edit · 2 commands",
-                worstStatus: .failed,
-                isExpanded: expanded,
-                onToggleExpanded: { expanded.toggle() }
-            )
-        case .thinking:
-            OpenCodeActivityCard(
-                state: .live,
-                startedAtMs: startMs - 20_000,
-                thinking: true,
-                doneLines: doneLines,
-                summary: "3 done · 1 read · 1 search · 1 edit",
-                isExpanded: expanded,
-                onToggleExpanded: { expanded.toggle() }
+                state: .settled(worstStatus: .failed, stepCount: 5),
+                summary: "Read, Edit, Shell",
+                onOpen: opened
             )
         }
+    }
+
+    private func tapped(_ id: String) {
+        lastTap = "Agent row \(id) tapped"
+    }
+
+    private func opened() {
+        lastTap = "Card tapped: opens the activity sheet"
     }
 }
 

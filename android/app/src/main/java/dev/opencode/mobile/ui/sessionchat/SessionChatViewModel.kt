@@ -32,6 +32,7 @@ import dev.opencode.mobile.domain.mcp.McpServer
 import dev.opencode.mobile.domain.message.Attachment
 import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.message.Message
+import dev.opencode.mobile.domain.message.MessageListUpdate
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.model.ModelCatalogStore
@@ -237,8 +238,13 @@ class SessionChatViewModel
         // Step rails the user unfolded past `N earlier steps`, keyed by rail id; reset per session.
         private var unfoldedStepRails: Set<String> = emptySet()
 
-        // Activity cards the user expanded, keyed by card id; cards start collapsed, reset per session.
-        private var expandedActivityCards: Set<String> = emptySet()
+        // Activity card whose sheet is open, by block id; reset per session (#779).
+        private var presentedActivityCard: String? = null
+
+        // Child sessions observed for activity cards: their jobs and what they are doing (#779).
+        private val activityMessageRepository = messageRepository
+        private val activityChildJobs = mutableMapOf<String, Job>()
+        private var activityCardChildren: Map<String, SessionChatChildActivity> = emptyMap()
         private var liveRailSource: List<SessionChatMessageItem>? = null
         private var liveRailMarked: List<SessionChatMessageItem> = emptyList()
         private var liveRailActive = false
@@ -393,7 +399,7 @@ class SessionChatViewModel
             snackbarSequence = 0L
             expandedStepParagraphs = emptyMap()
             unfoldedStepRails = emptySet()
-            expandedActivityCards = emptySet()
+            resetActivityCards()
             resetChipTimelineIntro()
             resetWorkingFooter()
             logI("bind session=$sessionId worktree=$worktree title=$sessionTitle")
@@ -434,7 +440,7 @@ class SessionChatViewModel
             snackbarSequence = 0L
             expandedStepParagraphs = emptyMap()
             unfoldedStepRails = emptySet()
-            expandedActivityCards = emptySet()
+            resetActivityCards()
             resetChipTimelineIntro()
             resetWorkingFooter()
             logI("bind optimistic create worktree=$worktree title=$sessionTitle")
@@ -1490,6 +1496,7 @@ class SessionChatViewModel
                     commandsState,
                     inboxState,
                 )
+            syncActivityChildren(_uiState.value.messages)
         }
 
         private fun mergeUiState(
@@ -1725,7 +1732,8 @@ class SessionChatViewModel
                 pendingSessionReplace = commandsState.pendingSessionReplace,
                 expandedStepParagraphs = expandedStepParagraphs,
                 unfoldedStepRails = unfoldedStepRails,
-                expandedActivityCards = expandedActivityCards,
+                presentedActivityCard = presentedActivityCard,
+                activityCardChildren = activityCardChildren,
                 chipTimelineIntroVisible = chipTimelineIntroVisible,
                 pendingTerminalOpen = commandsState.pendingTerminalOpen,
                 pendingFilesOpen = commandsState.pendingFilesOpen,
@@ -1762,11 +1770,56 @@ class SessionChatViewModel
             _uiState.value = _uiState.value.copy(unfoldedStepRails = unfoldedStepRails)
         }
 
-        /** Expands an activity card inline to list its finished steps, or collapses it. */
-        fun toggleActivityCardExpanded(cardId: String) {
-            expandedActivityCards =
-                if (cardId in expandedActivityCards) expandedActivityCards - cardId else expandedActivityCards + cardId
-            _uiState.value = _uiState.value.copy(expandedActivityCards = expandedActivityCards)
+        /** Opens the live activity sheet for card [blockId] (#779). */
+        fun openActivityCard(blockId: String) {
+            presentedActivityCard = blockId
+            _uiState.value = _uiState.value.copy(presentedActivityCard = blockId)
+            syncActivityChildren(_uiState.value.messages)
+        }
+
+        fun dismissActivityCard() {
+            if (presentedActivityCard == null) return
+            presentedActivityCard = null
+            _uiState.value = _uiState.value.copy(presentedActivityCard = null)
+            syncActivityChildren(_uiState.value.messages)
+        }
+
+        private fun resetActivityCards() {
+            presentedActivityCard = null
+            activityChildJobs.values.forEach { it.cancel() }
+            activityChildJobs.clear()
+            activityCardChildren = emptyMap()
+        }
+
+        /**
+         * Observes the messages of running child sessions on the live card and
+         * the presented one, through the same store and live events as the
+         * child's own Session Chat, so agent rows show what each child does.
+         * Closes the sheet once its card left the timeline.
+         */
+        private fun syncActivityChildren(messages: List<SessionChatMessageItem>) {
+            val presented = presentedActivityCard
+            if (presented != null && messages.isNotEmpty() && !SessionChatActivityCard.hasCard(messages, presented)) {
+                presentedActivityCard = null
+                _uiState.value = _uiState.value.copy(presentedActivityCard = null)
+            }
+            val worktree = boundWorktree
+            val wanted =
+                if (worktree == null) emptySet() else SessionChatActivityCard.observedChildSessionIds(messages, presentedActivityCard)
+            (activityChildJobs.keys - wanted).forEach { id -> activityChildJobs.remove(id)?.cancel() }
+            for (childId in wanted - activityChildJobs.keys) {
+                val parentId = boundSessionId
+                activityChildJobs[childId] =
+                    viewModelScope.launch {
+                        activityMessageRepository.observeMessages(childId, worktree).collect { update ->
+                            if (boundSessionId != parentId || update !is MessageListUpdate.Messages) return@collect
+                            val activity = SessionChatActivityCard.childActivity(update.messages)
+                            if (activityCardChildren[childId] == activity) return@collect
+                            activityCardChildren = activityCardChildren + (childId to activity)
+                            _uiState.value = _uiState.value.copy(activityCardChildren = activityCardChildren)
+                        }
+                    }
+            }
         }
 
         private fun resolveSnackbar(

@@ -612,6 +612,12 @@ nonisolated struct SessionChatStep: Equatable, Sendable, Identifiable {
         )
     }
 
+    /// The title in a list of steps (activity sheet): without the verb, except
+    /// a command still running, whose settled title would read "Ran cmd".
+    var listTitle: String {
+        status.isInFlight && family == .command ? runningTitle : settledTitle
+    }
+
     /// Settled tool and thought steps fold; running steps and child sessions never do.
     var isFoldable: Bool {
         kind != .childSession && !status.isInFlight
@@ -681,14 +687,11 @@ nonisolated struct SessionChatActivityCardBlock: Equatable, Sendable {
     /// The last card of a turn that is still working. Set at render time from
     /// session status (`withLive`); blocks built from parts are never live.
     let isLive: Bool
-    /// Live and nothing in flight: the card shows "Thinking…" instead of running lines.
-    let thinking: Bool
 
     init(id: String, steps: [SessionChatStep], isLive: Bool = false) {
         self.id = id
         self.steps = steps
         self.isLive = isLive
-        self.thinking = isLive && !steps.contains { $0.status.isInFlight }
     }
 
     func withLive(_ isLive: Bool) -> SessionChatActivityCardBlock {
@@ -696,11 +699,25 @@ nonisolated struct SessionChatActivityCardBlock: Equatable, Sendable {
         return SessionChatActivityCardBlock(id: id, steps: steps, isLive: isLive)
     }
 
-    /// Pending and running steps, in order.
-    var running: [SessionChatStep] { steps.filter(\.status.isInFlight) }
+    /// Child-session steps, running or finished, in order: the sheet's Agent section.
+    var childSteps: [SessionChatStep] { steps.filter { $0.kind == .childSession } }
 
-    /// Completed, failed and interrupted steps, in order.
-    var done: [SessionChatStep] { steps.filter { !$0.status.isInFlight } }
+    /// Every other step, in order: the sheet's Steps section.
+    var toolSteps: [SessionChatStep] { steps.filter { $0.kind != .childSession } }
+
+    /// Child sessions still in flight: the live card's Agent section.
+    var runningChildren: [SessionChatStep] { childSteps.filter(\.status.isInFlight) }
+
+    /// Tools still in flight, child sessions excluded.
+    var runningTools: [SessionChatStep] { toolSteps.filter(\.status.isInFlight) }
+
+    /// The live footer's tool: the most recently started running tool. A step
+    /// without a start time counts as oldest; ties go to the later step.
+    var latestRunningTool: SessionChatStep? {
+        runningTools.enumerated().max { lhs, rhs in
+            (lhs.element.startedAtMs ?? .min, lhs.offset) < (rhs.element.startedAtMs ?? .min, rhs.offset)
+        }?.element
+    }
 
     /// Failed if any step failed for real (not interrupted), else completed.
     var worstStatus: SessionChatStepStatus {
@@ -712,14 +729,9 @@ nonisolated struct SessionChatActivityCardBlock: Equatable, Sendable {
         steps.compactMap(\.startedAtMs).min()
     }
 
-    /// Live footer: "4 done · 3 reads · 1 search", or "nothing finished yet".
-    static func summary(done: [SessionChatStep]) -> String {
-        guard !done.isEmpty else { return "nothing finished yet" }
-        return joined("\(done.count) done", families(done))
-    }
-
-    /// Finished card: "9 steps · 3 reads · 2 edits".
-    static func settledSummary(_ steps: [SessionChatStep]) -> String {
+    /// Live card's second line: "6 steps · 3 reads · 1 search · 1 agent".
+    /// Counts every step, running or settled.
+    static func summary(_ steps: [SessionChatStep]) -> String {
         joined(steps.count == 1 ? "1 step" : "\(steps.count) steps", families(steps))
     }
 
@@ -734,9 +746,71 @@ nonisolated struct SessionChatActivityCardBlock: Equatable, Sendable {
         return order.map { $0.counted(counts[$0] ?? 0) }.joined(separator: " \u{00B7} ")
     }
 
+    /// Settled line's tool names, deduplicated in first-seen order: "Read, Edit, Agent".
+    static func usedToolNames(_ steps: [SessionChatStep]) -> [String] {
+        var seen: Set<String> = []
+        return steps.compactMap { step in
+            let name = usedToolName(step)
+            return seen.insert(name).inserted ? name : nil
+        }
+    }
+
+    /// Live footer with no running tool: waiting on child sessions, on the
+    /// user (a permission or question), or on the model.
+    static func idleText(hasRunningChildren: Bool, awaitingUser: Bool) -> String {
+        if hasRunningChildren { return "Waiting for agents" }
+        if awaitingUser { return "Waiting for you" }
+        return "Thinking\u{2026}"
+    }
+
+    private static func usedToolName(_ step: SessionChatStep) -> String {
+        switch step.kind {
+        case .thought: return "Thought"
+        case .childSession: return "Agent"
+        case .tool: break
+        }
+        let tool = step.card?.toolName.lowercased() ?? ""
+        switch tool {
+        case "read": return "Read"
+        case "glob": return "Glob"
+        case "grep": return "Grep"
+        case "websearch", "codesearch": return "Search"
+        case "webfetch": return "Fetch"
+        case "edit", "apply_patch", "patch": return "Edit"
+        case "write": return "Write"
+        case "bash", "shell": return "Shell"
+        case "task", "subagent": return "Agent"
+        case "skill": return "Skill"
+        case "question": return "Question"
+        // An unavailable tool keeps the name the model asked for.
+        case "invalid", "": return step.title
+        default: return tool.prefix(1).uppercased() + tool.dropFirst()
+        }
+    }
+
     private static func joined(_ head: String, _ tail: String) -> String {
         tail.isEmpty ? head : "\(head) \u{00B7} \(tail)"
     }
+}
+
+/// What a running child session is doing, observed from its own messages
+/// while an activity card shows it live (#779).
+nonisolated struct SessionChatChildActivity: Equatable, Sendable {
+    /// `runningTitle` of the child's most recently started running tool.
+    let currentAction: String?
+    /// Up to `recentLimit` of the child's latest steps, oldest first.
+    let recentSteps: [SessionChatChildActivityStep]
+    /// Visible tools the child has run or is running.
+    let toolCount: Int
+
+    static let recentLimit = 3
+    static let empty = SessionChatChildActivity(currentAction: nil, recentSteps: [], toolCount: 0)
+}
+
+nonisolated struct SessionChatChildActivityStep: Equatable, Sendable, Identifiable {
+    let id: String
+    let title: String
+    let isRunning: Bool
 }
 
 nonisolated enum SessionChatTimelineBlocks {
@@ -1232,6 +1306,31 @@ nonisolated enum SessionChatTimelineBlocks {
             let id = PresentationBlockId.activityCard(first)
             return .activityCard(blockID: id, card: SessionChatActivityCardBlock(id: id, steps: steps))
         }
+    }
+
+    /// A child session's activity from its messages, with the same step rules
+    /// as the parent's card: the latest started running tool names the current
+    /// action; the last few steps feed the sheet's sub-rows.
+    static func childActivity(from messages: [Message]) -> SessionChatChildActivity {
+        var steps: [SessionChatStep] = []
+        for message in messages where message.role == .assistant {
+            for case .tool(let tool) in message.parts where isVisibleTool(tool) {
+                if let step = toolStep(tool) { steps.append(step) }
+            }
+        }
+        let card = SessionChatActivityCardBlock(id: "", steps: steps)
+        let current = card.latestRunningTool ?? card.runningChildren.last
+        return SessionChatChildActivity(
+            currentAction: current.map { $0.kind == .childSession ? $0.title : $0.runningTitle },
+            recentSteps: steps.suffix(SessionChatChildActivity.recentLimit).map { step in
+                SessionChatChildActivityStep(
+                    id: step.id,
+                    title: step.kind == .childSession ? step.title : step.listTitle,
+                    isRunning: step.status.isInFlight
+                )
+            },
+            toolCount: steps.count
+        )
     }
 
     /// Shared by the step rail and the activity card: text and the rest render

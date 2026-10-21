@@ -9,105 +9,87 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ui.components.OpenCodeActivityCard
 import dev.opencode.mobile.ui.components.OpenCodeActivityCardSamples
 import dev.opencode.mobile.ui.components.OpenCodeActivityCardState
-import dev.opencode.mobile.ui.components.OpenCodeActivityLine
+import dev.opencode.mobile.ui.components.OpenCodeActivitySheet
+import dev.opencode.mobile.ui.components.OpenCodeActivitySheetSamples
 import dev.opencode.mobile.ui.components.OpenCodeActivityStatus
 
 @Composable
 fun ActivityCardGalleryScreen(modifier: Modifier = Modifier) {
     val nowMs = remember { System.currentTimeMillis() }
+    var sheetLive by remember { mutableStateOf<Boolean?>(null) }
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-        GallerySample("Live, one running step") {
-            GalleryCard(
-                state = OpenCodeActivityCardState.Live,
-                startedAtMs = nowMs - 12_000,
-                running = OpenCodeActivityCardSamples.oneRunning(nowMs),
-                done = emptyList(),
-                summary = "nothing finished yet",
+        GallerySample("Live, one running tool (tap the band for the sheet)") {
+            OpenCodeActivityCard(
+                state = OpenCodeActivityCardState.Live(elapsedStartMs = nowMs - 12_000),
+                summary = "1 step · 1 command",
+                agents = emptyList(),
+                current = OpenCodeActivityCardSamples.oneTool(nowMs),
+                idleText = null,
+                onAgentTap = {},
+                onOpen = { sheetLive = true },
             )
         }
-        GallerySample("Live, three running and a child session, collapsed") {
-            GalleryCard(
-                state = OpenCodeActivityCardState.Live,
-                startedAtMs = nowMs - 64_000,
-                running = OpenCodeActivityCardSamples.threeRunningWithChild(nowMs),
-                done = OpenCodeActivityCardSamples.someDone,
-                summary = OpenCodeActivityCardSamples.SOME_DONE_SUMMARY,
+        GallerySample("Live, two agents and +1") {
+            OpenCodeActivityCard(
+                state = OpenCodeActivityCardState.Live(elapsedStartMs = nowMs - 64_000),
+                summary = OpenCodeActivityCardSamples.LIVE_SUMMARY,
+                agents = OpenCodeActivityCardSamples.twoAgents(nowMs),
+                current = OpenCodeActivityCardSamples.editPlusOne(nowMs),
+                idleText = null,
+                onAgentTap = {},
+                onOpen = { sheetLive = true },
             )
         }
-        GallerySample("Live, three running and a child session, expanded") {
-            GalleryCard(
-                state = OpenCodeActivityCardState.Live,
-                startedAtMs = nowMs - 64_000,
-                running = OpenCodeActivityCardSamples.threeRunningWithChild(nowMs),
-                done = OpenCodeActivityCardSamples.someDone,
-                summary = OpenCodeActivityCardSamples.SOME_DONE_SUMMARY,
-                startExpanded = true,
+        GallerySample("Live, waiting for agents") {
+            OpenCodeActivityCard(
+                state = OpenCodeActivityCardState.Live(elapsedStartMs = nowMs - 40_000),
+                summary = "4 steps · 2 reads · 2 agents",
+                agents = OpenCodeActivityCardSamples.twoAgents(nowMs),
+                current = null,
+                idleText = "Waiting for agents",
+                onAgentTap = {},
+                onOpen = { sheetLive = true },
             )
         }
-        GallerySample("Settled with a failure, collapsed (tap to expand)") {
-            GalleryCard(
-                state = OpenCodeActivityCardState.Settled,
-                running = emptyList(),
-                done = OpenCodeActivityCardSamples.settledWithFailure,
-                summary = OpenCodeActivityCardSamples.SETTLED_SUMMARY,
-                worstStatus = OpenCodeActivityStatus.Failed,
+        GallerySample("Settled, completed (tap for the settled sheet)") {
+            OpenCodeActivityCard(
+                state = OpenCodeActivityCardState.Settled(worstStatus = OpenCodeActivityStatus.Completed, stepCount = 6),
+                summary = OpenCodeActivityCardSamples.SETTLED_NAMES,
+                agents = emptyList(),
+                current = null,
+                idleText = null,
+                onAgentTap = {},
+                onOpen = { sheetLive = false },
             )
         }
-        GallerySample("Settled with a failure, expanded") {
-            GalleryCard(
-                state = OpenCodeActivityCardState.Settled,
-                running = emptyList(),
-                done = OpenCodeActivityCardSamples.settledWithFailure,
-                summary = OpenCodeActivityCardSamples.SETTLED_SUMMARY,
-                worstStatus = OpenCodeActivityStatus.Failed,
-                startExpanded = true,
-            )
-        }
-        GallerySample("Live, thinking") {
-            GalleryCard(
-                state = OpenCodeActivityCardState.Live,
-                startedAtMs = nowMs - 20_000,
-                running = emptyList(),
-                done = OpenCodeActivityCardSamples.someDone,
-                summary = OpenCodeActivityCardSamples.SOME_DONE_SUMMARY,
-                thinking = true,
+        GallerySample("Settled with a failure") {
+            OpenCodeActivityCard(
+                state = OpenCodeActivityCardState.Settled(worstStatus = OpenCodeActivityStatus.Failed, stepCount = 7),
+                summary = OpenCodeActivityCardSamples.SETTLED_FAILED_NAMES,
+                agents = emptyList(),
+                current = null,
+                idleText = null,
+                onAgentTap = {},
+                onOpen = { sheetLive = false },
             )
         }
     }
-}
-
-@Composable
-private fun GalleryCard(
-    state: OpenCodeActivityCardState,
-    running: List<OpenCodeActivityLine>,
-    done: List<OpenCodeActivityLine>,
-    summary: String,
-    startedAtMs: Long? = null,
-    thinking: Boolean = false,
-    worstStatus: OpenCodeActivityStatus = OpenCodeActivityStatus.Completed,
-    startExpanded: Boolean = false,
-) {
-    var expanded by rememberSaveable { mutableStateOf(startExpanded) }
-    OpenCodeActivityCard(
-        state = state,
-        startedAtMs = startedAtMs,
-        endedAtMs = null,
-        thinking = thinking,
-        runningLines = running,
-        doneLines = done,
-        summary = summary,
-        worstStatus = worstStatus,
-        isExpanded = expanded,
-        onToggleExpanded = { expanded = !expanded },
-        onLineTap = {},
-        onChildSessionTap = {},
+    OpenCodeActivitySheet(
+        visible = sheetLive != null,
+        live = sheetLive == true,
+        stepCount = 6,
+        startedAtMs = nowMs - 64_000,
+        agents = OpenCodeActivitySheetSamples.agents(nowMs),
+        steps = OpenCodeActivitySheetSamples.steps(nowMs),
+        onAgentTap = {},
+        onStepTap = {},
+        onDismissRequest = { sheetLive = null },
     )
 }
 
