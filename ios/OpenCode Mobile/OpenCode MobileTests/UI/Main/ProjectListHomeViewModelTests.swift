@@ -392,6 +392,48 @@ struct ProjectListHomeViewModelTests {
         #expect(rows.first { $0.id == "s-main" }?.scopedLocation?.parts == [.branch("main")])
     }
 
+    @Test func coldV2BranchAnswerIsAskedAgainUntilTheServerKnowsTheRepository() async {
+        // A v2 server that just started answers {"branch":{}} (no provider) the first time.
+        let calls = VcsCallCounter()
+        let sessionRepository = FakeSessionRepository(sessions: [
+            Session(id: "s-tax", title: "Tax", slug: nil, projectID: nil, directory: "/wt/tax", parentID: nil, updatedAtEpochMs: 2),
+        ])
+        sessionRepository.vcsInfo = { directory in
+            let call = calls.next(directory)
+            if directory == "/notes" || call == 1 {
+                return VcsInfo(currentBranch: nil, defaultBranch: nil, isSettled: false)
+            }
+            return VcsInfo(currentBranch: directory == "/repo" ? "main" : "feature/tax-rounding", defaultBranch: "main")
+        }
+        let repo = Project(id: "prj_repo", worktree: "/repo", displayName: "repo", isRepository: true)
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(projectsByDirectory: ["/repo": repo]),
+            sessionRepository: sessionRepository,
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo", "/notes"]),
+            worktreeRepository: ScriptedWorktreeRepository(loads: [
+                .loaded(directories: ["/repo", "/wt/tax"], listsSessions: false),
+            ]),
+            branchRetryDelays: [.zero, .zero]
+        )
+
+        await viewModel.refresh()
+
+        let shown = await waitUntil {
+            viewModel.homeProjects.first?.worktrees.map(\.branch) == ["main", "feature/tax-rounding"]
+        }
+        #expect(shown)
+        guard case let .loaded(sections, _, _, _) = viewModel.state else {
+            Issue.record("Expected loaded")
+            return
+        }
+        let rows = sections.crossProjectSessionListSessions(projects: viewModel.homeProjects)
+        #expect(rows.first { $0.id == "s-tax" }?.scopedLocation?.parts == [.branch("feature/tax-rounding"), .text("tax")])
+        // A folder the server never detects stops after the bounded retries.
+        #expect(await waitUntil { calls.count("/notes") == 3 })
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(calls.count("/notes") == 3)
+    }
+
     @Test func removingAMergedProjectRemovesEveryMemberPath() async {
         let store = FakeConnectionProfileStore(initial: ["/repo", "/other", "/repo-wt"])
         let repo = Project(id: "prj_repo", worktree: "/repo", displayName: "repo", isRepository: true)
@@ -2982,5 +3024,21 @@ private final class GatedVcs: @unchecked Sendable {
         }
         if fails { throw SessionError.transport("cancelled") }
         return VcsInfo(currentBranch: branches[directory], defaultBranch: "main")
+    }
+}
+
+private final class VcsCallCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var counts: [String: Int] = [:]
+
+    func next(_ directory: String) -> Int {
+        lock.withLock {
+            counts[directory, default: 0] += 1
+            return counts[directory] ?? 0
+        }
+    }
+
+    func count(_ directory: String) -> Int {
+        lock.withLock { counts[directory] ?? 0 }
     }
 }

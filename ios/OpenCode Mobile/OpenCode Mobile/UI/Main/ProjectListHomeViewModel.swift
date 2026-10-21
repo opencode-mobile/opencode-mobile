@@ -553,12 +553,14 @@ final class ProjectListHomeViewModel {
         self.branchLookups = HomeBranchLookups(retryDelays: branchRetryDelays) { directory in
             do {
                 let info = try await sessions.getVcsInfo(directory: directory)
+                // A cold v2 server answers without a provider first; ask again shortly.
+                guard info.isSettled else { return .unknown }
                 return .branch(HomeProjectGrouping.usableBranch(info.currentBranch))
             } catch let SessionError.http(statusCode, _) where (400 ..< 500).contains(statusCode) {
                 // No VCS routes, or not a repository: there is no branch to show.
                 return .branch(nil)
             } catch {
-                return .failed
+                return .unknown
             }
         }
         self.connectionSessionCoordinator = connectionSessionCoordinator

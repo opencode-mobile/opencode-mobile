@@ -4,15 +4,16 @@ import Foundation
 ///
 /// Only the newest lookup of a directory may write it, so a lookup that started before a Home
 /// reload (and finishes late, or is cancelled when the REST pool is replaced) never overwrites a
-/// newer answer. A failed request keeps the last known branch and retries a few times; a
-/// directory whose lookups all failed is asked again on the next `lookUp`.
+/// newer answer. An unknown answer (a failed request, or a v2 server still detecting the
+/// repository) keeps the last known branch and retries a few times; a directory that stayed
+/// unknown is asked again on the next `lookUp`, so non-git folders stop after the retries.
 @MainActor
 final class HomeBranchLookups {
     nonisolated enum Outcome: Equatable, Sendable {
         /// The server answered; nil for a detached HEAD or a folder without a branch.
         case branch(String?)
-        /// The request failed; the answer is still unknown.
-        case failed
+        /// The request failed, or the server has not detected the repository yet.
+        case unknown
     }
 
     private(set) var branches: [String: String] = [:]

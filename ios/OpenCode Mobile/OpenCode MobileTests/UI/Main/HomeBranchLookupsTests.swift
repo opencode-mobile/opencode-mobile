@@ -16,7 +16,7 @@ struct HomeBranchLookupsTests {
 
         fetch.resolve(index: 1, with: .branch("feature/tax-rounding"))
         #expect(await waitFor { lookups.branches["/wt/tax"] == "feature/tax-rounding" })
-        fetch.resolve(index: 0, with: .failed)
+        fetch.resolve(index: 0, with: .unknown)
         await settle()
 
         #expect(lookups.branches["/wt/tax"] == "feature/tax-rounding")
@@ -40,7 +40,7 @@ struct HomeBranchLookupsTests {
     }
 
     @Test func failureRetriesThenKeepsTheKnownBranch() async {
-        let answers = Answers([.branch("main"), .failed, .failed])
+        let answers = Answers([.branch("main"), .unknown, .unknown])
         let lookups = HomeBranchLookups(retryDelays: [.zero]) { _ in await answers.next() }
         var changes = 0
         lookups.onChange = { _ in changes += 1 }
@@ -57,7 +57,7 @@ struct HomeBranchLookupsTests {
     }
 
     @Test func retryRecoversAFailedFirstAnswer() async {
-        let answers = Answers([.failed, .branch("feature/x")])
+        let answers = Answers([.unknown, .branch("feature/x")])
         let lookups = HomeBranchLookups(retryDelays: [.zero]) { _ in await answers.next() }
 
         lookups.lookUp(["/wt/x"])
@@ -66,7 +66,7 @@ struct HomeBranchLookupsTests {
     }
 
     @Test func exhaustedRetriesAskAgainOnTheNextLookUp() async {
-        let answers = Answers([.failed, .branch("feature/x")])
+        let answers = Answers([.unknown, .branch("feature/x")])
         let lookups = HomeBranchLookups(retryDelays: []) { _ in await answers.next() }
 
         lookups.lookUp(["/wt/x"])
@@ -160,6 +160,6 @@ private actor Answers {
 
     func next() -> HomeBranchLookups.Outcome {
         count += 1
-        return queue.isEmpty ? .failed : queue.removeFirst()
+        return queue.isEmpty ? .unknown : queue.removeFirst()
     }
 }
