@@ -36,66 +36,140 @@ final class HomeWorktreeSessionFold {
 struct WorktreeMarkUpdate: Sendable {
     let addedPath: String
     let projectID: String?
+    /// Current project of the added path; nil when it did not load.
+    var resolution: HomeProjectResolution? = nil
     let inventory: WorktreeInventory
+    /// Worktree directories the server listed for the project (v1 sandboxes, v2 worktree list).
+    var directories: [String] = []
     let extras: [SessionListItem]
 }
 
+/// Worktree inventory, current project, and (v1) the sessions of non-added worktrees for each
+/// added path on Home.
 final class HomeWorktreeMarks {
     private let repository: any WorktreeRepository
-    private let currentProjectID: @Sendable (String) async -> String?
+    private let resolveProject: @Sendable (String) async -> HomeProjectResolution?
     private let listSessions: @Sendable (String) async -> [SessionListItem]
+    private var resolutions: [String: HomeProjectResolution] = [:]
     private var projectIDs: [String: String] = [:]
     private var epochs: [String: Int] = [:]
     private let epochLock = NSLock()
     private let fold = HomeWorktreeSessionFold()
+    private var connectionKey: String?
+    private var addedPaths: [String] = []
+    /// v1: non-added directories whose sessions this added path lists, and its last inventory.
+    private var extraDirectories: [String: [String]] = [:]
+    private var lastLoads: [String: (inventory: WorktreeInventory, directories: [String])] = [:]
 
     init(
         repository: any WorktreeRepository,
-        currentProjectID: @escaping @Sendable (String) async -> String?,
+        resolveProject: @escaping @Sendable (String) async -> HomeProjectResolution?,
         listSessions: @escaping @Sendable (String) async -> [SessionListItem]
     ) {
         self.repository = repository
-        self.currentProjectID = currentProjectID
+        self.resolveProject = resolveProject
         self.listSessions = listSessions
     }
 
     func onDisconnected() {
         repository.onDisconnected()
+        connectionKey = nil
+        clearCaches()
     }
 
     func onConnection(_ key: String) {
         repository.onConnection(key: key)
+        if connectionKey != key {
+            connectionKey = key
+            clearCaches()
+        }
+    }
+
+    private func clearCaches() {
+        epochLock.withLock {
+            resolutions.removeAll()
+            projectIDs.removeAll()
+        }
+        extraDirectories.removeAll()
+        lastLoads.removeAll()
+    }
+
+    /// Added paths on Home, in order. Their sessions come from their own lists, never as extras.
+    func setAddedPaths(_ paths: [String]) {
+        addedPaths = paths
+        let kept = Set(paths)
+        extraDirectories = extraDirectories.filter { kept.contains($0.key) }
+        lastLoads = lastLoads.filter { kept.contains($0.key) }
     }
 
     func knows(_ projectID: String) -> Bool {
         epochLock.withLock { projectIDs.values.contains(projectID) }
     }
 
+    func resolution(for addedPath: String) -> HomeProjectResolution? {
+        epochLock.withLock { resolutions[addedPath] }
+    }
+
     func load(addedPath: String) async -> WorktreeMarkUpdate {
-        let lookedUp: String?
-        if let cached = epochLock.withLock({ projectIDs[addedPath] }) {
-            lookedUp = cached
+        let resolution: HomeProjectResolution?
+        if let cached = epochLock.withLock({ resolutions[addedPath] }) {
+            resolution = cached
         } else {
-            lookedUp = await currentProjectID(addedPath)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            resolution = await resolveProject(addedPath)
         }
-        let usable = (lookedUp?.isEmpty == false) ? lookedUp : nil
+        let trimmedID = resolution?.id.trimmingCharacters(in: .whitespacesAndNewlines)
+        let usable = (trimmedID?.isEmpty == false) ? trimmedID : nil
         // Record the id before refresh so a worktree.updated emitted by that call is not dropped.
-        if let usable {
-            epochLock.withLock { projectIDs[addedPath] = usable }
+        epochLock.withLock {
+            if let resolution { resolutions[addedPath] = resolution }
+            if let usable { projectIDs[addedPath] = usable }
         }
         let epoch = begin(addedPath)
         let loaded = await repository.loadRefreshed(addedPath: addedPath, projectID: usable)
         // A refetch that started during this load saw the pre-refresh list. Drop it.
         end(addedPath, epoch: epoch)
-        return await update(addedPath: addedPath, projectID: usable, load: loaded)
+        return await update(addedPath: addedPath, projectID: usable, resolution: resolution, load: loaded)
     }
 
-    func refetch(projectID: String) async -> WorktreeMarkUpdate? {
-        guard let addedPath = epochLock.withLock({ projectIDs.first { $0.value == projectID }?.key }) else { return nil }
-        guard let epoch = epochLock.withLock({ epochs[addedPath] }) else { return nil }
-        let loaded = await repository.refetch(projectID: projectID)
-        guard epochLock.withLock({ epochs[addedPath] }) == epoch else { return nil }
-        return await update(addedPath: addedPath, projectID: projectID, load: loaded)
+    /// `worktree.updated` for a project: refetches its list for every added path in it.
+    func refetch(projectID: String) async -> [WorktreeMarkUpdate] {
+        let paths = epochLock.withLock {
+            addedPaths.filter { projectIDs[$0] == projectID }
+                + projectIDs.filter { $0.value == projectID && !addedPaths.contains($0.key) }.map(\.key)
+        }
+        var updates: [WorktreeMarkUpdate] = []
+        for addedPath in paths {
+            guard let epoch = epochLock.withLock({ epochs[addedPath] }) else { continue }
+            let loaded = await repository.refetch(projectID: projectID)
+            guard epochLock.withLock({ epochs[addedPath] }) == epoch else { continue }
+            updates.append(
+                await update(addedPath: addedPath, projectID: projectID, resolution: resolution(for: addedPath), load: loaded)
+            )
+        }
+        return updates
+    }
+
+    /// v1: relists the sessions of every non-added worktree, for a session event Home refreshes on.
+    func refreshExtras() async -> [WorktreeMarkUpdate] {
+        var updates: [WorktreeMarkUpdate] = []
+        for addedPath in addedPaths {
+            guard let directories = extraDirectories[addedPath], !directories.isEmpty,
+                  let last = lastLoads[addedPath]
+            else { continue }
+            let extras = await list(directories)
+            guard extraDirectories[addedPath] == directories else { continue }
+            updates.append(
+                WorktreeMarkUpdate(
+                    addedPath: addedPath,
+                    projectID: epochLock.withLock { projectIDs[addedPath] },
+                    resolution: resolution(for: addedPath),
+                    inventory: last.inventory,
+                    directories: last.directories,
+                    extras: extras
+                )
+            )
+        }
+        return updates
     }
 
     private func begin(_ addedPath: String) -> Int {
@@ -122,27 +196,82 @@ final class HomeWorktreeMarks {
         fold.apply(addedPath: addedPath, current: current, nextExtras: extras)
     }
 
-    private func update(addedPath: String, projectID: String?, load: WorktreeLoad) async -> WorktreeMarkUpdate {
+    private func update(
+        addedPath: String,
+        projectID: String?,
+        resolution: HomeProjectResolution?,
+        load: WorktreeLoad
+    ) async -> WorktreeMarkUpdate {
         let inventory: WorktreeInventory
+        var directories: [String] = []
+        var listsExtras = false
         switch load {
-        case let .loaded(directories, _):
-            inventory = .loaded(directories)
-        case .unloaded, .stopped:
+        case let .loaded(listed, listsSessions):
+            inventory = .loaded(listed)
+            directories = listed
+            listsExtras = listsSessions
+        case .stopped:
+            // V1 server without `/experimental/worktree`: no extra worktrees, but a main checkout
+            // that was never added still lists its sessions.
+            inventory = .unloaded
+            listsExtras = true
+        case .unloaded:
             inventory = .unloaded
         case .failed:
             inventory = .failed
         }
+        lastLoads[addedPath] = (inventory, directories)
         var extras: [SessionListItem] = []
-        if case let .loaded(directories, listsSessions) = load, listsSessions {
-            extras = await listExtra(addedPath: addedPath, directories: directories)
+        if listsExtras {
+            let extra = extraDirectories(addedPath: addedPath, listed: directories, resolution: resolution)
+            extraDirectories[addedPath] = extra
+            extras = await list(extra)
+        } else {
+            extraDirectories[addedPath] = nil
         }
-        return WorktreeMarkUpdate(addedPath: addedPath, projectID: projectID, inventory: inventory, extras: extras)
+        return WorktreeMarkUpdate(
+            addedPath: addedPath,
+            projectID: projectID,
+            resolution: resolution,
+            inventory: inventory,
+            directories: directories,
+            extras: extras
+        )
     }
 
-    private func listExtra(addedPath: String, directories: [String]) async -> [SessionListItem] {
-        let added = ServerPathPolicy.canonical(addedPath)
+    /// Listed worktrees plus the main checkout, minus every added path (each lists its own
+    /// sessions). Only the first added path of a project lists them.
+    private func extraDirectories(
+        addedPath: String,
+        listed: [String],
+        resolution: HomeProjectResolution?
+    ) -> [String] {
+        if let resolution, resolution.isMergeable {
+            let earlier = addedPaths.prefix { $0 != addedPath }
+            let shared = epochLock.withLock {
+                earlier.contains { resolutions[$0]?.isMergeable == true && resolutions[$0]?.id == resolution.id }
+            }
+            if shared { return [] }
+        }
+        let added = Set((addedPaths + [addedPath]).map(ServerPathPolicy.canonical))
+        var candidates = listed
+        if let resolution, resolution.isMergeable, let main = resolution.mainCheckout {
+            candidates.insert(main, at: 0)
+        }
+        var directories: [String] = []
+        for raw in candidates {
+            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { continue }
+            let canonical = ServerPathPolicy.canonical(trimmed)
+            guard !added.contains(canonical), !directories.contains(canonical) else { continue }
+            directories.append(canonical)
+        }
+        return directories
+    }
+
+    private func list(_ directories: [String]) async -> [SessionListItem] {
         var sessions: [SessionListItem] = []
-        for directory in directories where ServerPathPolicy.canonical(directory) != added {
+        for directory in directories {
             sessions += await listSessions(directory)
         }
         return sessions

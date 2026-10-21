@@ -40,9 +40,9 @@ nonisolated struct WorktreesAPIClient: WorktreeRemote, Sendable {
         _ = try await data(for: request)
     }
 
-    func probeV1(directory: String) async -> V1WorkspaceHTTP {
+    func listV1(directory: String) async -> V1WorktreeHTTP {
         guard let connection = connectionProvider() else { return .failed(-1) }
-        let request = connection.authorizedRequest(path: "experimental/workspace", directory: directory)
+        let request = connection.authorizedRequest(path: "experimental/worktree", directory: directory)
         do {
             let (data, response) = try await resolveURLSession().data(for: request)
             guard let http = response as? HTTPURLResponse else { return .failed(-1) }

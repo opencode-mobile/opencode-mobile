@@ -51,9 +51,13 @@ import dev.opencode.mobile.domain.session.SessionIdleOutcome
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.domain.session.SessionSummary
+import dev.opencode.mobile.domain.session.VcsInfo
 import dev.opencode.mobile.domain.sessioncache.NoOpSessionCache
 import dev.opencode.mobile.domain.sessioncache.SessionCache
 import dev.opencode.mobile.domain.sync.testSyncCoordinator
+import dev.opencode.mobile.domain.worktree.UnavailableWorktreeRepository
+import dev.opencode.mobile.domain.worktree.WorktreeLoad
+import dev.opencode.mobile.domain.worktree.WorktreeRepository
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.OpencodeSseHttpClient
@@ -2426,6 +2430,205 @@ class MainScreenViewModelTest {
         return viewModel
     }
 
+    @Test
+    fun worktreesOfOneRepository_groupIntoOneProjectWithBranches() =
+        runTest(testDispatcher) {
+            val shared =
+                listOf(
+                    Session(id = "a", title = "A", directory = "/repo", updatedAtEpochMs = 2L),
+                    Session(id = "b", title = "B", directory = "/repo-wt", updatedAtEpochMs = 3L),
+                )
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo", "/repo-wt", "/plain")),
+                    projectRepository = FakeProjectRepository(projectsByDirectory = repoProjects),
+                    sessionRepository =
+                        FakeSessionRepository(
+                            mutableMapOf("/repo" to shared, "/repo-wt" to shared, "/plain" to emptyList()),
+                            branches = mapOf("/repo" to "dev", "/repo-wt" to "feature/x"),
+                        ),
+                )
+            advanceUntilIdle()
+
+            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            assertEquals(listOf("proj", "path:/plain"), loaded.projects.map { it.key })
+            assertEquals(listOf("/repo", "/repo-wt"), loaded.projects.first().memberPaths)
+            assertEquals(
+                listOf("dev", "feature/x"),
+                loaded.projects
+                    .first()
+                    .worktrees
+                    .map { it.branch },
+            )
+            assertEquals(listOf("b", "a"), loaded.homeSessions().map { it.id })
+        }
+
+    @Test
+    fun addProject_ofARepositoryOnHome_joinsItAsAWorktree() =
+        runTest(testDispatcher) {
+            val store = FakeConnectionProfileStore(initial = listOf("/repo"))
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = store,
+                    projectRepository = FakeProjectRepository(projectsByDirectory = repoProjects),
+                    sessionsByWorktree = mapOf("/repo" to emptyList(), "/repo-wt" to emptyList()),
+                )
+            advanceUntilIdle()
+
+            viewModel.addProject("/repo-wt")
+            advanceUntilIdle()
+
+            assertEquals(listOf("/repo", "/repo-wt"), store.added(serverUrl))
+            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            assertEquals(listOf("/repo", "/repo-wt"), loaded.projects.single().memberPaths)
+            assertEquals("Same repo as repo. Showing it as a worktree there.", viewModel.removalSnackbar.value?.text)
+            assertEquals(HomeScopeRequest(filterId = "/repo-wt", evenFromAll = true), viewModel.pendingScopeRequest.value)
+        }
+
+    @Test
+    fun removeProject_removesEveryAddedPathOfIt() =
+        runTest(testDispatcher) {
+            val store = FakeConnectionProfileStore(initial = listOf("/repo", "/plain", "/repo-wt"))
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = store,
+                    projectRepository = FakeProjectRepository(projectsByDirectory = repoProjects),
+                    sessionsByWorktree = mapOf("/repo" to emptyList(), "/repo-wt" to emptyList(), "/plain" to emptyList()),
+                )
+            advanceUntilIdle()
+
+            viewModel.requestRemoveProject("proj")
+            assertEquals(
+                listOf("/repo", "/repo-wt"),
+                (viewModel.uiState.value as MainScreenUiState.Loaded).pendingProjectRemoval?.worktrees,
+            )
+            viewModel.confirmRemoveProject()
+            advanceUntilIdle()
+
+            assertEquals(listOf("/plain"), store.added(serverUrl))
+            assertEquals("Removed \"repo\" from home", viewModel.removalSnackbar.value?.text)
+        }
+
+    @Test
+    fun reorderProjects_movesEveryAddedPathOfAProject() =
+        runTest(testDispatcher) {
+            val store = FakeConnectionProfileStore(initial = listOf("/repo", "/plain", "/repo-wt"))
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = store,
+                    projectRepository = FakeProjectRepository(projectsByDirectory = repoProjects),
+                    sessionsByWorktree = mapOf("/repo" to emptyList(), "/repo-wt" to emptyList(), "/plain" to emptyList()),
+                )
+            advanceUntilIdle()
+
+            viewModel.reorderProjects(listOf("path:/plain", "proj"))
+            advanceUntilIdle()
+
+            assertEquals(listOf("/plain", "/repo", "/repo-wt"), store.added(serverUrl))
+        }
+
+    @Test
+    fun v1WorktreeThatIsNotAdded_listsLiveAndRefreshesOnSessionEvents() =
+        runTest(testDispatcher) {
+            val eventStream = FakeForegroundEventStream().also { it.setConnectionState(EventStreamConnectionState.Connected) }
+            val sessionsByWorktree =
+                mutableMapOf(
+                    "/repo" to listOf(Session(id = "main", title = "Main", updatedAtEpochMs = 1L)),
+                    "/wt-unadded" to listOf(Session(id = "extra", title = "Extra", updatedAtEpochMs = 2L)),
+                )
+            val sessionRepository = FakeSessionRepository(sessionsByWorktree)
+            val v1Worktrees =
+                object : WorktreeRepository by UnavailableWorktreeRepository {
+                    override suspend fun loadRefreshed(
+                        addedPath: String,
+                        projectId: String?,
+                        mainWorktree: String?,
+                    ): WorktreeLoad = WorktreeLoad.Loaded(listOfNotNull(mainWorktree) + "/wt-unadded", listsSessions = true)
+                }
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    projectRepository = FakeProjectRepository(projectsByDirectory = repoProjects),
+                    eventStream = eventStream,
+                    sessionRepository = sessionRepository,
+                    worktreeRepository = v1Worktrees,
+                )
+            advanceUntilIdle()
+
+            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            assertEquals(listOf("extra", "main"), loaded.homeSessions().map { it.id })
+            assertEquals("/wt-unadded", loaded.homeSessions().first().directory)
+            assertEquals(
+                listOf("/repo", "/wt-unadded"),
+                loaded.projects
+                    .single()
+                    .worktrees
+                    .map { it.directory },
+            )
+
+            sessionsByWorktree["/wt-unadded"] =
+                listOf(
+                    Session(id = "extra", title = "Extra", updatedAtEpochMs = 2L),
+                    Session(id = "fresh", title = "Fresh", updatedAtEpochMs = 3L),
+                )
+            eventStream.emit(OpencodeEvent(type = "session.created", sessionId = "fresh"))
+            advanceTimeBy(550)
+            advanceUntilIdle()
+
+            val refreshed = viewModel.uiState.value as MainScreenUiState.Loaded
+            assertEquals(listOf("fresh", "extra", "main"), refreshed.homeSessions().map { it.id })
+            assertEquals(2, sessionRepository.listedDirectories.count { it == "/wt-unadded" })
+        }
+
+    @Test
+    fun v2BranchThatIsNotSettledOnTheFirstAnswerShowsWithoutRefresh() =
+        runTest(testDispatcher) {
+            val sessionRepository = FakeSessionRepository(mutableMapOf("/repo" to emptyList()))
+            sessionRepository.vcsAnswers =
+                ArrayDeque(
+                    listOf(
+                        VcsInfo(currentBranch = null, defaultBranch = null, isSettled = false),
+                        VcsInfo(currentBranch = "feature/tax-rounding", defaultBranch = "main"),
+                    ),
+                )
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    projectRepository = FakeProjectRepository(projectsByDirectory = repoProjects),
+                    sessionRepository = sessionRepository,
+                )
+            runCurrent()
+            advanceTimeBy(500)
+            assertEquals(
+                listOf(null),
+                (viewModel.uiState.value as MainScreenUiState.Loaded)
+                    .projects
+                    .single()
+                    .worktrees
+                    .map { it.branch },
+            )
+
+            advanceTimeBy(1_000)
+            runCurrent()
+
+            assertEquals(
+                listOf("feature/tax-rounding"),
+                (viewModel.uiState.value as MainScreenUiState.Loaded)
+                    .projects
+                    .single()
+                    .worktrees
+                    .map { it.branch },
+            )
+            assertEquals(2, sessionRepository.vcsCalls)
+        }
+
+    private val repoProjects =
+        mapOf(
+            "/repo" to Project(id = "proj", worktree = "/repo", displayName = "repo", isRepository = true),
+            "/repo-wt" to Project(id = "proj", worktree = "/repo", displayName = "repo", isRepository = true),
+            "/plain" to Project(id = "global", worktree = "/", displayName = ""),
+        )
+
     private fun createViewModel(
         shouldFailProbe: Boolean = false,
         connectionProfileStore: FakeConnectionProfileStore = FakeConnectionProfileStore(),
@@ -2450,6 +2653,7 @@ class MainScreenViewModelTest {
             object : ModelRepository {
                 override suspend fun listModelOptions(directory: String?): ModelSelectionCatalog = ModelSelectionCatalog(emptyList(), null)
             },
+        worktreeRepository: WorktreeRepository = UnavailableWorktreeRepository,
     ): MainScreenViewModel {
         val activeConnectionManager = ActiveConnectionManager(connectionProfileStore)
         runBlocking {
@@ -2522,6 +2726,7 @@ class MainScreenViewModelTest {
             activeConnectionManager = activeConnectionManager,
             connectionSessionCoordinator = coordinator,
             sessionCache = sessionCache,
+            worktreeRepository = worktreeRepository,
             projectFirstLoadTiming = projectFirstLoadTiming,
         )
     }
@@ -2548,7 +2753,9 @@ private class FakeProjectRepository(
         if (directory != null) {
             projectsByDirectory[directory]?.let { return it }
         }
-        return Project(id = "p1", worktree = directory ?: bootWorktree, displayName = "demo")
+        // Distinct folders are distinct projects on a real server.
+        val worktree = directory ?: bootWorktree
+        return Project(id = "p:$worktree", worktree = worktree, displayName = "demo")
     }
 }
 
@@ -2588,8 +2795,10 @@ private class FakeSessionRepository(
     private val deleteError: Throwable? = null,
     private val forkError: Throwable? = null,
     private val deleteResult: Boolean = true,
+    private val branches: Map<String, String> = emptyMap(),
 ) : SessionRepository {
     var listSessionsCallCount = 0
+    val listedDirectories = mutableListOf<String?>()
     var nextListGate: CompletableDeferred<Unit>? = null
 
     /** Per-directory list hooks: a gate holds that directory's list call, an error fails it. */
@@ -2601,8 +2810,19 @@ private class FakeSessionRepository(
     val deletedIds = mutableListOf<String>()
     val forkedIds = mutableListOf<String>()
 
+    /** Overrides [branches] when set: one scripted answer per call. */
+    var vcsAnswers: ArrayDeque<VcsInfo>? = null
+    var vcsCalls = 0
+
+    override suspend fun getVcsInfo(directory: String?): VcsInfo {
+        vcsCalls += 1
+        vcsAnswers?.let { answers -> return answers.removeFirstOrNull() ?: answers.lastOrNull() ?: VcsInfo(null, null) }
+        return VcsInfo(currentBranch = branches[directory], defaultBranch = "main")
+    }
+
     override suspend fun listSessions(directory: String?): List<Session> {
         listSessionsCallCount += 1
+        listedDirectories += directory
         nextListGate?.also {
             nextListGate = null
             it.await()

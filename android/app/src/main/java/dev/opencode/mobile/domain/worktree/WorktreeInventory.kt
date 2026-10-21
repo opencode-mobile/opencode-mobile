@@ -24,8 +24,9 @@ sealed class WorktreeInventory {
 }
 
 /**
- * Home badges a row only when that added project's inventory has loaded and the
- * session directory is a listed worktree other than the added path.
+ * A session directory is a marked checkout only when that added project's inventory has
+ * loaded and the directory is a listed worktree other than the added path. Session Chat
+ * names such a checkout; Home rows show the branch and folder instead.
  */
 object WorktreeMark {
     fun showsBadge(
@@ -43,8 +44,8 @@ object WorktreeMark {
     fun checkoutName(directory: String): String = ServerPathPolicy.name(ServerPathPolicy.canonical(directory))
 
     /**
-     * Session Chat names the checkout when the bound directory meets the Home badge
-     * predicate for any added project. Returns null otherwise.
+     * Session Chat names the checkout when the bound directory meets [showsBadge] for any
+     * added project. Returns null otherwise.
      */
     fun checkoutNameIfMarked(
         boundDirectory: String,

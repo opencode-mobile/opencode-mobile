@@ -1457,16 +1457,17 @@ class SessionChatViewModel
             checkoutProjectIds.clear()
             for (added in peers) {
                 coroutineContext.ensureActive()
-                val projectId =
+                val project =
                     try {
-                        projectRepository.getCurrentProject(added).id
+                        projectRepository.getCurrentProject(added)
                     } catch (cancellation: CancellationException) {
                         throw cancellation
                     } catch (_: Exception) {
                         null
-                    }?.takeIf { it.isNotBlank() }
+                    }
+                val projectId = project?.id?.takeIf { it.isNotBlank() }
                 if (projectId != null) checkoutProjectIds += projectId
-                val load = worktreeRepository.loadRefreshed(added, projectId)
+                val load = worktreeRepository.loadRefreshed(added, projectId, project?.worktree?.takeIf { it != "/" })
                 inventories[added] =
                     when (load) {
                         is WorktreeLoad.Loaded -> WorktreeInventory.loaded(load.directories)

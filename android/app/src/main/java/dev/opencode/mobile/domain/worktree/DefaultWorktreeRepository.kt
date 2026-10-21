@@ -1,6 +1,6 @@
 package dev.opencode.mobile.domain.worktree
 
-import dev.opencode.mobile.data.remote.V1WorkspaceHttp
+import dev.opencode.mobile.data.remote.V1WorktreeHttp
 import dev.opencode.mobile.data.remote.WorktreeRemote
 import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.network.ActiveConnectionManager
@@ -26,17 +26,19 @@ class DefaultWorktreeRepository(
     override suspend fun load(
         addedPath: String,
         projectId: String?,
+        mainWorktree: String?,
     ): WorktreeLoad =
         when (protocol()) {
             ServerProtocol.V2 -> loadV2(projectId)
-            ServerProtocol.V1 -> loadV1(addedPath)
+            ServerProtocol.V1 -> loadV1(addedPath, mainWorktree)
         }
 
     override suspend fun loadRefreshed(
         addedPath: String,
         projectId: String?,
+        mainWorktree: String?,
     ): WorktreeLoad {
-        val listed = load(addedPath, projectId)
+        val listed = load(addedPath, projectId, mainWorktree)
         if (listed !is WorktreeLoad.Loaded || listed.listsSessions || projectId.isNullOrBlank()) return listed
         if (!refresh(projectId)) return listed
         return when (val refreshed = refetch(projectId)) {
@@ -85,29 +87,36 @@ class DefaultWorktreeRepository(
         }
     }
 
-    private suspend fun loadV1(addedPath: String): WorktreeLoad {
-        if (v1StoppedKey != null && v1StoppedKey == connectionKey) return WorktreeLoad.Stopped
-        return when (val probe = runV1(addedPath)) {
-            is V1WorkspaceHttp.NotFound -> {
+    private suspend fun loadV1(
+        addedPath: String,
+        mainWorktree: String?,
+    ): WorktreeLoad {
+        val main = listOfNotNull(mainWorktree?.trim()?.takeIf { it.isNotEmpty() })
+        val mainOnly = if (main.isEmpty()) WorktreeLoad.Stopped else WorktreeLoad.Loaded(main, listsSessions = true)
+        if (v1StoppedKey != null && v1StoppedKey == connectionKey) return mainOnly
+        return when (val listed = runV1(addedPath)) {
+            is V1WorktreeHttp.NotFound -> {
+                // Older servers: no worktree route, so no extra worktrees.
                 v1StoppedKey = connectionKey
-                WorktreeLoad.Stopped
+                mainOnly
             }
-            is V1WorkspaceHttp.Failed ->
-                WorktreeLoad.Failed(IllegalStateException("workspace probe failed with status ${probe.statusCode}"))
-            is V1WorkspaceHttp.Ok -> {
-                val directories = WorkspaceDirectoryParser.parse(probe.body)
-                    ?: return WorktreeLoad.Failed(IllegalStateException("unrecognized workspace body"))
-                WorktreeLoad.Loaded(directories, listsSessions = true)
+            is V1WorktreeHttp.Failed ->
+                WorktreeLoad.Failed(IllegalStateException("worktree list failed with status ${listed.statusCode}"))
+            is V1WorktreeHttp.Ok -> {
+                val directories =
+                    WorktreeDirectoryParser.parse(listed.body)
+                        ?: return WorktreeLoad.Failed(IllegalStateException("unrecognized worktree body"))
+                WorktreeLoad.Loaded((main + directories).distinct(), listsSessions = true)
             }
         }
     }
 
-    private suspend fun runV1(addedPath: String): V1WorkspaceHttp =
+    private suspend fun runV1(addedPath: String): V1WorktreeHttp =
         try {
-            remote.probeV1(addedPath)
+            remote.listV1(addedPath)
         } catch (cancellation: CancellationException) {
             throw cancellation
         } catch (_: Exception) {
-            V1WorkspaceHttp.Failed(-1)
+            V1WorktreeHttp.Failed(-1)
         }
 }

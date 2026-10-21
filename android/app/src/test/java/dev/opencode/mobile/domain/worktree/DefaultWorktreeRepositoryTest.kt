@@ -1,6 +1,6 @@
 package dev.opencode.mobile.domain.worktree
 
-import dev.opencode.mobile.data.remote.V1WorkspaceHttp
+import dev.opencode.mobile.data.remote.V1WorktreeHttp
 import dev.opencode.mobile.data.remote.WorktreeRemote
 import dev.opencode.mobile.domain.connection.ServerProtocol
 import kotlinx.coroutines.test.runTest
@@ -17,18 +17,18 @@ class DefaultWorktreeRepositoryTest {
             val repository = repository(remote, ServerProtocol.V2)
             repository.onConnection("http://mac")
 
-            val loaded = repository.load("/repo", "proj")
+            val loaded = repository.load("/repo", "proj", mainWorktree = "/repo")
 
             assertEquals(WorktreeLoad.Loaded(listOf("/worktrees/crisp-cactus"), listsSessions = false), loaded)
             assertEquals(listOf("proj"), remote.v2Lists)
-            assertTrue(remote.v1Probes.isEmpty())
+            assertTrue(remote.v1Lists.isEmpty())
             assertTrue(repository.refresh("proj"))
             assertEquals(listOf("proj"), remote.v2Refreshes)
             assertFalse(repository.refresh(""))
         }
 
     @Test
-    fun v2DoesNotCallWhenProjectIdIsMissingAndDoesNotProbeV1() =
+    fun v2DoesNotCallWhenProjectIdIsMissingAndDoesNotListV1() =
         runTest {
             val remote = FakeWorktreeRemote()
             val repository = repository(remote, ServerProtocol.V2)
@@ -36,46 +36,74 @@ class DefaultWorktreeRepositoryTest {
             assertEquals(WorktreeLoad.Unloaded, repository.load("/repo", null))
             assertEquals(WorktreeLoad.Unloaded, repository.load("/repo", " "))
             assertTrue(remote.v2Lists.isEmpty())
-            assertTrue(remote.v1Probes.isEmpty())
+            assertTrue(remote.v1Lists.isEmpty())
             assertEquals(WorktreeLoad.Unloaded, repository.refetch(" "))
         }
 
     @Test
-    fun v1ListsWorkspaceDirectoriesAndA404StopsUntilTheNextConnect() =
+    fun v1PutsTheMainCheckoutBeforeTheListedSandboxes() =
         runTest {
-            val remote = FakeWorktreeRemote()
+            val remote = FakeWorktreeRemote(v1Result = V1WorktreeHttp.Ok("""["/abs/wt-a","/abs/wt-b"]"""))
             val repository = repository(remote, ServerProtocol.V1)
             repository.onConnection("http://mac")
 
-            val loaded = repository.load("/repo", null)
+            val loaded = repository.load("/abs/wt-a", null, mainWorktree = "/abs/repo")
 
             assertEquals(
-                WorktreeLoad.Loaded(listOf("/repo", "/worktrees/crisp-cactus"), listsSessions = true),
+                WorktreeLoad.Loaded(listOf("/abs/repo", "/abs/wt-a", "/abs/wt-b"), listsSessions = true),
                 loaded,
             )
-            assertEquals(listOf("/repo"), remote.v1Probes)
+            assertEquals(listOf("/abs/wt-a"), remote.v1Lists)
             assertTrue(remote.v2Lists.isEmpty())
-
-            remote.v1Result = V1WorkspaceHttp.NotFound
-            assertEquals(WorktreeLoad.Stopped, repository.load("/repo", null))
-            assertEquals(WorktreeLoad.Stopped, repository.load("/other", null))
-            assertEquals(2, remote.v1Probes.size)
-
-            repository.onConnection("http://mac")
-            assertEquals(WorktreeLoad.Stopped, repository.load("/repo", null))
-            assertEquals(2, remote.v1Probes.size)
-
-            repository.onDisconnected()
-            repository.onConnection("http://mac")
-            remote.v1Result = V1WorkspaceHttp.Ok("""["/repo"]""")
-            assertEquals(WorktreeLoad.Loaded(listOf("/repo"), listsSessions = true), repository.load("/repo", null))
-            assertEquals(3, remote.v1Probes.size)
         }
 
     @Test
-    fun v1Non404FailureDoesNotStopTheProbe() =
+    fun v1MainCheckoutIsNotListedTwice() =
         runTest {
-            val remote = FakeWorktreeRemote(v1Result = V1WorkspaceHttp.Failed(500))
+            val remote = FakeWorktreeRemote(v1Result = V1WorktreeHttp.Ok("""["/repo","/wt"]"""))
+            val repository = repository(remote, ServerProtocol.V1)
+
+            assertEquals(
+                WorktreeLoad.Loaded(listOf("/repo", "/wt"), listsSessions = true),
+                repository.load("/repo", "proj", mainWorktree = "/repo"),
+            )
+        }
+
+    @Test
+    fun v1A404MeansNoExtraWorktreesAndStopsListingUntilTheNextConnect() =
+        runTest {
+            val remote = FakeWorktreeRemote(v1Result = V1WorktreeHttp.NotFound)
+            val repository = repository(remote, ServerProtocol.V1)
+            repository.onConnection("http://mac")
+
+            assertEquals(
+                WorktreeLoad.Loaded(listOf("/repo"), listsSessions = true),
+                repository.load("/repo", "proj", mainWorktree = "/repo"),
+            )
+            assertEquals(WorktreeLoad.Stopped, repository.load("/other", null))
+            assertEquals(1, remote.v1Lists.size)
+
+            repository.onConnection("http://mac")
+            assertEquals(
+                WorktreeLoad.Loaded(listOf("/repo"), listsSessions = true),
+                repository.load("/repo", "proj", mainWorktree = "/repo"),
+            )
+            assertEquals(1, remote.v1Lists.size)
+
+            repository.onDisconnected()
+            repository.onConnection("http://mac")
+            remote.v1Result = V1WorktreeHttp.Ok("""["/wt"]""")
+            assertEquals(
+                WorktreeLoad.Loaded(listOf("/repo", "/wt"), listsSessions = true),
+                repository.load("/repo", "proj", mainWorktree = "/repo"),
+            )
+            assertEquals(2, remote.v1Lists.size)
+        }
+
+    @Test
+    fun v1Non404FailureDoesNotStopListing() =
+        runTest {
+            val remote = FakeWorktreeRemote(v1Result = V1WorktreeHttp.Failed(500))
             val repository = repository(remote, ServerProtocol.V1)
             repository.onConnection("http://mac")
 
@@ -83,7 +111,7 @@ class DefaultWorktreeRepositoryTest {
 
             assertTrue(failed is WorktreeLoad.Failed)
             assertTrue(repository.load("/repo", "proj") is WorktreeLoad.Failed)
-            assertEquals(2, remote.v1Probes.size)
+            assertEquals(2, remote.v1Lists.size)
             assertTrue(remote.v2Lists.isEmpty())
             assertFalse(repository.refresh("proj"))
         }
@@ -91,13 +119,13 @@ class DefaultWorktreeRepositoryTest {
     @Test
     fun unrecognizedV1BodyFailsWithoutStopping() =
         runTest {
-            val remote = FakeWorktreeRemote(v1Result = V1WorkspaceHttp.Ok("""{"workspaces":[]}"""))
+            val remote = FakeWorktreeRemote(v1Result = V1WorktreeHttp.Ok("""{"worktrees":[]}"""))
             val repository = repository(remote, ServerProtocol.V1)
             repository.onConnection("http://mac")
 
             assertTrue(repository.load("/repo", null) is WorktreeLoad.Failed)
-            remote.v1Result = V1WorkspaceHttp.Ok("""["/repo"]""")
-            assertEquals(WorktreeLoad.Loaded(listOf("/repo"), listsSessions = true), repository.load("/repo", null))
+            remote.v1Result = V1WorktreeHttp.Ok("""["/wt"]""")
+            assertEquals(WorktreeLoad.Loaded(listOf("/wt"), listsSessions = true), repository.load("/repo", null))
         }
 
     @Test
@@ -138,12 +166,12 @@ class DefaultWorktreeRepositoryTest {
     ) = DefaultWorktreeRepository(remote) { protocol }
 
     private class FakeWorktreeRemote(
-        var v1Result: V1WorkspaceHttp = V1WorkspaceHttp.Ok("""["/repo","/worktrees/crisp-cactus"]"""),
+        var v1Result: V1WorktreeHttp = V1WorktreeHttp.Ok("""["/worktrees/crisp-cactus"]"""),
         private val refreshError: Exception? = null,
     ) : WorktreeRemote {
         val v2Lists = mutableListOf<String>()
         val v2Refreshes = mutableListOf<String>()
-        val v1Probes = mutableListOf<String>()
+        val v1Lists = mutableListOf<String>()
 
         override suspend fun listV2(projectId: String): List<String> {
             v2Lists += projectId
@@ -155,8 +183,8 @@ class DefaultWorktreeRepositoryTest {
             refreshError?.let { throw it }
         }
 
-        override suspend fun probeV1(directory: String): V1WorkspaceHttp {
-            v1Probes += directory
+        override suspend fun listV1(directory: String): V1WorktreeHttp {
+            v1Lists += directory
             return v1Result
         }
     }

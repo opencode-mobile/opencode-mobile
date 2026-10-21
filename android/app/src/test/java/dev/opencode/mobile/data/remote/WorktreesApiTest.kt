@@ -55,7 +55,26 @@ class WorktreesApiTest {
         }
 
     @Test
-    fun v1ProbeUsesDirectoryAndStopsOn404() =
+    fun v1ListsExperimentalWorktreeByDirectory() =
+        runTest {
+            val captured = mutableListOf<HttpRequestData>()
+            val api =
+                api(captured) { request ->
+                    captured += request
+                    respond(
+                        """["/abs/wt-a","/abs/wt-b"]""",
+                        HttpStatusCode.OK,
+                        headersOf(HttpHeaders.ContentType, "application/json"),
+                    )
+                }
+
+            assertEquals(V1WorktreeHttp.Ok("""["/abs/wt-a","/abs/wt-b"]"""), api.listV1("/repo"))
+            assertEquals("/repo", captured.single().url.parameters["directory"])
+            assertTrue(captured.single().url.encodedPath.endsWith("/experimental/worktree"))
+        }
+
+    @Test
+    fun v1ListReports404ForOlderServers() =
         runTest {
             val captured = mutableListOf<HttpRequestData>()
             val api =
@@ -64,9 +83,7 @@ class WorktreesApiTest {
                     respond("missing", HttpStatusCode.NotFound)
                 }
 
-            assertEquals(V1WorkspaceHttp.NotFound, api.probeV1("/repo"))
-            assertEquals("/repo", captured.single().url.parameters["directory"])
-            assertTrue(captured.single().url.encodedPath.endsWith("/experimental/workspace"))
+            assertEquals(V1WorktreeHttp.NotFound, api.listV1("/repo"))
         }
 
     private fun api(

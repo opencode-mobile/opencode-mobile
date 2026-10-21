@@ -1,9 +1,9 @@
 import Foundation
 
-/// V1 `GET /experimental/workspace` bodies. A recognized shape is an array, or an
-/// object whose `data` is an array, of strings or `{ "directory": "..." }`.
-/// Nil means the body is not that shape.
-enum WorkspaceDirectoryParser {
+/// V1 `GET /experimental/worktree` bodies: the project's sandbox worktrees as a string array
+/// (the main checkout is not listed). Tolerates an object whose `data` is the array, and items
+/// shaped `{ "directory": "..." }`. Nil means the body is not one of those shapes.
+enum V1WorktreeListParser {
     static func parse(_ body: String) -> [String]? {
         guard let data = body.data(using: .utf8),
               let element = try? JSONSerialization.jsonObject(with: data)

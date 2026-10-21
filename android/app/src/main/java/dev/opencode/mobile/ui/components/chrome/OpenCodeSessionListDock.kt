@@ -462,7 +462,7 @@ private fun SessionListScopeIdentity(
         SessionListScopeMark(tab = tab)
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = tab.pickerTitle,
+                text = scopeControlTitle(tab),
                 color = textStrong,
                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
                 maxLines = 1,
@@ -582,13 +582,13 @@ fun SessionListProjectPickerRows(
         items = tabs,
         key = { it.id },
         onSelect = { onSelect(it.id) },
-        canMove = { !it.isAll },
+        canMove = { !it.isAll && !it.isWorktree },
         onMove =
             onReorderProjects?.let { reorder ->
                 { from, to -> reorder(reorderedProjectPickerWorktrees(tabs, from, to)) }
             },
         onContextAction = onRemoveProject?.let { remove -> { tab -> remove(tab.id) } },
-        supportsContextAction = { !it.isAll },
+        supportsContextAction = { !it.isAll && !it.isWorktree },
         modifier = modifier,
     ) { tab ->
         OpenCodeListItem(
@@ -596,6 +596,8 @@ fun SessionListProjectPickerRows(
             subtitle = displayedScopeSubtitle(tab),
             startDecorator = pickerStartDecorator(tab),
             trailing = { SessionListScopeTrailing(tab = tab) },
+            // A project's worktrees sit indented directly under it.
+            modifier = if (tab.isWorktree) Modifier.padding(start = WorktreeRowIndent) else Modifier,
         )
     }
 }
@@ -607,10 +609,15 @@ fun reorderedProjectPickerWorktrees(
 ): List<String> =
     ReorderableListMath
         .move(tabs, from, to)
-        .filterNot { it.isAll }
+        .filterNot { it.isAll || it.isWorktree }
         .map { it.id }
 
+private val WorktreeRowIndent = 28.dp
+
 private fun displayedScopeSubtitle(tab: SessionListFilterTab): String = if (tab.isAll) tab.subtitle else compactHomePath(tab.subtitle)
+
+/** Scope control title: a worktree scope shows its project. */
+private fun scopeControlTitle(tab: SessionListFilterTab): String = tab.dockTitle ?: tab.pickerTitle
 
 /** Scope control subtitle: load progress while the scope's first load is unfinished, else the path. */
 private fun scopeControlSubtitle(tab: SessionListFilterTab): String =
@@ -618,14 +625,14 @@ private fun scopeControlSubtitle(tab: SessionListFilterTab): String =
         is SessionListScopeLoad.Loading ->
             if (load.isSlow) SessionListScopeLoad.SLOW_SUBTITLE else SessionListScopeLoad.LOADING_SUBTITLE
         SessionListScopeLoad.Failed -> SessionListScopeLoad.FAILED_SUBTITLE
-        null -> displayedScopeSubtitle(tab)
+        null -> tab.dockSubtitle?.let(::compactHomePath) ?: displayedScopeSubtitle(tab)
     }
 
 internal fun scopeControlDescription(tab: SessionListFilterTab): String {
     val subtitle = scopeControlSubtitle(tab)
     val parts =
         buildList {
-            add(tab.pickerTitle)
+            add(scopeControlTitle(tab))
             if (subtitle.isNotEmpty()) add(subtitle)
             if (tab.load == null) add("${tab.count} sessions")
         }
@@ -651,6 +658,7 @@ private fun Modifier.horizontalEdgeAlphaFade(fadeWidthPx: Float): Modifier =
         }
 
 private fun pickerStartDecorator(tab: SessionListFilterTab): StartDecorator {
+    if (tab.isWorktree) return StartDecorator.Icon(OpenCodeIcons.CallSplit, null)
     val letter = tab.letter
     val accent = tab.letterAccent
     return if (letter != null && accent != null) {

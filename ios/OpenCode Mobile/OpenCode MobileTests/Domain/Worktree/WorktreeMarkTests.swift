@@ -52,16 +52,16 @@ struct WorktreeMarkTests {
 }
 
 @Suite
-struct WorkspaceDirectoryParserTests {
+struct V1WorktreeListParserTests {
     @Test func parsesAStringArrayAndObjectDirectories() {
-        #expect(WorkspaceDirectoryParser.parse(#"["/a","/b"]"#) == ["/a", "/b"])
+        #expect(V1WorktreeListParser.parse(#"["/a","/b"]"#) == ["/a", "/b"])
         let body = #"{"data":[{"directory":"/repo","name":"main"},{"directory":"/worktrees/crisp-cactus","id":"wrk_1"}]}"#
-        #expect(WorkspaceDirectoryParser.parse(body) == ["/repo", "/worktrees/crisp-cactus"])
+        #expect(V1WorktreeListParser.parse(body) == ["/repo", "/worktrees/crisp-cactus"])
     }
 
     @Test func unrecognizedShapesFailRatherThanStop() {
-        #expect(WorkspaceDirectoryParser.parse(#"{"workspaces":["/repo"]}"#) == nil)
-        #expect(WorkspaceDirectoryParser.parse("not-json") == nil)
-        #expect(WorkspaceDirectoryParser.parse("[1]") == nil)
+        #expect(V1WorktreeListParser.parse(#"{"workspaces":["/repo"]}"#) == nil)
+        #expect(V1WorktreeListParser.parse("not-json") == nil)
+        #expect(V1WorktreeListParser.parse("[1]") == nil)
     }
 }

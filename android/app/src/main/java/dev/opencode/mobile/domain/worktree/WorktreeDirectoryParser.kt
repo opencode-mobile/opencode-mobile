@@ -8,11 +8,11 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 
 /**
- * V1 `GET /experimental/workspace` bodies. A recognized shape is an array, or an
- * object whose `data` is an array, of strings or `{ "directory": "..." }`.
- * Null means the body is not that shape.
+ * V1 `GET /experimental/worktree` bodies (the project's sandboxes, without the main checkout).
+ * A recognized shape is an array, or an object whose `data` is an array, of strings or
+ * `{ "directory": "..." }`. Null means the body is not that shape.
  */
-object WorkspaceDirectoryParser {
+object WorktreeDirectoryParser {
     private val json = Json { ignoreUnknownKeys = true }
 
     fun parse(body: String): List<String>? {

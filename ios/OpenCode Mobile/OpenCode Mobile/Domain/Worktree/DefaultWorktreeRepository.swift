@@ -77,14 +77,14 @@ struct DefaultWorktreeRepository: WorktreeRepository {
 
     private func loadV1(_ addedPath: String) async -> WorktreeLoad {
         if state.isStopped { return .stopped }
-        switch await remote.probeV1(directory: addedPath) {
+        switch await remote.listV1(directory: addedPath) {
         case .notFound:
             state.markStopped()
             return .stopped
         case .failed:
             return .failed
         case let .ok(body):
-            guard let directories = WorkspaceDirectoryParser.parse(body) else { return .failed }
+            guard let directories = V1WorktreeListParser.parse(body) else { return .failed }
             return .loaded(directories: directories, listsSessions: true)
         }
     }

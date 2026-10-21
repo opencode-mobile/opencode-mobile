@@ -323,6 +323,9 @@ struct VcsFileStatus: Sendable, Equatable, Identifiable {
 struct VcsInfo: Sendable, Equatable {
     let currentBranch: String?
     let defaultBranch: String?
+    /// False while a v2 server has not detected the repository yet (no `provider`, empty
+    /// `branch`): the branch is unknown rather than absent. v1 answers are always settled.
+    var isSettled = true
 
     var supportsGit: Bool { currentBranch != nil || defaultBranch != nil }
     var hasDistinctMainBranch: Bool {

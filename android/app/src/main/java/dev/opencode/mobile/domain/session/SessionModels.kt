@@ -249,6 +249,12 @@ data class VcsFileStatus(
 data class VcsInfo(
     val currentBranch: String?,
     val defaultBranch: String?,
+    /**
+     * False while the server has not detected the folder's VCS yet: v2 answers without a
+     * `provider` (or with an empty branch) right after a restart, and permanently for non-git
+     * folders. Ask again later rather than treat the branch as missing.
+     */
+    val isSettled: Boolean = true,
 ) {
     val supportsGit: Boolean
         get() = currentBranch != null || defaultBranch != null
