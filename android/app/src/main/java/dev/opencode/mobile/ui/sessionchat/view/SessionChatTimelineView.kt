@@ -1109,7 +1109,8 @@ private fun ActivityCardBlock(
  * The live activity sheet (#779) for the card the screen model presents. Its
  * content is resolved from the current timeline every frame, so it grows in
  * place while open and closes once the card is gone. A step tap closes the
- * sheet first, then opens what the standard timeline opens.
+ * sheet first, then opens what the standard timeline opens; a detail sheet
+ * opened this way returns here when it closes.
  */
 @Composable
 private fun ActivityCardSheet(props: SessionChatTimelineViewProps) {
@@ -1130,7 +1131,8 @@ private fun ActivityCardSheet(props: SessionChatTimelineViewProps) {
                 supportsSessionMessageDiff = props.supportsSessionMessageDiff,
                 onChildSessionTap = props.onChildSessionTap,
                 onChangesReviewTap = props.onChangesReviewTap,
-                onToolDetailTap = props.onToolDetailTap,
+                // A detail opened from here remembers the card, so closing it comes back to this sheet.
+                onToolDetailTap = { target -> props.onToolDetailTap(target.copy(returnToActivityCard = blockId)) },
             )
         }
     val stepsById = content?.let { sheet -> (sheet.steps + sheet.agents.map { it.step }).associateBy { it.id } }.orEmpty()

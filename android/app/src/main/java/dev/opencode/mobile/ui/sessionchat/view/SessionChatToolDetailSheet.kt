@@ -20,11 +20,13 @@ import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.markdown.OpenCodeMarkdownParser
 import dev.opencode.mobile.markdown.OpenCodeSemanticFallbackHighlighter
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
+import dev.opencode.mobile.ui.components.OpenCodeBottomSheetHeaderAction
 import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeRenderedMarkdown
 import dev.opencode.mobile.ui.components.OpenCodeRenderedMarkdownVariant
 import dev.opencode.mobile.ui.components.openCodeBottomSheetContentInset
+import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -47,6 +49,8 @@ internal data class SessionChatToolDetailTarget(
     /** Live retry link, shown when this sheet was opened from the composer status. */
     val sheetLinkLabel: String? = null,
     val sheetLink: String? = null,
+    /** Activity card this detail was opened from; dismissing returns to its sheet. */
+    val returnToActivityCard: String? = null,
 )
 
 /**
@@ -92,6 +96,8 @@ internal fun SessionChatToolDetailSheet(
     onDismiss: () -> Unit,
     onFailureAction: (FailureAction) -> Unit = {},
     onOpenLink: (String) -> Unit = {},
+    /** Shown as a back arrow in the header when the detail was opened from another sheet. */
+    onBack: (() -> Unit)? = null,
 ) {
     ProductPresentedScreenViewEffect(
         screenId = ProductAnalytics.Screen.SESSION_TOOL_DETAIL,
@@ -110,6 +116,14 @@ internal fun SessionChatToolDetailSheet(
     OpenCodeBottomSheet(
         visible = target != null,
         title = target?.title ?: "Tool",
+        headerLeadingAction =
+            onBack?.takeIf { target?.returnToActivityCard != null }?.let { back ->
+                OpenCodeBottomSheetHeaderAction(
+                    imageVector = OpenCodeIcons.ArrowBack,
+                    contentDescription = "Back to activity",
+                    onClick = back,
+                )
+            },
         onDismissRequest = {
             ProductAnalytics.logUserAction(
                 screenId = ProductAnalytics.Screen.SESSION_TOOL_DETAIL,

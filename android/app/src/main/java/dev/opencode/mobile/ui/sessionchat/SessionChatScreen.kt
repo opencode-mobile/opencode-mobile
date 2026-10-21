@@ -1219,7 +1219,16 @@ fun SessionChatScreen(
         val sheetContext = LocalContext.current
         SessionChatToolDetailSheet(
             target = toolDetailTarget,
-            onDismiss = { toolDetailTarget = null },
+            onDismiss = {
+                val returnTo = toolDetailTarget?.returnToActivityCard
+                toolDetailTarget = null
+                returnTo?.let(viewModel::openActivityCard)
+            },
+            onBack = {
+                val returnTo = toolDetailTarget?.returnToActivityCard
+                toolDetailTarget = null
+                returnTo?.let(viewModel::openActivityCard)
+            },
             onFailureAction = { action ->
                 when (action) {
                     FailureAction.PickModel ->
