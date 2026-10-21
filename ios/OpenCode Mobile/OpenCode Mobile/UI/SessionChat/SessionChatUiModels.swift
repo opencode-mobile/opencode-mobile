@@ -330,6 +330,8 @@ struct SessionChatUiState: Equatable {
     var unfoldedStepRails: Set<String> = []
     /// The activity card (`SessionChatActivityCardBlock.id`) whose live sheet is open (#779).
     var presentedActivityCard: String?
+    /// The step (`SessionChatStep.id`) of the presented card whose detail the sheet shows; nil shows the list.
+    var activityCardDetailStepId: String?
     /// What each running child session on a live activity card is doing, by child session id.
     var childActivities: [String: SessionChatChildActivity] = [:]
     /// One-time Chip timeline intro sheet (OPE-270).
@@ -596,6 +598,8 @@ struct SessionChatTimelineRegionState: Equatable {
     var unfoldedStepRails: Set<String> = []
     /// The activity card whose live sheet is open; resolved from `messages` by id (#779).
     var presentedActivityCard: String?
+    /// The presented card's step whose detail the sheet shows instead of the list.
+    var activityCardDetailStepId: String?
     /// Observed activity of running child sessions on activity cards, by child session id.
     var childActivities: [String: SessionChatChildActivity] = [:]
 

@@ -159,12 +159,33 @@ final class SessionChatTimeline {
     func openActivityCard(_ cardID: String) {
         guard state.presentedActivityCard != cardID else { return }
         state.presentedActivityCard = cardID
+        state.activityCardDetailStepId = nil
         notifyChange()
     }
 
     func dismissActivityCard() {
-        guard state.presentedActivityCard != nil else { return }
+        guard state.presentedActivityCard != nil || state.activityCardDetailStepId != nil else { return }
         state.presentedActivityCard = nil
+        state.activityCardDetailStepId = nil
+        notifyChange()
+    }
+
+    /// Activity sheet: show one step's detail inside the open sheet. Ignored
+    /// unless the step belongs to the presented card.
+    func openActivityCardStep(_ stepID: String) {
+        guard state.activityCardDetailStepId != stepID,
+              let cardID = state.presentedActivityCard,
+              SessionChatActivityCardPresentation.card(id: cardID, in: state.messages)?
+                  .card.steps.contains(where: { $0.id == stepID }) == true
+        else { return }
+        state.activityCardDetailStepId = stepID
+        notifyChange()
+    }
+
+    /// Activity sheet: back from a step's detail to the list.
+    func closeActivityCardStep() {
+        guard state.activityCardDetailStepId != nil else { return }
+        state.activityCardDetailStepId = nil
         notifyChange()
     }
 
@@ -1123,10 +1144,14 @@ final class SessionChatTimeline {
     private func syncActivityCards() {
         var running: Set<String> = []
         var cardIDs: Set<String> = []
+        var presentedStepIDs: Set<String> = []
         if activityCardTimeline {
             for row in state.messages where row.role == .assistant {
                 for case .activityCard(_, let card) in row.blocks {
                     cardIDs.insert(card.id)
+                    if card.id == state.presentedActivityCard {
+                        presentedStepIDs.formUnion(card.steps.map(\.id))
+                    }
                     for step in card.runningChildren {
                         if let id = step.childSession?.childSessionId { running.insert(id) }
                     }
@@ -1135,6 +1160,11 @@ final class SessionChatTimeline {
         }
         if let presented = state.presentedActivityCard, !cardIDs.contains(presented), state.timeline == .ready {
             state.presentedActivityCard = nil
+        }
+        if let step = state.activityCardDetailStepId,
+           state.presentedActivityCard == nil || (!presentedStepIDs.contains(step) && state.timeline == .ready)
+        {
+            state.activityCardDetailStepId = nil
         }
         for (id, task) in childActivityTasks where !running.contains(id) {
             task.cancel()

@@ -814,6 +814,12 @@ fun SessionChatScreen(
                                 viewModel.openActivityCard(blockId)
                             },
                             onDismissActivityCard = viewModel::dismissActivityCard,
+                            activityCardDetailStepId = uiState.activityCardDetailStepId,
+                            onOpenActivityCardStep = { stepId ->
+                                logChatAction(ProductAnalytics.Action.CHAT_OPEN_TOOL_DETAIL)
+                                viewModel.openActivityCardStep(stepId)
+                            },
+                            onCloseActivityCardStep = viewModel::closeActivityCardStep,
                         ),
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -1219,16 +1225,7 @@ fun SessionChatScreen(
         val sheetContext = LocalContext.current
         SessionChatToolDetailSheet(
             target = toolDetailTarget,
-            onDismiss = {
-                val returnTo = toolDetailTarget?.returnToActivityCard
-                toolDetailTarget = null
-                returnTo?.let(viewModel::openActivityCard)
-            },
-            onBack = {
-                val returnTo = toolDetailTarget?.returnToActivityCard
-                toolDetailTarget = null
-                returnTo?.let(viewModel::openActivityCard)
-            },
+            onDismiss = { toolDetailTarget = null },
             onFailureAction = { action ->
                 when (action) {
                     FailureAction.PickModel ->

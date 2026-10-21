@@ -49,10 +49,14 @@ struct SessionChatTimelineViewProps {
     let onToggleStepRailFold: (String) -> Void
     /// The activity card whose live sheet is open (Screen Model state).
     let presentedActivityCard: String?
+    /// The presented card's step whose detail the sheet shows (Screen Model state).
+    let activityCardDetailStepId: String?
     /// Observed activity of running child sessions on activity cards, by child session id.
     let childActivities: [String: SessionChatChildActivity]
     let onOpenActivityCard: (String) -> Void
     let onDismissActivityCard: () -> Void
+    let onOpenActivityCardStep: (String) -> Void
+    let onCloseActivityCardStep: () -> Void
     /// Catalog names for model-switch notices.
     let noticeModelNames: TimelineNoticeModelNames
 
@@ -96,9 +100,12 @@ struct SessionChatTimelineViewProps {
         unfoldedStepRails: Set<String> = [],
         onToggleStepRailFold: @escaping (String) -> Void = { _ in },
         presentedActivityCard: String? = nil,
+        activityCardDetailStepId: String? = nil,
         childActivities: [String: SessionChatChildActivity] = [:],
         onOpenActivityCard: @escaping (String) -> Void = { _ in },
         onDismissActivityCard: @escaping () -> Void = {},
+        onOpenActivityCardStep: @escaping (String) -> Void = { _ in },
+        onCloseActivityCardStep: @escaping () -> Void = {},
         noticeModelNames: TimelineNoticeModelNames = .empty
     ) {
         self.timeline = timeline
@@ -140,9 +147,12 @@ struct SessionChatTimelineViewProps {
         self.unfoldedStepRails = unfoldedStepRails
         self.onToggleStepRailFold = onToggleStepRailFold
         self.presentedActivityCard = presentedActivityCard
+        self.activityCardDetailStepId = activityCardDetailStepId
         self.childActivities = childActivities
         self.onOpenActivityCard = onOpenActivityCard
         self.onDismissActivityCard = onDismissActivityCard
+        self.onOpenActivityCardStep = onOpenActivityCardStep
+        self.onCloseActivityCardStep = onCloseActivityCardStep
         self.noticeModelNames = noticeModelNames
     }
 }
@@ -312,14 +322,16 @@ private struct SessionChatTimelineReadyView: View {
         timelineContent
             .sessionChatActivitySheet(
                 cardID: props.presentedActivityCard,
+                detailStepID: props.activityCardDetailStepId,
                 rows: props.messages,
                 liveCardID: liveActivityCardID,
                 childActivities: props.childActivities,
                 awaitingUser: props.isAwaitingUser,
                 supportsSessionMessageDiff: props.supportsSessionMessageDiff,
-                onToolDetailTap: props.onToolDetailTap,
                 onChildSessionTap: props.onChildSessionTap,
                 onChangesReviewTap: props.onChangesReviewTap,
+                onOpenStep: props.onOpenActivityCardStep,
+                onCloseStep: props.onCloseActivityCardStep,
                 onDismiss: props.onDismissActivityCard
             )
     }
@@ -984,8 +996,10 @@ struct SessionChatStepTapActions {
 
     func action(for step: SessionChatStep) -> (() -> Void)? {
         if step.kind == .thought {
-            guard let text = step.thoughtText else { return nil }
-            return { onToolDetailTap(SessionChatToolDetailTarget(title: "Thought", body: text)) }
+            guard let target = Self.detailTarget(for: step, supportsSessionMessageDiff: supportsSessionMessageDiff) else {
+                return nil
+            }
+            return { onToolDetailTap(target) }
         }
         return step.card.flatMap(action(for:))
     }
@@ -997,24 +1011,38 @@ struct SessionChatStepTapActions {
         if card.opensChangesReview, supportsSessionMessageDiff {
             return { onChangesReviewTap(messageID, card.changesInitialFilePath) }
         }
-        if let detail = card.detailText {
-            return {
-                onToolDetailTap(
-                    SessionChatToolDetailTarget(
-                        title: card.title,
-                        body: detail,
-                        bodyIsMarkdown: card.detailIsMarkdown
-                    )
-                )
-            }
+        if let target = Self.detailTarget(for: card) {
+            return { onToolDetailTap(target) }
         }
         return nil
     }
 
     /// The tap pushes a screen (child session, Changes) instead of presenting a sheet.
     func navigates(_ step: SessionChatStep) -> Bool {
+        Self.navigates(step, supportsSessionMessageDiff: supportsSessionMessageDiff)
+    }
+
+    static func navigates(_ step: SessionChatStep, supportsSessionMessageDiff: Bool) -> Bool {
         guard step.kind != .thought, let card = step.card else { return false }
         return card.childSessionId != nil || (card.opensChangesReview && supportsSessionMessageDiff)
+    }
+
+    /// What a tap on `step` shows as a detail (thought text, tool output);
+    /// nil when the tap navigates or there is nothing to show.
+    static func detailTarget(for step: SessionChatStep, supportsSessionMessageDiff: Bool) -> SessionChatToolDetailTarget? {
+        if step.kind == .thought {
+            return step.thoughtText.map { SessionChatToolDetailTarget(title: "Thought", body: $0) }
+        }
+        guard let card = step.card, !navigates(step, supportsSessionMessageDiff: supportsSessionMessageDiff) else {
+            return nil
+        }
+        return detailTarget(for: card)
+    }
+
+    private static func detailTarget(for card: SessionChatToolCardBlock) -> SessionChatToolDetailTarget? {
+        card.detailText.map {
+            SessionChatToolDetailTarget(title: card.title, body: $0, bodyIsMarkdown: card.detailIsMarkdown)
+        }
     }
 }
 

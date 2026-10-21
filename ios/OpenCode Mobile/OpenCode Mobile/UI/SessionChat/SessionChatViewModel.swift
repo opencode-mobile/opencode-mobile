@@ -805,6 +805,16 @@ final class SessionChatViewModel {
         timeline.dismissActivityCard()
     }
 
+    /// Activity sheet: show one step's detail in the same sheet.
+    func openActivityCardStep(_ stepID: String) {
+        timeline.openActivityCardStep(stepID)
+    }
+
+    /// Activity sheet: back to the step list.
+    func closeActivityCardStep() {
+        timeline.closeActivityCardStep()
+    }
+
     /// Step rail: show or fold one rail's earlier settled steps.
     func toggleStepRailFold(_ railID: String) {
         timeline.toggleStepRailFold(railID)
@@ -1600,6 +1610,7 @@ final class SessionChatViewModel {
             expandedStepParagraphs: expandedStepParagraphs,
             unfoldedStepRails: timelineState.unfoldedStepRails,
             presentedActivityCard: timelineState.presentedActivityCard,
+            activityCardDetailStepId: timelineState.activityCardDetailStepId,
             childActivities: timelineState.childActivities,
             chipTimelineIntroVisible: chipTimelineIntroVisible,
             dictation: dictation

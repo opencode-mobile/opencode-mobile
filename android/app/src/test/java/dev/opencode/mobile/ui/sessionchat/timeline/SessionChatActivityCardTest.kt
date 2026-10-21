@@ -4,7 +4,10 @@ import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.ToolStatus
+import dev.opencode.mobile.ui.sessionchat.view.sessionChatStepDetail
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
@@ -501,6 +504,65 @@ class SessionChatActivityCardTest {
         assertEquals(null, SessionChatActivityCard.sheet(messages, "ac:gone"))
         assertTrue(SessionChatActivityCard.hasCard(messages, "ac:z"))
         assertFalse(SessionChatActivityCard.hasCard(messages, "ac:gone"))
+    }
+
+    @Test
+    fun hasStep_onlyForAStepOfThatCard() {
+        val steps = listOf(step("a", SessionChatStepFamily.Read), step("b", SessionChatStepFamily.Search))
+        val messages = listOf(item("m1", listOf(card(steps))))
+        assertTrue(SessionChatActivityCard.hasStep(messages, "ac:a", "b"))
+        assertFalse(SessionChatActivityCard.hasStep(messages, "ac:a", "z"))
+        assertFalse(SessionChatActivityCard.hasStep(messages, "ac:gone", "a"))
+    }
+
+    @Test
+    fun stepDetail_inSheetForThoughtsAndToolText_noneForNavigatingSteps() {
+        val parts =
+            listOf(
+                MessagePart.Reasoning(text = "Plan the fix", id = "r1", timeStartEpochMs = 1_000, timeEndEpochMs = 3_500),
+                tool("b1", "bash", input = buildJsonObject { put("command", "ls") }).copy(output = "a.txt\nb.txt"),
+                tool("e1", "edit", input = buildJsonObject { put("filePath", "/repo/a.kt") }),
+                tool(
+                    "c1",
+                    "task",
+                    input = buildJsonObject { put("subagent_type", "explore") },
+                    metadata = buildJsonObject { put("sessionId", "ses-c") },
+                ),
+                tool("f1", "bash", ToolStatus.Error, input = buildJsonObject { put("command", "make") }, error = "make: no target"),
+            )
+        val steps = cards(parts).single().steps.associateBy { it.id }
+
+        val thought = sessionChatStepDetail(steps.getValue("r1"), supportsSessionMessageDiff = true)
+        assertEquals("Thought", thought?.title)
+        assertEquals("Plan the fix", thought?.body)
+
+        val shell = sessionChatStepDetail(steps.getValue("b1"), supportsSessionMessageDiff = true)
+        assertTrue(shell?.body.orEmpty().contains("a.txt"))
+
+        val failed = sessionChatStepDetail(steps.getValue("f1"), supportsSessionMessageDiff = true)
+        assertTrue(failed?.body.orEmpty().contains("make: no target"))
+
+        val questions = buildJsonArray { add(buildJsonObject { put("question", "Where?") }) }
+        val answers = buildJsonArray { add(buildJsonArray { add(JsonPrimitive("Invoice field")) }) }
+        val question =
+            tool(
+                "q1",
+                "question",
+                input = buildJsonObject { put("questions", questions) },
+                metadata = buildJsonObject { put("answers", answers) },
+            )
+        val answered = sessionChatStepDetail(cards(listOf(question)).single().steps.single(), supportsSessionMessageDiff = true)
+        assertTrue(answered?.body.orEmpty().contains("Invoice field"))
+
+        // Without session diffs an edit shows its own detail, as in the standard timeline.
+        val editCard = steps.getValue("e1").card
+        if (editCard?.detailText != null) {
+            assertEquals(editCard.detailText, sessionChatStepDetail(steps.getValue("e1"), supportsSessionMessageDiff = false)?.body)
+        }
+
+        // A child session and an edit with Changes navigate instead.
+        assertEquals(null, sessionChatStepDetail(steps.getValue("c1"), supportsSessionMessageDiff = true))
+        assertEquals(null, sessionChatStepDetail(steps.getValue("e1"), supportsSessionMessageDiff = true))
     }
 
     @Test

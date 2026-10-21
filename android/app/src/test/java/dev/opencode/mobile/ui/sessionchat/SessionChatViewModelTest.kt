@@ -1272,6 +1272,64 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun activityCardStep_opensAndClosesInTheSheet_andClearsWithTheCardOrStep() =
+        runTest(testDispatcher) {
+            SessionChatDisplayPreferences.updateTimelineStyle(SessionChatTimelineStyle.ActivityCard)
+            val read = MessagePart.Tool(toolName = "read", status = ToolStatus.Completed, id = "p1", output = "file body")
+            val shell = MessagePart.Tool(toolName = "bash", status = ToolStatus.Completed, id = "p2", output = "ok")
+            val assistant = Message(id = "msg-2", role = MessageRole.Assistant, text = "", parts = listOf(read, shell))
+            val repository = FakeMessageRepository()
+            repository.messages = repository.messages + assistant
+            val viewModel = createViewModel(repository)
+            viewModel.bind("ses-1", "First", "/repo")
+            advanceUntilIdle()
+
+            // No sheet, no detail.
+            viewModel.openActivityCardStep("p2")
+            assertEquals(null, viewModel.uiState.value.activityCardDetailStepId)
+
+            viewModel.openActivityCard("ac:p1")
+            // A step that is not on the card is ignored.
+            viewModel.openActivityCardStep("nope")
+            assertEquals(null, viewModel.uiState.value.activityCardDetailStepId)
+            viewModel.openActivityCardStep("p2")
+            assertEquals("p2", viewModel.uiState.value.activityCardDetailStepId)
+            assertEquals("ac:p1", viewModel.uiState.value.presentedActivityCard)
+
+            // Back returns to the list; the sheet stays open.
+            viewModel.closeActivityCardStep()
+            assertEquals(null, viewModel.uiState.value.activityCardDetailStepId)
+            assertEquals("ac:p1", viewModel.uiState.value.presentedActivityCard)
+
+            // Dismiss clears both.
+            viewModel.openActivityCardStep("p2")
+            viewModel.dismissActivityCard()
+            assertEquals(null, viewModel.uiState.value.activityCardDetailStepId)
+            assertEquals(null, viewModel.uiState.value.presentedActivityCard)
+
+            // Reopening a card starts at its list.
+            viewModel.openActivityCard("ac:p1")
+            assertEquals(null, viewModel.uiState.value.activityCardDetailStepId)
+
+            // The step leaving the card goes back to the list.
+            viewModel.openActivityCardStep("p2")
+            repository.messages = repository.messages.map { if (it.id == "msg-2") it.copy(parts = listOf(read)) else it }
+            viewModel.refreshMessages()
+            advanceUntilIdle()
+            assertEquals("ac:p1", viewModel.uiState.value.presentedActivityCard)
+            assertEquals(null, viewModel.uiState.value.activityCardDetailStepId)
+
+            // The card leaving closes the sheet and the detail.
+            viewModel.openActivityCardStep("p1")
+            assertEquals("p1", viewModel.uiState.value.activityCardDetailStepId)
+            repository.messages = repository.messages.filter { it.id != "msg-2" }
+            viewModel.refreshMessages()
+            advanceUntilIdle()
+            assertEquals(null, viewModel.uiState.value.presentedActivityCard)
+            assertEquals(null, viewModel.uiState.value.activityCardDetailStepId)
+        }
+
+    @Test
     fun expandStepParagraph_survivesRepublish_sameSessionRebind_andResetsOnSessionChange() =
         runTest(testDispatcher) {
             val viewModel = createViewModel(FakeMessageRepository())

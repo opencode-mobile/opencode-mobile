@@ -191,6 +191,18 @@ object SessionChatActivityCard {
         blockId: String,
     ): Boolean = messages.any { message -> message.blocks.any { it.blockID == blockId && it is SessionChatTimelineBlock.ActivityCard } }
 
+    /** Whether card [blockId] in [messages] still holds step [stepId]. */
+    fun hasStep(
+        messages: List<SessionChatMessageItem>,
+        blockId: String,
+        stepId: String,
+    ): Boolean =
+        messages.any { message ->
+            message.blocks.any { block ->
+                block.blockID == blockId && block is SessionChatTimelineBlock.ActivityCard && block.steps.any { it.id == stepId }
+            }
+        }
+
     /** A child session's visible tool steps from its own messages. */
     fun childActivity(messages: List<Message>): SessionChatChildActivity =
         SessionChatChildActivity(SessionChatTimelineBlocks.toolSteps(messages))

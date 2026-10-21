@@ -453,6 +453,43 @@ struct SessionChatActivityCardTests {
 
     // MARK: - Helpers
 
+    @Test func sheetDetail_thoughtStepShowsItsText() throws {
+        let card = try cards([
+            .reasoning(ReasoningPart(id: "th1", text: "Weighing the options", timeStartEpochMs: 1_000, timeEndEpochMs: 2_000)),
+            read("r1"),
+        ])[0]
+        let thought = try #require(card.steps.first { $0.kind == .thought })
+        let detail = SessionChatActivityCardPresentation.detail(
+            stepID: thought.id,
+            in: card,
+            supportsSessionMessageDiff: true
+        )
+        #expect(detail?.step.id == thought.id)
+        #expect(detail?.target.title == "Thought")
+        #expect(detail?.target.body == "Weighing the options")
+    }
+
+    @Test func sheetDetail_toolWithDetailTextShowsItsOutput() throws {
+        let card = try cards([read("r1"), bash("b1")])[0]
+        let shell = try #require(card.steps.first { $0.id == "b1" }?.card)
+        let detail = SessionChatActivityCardPresentation.detail(stepID: "b1", in: card, supportsSessionMessageDiff: true)
+        #expect(shell.detailText != nil)
+        #expect(detail?.target.title == shell.title)
+        #expect(detail?.target.body == shell.detailText)
+        #expect(detail?.target.bodyIsMarkdown == shell.detailIsMarkdown)
+    }
+
+    @Test func sheetDetail_noneForNavigatingOrMissingSteps() throws {
+        let card = try cards([child("c1"), edit("e1"), read("r1")])[0]
+        let present = { (id: String?, diff: Bool) in
+            SessionChatActivityCardPresentation.detail(stepID: id, in: card, supportsSessionMessageDiff: diff) != nil
+        }
+        #expect(!present("c1", true))
+        #expect(!present("e1", true))
+        #expect(!present("gone", true))
+        #expect(!present(nil, true))
+    }
+
     /// A real epoch in ms, so `ToolStartTime.normalizeEpochMs` keeps it.
     private let t0: Int64 = 1_760_000_000_000
 

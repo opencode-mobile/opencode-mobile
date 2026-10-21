@@ -73,8 +73,6 @@ struct SessionChatToolDetailSheetModifier: ViewModifier {
                 title: target?.title ?? "Tool",
                 content: {
                     SessionChatToolDetailSheetBody(target: target)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .openCodeBottomSheetContentInset()
                 },
                 pinnedBottom: {
                     SessionChatToolDetailSheetActions(
@@ -151,21 +149,28 @@ private struct SessionChatToolDetailBody: View {
     }
 }
 
-private struct SessionChatToolDetailSheetBody: View {
+/// A detail's body inside a bottom sheet: markdown, monospace provider body,
+/// or plain text, inset like sheet content. Shared by the tool detail sheet
+/// and the activity sheet's detail mode.
+struct SessionChatToolDetailSheetBody: View {
     let target: SessionChatToolDetailTarget?
 
     var body: some View {
         let text = target?.body ?? ""
         let showsMonospace = target?.monospace == true && !text.isEmpty
         let showsBody = target?.bodyIsMarkdown == true || showsMonospace || !text.isEmpty
-        if showsBody {
-            SessionChatToolDetailBody(
-                text: text,
-                isMarkdown: target?.bodyIsMarkdown ?? false,
-                monospace: showsMonospace
-            )
-            .padding(.vertical, 12)
+        Group {
+            if showsBody {
+                SessionChatToolDetailBody(
+                    text: text,
+                    isMarkdown: target?.bodyIsMarkdown ?? false,
+                    monospace: showsMonospace
+                )
+                .padding(.vertical, 12)
+            }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .openCodeBottomSheetContentInset()
     }
 }
 

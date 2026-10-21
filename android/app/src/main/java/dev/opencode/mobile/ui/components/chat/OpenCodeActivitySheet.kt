@@ -1,10 +1,13 @@
 package dev.opencode.mobile.ui.components
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -15,6 +18,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
@@ -30,6 +34,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
+import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.sessionchat.SessionChatChildSessionElapsed
 
 /** A child session in an [OpenCodeActivitySheet]; [recent] are its latest steps, oldest first. */
@@ -64,6 +69,23 @@ data class OpenCodeActivitySheetStep(
     val tappable: Boolean = true,
 )
 
+/** A step's detail an [OpenCodeActivitySheet] shows in place of its list. */
+data class OpenCodeActivitySheetDetail(
+    val stepId: String,
+    val title: String,
+)
+
+private class SheetPaneMemory {
+    var switches = 0
+    var lastDetailStepId: String? = null
+}
+
+/** Which pane of the sheet a scroll reset targets, and the how-manyth switch it was. */
+private data class SheetPaneScrollKey(
+    val pane: String,
+    val switch: Int,
+)
+
 private val SheetRowHorizontal = 16.dp
 private val SheetRowVertical = 14.dp
 
@@ -80,6 +102,11 @@ private val SheetSubStepInset = 44.dp
  * [agents] with up to three recent steps under a running one; a Steps section
  * lists the other [steps] in order. Rows are keyed by id, so the list grows in
  * place. Composes [OpenCodeBottomSheet] at half height.
+ *
+ * With a [detail], the same sheet shows that step's [detailContent] instead:
+ * a back arrow and the detail title lead the header, and back (arrow or
+ * system back) calls [onDetailBack]. Close still dismisses the whole sheet.
+ * The detail opens at its top; back scrolls the list to the step it came from.
  */
 @Composable
 fun OpenCodeActivitySheet(
@@ -92,38 +119,67 @@ fun OpenCodeActivitySheet(
     onAgentTap: (id: String) -> Unit,
     onStepTap: (id: String) -> Unit,
     onDismissRequest: () -> Unit,
+    detail: OpenCodeActivitySheetDetail? = null,
+    onDetailBack: () -> Unit = {},
+    detailContent: @Composable ColumnScope.() -> Unit = {},
 ) {
     val animationsOn = rememberActivityAnimationsOn()
     val now by rememberActivityClock(ticking = visible && live)
     val title = if (live) "Working $stepCount" else "Used $stepCount"
     val elapsed = if (live) SessionChatChildSessionElapsed.format(startedAtMs, now) else null
-    OpenCodeBottomSheet(
-        visible = visible,
-        title = title,
-        onDismissRequest = onDismissRequest,
-        height = OpenCodeBottomSheetHeight.Half,
-        titleContent = {
-            Row(
-                modifier = Modifier.semantics(mergeDescendants = true) {
+    // Each list/detail switch gets a fresh key, so the body scrolls once per switch.
+    val panes = remember { SheetPaneMemory() }
+    val paneKey =
+        remember(detail?.stepId) {
+            panes.switches += 1
+            if (detail != null) panes.lastDetailStepId = detail.stepId
+            SheetPaneScrollKey(if (detail == null) "list" else "detail", panes.switches)
+        }
+    val lastDetailStepId = panes.lastDetailStepId
+    val listTitle: @Composable () -> Unit = {
+        Row(
+            modifier =
+                Modifier.semantics(mergeDescendants = true) {
                     contentDescription = listOfNotNull(title, elapsed).joinToString(", ")
                 },
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                val style = MaterialTheme.typography.titleMedium
-                if (live) {
-                    OpenCodeActivityWorkingLabel(text = "Working", shimmer = animationsOn, style = style)
-                } else {
-                    Text(text = "Used", style = style, color = openCodeColor("text-strong"), maxLines = 1)
-                }
-                Text(text = stepCount.toString(), style = style, color = openCodeColor("text-strong"), maxLines = 1)
-                Box(modifier = Modifier.weight(1f))
-                if (elapsed != null) {
-                    Text(text = elapsed, style = activityMonoCaption(), color = openCodeColor("text-weak"), maxLines = 1)
-                }
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            val style = MaterialTheme.typography.titleMedium
+            if (live) {
+                OpenCodeActivityWorkingLabel(text = "Working", shimmer = animationsOn, style = style)
+            } else {
+                Text(text = "Used", style = style, color = openCodeColor("text-strong"), maxLines = 1)
             }
-        },
+            Text(text = stepCount.toString(), style = style, color = openCodeColor("text-strong"), maxLines = 1)
+            Box(modifier = Modifier.weight(1f))
+            if (elapsed != null) {
+                Text(text = elapsed, style = activityMonoCaption(), color = openCodeColor("text-weak"), maxLines = 1)
+            }
+        }
+    }
+    OpenCodeBottomSheet(
+        visible = visible,
+        title = detail?.title ?: title,
+        onDismissRequest = onDismissRequest,
+        height = OpenCodeBottomSheetHeight.Half,
+        scrollTargetKey = paneKey,
+        headerLeadingAction =
+            detail?.let {
+                OpenCodeBottomSheetHeaderAction(
+                    imageVector = OpenCodeIcons.ArrowBack,
+                    contentDescription = "Back to activity",
+                    onClick = onDetailBack,
+                )
+            },
+        titleContent = listTitle.takeIf { detail == null },
     ) {
+        if (detail != null) {
+            // Zero height at the top: scrolling it to center lands the detail at its start.
+            Spacer(modifier = Modifier.openCodeBottomSheetScrollTarget(paneKey))
+            detailContent()
+            return@OpenCodeBottomSheet
+        }
         if (agents.isNotEmpty()) {
             OpenCodeActivitySectionLabel(
                 text = openCodeActivityAgentSectionLabel(agents.size),
@@ -144,10 +200,19 @@ fun OpenCodeActivitySheet(
         steps.forEachIndexed { index, step ->
             key(step.id) {
                 if (index > 0) ActivityHairline()
-                StepRow(step = step, nowMs = now, pulses = animationsOn, onTap = { onStepTap(step.id) })
+                StepRow(
+                    step = step,
+                    nowMs = now,
+                    pulses = animationsOn,
+                    onTap = { onStepTap(step.id) },
+                    // Back from a detail centers the step it came from.
+                    modifier = if (step.id == lastDetailStepId) Modifier.openCodeBottomSheetScrollTarget(paneKey) else Modifier,
+                )
             }
         }
     }
+    // Composed only while a detail shows, so it is registered after the sheet's own back handler and wins.
+    if (visible && detail != null) BackHandler(onBack = onDetailBack)
 }
 
 @Composable
@@ -194,7 +259,7 @@ private fun AgentRow(
                     Text(
                         text = agent.caption,
                         style = activityMonoCaption(),
-                        color = openCodeColor("text-weaker"),
+                        color = openCodeColor("text-weak"),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -237,12 +302,13 @@ private fun StepRow(
     nowMs: Long,
     pulses: Boolean,
     onTap: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val running = step.status.isInFlight
     val elapsed = if (running) SessionChatChildSessionElapsed.format(step.startedAtMs, nowMs) else null
     Row(
         modifier =
-            Modifier
+            modifier
                 .fillMaxWidth()
                 .then(if (step.tappable) Modifier.clickable(onClick = onTap) else Modifier)
                 .semantics(mergeDescendants = true) {
@@ -272,7 +338,7 @@ private fun StepRow(
                 Text(
                     text = step.detail,
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (step.status == OpenCodeActivityStatus.Failed) openCodeColor("error") else openCodeColor("text-weaker"),
+                    color = if (step.status == OpenCodeActivityStatus.Failed) openCodeColor("error") else openCodeColor("text-weak"),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )

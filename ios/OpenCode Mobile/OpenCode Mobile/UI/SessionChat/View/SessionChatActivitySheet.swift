@@ -3,43 +3,66 @@ import SwiftUI
 extension View {
     /// Activity card (#779): the live activity sheet for `cardID`. The card is
     /// resolved from `rows` on every render, so the sheet keeps updating while
-    /// open and closes once the card is gone.
+    /// open and closes once the card is gone. With `detailStepID` the same
+    /// sheet shows that step's detail under a back arrow instead of the list.
     func sessionChatActivitySheet(
         cardID: String?,
+        detailStepID: String?,
         rows: [SessionChatRow],
         liveCardID: String?,
         childActivities: [String: SessionChatChildActivity],
         awaitingUser: Bool,
         supportsSessionMessageDiff: Bool,
-        onToolDetailTap: @escaping (SessionChatToolDetailTarget) -> Void,
         onChildSessionTap: @escaping (String, String) -> Void,
         onChangesReviewTap: @escaping (String, String?) -> Void,
+        onOpenStep: @escaping (String) -> Void,
+        onCloseStep: @escaping () -> Void,
         onDismiss: @escaping () -> Void
     ) -> some View {
         let resolved = cardID.flatMap { SessionChatActivityCardPresentation.card(id: $0, in: rows) }
         let card = resolved.map { $0.card.withLive($0.card.id == liveCardID) }
+        let detail = card.flatMap {
+            SessionChatActivityCardPresentation.detail(
+                stepID: detailStepID,
+                in: $0,
+                supportsSessionMessageDiff: supportsSessionMessageDiff
+            )
+        }
         let count = card?.steps.count ?? 0
         let isLive = card?.isLive == true
+        let title = detail?.target.title ?? (isLive ? "Working \(count)" : "Used \(count)")
+        let titleState: OpenCodeBottomSheetTitleState = detail == nil && isLive
+            ? .running(startedAtMs: ToolStartTime.normalizeEpochMs(card?.startedAtMs))
+            : .plain
         return openCodeBottomSheet(
             isPresented: Binding(
                 get: { resolved != nil },
                 set: { presented in if !presented { onDismiss() } }
             ),
-            title: isLive ? "Working \(count)" : "Used \(count)",
-            titleState: isLive ? .running(startedAtMs: ToolStartTime.normalizeEpochMs(card?.startedAtMs)) : .plain,
+            title: title,
+            titleState: titleState,
+            leadingAction: detail == nil ? nil : OpenCodeBottomSheetHeaderAction(
+                icon: .arrowBack,
+                accessibilityLabel: "Back to steps",
+                action: onCloseStep
+            ),
             height: .half
         ) {
-            if let card, let rowID = resolved?.rowID {
+            if let detail {
+                SessionChatToolDetailSheetBody(target: detail.target)
+                    .id(detail.step.id)
+            } else if let card, let rowID = resolved?.rowID {
                 SessionChatActivitySheetContent(
                     card: card,
                     childActivities: childActivities,
                     actions: SessionChatStepTapActions(
                         messageID: rowID,
                         supportsSessionMessageDiff: supportsSessionMessageDiff,
-                        onToolDetailTap: onToolDetailTap,
+                        onToolDetailTap: { _ in },
                         onChildSessionTap: onChildSessionTap,
                         onChangesReviewTap: onChangesReviewTap
                     ),
+                    onOpenStep: onOpenStep,
                     onDismiss: onDismiss
                 )
             }
@@ -54,6 +77,7 @@ struct SessionChatActivitySheetContent: View {
     let card: SessionChatActivityCardBlock
     let childActivities: [String: SessionChatChildActivity]
     let actions: SessionChatStepTapActions
+    let onOpenStep: (String) -> Void
     let onDismiss: () -> Void
 
     var body: some View {
@@ -100,7 +124,7 @@ struct SessionChatActivitySheetContent: View {
                         if let caption = Self.childCaption(step, activity: activity) {
                             Text(caption)
                                 .font(OpenCodeTypography.caption)
-                                .foregroundStyle(step.activityStatus == .failed ? OpenCodeColors.error : OpenCodeColors.textWeaker)
+                                .foregroundStyle(step.activityStatus == .failed ? OpenCodeColors.error : OpenCodeColors.textWeak)
                                 .lineLimit(1)
                         }
                     }
@@ -112,8 +136,8 @@ struct SessionChatActivitySheetContent: View {
                         OpenCodeActivityChevron()
                     }
                 }
-                .padding(.vertical, 13)
-                .frame(minHeight: 44)
+                .padding(.vertical, 14)
+                .frame(minHeight: 48)
             }
             if running, let recent = activity?.recentSteps, !recent.isEmpty {
                 VStack(alignment: .leading, spacing: 0) {
@@ -185,7 +209,7 @@ struct SessionChatActivitySheetContent: View {
                     if let detail = step.detail, !detail.isEmpty {
                         Text(detail)
                             .font(OpenCodeTypography.caption)
-                            .foregroundStyle(step.activityStatus == .failed ? OpenCodeColors.error : OpenCodeColors.textWeaker)
+                            .foregroundStyle(step.activityStatus == .failed ? OpenCodeColors.error : OpenCodeColors.textWeak)
                             .lineLimit(1)
                     }
                 }
@@ -203,18 +227,26 @@ struct SessionChatActivitySheetContent: View {
                     OpenCodeLiveElapsedText(startedAtMs: start)
                 }
             }
-            .padding(.vertical, 13)
-                .frame(minHeight: 44)
+            .padding(.vertical, 14)
+            .frame(minHeight: 48)
         }
     }
 
-    /// The row's tap does what the timeline does: a detail sheet opens over
-    /// this one; a push (child session, Changes) closes this sheet first.
+    /// A push (child session, Changes) closes this sheet first and navigates
+    /// as the timeline does; any other tap shows the step's detail in place.
+    private func tapAction(_ step: SessionChatStep) -> (() -> Void)? {
+        guard let action = actions.action(for: step) else { return nil }
+        guard actions.navigates(step) else { return { onOpenStep(step.id) } }
+        return {
+            onDismiss()
+            action()
+        }
+    }
+
     @ViewBuilder
     private func tappable(_ step: SessionChatStep, @ViewBuilder label: () -> some View) -> some View {
-        if let action = actions.action(for: step) {
+        if let action = tapAction(step) {
             Button {
-                if actions.navigates(step) { onDismiss() }
                 action()
             } label: {
                 label()

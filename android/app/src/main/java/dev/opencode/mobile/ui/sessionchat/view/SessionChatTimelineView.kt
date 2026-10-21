@@ -97,6 +97,7 @@ import dev.opencode.mobile.ui.components.OpenCodeActivityCurrentRow
 import dev.opencode.mobile.ui.components.OpenCodeActivityIcon
 import dev.opencode.mobile.ui.components.OpenCodeActivitySheet
 import dev.opencode.mobile.ui.components.OpenCodeActivitySheetAgent
+import dev.opencode.mobile.ui.components.OpenCodeActivitySheetDetail
 import dev.opencode.mobile.ui.components.OpenCodeActivitySheetStep
 import dev.opencode.mobile.ui.components.OpenCodeActivitySheetSubStep
 import dev.opencode.mobile.ui.components.OpenCodeActivityStatus
@@ -205,6 +206,10 @@ internal data class SessionChatTimelineViewProps(
     val activityCardChildren: Map<String, SessionChatChildActivity> = emptyMap(),
     val onOpenActivityCard: (blockId: String) -> Unit = {},
     val onDismissActivityCard: () -> Unit = {},
+    /** Step of [presentedActivityCard] whose detail the sheet shows in place of its list. */
+    val activityCardDetailStepId: String? = null,
+    val onOpenActivityCardStep: (stepId: String) -> Unit = {},
+    val onCloseActivityCardStep: () -> Unit = {},
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -1019,31 +1024,44 @@ private class ToolTapTargets(
                     onChangesReviewTap(messageId, block.changesInitialFilePath)
                 }
             }
-            block.detailText != null -> {
-                {
-                    onToolDetailTap(
-                        SessionChatToolDetailTarget(
-                            title = block.title,
-                            body = block.detailText,
-                            bodyIsMarkdown = block.detailIsMarkdown,
-                        ),
-                    )
-                }
-            }
-            else -> null
+            else -> sessionChatToolCardDetail(block)?.let { target -> { onToolDetailTap(target) } }
         }
 
     // A rail or activity card step opens what the standard timeline opens for its tool card.
     fun stepAction(step: SessionChatStep): (() -> Unit)? {
         val card = step.card
-        val thoughtText = step.thoughtText
         return when {
             card != null -> toolCardAction(card)
-            thoughtText != null -> {
-                { onToolDetailTap(SessionChatToolDetailTarget(title = "Thought", body = thoughtText)) }
-            }
-            else -> null
+            else -> sessionChatStepDetail(step, supportsSessionMessageDiff)?.let { target -> { onToolDetailTap(target) } }
         }
+    }
+}
+
+private fun sessionChatToolCardDetail(block: SessionChatTimelineBlock.ToolCard): SessionChatToolDetailTarget? =
+    block.detailText?.let { text ->
+        SessionChatToolDetailTarget(title = block.title, body = text, bodyIsMarkdown = block.detailIsMarkdown)
+    }
+
+/**
+ * The detail a step's tap shows (a thought, or tool output, failure or answer
+ * text), or null when the tap navigates instead (a child session, Changes) or
+ * there is nothing to show. The activity sheet shows it in place (#779).
+ */
+internal fun sessionChatStepDetail(
+    step: SessionChatStep,
+    supportsSessionMessageDiff: Boolean,
+): SessionChatToolDetailTarget? {
+    val card = step.card
+    val thoughtText = step.thoughtText
+    return when {
+        card != null ->
+            if (card.childSessionId != null || (card.opensChangesReview && supportsSessionMessageDiff)) {
+                null
+            } else {
+                sessionChatToolCardDetail(card)
+            }
+        thoughtText != null -> SessionChatToolDetailTarget(title = "Thought", body = thoughtText)
+        else -> null
     }
 }
 
@@ -1108,9 +1126,10 @@ private fun ActivityCardBlock(
 /**
  * The live activity sheet (#779) for the card the screen model presents. Its
  * content is resolved from the current timeline every frame, so it grows in
- * place while open and closes once the card is gone. A step tap closes the
- * sheet first, then opens what the standard timeline opens; a detail sheet
- * opened this way returns here when it closes.
+ * place while open and closes once the card is gone. A step with a detail
+ * shows it in the same sheet, with a back arrow to the list; a step that
+ * navigates (child session, Changes) closes the sheet first, then opens what
+ * the standard timeline opens.
  */
 @Composable
 private fun ActivityCardSheet(props: SessionChatTimelineViewProps) {
@@ -1131,16 +1150,28 @@ private fun ActivityCardSheet(props: SessionChatTimelineViewProps) {
                 supportsSessionMessageDiff = props.supportsSessionMessageDiff,
                 onChildSessionTap = props.onChildSessionTap,
                 onChangesReviewTap = props.onChangesReviewTap,
-                // A detail opened from here remembers the card, so closing it comes back to this sheet.
-                onToolDetailTap = { target -> props.onToolDetailTap(target.copy(returnToActivityCard = blockId)) },
+                onToolDetailTap = props.onToolDetailTap,
             )
         }
     val stepsById = content?.let { sheet -> (sheet.steps + sheet.agents.map { it.step }).associateBy { it.id } }.orEmpty()
+
+    fun detailOf(step: SessionChatStep): SessionChatToolDetailTarget? =
+        if (step.kind == SessionChatStepKind.ChildSession) null else sessionChatStepDetail(step, props.supportsSessionMessageDiff)
+
     fun tap(id: String) {
-        val action = stepsById[id]?.let { taps?.stepAction(it) } ?: return
+        val step = stepsById[id] ?: return
+        if (detailOf(step) != null) {
+            props.onOpenActivityCardStep(id)
+            return
+        }
+        val action = taps?.stepAction(step) ?: return
         props.onDismissActivityCard()
         action()
     }
+    // Resolved live too: a running tool's output grows while its detail shows.
+    val detailStepId = props.activityCardDetailStepId
+    val detailTarget = detailStepId?.let { id -> stepsById[id]?.let(::detailOf) }
+    val detail = detailTarget?.let { target -> detailStepId?.let { OpenCodeActivitySheetDetail(stepId = it, title = target.title) } }
     OpenCodeActivitySheet(
         visible = visible,
         live = content?.isLive == true,
@@ -1179,6 +1210,9 @@ private fun ActivityCardSheet(props: SessionChatTimelineViewProps) {
         onAgentTap = ::tap,
         onStepTap = ::tap,
         onDismissRequest = props.onDismissActivityCard,
+        detail = detail,
+        onDetailBack = props.onCloseActivityCardStep,
+        detailContent = { detailTarget?.let { SessionChatToolDetailBody(it) } },
     )
 }
 

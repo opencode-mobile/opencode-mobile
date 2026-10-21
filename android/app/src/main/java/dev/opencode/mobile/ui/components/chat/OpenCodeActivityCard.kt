@@ -423,7 +423,7 @@ internal fun OpenCodeActivitySectionLabel(
     Text(
         text = text.uppercase(),
         style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.5.sp, letterSpacing = 0.08.em),
-        color = openCodeColor("text-weaker"),
+        color = openCodeColor("text-weak"),
         maxLines = 1,
         modifier = modifier,
     )

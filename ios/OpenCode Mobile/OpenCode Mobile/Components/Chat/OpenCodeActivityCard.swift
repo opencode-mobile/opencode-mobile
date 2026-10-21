@@ -353,7 +353,7 @@ private struct ActivityCardAgentRow: View {
 
 // MARK: - Shared pieces (card and activity sheet)
 
-/// "AGENT" / "2 AGENTS": uppercase, tracked, in the weakest text tone.
+/// "AGENT" / "2 AGENTS": uppercase, tracked, in the weak text tone.
 struct OpenCodeActivitySectionLabel: View {
     let text: String
 
@@ -370,7 +370,7 @@ struct OpenCodeActivitySectionLabel: View {
         Text(text.uppercased())
             .font(.system(size: 10.5, weight: .medium))
             .tracking(0.8)
-            .foregroundStyle(OpenCodeColors.textWeaker)
+            .foregroundStyle(OpenCodeColors.textWeak)
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityAddTraits(.isHeader)
     }

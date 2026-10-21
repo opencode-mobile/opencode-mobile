@@ -63,6 +63,23 @@ struct SessionChatActivityCardPresentation: Equatable {
         return nil
     }
 
+    /// The step detail the activity sheet shows for `stepID`: the step and
+    /// its detail when the step is on the card and its tap shows a detail
+    /// (thought, tool output); nil for a navigating step or a step that left.
+    static func detail(
+        stepID: String?,
+        in card: SessionChatActivityCardBlock,
+        supportsSessionMessageDiff: Bool
+    ) -> (step: SessionChatStep, target: SessionChatToolDetailTarget)? {
+        guard let stepID, let step = card.steps.first(where: { $0.id == stepID }),
+              let target = SessionChatStepTapActions.detailTarget(
+                  for: step,
+                  supportsSessionMessageDiff: supportsSessionMessageDiff
+              )
+        else { return nil }
+        return (step, target)
+    }
+
     /// Current actions of the running child sessions on the live card, for the
     /// rows that need to repaint when one changes.
     static func childActions(

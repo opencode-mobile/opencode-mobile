@@ -270,6 +270,8 @@ data class SessionChatUiState(
     val unfoldedStepRails: Set<String> = emptySet(),
     /** Activity card whose live sheet is open, by block id (#779). */
     val presentedActivityCard: String? = null,
+    /** Step of [presentedActivityCard] whose detail the sheet shows in place of its list (#779). */
+    val activityCardDetailStepId: String? = null,
     /** What running child sessions on activity cards are doing, by child session id (#779). */
     val activityCardChildren: Map<String, SessionChatChildActivity> = emptyMap(),
     /** One-time Chip timeline intro sheet (OPE-270). */

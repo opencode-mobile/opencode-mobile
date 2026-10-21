@@ -245,6 +245,9 @@ class SessionChatViewModel
         // Activity card whose sheet is open, by block id; reset per session (#779).
         private var presentedActivityCard: String? = null
 
+        // Step of the presented card whose detail the sheet shows in place of its list (#779).
+        private var activityCardDetailStepId: String? = null
+
         // Child sessions observed for activity cards: their jobs and what they are doing (#779).
         private val activityMessageRepository = messageRepository
         private val activityChildJobs = mutableMapOf<String, Job>()
@@ -1738,6 +1741,7 @@ class SessionChatViewModel
                 expandedStepParagraphs = expandedStepParagraphs,
                 unfoldedStepRails = unfoldedStepRails,
                 presentedActivityCard = presentedActivityCard,
+                activityCardDetailStepId = activityCardDetailStepId,
                 activityCardChildren = activityCardChildren,
                 chipTimelineIntroVisible = chipTimelineIntroVisible,
                 pendingTerminalOpen = commandsState.pendingTerminalOpen,
@@ -1778,19 +1782,37 @@ class SessionChatViewModel
         /** Opens the live activity sheet for card [blockId] (#779). */
         fun openActivityCard(blockId: String) {
             presentedActivityCard = blockId
-            _uiState.value = _uiState.value.copy(presentedActivityCard = blockId)
+            activityCardDetailStepId = null
+            _uiState.value = _uiState.value.copy(presentedActivityCard = blockId, activityCardDetailStepId = null)
             syncActivityChildren(_uiState.value.messages)
         }
 
         fun dismissActivityCard() {
             if (presentedActivityCard == null) return
             presentedActivityCard = null
-            _uiState.value = _uiState.value.copy(presentedActivityCard = null)
+            activityCardDetailStepId = null
+            _uiState.value = _uiState.value.copy(presentedActivityCard = null, activityCardDetailStepId = null)
             syncActivityChildren(_uiState.value.messages)
+        }
+
+        /** Shows step [stepId]'s detail inside the open activity sheet, in place of its list. */
+        fun openActivityCardStep(stepId: String) {
+            val presented = presentedActivityCard ?: return
+            if (!SessionChatActivityCard.hasStep(_uiState.value.messages, presented, stepId)) return
+            activityCardDetailStepId = stepId
+            _uiState.value = _uiState.value.copy(activityCardDetailStepId = stepId)
+        }
+
+        /** Returns the open activity sheet from a step's detail to its list. */
+        fun closeActivityCardStep() {
+            if (activityCardDetailStepId == null) return
+            activityCardDetailStepId = null
+            _uiState.value = _uiState.value.copy(activityCardDetailStepId = null)
         }
 
         private fun resetActivityCards() {
             presentedActivityCard = null
+            activityCardDetailStepId = null
             activityChildJobs.values.forEach { it.cancel() }
             activityChildJobs.clear()
             activityCardChildren = emptyMap()
@@ -1806,7 +1828,19 @@ class SessionChatViewModel
             val presented = presentedActivityCard
             if (presented != null && messages.isNotEmpty() && !SessionChatActivityCard.hasCard(messages, presented)) {
                 presentedActivityCard = null
-                _uiState.value = _uiState.value.copy(presentedActivityCard = null)
+                activityCardDetailStepId = null
+                _uiState.value = _uiState.value.copy(presentedActivityCard = null, activityCardDetailStepId = null)
+            }
+            // A detail whose step left the card goes back to the list.
+            val detailStep = activityCardDetailStepId
+            val card = presentedActivityCard
+            val detailLeft =
+                detailStep != null &&
+                    messages.isNotEmpty() &&
+                    (card == null || !SessionChatActivityCard.hasStep(messages, card, detailStep))
+            if (detailLeft) {
+                activityCardDetailStepId = null
+                _uiState.value = _uiState.value.copy(activityCardDetailStepId = null)
             }
             val worktree = boundWorktree
             val wanted =
