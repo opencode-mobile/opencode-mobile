@@ -49,6 +49,7 @@ private enum class GalleryDecoratorKind {
 private enum class GallerySubtitleKind {
     Plain,
     Diff,
+    Branch,
     Off,
 }
 
@@ -123,6 +124,16 @@ fun ListItemGalleryScreen(modifier: Modifier = Modifier) {
                 OpenCodeListItemSubtitleSegment("+51", OpenCodeListItemSubtitleTone.Addition),
                 OpenCodeListItemSubtitleSegment(" ", OpenCodeListItemSubtitleTone.Secondary),
                 OpenCodeListItemSubtitleSegment("−7", OpenCodeListItemSubtitleTone.Deletion),
+            )
+        } else if (subtitleKind == GallerySubtitleKind.Branch) {
+            listOf(
+                OpenCodeListItemSubtitleSegment("opencode-mobile · ", OpenCodeListItemSubtitleTone.Secondary),
+                OpenCodeListItemSubtitleSegment(
+                    "feature/723-iphone-duo",
+                    OpenCodeListItemSubtitleTone.Secondary,
+                    icon = OpenCodeIcons.CallSplit,
+                ),
+                OpenCodeListItemSubtitleSegment(" · opencode-mobile-723", OpenCodeListItemSubtitleTone.Secondary),
             )
         } else {
             null
