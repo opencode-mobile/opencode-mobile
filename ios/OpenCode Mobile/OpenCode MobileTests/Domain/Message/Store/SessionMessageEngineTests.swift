@@ -783,6 +783,53 @@ import Testing
         #expect(tool.input?["query"]?.stringValue == "opencode mobile")
     }
 
+    @Test func partUpdated_lateRunningDuplicateDoesNotReopenSettledTool() {
+        func toolUpdate(_ status: String) -> MessagePatch {
+            var state: [String: AnySendable] = [
+                "status": .string(status),
+                "input": .dictionary(["filePath": .string("/repo/src/currency.ts")]),
+            ]
+            if status == "error" { state["error"] = .string("File not found") }
+            return .partUpdated(
+                part: [
+                    "id": .string("prt-r"),
+                    "messageID": .string("msg-1"),
+                    "sessionID": .string("ses-1"),
+                    "type": .string("tool"),
+                    "tool": .string("read"),
+                    "state": .dictionary(state),
+                ],
+                delta: nil
+            )
+        }
+        let engine = makeEngine()
+        engine.replaceAll(
+            sessionID: "ses-1",
+            messages: [
+                Message(
+                    id: "msg-1",
+                    role: .assistant,
+                    text: "",
+                    parts: [],
+                    model: nil,
+                    mode: nil,
+                    sentAtEpochMs: nil
+                ),
+            ]
+        )
+        // v1 delivers every update on /global/event and /event; the buses interleave.
+        for status in ["running", "error", "running"] {
+            _ = engine.apply(sessionID: "ses-1", patch: toolUpdate(status))
+        }
+        let tools = engine.messages(sessionID: "ses-1").first?.parts.compactMap { part -> ToolPart? in
+            if case .tool(let tool) = part { return tool }
+            return nil
+        } ?? []
+        #expect(tools.count == 1)
+        #expect(tools.first?.status == .error)
+        #expect(tools.first?.error == "File not found")
+    }
+
     @Test func partUpdated_emptyTextDoesNotReplaceStreamingText() {
         let engine = makeEngine()
         seedStreamingAssistant(engine)

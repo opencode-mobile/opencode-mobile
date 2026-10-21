@@ -1144,6 +1144,10 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
         return next
     }
 
+    private func isSettledTool(_ status: ToolStatus) -> Bool {
+        status == .completed || status == .error
+    }
+
     private func mergePart(existing: MessagePart?, incoming: MessagePart) -> MessagePart {
         if existing == nil {
             if case .tool(let tool) = incoming {
@@ -1171,6 +1175,27 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
         switch (existing, incoming) {
         case (.tool(let prior), .tool(let next)):
             let mergedInput = ToolArgumentsPreview.mergedInput(prior.input, next.input)
+            // A tool part runs once. v1 sends each update on both event buses, so a
+            // late in-flight duplicate must not reopen a call that already settled.
+            if isSettledTool(prior.status), !isSettledTool(next.status) {
+                merged = .tool(
+                    ToolPart(
+                        id: prior.id,
+                        toolName: prior.toolName,
+                        status: prior.status,
+                        title: prior.title,
+                        error: prior.error,
+                        callID: prior.callID,
+                        input: mergedInput,
+                        output: prior.output,
+                        metadata: mergeDict(prior.metadata, next.metadata),
+                        timeStartEpochMs: prior.timeStartEpochMs ?? next.timeStartEpochMs,
+                        isInterrupted: prior.isInterrupted,
+                        isMalformed: prior.isMalformed
+                    )
+                )
+                break
+            }
             merged = .tool(
                 ToolPart(
                     id: prior.id,
