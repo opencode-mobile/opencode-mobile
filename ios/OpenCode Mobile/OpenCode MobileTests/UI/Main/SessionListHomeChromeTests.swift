@@ -65,6 +65,8 @@ struct SessionListHomeChromeTests {
         #expect(featureTab.count == 2)
         #expect(featureTab.subtitle == "feature/x \u{00B7} repo-wt")
         #expect(featureTab.pickerTitle == "feature/x")
+        #expect(featureTab.dockTitle == "repo")
+        #expect(project.dockTitle == "repo")
         #expect(featureTab.pickerSubtitle == "repo-wt")
     }
 

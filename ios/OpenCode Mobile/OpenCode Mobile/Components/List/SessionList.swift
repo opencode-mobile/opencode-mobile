@@ -166,6 +166,8 @@ struct SessionListFilterTab: Identifiable, Hashable {
     var isAll: Bool { id == Self.allId }
     var pickerTitle: String { pickerTitleOverride ?? (isAll ? Self.pickerAllTitle : title) }
     var pickerSubtitle: String { pickerSubtitleOverride ?? subtitle }
+    /// The dock keeps the project identity on a worktree scope; the picker names the worktree.
+    var dockTitle: String { isWorktree ? title : pickerTitle }
 
     init(
         id: String,
