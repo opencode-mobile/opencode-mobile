@@ -33,12 +33,15 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineHeightStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
@@ -423,9 +426,22 @@ internal fun OpenCodeActivityAgentTile(agentName: String) {
         Text(
             text = SessionChatChildSessionElapsed.letter(agentName),
             color = tint,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
             maxLines = 1,
+            textAlign = TextAlign.Center,
+            // Material body styles carry a tall line height and font padding that push a
+            // single glyph below the tile's centre; pin both so the letter sits centred.
+            style =
+                TextStyle(
+                    fontSize = 11.sp,
+                    lineHeight = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    platformStyle = PlatformTextStyle(includeFontPadding = false),
+                    lineHeightStyle =
+                        LineHeightStyle(
+                            alignment = LineHeightStyle.Alignment.Center,
+                            trim = LineHeightStyle.Trim.Both,
+                        ),
+                ),
         )
     }
 }
