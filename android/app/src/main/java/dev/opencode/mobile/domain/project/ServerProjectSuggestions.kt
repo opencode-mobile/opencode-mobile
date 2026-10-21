@@ -4,7 +4,8 @@ import dev.opencode.mobile.domain.filesystem.ServerPathPolicy
 
 /**
  * The server's own projects offered in Add project ("On this server"): repositories only, no global
- * project, nothing archived, nothing already on home, nothing under a temp or hidden folder, one row per worktree
+ * project, nothing archived, nothing already on home (by path, or by project id when another
+ * worktree of the repository is on home), nothing under a temp or hidden folder, one row per worktree
  * (the newest), newest activity first, undated last, at most [MAX_SUGGESTIONS] so the folder list
  * stays on screen.
  *
@@ -19,11 +20,13 @@ object ServerProjectSuggestions {
     fun suggestions(
         projects: List<Project>,
         addedWorktrees: Collection<String>,
+        addedProjectIds: Set<String> = emptySet(),
     ): List<Project> {
         val added = addedWorktrees.mapTo(HashSet()) { ServerPathPolicy.canonical(it) }
         val newestByWorktree = LinkedHashMap<String, Project>()
         for (project in projects) {
             if (project.id == GLOBAL_PROJECT_ID || !project.isRepository || project.isArchived) continue
+            if (project.id in addedProjectIds) continue
             val worktree = ServerPathPolicy.canonical(project.worktree)
             if (worktree.isBlank() || worktree == "/") continue
             if (worktree in added || isScratchLocation(worktree)) continue

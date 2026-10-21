@@ -37,6 +37,18 @@ class ServerProjectSuggestionsTest {
     }
 
     @Test
+    fun excludesRepositoriesWhoseOtherWorktreeIsOnHome() {
+        val result =
+            ServerProjectSuggestions.suggestions(
+                projects = listOf(project("proj", "/Users/me/repo", 2L), project("other", "/Users/me/other", 1L)),
+                addedWorktrees = listOf("/Users/me/repo-wt"),
+                addedProjectIds = setOf("proj"),
+            )
+
+        assertEquals(listOf("other"), result.map { it.id })
+    }
+
+    @Test
     fun excludesArchivedProjects() {
         val result =
             ServerProjectSuggestions.suggestions(
