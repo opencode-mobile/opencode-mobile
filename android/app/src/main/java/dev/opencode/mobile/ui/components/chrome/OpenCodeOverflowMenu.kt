@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -56,6 +57,7 @@ private val OverflowMenuEntryIconSize = 20.dp
 private val OverflowMenuEntryIconSpacing = 12.dp
 private val OverflowMenuAnchorEndInset = 4.dp
 private val OverflowMenuAnchorTopOffset = 8.dp
+private val OverflowMenuEntryTextMaxWidth = 240.dp
 
 data class OpenCodeOverflowMenuEntry(
     val title: String,
@@ -65,6 +67,9 @@ data class OpenCodeOverflowMenuEntry(
     val destructive: Boolean = false,
     val contentDescription: String? = null,
     val accessibilityLabel: String? = null,
+    /** Secondary line under the title, such as why the entry is disabled. */
+    val subtitle: String? = null,
+    val testTag: String? = null,
 )
 
 @Composable
@@ -270,7 +275,8 @@ private fun OverflowMenuEntryRow(
                     entry.accessibilityLabel?.let { label ->
                         Modifier.semantics(mergeDescendants = true) { contentDescription = label }
                     } ?: Modifier,
-                ).then(if (entry.enabled) Modifier else Modifier.alpha(0.7f)),
+                ).then(if (entry.enabled) Modifier else Modifier.alpha(0.7f))
+                .then(entry.testTag?.let { Modifier.testTag(it) } ?: Modifier),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement =
             Arrangement.spacedBy(
@@ -292,13 +298,24 @@ private fun OverflowMenuEntryRow(
                 }
             }
         }
-        Text(
-            text = entry.title,
-            style = MaterialTheme.typography.bodyLarge,
-            color = contentColor,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+        Column(modifier = Modifier.widthIn(max = OverflowMenuEntryTextMaxWidth)) {
+            Text(
+                text = entry.title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = contentColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            entry.subtitle?.let { subtitle ->
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = openCodeColor("text-weak"),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
     }
 }
 
@@ -363,6 +380,7 @@ private fun previewOverflowMenuEntries(): List<OpenCodeOverflowMenuEntry> =
             title = "Disabled action",
             icon = OpenCodeIcons.Settings,
             enabled = false,
+            subtitle = "Needs an opencode v2 server",
             onClick = {},
         ),
         OpenCodeOverflowMenuEntry(

@@ -537,6 +537,8 @@ fun MainNavigation() {
                                                         HomeDisplayPreferences.hideUserDirectoryPrefix,
                                                     onHideUserDirectoryPrefixChange =
                                                         settingsViewModel::setHideUserDirectoryPrefix,
+                                                    showsWorktrees = HomeDisplayPreferences.showsWorktrees,
+                                                    onShowsWorktreesChange = settingsViewModel::setShowsWorktrees,
                                                     recentWindowHours = HomeDisplayPreferences.recentWindowHours,
                                                     onRecentWindowHoursChange =
                                                         settingsViewModel::setRecentWindowHours,

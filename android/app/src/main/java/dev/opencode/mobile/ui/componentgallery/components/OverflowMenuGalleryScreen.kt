@@ -48,6 +48,15 @@ fun OverflowMenuGalleryScreen(modifier: Modifier = Modifier) {
             )
             add(
                 OpenCodeOverflowMenuEntry(
+                    title = "Move to worktree\u2026",
+                    icon = OpenCodeIcons.CallSplit,
+                    enabled = false,
+                    subtitle = "Needs an opencode v2 server",
+                    onClick = { menuExpanded = false },
+                ),
+            )
+            add(
+                OpenCodeOverflowMenuEntry(
                     title = "Copy session ID",
                     icon = if (selectionRowsEnabled) null else OpenCodeIcons.ContentCopy,
                     enabled = entriesEnabled,

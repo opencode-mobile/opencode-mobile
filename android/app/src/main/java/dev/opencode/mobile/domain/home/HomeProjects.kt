@@ -58,6 +58,10 @@ data class HomeProject(
     val hasManyWorktrees: Boolean
         get() = worktrees.size > 1
 
+    /** Where a tapped New session starts: the main checkout, else the primary added path. */
+    val mainCheckoutDirectory: String
+        get() = worktrees.firstOrNull { it.isMain }?.directory ?: primaryPath
+
     fun worktree(directory: String?): HomeWorktree? {
         val canonical = directory?.trim()?.takeIf { it.isNotEmpty() }?.let(ServerPathPolicy::canonical) ?: return null
         return worktrees.firstOrNull { it.directory == canonical }
@@ -183,11 +187,13 @@ sealed class HomeScope {
         /**
          * Reads a scope id against the current projects. An added path (an older scope, or a
          * just-added folder) maps to the project it belongs to, and so does a worktree of a
-         * project that no longer lists more than one. Null when nothing matches.
+         * project that no longer lists more than one, or any worktree while [worktreesEnabled]
+         * is off. Null when nothing matches.
          */
         fun resolve(
             id: String,
             projects: List<HomeProject>,
+            worktreesEnabled: Boolean = true,
         ): HomeScope? {
             if (id == ALL_ID) return All
             projects.firstOrNull { it.key == id }?.let { return Project(it.key) }
@@ -200,7 +206,7 @@ sealed class HomeScope {
                     projects.firstOrNull { it.key == projectKey && it.worktree(directory) != null }
                         ?: projects.firstOrNull { it.worktree(directory) != null }
                         ?: return null
-                return if (project.hasManyWorktrees) Worktree(project.key, directory) else Project(project.key)
+                return if (worktreesEnabled && project.hasManyWorktrees) Worktree(project.key, directory) else Project(project.key)
             }
             val canonical = ServerPathPolicy.canonical(id.trim())
             projects
@@ -220,14 +226,16 @@ object HomeSessionLocation {
     /**
      * Row subtitle parts for a session of a repository project: the project name (All scope
      * only), the branch, and the worktree folder when it is not the main checkout or the branch
-     * is unknown. Null for a non-repository project, which keeps its path subtitle.
+     * is unknown. Null for a non-repository project, which keeps its path subtitle, and for
+     * every project while [worktreesEnabled] is off.
      */
     fun parts(
         project: HomeProject,
         sessionDirectory: String?,
         includeProjectName: Boolean,
+        worktreesEnabled: Boolean = true,
     ): List<Part>? {
-        if (!project.isRepository) return null
+        if (!worktreesEnabled || !project.isRepository) return null
         val directory =
             sessionDirectory?.trim()?.takeIf { it.isNotEmpty() }?.let(ServerPathPolicy::canonical)
                 ?: ServerPathPolicy.canonical(project.primaryPath)
@@ -248,6 +256,13 @@ object HomeSessionLocation {
 object HomeWorktreeCopy {
     const val MAIN_CHECKOUT = "main checkout"
     const val RUN_IN = "Run in"
+    const val OTHER_PROJECTS = "Other projects"
+    const val SHOW_FEWER = "Show fewer"
+    const val EDIT = "Edit"
+    const val DONE = "Done"
+    const val REORDER_NOTE = "Drag to reorder. Worktrees stay with their project."
+
+    fun showAll(count: Int): String = "Show all $count"
 
     fun worktreeCount(count: Int): String = "$count worktrees"
 
@@ -265,5 +280,69 @@ object HomeWorktreeCopy {
     fun worktreePill(worktree: HomeWorktree): String {
         val branch = worktree.branch ?: return worktree.folderName
         return if (worktree.isMain) branch else "$branch${HomeSessionLocation.SEPARATOR}${worktree.folderName}"
+    }
+}
+
+/**
+ * Expand and edit state of the project picker: at most one project shows its worktrees, a
+ * project with more than [COLLAPSED_WORKTREE_LIMIT] shows the rest on request, and Edit
+ * collapses everything while projects reorder.
+ */
+data class HomeProjectPickerState(
+    val expandedProjectKey: String? = null,
+    val showAllProjectKeys: Set<String> = emptySet(),
+    val isEditing: Boolean = false,
+) {
+    /** Opens [key] and closes any other; the open one closes. */
+    fun toggleExpanded(key: String): HomeProjectPickerState = copy(expandedProjectKey = if (expandedProjectKey == key) null else key)
+
+    fun toggleShowAll(key: String): HomeProjectPickerState =
+        copy(showAllProjectKeys = if (key in showAllProjectKeys) showAllProjectKeys - key else showAllProjectKeys + key)
+
+    /** Edit starts and ends collapsed. */
+    fun setEditing(editing: Boolean): HomeProjectPickerState =
+        HomeProjectPickerState(expandedProjectKey = null, showAllProjectKeys = emptySet(), isEditing = editing)
+
+    fun isExpanded(key: String): Boolean = !isEditing && expandedProjectKey == key
+
+    /** Worktrees listed under project [key] while it is expanded: all, or the first few. */
+    fun <T> visibleWorktrees(
+        key: String,
+        worktrees: List<T>,
+    ): List<T> =
+        if (worktrees.size <= COLLAPSED_WORKTREE_LIMIT || key in showAllProjectKeys) {
+            worktrees
+        } else {
+            worktrees.take(COLLAPSED_WORKTREE_LIMIT)
+        }
+
+    /** "Show all N" / "Show fewer" under expanded project [key] with more than the limit; null otherwise. */
+    fun showAllLabel(
+        key: String,
+        worktreeCount: Int,
+    ): String? {
+        if (worktreeCount <= COLLAPSED_WORKTREE_LIMIT) return null
+        return if (key in showAllProjectKeys) HomeWorktreeCopy.SHOW_FEWER else HomeWorktreeCopy.showAll(worktreeCount)
+    }
+
+    companion object {
+        const val COLLAPSED_WORKTREE_LIMIT = 5
+
+        /**
+         * State each time the picker opens: a worktree scope starts with its project expanded,
+         * showing all when that worktree is past the first few. Anything else starts collapsed.
+         */
+        fun initial(
+            selectedScope: HomeScope?,
+            projects: List<HomeProject>,
+        ): HomeProjectPickerState {
+            val worktreeScope = selectedScope as? HomeScope.Worktree ?: return HomeProjectPickerState()
+            val project = projects.firstOrNull { it.key == worktreeScope.projectKey } ?: return HomeProjectPickerState()
+            val index = project.worktrees.indexOfFirst { it.directory == ServerPathPolicy.canonical(worktreeScope.directory) }
+            return HomeProjectPickerState(
+                expandedProjectKey = project.key,
+                showAllProjectKeys = if (index >= COLLAPSED_WORKTREE_LIMIT) setOf(project.key) else emptySet(),
+            )
+        }
     }
 }

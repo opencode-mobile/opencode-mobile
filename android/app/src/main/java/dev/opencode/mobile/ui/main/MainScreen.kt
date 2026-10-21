@@ -13,10 +13,12 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -28,9 +30,11 @@ import dev.opencode.mobile.ProductPresentedScreenViewEffect
 import dev.opencode.mobile.domain.connection.ConnectionProfileIdentity
 import dev.opencode.mobile.domain.home.HomeProject
 import dev.opencode.mobile.domain.home.HomeProjectGrouping
+import dev.opencode.mobile.domain.home.HomeProjectPickerState
 import dev.opencode.mobile.domain.home.HomeScope
 import dev.opencode.mobile.domain.home.HomeSessionLocation
 import dev.opencode.mobile.domain.home.HomeWorktreeCopy
+import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.session.SessionIdleOutcome
 import dev.opencode.mobile.domain.session.SessionSummary
 import dev.opencode.mobile.domain.time.RelativeTimeFormatting
@@ -41,6 +45,7 @@ import dev.opencode.mobile.theme.letterCharacterForProject
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
+import dev.opencode.mobile.ui.components.OpenCodeBottomSheetHeaderTextAction
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetHeight
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetKeyboard
 import dev.opencode.mobile.ui.components.OpenCodeButton
@@ -65,6 +70,7 @@ import dev.opencode.mobile.ui.components.SessionList
 import dev.opencode.mobile.ui.components.SessionListFilterTab
 import dev.opencode.mobile.ui.components.SessionListLocationPart
 import dev.opencode.mobile.ui.components.SessionListProjectPickerRows
+import dev.opencode.mobile.ui.components.SessionListProjectPickerTags
 import dev.opencode.mobile.ui.components.SessionListScopeLoad
 import dev.opencode.mobile.ui.components.SessionListSession
 import dev.opencode.mobile.ui.components.SessionListStatus
@@ -271,24 +277,35 @@ internal fun MainScreen(
             else -> null
         }
 
-    var showNewSessionProjectPicker by rememberSaveable { mutableStateOf(false) }
-    var runInProjectId by rememberSaveable { mutableStateOf<String?>(null) }
+    var newSessionSheetMode by rememberSaveable(stateSaver = NewSessionSheetModeSaver) {
+        mutableStateOf<SessionListHomeChrome.NewSessionSheetMode?>(null)
+    }
     var selectedFilterId by rememberSaveable { mutableStateOf(SessionListFilterTab.ALL_ID) }
+    val worktreesEnabled = HomeDisplayPreferences.showsWorktrees
     val loaded = uiState as? MainScreenUiState.Loaded
-    val homeSessions = remember(loaded) { loaded?.homeSessions().orEmpty() }
+    val homeSessions = remember(loaded, worktreesEnabled) { loaded?.homeSessions(worktreesEnabled).orEmpty() }
     val chromeProjects =
         remember(loaded, homeSessions) {
             loaded?.let { state -> homeChromeProjects(state.projects, homeSessions, state.projectLoads) }.orEmpty()
         }
     val showTerminalAction =
         SessionListHomeChrome.terminalAction(chromeProjects) is SessionListHomeChrome.TerminalAction.OpenCatalog
-    val runInProject = chromeProjects.firstOrNull { it.id == runInProjectId }
     val startNewSession: (SessionListHomeChrome.NewSessionAction) -> Unit = { action ->
         when (action) {
             SessionListHomeChrome.NewSessionAction.None -> Unit
-            SessionListHomeChrome.NewSessionAction.PresentPicker -> showNewSessionProjectPicker = true
-            is SessionListHomeChrome.NewSessionAction.ChooseWorktree -> runInProjectId = action.projectId
-            is SessionListHomeChrome.NewSessionAction.Create -> onNewSession(action.worktree)
+            is SessionListHomeChrome.NewSessionAction.PresentSheet -> {
+                if (newSessionSheetMode == null) {
+                    ProductAnalytics.logUserAction(
+                        screenId = ProductAnalytics.Screen.HOME,
+                        actionId = ProductAnalytics.Action.HOME_OPEN_NEW_SESSION_PROJECT_PICKER,
+                    )
+                }
+                newSessionSheetMode = action.mode
+            }
+            is SessionListHomeChrome.NewSessionAction.Create -> {
+                newSessionSheetMode = null
+                onNewSession(action.worktree)
+            }
         }
     }
 
@@ -310,7 +327,7 @@ internal fun MainScreen(
     ProductPresentedScreenViewEffect(
         screenId = ProductAnalytics.Screen.HOME_NEW_SESSION_PROJECT_PICKER,
         presentation = ProductAnalytics.Presentation.SHEET,
-        visible = showNewSessionProjectPicker || runInProject != null,
+        visible = newSessionSheetMode != null,
     )
     ProductPresentedScreenViewEffect(
         screenId = ProductAnalytics.Screen.HOME_REMOVE_PROJECT_CONFIRM,
@@ -430,14 +447,8 @@ internal fun MainScreen(
                             )
                             onSessionClick(target)
                         },
-                        onRequestNewSessionProjectPicker = {
-                            ProductAnalytics.logUserAction(
-                                screenId = ProductAnalytics.Screen.HOME,
-                                actionId = ProductAnalytics.Action.HOME_OPEN_NEW_SESSION_PROJECT_PICKER,
-                            )
-                            showNewSessionProjectPicker = true
-                        },
                         onNewSessionAction = startNewSession,
+                        worktreesEnabled = worktreesEnabled,
                         onRemoveProject = onRemoveProject,
                         onReorderProjects = onReorderProjects,
                         removalSnackbar = removalSnackbar,
@@ -558,24 +569,34 @@ internal fun MainScreen(
     )
 
     // One New session sheet: the project list, or "Run in" for a project with several worktrees.
-    val newSessionSheetVisible = showNewSessionProjectPicker || runInProject != null
     // Keeps the shown content while the sheet plays its exit motion.
-    var heldRunInProject by remember { mutableStateOf(runInProject) }
-    if (newSessionSheetVisible) heldRunInProject = runInProject
+    var heldSheetMode by remember { mutableStateOf(newSessionSheetMode) }
+    newSessionSheetMode?.let { heldSheetMode = it }
+    val pickProject: (SessionListHomeChrome.Project, Boolean) -> Unit = { project, holdPick ->
+        ProductAnalytics.logUserAction(
+            screenId = ProductAnalytics.Screen.HOME_NEW_SESSION_PROJECT_PICKER,
+            actionId = ProductAnalytics.Action.NEW_SESSION_PICKER_SELECT_PROJECT,
+        )
+        // A hold-pick of a project with several worktrees stays open and asks where to run.
+        startNewSession(SessionListHomeChrome.projectPickAction(project, holdPick, worktreesEnabled))
+    }
     OpenCodeBottomSheet(
-        visible = newSessionSheetVisible,
+        visible = newSessionSheetMode != null,
         title = "New session",
         onDismissRequest = {
             ProductAnalytics.logUserAction(
                 screenId = ProductAnalytics.Screen.HOME_NEW_SESSION_PROJECT_PICKER,
                 actionId = ProductAnalytics.Action.NEW_SESSION_PICKER_DISMISS,
             )
-            showNewSessionProjectPicker = false
-            runInProjectId = null
+            newSessionSheetMode = null
         },
     ) {
-        val runIn = heldRunInProject
-        if (runIn != null) {
+        val mode = heldSheetMode
+        val runIn =
+            (mode as? SessionListHomeChrome.NewSessionSheetMode.RunIn)?.let { runInMode ->
+                chromeProjects.firstOrNull { it.id == runInMode.projectId && it.hasManyWorktrees }
+            }
+        if (mode is SessionListHomeChrome.NewSessionSheetMode.RunIn && runIn != null) {
             OpenCodeSectionHeader(title = HomeWorktreeCopy.RUN_IN)
             runIn.worktrees.forEach { worktree ->
                 OpenCodeListItem(
@@ -588,38 +609,66 @@ internal fun MainScreen(
                             screenId = ProductAnalytics.Screen.HOME_NEW_SESSION_PROJECT_PICKER,
                             actionId = ProductAnalytics.Action.NEW_SESSION_PICKER_SELECT_PROJECT,
                         )
-                        showNewSessionProjectPicker = false
-                        runInProjectId = null
-                        onNewSession(worktree.directory)
+                        startNewSession(SessionListHomeChrome.NewSessionAction.Create(worktree.directory))
                     },
+                    modifier = Modifier.testTag(HomeNewSessionSheetTags.runInRow(worktree.title)),
                 )
+            }
+            val others = chromeProjects.filter { it.id != runIn.id }
+            if (mode.showsOtherProjects && others.isNotEmpty()) {
+                OpenCodeSectionHeader(title = HomeWorktreeCopy.OTHER_PROJECTS)
+                others.forEach { project ->
+                    OpenCodeBottomSheetEntry(
+                        title = project.title,
+                        startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Folder),
+                        onClick = { pickProject(project, true) },
+                    )
+                }
             }
         } else if (chromeProjects.isEmpty()) {
             OpenCodeBottomSheetEntry(title = "No projects", enabled = false, onClick = {})
         } else {
+            val holdPick = (mode as? SessionListHomeChrome.NewSessionSheetMode.Projects)?.holdPick ?: true
             chromeProjects.forEach { project ->
                 OpenCodeBottomSheetEntry(
                     title = project.title,
                     startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Folder),
-                    onClick = {
-                        ProductAnalytics.logUserAction(
-                            screenId = ProductAnalytics.Screen.HOME_NEW_SESSION_PROJECT_PICKER,
-                            actionId = ProductAnalytics.Action.NEW_SESSION_PICKER_SELECT_PROJECT,
-                        )
-                        when (val action = SessionListHomeChrome.projectAction(project)) {
-                            // Stays open and asks where to run.
-                            is SessionListHomeChrome.NewSessionAction.ChooseWorktree -> runInProjectId = action.projectId
-                            else -> {
-                                showNewSessionProjectPicker = false
-                                startNewSession(action)
-                            }
-                        }
-                    },
+                    onClick = { pickProject(project, holdPick) },
                 )
             }
         }
     }
 }
+
+/** Test tags of the New session sheet. */
+internal object HomeNewSessionSheetTags {
+    fun runInRow(title: String): String = "newSessionRunInRow:$title"
+}
+
+/** Saves the New session sheet mode across configuration changes. */
+private val NewSessionSheetModeSaver: Saver<SessionListHomeChrome.NewSessionSheetMode?, String> =
+    Saver(
+        save = { mode ->
+            when (mode) {
+                null -> ""
+                is SessionListHomeChrome.NewSessionSheetMode.Projects -> "p:${mode.holdPick}"
+                is SessionListHomeChrome.NewSessionSheetMode.RunIn -> "r:${mode.showsOtherProjects}:${mode.projectId}"
+            }
+        },
+        restore = { saved ->
+            when {
+                saved.startsWith("p:") -> SessionListHomeChrome.NewSessionSheetMode.Projects(holdPick = saved == "p:true")
+                saved.startsWith("r:") -> {
+                    val body = saved.removePrefix("r:")
+                    SessionListHomeChrome.NewSessionSheetMode.RunIn(
+                        projectId = body.substringAfter(':'),
+                        showsOtherProjects = body.substringBefore(':') == "true",
+                    )
+                }
+                else -> null
+            }
+        },
+    )
 
 @Composable
 private fun HomeSessionActions(
@@ -805,7 +854,6 @@ private fun HomeProjectsContent(
     onRefresh: () -> Unit,
     onBrowseProjectsClick: () -> Unit,
     onSessionClick: (SessionOpenTarget) -> Unit,
-    onRequestNewSessionProjectPicker: () -> Unit,
     onNewSessionAction: (SessionListHomeChrome.NewSessionAction) -> Unit,
     onRemoveProject: (String) -> Unit,
     onReorderProjects: (List<String>) -> Unit,
@@ -819,6 +867,7 @@ private fun HomeProjectsContent(
     onSelectedFilterIdChange: (String) -> Unit,
     selectedSessionId: String? = null,
     sessionKeyboardNavigationEnabled: Boolean = false,
+    worktreesEnabled: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     // Rows exactly as the list renders them for the selected filter; read by Ctrl+Tab stepping.
@@ -862,13 +911,18 @@ private fun HomeProjectsContent(
             SessionListHomeChrome.filterTabs(
                 projects = chromeProjects,
                 sessionCount = sessions.size,
+                worktreesEnabled = worktreesEnabled,
             )
+        val worktreeTabs = SessionListHomeChrome.worktreeTabs(chromeProjects, worktreesEnabled)
         var showProjectPicker by rememberSaveable { mutableStateOf(false) }
-        // An older scope id (an added path) reads as the project that path now belongs to.
+        var pickerState by remember { mutableStateOf(HomeProjectPickerState()) }
+        // An older scope id (an added path) reads as the project that path now belongs to, and
+        // so does a worktree scope while worktrees are off.
         val resolvedFilterId =
             SessionListHomeChrome.resolvedFilterId(
-                selectedId = homeScopeId(selectedFilterId, projects),
+                selectedId = homeScopeId(selectedFilterId, projects, worktreesEnabled),
                 tabs = filterTabs,
+                worktreeTabs = worktreeTabs,
             )
         LaunchedEffect(resolvedFilterId) {
             if (selectedFilterId != resolvedFilterId) {
@@ -878,7 +932,7 @@ private fun HomeProjectsContent(
         LaunchedEffect(pendingScopeRequest) {
             pendingScopeRequest?.let { request ->
                 if (request.evenFromAll || resolvedFilterId != SessionListFilterTab.ALL_ID) {
-                    onSelectedFilterIdChange(homeScopeId(request.filterId, projects))
+                    onSelectedFilterIdChange(homeScopeId(request.filterId, projects, worktreesEnabled))
                 }
                 onConsumePendingScopeRequest()
             }
@@ -903,6 +957,12 @@ private fun HomeProjectsContent(
                     screenId = ProductAnalytics.Screen.HOME,
                     actionId = ProductAnalytics.Action.HOME_OPEN_PROJECT_PICKER,
                 )
+                // Fresh each time: a worktree scope opens with its project expanded.
+                pickerState =
+                    HomeProjectPickerState.initial(
+                        selectedScope = HomeScope.resolve(resolvedFilterId, projects, worktreesEnabled),
+                        projects = projects,
+                    )
                 showProjectPicker = true
             },
             onFilterSelected = { filterId ->
@@ -916,32 +976,27 @@ private fun HomeProjectsContent(
             onDisplayedSessionsChange = { displayedSessions.value = it },
             onAddProject = onBrowseProjectsClick,
             onNewSession = {
-                when (
-                    val action =
-                        SessionListHomeChrome.newSessionAction(
-                            projects = chromeProjects,
-                            selectedFilterId = resolvedFilterId,
-                        )
-                ) {
-                    SessionListHomeChrome.NewSessionAction.PresentPicker ->
-                        onRequestNewSessionProjectPicker()
-                    else -> onNewSessionAction(action)
-                }
+                onNewSessionAction(
+                    SessionListHomeChrome.newSessionAction(
+                        projects = chromeProjects,
+                        selectedFilterId = resolvedFilterId,
+                        worktreesEnabled = worktreesEnabled,
+                    ),
+                )
             },
             onNewSessionLongPress =
-                if (
-                    SessionListHomeChrome.newSessionLongPressAction(
+                SessionListHomeChrome
+                    .newSessionLongPressAction(
                         projects = chromeProjects,
-                    ) is SessionListHomeChrome.NewSessionAction.PresentPicker
-                ) {
-                    onRequestNewSessionProjectPicker
-                } else {
-                    null
-                },
+                        selectedFilterId = resolvedFilterId,
+                        worktreesEnabled = worktreesEnabled,
+                    ).takeIf { it != SessionListHomeChrome.NewSessionAction.None }
+                    ?.let { action -> { onNewSessionAction(action) } },
             onSessionLongPress = onSessionLongPress,
             revealNewestToken = revealNewestToken,
             selectedSessionId = selectedSessionId,
             onRetryScopeLoad = onRetryProjectLoad,
+            scopeTabs = worktreeTabs,
             modifier = Modifier.fillMaxSize(),
             emptyContent =
                 if (sections.isEmpty()) {
@@ -957,6 +1012,14 @@ private fun HomeProjectsContent(
             // natural for this list (#680).
             height = OpenCodeBottomSheetHeight.Half,
             keyboard = OpenCodeBottomSheetKeyboard.Keep,
+            headerTrailingAction =
+                OpenCodeBottomSheetHeaderTextAction(
+                    title = if (pickerState.isEditing) HomeWorktreeCopy.DONE else HomeWorktreeCopy.EDIT,
+                    // Reordering needs two projects; the control stays visible either way.
+                    enabled = chromeProjects.size >= 2 || pickerState.isEditing,
+                    onClick = { pickerState = pickerState.setEditing(!pickerState.isEditing) },
+                    testTag = SessionListProjectPickerTags.EDIT,
+                ),
             onDismissRequest = {
                 ProductAnalytics.logUserAction(
                     screenId = ProductAnalytics.Screen.HOME_FILTER_PROJECT_PICKER,
@@ -966,7 +1029,16 @@ private fun HomeProjectsContent(
             },
         ) {
             SessionListProjectPickerRows(
-                tabs = filterTabs,
+                rows =
+                    SessionListHomeChrome.pickerRows(
+                        projects = chromeProjects,
+                        sessionCount = sessions.size,
+                        state = pickerState,
+                        worktreesEnabled = worktreesEnabled,
+                    ),
+                isEditing = pickerState.isEditing,
+                onToggleWorktrees = { projectId -> pickerState = pickerState.toggleExpanded(projectId) },
+                onToggleShowAll = { projectId -> pickerState = pickerState.toggleShowAll(projectId) },
                 onSelect = { filterId ->
                     ProductAnalytics.logUserAction(
                         screenId = ProductAnalytics.Screen.HOME_FILTER_PROJECT_PICKER,
@@ -987,15 +1059,19 @@ private class DisplayedSessions {
     var value: List<SessionListSession> = emptyList()
 }
 
-/** Scope id for [id] against [projects]: an added path maps to its project; anything else is kept. */
+/**
+ * Scope id for [id] against [projects]: an added path maps to its project, and so does a
+ * worktree while [worktreesEnabled] is off; anything else is kept.
+ */
 internal fun homeScopeId(
     id: String,
     projects: List<HomeProject>,
-): String = HomeScope.resolve(id, projects)?.let(HomeScope::id) ?: id
+    worktreesEnabled: Boolean = true,
+): String = HomeScope.resolve(id, projects, worktreesEnabled)?.let(HomeScope::id) ?: id
 
 /** Rows for every Home project, one per session id. */
-internal fun MainScreenUiState.Loaded.homeSessions(): List<SessionListSession> =
-    homeSessionListSessions(projects, sections, home.extraSessions)
+internal fun MainScreenUiState.Loaded.homeSessions(worktreesEnabled: Boolean = true): List<SessionListSession> =
+    homeSessionListSessions(projects, sections, home.extraSessions, worktreesEnabled)
 
 /** Without project data, each section is its own project (tests and previews). */
 internal fun List<ProjectSectionUi>.toCrossProjectSessionListSessions(): List<SessionListSession> =
@@ -1010,6 +1086,7 @@ internal fun homeSessionListSessions(
     projects: List<HomeProject>,
     sections: List<ProjectSectionUi>,
     extraSessions: Map<String, List<SessionSummary>> = emptyMap(),
+    worktreesEnabled: Boolean = true,
 ): List<SessionListSession> {
     val sectionsByPath = sections.associateBy { it.worktree }
     val flattened =
@@ -1035,7 +1112,7 @@ internal fun homeSessionListSessions(
             compareByDescending<Int> { index ->
                 flattened[index].session.updatedAtEpochMs ?: 0L
             }.thenBy { index -> index },
-        ).map { index -> flattened[index].toSessionListSession() }
+        ).map { index -> flattened[index].toSessionListSession(worktreesEnabled) }
 }
 
 private data class HomeRowSource(
@@ -1044,9 +1121,9 @@ private data class HomeRowSource(
     val listedIn: String,
     val session: SessionSummary,
 ) {
-    fun toSessionListSession(): SessionListSession {
+    fun toSessionListSession(worktreesEnabled: Boolean = true): SessionListSession {
         val directory = session.directory?.takeIf { it.isNotEmpty() } ?: listedIn
-        val worktree = project.worktree(directory)?.takeIf { project.hasManyWorktrees }
+        val worktree = project.worktree(directory)?.takeIf { worktreesEnabled && project.hasManyWorktrees }
         return SessionListSession(
             id = session.id,
             title = session.title,
@@ -1063,7 +1140,7 @@ private data class HomeRowSource(
             worktreeScopeId = worktree?.let { HomeScope.worktreeId(project.key, it.directory) },
             location =
                 HomeSessionLocation
-                    .parts(project, directory, includeProjectName = false)
+                    .parts(project, directory, includeProjectName = false, worktreesEnabled = worktreesEnabled)
                     ?.map { SessionListLocationPart(it.text, isBranch = it.isBranch) },
             projectName = project.displayName,
         )
