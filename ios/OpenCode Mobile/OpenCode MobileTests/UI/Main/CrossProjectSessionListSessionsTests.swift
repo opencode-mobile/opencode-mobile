@@ -158,6 +158,65 @@ struct CrossProjectSessionListSessionsTests {
         #expect(sessions.visibleForFilter("prj").map(\.id) == ["a", "b"])
     }
 
+    @Test func worktreesOffDropsBranchesAndWorktreeScopes() {
+        let resolution = HomeProjectResolution(id: "prj", canonical: "/repo", isRepository: true)
+        let sections = [
+            section(
+                worktree: "/repo",
+                session(id: "a", title: "Main", updatedAtEpochMs: 30, directory: "/repo"),
+                session(id: "b", title: "Feature", updatedAtEpochMs: 20, directory: "/repo-wt")
+            ),
+        ]
+        let projects = HomeProjectGrouping.group(
+            addedPaths: ["/repo"],
+            resolutions: ["/repo": resolution],
+            inventories: ["/repo": ["/repo", "/repo-wt"]],
+            branches: ["/repo": "main", "/repo-wt": "feature/b"]
+        )
+
+        let off = sections.crossProjectSessionListSessions(projects: projects, worktreesEnabled: false)
+        // Every worktree's sessions stay listed under the project, rendered as a plain project.
+        #expect(off.map(\.id) == ["a", "b"])
+        #expect(off.map(\.worktree) == ["prj", "prj"])
+        #expect(off.map(\.worktreeScopeID) == [nil, nil])
+        #expect(off.map(\.location) == [nil, nil])
+        #expect(off.map(\.scopedLocation) == [nil, nil])
+        #expect(off.map(\.subtitle) == ["/repo", "/repo"])
+        #expect(off.visibleForFilter("prj").map(\.id) == ["a", "b"])
+        let tabs = SessionListHomeChrome.filterTabs(projects: projects, sessions: off, worktreesEnabled: false)
+        #expect(tabs.map(\.id) == ["prj"])
+
+        // Back on: branches and worktree scopes return from the same inputs.
+        let on = sections.crossProjectSessionListSessions(projects: projects)
+        #expect(on[1].worktreeScopeID == HomeScope.worktreeID(projectKey: "prj", directory: "/repo-wt"))
+        #expect(on[1].scopedLocation?.parts == [.branch("feature/b"), .text("repo-wt")])
+    }
+
+    @Test func movedSessionRegroupsUnderItsNewWorktree() {
+        let resolution = HomeProjectResolution(id: "prj", canonical: "/repo", isRepository: true)
+        let projects = HomeProjectGrouping.group(
+            addedPaths: ["/repo"],
+            resolutions: ["/repo": resolution],
+            inventories: ["/repo": ["/repo", "/repo-wt"]],
+            branches: ["/repo": "main", "/repo-wt": "feature/b"]
+        )
+        let before = [
+            section(worktree: "/repo", session(id: "a", title: "Moving", updatedAtEpochMs: 30, directory: "/repo")),
+        ].crossProjectSessionListSessions(projects: projects)
+        // The refetch after `session.moved` lists the session in its new directory.
+        let after = [
+            section(worktree: "/repo", session(id: "a", title: "Moving", updatedAtEpochMs: 31, directory: "/repo-wt")),
+        ].crossProjectSessionListSessions(projects: projects)
+
+        let mainScope = HomeScope.worktreeID(projectKey: "prj", directory: "/repo")
+        let featureScope = HomeScope.worktreeID(projectKey: "prj", directory: "/repo-wt")
+        #expect(before.visibleForFilter(mainScope).map(\.id) == ["a"])
+        #expect(after.visibleForFilter(mainScope).isEmpty)
+        #expect(after.visibleForFilter(featureScope).map(\.id) == ["a"])
+        #expect(after[0].directory == "/repo-wt")
+        #expect(after[0].scopedLocation?.parts == [.branch("feature/b"), .text("repo-wt")])
+    }
+
     private func section(worktree: String, _ sessions: SessionListItem...) -> ProjectSectionItem {
         ProjectSectionItem(
             id: worktree,

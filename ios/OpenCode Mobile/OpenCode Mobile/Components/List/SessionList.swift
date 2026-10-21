@@ -159,6 +159,8 @@ struct SessionListFilterTab: Identifiable, Hashable {
     let load: SessionListScopeLoad?
     /// One worktree of a multi-worktree project: an indented branch row in the picker.
     let isWorktree: Bool
+    /// The tab a worktree scope sits inside (its project), for the dock swipe.
+    let parentId: String?
     /// Picker row text when it differs from the dock (worktree rows, project worktree counts).
     let pickerTitleOverride: String?
     let pickerSubtitleOverride: String?
@@ -178,6 +180,7 @@ struct SessionListFilterTab: Identifiable, Hashable {
         accent: LetterAccent? = nil,
         load: SessionListScopeLoad? = nil,
         isWorktree: Bool = false,
+        parentId: String? = nil,
         pickerTitle: String? = nil,
         pickerSubtitle: String? = nil
     ) {
@@ -189,6 +192,7 @@ struct SessionListFilterTab: Identifiable, Hashable {
         self.accent = accent
         self.load = load
         self.isWorktree = isWorktree
+        self.parentId = parentId
         self.pickerTitleOverride = pickerTitle
         self.pickerSubtitleOverride = pickerSubtitle
     }
@@ -202,14 +206,16 @@ struct SessionListFilterTab: Identifiable, Hashable {
         )
     }
 
-    /// A Home project. The dock reads "All N worktrees" (or the path for one worktree); the
-    /// picker reads "N worktrees" (or the path).
+    /// A Home project. The dock reads "All N worktrees" while worktrees are shown and the
+    /// project has several, else the path; the picker row reads the path (its worktree pill
+    /// carries the count).
     static func homeProject(
         _ project: HomeProject,
         count: Int,
-        load: SessionListScopeLoad? = nil
+        load: SessionListScopeLoad? = nil,
+        worktreesEnabled: Bool = true
     ) -> SessionListFilterTab {
-        let many = project.hasManyWorktrees
+        let many = worktreesEnabled && project.hasManyWorktrees
         return SessionListFilterTab(
             id: HomeScope.project(project.key).id,
             title: project.displayName,
@@ -218,7 +224,7 @@ struct SessionListFilterTab: Identifiable, Hashable {
             letter: letterCharacter(for: project.displayName),
             accent: letterAccent(for: project.primaryPath),
             load: load,
-            pickerSubtitle: many ? HomeProjectCopy.worktreeCount(project.worktrees.count) : project.primaryPath
+            pickerSubtitle: project.primaryPath
         )
     }
 
@@ -243,6 +249,7 @@ struct SessionListFilterTab: Identifiable, Hashable {
             letter: letterCharacter(for: project.displayName),
             accent: letterAccent(for: project.primaryPath),
             isWorktree: true,
+            parentId: HomeScope.project(project.key).id,
             pickerTitle: worktree.title,
             pickerSubtitle: worktree.subtitle
         )
@@ -270,6 +277,8 @@ struct SessionList<EmptyContent: View>: View {
     let sessions: [SessionListSession]
     let filterTabs: [SessionListFilterTab]
     let selectedFilterId: String
+    /// Dock tab of a selection that is not one of `filterTabs` (a worktree scope).
+    let selectedScopeTab: SessionListFilterTab?
     /// Session highlighted as the open trailing pane on tablets; nil on phones.
     let selectedSessionId: String?
     let createError: String?
@@ -306,6 +315,7 @@ struct SessionList<EmptyContent: View>: View {
         sessions: [SessionListSession],
         filterTabs: [SessionListFilterTab],
         selectedFilterId: String,
+        selectedScopeTab: SessionListFilterTab? = nil,
         selectedSessionId: String? = nil,
         createError: String? = nil,
         onOpenProjectPicker: @escaping () -> Void = {},
@@ -326,6 +336,7 @@ struct SessionList<EmptyContent: View>: View {
         self.sessions = sessions
         self.filterTabs = filterTabs
         self.selectedFilterId = selectedFilterId
+        self.selectedScopeTab = selectedScopeTab
         self.selectedSessionId = selectedSessionId
         self.createError = createError
         self.onOpenProjectPicker = onOpenProjectPicker
@@ -371,6 +382,7 @@ struct SessionList<EmptyContent: View>: View {
             OpenCodeSessionListDock(
                 filterTabs: filterTabs,
                 selectedFilterId: selectedFilterId,
+                selectedScopeTab: selectedScopeTab,
                 createError: createError,
                 onOpenProjectPicker: onOpenProjectPicker,
                 onFilterSelected: onFilterSelected,
