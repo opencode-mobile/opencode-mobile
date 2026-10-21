@@ -57,6 +57,10 @@ struct SessionChatView: View {
     @State private var hostID = UUID()
     @State private var dictationSession: any ComposerDictationSession = ComposerDictationSessions.make()
     @State private var dictationSupport = DictationSupport.hidden
+    /// Set once the server moved this session to another worktree; the chat rebinds there.
+    @State private var movedWorktree: String?
+    @State private var homeDisplayPreferences = HomeDisplayPreferences.shared
+    @Environment(\.homeProjects) private var homeProjects
 
     private let session: SessionListItem
     private let injectedViewModel: SessionChatViewModel?
@@ -131,10 +135,12 @@ struct SessionChatView: View {
             case .rebuild:
                 dictationSession.stop()
                 viewModelStorage?.detachHost(hostID)
-                viewModelStorage = injectedViewModel ?? Container.makeSessionChatViewModel(
+                // After a move every region binds to the new directory, so the handed-in
+                // view model (bound to the old one) is not reused.
+                viewModelStorage = (movedWorktree == nil ? injectedViewModel : nil) ?? Container.makeSessionChatViewModel(
                     sessionID: session.id,
                     sessionTitle: session.title,
-                    worktree: session.worktree
+                    worktree: boundSession.worktree
                 )
                 viewModelTaskID = taskID
                 // A view model handed over from the other Home layout may still be
@@ -148,7 +154,20 @@ struct SessionChatView: View {
     }
 
     private var sessionNavigationTaskID: String {
-        session.navigationID
+        guard let movedWorktree else { return session.navigationID }
+        return session.navigationID + "@" + movedWorktree
+    }
+
+    /// The session as opened, or in the worktree the server moved it to.
+    private var boundSession: SessionListItem {
+        guard let movedWorktree else { return session }
+        return SessionListItem(
+            id: session.id,
+            title: session.title,
+            worktree: movedWorktree,
+            parentID: session.parentID,
+            directory: movedWorktree
+        )
     }
 
     // The modifier chain is split into small steps so each one type-checks quickly;
@@ -156,7 +175,7 @@ struct SessionChatView: View {
     private var sessionChatBody: some View {
         let sheets = sessionChatPickerSheets(sessionChatSheets(sessionChatLayout))
         let observed = sessionChatObservers(sessionChatDestinations(sheets))
-        return sessionChatRoutes(sessionChatDialogs(sessionChatLifecycle(observed)))
+        return sessionChatMoveToWorktree(sessionChatRoutes(sessionChatDialogs(sessionChatLifecycle(observed))))
             .feedbackSheet(model: $feedbackModel)
     }
 
@@ -271,7 +290,7 @@ struct SessionChatView: View {
                     onLoadOlder: { Task { await viewModel.loadOlderMessages() } },
                     onSessionBranchTap: {
                         logChatAction(ProductAnalytics.Action.chatOpenChanges)
-                        changesTarget = viewModel.uiState.changesNavigationTarget(worktree: session.worktree)
+                        changesTarget = viewModel.uiState.changesNavigationTarget(worktree: boundSession.worktree)
                     },
                     onSessionTodosTap: {
                         guard !blocksSessionTodosSheet else { return }
@@ -319,7 +338,7 @@ struct SessionChatView: View {
                         childSessionTarget = ChildSessionNavigationTarget(
                             sessionID: sessionID,
                             sessionTitle: title,
-                            worktree: session.worktree,
+                            worktree: boundSession.worktree,
                             optimisticNavigationInstanceID: nil,
                             parentID: session.id
                         )
@@ -327,7 +346,7 @@ struct SessionChatView: View {
                     onChangesReviewTap: { assistantMessageID, initialFilePath in
                         logChatAction(ProductAnalytics.Action.chatOpenChangesFromTool)
                         changesTarget = viewModel.uiState.fileChangeNavigationTarget(
-                            worktree: session.worktree,
+                            worktree: boundSession.worktree,
                             assistantMessageID: assistantMessageID,
                             initialFilePath: initialFilePath
                         )
@@ -595,7 +614,7 @@ struct SessionChatView: View {
     private func sessionChatDestinations(_ content: some View) -> some View {
         content
             .navigationDestination(isPresented: $showSessionContext) {
-                SessionContextView(sessionID: viewModel.uiState.sessionID, worktree: session.worktree)
+                SessionContextView(sessionID: viewModel.uiState.sessionID, worktree: boundSession.worktree)
             }
             .navigationDestination(item: $changesTarget) { target in
                 ChangesView(
@@ -609,12 +628,12 @@ struct SessionChatView: View {
             .navigationDestination(item: $toolGroupTarget) { target in
                 SessionChatToolGroupView(
                     target: target,
-                    worktree: session.worktree,
+                    worktree: boundSession.worktree,
                     parentSessionID: session.id,
                     supportsSessionMessageDiff: viewModel.uiState.supportsSessionMessageDiff,
                     makeChangesTarget: { assistantMessageID, initialFilePath in
                         viewModel.uiState.fileChangeNavigationTarget(
-                            worktree: session.worktree,
+                            worktree: boundSession.worktree,
                             assistantMessageID: assistantMessageID,
                             initialFilePath: initialFilePath
                         )
@@ -987,6 +1006,82 @@ struct SessionChatView: View {
         }
     }
 
+    // MARK: Move to worktree
+
+    /// The Home project this session's directory belongs to.
+    private var moveProject: HomeProject? {
+        SessionChatMoveToWorktree.project(containing: boundSession.worktree, in: homeProjects)
+    }
+
+    private func moveToWorktreeMenuEntry(sessionCreated: Bool) -> OpenCodeOverflowMenuEntry {
+        let availability = SessionChatMoveToWorktree.availability(
+            supportsMove: viewModel.uiState.supportsSessionMove,
+            worktreesEnabled: homeDisplayPreferences.showsWorktrees,
+            sessionCreated: sessionCreated,
+            project: moveProject
+        )
+        return OpenCodeOverflowMenuEntry(
+            title: SessionChatMoveToWorktree.menuTitle,
+            subtitle: availability.subtitle,
+            icon: .callSplit,
+            enabled: availability.enabled,
+            accessibilityIdentifier: "sessionMoveToWorktree",
+            action: {
+                logOverflowAction(ProductAnalytics.Action.chatOverflowMoveToWorktree)
+                menuExpanded = false
+                viewModel.openMoveToWorktree()
+            }
+        )
+    }
+
+    private var moveSheetBinding: Binding<Bool> {
+        Binding(
+            get: { viewModel.uiState.moveSheetVisible },
+            set: { presented in
+                if !presented { viewModel.dismissMoveToWorktree() }
+            }
+        )
+    }
+
+    private func sessionChatMoveToWorktree(_ content: some View) -> some View {
+        content
+            .openCodeBottomSheet(
+                isPresented: moveSheetBinding,
+                title: SessionChatMoveToWorktree.sheetTitle
+            ) {
+                if let project = moveProject {
+                    ForEach(
+                        SessionChatMoveToWorktree.options(project: project, currentDirectory: boundSession.worktree)
+                    ) { option in
+                        OpenCodeListItem(
+                            title: option.title,
+                            subtitle: option.subtitle,
+                            selected: option.isCurrent,
+                            enabled: option.isCurrent || !viewModel.uiState.moveInFlight,
+                            startDecorator: .icon(.callSplit),
+                            action: option.isCurrent ? nil : {
+                                Task { await viewModel.moveSession(to: option.directory, worktreeTitle: option.title) }
+                            }
+                        ) {
+                            if option.isCurrent {
+                                OpenCodeIconImage(icon: .check, size: 18)
+                                    .accessibilityHidden(true)
+                            }
+                        }
+                        .accessibilityAddTraits(option.isCurrent ? .isSelected : [])
+                        .accessibilityIdentifier(
+                            option.isCurrent ? "sessionMoveToWorktreeCurrent" : "sessionMoveToWorktreeRow"
+                        )
+                    }
+                }
+            }
+            .onChange(of: viewModel.uiState.movedDirectory, initial: true) { _, directory in
+                // Also catches a view model handed over from the other Home layout after a move.
+                guard let directory, directory != boundSession.worktree else { return }
+                movedWorktree = directory
+            }
+    }
+
     private var sessionOverflowMenuEntries: [OpenCodeOverflowMenuEntry] {
         let sessionCreated = !OptimisticSessionCreate.isPlaceholder(viewModel.uiState.sessionID)
         let lifecycleEnabled = sessionCreated && !viewModel.uiState.isLifecycleActionInFlight
@@ -1008,7 +1103,7 @@ struct SessionChatView: View {
                 action: {
                     logOverflowAction(ProductAnalytics.Action.chatOverflowReviewChanges)
                     menuExpanded = false
-                    changesTarget = viewModel.uiState.changesNavigationTarget(worktree: session.worktree)
+                    changesTarget = viewModel.uiState.changesNavigationTarget(worktree: boundSession.worktree)
                 }
             ),
             OpenCodeOverflowMenuEntry(
@@ -1021,6 +1116,7 @@ struct SessionChatView: View {
                     viewModel.openForkDialog()
                 }
             ),
+            moveToWorktreeMenuEntry(sessionCreated: sessionCreated),
             OpenCodeOverflowMenuEntry(
                 title: "Browse files",
                 icon: .folder,
@@ -1028,7 +1124,7 @@ struct SessionChatView: View {
                 action: {
                     logOverflowAction(ProductAnalytics.Action.chatOverflowBrowseFiles)
                     menuExpanded = false
-                    filesRoute = FilesRoute(worktree: session.worktree)
+                    filesRoute = FilesRoute(worktree: boundSession.worktree)
                 }
             ),
             OpenCodeOverflowMenuEntry(

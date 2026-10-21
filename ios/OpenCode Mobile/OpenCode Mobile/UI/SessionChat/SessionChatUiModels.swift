@@ -301,6 +301,12 @@ struct SessionChatUiState: Equatable {
     var reviewChangesSummary: ReviewChangesSummary?
     var supportsSessionMessageDiff: Bool = true
     var supportsSessionArchive: Bool = true
+    /// Move to worktree is a v2 server feature.
+    var supportsSessionMove: Bool = false
+    var moveSheetVisible = false
+    var moveInFlight = false
+    /// Where the server moved this session (`session.moved`); the screen rebinds to it.
+    var movedDirectory: String?
     var rename = SessionRenameUiState()
     var slashSuggestionsVisible = false
     var slashSuggestions: [SessionChatSlashSuggestion] = []

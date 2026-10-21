@@ -3332,6 +3332,99 @@ struct SessionChatViewModelTests {
         #expect(viewModel.uiState.hasPendingRevert)
     }
 
+    // MARK: Move to worktree (#785)
+
+    @Test func moveToWorktree_idleMovePostsAndClosesTheSheetQuietly() async {
+        let sessionRepository = FakeChatSessionRepository()
+        let viewModel = makeViewModel(sessionRepository: sessionRepository, serverProtocol: .v2)
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        #expect(viewModel.uiState.supportsSessionMove)
+
+        viewModel.openMoveToWorktree()
+        #expect(viewModel.uiState.moveSheetVisible)
+        await viewModel.moveSession(to: "/repo-wt", worktreeTitle: "feature/x")
+
+        #expect(sessionRepository.moveRequests == [.init(id: "ses-1", directory: "/repo-wt")])
+        #expect(!viewModel.uiState.moveSheetVisible)
+        #expect(!viewModel.uiState.moveInFlight)
+        #expect(viewModel.uiState.snackbar == nil)
+    }
+
+    @Test func moveToWorktree_busySessionSaysItMovesAfterThisTurn() async {
+        let eventStream = FakeForegroundEventStream()
+        let sessionRepository = FakeChatSessionRepository()
+        let viewModel = makeViewModel(eventStream: eventStream, sessionRepository: sessionRepository, serverProtocol: .v2)
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        eventStream.emit(
+            OpencodeEvent(
+                type: "session.status",
+                sessionID: "ses-1",
+                rawProperties: ["status": .dictionary(["type": .string("busy")])]
+            )
+        )
+        let busy = await waitUntil { viewModel.uiState.sessionStatusLabel != nil }
+        #expect(busy)
+
+        viewModel.openMoveToWorktree()
+        await viewModel.moveSession(to: "/repo-wt", worktreeTitle: "feature/x")
+
+        #expect(!viewModel.uiState.moveSheetVisible)
+        #expect(viewModel.uiState.snackbar?.message == "Moves to feature/x after this turn.")
+        #expect(viewModel.uiState.snackbar?.tone == .default)
+    }
+
+    @Test func moveToWorktree_failureShowsTheServerMessage() async {
+        let sessionRepository = FakeChatSessionRepository()
+        sessionRepository.moveSessionError = .http(statusCode: 400, message: "Destination is not a directory")
+        let viewModel = makeViewModel(sessionRepository: sessionRepository, serverProtocol: .v2)
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+
+        viewModel.openMoveToWorktree()
+        await viewModel.moveSession(to: "/gone", worktreeTitle: "gone")
+
+        #expect(viewModel.uiState.snackbar?.message == "Couldn't move the session: Destination is not a directory")
+        #expect(viewModel.uiState.snackbar?.tone == .error)
+        #expect(viewModel.uiState.movedDirectory == nil)
+        viewModel.consumeSnackbar()
+        #expect(viewModel.uiState.snackbar == nil)
+    }
+
+    @Test func moveToWorktree_v1NeverOpensTheSheet() async {
+        let sessionRepository = FakeChatSessionRepository()
+        let viewModel = makeViewModel(sessionRepository: sessionRepository, serverProtocol: .v1)
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+
+        #expect(!viewModel.uiState.supportsSessionMove)
+        viewModel.openMoveToWorktree()
+        #expect(!viewModel.uiState.moveSheetVisible)
+    }
+
+    @Test func sessionMoved_rebindsTheChatToTheNewDirectory() async {
+        let eventStream = FakeForegroundEventStream()
+        let viewModel = makeViewModel(eventStream: eventStream, serverProtocol: .v2)
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        let adapter = EventDomainAdapter()
+
+        // Another session moving changes nothing here.
+        for event in adapter.parseEvents(
+            dataLine: #"{"id":"evt_x","type":"session.moved","location":{"directory":"/repo"},"data":{"sessionID":"ses-2","location":{"directory":"/repo-wt"},"projectID":"p"}}"#
+        ) {
+            eventStream.emit(event)
+        }
+        for event in adapter.parseEvents(
+            dataLine: #"{"id":"evt_m","type":"session.moved","location":{"directory":"/repo"},"data":{"sessionID":"ses-1","location":{"directory":"/repo-wt"},"projectID":"p","subpath":""}}"#
+        ) {
+            eventStream.emit(event)
+        }
+        let moved = await waitUntil { viewModel.uiState.movedDirectory == "/repo-wt" }
+        #expect(moved)
+    }
+
     @Test func revertStagedElsewhere_hidesRevertedTurnsUntilCleared() async {
         let messages = [
             Message(id: "msg-1", role: .user, text: "First", model: nil, mode: nil, sentAtEpochMs: 1),
@@ -5642,6 +5735,19 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
     }
     func listSessionTodos(id: String, directory: String?) async throws -> [SessionTodo] { fatalError() }
     func initializeSessionAgents(id: String, messageID: String, providerID: String, modelID: String) async throws -> Bool { fatalError() }
+    struct MoveRequest: Equatable {
+        let id: String
+        let directory: String
+    }
+
+    private(set) var moveRequests: [MoveRequest] = []
+    var moveSessionError: SessionError?
+
+    func moveSession(id: String, directory: String) async throws {
+        moveRequests.append(MoveRequest(id: id, directory: directory))
+        if let moveSessionError { throw moveSessionError }
+    }
+
     func forkSession(id: String, atMessageID: String?) async throws -> Session {
         forkSessionRequest = ForkRequest(id: id, atMessageID: atMessageID)
         forkSessionCallCount += 1
