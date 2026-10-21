@@ -17,6 +17,7 @@ data class ProjectDto(
     val directory: String? = null,
     val vcs: String? = null,
     val time: ProjectTimeDto? = null,
+    val name: String? = null,
 ) {
     val resolvedWorktree: String
         get() =

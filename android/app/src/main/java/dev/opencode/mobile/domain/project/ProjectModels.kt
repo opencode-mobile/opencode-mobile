@@ -10,6 +10,8 @@ data class Project(
     val isRepository: Boolean = false,
     /** True when the server archived the project because its directories are gone (v2 `time.archived`). */
     val isArchived: Boolean = false,
+    /** The project's own name when the user set one (v1 `name`). */
+    val name: String? = null,
 )
 
 sealed class ServerProbeError : Exception() {
