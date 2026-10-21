@@ -301,7 +301,8 @@ struct OpenCodeActivityCard: View {
 }
 
 private enum ActivityCardMetrics {
-    static let cornerRadius: CGFloat = 14
+    /// Same radius as the tool call card so settled lines and cards match.
+    static let cornerRadius: CGFloat = 8
     static let paddingHorizontal: CGFloat = 12
     static let paddingVertical: CGFloat = 10
     static let summaryBottomPadding: CGFloat = 8
@@ -335,7 +336,8 @@ private struct ActivityCardAgentRow: View {
             }
             OpenCodeActivityChevron()
         }
-        .padding(.vertical, 7)
+        .padding(.vertical, 9)
+        .frame(minHeight: 44)
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(

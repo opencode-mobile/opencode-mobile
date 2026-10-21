@@ -84,11 +84,15 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 import kotlin.coroutines.coroutineContext
+
+/** Minimum time a child session's current action stays on screen before the next one replaces it. */
+private const val ACTIVITY_CHILD_UPDATE_HOLD_MS = 800L
 
 @HiltViewModel
 class SessionChatViewModel
@@ -1812,12 +1816,16 @@ class SessionChatViewModel
                 val parentId = boundSessionId
                 activityChildJobs[childId] =
                     viewModelScope.launch {
-                        activityMessageRepository.observeMessages(childId, worktree).collect { update ->
+                        // conflate + delay: a child's current action changes at most once per
+                        // hold period, always settling on the latest value, so fast tool bursts
+                        // read as a smooth update instead of flicker.
+                        activityMessageRepository.observeMessages(childId, worktree).conflate().collect { update ->
                             if (boundSessionId != parentId || update !is MessageListUpdate.Messages) return@collect
                             val activity = SessionChatActivityCard.childActivity(update.messages)
                             if (activityCardChildren[childId] == activity) return@collect
                             activityCardChildren = activityCardChildren + (childId to activity)
                             _uiState.value = _uiState.value.copy(activityCardChildren = activityCardChildren)
+                            delay(ACTIVITY_CHILD_UPDATE_HOLD_MS)
                         }
                     }
             }

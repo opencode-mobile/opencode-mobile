@@ -112,7 +112,8 @@ struct SessionChatActivitySheetContent: View {
                         OpenCodeActivityChevron()
                     }
                 }
-                .padding(.vertical, 10)
+                .padding(.vertical, 13)
+                .frame(minHeight: 44)
             }
             if running, let recent = activity?.recentSteps, !recent.isEmpty {
                 VStack(alignment: .leading, spacing: 0) {
@@ -202,7 +203,8 @@ struct SessionChatActivitySheetContent: View {
                     OpenCodeLiveElapsedText(startedAtMs: start)
                 }
             }
-            .padding(.vertical, 10)
+            .padding(.vertical, 13)
+                .frame(minHeight: 44)
         }
     }
 

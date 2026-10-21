@@ -48,6 +48,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import dev.opencode.mobile.theme.OpenCodeRadius
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
@@ -102,13 +103,16 @@ data class OpenCodeActivityCurrentRow(
     val startedAtMs: Long?,
 )
 
-private val ActivityCardRadius = 14.dp
+private val ActivityCardRadius = OpenCodeRadius.small
 private val ActivityCardPaddingHorizontal = 12.dp
 private val ActivitySpacing = 8.dp
 private val ActivityDotSize = 8.dp
 private val ActivityIconSize = 16.dp
 private val ActivityChevronSize = 16.dp
 private val ActivityAgentTileSize = 20.dp
+
+/** Agent rows are tap targets; keep them at least this tall. */
+private val ActivityAgentRowMinHeight = 44.dp
 private val ActivityAgentTileRadius = 6.dp
 private const val ACTIVITY_AGENT_TILE_ALPHA = 0.08f
 private const val ACTIVITY_AGENT_BORDER_ALPHA = 0.4f
@@ -233,11 +237,14 @@ private fun AgentRow(
         modifier =
             Modifier
                 .fillMaxWidth()
+                // Rounded press feedback instead of a hard-edged ripple against the hairlines.
+                .clip(RoundedCornerShape(OpenCodeRadius.small))
                 .clickable(onClick = onTap)
                 .semantics(mergeDescendants = true) {
                     contentDescription = listOfNotNull(agent.agentName, agent.action, elapsed).joinToString(", ")
                     role = Role.Button
-                }.padding(vertical = 7.dp),
+                }.heightIn(min = ActivityAgentRowMinHeight)
+                .padding(vertical = 9.dp),
         horizontalArrangement = Arrangement.spacedBy(ActivitySpacing),
         verticalAlignment = Alignment.CenterVertically,
     ) {

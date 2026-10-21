@@ -1149,6 +1149,7 @@ final class SessionChatTimeline {
     private func observeChildActivity(_ childID: String) -> Task<Void, Never> {
         let repository = messageRepository
         let directory = worktree
+        let throttle = ChildActivityThrottle()
         return Task { @MainActor [weak self] in
             for await update in repository.observeMessages(sessionID: childID, directory: directory) {
                 guard !Task.isCancelled else { return }
@@ -1158,10 +1159,47 @@ final class SessionChatTimeline {
                 }.value
                 guard let self, !Task.isCancelled, self.childActivityTasks[childID] != nil else { return }
                 guard self.state.childActivities[childID] != activity else { continue }
-                self.state.childActivities[childID] = activity
-                self.onChange?()
+                throttle.submit(activity) { [weak self] latest in
+                    guard let self, self.childActivityTasks[childID] != nil else { return }
+                    guard self.state.childActivities[childID] != latest else { return }
+                    self.state.childActivities[childID] = latest
+                    self.onChange?()
+                }
             }
         }
+    }
+}
+
+/// Holds a child session's current action on screen for a minimum time before
+/// the next one replaces it, always settling on the latest value, so fast tool
+/// bursts read as a smooth update instead of flicker.
+@MainActor
+private final class ChildActivityThrottle {
+    static let hold: Duration = .milliseconds(800)
+
+    private var lastApplied: ContinuousClock.Instant?
+    private var pending: SessionChatChildActivity?
+    private var flush: Task<Void, Never>?
+
+    func submit(_ activity: SessionChatChildActivity, apply: @escaping @MainActor (SessionChatChildActivity) -> Void) {
+        let now = ContinuousClock.now
+        if let lastApplied, now - lastApplied < Self.hold {
+            pending = activity
+            guard flush == nil else { return }
+            let wait = Self.hold - (now - lastApplied)
+            flush = Task { @MainActor [weak self] in
+                try? await Task.sleep(for: wait)
+                guard let self, !Task.isCancelled, let latest = self.pending else { return }
+                self.pending = nil
+                self.flush = nil
+                self.lastApplied = ContinuousClock.now
+                apply(latest)
+            }
+            return
+        }
+        pending = nil
+        lastApplied = now
+        apply(activity)
     }
 }
 

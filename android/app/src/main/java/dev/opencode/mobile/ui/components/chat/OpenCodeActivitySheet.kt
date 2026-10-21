@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
@@ -65,6 +66,10 @@ data class OpenCodeActivitySheetStep(
 )
 
 private val SheetRowHorizontal = 16.dp
+private val SheetRowVertical = 14.dp
+
+/** Comfortable tap target for a sheet row (Material minimum is 48dp). */
+private val SheetRowMinHeight = 48.dp
 private val SheetSpacing = 10.dp
 private val SheetIconSize = 16.dp
 private val SheetSubStepInset = 44.dp
@@ -140,7 +145,7 @@ fun OpenCodeActivitySheet(
         }
         steps.forEachIndexed { index, step ->
             key(step.id) {
-                if (index > 0) ActivityHairline(modifier = Modifier.padding(start = SheetRowHorizontal))
+                if (index > 0) ActivityHairline()
                 StepRow(step = step, nowMs = now, pulses = animationsOn, onTap = { onStepTap(step.id) })
             }
         }
@@ -168,7 +173,8 @@ private fun AgentRow(
                             listOfNotNull(agent.agentName, agent.description, agent.status.spoken(), agent.caption, elapsed)
                                 .joinToString(", ")
                         if (agent.tappable) role = Role.Button
-                    }.padding(horizontal = SheetRowHorizontal, vertical = 10.dp),
+                    }.heightIn(min = SheetRowMinHeight)
+                    .padding(horizontal = SheetRowHorizontal, vertical = SheetRowVertical),
             horizontalArrangement = Arrangement.spacedBy(SheetSpacing),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -244,7 +250,8 @@ private fun StepRow(
                 .semantics(mergeDescendants = true) {
                     contentDescription = listOfNotNull(step.title, step.detail, step.status.spoken(), elapsed).joinToString(", ")
                     if (step.tappable) role = Role.Button
-                }.padding(horizontal = SheetRowHorizontal, vertical = 10.dp),
+                }.heightIn(min = SheetRowMinHeight)
+                    .padding(horizontal = SheetRowHorizontal, vertical = SheetRowVertical),
         horizontalArrangement = Arrangement.spacedBy(SheetSpacing),
         verticalAlignment = Alignment.CenterVertically,
     ) {
