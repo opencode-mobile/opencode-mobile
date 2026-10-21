@@ -345,6 +345,53 @@ struct ProjectListHomeViewModelTests {
         #expect(viewModel.homeProjects.first?.worktrees.map(\.directory) == ["/repo", "/repo-wt"])
     }
 
+    @Test func branchesOfWorktreesFoundAfterTheRefreshShowWithoutAPullToRefresh() async {
+        // v2: the first inventory knows only the main checkout; the next one (after
+        // POST /api/worktree/refresh) adds two worktrees while branch loads are still in flight.
+        let worktrees = ScriptedWorktreeRepository(loads: [
+            .loaded(directories: ["/repo"], listsSessions: false),
+            .loaded(directories: ["/repo", "/wt/tax", "/wt/export"], listsSessions: false),
+        ])
+        let vcs = GatedVcs(
+            branches: ["/repo": "main", "/wt/tax": "feature/tax-rounding", "/wt/export": "feature/export"],
+            // The first ask for the main checkout is cancelled when the REST pool is replaced.
+            failFirstCallFor: ["/repo"]
+        )
+        let sessionRepository = FakeSessionRepository(sessions: [
+            Session(id: "s-tax", title: "Tax", slug: nil, projectID: nil, directory: "/wt/tax", parentID: nil, updatedAtEpochMs: 2),
+            Session(id: "s-main", title: "Main", slug: nil, projectID: nil, directory: "/repo", parentID: nil, updatedAtEpochMs: 1),
+        ])
+        sessionRepository.vcsInfo = { directory in try await vcs.info(directory) }
+        let repo = Project(id: "prj_repo", worktree: "/repo", displayName: "repo", isRepository: true)
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(projectsByDirectory: ["/repo": repo]),
+            sessionRepository: sessionRepository,
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"]),
+            worktreeRepository: worktrees,
+            branchRetryDelays: [.zero]
+        )
+
+        await viewModel.refresh()
+        #expect(await waitUntil { vcs.waitingDirectories == ["/repo"] })
+        // Home reloads (the inventory grows) while the first branch load is still waiting.
+        await viewModel.refresh()
+        #expect(await waitUntil { viewModel.homeProjects.first?.worktrees.count == 3 })
+        #expect(await waitUntil { Set(vcs.waitingDirectories) == ["/repo", "/wt/tax", "/wt/export"] })
+        vcs.open()
+
+        let shown = await waitUntil {
+            viewModel.homeProjects.first?.worktrees.map(\.branch) == ["main", "feature/export", "feature/tax-rounding"]
+        }
+        #expect(shown)
+        guard case let .loaded(sections, _, _, _) = viewModel.state else {
+            Issue.record("Expected loaded")
+            return
+        }
+        let rows = sections.crossProjectSessionListSessions(projects: viewModel.homeProjects)
+        #expect(rows.first { $0.id == "s-tax" }?.scopedLocation?.parts == [.branch("feature/tax-rounding"), .text("tax")])
+        #expect(rows.first { $0.id == "s-main" }?.scopedLocation?.parts == [.branch("main")])
+    }
+
     @Test func removingAMergedProjectRemovesEveryMemberPath() async {
         let store = FakeConnectionProfileStore(initial: ["/repo", "/other", "/repo-wt"])
         let repo = Project(id: "prj_repo", worktree: "/repo", displayName: "repo", isRepository: true)
@@ -2135,7 +2182,9 @@ private func makeViewModel(
     sessionLiveStoreOverride: (any SessionLiveStore)? = nil,
     sessionStatusLiveStoreOverride: (any SessionStatusLiveStore)? = nil,
     sessionReadyStoreOverride: (any SessionReadyStore)? = nil,
-    projectLoadTiming: ProjectLoadTiming = .standard
+    projectLoadTiming: ProjectLoadTiming = .standard,
+    worktreeRepository: any WorktreeRepository = UnavailableWorktreeRepository(),
+    branchRetryDelays: [Duration] = [.seconds(1), .seconds(3)]
 ) -> ProjectListHomeViewModel {
     let eventStream = eventStream ?? FakeForegroundEventStream()
     // Mutations (createSession) require Connected; default fakes start Idle.
@@ -2176,7 +2225,9 @@ private func makeViewModel(
         sessionReadyStore: sessionReadyStore,
         connectionSessionCoordinator: coordinator,
         addProjectListingDebounce: .zero,
-        projectLoadTiming: projectLoadTiming
+        projectLoadTiming: projectLoadTiming,
+        worktreeRepository: worktreeRepository,
+        branchRetryDelays: branchRetryDelays
     )
 }
 
@@ -2489,6 +2540,13 @@ private final class FakeSessionRepository: SessionRepository, @unchecked Sendabl
     private(set) var archivedIDs: [String] = []
     private(set) var deletedIDs: [String] = []
     private(set) var forkedIDs: [String] = []
+    /// Answers `getVcsInfo`; nil keeps the protocol default (404).
+    var vcsInfo: (@Sendable (String) async throws -> VcsInfo)?
+
+    func getVcsInfo(directory: String?) async throws -> VcsInfo {
+        guard let vcsInfo else { throw SessionError.http(statusCode: 404, message: nil) }
+        return try await vcsInfo(directory ?? "")
+    }
 
     init(
         sessions: [Session] = [Session(id: "1", title: "Alpha", slug: nil, projectID: nil, directory: nil, parentID: nil, updatedAtEpochMs: 1)],
@@ -2855,5 +2913,74 @@ private final class SessionListSnapshotCollector {
 
     func cancel() {
         task?.cancel()
+    }
+}
+
+/// Worktree inventories handed out in order; the last one repeats.
+private final class ScriptedWorktreeRepository: WorktreeRepository, @unchecked Sendable {
+    private let lock = NSLock()
+    private var loads: [WorktreeLoad]
+
+    init(loads: [WorktreeLoad]) {
+        self.loads = loads
+    }
+
+    private func next() -> WorktreeLoad {
+        lock.withLock {
+            loads.count > 1 ? loads.removeFirst() : (loads.first ?? .unloaded)
+        }
+    }
+
+    func load(addedPath: String, projectID: String?) async -> WorktreeLoad { next() }
+    func loadRefreshed(addedPath: String, projectID: String?) async -> WorktreeLoad { next() }
+    func refresh(projectID: String) async -> Bool { false }
+    func refetch(projectID: String) async -> WorktreeLoad { next() }
+    func onDisconnected() {}
+    func onConnection(key: String) {}
+}
+
+/// `getVcsInfo` that holds every call until `open()`, then answers newest first. Directories in
+/// `failFirstCallFor` fail their first call (a request cancelled mid-flight).
+private final class GatedVcs: @unchecked Sendable {
+    private let lock = NSLock()
+    private let branches: [String: String]
+    private var failFirst: Set<String>
+    private var isOpen = false
+    private var waiting: [(directory: String, continuation: CheckedContinuation<Void, Never>)] = []
+
+    init(branches: [String: String], failFirstCallFor: Set<String> = []) {
+        self.branches = branches
+        self.failFirst = failFirstCallFor
+    }
+
+    var waitingDirectories: [String] {
+        lock.withLock { waiting.map(\.directory) }
+    }
+
+    func open() {
+        let released = lock.withLock {
+            isOpen = true
+            defer { waiting.removeAll() }
+            return waiting.map(\.continuation)
+        }
+        // Newest first: a stale request answers last.
+        released.reversed().forEach { $0.resume() }
+    }
+
+    func info(_ directory: String) async throws -> VcsInfo {
+        let fails = lock.withLock { failFirst.remove(directory) != nil }
+        let mustWait = lock.withLock { !isOpen }
+        if mustWait {
+            await withCheckedContinuation { continuation in
+                let resumeNow = lock.withLock {
+                    if isOpen { return true }
+                    waiting.append((directory, continuation))
+                    return false
+                }
+                if resumeNow { continuation.resume() }
+            }
+        }
+        if fails { throw SessionError.transport("cancelled") }
+        return VcsInfo(currentBranch: branches[directory], defaultBranch: "main")
     }
 }

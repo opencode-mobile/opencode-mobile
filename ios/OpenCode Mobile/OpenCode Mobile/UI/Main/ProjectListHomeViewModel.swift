@@ -468,8 +468,7 @@ final class ProjectListHomeViewModel {
     private var worktreeBranches: [String: String] = [:]
     /// Name and VCS from the server's project list, by project id.
     private var serverProjectInfo: [String: (name: String?, isRepository: Bool)] = [:]
-    @ObservationIgnored private var branchLookups: Set<String> = []
-    @ObservationIgnored private var branchTasks: [Task<Void, Never>] = []
+    @ObservationIgnored private var branchLookups: HomeBranchLookups
     @ObservationIgnored private var serverProjectsTask: Task<Void, Never>?
     @ObservationIgnored private var worktreeExtrasRefreshTask: Task<Void, Never>?
     private var worktreeMarkTask: Task<Void, Never>?
@@ -498,7 +497,8 @@ final class ProjectListHomeViewModel {
         addProjectListingDebounce: Duration = .milliseconds(250),
         projectLoadTiming: ProjectLoadTiming = .standard,
         worktreeRepository: any WorktreeRepository = UnavailableWorktreeRepository(),
-        foregroundEventStream: (any ForegroundEventStream)? = nil
+        foregroundEventStream: (any ForegroundEventStream)? = nil,
+        branchRetryDelays: [Duration] = [.seconds(1), .seconds(3)]
     ) {
         self.addProjectListingDebounce = addProjectListingDebounce
         self.projectLoadTiming = projectLoadTiming
@@ -550,6 +550,17 @@ final class ProjectListHomeViewModel {
                 }
             }
         )
+        self.branchLookups = HomeBranchLookups(retryDelays: branchRetryDelays) { directory in
+            do {
+                let info = try await sessions.getVcsInfo(directory: directory)
+                return .branch(HomeProjectGrouping.usableBranch(info.currentBranch))
+            } catch let SessionError.http(statusCode, _) where (400 ..< 500).contains(statusCode) {
+                // No VCS routes, or not a repository: there is no branch to show.
+                return .branch(nil)
+            } catch {
+                return .failed
+            }
+        }
         self.connectionSessionCoordinator = connectionSessionCoordinator
         self.sessionCache = sessionCache
         self.sessionActionsRegion = HomeSessionActions(
@@ -579,6 +590,10 @@ final class ProjectListHomeViewModel {
                 self?.state = .disconnected
                 self?.serversChrome = HomeServersChrome()
             }
+        }
+        branchLookups.onChange = { [weak self] branches in
+            guard let self, self.worktreeBranches != branches else { return }
+            self.worktreeBranches = branches
         }
         startObservingConnectionState()
     }
@@ -612,9 +627,7 @@ final class ProjectListHomeViewModel {
         worktreeDirectories.removeAll()
         worktreeBranches.removeAll()
         serverProjectInfo.removeAll()
-        branchLookups.removeAll()
-        branchTasks.forEach { $0.cancel() }
-        branchTasks.removeAll()
+        branchLookups.clear()
         serverProjectsTask?.cancel()
         serverProjectsTask = nil
     }
@@ -1701,7 +1714,7 @@ final class ProjectListHomeViewModel {
         worktreeMarkTask?.cancel()
         worktreeMarks.onConnection(serverBaseURL)
         worktreeMarks.setAddedPaths(worktrees)
-        branchLookups.removeAll()
+        branchLookups.refresh()
         loadServerProjectInfo()
         worktreeMarkTask = Task { @MainActor [weak self] in
             guard let self else { return }
@@ -1752,29 +1765,15 @@ final class ProjectListHomeViewModel {
 
     /// Pull to refresh asks every worktree for its branch again.
     private func refreshBranches() {
-        branchLookups.removeAll()
-        for project in homeProjects where projectResolutions[project.primaryPath] != nil {
-            lookUpBranches(project.worktrees.map(\.directory))
-        }
+        branchLookups.refresh()
+        lookUpBranchesForResolvedProjects()
     }
 
-    /// Branch names load behind the session list; a failure reads as unknown.
-    private func lookUpBranches(_ directories: [String]) {
-        let pending = directories.filter { !branchLookups.contains($0) }
-        guard !pending.isEmpty else { return }
-        branchLookups.formUnion(pending)
-        let sessionRepository = sessionRepository
-        branchTasks.removeAll { $0.isCancelled }
-        branchTasks.append(Task { @MainActor [weak self] in
-            for directory in pending {
-                let info = try? await sessionRepository.getVcsInfo(directory: directory)
-                guard !Task.isCancelled, let self else { return }
-                let branch = HomeProjectGrouping.usableBranch(info?.currentBranch)
-                if self.worktreeBranches[directory] != branch {
-                    self.worktreeBranches[directory] = branch
-                }
-            }
-        })
+    /// Branch names load behind the session list for every worktree of a resolved project.
+    private func lookUpBranchesForResolvedProjects() {
+        for project in homeProjects where project.memberPaths.contains(where: { projectResolutions[$0] != nil }) {
+            branchLookups.lookUp(project.worktrees.map(\.directory))
+        }
     }
 
     private func applyWorktreeMark(_ update: WorktreeMarkUpdate) {
@@ -1789,11 +1788,8 @@ final class ProjectListHomeViewModel {
         if update.inventory != .failed, worktreeDirectories[update.addedPath] != update.directories {
             worktreeDirectories[update.addedPath] = update.directories
         }
-        if update.resolution != nil,
-           let project = homeProjects.first(where: { $0.hasMember(update.addedPath) })
-        {
-            lookUpBranches(project.worktrees.map(\.directory))
-        }
+        // The inventory may have grown (v2 lists again after its refresh): ask for new worktrees.
+        lookUpBranchesForResolvedProjects()
         guard case let .loaded(sections, showAdd, addProjectSheet, createError) = state else { return }
         guard let section = sections.first(where: { $0.worktree == update.addedPath }) else { return }
         let updated = ProjectSectionItem(
