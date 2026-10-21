@@ -117,6 +117,9 @@ private val ActivityAgentTileSize = 20.dp
 /** Agent rows are tap targets; keep them at least this tall. */
 private val ActivityAgentRowMinHeight = 44.dp
 
+/** Footer band and settled line are tap targets too; Material's 48dp minimum. */
+private val ActivityTapRowMinHeight = 48.dp
+
 /** How far an agent row's press surface extends beyond its content on each side. */
 private val ActivityAgentRowBleed = 8.dp
 private val ActivityAgentTileRadius = 6.dp
@@ -307,7 +310,8 @@ private fun FooterBand(
                 .semantics(mergeDescendants = true) {
                     contentDescription = "$label, opens activity"
                     role = Role.Button
-                }.padding(start = ActivityCardPaddingHorizontal, end = ActivityCardPaddingHorizontal, top = 9.dp, bottom = 10.dp),
+                }.heightIn(min = ActivityTapRowMinHeight)
+                .padding(start = ActivityCardPaddingHorizontal, end = ActivityCardPaddingHorizontal, top = 12.dp, bottom = 13.dp),
         horizontalArrangement = Arrangement.spacedBy(ActivitySpacing),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -366,8 +370,8 @@ private fun SettledLine(
                 .semantics(mergeDescendants = true) {
                     contentDescription = "$label, ${state.worstStatus.spoken()}, opens activity"
                     role = Role.Button
-                }.heightIn(min = 36.dp)
-                .padding(horizontal = ActivityCardPaddingHorizontal, vertical = 8.dp),
+                }.heightIn(min = ActivityTapRowMinHeight)
+                .padding(horizontal = ActivityCardPaddingHorizontal, vertical = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(ActivitySpacing),
         verticalAlignment = Alignment.CenterVertically,
     ) {

@@ -230,7 +230,7 @@ struct OpenCodeActivityCard: View {
             .padding(.horizontal, ActivityCardMetrics.paddingHorizontal)
             .padding(.top, ActivityCardMetrics.footerPaddingTop)
             .padding(.bottom, ActivityCardMetrics.footerPaddingBottom)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, minHeight: ActivityCardMetrics.tapRowMinHeight, alignment: .leading)
             .background(OpenCodeColors.surfaceRaisedBaseHover)
             .clipShape(
                 UnevenRoundedRectangle(
@@ -279,6 +279,7 @@ struct OpenCodeActivityCard: View {
             }
             .padding(.horizontal, ActivityCardMetrics.paddingHorizontal)
             .padding(.vertical, ActivityCardMetrics.settledPaddingVertical)
+            .frame(maxWidth: .infinity, minHeight: ActivityCardMetrics.tapRowMinHeight, alignment: .leading)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -306,11 +307,13 @@ private enum ActivityCardMetrics {
     static let paddingHorizontal: CGFloat = 12
     static let paddingVertical: CGFloat = 10
     static let summaryBottomPadding: CGFloat = 8
-    static let settledPaddingVertical: CGFloat = 9
+    static let settledPaddingVertical: CGFloat = 11
+    /// Footer band and settled line are tap targets; keep them at least this tall.
+    static let tapRowMinHeight: CGFloat = 44
     static let iconSize: CGFloat = 16
     static let footerTopMargin: CGFloat = 0
-    static let footerPaddingTop: CGFloat = 9
-    static let footerPaddingBottom: CGFloat = 10
+    static let footerPaddingTop: CGFloat = 12
+    static let footerPaddingBottom: CGFloat = 13
 }
 
 /// Letter tile, agent name in the agent tint, current action muted, elapsed, chevron.
