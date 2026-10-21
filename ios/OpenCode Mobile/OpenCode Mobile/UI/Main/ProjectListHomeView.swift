@@ -17,6 +17,8 @@ struct ProjectListHomeView: View {
     @State private var connectionSetupViewModel: ConnectionSetupViewModel?
     @State private var serversRefreshToken = 0
     @State private var showNewSessionProjectPicker = false
+    /// Project whose worktrees the New session sheet lists under "Run in"; nil lists projects.
+    @State private var newSessionRunInProjectKey: String?
     @State private var showProjectPicker = false
     @State private var selectedSessionFilterId = SessionListFilterTab.allId
     /// Trailing-pane chat in the regular-width split view. Unused on compact.
@@ -221,11 +223,15 @@ struct ProjectListHomeView: View {
                         selectedSessionFilterId = filterId
                         showProjectPicker = false
                     },
-                    onRemoveProject: { worktree in
-                        viewModel.requestRemoveProject(worktree: worktree)
+                    onRemoveProject: { projectKey in
+                        viewModel.requestRemoveProject(worktree: projectKey)
                     },
-                    onReorderProjects: { worktrees in
-                        viewModel.reorderProjects(worktrees: worktrees)
+                    onReorderProjects: { projectKeys in
+                        let byKey = Dictionary(
+                            viewModel.homeProjects.map { ($0.key, $0.memberPaths) },
+                            uniquingKeysWith: { first, _ in first }
+                        )
+                        viewModel.reorderProjects(worktrees: projectKeys.flatMap { byKey[$0] ?? [] })
                     }
                 )
             }
@@ -233,11 +239,29 @@ struct ProjectListHomeView: View {
                 isPresented: newSessionPickerBinding,
                 title: "New session"
             ) {
-                let projects = newSessionPickerProjects
-                if projects.isEmpty {
+                let projects = viewModel.homeProjects
+                if let runIn = projects.first(where: { $0.key == newSessionRunInProjectKey }) {
+                    OpenCodeSectionHeader(title: HomeProjectCopy.runInTitle)
+                    ForEach(HomeRunInOption.options(for: runIn, sessions: homeSessions)) { option in
+                        OpenCodeListItem(
+                            title: option.title,
+                            subtitle: option.subtitle,
+                            caption: option.trailing,
+                            startDecorator: .icon(.callSplit),
+                            action: {
+                                ProductAnalytics.logUserAction(
+                                    screenId: ProductAnalytics.Screen.homeNewSessionProjectPicker,
+                                    actionId: ProductAnalytics.Action.newSessionPickerSelectProject
+                                )
+                                showNewSessionProjectPicker = false
+                                Task { await viewModel.createSession(in: option.directory) }
+                            }
+                        )
+                    }
+                } else if projects.isEmpty {
                     OpenCodeBottomSheetEntry(title: "No projects", enabled: false, action: {})
                 } else {
-                    ForEach(projects, id: \.worktree) { project in
+                    ForEach(projects) { project in
                         OpenCodeBottomSheetEntry(
                             title: project.displayName,
                             startDecorator: .icon(.folder),
@@ -246,8 +270,15 @@ struct ProjectListHomeView: View {
                                     screenId: ProductAnalytics.Screen.homeNewSessionProjectPicker,
                                     actionId: ProductAnalytics.Action.newSessionPickerSelectProject
                                 )
-                                showNewSessionProjectPicker = false
-                                Task { await viewModel.createSession(in: project.worktree) }
+                                switch SessionListHomeChrome.pick(project) {
+                                case let .chooseWorktree(projectKey):
+                                    newSessionRunInProjectKey = projectKey
+                                case let .create(directory):
+                                    showNewSessionProjectPicker = false
+                                    Task { await viewModel.createSession(in: directory) }
+                                case .none, .presentPicker:
+                                    break
+                                }
                             }
                         )
                     }
@@ -525,13 +556,22 @@ struct ProjectListHomeView: View {
         homeRoutes.isEmpty && !showSettings && scenePhase == .active
     }
 
-    private var newSessionPickerProjects: [(worktree: String, displayName: String)] {
-        switch viewModel.state {
-        case let .loaded(sections, _, _, _):
-            sections.map { ($0.worktree, $0.displayName) }
-        default:
-            []
+    private var homeSections: [ProjectSectionItem] {
+        if case let .loaded(sections, _, _, _) = viewModel.state { return sections }
+        return []
+    }
+
+    /// Home rows, filed under their Home project.
+    private var homeSessions: [SessionListSession] {
+        homeSections.crossProjectSessionListSessions(projects: viewModel.homeProjects)
+    }
+
+    private func homeFilterTabs(projects: [HomeProject], sessions: [SessionListSession]) -> [SessionListFilterTab] {
+        var loads: [String: SessionListScopeLoad] = [:]
+        for project in projects {
+            loads[project.key] = SessionListHomeChrome.projectLoad(project, loadStates: viewModel.projectLoadStates)
         }
+        return SessionListHomeChrome.filterTabs(projects: projects, sessions: sessions, loads: loads)
     }
 
     /// Every push goes through `homeRoutes`, so the stack only ever shrinks on its
@@ -732,8 +772,7 @@ struct ProjectListHomeView: View {
     }
 
     private var showsTerminalAction: Bool {
-        guard case let .loaded(sections, _, _, _) = viewModel.state else { return false }
-        return SessionListHomeChrome.terminalAction(projects: sections.homeChromeProjects()) == .openCatalog
+        SessionListHomeChrome.terminalAction(projects: viewModel.homeProjects) == .openCatalog
     }
 
     private var homeTopBarActions: [OpenCodeTopBarAction] {
@@ -760,14 +799,13 @@ struct ProjectListHomeView: View {
             screenId: ProductAnalytics.Screen.home,
             actionId: ProductAnalytics.Action.homeOpenTerminal
         )
-        guard case let .loaded(sections, _, _, _) = viewModel.state else { return }
-        let projects = sections.homeChromeProjects()
-        if case .openCatalog = SessionListHomeChrome.terminalAction(projects: projects) {
+        if case .openCatalog = SessionListHomeChrome.terminalAction(projects: viewModel.homeProjects) {
             homeRoutes.append(.terminalsCatalog)
         }
     }
 
-    private func presentNewSessionProjectPicker() {
+    private func presentNewSessionProjectPicker(runIn projectKey: String? = nil) {
+        newSessionRunInProjectKey = projectKey
         ProductAnalytics.logUserAction(
             screenId: ProductAnalytics.Screen.home,
             actionId: ProductAnalytics.Action.homeOpenNewSessionProjectPicker
@@ -807,16 +845,7 @@ struct ProjectListHomeView: View {
     }
 
     private var projectPickerTabs: [SessionListFilterTab] {
-        switch viewModel.state {
-        case let .loaded(sections, _, _, _):
-            let sessions = sections.crossProjectSessionListSessions()
-            return SessionListHomeChrome.filterTabs(
-                projects: sections.homeChromeProjects(loadStates: viewModel.projectLoadStates),
-                sessionCount: sessions.count
-            )
-        default:
-            return []
-        }
+        homeFilterTabs(projects: viewModel.homeProjects, sessions: homeSessions)
     }
 
     private var projectPickerBinding: Binding<Bool> {
@@ -939,15 +968,13 @@ struct ProjectListHomeView: View {
         sections: [ProjectSectionItem],
         createError: String?
     ) -> some View {
-        let sessions = sections.crossProjectSessionListSessions()
-        let chromeProjects = sections.homeChromeProjects(loadStates: viewModel.projectLoadStates)
-        let filterTabs = SessionListHomeChrome.filterTabs(
-            projects: chromeProjects,
-            sessionCount: sessions.count
-        )
+        let projects = sections.isEmpty ? [] : viewModel.homeProjects
+        let sessions = sections.crossProjectSessionListSessions(projects: projects)
+        let filterTabs = homeFilterTabs(projects: projects, sessions: sessions)
         let selectedFilterId = SessionListHomeChrome.resolvedFilterId(
             selectedId: selectedSessionFilterId,
-            tabs: filterTabs
+            tabs: filterTabs,
+            projects: projects
         )
         SessionList(
             sessions: sessions,
@@ -987,24 +1014,29 @@ struct ProjectListHomeView: View {
             onAddProject: { Task { await viewModel.showAddProjectSheet() } },
             onNewSession: {
                 switch SessionListHomeChrome.newSessionAction(
-                    projects: chromeProjects,
+                    projects: projects,
                     selectedFilterId: selectedFilterId
                 ) {
                 case .none:
                     break
                 case .presentPicker:
                     presentNewSessionProjectPicker()
-                case let .create(worktree):
-                    Task { await viewModel.createSession(in: worktree) }
+                case let .chooseWorktree(projectKey):
+                    presentNewSessionProjectPicker(runIn: projectKey)
+                case let .create(directory):
+                    Task { await viewModel.createSession(in: directory) }
                 }
             },
             onNewSessionLongPress: SessionListHomeChrome.newSessionLongPressAction(
-                projects: chromeProjects
+                projects: projects
             ) == .presentPicker
                 ? { presentNewSessionProjectPicker() }
                 : nil,
-            onRetryScopeLoad: { worktree in
-                Task { await viewModel.retryProjectLoad(worktree: worktree) }
+            onRetryScopeLoad: { scopeID in
+                let paths = projects.first { $0.key == scopeID }?.memberPaths ?? [scopeID]
+                for path in paths where viewModel.projectLoadStates[path] != nil {
+                    Task { await viewModel.retryProjectLoad(worktree: path) }
+                }
             },
             onRefresh: { await viewModel.pullToRefresh() },
             revealNewestToken: viewModel.revealNewestToken,
@@ -1112,7 +1144,11 @@ enum HomeSplitSelection {
 }
 
 extension Array where Element == ProjectSectionItem {
-    func crossProjectSessionListSessions() -> [SessionListSession] {
+    /// Every session on Home once, newest first, filed under its Home project. A session listed
+    /// by two added paths (worktrees of one project on v2, or the same id twice) keeps the newer row.
+    /// `projects` defaults to one project per added path.
+    func crossProjectSessionListSessions(projects: [HomeProject]? = nil) -> [SessionListSession] {
+        let projects = projects ?? HomeProjectGrouping.group(addedPaths: map(\.worktree), resolutions: [:])
         let flattened = flatMap { section in
             section.allSessions.map { session in
                 (section: section, session: session)
@@ -1130,6 +1166,10 @@ extension Array where Element == ProjectSectionItem {
                 chosenIndexById[row.session.id] = index
             }
         }
+        let projectByPath = Dictionary(
+            projects.flatMap { project in project.memberPaths.map { ($0, project) } },
+            uniquingKeysWith: { first, _ in first }
+        )
         return chosenIndexById.values.sorted { lhs, rhs in
             let leftTimestamp = flattened[lhs].session.updatedAtEpochMs ?? 0
             let rightTimestamp = flattened[rhs].session.updatedAtEpochMs ?? 0
@@ -1140,37 +1180,31 @@ extension Array where Element == ProjectSectionItem {
         }.map { index in
             let section = flattened[index].section
             let session = flattened[index].session
+            let directory = session.directory?.isEmpty == false ? session.directory! : section.worktree
+            let project = projectByPath[section.worktree]
+            let worktreeScopeID = project.flatMap { project -> String? in
+                guard project.hasManyWorktrees, let worktree = project.worktree(at: directory) else { return nil }
+                return HomeScope.worktree(projectKey: project.key, directory: worktree.directory).id
+            }
             return SessionListSession(
                 id: session.id,
                 title: session.title,
-                worktree: section.worktree,
-                letter: section.letter,
-                letterAccent: section.letterAccent,
+                worktree: project?.key ?? section.worktree,
+                letter: project.map { letterCharacter(for: $0.displayName) } ?? section.letter,
+                letterAccent: project.map { letterAccent(for: $0.primaryPath) } ?? section.letterAccent,
                 subtitle: section.pathSubtitle,
                 status: session.sessionListStatus(),
                 statusIsStale: session.statusIsStale,
                 caption: session.updatedAtEpochMs.map { RelativeTimeFormatting.format(epochMs: $0) } ?? "",
                 updatedAtEpochMs: session.updatedAtEpochMs,
-                directory: session.directory?.isEmpty == false ? session.directory : section.worktree,
-                worktreeCheckout: WorktreeMark.showsBadge(
-                    sessionDirectory: session.directory?.isEmpty == false ? session.directory : section.worktree,
-                    addedPath: section.worktree,
-                    inventory: section.worktreeInventory
-                )
-            )
-        }
-    }
-
-    func homeChromeProjects(
-        loadStates: [String: ProjectLoadState] = [:]
-    ) -> [SessionListHomeChrome.Project] {
-        let counts = Dictionary(grouping: crossProjectSessionListSessions(), by: \.worktree).mapValues(\.count)
-        return map { section in
-            SessionListHomeChrome.Project(
-                worktree: section.worktree,
-                title: section.displayName,
-                sessionCount: counts[section.worktree] ?? 0,
-                load: loadStates[section.worktree]?.scopeLoad
+                directory: directory,
+                worktreeScopeID: worktreeScopeID,
+                location: project.flatMap {
+                    HomeRowLocation.make(project: $0, sessionDirectory: directory, includesProjectName: true)
+                },
+                scopedLocation: project.flatMap {
+                    HomeRowLocation.make(project: $0, sessionDirectory: directory, includesProjectName: false)
+                }
             )
         }
     }

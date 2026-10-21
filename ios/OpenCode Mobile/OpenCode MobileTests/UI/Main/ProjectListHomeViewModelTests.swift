@@ -327,6 +327,75 @@ struct ProjectListHomeViewModelTests {
         #expect(viewModel.removalSnackbar == nil)
     }
 
+    @Test func worktreesOfOneRepositoryShowAsOneProject() async {
+        let store = FakeConnectionProfileStore(initial: ["/repo", "/other", "/repo-wt"])
+        let repo = Project(id: "prj_repo", worktree: "/repo", displayName: "repo", isRepository: true)
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(
+                projectsByDirectory: ["/repo": repo, "/repo-wt": repo]
+            ),
+            connectionProfileStore: store
+        )
+        await viewModel.refresh()
+
+        let merged = await waitUntil { viewModel.homeProjects.count == 2 }
+        #expect(merged)
+        #expect(viewModel.homeProjects.map(\.key) == ["prj_repo", "prj:/other"])
+        #expect(viewModel.homeProjects.first?.memberPaths == ["/repo", "/repo-wt"])
+        #expect(viewModel.homeProjects.first?.worktrees.map(\.directory) == ["/repo", "/repo-wt"])
+    }
+
+    @Test func removingAMergedProjectRemovesEveryMemberPath() async {
+        let store = FakeConnectionProfileStore(initial: ["/repo", "/other", "/repo-wt"])
+        let repo = Project(id: "prj_repo", worktree: "/repo", displayName: "repo", isRepository: true)
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(projectsByDirectory: ["/repo": repo, "/repo-wt": repo]),
+            connectionProfileStore: store
+        )
+        await viewModel.refresh()
+        #expect(await waitUntil { viewModel.homeProjects.count == 2 })
+
+        viewModel.requestRemoveProject(worktree: "prj_repo")
+        #expect(viewModel.pendingProjectRemoval?.worktrees == ["/repo", "/repo-wt"])
+        await viewModel.confirmRemoveProject()
+
+        #expect(await store.addedWorktrees(serverBaseURL: "http://127.0.0.1:4096/") == ["/other"])
+        #expect(viewModel.removalSnackbar?.text == "Removed \"repo\" from home")
+    }
+
+    @Test func addingAWorktreeOfAnAddedRepositoryJoinsIt() async {
+        let store = FakeConnectionProfileStore(initial: ["/repo"])
+        let repo = Project(id: "prj_repo", worktree: "/repo", displayName: "repo", isRepository: true)
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(projectsByDirectory: ["/repo": repo, "/repo-wt": repo]),
+            connectionProfileStore: store
+        )
+        await viewModel.refresh()
+        #expect(await waitUntil { viewModel.homeProjects.first?.key == "prj_repo" })
+
+        await viewModel.addProject(worktree: "/repo-wt")
+
+        #expect(await store.addedWorktrees(serverBaseURL: "http://127.0.0.1:4096/") == ["/repo", "/repo-wt"])
+        #expect(viewModel.removalSnackbar?.text == "Same repo as repo. Showing it as a worktree there.")
+        #expect(viewModel.homeProjects.map(\.key) == ["prj_repo"])
+        #expect(viewModel.homeProjects.first?.memberPaths == ["/repo", "/repo-wt"])
+    }
+
+    @Test func addingAnotherGlobalFolderStaysSeparate() async {
+        let store = FakeConnectionProfileStore(initial: ["/notes"])
+        let global = Project(id: "global", worktree: "/", displayName: "/")
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(projectsByDirectory: ["/notes": global, "/scratch": global]),
+            connectionProfileStore: store
+        )
+        await viewModel.refresh()
+
+        await viewModel.addProject(worktree: "/scratch")
+
+        #expect(viewModel.removalSnackbar == nil)
+        #expect(await waitUntil { viewModel.homeProjects.map(\.key) == ["path:/notes", "path:/scratch"] })
+    }
+
     @Test func confirmRemoveProject_lastProject_showsEmpty() async {
         let store = FakeConnectionProfileStore(initial: ["/one"])
         let viewModel = makeViewModel(
@@ -2034,9 +2103,14 @@ struct ProjectListHomeViewModelTests {
             allSessions: [],
             loadError: nil
         )
-        let projects = [section].homeChromeProjects(loadStates: ["/two": .loading(isSlow: true)])
-        #expect(projects.first?.load == .loading(isSlow: true))
-        let tabs = SessionListHomeChrome.filterTabs(projects: projects, sessionCount: 0)
+        let projects = HomeProjectGrouping.group(addedPaths: [section.worktree], resolutions: [:])
+        let load = SessionListHomeChrome.projectLoad(projects[0], loadStates: ["/two": .loading(isSlow: true)])
+        #expect(load == .loading(isSlow: true))
+        let tabs = SessionListHomeChrome.filterTabs(
+            projects: projects,
+            sessions: [section].crossProjectSessionListSessions(projects: projects),
+            loads: [projects[0].key: load].compactMapValues { $0 }
+        )
         #expect(tabs.first?.load == .loading(isSlow: true))
         #expect(tabs.first?.load?.subtitle == "Still loading\u{2026}")
     }
@@ -2212,7 +2286,8 @@ private final class FakeProjectRepository: ProjectRepository, @unchecked Sendabl
         if let directory, let project = projectsByDirectory[directory] {
             return project
         }
-        return Project(id: "p1", worktree: directory ?? bootWorktree, displayName: "demo")
+        // Every folder is its own project unless a test maps it.
+        return Project(id: "prj:" + (directory ?? bootWorktree), worktree: directory ?? bootWorktree, displayName: "demo")
     }
 }
 
