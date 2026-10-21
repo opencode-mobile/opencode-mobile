@@ -392,6 +392,27 @@ struct ProjectListHomeViewModelTests {
         #expect(rows.first { $0.id == "s-main" }?.scopedLocation?.parts == [.branch("main")])
     }
 
+    @Test func loadedWorktreeInventoriesAreSharedForSessionChat() async {
+        let cache = WorktreeInventoryCache()
+        let repo = Project(id: "prj_repo", worktree: "/repo", displayName: "repo", isRepository: true)
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(projectsByDirectory: ["/repo": repo]),
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"]),
+            worktreeRepository: ScriptedWorktreeRepository(loads: [
+                .loaded(directories: ["/repo", "/wt/tax"], listsSessions: false),
+            ]),
+            worktreeInventoryCache: cache
+        )
+
+        await viewModel.refresh()
+
+        let shared = await waitUntil {
+            cache.snapshot(server: "http://127.0.0.1:4096/")?.inventory(for: "/repo") == .loaded(["/repo", "/wt/tax"])
+        }
+        #expect(shared)
+        #expect(cache.snapshot(server: "http://127.0.0.1:4096")?.addedPaths == ["/repo"])
+    }
+
     @Test func coldV2BranchAnswerIsAskedAgainUntilTheServerKnowsTheRepository() async {
         // A v2 server that just started answers {"branch":{}} (no provider) the first time.
         let calls = VcsCallCounter()
@@ -2226,7 +2247,8 @@ private func makeViewModel(
     sessionReadyStoreOverride: (any SessionReadyStore)? = nil,
     projectLoadTiming: ProjectLoadTiming = .standard,
     worktreeRepository: any WorktreeRepository = UnavailableWorktreeRepository(),
-    branchRetryDelays: [Duration] = [.seconds(1), .seconds(3)]
+    branchRetryDelays: [Duration] = [.seconds(1), .seconds(3)],
+    worktreeInventoryCache: WorktreeInventoryCache = WorktreeInventoryCache()
 ) -> ProjectListHomeViewModel {
     let eventStream = eventStream ?? FakeForegroundEventStream()
     // Mutations (createSession) require Connected; default fakes start Idle.
@@ -2269,7 +2291,8 @@ private func makeViewModel(
         addProjectListingDebounce: .zero,
         projectLoadTiming: projectLoadTiming,
         worktreeRepository: worktreeRepository,
-        branchRetryDelays: branchRetryDelays
+        branchRetryDelays: branchRetryDelays,
+        worktreeInventoryCache: worktreeInventoryCache
     )
 }
 

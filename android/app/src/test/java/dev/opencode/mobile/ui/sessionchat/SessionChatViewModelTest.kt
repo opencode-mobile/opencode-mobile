@@ -79,6 +79,11 @@ import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.OpencodeSseHttpClient
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatComposer
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatReviewChanges
+import dev.opencode.mobile.domain.worktree.WorktreeInventory
+import dev.opencode.mobile.domain.worktree.WorktreeInventoryCache
+import dev.opencode.mobile.domain.worktree.WorktreeLoad
+import dev.opencode.mobile.domain.worktree.WorktreeRepository
+import dev.opencode.mobile.theme.letterAccentForWorktree
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -1397,6 +1402,127 @@ class SessionChatViewModelTest {
 
             assertEquals(listOf("ses-new"), reporter.focusCalls)
             assertEquals(listOf("ses-new"), reporter.releaseCalls)
+        }
+
+    // Project identity (#783): Home loaded the main checkout's inventory, which lists /wt/tax.
+    private fun homeInventoryCache(): WorktreeInventoryCache =
+        WorktreeInventoryCache().apply {
+            setAddedPaths(listOf("/repo"), HARNESS_BASE_URL)
+            record(WorktreeInventory.loaded(listOf("/repo", "/wt/tax")), "/repo", HARNESS_BASE_URL)
+        }
+
+    private fun identity(state: SessionChatUiState) =
+        SessionChatProjectIdentity(
+            label = state.projectLabel,
+            letter = state.projectLetter,
+            accent = state.projectLetterAccent,
+            isWorktreeCheckout = state.worktreeCheckout,
+        )
+
+    @Test
+    fun bind_worktreeSession_namesItsCheckoutOnTheFirstFrame() =
+        runTest(testDispatcher) {
+            val worktrees = GatedWorktreeRepository(WorktreeLoad.Loaded(listOf("/repo", "/wt/tax"), listsSessions = false))
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(),
+                    connectionProfileStore = FakeConnectionProfileStore(worktrees = mutableListOf("/repo")),
+                    worktreeRepository = worktrees,
+                    worktreeInventoryCache = homeInventoryCache(),
+                )
+
+            viewModel.bind("ses-1", "Title", "/wt/tax")
+            val first = viewModel.uiState.value
+            assertTrue(first.worktreeCheckout)
+            assertEquals("tax", first.projectLabel)
+            assertNull(first.projectLetter)
+            assertNull(first.projectLetterAccent)
+
+            // The server agrees: nothing changes once the refine lands.
+            worktrees.open()
+            advanceUntilIdle()
+            assertEquals(1, worktrees.answered)
+            assertEquals(identity(first), identity(viewModel.uiState.value))
+        }
+
+    @Test
+    fun bind_mainCheckoutSession_keepsItsLetterFromTheFirstFrame() =
+        runTest(testDispatcher) {
+            val worktrees = GatedWorktreeRepository(WorktreeLoad.Loaded(listOf("/repo", "/wt/tax"), listsSessions = false))
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(),
+                    connectionProfileStore = FakeConnectionProfileStore(worktrees = mutableListOf("/repo")),
+                    worktreeRepository = worktrees,
+                    worktreeInventoryCache = homeInventoryCache(),
+                )
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            val first = viewModel.uiState.value
+            assertFalse(first.worktreeCheckout)
+            assertEquals("repo", first.projectLabel)
+            assertEquals('R', first.projectLetter)
+            assertEquals(letterAccentForWorktree("/repo"), first.projectLetterAccent)
+
+            worktrees.open()
+            advanceUntilIdle()
+            assertEquals(1, worktrees.answered)
+            assertEquals(identity(first), identity(viewModel.uiState.value))
+        }
+
+    @Test
+    fun bind_worktreeSession_failedRefineKeepsTheCheckout() =
+        runTest(testDispatcher) {
+            val worktrees = GatedWorktreeRepository(WorktreeLoad.Failed(IllegalStateException("offline")))
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(),
+                    connectionProfileStore = FakeConnectionProfileStore(worktrees = mutableListOf("/repo")),
+                    worktreeRepository = worktrees,
+                    worktreeInventoryCache = homeInventoryCache(),
+                )
+
+            viewModel.bind("ses-1", "Title", "/wt/tax")
+            worktrees.open()
+            advanceUntilIdle()
+
+            assertEquals(1, worktrees.answered)
+            assertTrue(viewModel.uiState.value.worktreeCheckout)
+            assertEquals("tax", viewModel.uiState.value.projectLabel)
+        }
+
+    @Test
+    fun bind_worktreeSession_coldOpenResolvesAndSharesTheInventoryForTheNextOpen() =
+        runTest(testDispatcher) {
+            val cache = WorktreeInventoryCache()
+            val worktrees = GatedWorktreeRepository(WorktreeLoad.Loaded(listOf("/repo", "/wt/tax"), listsSessions = false))
+            val store = FakeConnectionProfileStore(worktrees = mutableListOf("/repo"))
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(),
+                    connectionProfileStore = store,
+                    worktreeRepository = worktrees,
+                    worktreeInventoryCache = cache,
+                )
+
+            // Nothing loaded yet (Home never ran): the folder with its letter until the server answers.
+            viewModel.bind("ses-1", "Title", "/wt/tax")
+            assertFalse(viewModel.uiState.value.worktreeCheckout)
+            assertEquals("tax", viewModel.uiState.value.projectLabel)
+            worktrees.open()
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.worktreeCheckout)
+
+            val reopened =
+                createViewModel(
+                    FakeMessageRepository(),
+                    connectionProfileStore = store,
+                    worktreeRepository = worktrees,
+                    worktreeInventoryCache = cache,
+                )
+            reopened.bind("ses-1", "Title", "/wt/tax")
+            assertTrue(reopened.uiState.value.worktreeCheckout)
+            assertEquals("tax", reopened.uiState.value.projectLabel)
         }
 
     @Test
@@ -6379,6 +6505,8 @@ class SessionChatViewModelTest {
         homeProjectsSnapshot: dev.opencode.mobile.domain.home.HomeProjectsSnapshot =
             dev.opencode.mobile.domain.home
                 .HomeProjectsSnapshot(),
+        worktreeRepository: WorktreeRepository = dev.opencode.mobile.domain.worktree.UnavailableWorktreeRepository,
+        worktreeInventoryCache: WorktreeInventoryCache = WorktreeInventoryCache(),
     ): SessionChatViewModel {
         val eventStream = repository.eventStream
         val liveStoreScope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
@@ -6453,6 +6581,8 @@ class SessionChatViewModelTest {
             sessionViewReporter = sessionViewReporter,
             projectFilesRepository = projectFilesRepository,
             homeProjectsSnapshot = homeProjectsSnapshot,
+            worktreeRepository = worktreeRepository,
+            worktreeInventoryCache = worktreeInventoryCache,
         ).apply {
             ioDispatcher = testDispatcher
             nowMs = { testDispatcher.scheduler.currentTime }
@@ -6637,6 +6767,47 @@ private class FakeSessionModelSelectionStore(
         worktree: String,
         sessionId: String,
     ): String = "$serverBaseUrl|$worktree|$sessionId"
+}
+
+private const val HARNESS_BASE_URL = "http://127.0.0.1:4096/"
+
+/** Every inventory load waits until [open], then answers [answer]. */
+private class GatedWorktreeRepository(
+    private val answer: WorktreeLoad,
+) : WorktreeRepository {
+    private val gate = CompletableDeferred<Unit>()
+    var answered = 0
+        private set
+
+    fun open() {
+        gate.complete(Unit)
+    }
+
+    private suspend fun gated(): WorktreeLoad {
+        gate.await()
+        answered += 1
+        return answer
+    }
+
+    override suspend fun load(
+        addedPath: String,
+        projectId: String?,
+        mainWorktree: String?,
+    ): WorktreeLoad = gated()
+
+    override suspend fun loadRefreshed(
+        addedPath: String,
+        projectId: String?,
+        mainWorktree: String?,
+    ): WorktreeLoad = gated()
+
+    override suspend fun refresh(projectId: String): Boolean = false
+
+    override suspend fun refetch(projectId: String): WorktreeLoad = gated()
+
+    override fun onDisconnected() = Unit
+
+    override fun onConnection(key: String) = Unit
 }
 
 private class FakeConnectionProfileStore(

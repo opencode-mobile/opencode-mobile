@@ -56,6 +56,7 @@ import dev.opencode.mobile.domain.sessioncache.NoOpSessionCache
 import dev.opencode.mobile.domain.sessioncache.SessionCache
 import dev.opencode.mobile.domain.sync.testSyncCoordinator
 import dev.opencode.mobile.domain.worktree.UnavailableWorktreeRepository
+import dev.opencode.mobile.domain.worktree.WorktreeInventory
 import dev.opencode.mobile.domain.worktree.WorktreeLoad
 import dev.opencode.mobile.domain.worktree.WorktreeRepository
 import dev.opencode.mobile.network.ActiveConnectionManager
@@ -2581,6 +2582,34 @@ class MainScreenViewModelTest {
         }
 
     @Test
+    fun loadedWorktreeInventoriesAreSharedForSessionChat() =
+        runTest(testDispatcher) {
+            val cache =
+                dev.opencode.mobile.domain.worktree
+                    .WorktreeInventoryCache()
+            val worktrees =
+                object : WorktreeRepository by UnavailableWorktreeRepository {
+                    override suspend fun loadRefreshed(
+                        addedPath: String,
+                        projectId: String?,
+                        mainWorktree: String?,
+                    ): WorktreeLoad = WorktreeLoad.Loaded(listOf("/repo", "/wt/tax"), listsSessions = false)
+                }
+            createViewModel(
+                connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                projectRepository = FakeProjectRepository(projectsByDirectory = repoProjects),
+                sessionsByWorktree = mapOf("/repo" to emptyList()),
+                worktreeRepository = worktrees,
+                worktreeInventoryCache = cache,
+            )
+            advanceUntilIdle()
+
+            val snapshot = cache.snapshot(serverUrl)
+            assertEquals(listOf("/repo"), snapshot?.addedPaths)
+            assertEquals(WorktreeInventory.loaded(listOf("/repo", "/wt/tax")), snapshot?.inventoryFor("/repo"))
+        }
+
+    @Test
     fun v2BranchThatIsNotSettledOnTheFirstAnswerShowsWithoutRefresh() =
         runTest(testDispatcher) {
             val sessionRepository = FakeSessionRepository(mutableMapOf("/repo" to emptyList()))
@@ -2654,6 +2683,9 @@ class MainScreenViewModelTest {
                 override suspend fun listModelOptions(directory: String?): ModelSelectionCatalog = ModelSelectionCatalog(emptyList(), null)
             },
         worktreeRepository: WorktreeRepository = UnavailableWorktreeRepository,
+        worktreeInventoryCache: dev.opencode.mobile.domain.worktree.WorktreeInventoryCache =
+            dev.opencode.mobile.domain.worktree
+                .WorktreeInventoryCache(),
     ): MainScreenViewModel {
         val activeConnectionManager = ActiveConnectionManager(connectionProfileStore)
         runBlocking {
@@ -2728,6 +2760,7 @@ class MainScreenViewModelTest {
             sessionCache = sessionCache,
             worktreeRepository = worktreeRepository,
             projectFirstLoadTiming = projectFirstLoadTiming,
+            worktreeInventoryCache = worktreeInventoryCache,
         )
     }
 }

@@ -124,6 +124,11 @@ extension Container {
         }.singleton
     }
 
+    /// Home's worktree inventories, read by Session Chat for its first frame.
+    var worktreeInventoryCache: Factory<WorktreeInventoryCache> {
+        onMainActor { WorktreeInventoryCache() }.singleton
+    }
+
     var projectRepository: Factory<any ProjectRepository> {
         onMainActor {
             DefaultProjectRepository(
@@ -650,7 +655,8 @@ extension Container {
                 sessionCache: self.sessionCache(),
                 liveUpdates: self.liveUpdates(),
                 worktreeRepository: self.worktreeRepository(),
-                foregroundEventStream: self.foregroundEventStream()
+                foregroundEventStream: self.foregroundEventStream(),
+                worktreeInventoryCache: self.worktreeInventoryCache()
             )
         }
     }
@@ -691,7 +697,8 @@ extension Container {
                 mcpRepository: self.mcpRepository(),
                 projectFilesRepository: self.projectFilesRepository(),
                 worktreeRepository: self.worktreeRepository(),
-                projectRepository: self.projectRepository()
+                projectRepository: self.projectRepository(),
+                worktreeInventoryCache: self.worktreeInventoryCache()
             )
         }
     }
