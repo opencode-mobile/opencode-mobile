@@ -805,6 +805,8 @@ fun SessionChatScreen(
                             supportsSessionMessageDiff = uiState.supportsSessionMessageDiff,
                             expandedStepParagraphs = uiState.expandedStepParagraphs,
                             onExpandStepParagraph = viewModel::expandStepParagraph,
+                            unfoldedStepRails = uiState.unfoldedStepRails,
+                            onToggleStepRailFold = viewModel::toggleStepRailFold,
                         ),
                     modifier = Modifier.fillMaxSize(),
                 )

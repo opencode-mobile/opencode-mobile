@@ -326,6 +326,8 @@ struct SessionChatUiState: Equatable {
     /// Chip-timeline step paragraphs expanded past `+N more`:
     /// `SessionChatStepParagraphBlock.id` to the chip count at tap time.
     var expandedStepParagraphs: [String: Int] = [:]
+    /// Step rails (`SessionChatStepRailBlock.id`) the user unfolded (#779).
+    var unfoldedStepRails: Set<String> = []
     /// One-time Chip timeline intro sheet (OPE-270).
     var chipTimelineIntroVisible = false
     var dictation: ComposerDictationUiState? = nil
@@ -585,6 +587,8 @@ struct SessionChatTimelineRegionState: Equatable {
     var hasOlder: Bool = false
     var isLoadingOlder: Bool = false
     var errorMessage: String?
+    /// Step rails whose earlier settled steps are shown instead of folded (#779).
+    var unfoldedStepRails: Set<String> = []
 
     var knownChildSessionIDs: Set<String> {
         Set(
@@ -602,6 +606,11 @@ struct SessionChatTimelineRegionState: Equatable {
                     case .stepParagraph(_, let paragraph):
                         paragraph.chips.compactMap { chip in
                             chip.status == .pending || chip.status == .running ? chip.card.childSessionId : nil
+                        }
+                    case .stepRail(_, let rail):
+                        // Same set as the standard timeline: child sessions that did not fail.
+                        rail.steps.compactMap { step in
+                            step.status == .failed ? nil : step.childSession?.childSessionId
                         }
                     default:
                         []

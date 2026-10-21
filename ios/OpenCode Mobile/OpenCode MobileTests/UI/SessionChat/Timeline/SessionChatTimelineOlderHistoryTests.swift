@@ -26,6 +26,23 @@ struct SessionChatTimelineOlderHistoryTests {
         #expect(repository.loadOlderCount == 1)
     }
 
+    @Test func toggleStepRailFold_flipsUnfoldedSet() {
+        let timeline = SessionChatTimeline(
+            sessionID: "ses-1",
+            worktree: "/repo",
+            messageRepository: OlderHistoryMessageRepository(
+                initial: [],
+                older: [],
+                hasOlderInitially: false,
+                hasOlderAfterLoad: false
+            )
+        )
+        timeline.toggleStepRailFold("sr:r1")
+        #expect(timeline.state.unfoldedStepRails == ["sr:r1"])
+        timeline.toggleStepRailFold("sr:r1")
+        #expect(timeline.state.unfoldedStepRails.isEmpty)
+    }
+
     @Test func loadOlderFailureRetainsRowsAndAllowsRetry() async {
         let repository = OlderHistoryMessageRepository(
             initial: [display("m3", role: .user)],

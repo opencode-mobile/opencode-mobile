@@ -1,6 +1,38 @@
 import Foundation
 import Observation
 
+/// How Session Chat presents an assistant turn (#779). Wire values are stored.
+nonisolated enum SessionChatTimelineStyle: String, CaseIterable, Sendable {
+    /// Tool cards and tool groups between the agent's messages.
+    case standard
+    /// Narration paragraphs with the tools each one used as chips (OPE-260).
+    case chips
+    /// One short line per step on a vertical rail with live status.
+    case stepRail = "step_rail"
+
+    var wireValue: String { rawValue }
+
+    static func fromWire(_ value: String?) -> SessionChatTimelineStyle? {
+        value.flatMap(SessionChatTimelineStyle.init(rawValue:))
+    }
+
+    var title: String {
+        switch self {
+        case .standard: "Standard"
+        case .chips: "Chips"
+        case .stepRail: "Step Rail"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .standard: "Tool cards and groups between the agent's messages"
+        case .chips: "Tools as chips under the agent's narration"
+        case .stepRail: "One line per step on a rail, live while the agent works"
+        }
+    }
+}
+
 /// Session Chat display preferences (OPE-144).
 /// Device-local, default on, cleared by Clear All Data.
 @Observable
@@ -8,11 +40,14 @@ nonisolated final class SessionChatDisplayPreferences {
     static let shared = SessionChatDisplayPreferences()
     static let defaultCollapseConsecutiveToolCalls = true
     static let defaultChipTimeline = false
+    static let defaultTimelineStyle = SessionChatTimelineStyle.standard
     static let defaultFollowUpDelivery = FollowUpDelivery.steer
 
     private enum StorageKeys {
         static let collapseConsecutiveToolCalls = "collapseConsecutiveToolCalls"
+        /// Legacy boolean (OPE-260). Read once to migrate; still mirrored on writes.
         static let chipTimeline = "chipTimeline"
+        static let timelineStyle = "timelineStyle"
         static let followUpDelivery = "followUpDelivery"
         static let chipTimelineIntroDone = "chipTimelineIntroDone"
         static let chipTimelineIntroSnoozedUntilMs = "chipTimelineIntroSnoozedUntilMs"
@@ -25,8 +60,13 @@ nonisolated final class SessionChatDisplayPreferences {
     /// assistant message collapses into one summary tool group.
     private(set) var collapseConsecutiveToolCalls: Bool
 
-    /// Stored "Chip timeline" preference, independent of the remote flag.
-    private(set) var chipTimelinePreference: Bool
+    /// Stored Timeline Style, independent of the remote flag.
+    private(set) var timelineStyle: SessionChatTimelineStyle
+
+    /// Stored "Chip timeline" choice, independent of the remote flag.
+    var chipTimelinePreference: Bool {
+        timelineStyle == .chips
+    }
 
     /// True once the Chip timeline intro sheet has been answered for good (OPE-270).
     private(set) var chipTimelineIntroDone: Bool
@@ -44,7 +84,22 @@ nonisolated final class SessionChatDisplayPreferences {
     /// stored preference gated by `chipTimelineAvailable`; a remotely disabled
     /// flag renders the standard timeline regardless of the stored preference.
     var chipTimeline: Bool {
-        chipTimelinePreference && chipTimelineAvailable
+        timelineStyle == .chips && chipTimelineAvailable
+    }
+
+    /// When true, Session Chat shows an assistant turn as a step rail (#779). Not flag-gated.
+    var stepRailTimeline: Bool {
+        timelineStyle == .stepRail
+    }
+
+    /// The style Session Chat renders: Chips falls back to Standard while the flag is off.
+    var effectiveTimelineStyle: SessionChatTimelineStyle {
+        timelineStyle == .chips && !chipTimelineAvailable ? .standard : timelineStyle
+    }
+
+    /// Styles the Settings picker offers; Chips only while its flag allows it.
+    var availableTimelineStyles: [SessionChatTimelineStyle] {
+        SessionChatTimelineStyle.allCases.filter { $0 != .chips || chipTimelineAvailable }
     }
 
     private(set) var followUpDelivery: FollowUpDelivery
@@ -57,10 +112,16 @@ nonisolated final class SessionChatDisplayPreferences {
         } else {
             collapseConsecutiveToolCalls = defaults.bool(forKey: StorageKeys.collapseConsecutiveToolCalls)
         }
-        if defaults.object(forKey: StorageKeys.chipTimeline) == nil {
-            chipTimelinePreference = Self.defaultChipTimeline
+        if let stored = SessionChatTimelineStyle.fromWire(defaults.string(forKey: StorageKeys.timelineStyle)) {
+            timelineStyle = stored
+        } else if defaults.object(forKey: StorageKeys.chipTimeline) != nil {
+            // Migrate the old Chip timeline boolean once; the old key stays.
+            let migrated: SessionChatTimelineStyle =
+                defaults.bool(forKey: StorageKeys.chipTimeline) ? .chips : .standard
+            timelineStyle = migrated
+            defaults.set(migrated.wireValue, forKey: StorageKeys.timelineStyle)
         } else {
-            chipTimelinePreference = defaults.bool(forKey: StorageKeys.chipTimeline)
+            timelineStyle = Self.defaultTimelineStyle
         }
         followUpDelivery = FollowUpDelivery.fromWire(defaults.string(forKey: StorageKeys.followUpDelivery))
             ?? Self.defaultFollowUpDelivery
@@ -74,21 +135,33 @@ nonisolated final class SessionChatDisplayPreferences {
         defaults.set(value, forKey: StorageKeys.collapseConsecutiveToolCalls)
     }
 
-    /// Any explicit choice, from Settings or the intro sheet, also ends the intro.
+    /// Intro sheet shim: true picks Chips, false Standard. Ends the intro.
     func setChipTimeline(_ value: Bool) {
-        chipTimelinePreference = value
-        defaults.set(value, forKey: StorageKeys.chipTimeline)
+        setTimelineStyle(value ? .chips : .standard)
+    }
+
+    /// Any explicit choice, from Settings or the intro sheet, also ends the intro.
+    func setTimelineStyle(_ style: SessionChatTimelineStyle) {
+        storeTimelineStyle(style)
         finishChipTimelineIntro()
+    }
+
+    private func storeTimelineStyle(_ style: SessionChatTimelineStyle) {
+        timelineStyle = style
+        defaults.set(style.wireValue, forKey: StorageKeys.timelineStyle)
+        // Mirror the legacy key so an older build reading it agrees on Chips.
+        defaults.set(style == .chips, forKey: StorageKeys.chipTimeline)
     }
 
     /// Settles the starting Chip timeline value once per install (OPE-270).
     /// `existingInstall` is true when the app opens past App onboarding. A
     /// stored value, from an earlier launch or a Settings choice, always wins.
     func resolveChipTimelineForInstall(existingInstall: Bool) {
-        guard defaults.object(forKey: StorageKeys.chipTimeline) == nil else { return }
+        guard defaults.object(forKey: StorageKeys.timelineStyle) == nil,
+              defaults.object(forKey: StorageKeys.chipTimeline) == nil
+        else { return }
         let value = ChipTimelineIntro.startingChipTimeline(existingInstall: existingInstall)
-        chipTimelinePreference = value
-        defaults.set(value, forKey: StorageKeys.chipTimeline)
+        storeTimelineStyle(value ? .chips : .standard)
     }
 
     /// Intro sheet "Don't show again", or a second Later.
@@ -114,7 +187,8 @@ nonisolated final class SessionChatDisplayPreferences {
     func shouldOfferChipTimelineIntro(turnToolCalls: Int, nowMs: Int64) -> Bool {
         ChipTimelineIntro.shouldShow(
             chipTimelineAvailable: chipTimelineAvailable,
-            chipTimelineOn: chipTimelinePreference,
+            // Step Rail is an explicit style choice too: never pitch Chips over it.
+            chipTimelineOn: timelineStyle == .chips || timelineStyle == .stepRail,
             introDone: chipTimelineIntroDone,
             snoozedUntilMs: chipTimelineIntroSnoozedUntilMs,
             nowMs: nowMs,
@@ -130,11 +204,12 @@ nonisolated final class SessionChatDisplayPreferences {
     func clear() {
         defaults.removeObject(forKey: StorageKeys.collapseConsecutiveToolCalls)
         defaults.removeObject(forKey: StorageKeys.chipTimeline)
+        defaults.removeObject(forKey: StorageKeys.timelineStyle)
         defaults.removeObject(forKey: StorageKeys.followUpDelivery)
         defaults.removeObject(forKey: StorageKeys.chipTimelineIntroDone)
         defaults.removeObject(forKey: StorageKeys.chipTimelineIntroSnoozedUntilMs)
         collapseConsecutiveToolCalls = Self.defaultCollapseConsecutiveToolCalls
-        chipTimelinePreference = Self.defaultChipTimeline
+        timelineStyle = Self.defaultTimelineStyle
         followUpDelivery = Self.defaultFollowUpDelivery
         chipTimelineIntroDone = false
         chipTimelineIntroSnoozedUntilMs = nil

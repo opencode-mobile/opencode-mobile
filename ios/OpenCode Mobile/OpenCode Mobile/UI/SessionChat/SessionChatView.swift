@@ -347,6 +347,8 @@ struct SessionChatView: View {
                     onExpandStepParagraph: { paragraphID, chipCount in
                         viewModel.expandStepParagraph(paragraphID, chipCount: chipCount)
                     },
+                    unfoldedStepRails: viewModel.uiState.unfoldedStepRails,
+                    onToggleStepRailFold: { railID in viewModel.toggleStepRailFold(railID) },
                     noticeModelNames: TimelineNoticeModelNames(options: viewModel.uiState.composer.modelOptions)
                 )
             )

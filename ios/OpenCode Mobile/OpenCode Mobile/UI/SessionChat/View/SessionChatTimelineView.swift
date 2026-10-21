@@ -40,6 +40,9 @@ struct SessionChatTimelineViewProps {
     /// the chip count at tap time (Screen Model state).
     let expandedStepParagraphs: [String: Int]
     let onExpandStepParagraph: (String, Int) -> Void
+    /// Step rails whose earlier settled steps are unfolded (Screen Model state).
+    let unfoldedStepRails: Set<String>
+    let onToggleStepRailFold: (String) -> Void
     /// Catalog names for model-switch notices.
     let noticeModelNames: TimelineNoticeModelNames
 
@@ -78,6 +81,8 @@ struct SessionChatTimelineViewProps {
         supportsSessionMessageDiff: Bool = true,
         expandedStepParagraphs: [String: Int] = [:],
         onExpandStepParagraph: @escaping (String, Int) -> Void = { _, _ in },
+        unfoldedStepRails: Set<String> = [],
+        onToggleStepRailFold: @escaping (String) -> Void = { _ in },
         noticeModelNames: TimelineNoticeModelNames = .empty
     ) {
         self.timeline = timeline
@@ -114,6 +119,8 @@ struct SessionChatTimelineViewProps {
         self.supportsSessionMessageDiff = supportsSessionMessageDiff
         self.expandedStepParagraphs = expandedStepParagraphs
         self.onExpandStepParagraph = onExpandStepParagraph
+        self.unfoldedStepRails = unfoldedStepRails
+        self.onToggleStepRailFold = onToggleStepRailFold
         self.noticeModelNames = noticeModelNames
     }
 }
@@ -187,6 +194,7 @@ private struct SessionChatTimelineReadyView: View {
     @State private var previousMountedWorkingLabel: String?
     @State private var previousWorkingIndicatorFading = false
     @State private var previousExpandedStepParagraphs: [String: Int] = [:]
+    @State private var previousStepRailState: SessionChatStepRailViewState = .empty
     @State private var previousNoticeModelNames: TimelineNoticeModelNames = .empty
     @State private var topOverlayInset: CGFloat = 0
     /// Syncing label the top pill slot shows, lagging the prop by the show delay
@@ -213,8 +221,23 @@ private struct SessionChatTimelineReadyView: View {
         topPill != nil
     }
 
+    /// The step rail that carries live status. While one exists, its trailing
+    /// Thinking or running step is the indicator and the Working footer stays away.
+    private var liveStepRailID: String? {
+        let label = props.workingIndicatorLabel
+        let working = label != nil
+            && !props.workingIndicatorCollapsed
+            && !WorkingTurnIndicator.showsIdleMark(label: label ?? "")
+        return SessionChatTimelineBlocks.liveStepRailID(in: props.messages, sessionWorking: working)
+    }
+
+    private var stepRailState: SessionChatStepRailViewState {
+        SessionChatStepRailViewState(unfolded: props.unfoldedStepRails, liveRailID: liveStepRailID)
+    }
+
     private var mountedWorkingLabel: String? {
-        WorkingTurnIndicator.mountedLabel(
+        guard liveStepRailID == nil else { return nil }
+        return WorkingTurnIndicator.mountedLabel(
             label: props.workingIndicatorLabel,
             collapsed: props.workingIndicatorCollapsed
         )
@@ -262,6 +285,11 @@ private struct SessionChatTimelineReadyView: View {
                     expanded: props.expandedStepParagraphs,
                     previousExpanded: previousExpandedStepParagraphs
                 )
+                .addingStepRailState(
+                    rows: props.messages,
+                    state: stepRailState,
+                    previous: previousStepRailState
+                )
                 .addingNoticeModelNames(
                     rows: props.messages,
                     names: props.noticeModelNames,
@@ -289,6 +317,8 @@ private struct SessionChatTimelineReadyView: View {
                     supportsSessionMessageDiff: props.supportsSessionMessageDiff,
                     expandedStepParagraphs: props.expandedStepParagraphs,
                     onExpandStepParagraph: props.onExpandStepParagraph,
+                    stepRailState: stepRailState,
+                    onToggleStepRailFold: props.onToggleStepRailFold,
                     noticeModelNames: props.noticeModelNames
                 )
             }
@@ -352,6 +382,7 @@ private struct SessionChatTimelineReadyView: View {
             previousMountedWorkingLabel = mountedWorkingLabel
             previousWorkingIndicatorFading = props.workingIndicatorFading
             previousExpandedStepParagraphs = props.expandedStepParagraphs
+            previousStepRailState = stepRailState
             previousNoticeModelNames = props.noticeModelNames
             refreshSessionTodosPillSnapshot(totalCount: props.sessionTodoTotalCount)
             updateDisplayedSyncingLabel(props.syncingIndicatorLabel)
@@ -372,6 +403,9 @@ private struct SessionChatTimelineReadyView: View {
         }
         .onChange(of: props.expandedStepParagraphs) { _, newValue in
             previousExpandedStepParagraphs = newValue
+        }
+        .onChange(of: stepRailState) { _, newValue in
+            previousStepRailState = newValue
         }
         .onChange(of: props.noticeModelNames) { _, newValue in
             previousNoticeModelNames = newValue
@@ -481,6 +515,8 @@ private struct SessionChatTimelineHostRow: View {
     let supportsSessionMessageDiff: Bool
     let expandedStepParagraphs: [String: Int]
     let onExpandStepParagraph: (String, Int) -> Void
+    let stepRailState: SessionChatStepRailViewState
+    let onToggleStepRailFold: (String) -> Void
     let noticeModelNames: TimelineNoticeModelNames
 
     var body: some View {
@@ -507,7 +543,9 @@ private struct SessionChatTimelineHostRow: View {
                         onChangesReviewTap: onChangesReviewTap,
                         supportsSessionMessageDiff: supportsSessionMessageDiff,
                         expandedStepParagraphs: expandedStepParagraphs,
-                        onExpandStepParagraph: onExpandStepParagraph
+                        onExpandStepParagraph: onExpandStepParagraph,
+                        stepRailState: stepRailState,
+                        onToggleStepRailFold: onToggleStepRailFold
                     )
                     Spacer(minLength: 0)
                 } else {
@@ -522,7 +560,9 @@ private struct SessionChatTimelineHostRow: View {
                         onChangesReviewTap: onChangesReviewTap,
                         supportsSessionMessageDiff: supportsSessionMessageDiff,
                         expandedStepParagraphs: expandedStepParagraphs,
-                        onExpandStepParagraph: onExpandStepParagraph
+                        onExpandStepParagraph: onExpandStepParagraph,
+                        stepRailState: stepRailState,
+                        onToggleStepRailFold: onToggleStepRailFold
                     )
                 }
             }
@@ -541,6 +581,8 @@ private struct SessionChatMessageRow: View {
     let supportsSessionMessageDiff: Bool
     let expandedStepParagraphs: [String: Int]
     let onExpandStepParagraph: (String, Int) -> Void
+    let stepRailState: SessionChatStepRailViewState
+    let onToggleStepRailFold: (String) -> Void
 
     private func openMessageActions(showsRevertMessage: Bool) {
         onMessageActionsTap(
@@ -583,7 +625,9 @@ private struct SessionChatMessageRow: View {
                     onChangesReviewTap: onChangesReviewTap,
                     supportsSessionMessageDiff: supportsSessionMessageDiff,
                     expandedStepParagraphs: expandedStepParagraphs,
-                    onExpandStepParagraph: onExpandStepParagraph
+                    onExpandStepParagraph: onExpandStepParagraph,
+                    stepRailState: stepRailState,
+                    onToggleStepRailFold: onToggleStepRailFold
                 )
                 .frame(maxWidth: .infinity, alignment: .leading)
             case .notice:
@@ -606,7 +650,8 @@ private extension SessionChatRow {
                 .text(id: blockID, text: text)
             case .attachment(_, let file):
                 .attachment(file.attachmentPresentation)
-            case .toolCard, .toolGroup, .childSessionRow, .reasoning, .stepParagraph, .stopNote, .failureLine, .notice:
+            case .toolCard, .toolGroup, .childSessionRow, .reasoning, .stepParagraph, .stepRail, .stopNote, .failureLine,
+                 .notice:
                 nil
             }
         }
@@ -648,6 +693,8 @@ private struct AssistantMessageContent: View {
     let supportsSessionMessageDiff: Bool
     let expandedStepParagraphs: [String: Int]
     let onExpandStepParagraph: (String, Int) -> Void
+    let stepRailState: SessionChatStepRailViewState
+    let onToggleStepRailFold: (String) -> Void
 
     /// Rows never render empty — unpaintable blocks are filtered and an empty
     /// result falls back to the live placeholder.
@@ -795,9 +842,37 @@ private struct AssistantMessageContent: View {
                             )
                         }
                     )
+                case .stepRail(_, let block):
+                    stepRail(block.withLive(block.id == stepRailState.liveRailID))
                 }
             }
         }
+    }
+
+    /// Step rail (#779): fold rows in from the Screen Model's unfolded set; taps
+    /// reuse the standard card actions, a thought opens its text.
+    private func stepRail(_ rail: SessionChatStepRailBlock) -> some View {
+        let rows = SessionChatTimelineBlocks.stepRailRows(
+            rail,
+            unfolded: stepRailState.unfolded.contains(rail.id)
+        )
+        let stepsByID = Dictionary(uniqueKeysWithValues: rail.steps.map { ($0.id, $0) })
+        return OpenCodeStepRail(
+            steps: rows.map { row in row.railItem(actionable: { stepAction(for: $0) != nil }) },
+            isLive: rail.isLive,
+            thinking: false,
+            onStepTap: { id in stepsByID[id].flatMap(stepAction(for:))?() },
+            onFoldTap: { onToggleStepRailFold(rail.id) },
+            onChildSessionTap: { id in stepsByID[id].flatMap(stepAction(for:))?() }
+        )
+    }
+
+    private func stepAction(for step: SessionChatStep) -> (() -> Void)? {
+        if step.kind == .thought {
+            guard let text = step.thoughtText else { return nil }
+            return { onToolDetailTap(SessionChatToolDetailTarget(title: "Thought", body: text)) }
+        }
+        return step.card.flatMap(toolCardAction(for:))
     }
 
     private func toolCardAction(for card: SessionChatToolCardBlock) -> (() -> Void)? {
@@ -968,6 +1043,56 @@ private extension SessionChatToolChipBlock {
         case .command: .command(label: label)
         case .agent: .agent(name: label, brief: brief)
         case .skill: .skill(name: label)
+        }
+    }
+}
+
+private extension SessionChatStepRailRow {
+    func railItem(actionable: (SessionChatStep) -> Bool) -> OpenCodeStepRailItem {
+        switch self {
+        case .fold(let count, let status):
+            return .fold(count: count, status: status == .failed ? .failed : .completed)
+        case .thinking:
+            return .thinking
+        case .step(let step):
+            let status = step.railStatus
+            let startedAtMs = ToolStartTime.normalizeEpochMs(step.startedAtMs)
+            let endedAtMs = ToolStartTime.normalizeEpochMs(step.endedAtMs)
+            if step.kind == .childSession {
+                return .childSession(
+                    id: step.id,
+                    agent: step.childSession?.agent ?? step.title,
+                    description: step.childSession?.description,
+                    status: status,
+                    startedAtMs: startedAtMs,
+                    endedAtMs: endedAtMs,
+                    detail: step.detail,
+                    isActionable: actionable(step)
+                )
+            }
+            return .step(
+                id: step.id,
+                title: step.title,
+                detail: step.detail,
+                status: status,
+                additions: step.additions,
+                deletions: step.deletions,
+                startedAtMs: step.kind == .thought ? nil : startedAtMs,
+                endedAtMs: endedAtMs,
+                isBranch: step.isBranch,
+                isActionable: actionable(step)
+            )
+        }
+    }
+}
+
+private extension SessionChatStep {
+    var railStatus: OpenCodeStepRailStatus {
+        switch status {
+        case .pending: .pending
+        case .running: .running
+        case .completed: .completed
+        case .failed: isInterrupted ? .interrupted : .failed
         }
     }
 }

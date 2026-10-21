@@ -25,11 +25,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.sessionchat.WorkingTurnIndicator
@@ -49,9 +51,21 @@ enum class OpenCodeChatActivityState {
     Expanded,
 }
 
-/** Six-point circle that pulses while a turn is in progress. */
+/**
+ * Six-point circle that pulses while a turn is in progress. The step rail uses
+ * a larger dot in a status tone; [animated] false is the static Reduce Motion dot.
+ */
 @Composable
-fun OpenCodePulsingDot(modifier: Modifier = Modifier) {
+fun OpenCodePulsingDot(
+    modifier: Modifier = Modifier,
+    color: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    size: Dp = 6.dp,
+    animated: Boolean = true,
+) {
+    if (!animated) {
+        Box(modifier = modifier.size(size).background(color = color, shape = CircleShape))
+        return
+    }
     val pulse =
         rememberInfiniteTransition(label = "opencode-pulsing-dot").animateFloat(
             initialValue = 1f,
@@ -66,10 +80,10 @@ fun OpenCodePulsingDot(modifier: Modifier = Modifier) {
     Box(
         modifier =
             modifier
-                .size(6.dp)
+                .size(size)
                 .alpha(pulse.value)
                 .background(
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = color,
                     shape = CircleShape,
                 ),
     )

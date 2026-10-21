@@ -42,6 +42,12 @@ nonisolated enum PresentationBlockId {
         "sp:" + firstPartId
     }
 
+    /// Step rail identity (#779): its first member part id, so the rail keeps
+    /// its block id while later steps join it.
+    nonisolated static func stepRail(_ firstPartId: String) -> String {
+        "sr:" + firstPartId
+    }
+
     /// Unstructured fallback when displayable parts lack stable IDs.
     nonisolated static func messageFallback(_ messageId: String) -> String {
         "m:\(messageId)"

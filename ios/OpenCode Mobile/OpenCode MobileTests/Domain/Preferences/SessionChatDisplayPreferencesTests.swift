@@ -173,4 +173,129 @@ import Testing
         let reloaded = SessionChatDisplayPreferences(defaults: defaults)
         #expect(reloaded.followUpDelivery == .queue)
     }
+    // MARK: - Timeline Style (#779)
+
+    private func freshDefaults(_ name: String) -> UserDefaults {
+        let suite = "SessionChatDisplayPreferencesTests.timelineStyle.\(name)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        return defaults
+    }
+
+    private func flags(chipsOn: Bool, _ name: String) -> FeatureFlags {
+        let flags = FeatureFlags(defaults: freshDefaults("flags.\(name)"))
+        flags.setOverride(.sessionChatChipTimeline, chipsOn)
+        return flags
+    }
+
+    @Test func timelineStyle_migratesStoredChipTrueToChips() {
+        let defaults = freshDefaults("migrateTrue")
+        defaults.set(true, forKey: "chipTimeline")
+
+        let preferences = SessionChatDisplayPreferences(defaults: defaults, featureFlags: flags(chipsOn: true, "migrateTrue"))
+
+        #expect(preferences.timelineStyle == .chips)
+        #expect(defaults.string(forKey: "timelineStyle") == "chips")
+        #expect(defaults.object(forKey: "chipTimeline") as? Bool == true)
+    }
+
+    @Test func timelineStyle_migratesStoredChipFalseToStandard() {
+        let defaults = freshDefaults("migrateFalse")
+        defaults.set(false, forKey: "chipTimeline")
+
+        let preferences = SessionChatDisplayPreferences(defaults: defaults)
+
+        #expect(preferences.timelineStyle == .standard)
+        #expect(defaults.string(forKey: "timelineStyle") == "standard")
+    }
+
+    @Test func timelineStyle_storedStyleWinsOverOldKey() {
+        let defaults = freshDefaults("storedWins")
+        defaults.set(true, forKey: "chipTimeline")
+        defaults.set("step_rail", forKey: "timelineStyle")
+
+        let preferences = SessionChatDisplayPreferences(defaults: defaults)
+
+        #expect(preferences.timelineStyle == .stepRail)
+        #expect(preferences.stepRailTimeline)
+        #expect(preferences.chipTimeline == false)
+    }
+
+    @Test func timelineStyle_missingResolvesInstallDefault() {
+        let fresh = SessionChatDisplayPreferences(defaults: freshDefaults("installFresh"))
+        fresh.resolveChipTimelineForInstall(existingInstall: false)
+        #expect(fresh.timelineStyle == .chips)
+
+        let existing = SessionChatDisplayPreferences(defaults: freshDefaults("installExisting"))
+        existing.resolveChipTimelineForInstall(existingInstall: true)
+        #expect(existing.timelineStyle == .standard)
+
+        let untouched = SessionChatDisplayPreferences(defaults: freshDefaults("installNone"))
+        #expect(untouched.timelineStyle == .standard)
+    }
+
+    @Test func timelineStyle_resolveKeepsAStoredStepRail() {
+        let defaults = freshDefaults("installKeepsStepRail")
+        let preferences = SessionChatDisplayPreferences(defaults: defaults)
+        preferences.setTimelineStyle(.stepRail)
+
+        preferences.resolveChipTimelineForInstall(existingInstall: false)
+
+        #expect(preferences.timelineStyle == .stepRail)
+    }
+
+    @Test func timelineStyle_flagOffMakesChipsEffectiveStandard() {
+        let defaults = freshDefaults("flagOff")
+        let preferences = SessionChatDisplayPreferences(defaults: defaults, featureFlags: flags(chipsOn: false, "flagOff"))
+        preferences.setTimelineStyle(.chips)
+
+        #expect(preferences.timelineStyle == .chips)
+        #expect(preferences.chipTimeline == false)
+        #expect(preferences.effectiveTimelineStyle == .standard)
+        #expect(preferences.availableTimelineStyles == [.standard, .stepRail])
+
+        preferences.setTimelineStyle(.stepRail)
+        #expect(preferences.stepRailTimeline)
+        #expect(preferences.effectiveTimelineStyle == .stepRail)
+    }
+
+    @Test func timelineStyle_flagOnOffersAllStyles() {
+        let preferences = SessionChatDisplayPreferences(
+            defaults: freshDefaults("flagOn"),
+            featureFlags: flags(chipsOn: true, "flagOn")
+        )
+        #expect(preferences.availableTimelineStyles == [.standard, .chips, .stepRail])
+    }
+
+    @Test func timelineStyle_setPersistsEndsIntroAndClearResets() {
+        let defaults = freshDefaults("setClear")
+        let preferences = SessionChatDisplayPreferences(defaults: defaults)
+
+        preferences.setTimelineStyle(.stepRail)
+
+        #expect(preferences.chipTimelineIntroDone)
+        #expect(SessionChatDisplayPreferences(defaults: defaults).timelineStyle == .stepRail)
+
+        preferences.clear()
+
+        #expect(preferences.timelineStyle == .standard)
+        #expect(defaults.object(forKey: "timelineStyle") == nil)
+        #expect(defaults.object(forKey: "chipTimeline") == nil)
+    }
+
+    @Test func timelineStyle_stepRailNeverOffersTheChipIntro() {
+        let defaults = freshDefaults("intro")
+        defaults.set("step_rail", forKey: "timelineStyle")
+        let preferences = SessionChatDisplayPreferences(defaults: defaults, featureFlags: flags(chipsOn: true, "intro"))
+
+        #expect(!preferences.shouldOfferChipTimelineIntro(turnToolCalls: 20, nowMs: 1_000))
+    }
+
+    @Test func timelineStyle_chipShimMapsToChipsAndStandard() {
+        let preferences = SessionChatDisplayPreferences(defaults: freshDefaults("shim"))
+        preferences.setChipTimeline(true)
+        #expect(preferences.timelineStyle == .chips)
+        preferences.setChipTimeline(false)
+        #expect(preferences.timelineStyle == .standard)
+    }
 }

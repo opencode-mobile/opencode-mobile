@@ -796,6 +796,11 @@ final class SessionChatViewModel {
         publishUiState()
     }
 
+    /// Step rail: show or fold one rail's earlier settled steps.
+    func toggleStepRailFold(_ railID: String) {
+        timeline.toggleStepRailFold(railID)
+    }
+
     func toggleFollowUp() {
         guard activeConnectionManager.capabilities.supportsFollowUpDelivery else { return }
         composer.toggleFollowUp()
@@ -1092,6 +1097,7 @@ final class SessionChatViewModel {
             SessionChatDisplayPreferences.shared.collapseConsecutiveToolCalls
         )
         timeline.updateChipTimeline(SessionChatDisplayPreferences.shared.chipTimeline)
+        timeline.updateStepRailTimeline(SessionChatDisplayPreferences.shared.stepRailTimeline)
         observeCollapsePreference()
     }
 
@@ -1103,6 +1109,7 @@ final class SessionChatViewModel {
         withObservationTracking {
             _ = SessionChatDisplayPreferences.shared.collapseConsecutiveToolCalls
             _ = SessionChatDisplayPreferences.shared.chipTimeline
+            _ = SessionChatDisplayPreferences.shared.stepRailTimeline
         } onChange: { [weak self] in
             Task { @MainActor in
                 guard let self, self.collapsePreferenceGeneration == generation else { return }
@@ -1110,6 +1117,7 @@ final class SessionChatViewModel {
                     SessionChatDisplayPreferences.shared.collapseConsecutiveToolCalls
                 )
                 self.timeline.updateChipTimeline(SessionChatDisplayPreferences.shared.chipTimeline)
+                self.timeline.updateStepRailTimeline(SessionChatDisplayPreferences.shared.stepRailTimeline)
                 self.publishUiState()
                 self.observeCollapsePreference()
             }
@@ -1576,6 +1584,7 @@ final class SessionChatViewModel {
             pendingFilesOpen: commandsState.pendingFilesOpen,
             hasPendingRevert: commandsState.hasPendingRevert,
             expandedStepParagraphs: expandedStepParagraphs,
+            unfoldedStepRails: timelineState.unfoldedStepRails,
             chipTimelineIntroVisible: chipTimelineIntroVisible,
             dictation: dictation
         )

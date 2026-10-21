@@ -141,7 +141,8 @@ nonisolated enum SessionChatTimelineProjector {
         sessionKey: String,
         serverCommands: [ServerCommand] = [],
         collapseConsecutiveToolCalls: Bool = false,
-        chipTimeline: Bool = false
+        chipTimeline: Bool = false,
+        stepRail: Bool = false
     ) -> [String: Int] {
         let frame = DisplayFrameBuilder.build(
             sessionKey: sessionKey,
@@ -150,7 +151,8 @@ nonisolated enum SessionChatTimelineProjector {
             displayMessages: messages,
             serverCommands: serverCommands,
             collapseConsecutiveToolCalls: collapseConsecutiveToolCalls,
-            chipTimeline: chipTimeline
+            chipTimeline: chipTimeline,
+            stepRail: stepRail
         )
         return signatureCounts(serverRows(from: frame))
     }
@@ -521,7 +523,8 @@ nonisolated enum SessionChatTimelineProjector {
                 // Kind, not mime: a server may re-encode an image (v2 stores a large PNG as JPEG).
                 let name = file.filename.trimmingCharacters(in: .whitespacesAndNewlines)
                 return name.isEmpty ? "file:\(file.kind.rawValue)" : "file:\(name):\(file.kind.rawValue)"
-            case .toolCard, .toolGroup, .childSessionRow, .reasoning, .stepParagraph, .stopNote, .failureLine, .notice:
+            case .toolCard, .toolGroup, .childSessionRow, .reasoning, .stepParagraph, .stepRail, .stopNote, .failureLine,
+                 .notice:
                 return nil
             }
         }
@@ -612,6 +615,11 @@ nonisolated enum SessionChatTimelineProjector {
                     + paragraph.chips.map {
                         "\($0.status.rawValue)/\($0.additions ?? -1)/\($0.deletions ?? -1)"
                     }.joined(separator: ",")
+            case .stepRail(let id, let rail):
+                "sr:\(id):"
+                    + rail.steps.map {
+                        "\($0.id)/\($0.status.rawValue)/\($0.isBranch)/\($0.detail != nil)/\($0.additions ?? -1)/\($0.deletions ?? -1)"
+                    }.joined(separator: ",")
             case .stopNote(let id, let reason):
                 "x:\(id):\(reason.rawValue)"
             case .failureLine(let id, _, let body, let neutral, let action, _, _):
@@ -652,6 +660,8 @@ nonisolated enum SessionChatTimelineProjector {
                 "n:\(id)"
             case .stepParagraph(let id, let paragraph):
                 "s:\(id):\(paragraph.chips.count)"
+            case .stepRail(let id, let rail):
+                "sr:\(id):\(rail.steps.count)"
             case .stopNote(let id, let reason):
                 "x:\(id):\(reason.rawValue)"
             case .failureLine(let id, _, let body, _, _, _, _):

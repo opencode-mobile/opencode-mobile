@@ -1006,8 +1006,10 @@ private struct BottomSheetKeyboardHostPolicy: ViewModifier {
 /// Tappable row in a bottom sheet. `selected` marks the current choice in a
 /// picker: it shows a check in the end slot (replacing `endDecorator`) and
 /// carries the selected trait. Titles wrap to two lines at large Dynamic Type.
+/// An optional `subtitle` explains a choice in one muted line under the title.
 struct OpenCodeBottomSheetEntry: View {
     let title: String
+    let subtitle: String?
     let enabled: Bool
     let destructive: Bool
     let startDecorator: BottomSheetEntryDecorator
@@ -1017,6 +1019,7 @@ struct OpenCodeBottomSheetEntry: View {
 
     init(
         title: String,
+        subtitle: String? = nil,
         enabled: Bool = true,
         destructive: Bool = false,
         startDecorator: BottomSheetEntryDecorator = .none,
@@ -1025,6 +1028,7 @@ struct OpenCodeBottomSheetEntry: View {
         action: @escaping () -> Void
     ) {
         self.title = title
+        self.subtitle = subtitle
         self.enabled = enabled
         self.destructive = destructive
         self.startDecorator = startDecorator
@@ -1053,12 +1057,21 @@ struct OpenCodeBottomSheetEntry: View {
                     destructive: destructive
                 )
 
-                Text(title)
-                    .font(OpenCodeTypography.body)
-                    .foregroundStyle(titleColor)
-                    .lineLimit(bottomSheetEntryMaxLines)
-                    .multilineTextAlignment(.leading)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(OpenCodeTypography.body)
+                        .foregroundStyle(titleColor)
+                        .lineLimit(bottomSheetEntryMaxLines)
+                        .multilineTextAlignment(.leading)
+                    if let subtitle, !subtitle.isEmpty {
+                        Text(subtitle)
+                            .font(OpenCodeTypography.caption)
+                            .foregroundStyle(OpenCodeColors.textWeak)
+                            .lineLimit(bottomSheetEntryMaxLines)
+                            .multilineTextAlignment(.leading)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
 
                 BottomSheetEntryDecoration(
                     decorator: selected ? .icon(.check) : endDecorator,

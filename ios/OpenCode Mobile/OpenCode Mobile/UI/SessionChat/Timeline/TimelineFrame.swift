@@ -346,6 +346,42 @@ struct MessageListTimelineApplyPacket: Equatable, Sendable {
         )
     }
 
+    /// Step rail: fold state and the live rail live in the Screen Model and
+    /// the host, not the projected frame. Rows holding a rail whose fold or
+    /// liveness changed reconfigure as a layout change, and the state folds
+    /// into revision so an unchanged state never re-applies.
+    func addingStepRailState(
+        rows: [SessionChatRow],
+        state: SessionChatStepRailViewState,
+        previous: SessionChatStepRailViewState
+    ) -> MessageListTimelineApplyPacket {
+        var keyed = Dictionary(uniqueKeysWithValues: state.unfolded.map { ($0, 0) })
+        if let live = state.liveRailID { keyed["live:" + live] = 1 }
+        let fingerprint = SessionChatStepParagraphExpansion.fingerprint(keyed)
+        var toggled = state.unfolded.symmetricDifference(previous.unfolded)
+        if state.liveRailID != previous.liveRailID {
+            toggled.formUnion([state.liveRailID, previous.liveRailID].compactMap { $0 })
+        }
+        let rowIDs = SessionChatStepParagraphExpansion.rowIDs(containingStepRails: toggled, in: rows)
+        guard fingerprint != 0 || !rowIDs.isEmpty else { return self }
+        var nextKinds = kinds
+        if !rowIDs.isEmpty {
+            nextKinds.insert(.structure)
+            nextKinds.insert(.content)
+        }
+        return MessageListTimelineApplyPacket(
+            frameRevision: frameRevision &+ (fingerprint &* 1_000_000_009),
+            insertedRowIDs: insertedRowIDs,
+            changedRowIDs: changedRowIDs.union(rowIDs),
+            removedRowIDs: removedRowIDs,
+            layoutChangedRowIDs: layoutChangedRowIDs.union(rowIDs),
+            grewBottomRowIDs: grewBottomRowIDs,
+            decorateRowIDs: decorateRowIDs,
+            isRequired: isRequired,
+            kinds: nextKinds
+        )
+    }
+
     /// Model-switch notices show the catalog name, which can arrive after the row.
     /// Rows whose resolved name changed reconfigure; the names fold into revision
     /// so an unchanged catalog never re-applies.
@@ -544,6 +580,15 @@ extension TimelineRow {
     }
 }
 
+/// Step rail presentation state the timeline host threads to each row.
+struct SessionChatStepRailViewState: Equatable {
+    var unfolded: Set<String>
+    /// The rail that shows live status, or nil.
+    var liveRailID: String?
+
+    static let empty = SessionChatStepRailViewState(unfolded: [], liveRailID: nil)
+}
+
 /// Chip-timeline `+N more` expansion helpers for the timeline host.
 enum SessionChatStepParagraphExpansion {
     /// Order-independent, process-stable fingerprint over paragraph id and
@@ -566,6 +611,20 @@ enum SessionChatStepParagraphExpansion {
             changed.insert(key)
         }
         return changed
+    }
+
+    /// Rows whose blocks hold a step rail with one of `railIDs`.
+    static func rowIDs(containingStepRails railIDs: Set<String>, in rows: [SessionChatRow]) -> Set<String> {
+        guard !railIDs.isEmpty else { return [] }
+        var result: Set<String> = []
+        for row in rows {
+            let holds = row.blocks.contains { block in
+                guard case .stepRail(_, let rail) = block else { return false }
+                return railIDs.contains(rail.id)
+            }
+            if holds { result.insert(row.id) }
+        }
+        return result
     }
 
     /// Rows whose blocks hold a step paragraph with one of `paragraphIDs`.

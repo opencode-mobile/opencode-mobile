@@ -234,6 +234,12 @@ class SessionChatViewModel
         // expansion id with the chip count at tap time; reset per session.
         private var expandedStepParagraphs: Map<String, Int> = emptyMap()
 
+        // Step rails the user unfolded past `N earlier steps`, keyed by rail id; reset per session.
+        private var unfoldedStepRails: Set<String> = emptySet()
+        private var liveRailSource: List<SessionChatMessageItem>? = null
+        private var liveRailMarked: List<SessionChatMessageItem> = emptyList()
+        private var liveRailActive = false
+
         // Composer dictation card. An active card is cancelled without inserting when the
         // mode, background, or screen goes away.
         private var dictation: ComposerDictationUiState? = null
@@ -341,6 +347,13 @@ class SessionChatViewModel
                         timeline.updateChipTimeline(enabled)
                     }
             }
+            viewModelScope.launch {
+                snapshotFlow { SessionChatDisplayPreferences.stepRailTimeline }
+                    .distinctUntilChanged()
+                    .collect { enabled ->
+                        timeline.updateStepRailTimeline(enabled)
+                    }
+            }
         }
 
         fun bind(
@@ -375,6 +388,7 @@ class SessionChatViewModel
             suppressedSnackbarKey = null
             snackbarSequence = 0L
             expandedStepParagraphs = emptyMap()
+            unfoldedStepRails = emptySet()
             resetChipTimelineIntro()
             resetWorkingFooter()
             logI("bind session=$sessionId worktree=$worktree title=$sessionTitle")
@@ -414,6 +428,7 @@ class SessionChatViewModel
             suppressedSnackbarKey = null
             snackbarSequence = 0L
             expandedStepParagraphs = emptyMap()
+            unfoldedStepRails = emptySet()
             resetChipTimelineIntro()
             resetWorkingFooter()
             logI("bind optimistic create worktree=$worktree title=$sessionTitle")
@@ -1505,11 +1520,15 @@ class SessionChatViewModel
                 timelineState.timelineFrame === previous.timelineFrame &&
                     timelineState.messages === previous.messages
             val messages =
-                if (timelineUnchanged) {
-                    previous.messages
-                } else {
-                    timelineState.messages
-                }
+                markLiveStepRail(
+                    messages =
+                        if (timelineUnchanged) {
+                            previous.messages
+                        } else {
+                            timelineState.messages
+                        },
+                    isTurnActive = infoState.sessionStatusLabel != null,
+                )
             val timelineFrame =
                 if (timelineUnchanged) {
                     previous.timelineFrame
@@ -1576,7 +1595,11 @@ class SessionChatViewModel
             workingChrome = workingResolution.chrome
             workingHold = workingResolution.hold
             scheduleWorkingFooterWake(workingResolution.wakeAfterMs)
-            val workingIndicatorLabel = workingResolution.chrome.label
+            // Step rail: the live rail's running or Thinking… step is the indicator (#779).
+            val workingIndicatorLabel =
+                workingResolution.chrome.label.takeUnless {
+                    activeWorkingLabel != null && SessionChatStepRail.hasLiveRail(messages)
+                }
             val workingIndicatorCollapsed = workingResolution.chrome.collapsed
             val workingIndicatorFading = workingResolution.chrome.fading
             val workingLampKey =
@@ -1695,6 +1718,7 @@ class SessionChatViewModel
                 forkedSessionTitle = commandsState.forkedSessionTitle,
                 pendingSessionReplace = commandsState.pendingSessionReplace,
                 expandedStepParagraphs = expandedStepParagraphs,
+                unfoldedStepRails = unfoldedStepRails,
                 chipTimelineIntroVisible = chipTimelineIntroVisible,
                 pendingTerminalOpen = commandsState.pendingTerminalOpen,
                 pendingFilesOpen = commandsState.pendingFilesOpen,
@@ -1706,6 +1730,29 @@ class SessionChatViewModel
                 sessionBranchPill = repoStrip.state.value.toSessionBranchPill(),
                 dictation = dictation,
             )
+        }
+
+        /**
+         * Marks the trailing rail of a working turn live. Cached on the source
+         * list so a republish from another region keeps the same message list.
+         */
+        private fun markLiveStepRail(
+            messages: List<SessionChatMessageItem>,
+            isTurnActive: Boolean,
+        ): List<SessionChatMessageItem> {
+            if (messages === liveRailMarked && isTurnActive == liveRailActive) return messages
+            if (messages === liveRailSource && isTurnActive == liveRailActive) return liveRailMarked
+            val marked = SessionChatStepRail.markLive(messages, isTurnActive)
+            liveRailSource = messages
+            liveRailActive = isTurnActive
+            liveRailMarked = marked
+            return marked
+        }
+
+        /** Shows every step of a folded step rail, or folds it again. */
+        fun toggleStepRailFold(railId: String) {
+            unfoldedStepRails = if (railId in unfoldedStepRails) unfoldedStepRails - railId else unfoldedStepRails + railId
+            _uiState.value = _uiState.value.copy(unfoldedStepRails = unfoldedStepRails)
         }
 
         private fun resolveSnackbar(

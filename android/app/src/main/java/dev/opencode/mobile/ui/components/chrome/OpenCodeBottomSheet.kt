@@ -1074,6 +1074,8 @@ fun OpenCodeBottomSheetEntry(
     selected: Boolean = false,
     startDecorator: BottomSheetEntryDecorator = BottomSheetEntryDecorator.None,
     endDecorator: BottomSheetEntryDecorator = BottomSheetEntryDecorator.None,
+    /** Optional second line that explains the entry, for pickers whose options need a description. */
+    subtitle: String? = null,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -1125,14 +1127,36 @@ fun OpenCodeBottomSheetEntry(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         BottomSheetEntryDecoration(decorator = startDecorator, tint = iconColor)
-        Text(
-            text = title,
-            modifier = Modifier.weight(1f),
-            style = MaterialTheme.typography.bodyLarge,
-            color = contentColor,
-            maxLines = BottomSheetEntryMaxLines,
-            overflow = TextOverflow.Ellipsis,
-        )
+        if (subtitle.isNullOrEmpty()) {
+            Text(
+                text = title,
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.bodyLarge,
+                color = contentColor,
+                maxLines = BottomSheetEntryMaxLines,
+                overflow = TextOverflow.Ellipsis,
+            )
+        } else {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = contentColor,
+                    maxLines = BottomSheetEntryMaxLines,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (enabled) openCodeColor("text-base") else openCodeColor("text-weaker"),
+                    maxLines = BottomSheetEntryMaxLines,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
         BottomSheetEntryDecoration(decorator = resolvedEndDecorator, tint = iconColor)
     }
 }

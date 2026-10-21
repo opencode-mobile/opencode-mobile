@@ -33,6 +33,8 @@ final class SessionChatTimeline {
     private(set) var collapseConsecutiveToolCalls = false
     /// Chip-timeline preference (OPE-260); narration paragraphs with tool chips.
     private(set) var chipTimeline = false
+    /// Step rail timeline preference (#779); one line per step on a rail.
+    private(set) var stepRailTimeline = false
     /// First message of a pending revert (v1 `session.revert`, v2 `session.revert.staged`): it and
     /// every later message stay hidden until the revert is cleared or committed (#619).
     private(set) var revertBoundaryMessageID: String?
@@ -111,6 +113,34 @@ final class SessionChatTimeline {
                 expirePendingPromptPatches: false
             )
         }
+    }
+
+    func updateStepRailTimeline(_ enabled: Bool) {
+        guard enabled != stepRailTimeline else { return }
+        stepRailTimeline = enabled
+        guard !lastLoadedDisplayMessages.isEmpty else { return }
+        let snapshot = lastLoadedDisplayMessages
+        let fromCache = state.messagesFromCache
+        Task {
+            await applyLoadedDisplayMessagesTransform(
+                snapshot,
+                isRefreshing: false,
+                fromQuietRefresh: true,
+                messagesFromCache: fromCache,
+                expirePendingPromptPatches: false
+            )
+        }
+    }
+
+    /// Step rail: show or fold the earlier settled steps of one rail. Fold
+    /// state is presentation, keyed by the rail's stable id; blocks never change.
+    func toggleStepRailFold(_ railID: String) {
+        if state.unfoldedStepRails.contains(railID) {
+            state.unfoldedStepRails.remove(railID)
+        } else {
+            state.unfoldedStepRails.insert(railID)
+        }
+        notifyChange()
     }
 
     func updateRevertBoundary(_ messageID: String?) {
@@ -330,6 +360,7 @@ final class SessionChatTimeline {
             serverCommands: serverCommands,
             collapseConsecutiveToolCalls: collapseConsecutiveToolCalls,
             chipTimeline: chipTimeline,
+            stepRail: stepRailTimeline,
             childSessions: childSessions
         )
         let stamped = SessionChatTimelineProjector.project(
@@ -520,7 +551,8 @@ final class SessionChatTimeline {
             sessionKey: sessionID,
             serverCommands: serverCommands,
             collapseConsecutiveToolCalls: collapseConsecutiveToolCalls,
-            chipTimeline: chipTimeline
+            chipTimeline: chipTimeline,
+            stepRail: stepRailTimeline
         )
         let displayed = SessionChatTimelineProjector.displayedOptimisticSendRows(rows)
         let hadPriorRows = !state.messages.isEmpty || !timelineFrame.rows.isEmpty
@@ -657,6 +689,7 @@ final class SessionChatTimeline {
             serverCommands: serverCommands,
             collapseConsecutiveToolCalls: collapseConsecutiveToolCalls,
             chipTimeline: chipTimeline,
+            stepRail: stepRailTimeline,
             childSessions: childSessions
         )
         guard !frame.messages.isEmpty else { return nil }
@@ -725,6 +758,7 @@ final class SessionChatTimeline {
         let commands = serverCommands
         let collapse = collapseConsecutiveToolCalls
         let chips = chipTimeline
+        let stepRail = stepRailTimeline
         let children = childSessions
         let visibleDisplayMessages = Self.hidingReverted(displayMessages, from: revertBoundaryMessageID)
 
@@ -755,6 +789,7 @@ final class SessionChatTimeline {
                 serverCommands: commands,
                 collapseConsecutiveToolCalls: collapse,
                 chipTimeline: chips,
+                stepRail: stepRail,
                 childSessions: children
             )
             return SessionChatTimelineProjector.project(
@@ -872,6 +907,7 @@ final class SessionChatTimeline {
             serverCommands: serverCommands,
             collapseConsecutiveToolCalls: collapseConsecutiveToolCalls,
             chipTimeline: chipTimeline,
+            stepRail: stepRailTimeline,
             childSessions: childSessions
         )
         let stillUnacked = SessionChatTimelineProjector.unmatchedPending(

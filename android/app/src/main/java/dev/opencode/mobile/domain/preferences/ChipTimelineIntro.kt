@@ -33,9 +33,11 @@ object ChipTimelineIntro {
         snoozedUntilMillis: Long?,
         nowMillis: Long,
         turnToolCalls: Int,
+        timelineStyleChosen: Boolean = false,
     ): Boolean =
         chipTimelineAvailable &&
             !chipTimelineOn &&
+            !timelineStyleChosen &&
             !introDone &&
             (snoozedUntilMillis == null || snoozedUntilMillis <= nowMillis) &&
             turnToolCalls >= MIN_TOOL_CALLS

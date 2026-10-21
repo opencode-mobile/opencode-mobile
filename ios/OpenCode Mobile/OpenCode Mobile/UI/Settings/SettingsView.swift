@@ -50,6 +50,7 @@ struct SettingsView: View {
     @State private var showAppearance = false
     @State private var showRecentWindowPicker = false
     @State private var showFollowUpPicker = false
+    @State private var showTimelineStylePicker = false
     @State private var themeManager = ThemeManager.shared
     @State private var homeDisplayPreferences = HomeDisplayPreferences.shared
     @State private var markdownHighlightPreferences = MarkdownHighlightPreferences.shared
@@ -135,6 +136,26 @@ struct SettingsView: View {
                     }
                 )
                 .id("hours-\(hours)")
+            }
+        }
+        .openCodeBottomSheet(isPresented: $showTimelineStylePicker, title: "Timeline Style") {
+            ForEach(sessionChatDisplayPreferences.availableTimelineStyles, id: \.self) { style in
+                OpenCodeBottomSheetEntry(
+                    title: style.title,
+                    subtitle: style.subtitle,
+                    selected: style == sessionChatDisplayPreferences.effectiveTimelineStyle,
+                    action: {
+                        ProductAnalytics.logUserAction(
+                            screenId: ProductAnalytics.Screen.settings,
+                            actionId: style == .chips
+                                ? ProductAnalytics.Action.settingsToggleChipTimeline
+                                : ProductAnalytics.Action.settingsTimelineStyle,
+                            parameters: [ProductAnalytics.Param.mode: style.wireValue]
+                        )
+                        sessionChatDisplayPreferences.setTimelineStyle(style)
+                        showTimelineStylePicker = false
+                    }
+                )
             }
         }
         .openCodeBottomSheet(isPresented: $showFollowUpPicker, title: "Follow-up send") {
@@ -356,27 +377,15 @@ struct SettingsView: View {
                     )
                     .padding(.horizontal, 16)
 
-                    if sessionChatDisplayPreferences.chipTimelineAvailable {
-                        OpenCodeListItem(
-                            title: "Chip Timeline",
-                            subtitle: "Show the tools an agent used as chips under its narration",
-                            style: .card,
-                            startDecorator: .icon(.widgets, accessibilityLabel: "Chip Timeline"),
-                            accessory: .toggle(
-                                isOn: Binding(
-                                    get: { sessionChatDisplayPreferences.chipTimeline },
-                                    set: { newValue in
-                                        logSettingsAction(
-                                            ProductAnalytics.Action.settingsToggleChipTimeline
-                                        )
-                                        sessionChatDisplayPreferences.setChipTimeline(newValue)
-                                    }
-                                ),
-                                accessibilityLabel: "Chip Timeline"
-                            )
-                        )
-                        .padding(.horizontal, 16)
-                    }
+                    OpenCodeListItem(
+                        title: "Timeline Style",
+                        subtitle: sessionChatDisplayPreferences.effectiveTimelineStyle.title,
+                        style: .card,
+                        startDecorator: .icon(.widgets, accessibilityLabel: "Timeline Style"),
+                        accessory: .disclosure,
+                        action: { showTimelineStylePicker = true }
+                    )
+                    .padding(.horizontal, 16)
 
                     OpenCodeListItem(
                         title: "Follow-up send",

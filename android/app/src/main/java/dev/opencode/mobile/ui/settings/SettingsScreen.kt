@@ -31,6 +31,7 @@ import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.preferences.DeveloperToolsPreferences
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
+import dev.opencode.mobile.domain.preferences.SessionChatTimelineStyle
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.ThemeManager
 import dev.opencode.mobile.theme.openCodeColor
@@ -76,8 +77,8 @@ fun SettingsScreen(
     onRecentWindowHoursChange: (Int) -> Unit,
     collapseConsecutiveToolCalls: Boolean,
     onCollapseConsecutiveToolCallsChange: (Boolean) -> Unit,
-    chipTimeline: Boolean,
-    onChipTimelineChange: (Boolean) -> Unit,
+    timelineStyle: SessionChatTimelineStyle,
+    onTimelineStyleChange: (SessionChatTimelineStyle) -> Unit,
     chipTimelineAvailable: Boolean = true,
     followUpDelivery: FollowUpDelivery,
     onFollowUpDeliveryChange: (FollowUpDelivery) -> Unit,
@@ -97,6 +98,7 @@ fun SettingsScreen(
     var showClearSessionCacheConfirmation by remember { mutableStateOf(false) }
     var showRecentWindowPicker by remember { mutableStateOf(false) }
     var showFollowUpPicker by remember { mutableStateOf(false) }
+    var showTimelineStylePicker by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val currentTheme = ThemeManager.currentTheme
     val currentSyntax = ThemeManager.currentSyntaxPreset
@@ -242,23 +244,15 @@ fun SettingsScreen(
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
 
-                if (chipTimelineAvailable) {
-                    OpenCodeListItem(
-                        title = "Chip Timeline",
-                        subtitle = "Show the tools an agent used as chips under its narration",
-                        style = OpenCodeListItemStyle.Card,
-                        startDecorator = StartDecorator.Icon(OpenCodeIcons.Widgets, "Chip Timeline"),
-                        accessory =
-                            OpenCodeListItemAccessory.Toggle(
-                                checked = chipTimeline,
-                                onCheckedChange = { enabled ->
-                                    logSettingsToggle(ProductAnalytics.Action.SETTINGS_TOGGLE_CHIP_TIMELINE, enabled)
-                                    onChipTimelineChange(enabled)
-                                },
-                            ),
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                    )
-                }
+                OpenCodeListItem(
+                    title = "Timeline Style",
+                    subtitle = timelineStyle.settingsTitle(),
+                    style = OpenCodeListItemStyle.Card,
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Widgets, "Timeline Style"),
+                    accessory = OpenCodeListItemAccessory.Disclosure,
+                    onClick = { showTimelineStylePicker = true },
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
 
                 OpenCodeListItem(
                     title = "Follow-up send",
@@ -532,6 +526,33 @@ fun SettingsScreen(
     }
 
     OpenCodeBottomSheet(
+        visible = showTimelineStylePicker,
+        title = "Timeline Style",
+        onDismissRequest = { showTimelineStylePicker = false },
+    ) {
+        SessionChatTimelineStyle.entries
+            .filter { it != SessionChatTimelineStyle.Chips || chipTimelineAvailable }
+            .forEach { style ->
+                OpenCodeBottomSheetEntry(
+                    title = style.settingsTitle(),
+                    subtitle = style.settingsSubtitle(),
+                    selected = style == timelineStyle,
+                    onClick = {
+                        // Chips keeps the existing toggle event; leaving Chips logs it disabled.
+                        if (style == SessionChatTimelineStyle.Chips || timelineStyle == SessionChatTimelineStyle.Chips) {
+                            logSettingsToggle(
+                                ProductAnalytics.Action.SETTINGS_TOGGLE_CHIP_TIMELINE,
+                                style == SessionChatTimelineStyle.Chips,
+                            )
+                        }
+                        onTimelineStyleChange(style)
+                        showTimelineStylePicker = false
+                    },
+                )
+            }
+    }
+
+    OpenCodeBottomSheet(
         visible = showFollowUpPicker,
         title = "Follow-up send",
         onDismissRequest = { showFollowUpPicker = false },
@@ -620,6 +641,20 @@ fun SettingsScreen(
     )
 }
 
+private fun SessionChatTimelineStyle.settingsTitle(): String =
+    when (this) {
+        SessionChatTimelineStyle.Standard -> "Standard"
+        SessionChatTimelineStyle.Chips -> "Chips"
+        SessionChatTimelineStyle.StepRail -> "Step Rail"
+    }
+
+private fun SessionChatTimelineStyle.settingsSubtitle(): String =
+    when (this) {
+        SessionChatTimelineStyle.Standard -> "Tool cards and groups between the agent's messages"
+        SessionChatTimelineStyle.Chips -> "Tools as chips under the agent's narration"
+        SessionChatTimelineStyle.StepRail -> "One line per step on a rail, live while the agent works"
+    }
+
 private fun logSettingsAction(actionId: String) {
     ProductAnalytics.logUserAction(
         screenId = ProductAnalytics.Screen.SETTINGS,
@@ -672,8 +707,8 @@ private fun SettingsScreenLightPreview() {
             collapseConsecutiveToolCalls =
                 SessionChatDisplayPreferences.collapseConsecutiveToolCalls,
             onCollapseConsecutiveToolCallsChange = {},
-            chipTimeline = SessionChatDisplayPreferences.chipTimeline,
-            onChipTimelineChange = {},
+            timelineStyle = SessionChatDisplayPreferences.timelineStyle,
+            onTimelineStyleChange = {},
             followUpDelivery = FollowUpDelivery.Steer,
             onFollowUpDeliveryChange = {},
             supportsFollowUpDelivery = true,
@@ -710,8 +745,8 @@ private fun SettingsScreenDarkPreview() {
             collapseConsecutiveToolCalls =
                 SessionChatDisplayPreferences.collapseConsecutiveToolCalls,
             onCollapseConsecutiveToolCallsChange = {},
-            chipTimeline = SessionChatDisplayPreferences.chipTimeline,
-            onChipTimelineChange = {},
+            timelineStyle = SessionChatDisplayPreferences.timelineStyle,
+            onTimelineStyleChange = {},
             followUpDelivery = FollowUpDelivery.Steer,
             onFollowUpDeliveryChange = {},
             supportsFollowUpDelivery = true,

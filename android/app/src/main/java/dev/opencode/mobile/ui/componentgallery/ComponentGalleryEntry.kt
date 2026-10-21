@@ -34,6 +34,7 @@ enum class ComponentGalleryEntryId {
     MessageNote,
     TimelineNotice,
     ChildSessionRow,
+    StepRail,
     WorkingIndicator,
     ReasoningRow,
     TopBar,
@@ -383,6 +384,12 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.ChildSessionRow,
             title = "Child Session Row",
             description = "Quiet person/thread row for a child session in Session Chat.",
+            category = ComponentGalleryCategory.Chat,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.StepRail,
+            title = "Step Rail",
+            description = "One line per step on a vertical rail, live while the agent works.",
             category = ComponentGalleryCategory.Chat,
         ),
         ComponentGalleryEntry(

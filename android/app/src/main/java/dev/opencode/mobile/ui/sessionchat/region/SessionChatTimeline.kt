@@ -77,6 +77,9 @@ class SessionChatTimeline(
     @Volatile
     var chipTimeline: Boolean = false
 
+    @Volatile
+    var stepRailTimeline: Boolean = false
+
     fun updateServerCommands(commands: List<ServerCommand>) {
         if (commands == serverCommands) return
         val wasEmpty = serverCommands.isEmpty()
@@ -147,6 +150,23 @@ class SessionChatTimeline(
                 sourceWorktree = worktree,
                 fromQuietRefresh = true,
                 source = "chip-pref",
+                messagesFromCache = _state.value.messagesFromCache,
+            )
+        }
+    }
+
+    fun updateStepRailTimeline(enabled: Boolean) {
+        if (enabled == stepRailTimeline) return
+        stepRailTimeline = enabled
+        val sessionId = boundSessionId ?: return
+        val worktree = boundWorktree ?: return
+        if (lastLoadedDisplayMessages.isNotEmpty()) {
+            applyLoadedDisplayMessages(
+                displayMessages = lastLoadedDisplayMessages,
+                sourceSessionId = sessionId,
+                sourceWorktree = worktree,
+                fromQuietRefresh = true,
+                source = "step-rail-pref",
                 messagesFromCache = _state.value.messagesFromCache,
             )
         }
@@ -773,6 +793,7 @@ class SessionChatTimeline(
                         },
                         collapseConsecutiveToolCalls,
                         chipTimeline,
+                        stepRailTimeline,
                     )
                 TimelineProjector.project(
                     frame =
@@ -1100,6 +1121,7 @@ class SessionChatTimeline(
                                 fallbackText = message.text,
                                 collapseConsecutiveToolCalls = collapseConsecutiveToolCalls,
                                 chipTimeline = chipTimeline,
+                                stepRail = stepRailTimeline,
                             ),
                         commands = serverCommands,
                     ),
