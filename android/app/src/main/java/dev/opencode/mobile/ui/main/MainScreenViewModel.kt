@@ -37,6 +37,7 @@ import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionActivitySnapshot
 import dev.opencode.mobile.domain.session.SessionDomainAdapter
+import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionForkTitle
 import dev.opencode.mobile.domain.session.SessionIdleOutcome
 import dev.opencode.mobile.domain.session.SessionRepository
@@ -169,8 +170,13 @@ class MainScreenViewModel
         /** V1 live lists of worktrees that are not added paths, by canonical directory. */
         private var extraObservationJobs: Map<String, Job> = emptyMap()
 
-        /** Worktree directories whose branch was asked for since the last inventory reload. */
-        private val branchesRequested = mutableSetOf<String>()
+        /** Branch per worktree directory; only a settled server answer decides it. */
+        private val branchLookups =
+            HomeBranchLookups(
+                scope = viewModelScope,
+                fetch = ::lookUpBranch,
+                onChange = { branches -> updateHomeIndex { it.copy(branches = branches) } },
+            )
         private var worktreeMarkJob: Job? = null
 
         // Title fields report one edit per dialog appearance instead of per keystroke.
@@ -1292,7 +1298,7 @@ class MainScreenViewModel
         ) {
             worktreeMarkJob?.cancel()
             worktreeLoader.onConnection(serverBaseUrl)
-            branchesRequested.clear()
+            branchLookups.refresh()
             worktreeMarkJob =
                 viewModelScope.launch {
                     val resolved =
@@ -1341,7 +1347,7 @@ class MainScreenViewModel
         private fun resetHomeIndex() {
             worktreeLoader.onDisconnected()
             listsSessionsPaths.clear()
-            branchesRequested.clear()
+            branchLookups.clear()
             homeIndex = HomeWorktreeIndex()
         }
 
@@ -1356,31 +1362,35 @@ class MainScreenViewModel
                 ?: projects.firstOrNull { id in it.memberPaths }?.memberPaths
                 ?: listOf(id)
 
-        /** Branch names for every project worktree not asked for since the last reload; failures keep the last name. */
+        /** Branch names for every project worktree not answered since the last reload. */
         private fun requestBranches() {
-            val directories =
+            branchLookups.lookUp(
                 currentHomeProjects()
                     .filter { it.projectId != null }
-                    .flatMap { project -> project.worktrees.map { it.directory } }
-                    .filter { branchesRequested.add(it) }
-            for (directory in directories) {
-                viewModelScope.launch {
-                    val branch =
-                        try {
-                            HomeProjectGrouping.normalizedBranch(sessionRepository.getVcsInfo(directory).currentBranch)
-                        } catch (cancellation: CancellationException) {
-                            throw cancellation
-                        } catch (error: Exception) {
-                            logI("home branch failed directory=$directory: ${error.message}")
-                            return@launch
-                        }
-                    updateHomeIndex { index ->
-                        val branches = if (branch == null) index.branches - directory else index.branches + (directory to branch)
-                        index.copy(branches = branches)
-                    }
-                }
-            }
+                    .flatMap { project -> project.worktrees.map { it.directory } },
+            )
         }
+
+        /**
+         * One branch lookup. A v2 answer before VCS detection settles, or a failed request, is
+         * unknown (asked again); a 4xx means the server has no branch for it.
+         */
+        private suspend fun lookUpBranch(directory: String): HomeBranchLookups.Outcome =
+            try {
+                val info = sessionRepository.getVcsInfo(directory)
+                if (info.isSettled) {
+                    HomeBranchLookups.Outcome.Branch(HomeProjectGrouping.normalizedBranch(info.currentBranch))
+                } else {
+                    HomeBranchLookups.Outcome.Unknown
+                }
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (error: SessionError.Http) {
+                if (error.statusCode in 400..499) HomeBranchLookups.Outcome.Branch(null) else HomeBranchLookups.Outcome.Unknown
+            } catch (error: Exception) {
+                logI("home branch failed directory=$directory: ${error.message}")
+                HomeBranchLookups.Outcome.Unknown
+            }
 
         /**
          * V1 lists sessions per directory, so each listed worktree that is not an added path gets

@@ -2580,6 +2580,48 @@ class MainScreenViewModelTest {
             assertEquals(2, sessionRepository.listedDirectories.count { it == "/wt-unadded" })
         }
 
+    @Test
+    fun v2BranchThatIsNotSettledOnTheFirstAnswerShowsWithoutRefresh() =
+        runTest(testDispatcher) {
+            val sessionRepository = FakeSessionRepository(mutableMapOf("/repo" to emptyList()))
+            sessionRepository.vcsAnswers =
+                ArrayDeque(
+                    listOf(
+                        VcsInfo(currentBranch = null, defaultBranch = null, isSettled = false),
+                        VcsInfo(currentBranch = "feature/tax-rounding", defaultBranch = "main"),
+                    ),
+                )
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    projectRepository = FakeProjectRepository(projectsByDirectory = repoProjects),
+                    sessionRepository = sessionRepository,
+                )
+            runCurrent()
+            advanceTimeBy(500)
+            assertEquals(
+                listOf(null),
+                (viewModel.uiState.value as MainScreenUiState.Loaded)
+                    .projects
+                    .single()
+                    .worktrees
+                    .map { it.branch },
+            )
+
+            advanceTimeBy(1_000)
+            runCurrent()
+
+            assertEquals(
+                listOf("feature/tax-rounding"),
+                (viewModel.uiState.value as MainScreenUiState.Loaded)
+                    .projects
+                    .single()
+                    .worktrees
+                    .map { it.branch },
+            )
+            assertEquals(2, sessionRepository.vcsCalls)
+        }
+
     private val repoProjects =
         mapOf(
             "/repo" to Project(id = "proj", worktree = "/repo", displayName = "repo", isRepository = true),
@@ -2768,7 +2810,15 @@ private class FakeSessionRepository(
     val deletedIds = mutableListOf<String>()
     val forkedIds = mutableListOf<String>()
 
-    override suspend fun getVcsInfo(directory: String?): VcsInfo = VcsInfo(currentBranch = branches[directory], defaultBranch = "main")
+    /** Overrides [branches] when set: one scripted answer per call. */
+    var vcsAnswers: ArrayDeque<VcsInfo>? = null
+    var vcsCalls = 0
+
+    override suspend fun getVcsInfo(directory: String?): VcsInfo {
+        vcsCalls += 1
+        vcsAnswers?.let { answers -> return answers.removeFirstOrNull() ?: answers.lastOrNull() ?: VcsInfo(null, null) }
+        return VcsInfo(currentBranch = branches[directory], defaultBranch = "main")
+    }
 
     override suspend fun listSessions(directory: String?): List<Session> {
         listSessionsCallCount += 1
