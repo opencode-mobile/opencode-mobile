@@ -358,7 +358,9 @@ fun OpenCodeListItem(
                             text =
                                 buildAnnotatedString {
                                     subtitleSegments.forEachIndexed { index, segment ->
-                                        if (segment.icon != null) appendInlineContent(subtitleIconId(index), "")
+                                        // Decorative icon: alternate text must be non-empty, so use a zero-width space
+                                        // rather than the default replacement character screen readers announce.
+                                        if (segment.icon != null) appendInlineContent(subtitleIconId(index), "\u200B")
                                         withStyle(SpanStyle(color = segmentColors[index])) { append(segment.text) }
                                     }
                                 },
