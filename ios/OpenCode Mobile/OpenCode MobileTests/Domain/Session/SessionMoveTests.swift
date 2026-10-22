@@ -75,6 +75,14 @@ struct SessionMovedEventTests {
         #expect(events.contains { $0.type == "session.updated" && $0.triggersHomeRefresh })
     }
 
+    @Test func movedChatOpenedByNewSessionRebindsToTheCreatedSession() {
+        let placeholder = OptimisticSessionCreate.placeholderSessionID
+        #expect(SessionChatMoveToWorktree.reboundSessionID(routeID: placeholder, currentID: "ses_new") == "ses_new")
+        #expect(SessionChatMoveToWorktree.reboundSessionID(routeID: placeholder, currentID: placeholder) == placeholder)
+        #expect(SessionChatMoveToWorktree.reboundSessionID(routeID: placeholder, currentID: nil) == placeholder)
+        #expect(SessionChatMoveToWorktree.reboundSessionID(routeID: "ses_1", currentID: "ses_other") == "ses_1")
+    }
+
     @Test func otherSessionUpdatesAreNotMoves() {
         let v1Update = OpencodeEvent(
             type: "session.updated",

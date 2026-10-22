@@ -139,7 +139,7 @@ struct SessionChatView: View {
                 // After a move every region binds to the new directory, so the handed-in
                 // view model (bound to the old one) is not reused.
                 viewModelStorage = (movedWorktree == nil ? injectedViewModel : nil) ?? Container.makeSessionChatViewModel(
-                    sessionID: session.id,
+                    sessionID: boundSession.id,
                     sessionTitle: session.title,
                     worktree: boundSession.worktree
                 )
@@ -163,7 +163,10 @@ struct SessionChatView: View {
     private var boundSession: SessionListItem {
         guard let movedWorktree else { return session }
         return SessionListItem(
-            id: session.id,
+            id: SessionChatMoveToWorktree.reboundSessionID(
+                routeID: session.id,
+                currentID: viewModelStorage?.uiState.sessionID
+            ),
             title: session.title,
             worktree: movedWorktree,
             parentID: session.parentID,

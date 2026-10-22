@@ -73,6 +73,16 @@ enum SessionChatMoveToWorktree {
         )
     }
 
+    /// The session a moved Session Chat rebinds to. A chat opened by New session keeps the
+    /// optimistic placeholder as its route id; rebinding with it would create another session in
+    /// the new directory, so the id the server gave the created session wins.
+    static func reboundSessionID(routeID: String, currentID: String?) -> String {
+        guard OptimisticSessionCreate.isPlaceholder(routeID),
+              let currentID, !currentID.isEmpty, !OptimisticSessionCreate.isPlaceholder(currentID)
+        else { return routeID }
+        return currentID
+    }
+
     /// The Home project that lists `directory` as one of its worktrees.
     static func project(containing directory: String, in projects: [HomeProject]) -> HomeProject? {
         projects.first { $0.worktree(at: directory) != nil }
