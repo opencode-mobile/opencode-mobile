@@ -98,10 +98,38 @@ struct OpenCodeStepRail: View {
                     onFoldTap: onFoldTap,
                     onChildSessionTap: onChildSessionTap
                 )
+                // A step that joins running fades in, so its arrival reads as one change.
+                .modifier(StepRailEnterFade(enabled: item.joinsRunning))
             }
         }
         .padding(.leading, StepRailMetrics.leadingInset)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private extension OpenCodeStepRailItem {
+    var joinsRunning: Bool {
+        guard case .step(_, _, _, let status, _, _, _, _, _, _) = self else { return false }
+        return status == .running || status == .pending
+    }
+}
+
+/// Fades a row in over 200 ms when it first appears, if `enabled` then; never under Reduce Motion.
+private struct StepRailEnterFade: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var shown: Bool
+
+    init(enabled: Bool) {
+        _shown = State(initialValue: !enabled)
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(shown || reduceMotion ? 1 : 0)
+            .onAppear {
+                guard !shown else { return }
+                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { shown = true }
+            }
     }
 }
 

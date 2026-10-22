@@ -1,6 +1,11 @@
 package dev.opencode.mobile.ui.components
 
 import android.provider.Settings
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -8,6 +13,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -98,12 +104,19 @@ data class OpenCodeActivityAgentRow(
     val startedAtMs: Long?,
 )
 
-/** The latest running tool in a live card's footer band; [extraRunning] more run beside it. */
+/**
+ * The tool in a live card's footer band. Running: its running title, with
+ * [extraRunning] more beside it and elapsed from [startedAtMs]. Not [running]:
+ * a tool that just finished, in its settled form (settled title only, no `+N`,
+ * no elapsed). [stepId] keys the band's crossfade; null falls back to the title.
+ */
 data class OpenCodeActivityCurrentRow(
     val icon: OpenCodeActivityIcon,
     val title: String,
     val extraRunning: Int,
     val startedAtMs: Long?,
+    val running: Boolean = true,
+    val stepId: String? = null,
 )
 
 private val ActivityCardRadius = OpenCodeRadius.small
@@ -192,7 +205,7 @@ fun OpenCodeActivityCard(
                 if (agents.isNotEmpty()) {
                     AgentSection(agents = agents, nowMs = now, onAgentTap = onAgentTap)
                 }
-                FooterBand(current = current, idleText = idleText, nowMs = now, onTap = onOpen)
+                FooterBand(current = current, idleText = idleText, nowMs = now, animate = animationsOn, onTap = onOpen)
             }
         }
     }
@@ -300,20 +313,22 @@ private fun FooterBand(
     current: OpenCodeActivityCurrentRow?,
     idleText: String?,
     nowMs: Long,
+    animate: Boolean,
     onTap: () -> Unit,
 ) {
-    val elapsed = current?.let { SessionChatChildSessionElapsed.format(it.startedAtMs, nowMs) }
+    val running = current?.takeIf { it.running }
+    val elapsed = running?.let { SessionChatChildSessionElapsed.format(it.startedAtMs, nowMs) }
     val label =
         if (current != null) {
             listOfNotNull(
                 current.title,
-                current.extraRunning.takeIf { it > 0 }?.let { "$it more running" },
+                running?.extraRunning?.takeIf { it > 0 }?.let { "$it more running" },
                 elapsed,
             ).joinToString(", ")
         } else {
             idleText.orEmpty()
         }
-    Row(
+    Box(
         modifier =
             Modifier
                 .padding(top = 6.dp)
@@ -323,40 +338,58 @@ private fun FooterBand(
                 .semantics(mergeDescendants = true) {
                     contentDescription = "$label, opens activity"
                     role = Role.Button
-                }.heightIn(min = ActivityTapRowMinHeight)
+                },
+    ) {
+        val content = FooterContent(current = current, idleText = idleText)
+        if (animate) {
+            // A new tool, a tool turning settled, or new idle text crossfades; `+N` and elapsed change in place.
+            AnimatedContent(
+                targetState = content,
+                contentKey = { it.key },
+                transitionSpec = { fadeIn(tween(FOOTER_FADE_MS)) togetherWith fadeOut(tween(FOOTER_FADE_MS)) },
+                label = "activity footer",
+            ) { shown -> FooterRow(shown, nowMs) }
+        } else {
+            FooterRow(content, nowMs)
+        }
+    }
+}
+
+private const val FOOTER_FADE_MS = 200
+
+private data class FooterContent(
+    val current: OpenCodeActivityCurrentRow?,
+    val idleText: String?,
+) {
+    val key: String
+        get() =
+            if (current != null) {
+                "tool:${current.stepId ?: current.title}:${current.running}"
+            } else {
+                "idle:${idleText.orEmpty()}"
+            }
+}
+
+@Composable
+private fun FooterRow(
+    content: FooterContent,
+    nowMs: Long,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = ActivityTapRowMinHeight)
                 .padding(start = ActivityCardPaddingHorizontal, end = ActivityCardPaddingHorizontal, top = 12.dp, bottom = 13.dp),
         horizontalArrangement = Arrangement.spacedBy(ActivitySpacing),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        val current = content.current
         if (current != null) {
-            Icon(
-                imageVector = current.icon.vector(),
-                contentDescription = null,
-                modifier = Modifier.size(ActivityIconSize),
-                tint = openCodeColor("icon-base"),
-            )
-            Text(
-                text = current.title,
-                style = MaterialTheme.typography.bodyMedium,
-                color = openCodeColor("text-strong"),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
-            if (current.extraRunning > 0) {
-                Text(
-                    text = "+${current.extraRunning}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = openCodeColor("text-weak"),
-                    maxLines = 1,
-                )
-            }
-            if (elapsed != null) {
-                Text(text = elapsed, style = activityMonoCaption(), color = openCodeColor("text-weaker"), maxLines = 1)
-            }
+            CurrentTool(current, nowMs)
         } else {
             Text(
-                text = idleText.orEmpty(),
+                text = content.idleText.orEmpty(),
                 style = MaterialTheme.typography.bodyMedium.copy(fontStyle = FontStyle.Italic),
                 color = openCodeColor("text-weaker"),
                 maxLines = 1,
@@ -365,6 +398,41 @@ private fun FooterBand(
             )
         }
         ActivityChevron()
+    }
+}
+
+/** Running: icon, running title, `+N`, elapsed. Settled: icon and settled title only. */
+@Composable
+private fun RowScope.CurrentTool(
+    current: OpenCodeActivityCurrentRow,
+    nowMs: Long,
+) {
+    Icon(
+        imageVector = current.icon.vector(),
+        contentDescription = null,
+        modifier = Modifier.size(ActivityIconSize),
+        tint = openCodeColor("icon-base"),
+    )
+    Text(
+        text = current.title,
+        style = MaterialTheme.typography.bodyMedium,
+        color = openCodeColor("text-strong"),
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.weight(1f),
+    )
+    if (!current.running) return
+    if (current.extraRunning > 0) {
+        Text(
+            text = "+${current.extraRunning}",
+            style = MaterialTheme.typography.bodySmall,
+            color = openCodeColor("text-weak"),
+            maxLines = 1,
+        )
+    }
+    val elapsed = SessionChatChildSessionElapsed.format(current.startedAtMs, nowMs)
+    if (elapsed != null) {
+        Text(text = elapsed, style = activityMonoCaption(), color = openCodeColor("text-weaker"), maxLines = 1)
     }
 }
 
@@ -604,6 +672,16 @@ object OpenCodeActivityCardSamples {
             title = "Editing SessionChatRepoStrip.kt",
             extraRunning = 1,
             startedAtMs = nowMs - 3_000,
+        )
+
+    /** A tool that just finished, held in the band in its settled form. */
+    val justFinished: OpenCodeActivityCurrentRow =
+        OpenCodeActivityCurrentRow(
+            icon = OpenCodeActivityIcon.Search,
+            title = "Searched \"branchPill\"",
+            extraRunning = 0,
+            startedAtMs = null,
+            running = false,
         )
 
     const val SETTLED_NAMES = "Read, Grep, Edit, Agent"

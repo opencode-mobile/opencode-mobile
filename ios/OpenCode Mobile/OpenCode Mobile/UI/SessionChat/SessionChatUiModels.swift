@@ -334,6 +334,10 @@ struct SessionChatUiState: Equatable {
     var activityCardDetailStepId: String?
     /// What each running child session on a live activity card is doing, by child session id.
     var childActivities: [String: SessionChatChildActivity] = [:]
+    /// What the trailing activity card's footer band shows after the footer hold, by card id (#779).
+    var activityCardFooters: [String: SessionChatActivityFooter] = [:]
+    /// In-flight steps not rendered yet: seen running for less than the entry debounce (#779).
+    var debouncedStepIDs: Set<String> = []
     /// One-time Chip timeline intro sheet (OPE-270).
     var chipTimelineIntroVisible = false
     var dictation: ComposerDictationUiState? = nil
@@ -602,6 +606,10 @@ struct SessionChatTimelineRegionState: Equatable {
     var activityCardDetailStepId: String?
     /// Observed activity of running child sessions on activity cards, by child session id.
     var childActivities: [String: SessionChatChildActivity] = [:]
+    /// What the trailing activity card's footer band shows after the footer hold, by card id (#779).
+    var activityCardFooters: [String: SessionChatActivityFooter] = [:]
+    /// In-flight steps not rendered yet: seen running for less than the entry debounce (#779).
+    var debouncedStepIDs: Set<String> = []
 
     var knownChildSessionIDs: Set<String> {
         Set(

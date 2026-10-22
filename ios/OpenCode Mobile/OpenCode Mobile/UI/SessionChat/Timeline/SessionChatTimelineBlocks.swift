@@ -1433,7 +1433,7 @@ nonisolated enum SessionChatTimelineBlocks {
 
     /// A running step right after another running step is a parallel branch.
     /// A child session between them ends the branch run.
-    private static func markBranches(_ steps: [SessionChatStep]) -> [SessionChatStep] {
+    static func markBranches(_ steps: [SessionChatStep]) -> [SessionChatStep] {
         var previousInFlight = false
         return steps.map { step in
             if step.kind == .childSession {

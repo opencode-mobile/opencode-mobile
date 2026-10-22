@@ -10,7 +10,14 @@ struct SessionChatActivityCardPresentation: Equatable {
     let idleText: String?
 
     /// `childActions`: current action of running child sessions by child session id.
-    init(card: SessionChatActivityCardBlock, childActions: [String: String], awaitingUser: Bool) {
+    /// `footer`: what the Screen Model's footer hold shows on the live card's
+    /// band; nil derives the band from the steps as they are.
+    init(
+        card: SessionChatActivityCardBlock,
+        childActions: [String: String],
+        awaitingUser: Bool,
+        footer: SessionChatActivityFooter? = nil
+    ) {
         guard card.isLive else {
             state = .settled(
                 worstStatus: card.worstStatus == .failed ? .failed : .completed,
@@ -41,12 +48,35 @@ struct SessionChatActivityCardPresentation: Equatable {
                 startedAtMs: ToolStartTime.normalizeEpochMs(step.startedAtMs)
             )
         }
+        switch footer {
+        case .tool(let tool):
+            current = OpenCodeActivityCurrentRow(
+                icon: tool.icon,
+                title: tool.title,
+                extraRunning: tool.extraRunning,
+                startedAtMs: tool.running ? ToolStartTime.normalizeEpochMs(tool.startedAtMs) : nil,
+                running: tool.running,
+                stepID: tool.stepID
+            )
+            idleText = nil
+            return
+        case .idle(let text):
+            current = nil
+            // "Waiting for you" is render-time state; the hold only knows Thinking and Waiting for agents.
+            idleText = awaitingUser && text == SessionChatActivityFooter.thinking
+                ? SessionChatActivityCardBlock.idleText(hasRunningChildren: false, awaitingUser: true)
+                : text
+            return
+        case nil:
+            break
+        }
         if let latest = card.latestRunningTool {
             current = OpenCodeActivityCurrentRow(
                 icon: latest.activityIcon,
                 title: latest.runningTitle,
                 extraRunning: card.runningTools.count - 1,
-                startedAtMs: ToolStartTime.normalizeEpochMs(latest.startedAtMs)
+                startedAtMs: ToolStartTime.normalizeEpochMs(latest.startedAtMs),
+                stepID: latest.id
             )
             idleText = nil
         } else {

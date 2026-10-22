@@ -22,6 +22,18 @@ object SessionChatStepRail {
             if (step.isBranch == isBranch) step else step.copy(isBranch = isBranch)
         }
 
+    /**
+     * The rail's steps without the entry-debounced ones ([hidden]), branches
+     * recomputed. Returns [steps] itself when nothing is hidden.
+     */
+    fun visibleSteps(
+        steps: List<SessionChatStep>,
+        hidden: Set<String>,
+    ): List<SessionChatStep> {
+        if (hidden.isEmpty() || steps.none { it.id in hidden }) return steps
+        return withBranches(steps.filter { it.id !in hidden })
+    }
+
     fun worstStatus(steps: List<SessionChatStep>): SessionChatStepStatus =
         if (steps.any { it.status == SessionChatStepStatus.Failed && !it.isInterrupted }) {
             SessionChatStepStatus.Failed

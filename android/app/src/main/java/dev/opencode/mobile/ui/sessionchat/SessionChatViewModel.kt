@@ -252,6 +252,13 @@ class SessionChatViewModel
         private val activityMessageRepository = messageRepository
         private val activityChildJobs = mutableMapOf<String, Job>()
         private var activityCardChildren: Map<String, SessionChatChildActivity> = emptyMap()
+
+        // Activity card footer hold per live card, step entry debounce, and their next tick (#779).
+        private val activityFooterHolds = mutableMapOf<String, SessionChatActivityFooterHold>()
+        private var stepEntryDebounce = SessionChatStepEntryDebounce()
+        private var activityCardFooters: Map<String, SessionChatActivityFooter> = emptyMap()
+        private var debouncedStepIds: Set<String> = emptySet()
+        private var stepTimingJob: Job? = null
         private var liveRailSource: List<SessionChatMessageItem>? = null
         private var liveRailMarked: List<SessionChatMessageItem> = emptyList()
         private var liveRailActive = false
@@ -1495,7 +1502,7 @@ class SessionChatViewModel
             commandsState: SessionChatCommandsRegionState,
             inboxState: SessionChatInboxRegionState,
         ) {
-            _uiState.value =
+            val merged =
                 mergeUiState(
                     timelineState,
                     composerState,
@@ -1504,6 +1511,8 @@ class SessionChatViewModel
                     commandsState,
                     inboxState,
                 )
+            syncStepTiming(merged.messages, nowMs())
+            _uiState.value = merged.copy(activityCardFooters = activityCardFooters, debouncedStepIds = debouncedStepIds)
             syncActivityChildren(_uiState.value.messages)
         }
 
@@ -1743,6 +1752,8 @@ class SessionChatViewModel
                 presentedActivityCard = presentedActivityCard,
                 activityCardDetailStepId = activityCardDetailStepId,
                 activityCardChildren = activityCardChildren,
+                activityCardFooters = activityCardFooters,
+                debouncedStepIds = debouncedStepIds,
                 chipTimelineIntroVisible = chipTimelineIntroVisible,
                 pendingTerminalOpen = commandsState.pendingTerminalOpen,
                 pendingFilesOpen = commandsState.pendingFilesOpen,
@@ -1819,6 +1830,56 @@ class SessionChatViewModel
             activityChildJobs.values.forEach { it.cancel() }
             activityChildJobs.clear()
             activityCardChildren = emptyMap()
+            stepTimingJob?.cancel()
+            stepTimingJob = null
+            activityFooterHolds.clear()
+            stepEntryDebounce = SessionChatStepEntryDebounce()
+            activityCardFooters = emptyMap()
+            debouncedStepIds = emptySet()
+        }
+
+        /**
+         * Step timing (#779): the entry debounce hides steps seen in flight for
+         * less than 300 ms (step rail and activity card), and each live activity
+         * card's footer hold latches what its band shows. Re-runs itself at the
+         * next due time; a card that stops being live drops its hold.
+         */
+        private fun syncStepTiming(
+            messages: List<SessionChatMessageItem>,
+            now: Long,
+        ) {
+            val blocks = messages.flatMap { it.blocks }
+            val steps =
+                blocks.flatMap { block ->
+                    when (block) {
+                        is SessionChatTimelineBlock.StepRail -> block.steps
+                        is SessionChatTimelineBlock.ActivityCard -> block.steps
+                        else -> emptyList()
+                    }
+                }
+            debouncedStepIds = stepEntryDebounce.submit(steps, now)
+            val liveCards = blocks.filterIsInstance<SessionChatTimelineBlock.ActivityCard>().filter { it.isLive }
+            activityFooterHolds.keys.retainAll(liveCards.mapTo(HashSet()) { it.blockID })
+            activityCardFooters =
+                liveCards.associate { card ->
+                    val hold = activityFooterHolds.getOrPut(card.blockID) { SessionChatActivityFooterHold() }
+                    card.blockID to hold.submit(card.steps.filter { it.id !in debouncedStepIds }, now)
+                }
+            val due = (listOfNotNull(stepEntryDebounce.nextDueMs) + activityFooterHolds.values.mapNotNull { it.expiresAtMs }).minOrNull()
+            stepTimingJob?.cancel()
+            stepTimingJob =
+                due?.let {
+                    viewModelScope.launch {
+                        delay((it - now).coerceAtLeast(0))
+                        stepTimingJob = null
+                        // Never earlier than due, so a test's virtual clock still expires the hold.
+                        syncStepTiming(_uiState.value.messages, maxOf(nowMs(), it))
+                        val current = _uiState.value
+                        if (current.activityCardFooters != activityCardFooters || current.debouncedStepIds != debouncedStepIds) {
+                            _uiState.value = current.copy(activityCardFooters = activityCardFooters, debouncedStepIds = debouncedStepIds)
+                        }
+                    }
+                }
         }
 
         /**

@@ -295,7 +295,8 @@ struct SessionChatActivityCardTests {
             icon: .read,
             title: "Reading View.swift",
             extraRunning: 1,
-            startedAtMs: t0 + 9_000
+            startedAtMs: t0 + 9_000,
+            stepID: "r1"
         ))
         #expect(live.idleText == nil)
     }

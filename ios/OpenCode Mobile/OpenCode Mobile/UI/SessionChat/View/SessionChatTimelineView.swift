@@ -53,6 +53,10 @@ struct SessionChatTimelineViewProps {
     let activityCardDetailStepId: String?
     /// Observed activity of running child sessions on activity cards, by child session id.
     let childActivities: [String: SessionChatChildActivity]
+    /// What the trailing activity card's footer band shows after the footer hold (Screen Model state).
+    let activityCardFooters: [String: SessionChatActivityFooter]
+    /// In-flight steps not rendered yet (Screen Model's step entry debounce).
+    let debouncedStepIDs: Set<String>
     let onOpenActivityCard: (String) -> Void
     let onDismissActivityCard: () -> Void
     let onOpenActivityCardStep: (String) -> Void
@@ -102,6 +106,8 @@ struct SessionChatTimelineViewProps {
         presentedActivityCard: String? = nil,
         activityCardDetailStepId: String? = nil,
         childActivities: [String: SessionChatChildActivity] = [:],
+        activityCardFooters: [String: SessionChatActivityFooter] = [:],
+        debouncedStepIDs: Set<String> = [],
         onOpenActivityCard: @escaping (String) -> Void = { _ in },
         onDismissActivityCard: @escaping () -> Void = {},
         onOpenActivityCardStep: @escaping (String) -> Void = { _ in },
@@ -149,6 +155,8 @@ struct SessionChatTimelineViewProps {
         self.presentedActivityCard = presentedActivityCard
         self.activityCardDetailStepId = activityCardDetailStepId
         self.childActivities = childActivities
+        self.activityCardFooters = activityCardFooters
+        self.debouncedStepIDs = debouncedStepIDs
         self.onOpenActivityCard = onOpenActivityCard
         self.onDismissActivityCard = onDismissActivityCard
         self.onOpenActivityCardStep = onOpenActivityCardStep
@@ -283,7 +291,9 @@ private struct SessionChatTimelineReadyView: View {
             ),
             liveRailID: liveStepRailID,
             liveCardID: liveActivityCardID,
-            awaitingUser: props.isAwaitingUser
+            awaitingUser: props.isAwaitingUser,
+            activityFooters: props.activityCardFooters,
+            debouncedStepIDs: props.debouncedStepIDs
         )
     }
 
@@ -937,7 +947,9 @@ private struct AssistantMessageContent: View {
 
     /// Step rail (#779): fold rows in from the Screen Model's unfolded set; taps
     /// reuse the standard card actions, a thought opens its text.
-    private func stepRail(_ rail: SessionChatStepRailBlock) -> some View {
+    private func stepRail(_ block: SessionChatStepRailBlock) -> some View {
+        // Steps seen in flight for under 300 ms are not drawn yet; Thinking stays until a drawn step runs.
+        let rail = block.hiding(stepRailState.debouncedStepIDs)
         let rows = SessionChatTimelineBlocks.stepRailRows(
             rail,
             unfolded: stepRailState.unfolded.contains(rail.id)
@@ -959,7 +971,8 @@ private struct AssistantMessageContent: View {
         let presentation = SessionChatActivityCardPresentation(
             card: card,
             childActions: stepRailState.childActions,
-            awaitingUser: stepRailState.awaitingUser
+            awaitingUser: stepRailState.awaitingUser,
+            footer: stepRailState.activityFooters[card.id]
         )
         return OpenCodeActivityCard(
             state: presentation.state,

@@ -49,6 +49,13 @@ final class SessionChatTimeline {
     /// Activity card: one observation per running child session the live card
     /// shows, keyed by child session id (#779).
     private var childActivityTasks: [String: Task<Void, Never>] = [:]
+    /// Footer hold of the trailing activity card, by card id, and the step
+    /// entry debounce of rails and cards (#779); `stepTimingTask` re-runs them when due.
+    private var footerHolds: [String: SessionChatActivityFooterHold] = [:]
+    private var stepEntryDebounce = SessionChatStepEntryDebounce()
+    private var stepTimingTask: Task<Void, Never>?
+    /// Wall clock in epoch ms for step timing; tests replace it.
+    static var stepTimingNowMs: @MainActor () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1_000) }
     /// Test-only: runs after a frame revision is taken, before off-main build.
     static var applyTestGate: (@MainActor () async -> Void)?
     /// Wait before looking up child sessions, so a live `tool.progress` can link
@@ -315,6 +322,10 @@ final class SessionChatTimeline {
         networkCacheSyncConfirmed = false
         catchUpSyncing = false
         state = SessionChatTimelineRegionState()
+        stepTimingTask?.cancel()
+        stepTimingTask = nil
+        footerHolds = [:]
+        stepEntryDebounce = SessionChatStepEntryDebounce()
         notifyChange()
     }
 
@@ -1135,7 +1146,59 @@ final class SessionChatTimeline {
 
     private func notifyChange() {
         syncActivityCards()
+        syncStepTiming(nowMs: Self.stepTimingNowMs())
         onChange?()
+    }
+
+    /// Step timing (#779): the entry debounce hides steps seen in flight for
+    /// less than 300 ms (step rail and activity card), and the trailing
+    /// activity card's footer hold latches what its band shows. Re-runs itself
+    /// at the next due time; a card that is no longer trailing drops its hold.
+    private func syncStepTiming(nowMs: Int64) {
+        stepTimingTask?.cancel()
+        stepTimingTask = nil
+        guard stepRailTimeline || activityCardTimeline else {
+            footerHolds = [:]
+            if !state.debouncedStepIDs.isEmpty { state.debouncedStepIDs = [] }
+            if !state.activityCardFooters.isEmpty { state.activityCardFooters = [:] }
+            return
+        }
+        var steps: [SessionChatStep] = []
+        for row in state.messages where row.role == .assistant {
+            for block in row.blocks {
+                switch block {
+                case .stepRail(_, let rail): steps.append(contentsOf: rail.steps)
+                case .activityCard(_, let card): steps.append(contentsOf: card.steps)
+                default: break
+                }
+            }
+        }
+        let hidden = stepEntryDebounce.submit(steps, nowMs: nowMs)
+        var footers: [String: SessionChatActivityFooter] = [:]
+        var holds: [String: SessionChatActivityFooterHold] = [:]
+        // Liveness is decided at render time; the trailing card of the last row is the only one that can be live.
+        if activityCardTimeline,
+           let trailingID = SessionChatTimelineBlocks.liveStepRunID(in: state.messages, sessionWorking: true),
+           let trailing = SessionChatActivityCardPresentation.card(id: trailingID, in: state.messages)
+        {
+            var hold = footerHolds[trailingID] ?? SessionChatActivityFooterHold()
+            footers[trailingID] = hold.submit(trailing.card.steps.filter { !hidden.contains($0.id) }, nowMs: nowMs)
+            holds[trailingID] = hold
+        }
+        footerHolds = holds
+        if state.debouncedStepIDs != hidden { state.debouncedStepIDs = hidden }
+        if state.activityCardFooters != footers { state.activityCardFooters = footers }
+        let due = ([stepEntryDebounce.nextDueMs] + holds.values.map(\.expiresAtMs)).compactMap { $0 }.min()
+        guard let due else { return }
+        stepTimingTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(max(0, due - nowMs)))
+            guard let self, !Task.isCancelled else { return }
+            self.stepTimingTask = nil
+            let before = (self.state.debouncedStepIDs, self.state.activityCardFooters)
+            // Never earlier than due, so a coarse sleep still ends the hold.
+            self.syncStepTiming(nowMs: max(Self.stepTimingNowMs(), due))
+            if before != (self.state.debouncedStepIDs, self.state.activityCardFooters) { self.onChange?() }
+        }
     }
 
     /// Activity card (#779): observe each running child session a card shows,

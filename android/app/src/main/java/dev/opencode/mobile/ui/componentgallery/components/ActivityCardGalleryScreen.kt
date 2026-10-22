@@ -46,6 +46,17 @@ fun ActivityCardGalleryScreen(modifier: Modifier = Modifier) {
                 onOpen = { sheetLive = true },
             )
         }
+        GallerySample("Live, last tool just finished") {
+            OpenCodeActivityCard(
+                state = OpenCodeActivityCardState.Live(elapsedStartMs = nowMs - 9_000),
+                summary = "3 steps · 2 reads · 1 search",
+                agents = emptyList(),
+                current = OpenCodeActivityCardSamples.justFinished,
+                idleText = null,
+                onAgentTap = {},
+                onOpen = { sheetLive = true },
+            )
+        }
         GallerySample("Live, waiting for agents") {
             OpenCodeActivityCard(
                 state = OpenCodeActivityCardState.Live(elapsedStartMs = nowMs - 40_000),

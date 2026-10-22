@@ -809,6 +809,8 @@ fun SessionChatScreen(
                             onToggleStepRailFold = viewModel::toggleStepRailFold,
                             presentedActivityCard = uiState.presentedActivityCard,
                             activityCardChildren = uiState.activityCardChildren,
+                            activityCardFooters = uiState.activityCardFooters,
+                            debouncedStepIds = uiState.debouncedStepIds,
                             onOpenActivityCard = { blockId ->
                                 logChatAction(ProductAnalytics.Action.CHAT_OPEN_TOOL_DETAIL)
                                 viewModel.openActivityCard(blockId)

@@ -355,6 +355,8 @@ struct SessionChatView: View {
                     presentedActivityCard: viewModel.uiState.presentedActivityCard,
                     activityCardDetailStepId: viewModel.uiState.activityCardDetailStepId,
                     childActivities: viewModel.uiState.childActivities,
+                    activityCardFooters: viewModel.uiState.activityCardFooters,
+                    debouncedStepIDs: viewModel.uiState.debouncedStepIDs,
                     onOpenActivityCard: { cardID in viewModel.openActivityCard(cardID) },
                     onDismissActivityCard: { viewModel.dismissActivityCard() },
                     onOpenActivityCardStep: { stepID in viewModel.openActivityCardStep(stepID) },

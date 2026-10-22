@@ -4,6 +4,7 @@ struct ActivityCardGalleryView: View {
     private enum Sample: String, CaseIterable, Identifiable {
         case oneTool = "One running tool"
         case twoAgents = "Two agents, +1"
+        case justFinished = "Last tool just finished"
         case waiting = "Waiting for agents"
         case settled = "Settled"
         case settledAgents = "Settled with agents"
@@ -85,6 +86,20 @@ struct ActivityCardGalleryView: View {
                     title: "Editing SessionChatRepoStrip.swift",
                     extraRunning: 1,
                     startedAtMs: startMs - 3_000
+                ),
+                onAgentTap: tapped,
+                onOpen: opened
+            )
+        case .justFinished:
+            OpenCodeActivityCard(
+                state: .live(startedAtMs: startMs - 9_000),
+                summary: "3 steps · 2 reads · 1 search",
+                current: OpenCodeActivityCurrentRow(
+                    icon: .search,
+                    title: "Searched \"branchPill\"",
+                    extraRunning: 0,
+                    startedAtMs: nil,
+                    running: false
                 ),
                 onAgentTap: tapped,
                 onOpen: opened

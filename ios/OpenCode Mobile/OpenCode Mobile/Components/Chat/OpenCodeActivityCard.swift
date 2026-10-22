@@ -63,13 +63,17 @@ struct OpenCodeActivityAgentRow: Equatable, Sendable, Identifiable {
     let startedAtMs: Int64?
 }
 
-/// The live card's footer: the latest running tool.
+/// The live card's footer tool. Running: its running title, "+N" and elapsed.
+/// Not `running`: a tool that just finished, in its settled form (settled
+/// title only, no "+N", no elapsed). `stepID` keys the band's crossfade.
 struct OpenCodeActivityCurrentRow: Equatable, Sendable {
     let icon: OpenCodeActivityLineIcon
     let title: String
     /// Other tools running at the same time ("+N").
     let extraRunning: Int
     let startedAtMs: Int64?
+    var running: Bool = true
+    var stepID: String?
 }
 
 /// Activity Card (#779): one card per run of an agent's steps. Live, a
@@ -108,6 +112,8 @@ struct OpenCodeActivityCard: View {
         self.onAgentTap = onAgentTap
         self.onOpen = onOpen
     }
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Group {
@@ -204,39 +210,20 @@ struct OpenCodeActivityCard: View {
         }
     }
 
+    /// A new tool, a tool turning settled, or new idle text crossfades; "+N" and elapsed change in place.
+    private var footerKey: String {
+        guard let current else { return "idle:" + (idleText ?? "") }
+        return "tool:\(current.stepID ?? current.title):\(current.running)"
+    }
+
     private var footer: some View {
         Button(action: onOpen) {
-            HStack(spacing: 8) {
-                if let current {
-                    OpenCodeIconImage(icon: current.icon.icon, size: ActivityCardMetrics.iconSize)
-                        .foregroundStyle(OpenCodeColors.iconWeakBase)
-                        .frame(width: ActivityCardMetrics.iconSize)
-                        .accessibilityHidden(true)
-                    Text(current.title)
-                        .font(OpenCodeTypography.bodySecondary)
-                        .foregroundStyle(OpenCodeColors.textStrong)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    if current.extraRunning > 0 {
-                        Text("+\(current.extraRunning)")
-                            .font(OpenCodeTypography.caption)
-                            .foregroundStyle(OpenCodeColors.textWeak)
-                            .fixedSize()
-                    }
-                    if let startedAtMs = current.startedAtMs {
-                        OpenCodeLiveElapsedText(startedAtMs: startedAtMs)
-                    }
-                } else {
-                    Text(idleText ?? "Thinking\u{2026}")
-                        .font(OpenCodeTypography.bodySecondary)
-                        .italic()
-                        .foregroundStyle(OpenCodeColors.textWeaker)
-                        .lineLimit(1)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                OpenCodeActivityChevron()
+            ZStack {
+                footerContent
+                    .id(footerKey)
+                    .transition(.opacity)
             }
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: footerKey)
             .padding(.horizontal, ActivityCardMetrics.paddingHorizontal)
             .padding(.top, ActivityCardMetrics.footerPaddingTop)
             .padding(.bottom, ActivityCardMetrics.footerPaddingBottom)
@@ -260,9 +247,44 @@ struct OpenCodeActivityCard: View {
         .accessibilityAddTraits(.isButton)
     }
 
+    private var footerContent: some View {
+        HStack(spacing: 8) {
+            if let current {
+                OpenCodeIconImage(icon: current.icon.icon, size: ActivityCardMetrics.iconSize)
+                    .foregroundStyle(OpenCodeColors.iconWeakBase)
+                    .frame(width: ActivityCardMetrics.iconSize)
+                    .accessibilityHidden(true)
+                Text(current.title)
+                    .font(OpenCodeTypography.bodySecondary)
+                    .foregroundStyle(OpenCodeColors.textStrong)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if current.running, current.extraRunning > 0 {
+                    Text("+\(current.extraRunning)")
+                        .font(OpenCodeTypography.caption)
+                        .foregroundStyle(OpenCodeColors.textWeak)
+                        .fixedSize()
+                }
+                if current.running, let startedAtMs = current.startedAtMs {
+                    OpenCodeLiveElapsedText(startedAtMs: startedAtMs)
+                }
+            } else {
+                Text(idleText ?? "Thinking\u{2026}")
+                    .font(OpenCodeTypography.bodySecondary)
+                    .italic()
+                    .foregroundStyle(OpenCodeColors.textWeaker)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            OpenCodeActivityChevron()
+        }
+    }
+
     private var footerAccessibilityLabel: String {
         guard let current else { return idleText ?? "Thinking" }
         var parts = [current.title]
+        guard current.running else { return current.title }
         if current.extraRunning > 0 { parts.append("\(current.extraRunning) more running") }
         if let startedAtMs = current.startedAtMs {
             parts.append(OpenCodeStepRailElapsed.format(

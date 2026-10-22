@@ -131,6 +131,7 @@ import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import dev.opencode.mobile.ui.sessionchat.SessionChatNoticeCopy
 import dev.opencode.mobile.ui.sessionchat.SessionChatNoticeModelNames
 import dev.opencode.mobile.ui.sessionchat.SessionChatActivityCard
+import dev.opencode.mobile.ui.sessionchat.SessionChatActivityFooter
 import dev.opencode.mobile.ui.sessionchat.SessionChatActivitySheetContent
 import dev.opencode.mobile.ui.sessionchat.SessionChatChildActivity
 import dev.opencode.mobile.ui.sessionchat.SessionChatStep
@@ -204,6 +205,8 @@ internal data class SessionChatTimelineViewProps(
     val presentedActivityCard: String? = null,
     /** What running child sessions on activity cards are doing, by child session id. */
     val activityCardChildren: Map<String, SessionChatChildActivity> = emptyMap(),
+    val activityCardFooters: Map<String, SessionChatActivityFooter> = emptyMap(),
+    val debouncedStepIds: Set<String> = emptySet(),
     val onOpenActivityCard: (blockId: String) -> Unit = {},
     val onDismissActivityCard: () -> Unit = {},
     /** Step of [presentedActivityCard] whose detail the sheet shows in place of its list. */
@@ -299,6 +302,8 @@ internal fun SessionChatTimelineView(
                 unfoldedStepRails = props.unfoldedStepRails,
                 onToggleStepRailFold = props.onToggleStepRailFold,
                 activityCardChildren = props.activityCardChildren,
+                activityCardFooters = props.activityCardFooters,
+                debouncedStepIds = props.debouncedStepIds,
                 onOpenActivityCard = props.onOpenActivityCard,
                 modifier = modifier,
             )
@@ -343,6 +348,8 @@ private fun SessionChatTimelineReadyView(
     unfoldedStepRails: Set<String>,
     onToggleStepRailFold: (railId: String) -> Unit,
     activityCardChildren: Map<String, SessionChatChildActivity>,
+    activityCardFooters: Map<String, SessionChatActivityFooter>,
+    debouncedStepIds: Set<String>,
     onOpenActivityCard: (blockId: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -538,6 +545,8 @@ private fun SessionChatTimelineReadyView(
                     unfoldedStepRails = unfoldedStepRails,
                     onToggleStepRailFold = onToggleStepRailFold,
                     activityCardChildren = activityCardChildren,
+                    activityCardFooters = activityCardFooters,
+                    debouncedStepIds = debouncedStepIds,
                     onOpenActivityCard = onOpenActivityCard,
                     // Streaming height growth is GrowBottom + unanimated layout; do not
                     // animateContentSize on production Session Chat (gallery may still demo it).
@@ -647,6 +656,8 @@ private fun SessionChatMessageRow(
     unfoldedStepRails: Set<String>,
     onToggleStepRailFold: (railId: String) -> Unit,
     activityCardChildren: Map<String, SessionChatChildActivity>,
+    activityCardFooters: Map<String, SessionChatActivityFooter>,
+    debouncedStepIds: Set<String>,
     onOpenActivityCard: (blockId: String) -> Unit,
     animateSizeChanges: Boolean,
     onContentSizeAnimationFinished: (() -> Unit)?,
@@ -703,6 +714,8 @@ private fun SessionChatMessageRow(
                     unfoldedStepRails = unfoldedStepRails,
                     onToggleStepRailFold = onToggleStepRailFold,
                     activityCardChildren = activityCardChildren,
+                    activityCardFooters = activityCardFooters,
+                    debouncedStepIds = debouncedStepIds,
                     onOpenActivityCard = onOpenActivityCard,
                 )
 
@@ -764,6 +777,8 @@ private fun AssistantMessageContent(
     unfoldedStepRails: Set<String>,
     onToggleStepRailFold: (railId: String) -> Unit,
     activityCardChildren: Map<String, SessionChatChildActivity>,
+    activityCardFooters: Map<String, SessionChatActivityFooter>,
+    debouncedStepIds: Set<String>,
     onOpenActivityCard: (blockId: String) -> Unit,
 ) {
     // Rows never render empty — unpaintable blocks are filtered and an empty
@@ -918,6 +933,7 @@ private fun AssistantMessageContent(
                         StepRailBlock(
                             block = block,
                             unfolded = block.blockID in unfoldedStepRails,
+                            debouncedStepIds = debouncedStepIds,
                             onToggleFold = { onToggleStepRailFold(block.blockID) },
                             stepAction = ::stepAction,
                         )
@@ -925,6 +941,7 @@ private fun AssistantMessageContent(
                         ActivityCardBlock(
                             block = block,
                             children = activityCardChildren,
+                            footer = activityCardFooters[block.blockID],
                             onOpen = { onOpenActivityCard(block.blockID) },
                             stepAction = ::stepAction,
                         )
@@ -943,16 +960,19 @@ private fun AssistantMessageContent(
 private fun StepRailBlock(
     block: SessionChatTimelineBlock.StepRail,
     unfolded: Boolean,
+    debouncedStepIds: Set<String>,
     onToggleFold: () -> Unit,
     stepAction: (SessionChatStep) -> (() -> Unit)?,
 ) {
-    val entries = remember(block.steps, unfolded) { SessionChatStepRail.entries(block.steps, unfolded) }
+    // Steps seen in flight for under 300 ms are not drawn yet; Thinking stays until a drawn step runs.
+    val visible = remember(block.steps, debouncedStepIds) { SessionChatStepRail.visibleSteps(block.steps, debouncedStepIds) }
+    val entries = remember(visible, unfolded) { SessionChatStepRail.entries(visible, unfolded) }
     val actions = entries.mapNotNull { (it as? SessionChatStepRail.Entry.Step)?.step }.associate { it.id to stepAction(it) }
     val items = entries.map { entry -> entry.toStepRailItem(tappable = { id -> actions[id] != null }) }
     OpenCodeStepRail(
         steps = items,
         isLive = block.isLive,
-        thinking = block.thinking,
+        thinking = block.isLive && visible.none { it.status.isInFlight },
         onStepTap = { id -> actions[id]?.invoke() },
         onFoldTap = onToggleFold,
         onChildSessionTap = { id -> actions[id]?.invoke() },
@@ -1075,6 +1095,7 @@ internal fun sessionChatStepDetail(
 private fun ActivityCardBlock(
     block: SessionChatTimelineBlock.ActivityCard,
     children: Map<String, SessionChatChildActivity>,
+    footer: SessionChatActivityFooter?,
     onOpen: () -> Unit,
     stepAction: (SessionChatStep) -> (() -> Unit)?,
 ) {
@@ -1088,16 +1109,36 @@ private fun ActivityCardBlock(
                 live.agents.map {
                     OpenCodeActivityAgentRow(id = it.id, agentName = it.agentName, action = it.action, startedAtMs = it.startedAtMs)
                 },
+            // The Screen Model's footer hold decides what the band shows; the raw value is a fallback.
             current =
-                live.current?.let {
-                    OpenCodeActivityCurrentRow(
-                        icon = it.family.toActivityIcon(),
-                        title = it.title,
-                        extraRunning = it.extraRunning,
-                        startedAtMs = it.startedAtMs,
-                    )
+                when (footer) {
+                    is SessionChatActivityFooter.Tool ->
+                        OpenCodeActivityCurrentRow(
+                            icon = footer.family.toActivityIcon(),
+                            title = footer.title,
+                            extraRunning = footer.extraRunning,
+                            startedAtMs = footer.startedAtMs,
+                            running = footer.running,
+                            stepId = footer.stepId,
+                        )
+                    is SessionChatActivityFooter.Idle -> null
+                    null ->
+                        live.current?.let {
+                            OpenCodeActivityCurrentRow(
+                                icon = it.family.toActivityIcon(),
+                                title = it.title,
+                                extraRunning = it.extraRunning,
+                                startedAtMs = it.startedAtMs,
+                                stepId = it.stepId,
+                            )
+                        }
                 },
-            idleText = live.idleText,
+            idleText =
+                when (footer) {
+                    is SessionChatActivityFooter.Idle -> footer.text
+                    is SessionChatActivityFooter.Tool -> null
+                    null -> live.idleText
+                },
             onAgentTap = { id -> actions[id]?.invoke() },
             onOpen = onOpen,
         )

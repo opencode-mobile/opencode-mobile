@@ -274,6 +274,10 @@ data class SessionChatUiState(
     val activityCardDetailStepId: String? = null,
     /** What running child sessions on activity cards are doing, by child session id (#779). */
     val activityCardChildren: Map<String, SessionChatChildActivity> = emptyMap(),
+    /** What each live activity card's footer band shows after the footer hold, by block id (#779). */
+    val activityCardFooters: Map<String, SessionChatActivityFooter> = emptyMap(),
+    /** In-flight steps not rendered yet: seen running for less than the entry debounce (#779). */
+    val debouncedStepIds: Set<String> = emptySet(),
     /** One-time Chip timeline intro sheet (OPE-270). */
     val chipTimelineIntroVisible: Boolean = false,
     /** Null while idle. A value shows the dictation card in place of prompt entry. */

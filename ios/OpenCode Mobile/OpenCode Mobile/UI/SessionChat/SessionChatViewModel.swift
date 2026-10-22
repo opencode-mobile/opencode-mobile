@@ -1612,6 +1612,8 @@ final class SessionChatViewModel {
             presentedActivityCard: timelineState.presentedActivityCard,
             activityCardDetailStepId: timelineState.activityCardDetailStepId,
             childActivities: timelineState.childActivities,
+            activityCardFooters: timelineState.activityCardFooters,
+            debouncedStepIDs: timelineState.debouncedStepIDs,
             chipTimelineIntroVisible: chipTimelineIntroVisible,
             dictation: dictation
         )

@@ -21,7 +21,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -29,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
@@ -159,7 +163,13 @@ fun OpenCodeStepRail(
                     )
                 when (item) {
                     is OpenCodeStepRailItem.Step ->
-                        StepRow(item = item, pulses = pulses, onTap = { onStepTap(item.id) }, modifier = railModifier)
+                        StepRow(
+                            item = item,
+                            pulses = pulses,
+                            onTap = { onStepTap(item.id) },
+                            // A step that joins running fades in, so its arrival reads as one change.
+                            modifier = railModifier.fadeInOnEnter(animationsOn && item.status.isRunningTone()),
+                        )
                     is OpenCodeStepRailItem.ChildSession ->
                         ChildSessionRow(item = item, pulses = pulses, onTap = { onChildSessionTap(item.id) }, modifier = railModifier)
                     is OpenCodeStepRailItem.Fold -> FoldRow(item = item, onTap = onFoldTap, modifier = railModifier)
@@ -169,6 +179,19 @@ fun OpenCodeStepRail(
         }
     }
 }
+
+/** Fades the row's content in over 200 ms on its first composition when [enabled]; the rail line stays. */
+@Composable
+private fun Modifier.fadeInOnEnter(enabled: Boolean): Modifier {
+    val alpha = remember { Animatable(if (enabled) 0f else 1f) }
+    LaunchedEffect(Unit) { alpha.animateTo(1f, tween(STEP_RAIL_ENTER_FADE_MS)) }
+    return graphicsLayer { this.alpha = alpha.value }
+}
+
+private const val STEP_RAIL_ENTER_FADE_MS = 200
+
+private fun OpenCodeStepRailStatus.isRunningTone(): Boolean =
+    this == OpenCodeStepRailStatus.Running || this == OpenCodeStepRailStatus.Pending
 
 /** The rail segment behind one row; it starts and ends at the dot for the first and last row. */
 @Composable
