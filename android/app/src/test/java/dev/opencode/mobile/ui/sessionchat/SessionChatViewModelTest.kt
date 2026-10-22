@@ -4168,19 +4168,24 @@ class SessionChatViewModelTest {
         }
 
     @Test
-    fun moveToWorktree_v2PostsTheMoveAndSessionMovedReopensInTheNewDirectory() =
+    fun moveToWorktree_v2PostsTheMoveAndSessionMovedRebindsInPlace() =
         runTest(testDispatcher) {
             val repository = FakeMessageRepository()
-            val sessionRepository = FakeSessionRepository()
+            val sessionRepository = FakeSessionRepository().apply { vcsBranches = mapOf("/repo" to "dev", "/repo-feature" to "feature/x") }
+            val commandRepository = FakeCommandRepository()
             val viewModel =
                 createViewModel(
                     repository = repository,
                     sessionRepository = sessionRepository,
+                    commandRepository = commandRepository,
                     serverProtocol = ServerProtocol.V2,
                     homeProjectsSnapshot = moveProjectsSnapshot(),
                 )
             viewModel.bind("ses-1", "Title", "/repo")
             advanceUntilIdle()
+            viewModel.updateComposerText("draft in progress")
+            val frameBefore = viewModel.uiState.value.timelineFrame
+            assertEquals("dev", viewModel.uiState.value.sessionBranchPill?.branch)
 
             viewModel.openMoveToWorktree()
             advanceUntilIdle()
@@ -4190,33 +4195,150 @@ class SessionChatViewModelTest {
 
             assertEquals(listOf("ses-1" to "/repo-feature"), sessionRepository.moveSessionRequests)
             assertFalse(viewModel.uiState.value.moveToWorktree.sheetVisible)
-            assertNull(viewModel.uiState.value.pendingSessionReplace)
+            assertEquals("/repo", viewModel.uiState.value.worktree)
 
-            repository.eventStream.emit(
-                OpencodeEvent(
-                    type = EventDomainAdapter.SESSION_MOVED_EVENT,
-                    sessionId = "ses-1",
-                    rawProperties =
-                        kotlinx.serialization.json.buildJsonObject {
-                            put("sessionID", kotlinx.serialization.json.JsonPrimitive("ses-1"))
-                            put(
-                                "location",
-                                kotlinx.serialization.json.buildJsonObject {
-                                    put("directory", kotlinx.serialization.json.JsonPrimitive("/repo-feature"))
-                                },
-                            )
-                        },
-                ),
-            )
+            repository.eventStream.emit(sessionMovedEvent("ses-1", "/repo-feature"))
             advanceUntilIdle()
 
-            val replace = viewModel.uiState.value.pendingSessionReplace
-            assertEquals("ses-1", replace?.sessionId)
-            assertEquals("/repo-feature", replace?.worktree)
-            viewModel.consumePendingSessionReplace()
+            val state = viewModel.uiState.value
+            assertNull(state.pendingSessionReplace)
+            assertEquals("/repo-feature", state.worktree)
+            assertEquals("repo-feature", state.projectLabel)
+            assertEquals("feature/x", state.sessionBranchPill?.branch)
+            assertEquals("/repo-feature", sessionRepository.vcsInfoRequests.last())
+            assertEquals(listOf(false, true), state.moveToWorktree.rows.map { it.isCurrent })
+            assertEquals("/repo-feature", commandRepository.listCommandsDirectories.last())
+            // The timeline keeps its transcript: no reload, same frame, draft intact.
+            assertEquals(SessionChatTimelineState.Ready, state.timeline)
+            assertEquals(listOf<String?>("/repo"), repository.observedDisplayDirectories)
+            assertEquals(frameBefore?.rows?.map { it.id }, state.timelineFrame?.rows?.map { it.id })
+            assertEquals("draft in progress", state.composer.text)
+            assertEquals("claude-sonnet", state.composer.selectedModel?.option?.modelId)
+            assertNull(state.composer.modelNotice)
+        }
+
+    @Test
+    fun sessionMoved_modelTheNewDirectoryLacksFallsBackWithANotice() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val gpt =
+                ModelSelectionOption(
+                    providerId = "openai",
+                    providerName = "OpenAI",
+                    modelId = "gpt-5",
+                    modelName = "GPT-5",
+                )
+            val modelRepository =
+                FakeModelRepository().apply {
+                    catalogsByDirectory = mapOf("/repo-feature" to ModelSelectionCatalog(options = listOf(gpt), serverDefault = gpt))
+                }
+            val viewModel =
+                createViewModel(
+                    repository = repository,
+                    modelRepository = modelRepository,
+                    serverProtocol = ServerProtocol.V2,
+                    homeProjectsSnapshot = moveProjectsSnapshot(),
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
             advanceUntilIdle()
+            assertEquals("claude-sonnet", viewModel.uiState.value.composer.selectedModel?.option?.modelId)
+
+            repository.eventStream.emit(sessionMovedEvent("ses-1", "/repo-feature"))
+            advanceUntilIdle()
+
+            val composer = viewModel.uiState.value.composer
+            assertEquals("gpt-5", composer.selectedModel?.option?.modelId)
+            assertEquals("Selected model is unavailable. Using ${gpt.modelLabel}.", composer.modelNotice)
+        }
+
+    @Test
+    fun sessionMoved_routeRebindWithTheOldDirectoryKeepsTheNewOne() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val viewModel =
+                createViewModel(
+                    repository = repository,
+                    serverProtocol = ServerProtocol.V2,
+                    homeProjectsSnapshot = moveProjectsSnapshot(),
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            repository.eventStream.emit(sessionMovedEvent("ses-1", "/repo-feature"))
+            advanceUntilIdle()
+
+            // Back from Files or a configuration change: the route still names /repo.
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertEquals("/repo-feature", viewModel.uiState.value.worktree)
+            assertEquals(SessionChatTimelineState.Ready, viewModel.uiState.value.timeline)
             assertNull(viewModel.uiState.value.pendingSessionReplace)
         }
+
+    @Test
+    fun sessionMoved_rapidMovesEndInTheLastDirectory() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val viewModel =
+                createViewModel(
+                    repository = repository,
+                    serverProtocol = ServerProtocol.V2,
+                    homeProjectsSnapshot = moveProjectsSnapshot(listOf("/repo", "/repo-feature", "/repo-fix")),
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            repeat(3) {
+                repository.eventStream.emit(sessionMovedEvent("ses-1", "/repo-feature"))
+                repository.eventStream.emit(sessionMovedEvent("ses-1", "/repo-fix"))
+                repository.eventStream.emit(sessionMovedEvent("ses-1", "/repo"))
+            }
+            repository.eventStream.emit(sessionMovedEvent("ses-1", "/repo-fix"))
+            advanceUntilIdle()
+
+            assertEquals("/repo-fix", viewModel.uiState.value.worktree)
+            assertEquals("repo-fix", viewModel.uiState.value.projectLabel)
+            assertEquals(listOf(false, false, true), viewModel.uiState.value.moveToWorktree.rows.map { it.isCurrent })
+            assertEquals(listOf<String?>("/repo"), repository.observedDisplayDirectories)
+        }
+
+    @Test
+    fun sessionMoved_forAnotherSessionChangesNothing() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val viewModel =
+                createViewModel(
+                    repository = repository,
+                    serverProtocol = ServerProtocol.V2,
+                    homeProjectsSnapshot = moveProjectsSnapshot(),
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            repository.eventStream.emit(sessionMovedEvent("ses-2", "/repo-feature"))
+            advanceUntilIdle()
+
+            assertEquals("/repo", viewModel.uiState.value.worktree)
+            assertEquals("repo", viewModel.uiState.value.projectLabel)
+        }
+
+    private fun sessionMovedEvent(
+        sessionId: String,
+        directory: String,
+    ) = OpencodeEvent(
+        type = EventDomainAdapter.SESSION_MOVED_EVENT,
+        sessionId = sessionId,
+        rawProperties =
+            kotlinx.serialization.json.buildJsonObject {
+                put("sessionID", kotlinx.serialization.json.JsonPrimitive(sessionId))
+                put(
+                    "location",
+                    kotlinx.serialization.json.buildJsonObject {
+                        put("directory", kotlinx.serialization.json.JsonPrimitive(directory))
+                    },
+                )
+            },
+    )
 
     @Test
     fun runClientSlashAction_new_requestsOptimisticReplaceKeepsDraftNeverRunsCommand() =
@@ -6875,7 +6997,12 @@ private class FakeCommandRepository(
     var lastRunOptions: CommandRunOptions? = null
     var lastRunSessionId: String? = null
 
-    override suspend fun listCommands(directory: String?): List<ServerCommand> = commands
+    val listCommandsDirectories = mutableListOf<String?>()
+
+    override suspend fun listCommands(directory: String?): List<ServerCommand> {
+        listCommandsDirectories += directory
+        return commands
+    }
 
     override suspend fun runCommand(
         sessionId: String,
@@ -6969,11 +7096,14 @@ private class FakeMessageRepository(
         directory: String?,
     ): Flow<Boolean> = catchUpChrome
 
+    val observedDisplayDirectories = mutableListOf<String?>()
+
     override fun observeDisplayMessages(
         sessionId: String,
         directory: String?,
     ): Flow<DisplayMessageListUpdate> =
         flow {
+            observedDisplayDirectories += directory
             var previousById = emptyMap<String, DisplayMessage>()
             observeMessages(sessionId, directory).collect { update ->
                 when (update) {
@@ -7094,6 +7224,9 @@ private class FakeModelRepository(
     var calls = 0
         private set
 
+    /** Per-directory answers, checked after [queued] and before [catalog]. */
+    var catalogsByDirectory: Map<String, ModelSelectionCatalog> = emptyMap()
+
     /** While set, calls wait on it; lets a test observe state before any answer resolves. */
     var gate: CompletableDeferred<Unit>? = null
 
@@ -7105,6 +7238,7 @@ private class FakeModelRepository(
         gate?.await()
         error?.let { throw it }
         queued.removeFirstOrNull()?.let { return it }
+        catalogsByDirectory[directory]?.let { return it }
         catalog?.let { return it }
         val option =
             ModelSelectionOption(
@@ -7355,6 +7489,18 @@ private class FakeSessionRepository(
     }
 
     val moveSessionRequests = mutableListOf<Pair<String, String>>()
+
+    /** Branch per directory for `getVcsInfo`; a directory missing here answers 404. */
+    var vcsBranches: Map<String, String> = emptyMap()
+    val vcsInfoRequests = mutableListOf<String?>()
+
+    override suspend fun getVcsInfo(directory: String?): dev.opencode.mobile.domain.session.VcsInfo {
+        vcsInfoRequests += directory
+        val branch = vcsBranches[directory] ?: throw SessionError.Http(404, "no vcs")
+        return dev.opencode.mobile.domain.session.VcsInfo(currentBranch = branch, defaultBranch = "dev")
+    }
+
+    override suspend fun getVcsStatus(directory: String?): List<dev.opencode.mobile.domain.session.VcsFileStatus> = emptyList()
 
     override suspend fun moveSession(
         id: String,

@@ -187,6 +187,8 @@ fun SessionChatScreen(
     }
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    // After `session.moved` the route still names the old directory; actions follow the session.
+    val currentWorktree = uiState.worktree.ifEmpty { worktree }
     val attachmentSources = uiState.composer.attachmentSources(DeveloperToolsPreferences.unlocked)
     var menuExpanded by rememberSaveable { mutableStateOf(false) }
     var showDeleteConfirmation by remember { mutableStateOf(false) }
@@ -585,7 +587,7 @@ fun SessionChatScreen(
                                 onClick = {
                                     logOverflowAction(ProductAnalytics.Action.CHAT_OVERFLOW_REVIEW_CHANGES)
                                     menuExpanded = false
-                                    onReviewChangesClick(uiState.changesNavigationTarget(worktree))
+                                    onReviewChangesClick(uiState.changesNavigationTarget(currentWorktree))
                                 },
                             ),
                         )
@@ -621,7 +623,7 @@ fun SessionChatScreen(
                                 onClick = {
                                     logOverflowAction(ProductAnalytics.Action.CHAT_OVERFLOW_BROWSE_FILES)
                                     menuExpanded = false
-                                    onFilesRequested(worktree)
+                                    onFilesRequested(currentWorktree)
                                 },
                             ),
                         )
@@ -779,7 +781,7 @@ fun SessionChatScreen(
                             onLoadOlder = viewModel::loadOlderMessages,
                             onSessionBranchClick = {
                                 logChatAction(ProductAnalytics.Action.CHAT_OPEN_CHANGES)
-                                onReviewChangesClick(uiState.changesNavigationTarget(worktree))
+                                onReviewChangesClick(uiState.changesNavigationTarget(currentWorktree))
                             },
                             onSessionTodosClick = {
                                 logChatAction(ProductAnalytics.Action.CHAT_OPEN_TODOS)
@@ -804,7 +806,7 @@ fun SessionChatScreen(
                                 onToolGroupClick(
                                     target.toRoute(
                                         sessionId = sessionId,
-                                        worktree = worktree,
+                                        worktree = currentWorktree,
                                         parentId = parentId ?: uiState.sessionParentId,
                                         owningTurnMessageId = uiState.owningTurnMessageId(target.messageId),
                                         supportsSessionMessageDiff = uiState.supportsSessionMessageDiff,
@@ -817,7 +819,7 @@ fun SessionChatScreen(
                                     ChildSessionNavigationTarget(
                                         sessionId = childSessionId,
                                         sessionTitle = childTitle,
-                                        worktree = worktree,
+                                        worktree = currentWorktree,
                                     ),
                                 )
                             },
@@ -825,7 +827,7 @@ fun SessionChatScreen(
                                 logChatAction(ProductAnalytics.Action.CHAT_OPEN_CHANGES_FROM_TOOL)
                                 uiState
                                     .fileChangeNavigationTarget(
-                                        worktree = worktree,
+                                        worktree = currentWorktree,
                                         assistantMessageId = assistantMessageId,
                                         initialFilePath = initialFilePath,
                                     )?.let(onReviewChangesClick)

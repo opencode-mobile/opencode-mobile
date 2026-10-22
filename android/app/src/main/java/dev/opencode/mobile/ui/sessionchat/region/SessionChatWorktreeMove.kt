@@ -101,8 +101,6 @@ data class SessionChatWorktreeMoveRegionState(
     /** "Moves to … after this turn." after a move the server parks until the turn ends. */
     val notice: String? = null,
     val errorMessage: String? = null,
-    /** Set by `session.moved` for the open session: where Session Chat now runs. */
-    val movedDirectory: String? = null,
 )
 
 /**
@@ -173,20 +171,21 @@ class SessionChatWorktreeMove(
             }
     }
 
-    /** A `session.moved` for [boundSessionId] to a directory other than [boundDirectory]. */
+    /**
+     * A `session.moved` for [boundSessionId]: returns the directory Session Chat now runs in, or
+     * null when the event is for another session or names [boundDirectory] already. A move that
+     * lands closes the sheet and clears the "after this turn" notice.
+     */
     fun onSessionMoved(
         moved: SessionMovedUpdate,
         boundSessionId: String?,
         boundDirectory: String?,
-    ) {
-        if (moved.sessionId != boundSessionId) return
+    ): String? {
+        if (moved.sessionId != boundSessionId) return null
         val destination = ServerPathPolicy.canonical(moved.directory)
-        if (boundDirectory != null && ServerPathPolicy.canonical(boundDirectory) == destination) return
-        _state.update { it.copy(movedDirectory = moved.directory, sheetVisible = false) }
-    }
-
-    fun consumeMoved() {
-        _state.update { it.copy(movedDirectory = null) }
+        if (boundDirectory != null && ServerPathPolicy.canonical(boundDirectory) == destination) return null
+        _state.update { it.copy(sheetVisible = false, notice = null) }
+        return moved.directory
     }
 
     fun clearMessages() {

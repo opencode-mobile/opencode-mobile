@@ -123,16 +123,30 @@ class SessionChatWorktreeMoveTest {
     fun sessionMovedForTheOpenSessionReportsItsNewDirectory() =
         runTest {
             val move = region(this) { _, _ -> }
+            move.openSheet()
 
-            move.onSessionMoved(SessionMovedUpdate("other", "/repo-feature"), boundSessionId = "ses-1", boundDirectory = "/repo")
-            assertNull(move.state.value.movedDirectory)
-            move.onSessionMoved(SessionMovedUpdate("ses-1", "/repo/"), boundSessionId = "ses-1", boundDirectory = "/repo")
-            assertNull(move.state.value.movedDirectory)
+            assertNull(move.onSessionMoved(SessionMovedUpdate("other", "/repo-feature"), boundSessionId = "ses-1", boundDirectory = "/repo"))
+            assertNull(move.onSessionMoved(SessionMovedUpdate("ses-1", "/repo/"), boundSessionId = "ses-1", boundDirectory = "/repo"))
+            assertTrue(move.state.value.sheetVisible)
+
+            assertEquals(
+                "/repo-feature",
+                move.onSessionMoved(SessionMovedUpdate("ses-1", "/repo-feature"), boundSessionId = "ses-1", boundDirectory = "/repo"),
+            )
+            assertFalse(move.state.value.sheetVisible)
+        }
+
+    @Test
+    fun sessionMovedClearsTheAfterThisTurnNotice() =
+        runTest {
+            val move = region(this) { _, _ -> }
+            move.move("ses-1", row("/repo-feature", "feature/x", isCurrent = false), isBusy = true)
+            advanceUntilIdle()
+            assertEquals(SessionChatWorktreeMoveCopy.movesAfterTurn("feature/x"), move.state.value.notice)
 
             move.onSessionMoved(SessionMovedUpdate("ses-1", "/repo-feature"), boundSessionId = "ses-1", boundDirectory = "/repo")
-            assertEquals("/repo-feature", move.state.value.movedDirectory)
-            move.consumeMoved()
-            assertNull(move.state.value.movedDirectory)
+
+            assertNull(move.state.value.notice)
         }
 
     private fun row(

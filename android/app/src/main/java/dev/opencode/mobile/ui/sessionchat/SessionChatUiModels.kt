@@ -273,6 +273,8 @@ data class SessionChatUiState(
     val chipTimelineIntroVisible: Boolean = false,
     /** Null while idle. A value shows the dictation card in place of prompt entry. */
     val dictation: ComposerDictationUiState? = null,
+    /** Directory the session runs in now; differs from the route's after `session.moved`. Empty until bound. */
+    val worktree: String = "",
 ) {
     /** A permission, question, or Screen Model-owned sheet or dialog would sit under the intro sheet. */
     fun blocksChipTimelineIntro(): Boolean =
