@@ -230,9 +230,9 @@ object SessionListWorktreeEmptyCopy {
     const val TITLE = "No sessions in this worktree"
     const val ACTION = "Clear filter"
     const val OTHER_WORKTREES = "Clear the filter to see sessions on other worktrees."
-    const val OTHER_PROJECTS = "Clear filters to see sessions on other projects."
+    const val OTHER_PROJECTS = "Clear the filter to see sessions on other projects."
     const val EVERY_WORKTREE = "Clear the filter to see every worktree."
-    const val EVERY_PROJECT = "Clear filters to see every project."
+    const val EVERY_PROJECT = "Clear the filter to see every project."
 }
 
 @Composable

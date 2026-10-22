@@ -313,9 +313,9 @@ enum SessionListWorktreeEmptyCopy {
     static let title = "No sessions in this worktree"
     static let action = "Clear filter"
     static let otherWorktrees = "Clear the filter to see sessions on other worktrees."
-    static let otherProjects = "Clear filters to see sessions on other projects."
+    static let otherProjects = "Clear the filter to see sessions on other projects."
     static let everyWorktree = "Clear the filter to see every worktree."
-    static let everyProject = "Clear filters to see every project."
+    static let everyProject = "Clear the filter to see every project."
 }
 
 struct SessionList<EmptyContent: View>: View {
@@ -351,6 +351,8 @@ struct SessionList<EmptyContent: View>: View {
     @State private var homeDisplayPreferences = HomeDisplayPreferences.shared
     @State private var followingTop = true
     @State private var incomingFilterId: String
+    /// Worktree scope of the incoming layer, held so the outgoing fade keeps it after the selection moves on.
+    @State private var incomingScopeTab: SessionListFilterTab?
     @State private var feedLayers: [SessionListFeedLayer]
     @State private var incomingOpacity: CGFloat = 1
     @State private var outgoingOpacity: CGFloat = 0
@@ -399,6 +401,7 @@ struct SessionList<EmptyContent: View>: View {
         self.showsEmptyContent = showsEmptyContent
         self.emptyContent = emptyContent()
         _incomingFilterId = State(initialValue: selectedFilterId)
+        _incomingScopeTab = State(initialValue: selectedScopeTab?.id == selectedFilterId ? selectedScopeTab : nil)
         _feedLayers = State(initialValue: [SessionListFeedLayer(id: selectedFilterId, isOutgoing: false)])
     }
 
@@ -406,7 +409,7 @@ struct SessionList<EmptyContent: View>: View {
         ZStack(alignment: .bottom) {
             ZStack {
                 ForEach(feedLayers) { layer in
-                    listBody(filterId: layer.id, isCurrent: !layer.isOutgoing)
+                    listBody(layer: layer)
                         .background(OpenCodeColors.backgroundBase)
                         .opacity(layer.isOutgoing ? outgoingOpacity : incomingOpacity)
                         .allowsHitTesting(!layer.isOutgoing)
@@ -415,6 +418,10 @@ struct SessionList<EmptyContent: View>: View {
             }
             .onChange(of: selectedFilterId) { _, newId in
                 scheduleListCrossfade(to: newId)
+            }
+            .onChange(of: selectedScopeTab) { _, tab in
+                guard let tab, tab.id == incomingFilterId else { return }
+                incomingScopeTab = tab
             }
 
             OpenCodeBottomFade(
@@ -463,9 +470,15 @@ struct SessionList<EmptyContent: View>: View {
     }
 
     @ViewBuilder
-    private func listBody(filterId: String, isCurrent: Bool) -> some View {
+    private func listBody(layer: SessionListFeedLayer) -> some View {
+        let filterId = layer.id
+        let isCurrent = !layer.isOutgoing
         let visible = sessions.visibleForFilter(filterId)
-        let scopeTab = filterTabs.first { $0.id == filterId } ?? (selectedScopeTab?.id == filterId ? selectedScopeTab : nil)
+        // Worktree tabs are not in `filterTabs`. The outgoing layer keeps the tab it was
+        // showing, since `selectedScopeTab` has already moved with the selection.
+        let scopeTab = filterTabs.first { $0.id == filterId }
+            ?? layer.scopeTab
+            ?? (selectedScopeTab?.id == filterId ? selectedScopeTab : nil)
         let loadingTab = visible.isEmpty ? scopeTab.flatMap { $0.load == nil ? nil : $0 } : nil
         let worktreeClear = scopeTab?.worktreeFilterClear(broaderTabs: filterTabs, visibleIsEmpty: visible.isEmpty)
         Group {
@@ -659,9 +672,10 @@ struct SessionList<EmptyContent: View>: View {
             incomingOpacity = 0
             feedLayers = [
                 SessionListFeedLayer(id: newId, isOutgoing: false),
-                SessionListFeedLayer(id: incomingFilterId, isOutgoing: true),
+                SessionListFeedLayer(id: incomingFilterId, isOutgoing: true, scopeTab: incomingScopeTab),
             ]
             incomingFilterId = newId
+            incomingScopeTab = selectedScopeTab?.id == newId ? selectedScopeTab : nil
         }
         listCrossfadeTask = Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(16))
@@ -691,6 +705,8 @@ struct SessionList<EmptyContent: View>: View {
 private struct SessionListFeedLayer: Identifiable, Equatable {
     let id: String
     let isOutgoing: Bool
+    /// Worktree scope the layer shows, captured when it became the outgoing fade.
+    var scopeTab: SessionListFilterTab? = nil
 }
 
 private let sessionListTopAnchorID = "session-list-top"
