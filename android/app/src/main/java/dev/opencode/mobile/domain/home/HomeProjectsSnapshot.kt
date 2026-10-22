@@ -1,8 +1,11 @@
 package dev.opencode.mobile.domain.home
 
 import dev.opencode.mobile.domain.filesystem.ServerPathPolicy
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -19,8 +22,18 @@ class HomeProjectsSnapshot
         private val _projects = MutableStateFlow<List<HomeProject>>(emptyList())
         val projects: StateFlow<List<HomeProject>> = _projects.asStateFlow()
 
+        private val _worktreeRefreshRequests = MutableSharedFlow<String>(extraBufferCapacity = 8)
+
+        /** Directories whose project's worktrees changed elsewhere (a checkout created in Session Chat). */
+        val worktreeRefreshRequests: SharedFlow<String> = _worktreeRefreshRequests.asSharedFlow()
+
         fun publish(projects: List<HomeProject>) {
             _projects.value = projects
+        }
+
+        /** Asks Home to list the worktrees of [directory]'s project again. */
+        fun requestWorktreeRefresh(directory: String) {
+            _worktreeRefreshRequests.tryEmit(directory)
         }
 
         /** The project whose worktrees (or added paths) include [directory]. */
