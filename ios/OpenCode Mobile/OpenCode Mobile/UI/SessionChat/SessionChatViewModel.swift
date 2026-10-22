@@ -53,15 +53,20 @@ final class SessionChatViewModel {
     private var pendingSend: PendingSend?
     private var armedSendAcceptance: ArmedSendAcceptance?
     private var sendInFlight = false
-    private var projectLabel: String?
-    private var projectLetter: Character?
-    private var projectLetterAccent: LetterAccent?
-    private var worktreeCheckout = false
+    private var projectIdentity: SessionChatProjectIdentity
     private var checkoutProjectIDs: Set<String> = []
     private var worktreeEventTask: Task<Void, Never>?
     private let worktreeRepository: any WorktreeRepository
+    private let worktreeInventoryCache: WorktreeInventoryCache
     private let projectRepository: any ProjectRepository
     private var projectIdentityTask: Task<Void, Never>?
+    /// Move to worktree (#785).
+    private var moveSheetVisible = false
+    private var moveInFlight = false
+    private var moveErrorMessage: String?
+    private var moveNotice: String?
+    private var movedDirectory: String?
+    private var sessionMoveTask: Task<Void, Never>?
     /// Chip-timeline step paragraphs the user expanded past `+N more`:
     /// paragraph id to the chip count at tap time.
     private var expandedStepParagraphs: [String: Int] = [:]
@@ -106,7 +111,8 @@ final class SessionChatViewModel {
         projectFilesRepository: (any ProjectFilesRepository)? = nil,
         catalogRetryDelaysMs: [Int] = SessionChatComposer.defaultCatalogRetryDelaysMs,
         worktreeRepository: any WorktreeRepository = UnavailableWorktreeRepository(),
-        projectRepository: any ProjectRepository = UnavailableProjectRepository()
+        projectRepository: any ProjectRepository = UnavailableProjectRepository(),
+        worktreeInventoryCache: WorktreeInventoryCache = WorktreeInventoryCache()
     ) {
         self.sessionID = sessionID
         self.sessionTitle = sessionTitle
@@ -128,6 +134,14 @@ final class SessionChatViewModel {
         self.foregroundEventStream = foregroundEventStream
         self.worktreeRepository = worktreeRepository
         self.projectRepository = projectRepository
+        self.worktreeInventoryCache = worktreeInventoryCache
+        // What Home already loaded decides the identity before the first frame; the refresh
+        // below only changes it when the server now answers differently.
+        self.projectIdentity = Self.cachedProjectIdentity(
+            worktree: worktree,
+            serverBaseURL: activeConnectionManager.connection?.baseURL.absoluteString,
+            cache: worktreeInventoryCache
+        ) ?? .folder(worktree)
         self.timeline = SessionChatTimeline(
             sessionID: sessionID,
             worktree: worktree,
@@ -228,6 +242,7 @@ final class SessionChatViewModel {
     func startObserving() {
         isSessionBound = true
         startSessionEventObservation()
+        startSessionMoveObservation()
         startCollapsePreferenceObservation()
         repoStrip.start()
         reviewChanges.start()
@@ -606,6 +621,68 @@ final class SessionChatViewModel {
         commands.openForkDialog(currentTitle: uiState.sessionTitle, atMessageID: messageID)
     }
 
+    // MARK: Move to worktree
+
+    func openMoveToWorktree() {
+        guard hasCreatedSession, activeConnectionManager.capabilities.supportsSessionMove else { return }
+        ProductAnalytics.logScreenView(
+            screenId: ProductAnalytics.Screen.sessionMoveToWorktree,
+            presentation: ProductAnalytics.Presentation.sheet,
+            trigger: ProductAnalytics.Trigger.present
+        )
+        moveSheetVisible = true
+        publishUiState()
+    }
+
+    func dismissMoveToWorktree() {
+        guard moveSheetVisible else { return }
+        moveSheetVisible = false
+        publishUiState()
+    }
+
+    /// `POST /api/session/{id}/move`. The server moves an idle session at once and a busy one
+    /// when its turn ends; `session.moved` then rebinds the screen to `directory`.
+    func moveSession(to directory: String, worktreeTitle: String) async {
+        guard hasCreatedSession, !moveInFlight else { return }
+        moveInFlight = true
+        moveErrorMessage = nil
+        moveNotice = nil
+        publishUiState()
+        let wasBusy = uiState.sessionStatusLabel != nil || effectiveCompacting()
+        do {
+            try await sessionRepository.moveSession(id: sessionID, directory: directory)
+            if wasBusy {
+                moveNotice = SessionChatMoveToWorktree.movesAfterTurn(worktreeTitle)
+            }
+        } catch {
+            moveErrorMessage = SessionChatMoveToWorktree.failure(SessionChatMoveToWorktree.serverMessage(error))
+        }
+        moveInFlight = false
+        moveSheetVisible = false
+        publishUiState()
+    }
+
+    private func startSessionMoveObservation() {
+        sessionMoveTask?.cancel()
+        sessionMoveTask = Task { [weak self] in
+            guard let self else { return }
+            for await event in self.foregroundEventStream.events() {
+                guard let moved = self.eventAdapter.sessionMoved(from: event),
+                      moved.sessionID == self.sessionID
+                else { continue }
+                self.applySessionMoved(to: moved.directory)
+            }
+        }
+    }
+
+    private func applySessionMoved(to directory: String) {
+        let canonical = ServerPathPolicy.canonical(directory)
+        guard canonical != ServerPathPolicy.canonical(worktree), canonical != movedDirectory else { return }
+        OpenCodeLog.sessionChat.info("session moved session=\(self.sessionID) directory=\(canonical)")
+        movedDirectory = canonical
+        publishUiState()
+    }
+
     func updateForkDraft(_ text: String) {
         if !loggedForkTitleEdit {
             loggedForkTitleEdit = true
@@ -675,6 +752,8 @@ final class SessionChatViewModel {
         }
         suppressedSnackbarKey = lastSnackbarKey
         chipTimelineIntroNotice = nil
+        moveErrorMessage = nil
+        moveNotice = nil
         commands.clearActionFeedback()
         composer.clearTransientErrors()
         sessionInfo.clearTransientErrors()
@@ -1193,6 +1272,8 @@ final class SessionChatViewModel {
         projectIdentityTask = nil
         worktreeEventTask?.cancel()
         worktreeEventTask = nil
+        sessionMoveTask?.cancel()
+        sessionMoveTask = nil
         timeline.stopObserving()
         sessionInfo.stopObserving()
         inbox.stop()
@@ -1207,20 +1288,42 @@ final class SessionChatViewModel {
         composer.stopCatalogEventRefresh()
     }
 
+    /// Identity from the inventories Home (or an earlier Session Chat) loaded; nil when the
+    /// added paths of this server are not known yet.
+    private static func cachedProjectIdentity(
+        worktree: String,
+        serverBaseURL: String?,
+        cache: WorktreeInventoryCache
+    ) -> SessionChatProjectIdentity? {
+        guard let serverBaseURL, let snapshot = cache.snapshot(server: serverBaseURL) else { return nil }
+        return .resolve(worktree: worktree, addedPaths: snapshot.addedPaths, inventoryFor: snapshot.inventory(for:))
+    }
+
+    private var inventoryServerKey: String? {
+        activeConnectionManager.connection?.baseURL.absoluteString
+    }
+
+    private func applyProjectIdentity(_ identity: SessionChatProjectIdentity) {
+        guard identity != projectIdentity else { return }
+        projectIdentity = identity
+        publishUiState()
+    }
+
+    /// Re-resolves the identity from the server. Keeps the identity on screen until the answer
+    /// lands, so an agreeing answer changes nothing.
     private func refreshProjectIdentity() {
         projectIdentityTask?.cancel()
         guard !worktree.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            projectLabel = nil
-            projectLetter = nil
-            projectLetterAccent = nil
-            worktreeCheckout = false
+            applyProjectIdentity(.none)
             return
         }
-        let displayName = ProjectDomainAdapter.displayName(from: worktree)
-        projectLabel = displayName
-        projectLetter = letterCharacter(for: displayName)
-        projectLetterAccent = letterAccent(for: worktree)
-        worktreeCheckout = false
+        if let cached = Self.cachedProjectIdentity(
+            worktree: worktree,
+            serverBaseURL: inventoryServerKey,
+            cache: worktreeInventoryCache
+        ) {
+            applyProjectIdentity(cached)
+        }
         checkoutProjectIDs = []
         projectIdentityTask = Task { [worktree, connectionProfileStore, activeConnectionManager] in
             let baseURL: String?
@@ -1238,28 +1341,27 @@ final class SessionChatViewModel {
                 peers = []
             }
             guard !Task.isCancelled else { return }
-            let checkout = await resolveCheckoutName(boundDirectory: worktree, peers: peers)
-            guard !Task.isCancelled else { return }
+            let inventories = await loadInventories(peers: peers)
+            guard !Task.isCancelled, let inventories else { return }
             await MainActor.run {
                 guard !Task.isCancelled else { return }
-                if let checkout {
-                    self.projectLabel = checkout
-                    self.projectLetter = nil
-                    self.projectLetterAccent = nil
-                    self.worktreeCheckout = true
-                } else {
-                    self.projectLabel = smartProjectLabel(focusWorktree: worktree, peerWorktrees: peers)
-                    self.projectLetter = letterCharacter(for: displayName)
-                    self.projectLetterAccent = letterAccent(for: worktree)
-                    self.worktreeCheckout = false
-                }
-                self.publishUiState()
+                self.applyProjectIdentity(
+                    .resolve(worktree: worktree, addedPaths: peers) { inventories[$0] ?? .unloaded }
+                )
             }
         }
     }
 
-    private func resolveCheckoutName(boundDirectory: String, peers: [String]) async -> String? {
-        guard !peers.isEmpty else { return nil }
+    /// Fresh inventory of every added path. A load that did not succeed falls back to the last
+    /// known one, so a transient failure does not turn a checkout back into a project letter.
+    /// Nil when cancelled.
+    private func loadInventories(peers: [String]) async -> [String: WorktreeInventory]? {
+        let server = inventoryServerKey
+        let cached = server.flatMap { worktreeInventoryCache.snapshot(server: $0) }
+        if let server {
+            worktreeInventoryCache.setAddedPaths(peers, server: server)
+        }
+        guard !peers.isEmpty else { return [:] }
         let baseURL = await connectionProfileStore.activeProfile()?.baseURL ?? activeConnectionManager.currentProfile()?.baseURL
         if let baseURL, !baseURL.isEmpty {
             worktreeRepository.onConnection(key: baseURL)
@@ -1281,11 +1383,15 @@ final class SessionChatViewModel {
             let loaded = await worktreeRepository.loadRefreshed(addedPath: added, projectID: usable)
             switch loaded {
             case let .loaded(directories, _):
-                inventories[added] = .loaded(directories)
+                let inventory = WorktreeInventory.loaded(directories)
+                inventories[added] = inventory
+                if let server {
+                    worktreeInventoryCache.record(inventory, addedPath: added, server: server)
+                }
             case .failed:
-                inventories[added] = .failed
+                inventories[added] = cached?.inventories[added] ?? .failed
             case .unloaded, .stopped:
-                inventories[added] = .unloaded
+                inventories[added] = cached?.inventories[added] ?? .unloaded
             }
         }
         if Task.isCancelled { return nil }
@@ -1294,9 +1400,7 @@ final class SessionChatViewModel {
             checkoutProjectIDs = projectIDs
         }
         guard !Task.isCancelled else { return nil }
-        return WorktreeMark.checkoutNameIfMarked(boundDirectory: boundDirectory, addedPaths: peers) { added in
-            inventories[added] ?? .unloaded
-        }
+        return inventories
     }
 
     private func startSessionEventObservation() {
@@ -1460,6 +1564,7 @@ final class SessionChatViewModel {
             if let error = composerState.errorMessage { return error }
             if let error = composerState.abortErrorMessage { return error }
             if let error = commandsState.actionErrorMessage { return error }
+            if let error = moveErrorMessage { return error }
             if let error = infoState.errorMessage { return error }
             if inboxState.permissionRequests.isEmpty, let error = inboxState.permissionTopologyError { return error }
             if inboxState.questionRequests.isEmpty, let error = inboxState.questionTopologyError { return error }
@@ -1469,6 +1574,7 @@ final class SessionChatViewModel {
             transientError: transientError,
             successNotice: composerState.followUpNotice
                 ?? commandsState.actionSuccessMessage
+                ?? moveNotice
                 ?? chipTimelineIntroNotice
         )
         // Reuse the current TimelineFrame when only composer / session-info /
@@ -1517,10 +1623,10 @@ final class SessionChatViewModel {
         uiState = SessionChatUiState(
             sessionID: infoState.sessionID.isEmpty ? sessionID : infoState.sessionID,
             sessionTitle: infoState.sessionTitle.isEmpty ? sessionTitle : infoState.sessionTitle,
-            projectLabel: projectLabel,
-            projectLetter: projectLetter,
-            projectLetterAccent: projectLetterAccent,
-            worktreeCheckout: worktreeCheckout,
+            projectLabel: projectIdentity.label,
+            projectLetter: projectIdentity.letter,
+            projectLetterAccent: projectIdentity.accent,
+            worktreeCheckout: projectIdentity.isWorktreeCheckout,
             sessionBranchPill: SessionChatBranchPillUiState.resolved(from: repoStripState),
             timeline: timelineState.timeline,
             messages: timelineState.messages,
@@ -1585,6 +1691,10 @@ final class SessionChatViewModel {
             reviewChangesSummary: reviewChangesState.summary,
             supportsSessionMessageDiff: activeConnectionManager.capabilities.supportsSessionMessageDiff,
             supportsSessionArchive: activeConnectionManager.capabilities.supportsSessionArchive,
+            supportsSessionMove: activeConnectionManager.capabilities.supportsSessionMove,
+            moveSheetVisible: moveSheetVisible,
+            moveInFlight: moveInFlight,
+            movedDirectory: movedDirectory,
             rename: infoState.rename,
             slashSuggestionsVisible: composerState.slashSuggestionsVisible,
             slashSuggestions: composerState.slashSuggestions,

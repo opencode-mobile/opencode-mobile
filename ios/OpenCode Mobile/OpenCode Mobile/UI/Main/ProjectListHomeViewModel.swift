@@ -446,6 +446,7 @@ final class ProjectListHomeViewModel {
     private let sessionReadyStore: any SessionReadyStore
     private let liveUpdates: any LiveUpdates
     private let worktreeRepository: any WorktreeRepository
+    private let worktreeInventoryCache: WorktreeInventoryCache
     private let foregroundEventStream: (any ForegroundEventStream)?
     private let sessionCache: any SessionCache
     private let sessionAdapter = SessionDomainAdapter()
@@ -498,7 +499,8 @@ final class ProjectListHomeViewModel {
         projectLoadTiming: ProjectLoadTiming = .standard,
         worktreeRepository: any WorktreeRepository = UnavailableWorktreeRepository(),
         foregroundEventStream: (any ForegroundEventStream)? = nil,
-        branchRetryDelays: [Duration] = [.seconds(1), .seconds(3)]
+        branchRetryDelays: [Duration] = [.seconds(1), .seconds(3)],
+        worktreeInventoryCache: WorktreeInventoryCache = WorktreeInventoryCache()
     ) {
         self.addProjectListingDebounce = addProjectListingDebounce
         self.projectLoadTiming = projectLoadTiming
@@ -513,6 +515,7 @@ final class ProjectListHomeViewModel {
         self.sessionReadyStore = sessionReadyStore
         self.liveUpdates = liveUpdates
         self.worktreeRepository = worktreeRepository
+        self.worktreeInventoryCache = worktreeInventoryCache
         self.foregroundEventStream = foregroundEventStream
         let projects = projectRepository
         let sessions = sessionRepository
@@ -586,6 +589,7 @@ final class ProjectListHomeViewModel {
                 self?.clearProjectLoads()
                 self?.stopLiveObservations()
                 self?.worktreeMarks.onDisconnected()
+                self?.worktreeInventoryCache.clear()
                 self?.worktreeInventories.removeAll()
                 self?.worktreeProjectIDs.removeAll()
                 self?.clearHomeProjectInputs()
@@ -1716,6 +1720,7 @@ final class ProjectListHomeViewModel {
         worktreeMarkTask?.cancel()
         worktreeMarks.onConnection(serverBaseURL)
         worktreeMarks.setAddedPaths(worktrees)
+        worktreeInventoryCache.setAddedPaths(worktrees, server: serverBaseURL)
         branchLookups.refresh()
         loadServerProjectInfo()
         worktreeMarkTask = Task { @MainActor [weak self] in
@@ -1780,6 +1785,7 @@ final class ProjectListHomeViewModel {
 
     private func applyWorktreeMark(_ update: WorktreeMarkUpdate) {
         worktreeInventories[update.addedPath] = update.inventory
+        worktreeInventoryCache.record(update.inventory, addedPath: update.addedPath, server: serverBaseURL)
         if let projectID = update.projectID {
             worktreeProjectIDs[update.addedPath] = projectID
         }

@@ -27,7 +27,7 @@ struct SessionListHomeChromeTests {
         #expect(tabs.first?.subtitle == "2 projects")
     }
 
-    @Test func filterTabs_multiWorktreeProjectListsItsWorktrees() {
+    @Test func filterTabs_listsAllAndProjectsOnly() {
         let main = "/src/repo"
         let feature = "/src/repo-wt"
         let tabs = SessionListHomeChrome.filterTabs(
@@ -39,35 +39,50 @@ struct SessionListHomeChromeTests {
             ]
         )
 
-        #expect(tabs.map(\.id) == [
-            SessionListFilterTab.allId,
-            "prj",
-            HomeScope.worktreeID(projectKey: "prj", directory: main),
-            HomeScope.worktreeID(projectKey: "prj", directory: feature),
-            "path:/play",
-        ])
+        #expect(tabs.map(\.id) == [SessionListFilterTab.allId, "prj", "path:/play"])
         let project = tabs[1]
         #expect(project.count == 3)
         #expect(project.title == "repo")
         #expect(project.subtitle == "All 2 worktrees")
-        #expect(project.pickerSubtitle == "2 worktrees")
+        // The worktree pill carries the count; the row keeps the path.
+        #expect(project.pickerSubtitle == "/src/repo")
         #expect(!project.isWorktree)
+        #expect(project.dockTitle == "repo")
+    }
 
-        let mainTab = tabs[2]
+    @Test func worktreeTabs_listEachWorktreeWithItsCount() {
+        let main = "/src/repo"
+        let feature = "/src/repo-wt"
+        let tabs = SessionListHomeChrome.worktreeTabs(
+            for: repo,
+            sessions: [
+                row("1", repo.key, directory: main, scope: HomeScope.worktreeID(projectKey: "prj", directory: main)),
+                row("2", repo.key, directory: feature, scope: HomeScope.worktreeID(projectKey: "prj", directory: feature)),
+                row("3", repo.key, directory: feature, scope: HomeScope.worktreeID(projectKey: "prj", directory: feature)),
+            ]
+        )
+        #expect(tabs.map(\.id) == [
+            HomeScope.worktreeID(projectKey: "prj", directory: main),
+            HomeScope.worktreeID(projectKey: "prj", directory: feature),
+        ])
+
+        let mainTab = tabs[0]
         #expect(mainTab.isWorktree)
+        #expect(mainTab.parentId == "prj")
         #expect(mainTab.count == 1)
         #expect(mainTab.title == "repo")
         #expect(mainTab.subtitle == "main")
         #expect(mainTab.pickerTitle == "main")
         #expect(mainTab.pickerSubtitle == "main checkout")
 
-        let featureTab = tabs[3]
+        let featureTab = tabs[1]
         #expect(featureTab.count == 2)
         #expect(featureTab.subtitle == "feature/x \u{00B7} repo-wt")
         #expect(featureTab.pickerTitle == "feature/x")
         #expect(featureTab.dockTitle == "repo")
-        #expect(project.dockTitle == "repo")
         #expect(featureTab.pickerSubtitle == "repo-wt")
+
+        #expect(SessionListHomeChrome.worktreeTabs(for: playground, sessions: []).isEmpty)
     }
 
     @Test func worktreeTabWithoutBranchReadsTheFolder() {
@@ -76,8 +91,57 @@ struct SessionListHomeChromeTests {
             resolutions: ["/src/repo": resolution, "/src/repo-wt": resolution]
         )[0]
         let tabs = SessionListHomeChrome.filterTabs(projects: [project], sessions: [])
-        #expect(tabs.map(\.subtitle) == ["All 2 worktrees", "repo", "repo-wt"])
-        #expect(tabs.map(\.pickerTitle) == ["repo", "repo", "repo-wt"])
+        #expect(tabs.map(\.subtitle) == ["All 2 worktrees"])
+        let worktrees = SessionListHomeChrome.worktreeTabs(for: project, sessions: [])
+        #expect(worktrees.map(\.subtitle) == ["repo", "repo-wt"])
+        #expect(worktrees.map(\.pickerTitle) == ["repo", "repo-wt"])
+    }
+
+    @Test func worktreesOff_projectTabReadsAsOneCheckout() {
+        let tabs = SessionListHomeChrome.filterTabs(projects: [repo, playground], sessions: [], worktreesEnabled: false)
+        #expect(tabs.map(\.id) == [SessionListFilterTab.allId, "prj", "path:/play"])
+        #expect(tabs[1].subtitle == "/src/repo")
+        #expect(tabs[1].pickerSubtitle == "/src/repo")
+    }
+
+    @Test func resolvedFilterId_keepsAWorktreeScopeWhileWorktreesAreOn() {
+        let projects = [repo, playground]
+        let tabs = SessionListHomeChrome.filterTabs(projects: projects, sessions: [])
+        let scope = HomeScope.worktreeID(projectKey: "prj", directory: "/src/repo-wt")
+        #expect(SessionListHomeChrome.resolvedFilterId(selectedId: scope, tabs: tabs, projects: projects) == scope)
+    }
+
+    @Test func resolvedFilterId_mapsAWorktreeScopeToItsProjectWhileWorktreesAreOff() {
+        let projects = [repo, playground]
+        let tabs = SessionListHomeChrome.filterTabs(projects: projects, sessions: [], worktreesEnabled: false)
+        let scope = HomeScope.worktreeID(projectKey: "prj", directory: "/src/repo-wt")
+        #expect(
+            SessionListHomeChrome.resolvedFilterId(selectedId: scope, tabs: tabs, projects: projects, worktreesEnabled: false)
+                == "prj"
+        )
+        // Turning worktrees back on restores the stored worktree scope.
+        #expect(SessionListHomeChrome.resolvedFilterId(selectedId: scope, tabs: tabs, projects: projects) == scope)
+    }
+
+    @Test func selectedScopeTab_describesAWorktreeScopeForTheDock() {
+        let projects = [repo, playground]
+        let tabs = SessionListHomeChrome.filterTabs(projects: projects, sessions: [])
+        let scope = HomeScope.worktreeID(projectKey: "prj", directory: "/src/repo-wt")
+        let tab = SessionListHomeChrome.selectedScopeTab(
+            selectedId: scope, tabs: tabs, projects: projects, sessions: []
+        )
+        #expect(tab?.id == scope)
+        #expect(tab?.dockTitle == "repo")
+        #expect(tab?.subtitle == "feature/x \u{00B7} repo-wt")
+        #expect(tab?.parentId == "prj")
+        #expect(
+            SessionListHomeChrome.selectedScopeTab(selectedId: "prj", tabs: tabs, projects: projects, sessions: []) == nil
+        )
+        #expect(
+            SessionListHomeChrome.selectedScopeTab(
+                selectedId: scope, tabs: tabs, projects: projects, sessions: [], worktreesEnabled: false
+            ) == nil
+        )
     }
 
     @Test func resolvedFilterId_fallsBackToSoleProjectWhenAllIsOmitted() {
@@ -140,13 +204,51 @@ struct SessionListHomeChromeTests {
         )
     }
 
-    @Test func newSessionAction_multiWorktreeProjectAsksWhereToRun() {
+    @Test func newSessionAction_tapStartsOnTheMainCheckoutWithoutAsking() {
         #expect(
             SessionListHomeChrome.newSessionAction(projects: [repo, playground], selectedFilterId: "prj")
-                == .chooseWorktree(projectKey: "prj")
+                == .create(directory: "/src/repo")
         )
-        #expect(SessionListHomeChrome.pick(repo) == .chooseWorktree(projectKey: "prj"))
-        #expect(SessionListHomeChrome.pick(playground) == .create(directory: "/play"))
+        #expect(
+            SessionListHomeChrome.newSessionAction(
+                projects: [repo, playground], selectedFilterId: "prj", worktreesEnabled: false
+            ) == .create(directory: "/src/repo")
+        )
+        #expect(
+            SessionListHomeChrome.newSessionAction(projects: [repo], selectedFilterId: SessionListFilterTab.allId)
+                == .create(directory: "/src/repo")
+        )
+    }
+
+    @Test func newSessionAction_mainCheckoutWinsOverTheFirstAddedPath() {
+        // The worktree was added first; the main checkout is still where a tap starts.
+        let project = HomeProjectGrouping.group(
+            addedPaths: ["/src/repo-wt"],
+            resolutions: ["/src/repo-wt": resolution],
+            inventories: ["/src/repo-wt": ["/src/repo", "/src/repo-wt"]]
+        )[0]
+        #expect(project.primaryPath == "/src/repo-wt")
+        #expect(project.mainCheckoutDirectory == "/src/repo")
+        #expect(
+            SessionListHomeChrome.newSessionAction(projects: [project], selectedFilterId: project.key)
+                == .create(directory: "/src/repo")
+        )
+    }
+
+    @Test func pick_afterATapStartsOnTheMainCheckout() {
+        #expect(SessionListHomeChrome.pick(repo, holdPick: false) == .create(directory: "/src/repo"))
+        #expect(SessionListHomeChrome.pick(playground, holdPick: false) == .create(directory: "/play"))
+    }
+
+    @Test func pick_afterAHoldOpensRunInForAMultiWorktreeProject() {
+        #expect(
+            SessionListHomeChrome.pick(repo, holdPick: true)
+                == .show(.runIn(projectKey: "prj", showsOtherProjects: false))
+        )
+        #expect(SessionListHomeChrome.pick(playground, holdPick: true) == .create(directory: "/play"))
+        #expect(
+            SessionListHomeChrome.pick(repo, holdPick: true, worktreesEnabled: false) == .create(directory: "/src/repo")
+        )
     }
 
     @Test func newSessionAction_worktreeScopeCreatesInThatWorktree() {
@@ -154,6 +256,12 @@ struct SessionListHomeChromeTests {
         #expect(
             SessionListHomeChrome.newSessionAction(projects: [repo, playground], selectedFilterId: scope)
                 == .create(directory: "/src/repo-wt")
+        )
+        // Worktrees off: the stored worktree scope reads as its project, which starts on main.
+        #expect(
+            SessionListHomeChrome.newSessionAction(
+                projects: [repo, playground], selectedFilterId: scope, worktreesEnabled: false
+            ) == .create(directory: "/src/repo")
         )
     }
 
@@ -187,9 +295,121 @@ struct SessionListHomeChromeTests {
         #expect(SessionListHomeChrome.terminalAction(projects: [mobile]) == .openCatalog)
     }
 
-    @Test func newSessionLongPressAction_needsTwoProjects() {
-        #expect(SessionListHomeChrome.newSessionLongPressAction(projects: [mobile]) == .none)
-        #expect(SessionListHomeChrome.newSessionLongPressAction(projects: [mobile, playground]) == .presentPicker)
+    @Test func newSessionLongPressAction_needsSomethingToChoose() {
+        #expect(SessionListHomeChrome.newSessionLongPressAction(projects: [mobile], selectedFilterId: "path:/repo") == nil)
+        #expect(
+            SessionListHomeChrome.newSessionLongPressAction(
+                projects: [mobile, playground], selectedFilterId: SessionListFilterTab.allId
+            ) == .projects(holdPick: true)
+        )
+        #expect(
+            SessionListHomeChrome.newSessionLongPressAction(projects: [mobile, playground], selectedFilterId: "path:/play")
+                == .projects(holdPick: true)
+        )
+    }
+
+    @Test func newSessionLongPressAction_opensRunInForAMultiWorktreeTarget() {
+        #expect(
+            SessionListHomeChrome.newSessionLongPressAction(projects: [repo, playground], selectedFilterId: "prj")
+                == .runIn(projectKey: "prj", showsOtherProjects: true)
+        )
+        let scope = HomeScope.worktreeID(projectKey: "prj", directory: "/src/repo-wt")
+        #expect(
+            SessionListHomeChrome.newSessionLongPressAction(projects: [repo, playground], selectedFilterId: scope)
+                == .runIn(projectKey: "prj", showsOtherProjects: true)
+        )
+        // One project: Run in without Other projects.
+        #expect(
+            SessionListHomeChrome.newSessionLongPressAction(projects: [repo], selectedFilterId: SessionListFilterTab.allId)
+                == .runIn(projectKey: "prj", showsOtherProjects: false)
+        )
+        // All with several projects has no target: the project list.
+        #expect(
+            SessionListHomeChrome.newSessionLongPressAction(
+                projects: [repo, playground], selectedFilterId: SessionListFilterTab.allId
+            ) == .projects(holdPick: true)
+        )
+    }
+
+    @Test func newSessionLongPressAction_neverOffersRunInWhileWorktreesAreOff() {
+        #expect(
+            SessionListHomeChrome.newSessionLongPressAction(
+                projects: [repo, playground], selectedFilterId: "prj", worktreesEnabled: false
+            ) == .projects(holdPick: true)
+        )
+        #expect(
+            SessionListHomeChrome.newSessionLongPressAction(
+                projects: [repo], selectedFilterId: "prj", worktreesEnabled: false
+            ) == nil
+        )
+    }
+
+    @Test func otherProjectsListTheRestBelowRunIn() {
+        let projects = [repo, playground, mobile]
+        #expect(
+            SessionListHomeChrome.otherProjects(projects, mode: .runIn(projectKey: "prj", showsOtherProjects: true))
+                .map(\.key) == ["path:/play", "path:/repo"]
+        )
+        #expect(
+            SessionListHomeChrome.otherProjects(projects, mode: .runIn(projectKey: "prj", showsOtherProjects: false))
+                .isEmpty
+        )
+        #expect(SessionListHomeChrome.otherProjects(projects, mode: .projects(holdPick: true)).isEmpty)
+    }
+
+    @Test func targetProject_followsTheScope() {
+        let scope = HomeScope.worktreeID(projectKey: "prj", directory: "/src/repo-wt")
+        #expect(SessionListHomeChrome.targetProject(projects: [repo, playground], selectedFilterId: scope)?.key == "prj")
+        #expect(
+            SessionListHomeChrome.targetProject(projects: [repo, playground], selectedFilterId: "path:/play")?.key
+                == "path:/play"
+        )
+        #expect(
+            SessionListHomeChrome.targetProject(projects: [repo, playground], selectedFilterId: SessionListFilterTab.allId)
+                == nil
+        )
+        #expect(
+            SessionListHomeChrome.targetProject(projects: [repo], selectedFilterId: SessionListFilterTab.allId)?.key == "prj"
+        )
+    }
+
+    @Test func dockSwipe_walksAllAndProjectsOnly() {
+        let tabs = SessionListHomeChrome.filterTabs(projects: [repo, playground], sessions: []).map(\.id)
+        #expect(tabs == [SessionListFilterTab.allId, "prj", "path:/play"])
+        #expect(
+            SessionListScopePaging.neighborID(selectedID: "prj", parentID: nil, tabIDs: tabs, direction: .next)
+                == "path:/play"
+        )
+        #expect(
+            SessionListScopePaging.neighborID(selectedID: "prj", parentID: nil, tabIDs: tabs, direction: .previous)
+                == SessionListFilterTab.allId
+        )
+        #expect(
+            SessionListScopePaging.neighborID(selectedID: "path:/play", parentID: nil, tabIDs: tabs, direction: .next)
+                == nil
+        )
+    }
+
+    @Test func dockSwipe_fromAWorktreeScopeSitsInsideItsProject() {
+        let tabs = SessionListHomeChrome.filterTabs(projects: [repo, playground], sessions: []).map(\.id)
+        let scope = HomeScope.worktreeID(projectKey: "prj", directory: "/src/repo-wt")
+        #expect(
+            SessionListScopePaging.neighborID(selectedID: scope, parentID: "prj", tabIDs: tabs, direction: .previous)
+                == "prj"
+        )
+        #expect(
+            SessionListScopePaging.neighborID(selectedID: scope, parentID: "prj", tabIDs: tabs, direction: .next)
+                == "path:/play"
+        )
+        // The last project's worktree has nothing after it.
+        let last = ["prj"]
+        #expect(
+            SessionListScopePaging.neighborID(selectedID: scope, parentID: "prj", tabIDs: last, direction: .next) == nil
+        )
+        #expect(
+            SessionListScopePaging.neighborID(selectedID: scope, parentID: "prj", tabIDs: last, direction: .previous)
+                == "prj"
+        )
     }
 
     private let resolution = HomeProjectResolution(id: "prj", canonical: "/src/repo", isRepository: true)

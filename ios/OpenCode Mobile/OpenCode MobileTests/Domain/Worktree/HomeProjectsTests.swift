@@ -142,6 +142,23 @@ struct HomeScopeTests {
         #expect(HomeScope.resolve(id: single, projects: projects) == .project("path:/notes"))
     }
 
+    @Test func worktreeScopeReadsAsItsProjectWhileWorktreesAreOff() {
+        let scope = HomeScope.worktreeID(projectKey: "prj_repo", directory: "/src/repo-wt")
+        #expect(HomeScope.resolve(id: scope, projects: projects, worktreesEnabled: false) == .project("prj_repo"))
+        #expect(
+            HomeScope.resolve(id: scope, projects: projects)
+                == .worktree(projectKey: "prj_repo", directory: "/src/repo-wt")
+        )
+        #expect(HomeScope.resolve(id: "prj_repo", projects: projects, worktreesEnabled: false) == .project("prj_repo"))
+    }
+
+    @Test func mainCheckoutDirectoryIsTheMainWorktree() {
+        #expect(projects[0].mainCheckoutDirectory == "/src/repo")
+        #expect(projects[1].mainCheckoutDirectory == "/notes")
+        #expect(HomeScope.worktree(projectKey: "prj_repo", directory: "/x").projectKey == "prj_repo")
+        #expect(HomeScope.all.projectKey == nil)
+    }
+
     @Test func worktreeScopeKeepsOnlyThatDirectory() {
         let scope = HomeScope.worktree(projectKey: "prj_repo", directory: "/src/repo-wt")
         #expect(scope.includes(projectKey: "prj_repo", directory: "/src/repo-wt/"))
@@ -190,6 +207,17 @@ struct HomeRowLocationTests {
     @Test func missingDirectoryUsesThePrimaryPath() {
         let location = HomeRowLocation.make(project: project, sessionDirectory: nil, includesProjectName: false)
         #expect(location?.parts == [.branch("main")])
+    }
+
+    @Test func worktreesOffKeepsThePathSubtitle() {
+        #expect(
+            HomeRowLocation.make(
+                project: project,
+                sessionDirectory: "/src/opencode-mobile-723",
+                includesProjectName: true,
+                worktreesEnabled: false
+            ) == nil
+        )
     }
 
     @Test func nonRepositoryKeepsThePathSubtitle() {

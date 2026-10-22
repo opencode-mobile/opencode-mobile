@@ -74,6 +74,10 @@ nonisolated struct V2ViewSessionRequestDTO: Encodable, Sendable {
     let idle: Int64
 }
 
+nonisolated struct V2MoveSessionRequestDTO: Encodable, Sendable {
+    let directory: String
+}
+
 nonisolated struct V2CreateSessionRequestDTO: Encodable, Sendable {
     let parentID: String?
     let title: String?

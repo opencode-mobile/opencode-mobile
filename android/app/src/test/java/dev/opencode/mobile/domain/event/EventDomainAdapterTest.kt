@@ -1804,6 +1804,18 @@ class EventDomainAdapterTest {
     }
 
     @Test
+    fun parseEvents_v2MoveReportsTheNewDirectoryNotTheEnvelopeLocation() {
+        val line =
+            """{"id":"evt_0fa2","created":1790000000000,"type":"session.moved","location":{"directory":"/repo"},""" +
+                """"data":{"sessionID":"ses-1","location":{"directory":"/repo/.worktrees/feature"},"projectID":"prj_1","subpath":""}}"""
+
+        val moves = adapter.parseEvents(line).mapNotNull { it.sessionMoved() }
+
+        assertEquals(listOf(SessionMovedUpdate("ses-1", "/repo/.worktrees/feature")), moves)
+        assertEquals(null, OpencodeEvent(type = "session.updated", sessionId = "ses-1").sessionMoved())
+    }
+
+    @Test
     fun parseEvents_v2AgentAndModelSwitchesKeepContextAndAddNotices() {
         val agent =
             adapter.parseEvents(

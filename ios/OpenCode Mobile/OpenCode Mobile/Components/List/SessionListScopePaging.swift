@@ -28,6 +28,26 @@ enum SessionListScopePaging {
         }
     }
 
+    /// Neighbor of the selection in `tabIDs`. A selection that is not a tab itself (a worktree
+    /// scope) sits inside its `parentID` tab: previous goes to that tab, next to the one after it.
+    static func neighborID(
+        selectedID: String,
+        parentID: String?,
+        tabIDs: [String],
+        direction: Direction
+    ) -> String? {
+        if let index = tabIDs.firstIndex(of: selectedID) {
+            return neighborIndex(selectedIndex: index, count: tabIDs.count, direction: direction).map { tabIDs[$0] }
+        }
+        guard let parentID, let parentIndex = tabIDs.firstIndex(of: parentID) else { return nil }
+        switch direction {
+        case .previous:
+            return tabIDs[parentIndex]
+        case .next:
+            return neighborIndex(selectedIndex: parentIndex, count: tabIDs.count, direction: .next).map { tabIDs[$0] }
+        }
+    }
+
     /// Visual offset while dragging: resists in both directions, never pages.
     static func rubberBandOffset(_ translation: CGFloat) -> CGFloat {
         if translation > 0 { return rubberBand(translation) }

@@ -3,10 +3,31 @@ import Foundation
 enum SessionListHomeChrome {
     enum NewSessionAction: Equatable {
         case none
+        /// All scope with two or more projects: choose the project (tap).
         case presentPicker
         case create(directory: String)
-        /// The project has more than one worktree: ask where to run.
-        case chooseWorktree(projectKey: String)
+    }
+
+    /// What the New session sheet lists.
+    enum NewSessionSheetMode: Equatable {
+        /// The projects. `holdPick` (opened by a hold) lets a multi-worktree pick open its Run in list.
+        case projects(holdPick: Bool)
+        /// Where to run in one project, then the other projects when `showsOtherProjects`.
+        case runIn(projectKey: String, showsOtherProjects: Bool)
+
+        /// The sheet came from a hold, so a project pick may still ask where to run.
+        var isHoldPick: Bool {
+            switch self {
+            case let .projects(holdPick): holdPick
+            case .runIn: true
+            }
+        }
+    }
+
+    /// What picking a project in the New session sheet does.
+    enum NewSessionPick: Equatable {
+        case create(directory: String)
+        case show(NewSessionSheetMode)
     }
 
     enum TerminalAction: Equatable {
@@ -14,20 +35,17 @@ enum SessionListHomeChrome {
         case openCatalog
     }
 
-    /// All (with two or more projects), then each project followed by its worktrees when it has
-    /// more than one. Counts come from the deduplicated Home rows.
+    /// All (with two or more projects), then each project. Worktrees are reached from the
+    /// picker (`worktreeTabs`), never listed here. Counts come from the deduplicated Home rows.
     static func filterTabs(
         projects: [HomeProject],
         sessions: [SessionListSession],
-        loads: [String: SessionListScopeLoad] = [:]
+        loads: [String: SessionListScopeLoad] = [:],
+        worktreesEnabled: Bool = true
     ) -> [SessionListFilterTab] {
         var projectCounts: [String: Int] = [:]
-        var worktreeCounts: [String: Int] = [:]
         for session in sessions {
             projectCounts[session.worktree, default: 0] += 1
-            if let scopeID = session.worktreeScopeID {
-                worktreeCounts[scopeID, default: 0] += 1
-            }
         }
         var tabs: [SessionListFilterTab] = []
         if projects.count >= 2 {
@@ -35,60 +53,148 @@ enum SessionListHomeChrome {
         }
         for project in projects {
             tabs.append(
-                .homeProject(project, count: projectCounts[project.key] ?? 0, load: loads[project.key])
+                .homeProject(
+                    project,
+                    count: projectCounts[project.key] ?? 0,
+                    load: loads[project.key],
+                    worktreesEnabled: worktreesEnabled
+                )
             )
-            guard project.hasManyWorktrees else { continue }
-            for worktree in project.worktrees {
-                let id = HomeScope.worktree(projectKey: project.key, directory: worktree.directory).id
-                tabs.append(.homeWorktree(worktree, of: project, count: worktreeCounts[id] ?? 0))
-            }
         }
         return tabs
     }
 
-    /// Keeps the selection when it still exists, maps an added path or an old key onto the
-    /// project that now holds it, else falls back to the first tab.
+    /// The worktree scopes of a multi-worktree project, main checkout first. Empty for a project
+    /// with one worktree.
+    static func worktreeTabs(for project: HomeProject, sessions: [SessionListSession]) -> [SessionListFilterTab] {
+        guard project.hasManyWorktrees else { return [] }
+        var counts: [String: Int] = [:]
+        for session in sessions {
+            if let scopeID = session.worktreeScopeID {
+                counts[scopeID, default: 0] += 1
+            }
+        }
+        return project.worktrees.map { worktree in
+            let id = HomeScope.worktree(projectKey: project.key, directory: worktree.directory).id
+            return .homeWorktree(worktree, of: project, count: counts[id] ?? 0)
+        }
+    }
+
+    /// Dock tab of a worktree scope selection, which `filterTabs` does not list. Nil otherwise.
+    static func selectedScopeTab(
+        selectedId: String,
+        tabs: [SessionListFilterTab],
+        projects: [HomeProject],
+        sessions: [SessionListSession],
+        worktreesEnabled: Bool = true
+    ) -> SessionListFilterTab? {
+        guard worktreesEnabled, !tabs.contains(where: { $0.id == selectedId }),
+              case let .worktree(projectKey, _) = HomeScope.resolve(id: selectedId, projects: projects),
+              let project = projects.first(where: { $0.key == projectKey })
+        else { return nil }
+        return worktreeTabs(for: project, sessions: sessions).first { $0.id == selectedId }
+    }
+
+    /// Keeps the selection when it still exists (a worktree scope too, while worktrees are on),
+    /// maps an added path, an old key or (worktrees off) a worktree scope onto the project that
+    /// now holds it, else falls back to the first tab.
     static func resolvedFilterId(
         selectedId: String,
         tabs: [SessionListFilterTab],
-        projects: [HomeProject] = []
+        projects: [HomeProject] = [],
+        worktreesEnabled: Bool = true
     ) -> String {
         if tabs.contains(where: { $0.id == selectedId }) {
             return selectedId
         }
-        if let mapped = HomeScope.resolve(id: selectedId, projects: projects)?.id,
-           tabs.contains(where: { $0.id == mapped })
-        {
-            return mapped
+        if let resolved = HomeScope.resolve(id: selectedId, projects: projects, worktreesEnabled: worktreesEnabled) {
+            // A worktree scope is valid while its project is listed.
+            let listedID = resolved.projectKey.map { HomeScope.project($0).id } ?? resolved.id
+            if tabs.contains(where: { $0.id == listedID }) {
+                return resolved.id
+            }
         }
         return tabs.first?.id ?? SessionListFilterTab.allId
     }
 
-    static func newSessionAction(projects: [HomeProject], selectedFilterId: String) -> NewSessionAction {
+    /// The project New session starts in: the scope's project (a worktree scope's owner), or the
+    /// only project in the All scope. Nil in the All scope with several projects.
+    static func targetProject(
+        projects: [HomeProject],
+        selectedFilterId: String,
+        worktreesEnabled: Bool = true
+    ) -> HomeProject? {
+        let scope = HomeScope.resolve(id: selectedFilterId, projects: projects, worktreesEnabled: worktreesEnabled)
+        if let key = scope?.projectKey, let project = projects.first(where: { $0.key == key }) {
+            return project
+        }
+        return projects.count == 1 ? projects[0] : nil
+    }
+
+    /// Tap: start on the main checkout of the current project, or in the filtered worktree.
+    /// Nothing is asked except which project in the All scope.
+    static func newSessionAction(
+        projects: [HomeProject],
+        selectedFilterId: String,
+        worktreesEnabled: Bool = true
+    ) -> NewSessionAction {
         if projects.isEmpty {
             return .none
         }
-        switch HomeScope.resolve(id: selectedFilterId, projects: projects) {
-        case let .worktree(_, directory):
+        if worktreesEnabled,
+           case let .worktree(_, directory)? = HomeScope.resolve(id: selectedFilterId, projects: projects)
+        {
             return .create(directory: directory)
-        case let .project(key):
-            if let project = projects.first(where: { $0.key == key }) {
-                return pick(project)
-            }
-        case .all, nil:
-            break
         }
-        if projects.count == 1 {
-            return pick(projects[0])
+        if let project = targetProject(
+            projects: projects,
+            selectedFilterId: selectedFilterId,
+            worktreesEnabled: worktreesEnabled
+        ) {
+            return .create(directory: project.mainCheckoutDirectory)
         }
         return .presentPicker
     }
 
-    /// A project chosen from the New session picker.
-    static func pick(_ project: HomeProject) -> NewSessionAction {
-        project.hasManyWorktrees
-            ? .chooseWorktree(projectKey: project.key)
-            : .create(directory: project.primaryPath)
+    /// Hold: Run in for a multi-worktree target project (worktrees on), else the project list
+    /// with two or more projects, else nothing to choose (no hold action).
+    static func newSessionLongPressAction(
+        projects: [HomeProject],
+        selectedFilterId: String,
+        worktreesEnabled: Bool = true
+    ) -> NewSessionSheetMode? {
+        if worktreesEnabled,
+           let target = targetProject(projects: projects, selectedFilterId: selectedFilterId),
+           target.hasManyWorktrees
+        {
+            return .runIn(projectKey: target.key, showsOtherProjects: projects.count >= 2)
+        }
+        if projects.count >= 2 {
+            return .projects(holdPick: true)
+        }
+        return nil
+    }
+
+    /// A project chosen in the New session sheet. After a tap it starts on its main checkout;
+    /// after a hold a multi-worktree project (worktrees on) opens its Run in list instead.
+    static func pick(
+        _ project: HomeProject,
+        holdPick: Bool,
+        worktreesEnabled: Bool = true
+    ) -> NewSessionPick {
+        if holdPick, worktreesEnabled, project.hasManyWorktrees {
+            return .show(.runIn(projectKey: project.key, showsOtherProjects: false))
+        }
+        return .create(directory: project.mainCheckoutDirectory)
+    }
+
+    /// Projects listed under "Other projects" below a Run in list.
+    static func otherProjects(
+        _ projects: [HomeProject],
+        mode: NewSessionSheetMode
+    ) -> [HomeProject] {
+        guard case let .runIn(projectKey, true) = mode else { return [] }
+        return projects.filter { $0.key != projectKey }
     }
 
     static func terminalAction(projects: [HomeProject]) -> TerminalAction {
@@ -96,13 +202,6 @@ enum SessionListHomeChrome {
             return .none
         }
         return .openCatalog
-    }
-
-    static func newSessionLongPressAction(projects: [HomeProject]) -> NewSessionAction {
-        guard projects.count >= 2 else {
-            return .none
-        }
-        return .presentPicker
     }
 
     /// One project's first-load state from its member paths: loading while any is loading,

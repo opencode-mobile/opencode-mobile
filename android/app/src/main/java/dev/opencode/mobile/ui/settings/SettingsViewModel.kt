@@ -117,6 +117,10 @@ class SettingsViewModel
             HomeDisplayPreferences.updateHideUserDirectoryPrefix(enabled)
         }
 
+        fun setShowsWorktrees(enabled: Boolean) {
+            HomeDisplayPreferences.updateShowsWorktrees(enabled)
+        }
+
         fun setRecentWindowHours(hours: Int) {
             HomeDisplayPreferences.updateRecentWindowHours(hours)
         }

@@ -107,6 +107,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -231,6 +232,17 @@ data class OpenCodeBottomSheetHeaderAction(
 )
 
 /**
+ * Text action at the trailing end of an [OpenCodeBottomSheet] header, before Close (for
+ * example Edit / Done). Disabled, it stays visible.
+ */
+data class OpenCodeBottomSheetHeaderTextAction(
+    val title: String,
+    val onClick: () -> Unit,
+    val enabled: Boolean = true,
+    val testTag: String? = null,
+)
+
+/**
  * Modal bottom sheet with a header, an optional [pinnedTop] slot under it, a scrolling body
  * ([content]), and an optional [pinnedBottom] footer.
  *
@@ -256,6 +268,7 @@ fun OpenCodeBottomSheet(
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
     headerLeadingAction: OpenCodeBottomSheetHeaderAction? = null,
+    headerTrailingAction: OpenCodeBottomSheetHeaderTextAction? = null,
     height: OpenCodeBottomSheetHeight = OpenCodeBottomSheetHeight.FitContent,
     keyboard: OpenCodeBottomSheetKeyboard = OpenCodeBottomSheetKeyboard.Dismiss,
     scrollTargetKey: Any? = null,
@@ -279,7 +292,7 @@ fun OpenCodeBottomSheet(
     // reacted to the caller clearing its state (a null target, an empty list).
     val shown = remember { BottomSheetShownSlots() }
     if (visible || !shown.isSet) {
-        shown.update(title, headerLeadingAction, height, keyboard, scrollTargetKey, pinnedTop, pinnedBottom, content, titleContent)
+        shown.update(title, headerLeadingAction, headerTrailingAction, height, keyboard, scrollTargetKey, pinnedTop, pinnedBottom, content, titleContent)
     }
 
     LaunchedEffect(visible, keyboard) {
@@ -435,6 +448,7 @@ fun OpenCodeBottomSheet(
                         title = shown.title,
                         titleContent = shown.titleContent,
                         headerLeadingAction = shown.headerLeadingAction,
+                        headerTrailingAction = shown.headerTrailingAction,
                         height = shown.height,
                         keyboard = shownKeyboard,
                         scrollTargetKey = shown.scrollTargetKey,
@@ -492,6 +506,8 @@ private class BottomSheetShownSlots {
         private set
     var headerLeadingAction: OpenCodeBottomSheetHeaderAction? = null
         private set
+    var headerTrailingAction: OpenCodeBottomSheetHeaderTextAction? = null
+        private set
     var height: OpenCodeBottomSheetHeight = OpenCodeBottomSheetHeight.FitContent
         private set
     var keyboard: OpenCodeBottomSheetKeyboard = OpenCodeBottomSheetKeyboard.Dismiss
@@ -510,6 +526,7 @@ private class BottomSheetShownSlots {
     fun update(
         title: String,
         headerLeadingAction: OpenCodeBottomSheetHeaderAction?,
+        headerTrailingAction: OpenCodeBottomSheetHeaderTextAction?,
         height: OpenCodeBottomSheetHeight,
         keyboard: OpenCodeBottomSheetKeyboard,
         scrollTargetKey: Any?,
@@ -522,6 +539,7 @@ private class BottomSheetShownSlots {
         this.titleContent = titleContent
         this.title = title
         this.headerLeadingAction = headerLeadingAction
+        this.headerTrailingAction = headerTrailingAction
         this.height = height
         this.keyboard = keyboard
         this.scrollTargetKey = scrollTargetKey
@@ -592,6 +610,7 @@ private fun BottomSheetContent(
     title: String,
     titleContent: (@Composable () -> Unit)?,
     headerLeadingAction: OpenCodeBottomSheetHeaderAction?,
+    headerTrailingAction: OpenCodeBottomSheetHeaderTextAction?,
     height: OpenCodeBottomSheetHeight,
     keyboard: OpenCodeBottomSheetKeyboard,
     scrollTargetKey: Any?,
@@ -712,6 +731,7 @@ private fun BottomSheetContent(
             title = title,
             titleContent = titleContent,
             leadingAction = headerLeadingAction,
+            trailingAction = headerTrailingAction,
             onDismissRequest = onDismissRequest,
             modifier =
                 headerDragModifier.onSizeChanged {
@@ -812,6 +832,7 @@ private fun BottomSheetHeader(
     leadingAction: OpenCodeBottomSheetHeaderAction?,
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
+    trailingAction: OpenCodeBottomSheetHeaderTextAction? = null,
 ) {
     Row(
         modifier =
@@ -843,6 +864,15 @@ private fun BottomSheetHeader(
                 color = openCodeColor("text-strong"),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+            )
+        }
+        trailingAction?.let { action ->
+            OpenCodeButton(
+                variant = OpenCodeButtonVariant.CompactText(action.title),
+                contrast = OpenCodeButtonContrast.Low,
+                enabled = action.enabled,
+                onClick = action.onClick,
+                modifier = action.testTag?.let { Modifier.testTag(it) } ?: Modifier,
             )
         }
         OpenCodeButton(

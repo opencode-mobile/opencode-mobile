@@ -27,6 +27,125 @@ struct SessionChatViewModelTests {
         #expect(viewModel.uiState.expandedStepParagraphs == ["sp:t1": 9, "sp:r9": 2])
     }
 
+    // MARK: Project identity (#783)
+
+    private static let serverBaseURL = "http://127.0.0.1:4096/"
+
+    /// Home loaded the main checkout's inventory, which lists the `/wt/tax` worktree.
+    private func homeInventoryCache() -> WorktreeInventoryCache {
+        let cache = WorktreeInventoryCache()
+        cache.setAddedPaths(["/repo"], server: Self.serverBaseURL)
+        cache.record(.loaded(["/repo", "/wt/tax"]), addedPath: "/repo", server: Self.serverBaseURL)
+        return cache
+    }
+
+    private func identity(_ state: SessionChatUiState) -> SessionChatProjectIdentity {
+        SessionChatProjectIdentity(
+            label: state.projectLabel,
+            letter: state.projectLetter,
+            accent: state.projectLetterAccent,
+            isWorktreeCheckout: state.worktreeCheckout
+        )
+    }
+
+    @Test func projectIdentity_worktreeSessionNamesItsCheckoutOnTheFirstFrame() async {
+        let worktrees = GatedWorktreeRepository(load: .loaded(directories: ["/repo", "/wt/tax"], listsSessions: false))
+        let viewModel = makeViewModel(
+            worktree: "/wt/tax",
+            connectionProfileStore: AddedPathsConnectionProfileStore(added: ["/repo"]),
+            worktreeRepository: worktrees,
+            worktreeInventoryCache: homeInventoryCache()
+        )
+        defer {
+            worktrees.open()
+            viewModel.stopObserving()
+        }
+
+        let first = viewModel.uiState
+        #expect(first.worktreeCheckout)
+        #expect(first.projectLabel == "tax")
+        #expect(first.projectLetter == nil)
+        #expect(first.projectLetterAccent == nil)
+
+        // The server agrees: nothing changes once the refresh lands.
+        worktrees.open()
+        #expect(await waitUntil { worktrees.answered >= 1 })
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(identity(viewModel.uiState) == identity(first))
+    }
+
+    @Test func projectIdentity_mainCheckoutSessionKeepsItsLetterFromTheFirstFrame() async {
+        let worktrees = GatedWorktreeRepository(load: .loaded(directories: ["/repo", "/wt/tax"], listsSessions: false))
+        let viewModel = makeViewModel(
+            worktree: "/repo",
+            connectionProfileStore: AddedPathsConnectionProfileStore(added: ["/repo"]),
+            worktreeRepository: worktrees,
+            worktreeInventoryCache: homeInventoryCache()
+        )
+        defer {
+            worktrees.open()
+            viewModel.stopObserving()
+        }
+
+        let first = viewModel.uiState
+        #expect(first.worktreeCheckout == false)
+        #expect(first.projectLabel == "repo")
+        #expect(first.projectLetter == "R")
+        #expect(first.projectLetterAccent == letterAccent(for: "/repo"))
+
+        worktrees.open()
+        #expect(await waitUntil { worktrees.answered >= 1 })
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(identity(viewModel.uiState) == identity(first))
+    }
+
+    @Test func projectIdentity_failedRefreshKeepsTheCheckout() async {
+        let worktrees = GatedWorktreeRepository(load: .failed)
+        let viewModel = makeViewModel(
+            worktree: "/wt/tax",
+            connectionProfileStore: AddedPathsConnectionProfileStore(added: ["/repo"]),
+            worktreeRepository: worktrees,
+            worktreeInventoryCache: homeInventoryCache()
+        )
+        defer { viewModel.stopObserving() }
+
+        worktrees.open()
+        #expect(await waitUntil { worktrees.answered >= 1 })
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(viewModel.uiState.worktreeCheckout)
+        #expect(viewModel.uiState.projectLabel == "tax")
+    }
+
+    @Test func projectIdentity_coldOpenResolvesAndSharesTheInventoryForTheNextOpen() async {
+        let cache = WorktreeInventoryCache()
+        let worktrees = GatedWorktreeRepository(load: .loaded(directories: ["/repo", "/wt/tax"], listsSessions: false))
+        let store = AddedPathsConnectionProfileStore(added: ["/repo"])
+        let viewModel = makeViewModel(
+            worktree: "/wt/tax",
+            connectionProfileStore: store,
+            worktreeRepository: worktrees,
+            worktreeInventoryCache: cache
+        )
+        defer { viewModel.stopObserving() }
+
+        // Nothing loaded yet (Home never ran): the folder with its letter until the server answers.
+        #expect(viewModel.uiState.worktreeCheckout == false)
+        #expect(viewModel.uiState.projectLabel == "tax")
+        worktrees.open()
+        #expect(await waitUntil { viewModel.uiState.worktreeCheckout })
+        #expect(viewModel.uiState.projectLabel == "tax")
+
+        let reopened = makeViewModel(
+            worktree: "/wt/tax",
+            connectionProfileStore: store,
+            worktreeRepository: worktrees,
+            worktreeInventoryCache: cache
+        )
+        defer { reopened.stopObserving() }
+        #expect(reopened.uiState.worktreeCheckout)
+        #expect(reopened.uiState.projectLabel == "tax")
+    }
+
     @Test func archiveSession_successLeavesSession() async {
         let sessionRepository = FakeChatSessionRepository()
         let viewModel = makeViewModel(sessionRepository: sessionRepository)
@@ -3332,6 +3451,99 @@ struct SessionChatViewModelTests {
         #expect(viewModel.uiState.hasPendingRevert)
     }
 
+    // MARK: Move to worktree (#785)
+
+    @Test func moveToWorktree_idleMovePostsAndClosesTheSheetQuietly() async {
+        let sessionRepository = FakeChatSessionRepository()
+        let viewModel = makeViewModel(sessionRepository: sessionRepository, serverProtocol: .v2)
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        #expect(viewModel.uiState.supportsSessionMove)
+
+        viewModel.openMoveToWorktree()
+        #expect(viewModel.uiState.moveSheetVisible)
+        await viewModel.moveSession(to: "/repo-wt", worktreeTitle: "feature/x")
+
+        #expect(sessionRepository.moveRequests == [.init(id: "ses-1", directory: "/repo-wt")])
+        #expect(!viewModel.uiState.moveSheetVisible)
+        #expect(!viewModel.uiState.moveInFlight)
+        #expect(viewModel.uiState.snackbar == nil)
+    }
+
+    @Test func moveToWorktree_busySessionSaysItMovesAfterThisTurn() async {
+        let eventStream = FakeForegroundEventStream()
+        let sessionRepository = FakeChatSessionRepository()
+        let viewModel = makeViewModel(eventStream: eventStream, sessionRepository: sessionRepository, serverProtocol: .v2)
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        eventStream.emit(
+            OpencodeEvent(
+                type: "session.status",
+                sessionID: "ses-1",
+                rawProperties: ["status": .dictionary(["type": .string("busy")])]
+            )
+        )
+        let busy = await waitUntil { viewModel.uiState.sessionStatusLabel != nil }
+        #expect(busy)
+
+        viewModel.openMoveToWorktree()
+        await viewModel.moveSession(to: "/repo-wt", worktreeTitle: "feature/x")
+
+        #expect(!viewModel.uiState.moveSheetVisible)
+        #expect(viewModel.uiState.snackbar?.message == "Moves to feature/x after this turn.")
+        #expect(viewModel.uiState.snackbar?.tone == .default)
+    }
+
+    @Test func moveToWorktree_failureShowsTheServerMessage() async {
+        let sessionRepository = FakeChatSessionRepository()
+        sessionRepository.moveSessionError = .http(statusCode: 400, message: "Destination is not a directory")
+        let viewModel = makeViewModel(sessionRepository: sessionRepository, serverProtocol: .v2)
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+
+        viewModel.openMoveToWorktree()
+        await viewModel.moveSession(to: "/gone", worktreeTitle: "gone")
+
+        #expect(viewModel.uiState.snackbar?.message == "Couldn't move the session: Destination is not a directory")
+        #expect(viewModel.uiState.snackbar?.tone == .error)
+        #expect(viewModel.uiState.movedDirectory == nil)
+        viewModel.consumeSnackbar()
+        #expect(viewModel.uiState.snackbar == nil)
+    }
+
+    @Test func moveToWorktree_v1NeverOpensTheSheet() async {
+        let sessionRepository = FakeChatSessionRepository()
+        let viewModel = makeViewModel(sessionRepository: sessionRepository, serverProtocol: .v1)
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+
+        #expect(!viewModel.uiState.supportsSessionMove)
+        viewModel.openMoveToWorktree()
+        #expect(!viewModel.uiState.moveSheetVisible)
+    }
+
+    @Test func sessionMoved_rebindsTheChatToTheNewDirectory() async {
+        let eventStream = FakeForegroundEventStream()
+        let viewModel = makeViewModel(eventStream: eventStream, serverProtocol: .v2)
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        let adapter = EventDomainAdapter()
+
+        // Another session moving changes nothing here.
+        for event in adapter.parseEvents(
+            dataLine: #"{"id":"evt_x","type":"session.moved","location":{"directory":"/repo"},"data":{"sessionID":"ses-2","location":{"directory":"/repo-wt"},"projectID":"p"}}"#
+        ) {
+            eventStream.emit(event)
+        }
+        for event in adapter.parseEvents(
+            dataLine: #"{"id":"evt_m","type":"session.moved","location":{"directory":"/repo"},"data":{"sessionID":"ses-1","location":{"directory":"/repo-wt"},"projectID":"p","subpath":""}}"#
+        ) {
+            eventStream.emit(event)
+        }
+        let moved = await waitUntil { viewModel.uiState.movedDirectory == "/repo-wt" }
+        #expect(moved)
+    }
+
     @Test func revertStagedElsewhere_hidesRevertedTurnsUntilCleared() async {
         let messages = [
             Message(id: "msg-1", role: .user, text: "First", model: nil, mode: nil, sentAtEpochMs: 1),
@@ -4571,7 +4783,11 @@ struct SessionChatViewModelTests {
         clock: any SyncClock = SystemSyncClock(),
         catalogRetryDelaysMs: [Int] = [],
         sessionViewReporter: (any SessionViewReporter)? = nil,
-        projectFilesRepository: (any ProjectFilesRepository)? = nil
+        projectFilesRepository: (any ProjectFilesRepository)? = nil,
+        worktree: String = "/repo",
+        connectionProfileStore: any ConnectionProfileStore = EmptyConnectionProfileStore(),
+        worktreeRepository: any WorktreeRepository = UnavailableWorktreeRepository(),
+        worktreeInventoryCache: WorktreeInventoryCache = WorktreeInventoryCache()
     ) -> SessionChatViewModel {
         let eventStream = eventStream ?? FakeForegroundEventStream()
         // Mutations (send/rename/fork/new/permissions) require Connected; default fakes start Idle.
@@ -4604,7 +4820,7 @@ struct SessionChatViewModelTests {
         let viewModel = SessionChatViewModel(
             sessionID: sessionID,
             sessionTitle: sessionTitle,
-            worktree: "/repo",
+            worktree: worktree,
             messageRepository: repo,
             modelCatalogStore: catalogStore,
             commandRepository: commandRepository,
@@ -4619,7 +4835,7 @@ struct SessionChatViewModelTests {
             sessionModelSelectionStore: selectionStore,
             composerDraftStore: draftStore,
             activeConnectionManager: activeConnectionManager,
-            connectionProfileStore: EmptyConnectionProfileStore(),
+            connectionProfileStore: connectionProfileStore,
             newSessionModelSelectionResolver: NewSessionModelSelectionResolver(
                 store: selectionStore,
                 modelCatalogStore: catalogStore
@@ -4627,7 +4843,9 @@ struct SessionChatViewModelTests {
             liveUpdates: liveUpdates,
             clock: clock,
             projectFilesRepository: projectFilesRepository,
-            catalogRetryDelaysMs: catalogRetryDelaysMs
+            catalogRetryDelaysMs: catalogRetryDelaysMs,
+            worktreeRepository: worktreeRepository,
+            worktreeInventoryCache: worktreeInventoryCache
         )
         viewModel.startObserving()
         return viewModel
@@ -5642,6 +5860,19 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
     }
     func listSessionTodos(id: String, directory: String?) async throws -> [SessionTodo] { fatalError() }
     func initializeSessionAgents(id: String, messageID: String, providerID: String, modelID: String) async throws -> Bool { fatalError() }
+    struct MoveRequest: Equatable {
+        let id: String
+        let directory: String
+    }
+
+    private(set) var moveRequests: [MoveRequest] = []
+    var moveSessionError: SessionError?
+
+    func moveSession(id: String, directory: String) async throws {
+        moveRequests.append(MoveRequest(id: id, directory: directory))
+        if let moveSessionError { throw moveSessionError }
+    }
+
     func forkSession(id: String, atMessageID: String?) async throws -> Session {
         forkSessionRequest = ForkRequest(id: id, atMessageID: atMessageID)
         forkSessionCallCount += 1
@@ -5919,6 +6150,63 @@ private func questionRequest(
         toolMessageID: nil,
         toolCallID: nil
     )
+}
+
+/// Added paths for any server; no stored profile.
+private struct AddedPathsConnectionProfileStore: ConnectionProfileStore {
+    let added: [String]
+
+    func activeProfile() async -> ConnectionProfile? { nil }
+    func saveProfile(_ profile: ConnectionProfile) async {}
+    func addedWorktrees(serverBaseURL: String) async -> [String] { added }
+    func addWorktree(serverBaseURL: String, worktree: String) async {}
+    func removeWorktree(serverBaseURL: String, worktree: String) async {}
+    func setAddedWorktrees(serverBaseURL: String, worktrees: [String]) async {}
+    func clearAll() async {}
+}
+
+/// Every inventory load waits until `open()`, then answers `load`.
+private final class GatedWorktreeRepository: WorktreeRepository, @unchecked Sendable {
+    private let lock = NSLock()
+    private let answer: WorktreeLoad
+    private var isOpen = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+    private var answeredCount = 0
+
+    init(load: WorktreeLoad) {
+        answer = load
+    }
+
+    var answered: Int { lock.withLock { answeredCount } }
+
+    func open() {
+        let resumed: [CheckedContinuation<Void, Never>] = lock.withLock {
+            isOpen = true
+            defer { waiters = [] }
+            return waiters
+        }
+        resumed.forEach { $0.resume() }
+    }
+
+    func load(addedPath: String, projectID: String?) async -> WorktreeLoad { await gated() }
+    func loadRefreshed(addedPath: String, projectID: String?) async -> WorktreeLoad { await gated() }
+    func refresh(projectID: String) async -> Bool { false }
+    func refetch(projectID: String) async -> WorktreeLoad { await gated() }
+    func onDisconnected() {}
+    func onConnection(key: String) {}
+
+    private func gated() async -> WorktreeLoad {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            let resumeNow: Bool = lock.withLock {
+                if isOpen { return true }
+                waiters.append(continuation)
+                return false
+            }
+            if resumeNow { continuation.resume() }
+        }
+        lock.withLock { answeredCount += 1 }
+        return answer
+    }
 }
 
 private struct EmptyConnectionProfileStore: ConnectionProfileStore {

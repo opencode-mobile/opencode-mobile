@@ -1314,6 +1314,22 @@ nonisolated struct EventDomainAdapter: Sendable {
         }
     }
 
+    /// New directory of a session the server moved (v2 `session.moved`, projected onto
+    /// `session.updated` with the move's `location`). Nil for any other event, including a v1
+    /// `session.updated` that carries the whole session under `info`.
+    func sessionMoved(from event: OpencodeEvent) -> SessionMovedUpdate? {
+        guard event.type == "session.updated", event.rawProperties?["info"] == nil else { return nil }
+        guard let sessionID = event.sessionID, !sessionID.isEmpty else { return nil }
+        let directory = event.rawProperties?["location"]?.dictionaryValue?["directory"]?.stringValue?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let directory, !directory.isEmpty else { return nil }
+        return SessionMovedUpdate(
+            sessionID: sessionID,
+            directory: directory,
+            projectID: event.namedProjectID
+        )
+    }
+
     /// Session removed on the server. v1 carries the id only in `info.id`; v2 sends `sessionID`.
     func sessionDeletedID(from event: OpencodeEvent) -> String? {
         guard event.type == "session.deleted" else { return nil }
@@ -1358,6 +1374,13 @@ nonisolated enum EventParseOutcome: Sendable {
     /// Frame was recognized but intentionally projected to no domain event.
     case dropped(type: String)
     case events([OpencodeEvent])
+}
+
+nonisolated struct SessionMovedUpdate: Equatable, Sendable {
+    let sessionID: String
+    /// The session's new working directory.
+    let directory: String
+    let projectID: String?
 }
 
 nonisolated struct SessionViewedUpdate: Equatable, Sendable {

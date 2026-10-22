@@ -15,12 +15,15 @@ import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.event.IdleForegroundEventStream
 import dev.opencode.mobile.domain.event.LiveUpdates
 import dev.opencode.mobile.domain.event.OpencodeEvent
+import dev.opencode.mobile.domain.event.SessionMovedUpdate
 import dev.opencode.mobile.domain.event.namedProjectId
+import dev.opencode.mobile.domain.event.sessionMoved
 import dev.opencode.mobile.domain.filesystem.DirectoryNotFoundException
 import dev.opencode.mobile.domain.filesystem.FilesystemRepository
 import dev.opencode.mobile.domain.filesystem.ServerPathPolicy
 import dev.opencode.mobile.domain.home.HomeProject
 import dev.opencode.mobile.domain.home.HomeProjectGrouping
+import dev.opencode.mobile.domain.home.HomeProjectsSnapshot
 import dev.opencode.mobile.domain.home.HomeWorktreeCopy
 import dev.opencode.mobile.domain.home.ResolvedHomePath
 import dev.opencode.mobile.domain.live.LiveStoreRefreshPolicy
@@ -47,6 +50,7 @@ import dev.opencode.mobile.domain.session.rootSessions
 import dev.opencode.mobile.domain.sessioncache.SessionCache
 import dev.opencode.mobile.domain.worktree.UnavailableWorktreeRepository
 import dev.opencode.mobile.domain.worktree.WorktreeInventory
+import dev.opencode.mobile.domain.worktree.WorktreeInventoryCache
 import dev.opencode.mobile.domain.worktree.WorktreeRepository
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.theme.LetterAccent
@@ -74,6 +78,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 @HiltViewModel
 class MainScreenViewModel
@@ -95,6 +100,8 @@ class MainScreenViewModel
         worktreeRepository: WorktreeRepository = UnavailableWorktreeRepository,
         private val foregroundEventStream: ForegroundEventStream = IdleForegroundEventStream,
         projectFirstLoadTiming: ProjectFirstLoadTiming = ProjectFirstLoadTiming(),
+        private val homeProjectsSnapshot: HomeProjectsSnapshot = HomeProjectsSnapshot(),
+        private val worktreeInventoryCache: WorktreeInventoryCache = WorktreeInventoryCache(),
     ) : ViewModel() {
         private val _uiState = MutableStateFlow<MainScreenUiState>(MainScreenUiState.Probing)
         val uiState: StateFlow<MainScreenUiState> = _uiState.asStateFlow()
@@ -196,6 +203,13 @@ class MainScreenViewModel
 
         init {
             refresh()
+            viewModelScope.launch {
+                // Session Chat reads the session's project and worktrees from here.
+                _uiState
+                    .map { (it as? MainScreenUiState.Loaded)?.projects.orEmpty() }
+                    .distinctUntilChanged()
+                    .collect(homeProjectsSnapshot::publish)
+            }
             viewModelScope.launch {
                 connectionSessionCoordinator.profileSaved.collect {
                     stopLiveObservations()
@@ -1279,6 +1293,10 @@ class MainScreenViewModel
                 } +
                     viewModelScope.launch {
                         foregroundEventStream.events.collect { event ->
+                            event.sessionMoved()?.let { moved ->
+                                applySessionMoved(moved)
+                                return@collect
+                            }
                             val projectId = event.namedProjectId() ?: return@collect
                             if (event.type != "worktree.updated") return@collect
                             if (!worktreeLoader.knows(projectId)) return@collect
@@ -1298,6 +1316,7 @@ class MainScreenViewModel
         ) {
             worktreeMarkJob?.cancel()
             worktreeLoader.onConnection(serverBaseUrl)
+            worktreeInventoryCache.setAddedPaths(worktrees, serverBaseUrl)
             branchLookups.refresh()
             worktreeMarkJob =
                 viewModelScope.launch {
@@ -1320,6 +1339,7 @@ class MainScreenViewModel
 
         private fun applyPathLoad(load: HomePathLoad) {
             if (load.listsSessions) listsSessionsPaths += load.addedPath else listsSessionsPaths -= load.addedPath
+            worktreeInventoryCache.record(load.inventory, load.addedPath, serverBaseUrl)
             updateHomeIndex { index ->
                 val resolutions = load.resolution?.let { index.resolutions + (load.addedPath to it) } ?: index.resolutions
                 val inventories =
@@ -1335,6 +1355,14 @@ class MainScreenViewModel
             requestBranches()
         }
 
+        /** Regroups a moved session's row at once; the list refetch on the same event confirms it. */
+        private fun applySessionMoved(moved: SessionMovedUpdate) {
+            updateHomeIndex { it.copy(extraSessions = it.extraSessions.withSessionMoved(moved)) }
+            _uiState.update { state ->
+                if (state is MainScreenUiState.Loaded) state.withSessionMoved(moved) else state
+            }
+        }
+
         private fun updateHomeIndex(transform: (HomeWorktreeIndex) -> HomeWorktreeIndex) {
             val next = transform(homeIndex)
             if (next == homeIndex) return
@@ -1346,6 +1374,7 @@ class MainScreenViewModel
 
         private fun resetHomeIndex() {
             worktreeLoader.onDisconnected()
+            worktreeInventoryCache.clear()
             listsSessionsPaths.clear()
             branchLookups.clear()
             homeIndex = HomeWorktreeIndex()
@@ -1645,6 +1674,27 @@ data class SessionOpenTarget(
     val worktree: String,
     val optimisticNavigationInstanceId: String? = null,
 )
+
+/** Home with [moved]'s session row in its new directory, so it regroups under that worktree. */
+internal fun MainScreenUiState.Loaded.withSessionMoved(moved: SessionMovedUpdate): MainScreenUiState.Loaded {
+    val patched =
+        sections.map { section ->
+            if (section.allSessions.none { it.id == moved.sessionId }) {
+                section
+            } else {
+                section.copy(allSessions = section.allSessions.map { it.movedTo(moved) })
+            }
+        }
+    return copy(sections = patched, home = home.copy(extraSessions = home.extraSessions.withSessionMoved(moved)))
+}
+
+internal fun Map<String, List<SessionSummary>>.withSessionMoved(moved: SessionMovedUpdate): Map<String, List<SessionSummary>> =
+    mapValues { (_, sessions) ->
+        if (sessions.none { it.id == moved.sessionId }) sessions else sessions.map { it.movedTo(moved) }
+    }
+
+private fun SessionSummary.movedTo(moved: SessionMovedUpdate): SessionSummary =
+    if (id == moved.sessionId) copy(directory = moved.directory) else this
 
 /** Unread finished-run outcome for Home; null when read or when the server has no read state. */
 internal fun Session.homeUnreadOutcome(serverReadState: Boolean): SessionIdleOutcome? =

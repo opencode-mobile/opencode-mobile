@@ -198,6 +198,35 @@ class SessionChatComposer(
     }
 
     /**
+     * The bound session moved to [worktree] (v2 `session.moved`). Keeps the draft, attachments
+     * and model; carries the draft and selection over to the new directory and reloads what the
+     * directory scopes (models, commands, mentionable agents, file search).
+     */
+    fun moveDirectory(worktree: String) {
+        val sessionId = boundSessionId ?: return
+        val previousWorktree = boundWorktree ?: return
+        if (previousWorktree == worktree || OptimisticSessionCreate.isPlaceholder(sessionId)) return
+        persistDraftJob?.cancel()
+        persistDraftJob = null
+        val snapshot = currentDraft()
+        boundWorktree = worktree
+        logI("move session=$sessionId from=$previousWorktree to=$worktree")
+        scope.launch {
+            persistDraft(sessionId, previousWorktree, ComposerDraft(text = ""))
+            persistDraft(sessionId, worktree, snapshot)
+        }
+        // A search still running answers for the old directory.
+        fileSearchJob?.cancel()
+        fileSearchGeneration++
+        _state.update { it.copy(fileSuggestions = emptyList(), fileSuggestionQuery = null) }
+        if (!provisionalSelection) persistCurrentSelection(updatePreference = false)
+        // Project config can differ per directory; a model the new one lacks falls back with a notice.
+        loadCatalog(keepLoadedCatalogOnFailure = true)
+        loadServerCommands(force = true)
+        loadMentionableAgents(force = true)
+    }
+
+    /**
      * Shows the store's catalog and agents at once, and for a session with a remembered selection
      * also publishes that selection, so switching back to it never shows "Loading model…". The
      * gate reconciles it later against the persisted selection and history. A session without one

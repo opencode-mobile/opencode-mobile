@@ -18,6 +18,9 @@ import dev.opencode.mobile.domain.event.FixedLiveUpdates
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.event.LiveUpdates
 import dev.opencode.mobile.domain.event.namedProjectId
+import dev.opencode.mobile.domain.event.sessionMoved
+import dev.opencode.mobile.domain.filesystem.ServerPathPolicy
+import dev.opencode.mobile.domain.home.HomeProjectsSnapshot
 import dev.opencode.mobile.domain.live.EmptySessionReadyStore
 import dev.opencode.mobile.domain.live.EmptySessionTodoLiveStore
 import dev.opencode.mobile.domain.live.NoOpSessionViewReporter
@@ -40,15 +43,14 @@ import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.model.NewSessionModelSelectionResolver
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
 import dev.opencode.mobile.domain.preferences.ChipTimelineIntro
+import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
-import dev.opencode.mobile.domain.project.ProjectDomainAdapter
 import dev.opencode.mobile.domain.project.ProjectRepository
 import dev.opencode.mobile.domain.project.UnavailableProjectRepository
-import dev.opencode.mobile.domain.project.smartProjectLabel
 import dev.opencode.mobile.domain.worktree.UnavailableWorktreeRepository
 import dev.opencode.mobile.domain.worktree.WorktreeInventory
+import dev.opencode.mobile.domain.worktree.WorktreeInventoryCache
 import dev.opencode.mobile.domain.worktree.WorktreeLoad
-import dev.opencode.mobile.domain.worktree.WorktreeMark
 import dev.opencode.mobile.domain.worktree.WorktreeRepository
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.PermissionRequest
@@ -62,15 +64,16 @@ import dev.opencode.mobile.domain.sync.NoOpSyncCoordinator
 import dev.opencode.mobile.domain.sync.ProjectionKey
 import dev.opencode.mobile.domain.sync.SyncCoordinator
 import dev.opencode.mobile.network.ActiveConnectionManager
-import dev.opencode.mobile.theme.LetterAccent
-import dev.opencode.mobile.theme.letterAccentForWorktree
-import dev.opencode.mobile.theme.letterCharacterForProject
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatCommands
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatComposer
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatInbox
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatRepoStrip
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatReviewChanges
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatTimeline
+import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMove
+import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveAvailability
+import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveRow
+import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveUiState
 import dev.opencode.mobile.ui.sessionchat.region.SessionInfo
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
@@ -124,6 +127,8 @@ class SessionChatViewModel
         private val sessionViewReporter: SessionViewReporter = NoOpSessionViewReporter,
         private val worktreeRepository: WorktreeRepository = UnavailableWorktreeRepository,
         private val projectRepository: ProjectRepository = UnavailableProjectRepository,
+        private val homeProjectsSnapshot: HomeProjectsSnapshot = HomeProjectsSnapshot(),
+        private val worktreeInventoryCache: WorktreeInventoryCache = WorktreeInventoryCache(),
     ) : ViewModel() {
         internal var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
             set(value) {
@@ -134,6 +139,7 @@ class SessionChatViewModel
                 repoStrip.ioDispatcher = value
                 commands.ioDispatcher = value
                 inbox.ioDispatcher = value
+                worktreeMove.ioDispatcher = value
             }
 
         internal var nowMs: () -> Long = { System.currentTimeMillis() }
@@ -213,6 +219,12 @@ class SessionChatViewModel
                 loadedMessages = { timeline.loadedMessages() },
             )
 
+        private val worktreeMove =
+            SessionChatWorktreeMove(
+                moveSession = { id, directory -> sessionRepository.moveSession(id, directory) },
+                scope = viewModelScope,
+            )
+
         private val _uiState =
             MutableStateFlow(SessionChatUiState.initial(sessionId = "", sessionTitle = ""))
         val uiState: StateFlow<SessionChatUiState> = _uiState.asStateFlow()
@@ -220,10 +232,15 @@ class SessionChatViewModel
         private var boundSessionId: String? = null
         private var boundSessionTitle: String? = null
         private var boundWorktree: String? = null
-        private var projectLabel: String? = null
-        private var projectLetter: Char? = null
-        private var projectLetterAccent: LetterAccent? = null
-        private var worktreeCheckout = false
+
+        // The worktree the route bound with. After `session.moved` [boundWorktree] differs, and
+        // the route (which still names this one) must not rebind to the old directory.
+        private var routeWorktree: String? = null
+
+        // The directory the transcript (timeline cache and sync projection) is keyed by; a move
+        // keeps it so the timeline does not reload.
+        private var transcriptWorktree: String? = null
+        private var projectIdentity = SessionChatProjectIdentity.None
         private var projectIdentityJob: kotlinx.coroutines.Job? = null
         private val checkoutProjectIds = mutableSetOf<String>()
         private var lastSnackbarKey: String? = null
@@ -296,6 +313,10 @@ class SessionChatViewModel
                         commands.applyRevertUpdate(update)
                         return@collect
                     }
+                    event.sessionMoved()?.let { moved ->
+                        worktreeMove.onSessionMoved(moved, boundSessionId, boundWorktree)?.let(::rebindMovedSession)
+                        return@collect
+                    }
                     if (event.type != "worktree.updated") return@collect
                     val projectId = event.namedProjectId() ?: return@collect
                     if (projectId !in checkoutProjectIds) return@collect
@@ -357,6 +378,13 @@ class SessionChatViewModel
                 repoStrip.state.collect { publishUiState() }
             }
             viewModelScope.launch {
+                combine(
+                    worktreeMove.state,
+                    homeProjectsSnapshot.projects,
+                    snapshotFlow { HomeDisplayPreferences.showsWorktrees },
+                ) { _, _, _ -> }.collect { publishUiState() }
+            }
+            viewModelScope.launch {
                 snapshotFlow { SessionChatDisplayPreferences.collapseConsecutiveToolCalls }
                     .distinctUntilChanged()
                     .collect { enabled ->
@@ -389,25 +417,23 @@ class SessionChatViewModel
                 bindOptimisticCreate(sessionTitle, worktree)
                 return
             }
+            if (boundSessionId == sessionId && routeWorktree == worktree) {
+                bindCurrent(sessionId, sessionTitle)
+                return
+            }
             // Identity is session + worktree. Title may diverge after rename / session.updated;
             // do not full-reset when navigation still carries a stale title.
             // Always re-assert Ready focus: nav can dispose/clear focus then re-enter the same
             // bound ViewModel without a full reset, and Ready must clear on open.
             sessionReadyStore.setFocusedSession(sessionId, worktree)
             sessionViewReporter.focus(sessionId)
-            if (boundSessionId == sessionId && boundWorktree == worktree) {
-                bindTitleIfChanged(sessionId, sessionTitle, worktree)
-                // Peers may have changed while the screen was away; re-resolve smart label.
-                scheduleProjectIdentityRefine(worktree)
-                timeline.restartLiveObservation()
-                syncCoordinator.markFocused(ProjectionKey.Transcript(worktree, sessionId))
-                return
-            }
             boundSessionId = sessionId
             // Clear so bindTitleIfChanged always rebinds sessionInfo for a new identity,
             // even when the previous session shared the same title.
             boundSessionTitle = null
             boundWorktree = worktree
+            routeWorktree = worktree
+            transcriptWorktree = worktree
             lastSnackbarKey = null
             suppressedSnackbarKey = null
             snackbarSequence = 0L
@@ -416,13 +442,15 @@ class SessionChatViewModel
             resetActivityCards()
             resetChipTimelineIntro()
             resetWorkingFooter()
+            worktreeMove.reset()
             logI("bind session=$sessionId worktree=$worktree title=$sessionTitle")
             seedProjectIdentity(worktree)
             _uiState.value =
                 SessionChatUiState.initial(sessionId = sessionId, sessionTitle = sessionTitle).copy(
-                    projectLabel = projectLabel,
-                    projectLetter = projectLetter,
-                    projectLetterAccent = projectLetterAccent,
+                    projectLabel = projectIdentity.label,
+                    projectLetter = projectIdentity.letter,
+                    projectLetterAccent = projectIdentity.accent,
+                    worktreeCheckout = projectIdentity.isWorktreeCheckout,
                 )
             scheduleProjectIdentityRefine(worktree)
             timeline.bind(sessionId, worktree)
@@ -438,17 +466,64 @@ class SessionChatViewModel
             }
         }
 
+        /**
+         * The route binds the session this ViewModel already shows. After a move the route still
+         * names the old worktree, so everything uses the current one.
+         */
+        private fun bindCurrent(
+            sessionId: String,
+            sessionTitle: String,
+        ) {
+            val worktree = boundWorktree ?: return
+            sessionReadyStore.setFocusedSession(sessionId, worktree)
+            sessionViewReporter.focus(sessionId)
+            bindTitleIfChanged(sessionId, sessionTitle, worktree)
+            // Peers may have changed while the screen was away; re-resolve smart label.
+            scheduleProjectIdentityRefine(worktree)
+            timeline.restartLiveObservation()
+            syncCoordinator.markFocused(ProjectionKey.Transcript(transcriptWorktree ?: worktree, sessionId))
+        }
+
+        /**
+         * v2 `session.moved` for the open session: Session Chat follows it to [directory] in place.
+         * The transcript stays (v2 scopes messages by session only, so its cache key keeps the old
+         * directory), which keeps the timeline and scroll position; the header, composer, inbox,
+         * repo strip and commands rebind to the new directory.
+         */
+        private fun rebindMovedSession(directory: String) {
+            val sessionId = boundSessionId?.takeIf { hasCreatedSession() } ?: return
+            val previous = boundWorktree ?: return
+            logI("session moved session=$sessionId from=$previous to=$directory")
+            boundWorktree = directory
+            sessionReadyStore.setFocusedSession(sessionId, directory)
+            seedProjectIdentity(directory)
+            scheduleProjectIdentityRefine(directory)
+            composer.moveDirectory(directory)
+            sessionInfo.moveDirectory(directory)
+            commands.moveDirectory(directory)
+            inbox.moveDirectory(directory)
+            val knownBranch =
+                homeProjectsSnapshot
+                    .projectContaining(directory)
+                    ?.worktree(ServerPathPolicy.canonical(directory))
+                    ?.branch
+            repoStrip.moveTo(directory, knownBranch)
+            publishUiState()
+        }
+
         private fun bindOptimisticCreate(
             sessionTitle: String,
             worktree: String,
         ) {
-            if (boundWorktree == worktree && boundSessionId != null) {
+            if ((boundWorktree == worktree || routeWorktree == worktree) && boundSessionId != null) {
                 return
             }
             optimisticCreateJob?.cancel()
             boundSessionId = OptimisticSessionCreate.PLACEHOLDER_SESSION_ID
             boundSessionTitle = sessionTitle
             boundWorktree = worktree
+            routeWorktree = worktree
+            transcriptWorktree = worktree
             lastSnackbarKey = null
             suppressedSnackbarKey = null
             snackbarSequence = 0L
@@ -457,6 +532,7 @@ class SessionChatViewModel
             resetActivityCards()
             resetChipTimelineIntro()
             resetWorkingFooter()
+            worktreeMove.reset()
             logI("bind optimistic create worktree=$worktree title=$sessionTitle")
             seedProjectIdentity(worktree)
             _uiState.value =
@@ -466,9 +542,10 @@ class SessionChatViewModel
                         sessionTitle = sessionTitle,
                         timeline = SessionChatTimelineState.Creating,
                     ).copy(
-                        projectLabel = projectLabel,
-                        projectLetter = projectLetter,
-                        projectLetterAccent = projectLetterAccent,
+                        projectLabel = projectIdentity.label,
+                        projectLetter = projectIdentity.letter,
+                        projectLetterAccent = projectIdentity.accent,
+                        worktreeCheckout = projectIdentity.isWorktreeCheckout,
                     )
             scheduleProjectIdentityRefine(worktree)
             timeline.bindCreating(worktree)
@@ -968,6 +1045,43 @@ class SessionChatViewModel
             commands.consumePendingSessionReplace()
         }
 
+        /** Session Chat ⋯ → "Move to worktree…". */
+        fun openMoveToWorktree() {
+            if (!moveToWorktreeUiState().availability.enabled) return
+            logAction(
+                actionId = ProductAnalytics.Action.CHAT_OVERFLOW_MOVE_TO_WORKTREE,
+                screenId = ProductAnalytics.Screen.SESSION_OVERFLOW,
+            )
+            worktreeMove.openSheet()
+        }
+
+        fun dismissMoveToWorktree() {
+            worktreeMove.dismissSheet()
+        }
+
+        fun moveToWorktree(directory: String) {
+            val sessionId = boundSessionId?.takeIf { hasCreatedSession() } ?: return
+            val destination = moveToWorktreeUiState().rows.firstOrNull { it.directory == directory } ?: return
+            worktreeMove.move(sessionId, destination, isBusy = isSessionBusy())
+        }
+
+        private fun moveToWorktreeUiState(): SessionChatWorktreeMoveUiState {
+            val project = homeProjectsSnapshot.projectContaining(boundWorktree)
+            val regionState = worktreeMove.state.value
+            return SessionChatWorktreeMoveUiState(
+                availability =
+                    SessionChatWorktreeMoveAvailability.resolve(
+                        supportsSessionMove = activeConnectionManager.currentCapabilities().supportsSessionMove,
+                        worktreesEnabled = HomeDisplayPreferences.showsWorktrees,
+                        sessionCreated = hasCreatedSession(),
+                        worktreeCount = project?.worktrees?.size ?: 0,
+                    ),
+                sheetVisible = regionState.sheetVisible,
+                rows = SessionChatWorktreeMoveRow.rows(project, boundWorktree),
+                submittingDirectory = regionState.submittingDirectory,
+            )
+        }
+
         fun consumePendingTerminalOpen() {
             commands.consumePendingTerminalOpen()
         }
@@ -1037,6 +1151,7 @@ class SessionChatViewModel
             suppressedSnackbarKey = lastSnackbarKey
             chipTimelineIntroNotice = null
             commands.clearActionFeedback()
+            worktreeMove.clearMessages()
             composer.clearTransientErrors()
             sessionInfo.clearTransientErrors()
             timeline.clearReadyError()
@@ -1404,27 +1519,44 @@ class SessionChatViewModel
             )
         }
 
-        private fun seedProjectIdentity(worktree: String) {
-            projectIdentityJob?.cancel()
-            if (worktree.isBlank()) {
-                projectLabel = null
-                projectLetter = null
-                projectLetterAccent = null
-                worktreeCheckout = false
-                return
-            }
-            val displayName = ProjectDomainAdapter.displayNameFromWorktree(worktree)
-            projectLabel = displayName
-            projectLetter = letterCharacterForProject(displayName)
-            projectLetterAccent = letterAccentForWorktree(worktree)
-            worktreeCheckout = false
-            checkoutProjectIds.clear()
+        /** Connection key Home records worktree inventories under. */
+        private fun inventoryServerKey(): String = activeConnectionManager.current()?.baseUrl.orEmpty()
+
+        /** Identity from the inventories Home (or an earlier Session Chat) loaded; null when unknown. */
+        private fun cachedProjectIdentity(worktree: String): SessionChatProjectIdentity? {
+            val snapshot = worktreeInventoryCache.snapshot(inventoryServerKey()) ?: return null
+            return SessionChatProjectIdentity.resolve(worktree, snapshot.addedPaths, snapshot::inventoryFor)
         }
 
+        /**
+         * What Home already loaded decides the identity before the first frame; the refine only
+         * changes it when the server now answers differently.
+         */
+        private fun seedProjectIdentity(worktree: String) {
+            projectIdentityJob?.cancel()
+            checkoutProjectIds.clear()
+            projectIdentity =
+                if (worktree.isBlank()) {
+                    SessionChatProjectIdentity.None
+                } else {
+                    cachedProjectIdentity(worktree) ?: SessionChatProjectIdentity.folder(worktree)
+                }
+        }
+
+        private fun applyProjectIdentity(identity: SessionChatProjectIdentity) {
+            if (identity == projectIdentity) return
+            projectIdentity = identity
+            publishUiState()
+        }
+
+        /**
+         * Re-resolves the identity from the server. Keeps the identity on screen until the answer
+         * lands, so an agreeing answer changes nothing.
+         */
         private fun scheduleProjectIdentityRefine(worktree: String) {
             if (worktree.isBlank()) return
-            val displayName = ProjectDomainAdapter.displayNameFromWorktree(worktree)
             projectIdentityJob?.cancel()
+            cachedProjectIdentity(worktree)?.let(::applyProjectIdentity)
             projectIdentityJob =
                 viewModelScope.launch {
                     val peers =
@@ -1440,29 +1572,26 @@ class SessionChatViewModel
                         }
                     coroutineContext.ensureActive()
                     if (boundWorktree != worktree) return@launch
-                    val checkout = resolveCheckoutName(worktree, peers)
+                    val inventories = loadInventories(peers)
                     coroutineContext.ensureActive()
                     if (boundWorktree != worktree) return@launch
-                    if (checkout != null) {
-                        projectLabel = checkout
-                        projectLetter = null
-                        projectLetterAccent = null
-                        worktreeCheckout = true
-                    } else {
-                        projectLabel = smartProjectLabel(worktree, peers)
-                        projectLetter = letterCharacterForProject(displayName)
-                        projectLetterAccent = letterAccentForWorktree(worktree)
-                        worktreeCheckout = false
-                    }
-                    publishUiState()
+                    applyProjectIdentity(
+                        SessionChatProjectIdentity.resolve(worktree, peers) { added ->
+                            inventories[added] ?: WorktreeInventory.Unloaded
+                        },
+                    )
                 }
         }
 
-        private suspend fun resolveCheckoutName(
-            worktree: String,
-            peers: List<String>,
-        ): String? {
-            if (peers.isEmpty()) return null
+        /**
+         * Fresh inventory of every added path. A load that did not succeed falls back to the last
+         * known one, so a transient failure does not turn a checkout back into a project letter.
+         */
+        private suspend fun loadInventories(peers: List<String>): Map<String, WorktreeInventory> {
+            val server = inventoryServerKey()
+            val cached = worktreeInventoryCache.snapshot(server)
+            worktreeInventoryCache.setAddedPaths(peers, server)
+            if (peers.isEmpty()) return emptyMap()
             val baseUrl =
                 connectionSessionCoordinator.currentProfile()?.baseUrl
                     ?: connectionProfileStore.activeProfile()?.baseUrl
@@ -1484,14 +1613,15 @@ class SessionChatViewModel
                 val load = worktreeRepository.loadRefreshed(added, projectId, project?.worktree?.takeIf { it != "/" })
                 inventories[added] =
                     when (load) {
-                        is WorktreeLoad.Loaded -> WorktreeInventory.loaded(load.directories)
-                        is WorktreeLoad.Failed -> WorktreeInventory.Failed
-                        WorktreeLoad.Unloaded, WorktreeLoad.Stopped -> WorktreeInventory.Unloaded
+                        is WorktreeLoad.Loaded ->
+                            WorktreeInventory.loaded(load.directories).also { inventory ->
+                                worktreeInventoryCache.record(inventory, added, server)
+                            }
+                        is WorktreeLoad.Failed -> cached?.inventories?.get(added) ?: WorktreeInventory.Failed
+                        WorktreeLoad.Unloaded, WorktreeLoad.Stopped -> cached?.inventories?.get(added) ?: WorktreeInventory.Unloaded
                     }
             }
-            return WorktreeMark.checkoutNameIfMarked(worktree, peers) { added ->
-                inventories[added] ?: WorktreeInventory.Unloaded
-            }
+            return inventories
         }
 
         private fun publishUiState(
@@ -1577,6 +1707,7 @@ class SessionChatViewModel
                 } else {
                     when {
                         infoState.lifecycleErrorMessage != null -> infoState.lifecycleErrorMessage
+                        worktreeMove.state.value.errorMessage != null -> worktreeMove.state.value.errorMessage
                         composerState.errorMessage != null -> composerState.errorMessage
                         composerState.abortErrorMessage != null -> composerState.abortErrorMessage
                         commandsState.actionErrorMessage != null -> commandsState.actionErrorMessage
@@ -1592,7 +1723,10 @@ class SessionChatViewModel
             val snackbar =
                 resolveSnackbar(
                     transientError,
-                    composerState.followUpNotice ?: commandsState.actionSuccessMessage ?: chipTimelineIntroNotice,
+                    composerState.followUpNotice
+                        ?: worktreeMove.state.value.notice
+                        ?: commandsState.actionSuccessMessage
+                        ?: chipTimelineIntroNotice,
                 )
             val sessionStatusLabel =
                 if (isCompacting) {
@@ -1747,6 +1881,7 @@ class SessionChatViewModel
                 forkResultVisible = commandsState.forkResultVisible,
                 forkedSessionTitle = commandsState.forkedSessionTitle,
                 pendingSessionReplace = commandsState.pendingSessionReplace,
+                moveToWorktree = moveToWorktreeUiState(),
                 expandedStepParagraphs = expandedStepParagraphs,
                 unfoldedStepRails = unfoldedStepRails,
                 presentedActivityCard = presentedActivityCard,
@@ -1758,11 +1893,12 @@ class SessionChatViewModel
                 pendingTerminalOpen = commandsState.pendingTerminalOpen,
                 pendingFilesOpen = commandsState.pendingFilesOpen,
                 hasPendingRevert = commandsState.hasPendingRevert,
-                projectLabel = projectLabel,
-                projectLetter = projectLetter,
-                projectLetterAccent = projectLetterAccent,
-                worktreeCheckout = worktreeCheckout,
+                projectLabel = projectIdentity.label,
+                projectLetter = projectIdentity.letter,
+                projectLetterAccent = projectIdentity.accent,
+                worktreeCheckout = projectIdentity.isWorktreeCheckout,
                 sessionBranchPill = repoStrip.state.value.toSessionBranchPill(),
+                worktree = boundWorktree.orEmpty(),
                 dictation = dictation,
             )
         }

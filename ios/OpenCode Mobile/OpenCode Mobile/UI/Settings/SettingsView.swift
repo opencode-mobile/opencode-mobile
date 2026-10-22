@@ -407,6 +407,27 @@ struct SettingsView: View {
                             .padding(.top, 4)
                     }
 
+                    OpenCodeSectionHeader(title: "Home")
+
+                    OpenCodeListItem(
+                        title: "Worktrees",
+                        subtitle: "Show each project\u{2019}s worktrees and branches on Home, and let New session pick a worktree when you hold it.",
+                        style: .card,
+                        startDecorator: .icon(.callSplit, accessibilityLabel: "Worktrees"),
+                        accessory: .toggle(
+                            isOn: Binding(
+                                get: { homeDisplayPreferences.showsWorktrees },
+                                set: { newValue in
+                                    logSettingsAction(ProductAnalytics.Action.settingsToggleWorktrees)
+                                    homeDisplayPreferences.setShowsWorktrees(newValue)
+                                }
+                            ),
+                            accessibilityLabel: "Worktrees"
+                        )
+                    )
+                    .padding(.horizontal, 16)
+                    .accessibilityIdentifier("settingsWorktreesToggle")
+
                     OpenCodeSectionHeader(title: "Session Cache")
 
                     OpenCodeListItem(

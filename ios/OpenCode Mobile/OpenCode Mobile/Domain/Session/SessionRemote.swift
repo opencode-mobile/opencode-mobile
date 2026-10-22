@@ -190,4 +190,8 @@ struct ProtocolSelectedSessionRemote: SessionRemote, Sendable {
     func markSessionViewed(sessionId: String, idleAtEpochMs: Int64) async throws {
         try await selected().markSessionViewed(sessionId: sessionId, idleAtEpochMs: idleAtEpochMs)
     }
+
+    func moveSession(id: String, directory: String) async throws {
+        try await selected().moveSession(id: id, directory: directory)
+    }
 }

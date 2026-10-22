@@ -212,6 +212,8 @@ fun SessionList(
     onDisplayedSessionsChange: ((List<SessionListSession>) -> Unit)? = null,
     /** Retry for a scope whose [SessionListFilterTab.load] failed; receives the tab id. */
     onRetryScopeLoad: (String) -> Unit = {},
+    /** Selectable scopes outside [filterTabs] (worktrees); the dock shows them but never swipes to them. */
+    scopeTabs: List<SessionListFilterTab> = emptyList(),
 ) {
     val background = openCodeColor("background-base")
     val borderWeaker = openCodeColor("border-weaker-base")
@@ -246,7 +248,7 @@ fun SessionList(
                     sessions = sessions,
                     filterId = filterId,
                     showsProjectName = filterId == SessionListFilterTab.ALL_ID,
-                    scopeTab = filterTabs.firstOrNull { it.id == filterId },
+                    scopeTab = filterTabs.firstOrNull { it.id == filterId } ?: scopeTabs.firstOrNull { it.id == filterId },
                     onRetryScopeLoad = onRetryScopeLoad,
                     listBottomFadeHeight = listBottomFadeHeight,
                     borderWeaker = borderWeaker,
@@ -275,6 +277,7 @@ fun SessionList(
                 onAddProject = onAddProject,
                 onNewSession = onNewSession,
                 onNewSessionLongPress = onNewSessionLongPress,
+                scopeTabs = scopeTabs,
                 modifier =
                     Modifier
                         .align(Alignment.BottomCenter)

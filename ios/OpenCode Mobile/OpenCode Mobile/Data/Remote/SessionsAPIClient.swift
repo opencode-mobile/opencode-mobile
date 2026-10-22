@@ -136,6 +136,12 @@ nonisolated struct SessionsAPIClient: Sendable {
         try await postEmpty(path: "api/session/\(id)/view", body: V2ViewSessionRequestDTO(idle: idle))
     }
 
+    /// `POST /api/session/{id}/move` → 204. Moves the session to `directory` at the server's
+    /// default delivery boundary (steer); the body carries nothing else.
+    func moveSessionV2(id: String, directory: String) async throws -> Bool {
+        try await postEmpty(path: "api/session/\(id)/move", body: V2MoveSessionRequestDTO(directory: directory))
+    }
+
     func cancelInboxV2(sessionID: String, inboxID: String) async throws -> Bool {
         try await delete(path: "api/session/\(sessionID)/inbox/\(inboxID)")
     }

@@ -231,19 +231,80 @@ enum OpenCodeBottomSheetLayoutMath {
     }
 }
 
+/// A header button beside the title: an icon (leading, such as Back) or a short
+/// text label (trailing, before Close, such as Edit / Done). Disabled stays
+/// visible.
 struct OpenCodeBottomSheetHeaderAction {
-    let icon: OpenCodeIcon
+    enum Content: Equatable {
+        case icon(OpenCodeIcon)
+        case text(String)
+    }
+
+    let content: Content
     let accessibilityLabel: String
+    let enabled: Bool
+    let accessibilityIdentifier: String?
     let action: () -> Void
 
     init(
         icon: OpenCodeIcon,
         accessibilityLabel: String,
+        enabled: Bool = true,
+        accessibilityIdentifier: String? = nil,
         action: @escaping () -> Void
     ) {
-        self.icon = icon
+        self.content = .icon(icon)
         self.accessibilityLabel = accessibilityLabel
+        self.enabled = enabled
+        self.accessibilityIdentifier = accessibilityIdentifier
         self.action = action
+    }
+
+    init(
+        text: String,
+        accessibilityLabel: String? = nil,
+        enabled: Bool = true,
+        accessibilityIdentifier: String? = nil,
+        action: @escaping () -> Void
+    ) {
+        self.content = .text(text)
+        self.accessibilityLabel = accessibilityLabel ?? text
+        self.enabled = enabled
+        self.accessibilityIdentifier = accessibilityIdentifier
+        self.action = action
+    }
+}
+
+private struct OpenCodeBottomSheetHeaderActionButton: View {
+    let headerAction: OpenCodeBottomSheetHeaderAction
+
+    var body: some View {
+        if let identifier = headerAction.accessibilityIdentifier {
+            button.accessibilityIdentifier(identifier)
+        } else {
+            button
+        }
+    }
+
+    @ViewBuilder
+    private var button: some View {
+        switch headerAction.content {
+        case let .icon(icon):
+            OpenCodeButton(
+                variant: .iconCircle(icon, accessibilityLabel: headerAction.accessibilityLabel),
+                enabled: headerAction.enabled,
+                contrast: .low,
+                action: headerAction.action
+            )
+        case let .text(text):
+            OpenCodeButton(
+                variant: .compactText(title: text),
+                enabled: headerAction.enabled,
+                contrast: .low,
+                action: headerAction.action
+            )
+            .accessibilityLabel(headerAction.accessibilityLabel)
+        }
     }
 }
 
@@ -288,6 +349,7 @@ private struct OpenCodeBottomSheetSheetBody<PinnedTop: View, SheetContent: View,
     let title: String
     let titleState: OpenCodeBottomSheetTitleState
     let leadingAction: OpenCodeBottomSheetHeaderAction?
+    let trailingAction: OpenCodeBottomSheetHeaderAction?
     let scrollTargetID: String?
     let height: OpenCodeBottomSheetHeight
     let keyboard: OpenCodeBottomSheetKeyboard
@@ -314,6 +376,7 @@ private struct OpenCodeBottomSheetSheetBody<PinnedTop: View, SheetContent: View,
         title: String,
         titleState: OpenCodeBottomSheetTitleState,
         leadingAction: OpenCodeBottomSheetHeaderAction?,
+        trailingAction: OpenCodeBottomSheetHeaderAction?,
         scrollTargetID: String?,
         height: OpenCodeBottomSheetHeight,
         keyboard: OpenCodeBottomSheetKeyboard,
@@ -333,6 +396,7 @@ private struct OpenCodeBottomSheetSheetBody<PinnedTop: View, SheetContent: View,
         self.title = title
         self.titleState = titleState
         self.leadingAction = leadingAction
+        self.trailingAction = trailingAction
         self.scrollTargetID = scrollTargetID
         self.height = height
         self.keyboard = keyboard
@@ -409,6 +473,7 @@ private struct OpenCodeBottomSheetSheetBody<PinnedTop: View, SheetContent: View,
             title: title,
             titleState: titleState,
             leadingAction: leadingAction,
+            trailingAction: trailingAction,
             onDismiss: onDismiss,
             onHeaderDragChanged: onHeaderDragChanged,
             onHeaderDragEnded: onHeaderDragEnded,
@@ -634,6 +699,7 @@ struct OpenCodeBottomSheet<PinnedTop: View, SheetContent: View, PinnedBottom: Vi
     let title: String
     let titleState: OpenCodeBottomSheetTitleState
     let leadingAction: OpenCodeBottomSheetHeaderAction?
+    let trailingAction: OpenCodeBottomSheetHeaderAction?
     let scrollTargetID: String?
     let height: OpenCodeBottomSheetHeight
     let keyboard: OpenCodeBottomSheetKeyboard
@@ -653,6 +719,7 @@ struct OpenCodeBottomSheet<PinnedTop: View, SheetContent: View, PinnedBottom: Vi
                     title: title,
                     titleState: titleState,
                     leadingAction: leadingAction,
+                    trailingAction: trailingAction,
                     scrollTargetID: scrollTargetID,
                     height: height,
                     keyboard: keyboard,
@@ -670,6 +737,7 @@ private struct OpenCodeBottomSheetOverlayHost<PinnedTop: View, SheetContent: Vie
     var title: String
     var titleState: OpenCodeBottomSheetTitleState
     var leadingAction: OpenCodeBottomSheetHeaderAction?
+    var trailingAction: OpenCodeBottomSheetHeaderAction?
     var scrollTargetID: String?
     var height: OpenCodeBottomSheetHeight
     var keyboard: OpenCodeBottomSheetKeyboard
@@ -694,6 +762,7 @@ private struct OpenCodeBottomSheetOverlayHost<PinnedTop: View, SheetContent: Vie
             title: title,
             titleState: titleState,
             leadingAction: leadingAction,
+            trailingAction: trailingAction,
             scrollTargetID: scrollTargetID,
             height: height,
             keyboard: keyboard,
@@ -724,6 +793,7 @@ private struct OpenCodeBottomSheetOverlayHost<PinnedTop: View, SheetContent: Vie
             title: String,
             titleState: OpenCodeBottomSheetTitleState,
             leadingAction: OpenCodeBottomSheetHeaderAction?,
+            trailingAction: OpenCodeBottomSheetHeaderAction?,
             scrollTargetID: String?,
             height: OpenCodeBottomSheetHeight,
             keyboard: OpenCodeBottomSheetKeyboard,
@@ -758,6 +828,7 @@ private struct OpenCodeBottomSheetOverlayHost<PinnedTop: View, SheetContent: Vie
                 title: title,
                 titleState: titleState,
                 leadingAction: leadingAction,
+                trailingAction: trailingAction,
                 scrollTargetID: scrollTargetID,
                 height: height,
                 keyboard: keyboard,
@@ -893,6 +964,7 @@ private struct OpenCodeBottomSheetOverlayContent<PinnedTop: View, SheetContent: 
     let title: String
     let titleState: OpenCodeBottomSheetTitleState
     let leadingAction: OpenCodeBottomSheetHeaderAction?
+    let trailingAction: OpenCodeBottomSheetHeaderAction?
     let scrollTargetID: String?
     let height: OpenCodeBottomSheetHeight
     let keyboard: OpenCodeBottomSheetKeyboard
@@ -939,6 +1011,7 @@ private struct OpenCodeBottomSheetOverlayContent<PinnedTop: View, SheetContent: 
                     title: title,
                     titleState: titleState,
                     leadingAction: leadingAction,
+                    trailingAction: trailingAction,
                     scrollTargetID: scrollTargetID,
                     height: height,
                     keyboard: keyboard,
@@ -1131,6 +1204,7 @@ private struct OpenCodeBottomSheetContainer<PinnedTop: View, SheetContent: View,
     let title: String
     let titleState: OpenCodeBottomSheetTitleState
     let leadingAction: OpenCodeBottomSheetHeaderAction?
+    let trailingAction: OpenCodeBottomSheetHeaderAction?
     let onDismiss: () -> Void
     let onHeaderDragChanged: (CGFloat) -> Void
     let onHeaderDragEnded: (CGFloat, CGFloat) -> Void
@@ -1254,14 +1328,7 @@ private struct OpenCodeBottomSheetContainer<PinnedTop: View, SheetContent: View,
     private var header: some View {
         HStack(spacing: 12) {
             if let leadingAction {
-                OpenCodeButton(
-                    variant: .iconCircle(
-                        leadingAction.icon,
-                        accessibilityLabel: leadingAction.accessibilityLabel
-                    ),
-                    contrast: .low,
-                    action: leadingAction.action
-                )
+                OpenCodeBottomSheetHeaderActionButton(headerAction: leadingAction)
             }
 
             switch titleState {
@@ -1282,6 +1349,10 @@ private struct OpenCodeBottomSheetContainer<PinnedTop: View, SheetContent: View,
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            if let trailingAction {
+                OpenCodeBottomSheetHeaderActionButton(headerAction: trailingAction)
             }
 
             OpenCodeButton(
@@ -1372,6 +1443,7 @@ extension View {
         title: String,
         titleState: OpenCodeBottomSheetTitleState = .plain,
         leadingAction: OpenCodeBottomSheetHeaderAction? = nil,
+        trailingAction: OpenCodeBottomSheetHeaderAction? = nil,
         scrollTargetID: String? = nil,
         height: OpenCodeBottomSheetHeight = .fitContent,
         keyboard: OpenCodeBottomSheetKeyboard = .dismiss,
@@ -1385,6 +1457,7 @@ extension View {
                 title: title,
                 titleState: titleState,
                 leadingAction: leadingAction,
+                trailingAction: trailingAction,
                 scrollTargetID: scrollTargetID,
                 height: height,
                 keyboard: keyboard,
@@ -1401,6 +1474,7 @@ extension View {
         title: String,
         titleState: OpenCodeBottomSheetTitleState = .plain,
         leadingAction: OpenCodeBottomSheetHeaderAction? = nil,
+        trailingAction: OpenCodeBottomSheetHeaderAction? = nil,
         scrollTargetID: String? = nil,
         height: OpenCodeBottomSheetHeight = .fitContent,
         keyboard: OpenCodeBottomSheetKeyboard = .dismiss,
@@ -1411,6 +1485,7 @@ extension View {
             title: title,
             titleState: titleState,
             leadingAction: leadingAction,
+            trailingAction: trailingAction,
             scrollTargetID: scrollTargetID,
             height: height,
             keyboard: keyboard,
@@ -1425,6 +1500,7 @@ extension View {
         isPresented: Binding<Bool>,
         title: String,
         leadingAction: OpenCodeBottomSheetHeaderAction? = nil,
+        trailingAction: OpenCodeBottomSheetHeaderAction? = nil,
         scrollTargetID: String? = nil,
         height: OpenCodeBottomSheetHeight = .fitContent,
         keyboard: OpenCodeBottomSheetKeyboard = .dismiss,
@@ -1435,6 +1511,7 @@ extension View {
             isPresented: isPresented,
             title: title,
             leadingAction: leadingAction,
+            trailingAction: trailingAction,
             scrollTargetID: scrollTargetID,
             height: height,
             keyboard: keyboard,
@@ -1449,6 +1526,7 @@ extension View {
         isPresented: Binding<Bool>,
         title: String,
         leadingAction: OpenCodeBottomSheetHeaderAction? = nil,
+        trailingAction: OpenCodeBottomSheetHeaderAction? = nil,
         scrollTargetID: String? = nil,
         height: OpenCodeBottomSheetHeight = .fitContent,
         keyboard: OpenCodeBottomSheetKeyboard = .dismiss,
@@ -1459,6 +1537,7 @@ extension View {
             isPresented: isPresented,
             title: title,
             leadingAction: leadingAction,
+            trailingAction: trailingAction,
             scrollTargetID: scrollTargetID,
             height: height,
             keyboard: keyboard,

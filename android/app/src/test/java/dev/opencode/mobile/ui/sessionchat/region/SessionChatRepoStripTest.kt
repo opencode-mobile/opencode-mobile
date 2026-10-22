@@ -74,6 +74,54 @@ class SessionChatRepoStripTest {
         }
 
     @Test
+    fun moveTo_showsTheKnownBranchThenTheServerAnswer() =
+        runTest {
+            val repository = FakeVcsRepository(info = VcsInfo("main", "main"))
+            val region = region(repository)
+            region.bind("/repo", startExpanded = false)
+            advanceUntilIdle()
+
+            repository.info = VcsInfo("feature/login", "main")
+            region.moveTo("/repo-feature", knownBranch = "feature/x")
+            assertEquals("feature/x", region.state.value.branch)
+            advanceUntilIdle()
+
+            assertEquals("feature/login", region.state.value.branch)
+        }
+
+    @Test
+    fun moveTo_coldV2AnswerKeepsTheKnownBranch() =
+        runTest {
+            val repository = FakeVcsRepository(info = VcsInfo("main", "main"))
+            val region = region(repository)
+            region.bind("/repo", startExpanded = false)
+            advanceUntilIdle()
+
+            repository.info = VcsInfo(currentBranch = null, defaultBranch = null, isSettled = false)
+            region.moveTo("/repo-feature", knownBranch = "feature/x")
+            advanceUntilIdle()
+
+            assertTrue(region.state.value.isAvailable)
+            assertEquals("feature/x", region.state.value.branch)
+        }
+
+    @Test
+    fun moveTo_withoutAKnownBranchWaitsForTheServer() =
+        runTest {
+            val repository = FakeVcsRepository(info = VcsInfo("main", "main"))
+            val region = region(repository)
+            region.bind("/repo", startExpanded = false)
+            advanceUntilIdle()
+
+            repository.info = VcsInfo("fix/totals", "main")
+            region.moveTo("/repo-fix", knownBranch = null)
+            assertFalse(region.state.value.isAvailable)
+            advanceUntilIdle()
+
+            assertEquals("fix/totals", region.state.value.branch)
+        }
+
+    @Test
     fun noVcs_isUnavailable() =
         runTest {
             val region = region(FakeVcsRepository(infoError = SessionError.Http(404, "no vcs")))

@@ -27,6 +27,7 @@ import dev.opencode.mobile.data.remote.dto.V2InboxDeliveryRequestDto
 import dev.opencode.mobile.data.remote.dto.V2InboxItemDto
 import dev.opencode.mobile.data.remote.dto.V2LocationDto
 import dev.opencode.mobile.data.remote.dto.V2LocationInfoDto
+import dev.opencode.mobile.data.remote.dto.V2MoveSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.V2PermissionReplyRequestDto
 import dev.opencode.mobile.data.remote.dto.V2PermissionRequestDto
 import dev.opencode.mobile.data.remote.dto.V2RenameSessionRequestDto
@@ -547,6 +548,20 @@ class SessionsApi private constructor(
                     setJsonBody(json, V2ForkSessionRequestDto(before = before))
                 }
             }.decodeV2Session()
+
+    /**
+     * `POST /api/session/{id}/move`: moves the session to [directory] at the next delivery
+     * boundary. 204 with no body; 400 / 404 carry the server's message.
+     */
+    suspend fun moveSessionV2(
+        id: String,
+        directory: String,
+    ): Boolean =
+        httpClient
+            .get()
+            .post("api/session/$id/move") {
+                setJsonBody(json, V2MoveSessionRequestDto(directory = directory))
+            }.ensureSuccess()
 
     suspend fun compactSessionV2(id: String): Boolean =
         httpClient

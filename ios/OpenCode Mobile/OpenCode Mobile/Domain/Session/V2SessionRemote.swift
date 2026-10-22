@@ -211,4 +211,8 @@ struct V2SessionRemote: SessionRemote, Sendable {
     func markSessionViewed(sessionId: String, idleAtEpochMs: Int64) async throws {
         _ = try await api.markSessionViewedV2(id: sessionId, idle: idleAtEpochMs)
     }
+
+    func moveSession(id: String, directory: String) async throws {
+        _ = try await api.moveSessionV2(id: id, directory: directory)
+    }
 }

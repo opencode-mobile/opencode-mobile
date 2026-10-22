@@ -69,6 +69,11 @@ internal class ProtocolSelectedSessionRemote(
         directory: String?,
     ): Session = selected().forkSession(id, atMessageId, directory)
 
+    override suspend fun moveSession(
+        id: String,
+        directory: String,
+    ) = selected().moveSession(id, directory)
+
     override suspend fun abortSession(
         id: String,
         directory: String?,

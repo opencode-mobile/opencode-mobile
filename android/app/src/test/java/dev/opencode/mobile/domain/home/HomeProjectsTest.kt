@@ -256,4 +256,43 @@ class HomeProjectsTest {
             HomeWorktreeCopy.joinedProject("opencode-mobile"),
         )
     }
+
+    private fun twoWorktreeProject(addedPaths: List<String> = listOf("/Users/me/repo-wt")): HomeProject =
+        HomeProjectGrouping
+            .group(
+                addedPaths = addedPaths,
+                resolved = addedPaths.associateWith { repo() },
+                inventories = mapOf(addedPaths.first() to setOf("/Users/me/repo", "/Users/me/repo-wt")),
+                branches = mapOf("/Users/me/repo" to "dev", "/Users/me/repo-wt" to "feature/x"),
+            ).single()
+
+    @Test
+    fun mainCheckoutDirectoryIsTheMainWorktreeNotTheFirstAddedPath() {
+        val project = twoWorktreeProject()
+
+        assertEquals("/Users/me/repo-wt", project.primaryPath)
+        assertEquals("/Users/me/repo", project.mainCheckoutDirectory)
+        val plain = HomeProjectGrouping.group(listOf("/tmp/a"), emptyMap()).single()
+        assertEquals("/tmp/a", plain.mainCheckoutDirectory)
+    }
+
+    @Test
+    fun worktreesOffResolvesAWorktreeScopeToItsProjectAndBackWhenOn() {
+        val projects = listOf(twoWorktreeProject())
+        val worktreeId = HomeScope.worktreeId("proj", "/Users/me/repo-wt")
+
+        assertEquals(HomeScope.Project("proj"), HomeScope.resolve(worktreeId, projects, worktreesEnabled = false))
+        assertEquals(HomeScope.Worktree("proj", "/Users/me/repo-wt"), HomeScope.resolve(worktreeId, projects, worktreesEnabled = true))
+    }
+
+    @Test
+    fun worktreesOffRowsLoseBranchAndFolderAndGetThemBackWhenOn() {
+        val project = twoWorktreeProject()
+
+        assertNull(HomeSessionLocation.parts(project, "/Users/me/repo-wt", includeProjectName = false, worktreesEnabled = false))
+        assertEquals(
+            listOf(HomeSessionLocation.Part("feature/x", isBranch = true), HomeSessionLocation.Part("repo-wt")),
+            HomeSessionLocation.parts(project, "/Users/me/repo-wt", includeProjectName = false, worktreesEnabled = true),
+        )
+    }
 }

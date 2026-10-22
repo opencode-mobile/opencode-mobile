@@ -19,6 +19,8 @@ struct BottomSheetGalleryView: View {
     @State private var entryEnabled = true
     @State private var entrySelected = false
     @State private var showsHeaderBack = false
+    @State private var showsHeaderTextAction = false
+    @State private var headerTextActionEditing = false
     @State private var itemCount = 2
     @State private var startDecorator: GalleryBottomSheetDecoratorKind = .icon
     @State private var endDecorator: GalleryBottomSheetDecoratorKind = .none
@@ -70,6 +72,11 @@ struct BottomSheetGalleryView: View {
                         label: "Header back",
                         selected: showsHeaderBack,
                         action: { showsHeaderBack.toggle() }
+                    )
+                    OpenCodeChoiceBadge(
+                        label: "Header Edit",
+                        selected: showsHeaderTextAction,
+                        action: { showsHeaderTextAction.toggle() }
                     )
                 }
             }
@@ -176,6 +183,12 @@ struct BottomSheetGalleryView: View {
                     icon: .arrowBack,
                     accessibilityLabel: "Back to providers",
                     action: { showsHeaderBack = false }
+                )
+                : nil,
+            trailingAction: showsHeaderTextAction
+                ? OpenCodeBottomSheetHeaderAction(
+                    text: headerTextActionEditing ? "Done" : "Edit",
+                    action: { headerTextActionEditing.toggle() }
                 )
                 : nil,
             height: height,

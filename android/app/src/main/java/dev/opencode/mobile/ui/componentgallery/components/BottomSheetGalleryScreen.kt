@@ -18,6 +18,7 @@ import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetHeaderAction
+import dev.opencode.mobile.ui.components.OpenCodeBottomSheetHeaderTextAction
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetHeight
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetKeyboard
 import dev.opencode.mobile.ui.components.OpenCodeButton
@@ -41,6 +42,8 @@ fun BottomSheetGalleryScreen(modifier: Modifier = Modifier) {
     var enabled by rememberSaveable { mutableStateOf(true) }
     var selected by rememberSaveable { mutableStateOf(false) }
     var showsHeaderBack by rememberSaveable { mutableStateOf(false) }
+    var showsHeaderTextAction by rememberSaveable { mutableStateOf(false) }
+    var headerEditing by rememberSaveable { mutableStateOf(false) }
     var itemCount by rememberSaveable { mutableStateOf(2) }
     var startDecoratorName by rememberSaveable { mutableStateOf(GalleryBottomSheetDecoratorKind.Icon.name) }
     var endDecoratorName by rememberSaveable { mutableStateOf(GalleryBottomSheetDecoratorKind.None.name) }
@@ -74,6 +77,11 @@ fun BottomSheetGalleryScreen(modifier: Modifier = Modifier) {
                 OpenCodeChoiceBadge(label = "Entry enabled", selected = enabled, onClick = { enabled = !enabled })
                 OpenCodeChoiceBadge(label = "Entry selected", selected = selected, onClick = { selected = !selected })
                 OpenCodeChoiceBadge(label = "Header back", selected = showsHeaderBack, onClick = { showsHeaderBack = !showsHeaderBack })
+                OpenCodeChoiceBadge(
+                    label = "Header Edit",
+                    selected = showsHeaderTextAction,
+                    onClick = { showsHeaderTextAction = !showsHeaderTextAction },
+                )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OpenCodeChoiceBadge(label = "Pinned top", selected = showsPinnedTop, onClick = { showsPinnedTop = !showsPinnedTop })
@@ -150,6 +158,15 @@ fun BottomSheetGalleryScreen(modifier: Modifier = Modifier) {
                     imageVector = OpenCodeIcons.ArrowBack,
                     contentDescription = "Back to providers",
                     onClick = { showsHeaderBack = false },
+                )
+            } else {
+                null
+            },
+        headerTrailingAction =
+            if (showsHeaderTextAction) {
+                OpenCodeBottomSheetHeaderTextAction(
+                    title = if (headerEditing) "Done" else "Edit",
+                    onClick = { headerEditing = !headerEditing },
                 )
             } else {
                 null
