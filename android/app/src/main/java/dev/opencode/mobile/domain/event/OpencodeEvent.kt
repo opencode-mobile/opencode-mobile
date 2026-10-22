@@ -58,3 +58,25 @@ fun OpencodeEvent.namedProjectId(): String? {
     fun string(key: String) = (properties[key] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
     return string("projectID") ?: string("projectId")
 }
+
+/** A session now runs in [directory] (v2 `session.moved`). */
+data class SessionMovedUpdate(
+    val sessionId: String,
+    val directory: String,
+)
+
+/** The move this event reports, or null for any other event. */
+fun OpencodeEvent.sessionMoved(): SessionMovedUpdate? {
+    if (type != EventDomainAdapter.SESSION_MOVED_EVENT) return null
+    val properties = rawProperties ?: return null
+    val sessionId =
+        sessionId
+            ?: (properties["sessionID"] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
+            ?: return null
+    val directory =
+        ((properties["location"] as? JsonObject)?.get("directory") as? JsonPrimitive)
+            ?.contentOrNull
+            ?.takeIf { it.isNotBlank() }
+            ?: return null
+    return SessionMovedUpdate(sessionId = sessionId, directory = directory)
+}

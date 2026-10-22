@@ -18,6 +18,9 @@ import dev.opencode.mobile.domain.event.FixedLiveUpdates
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.event.LiveUpdates
 import dev.opencode.mobile.domain.event.namedProjectId
+import dev.opencode.mobile.domain.event.sessionMoved
+import dev.opencode.mobile.domain.filesystem.ServerPathPolicy
+import dev.opencode.mobile.domain.home.HomeProjectsSnapshot
 import dev.opencode.mobile.domain.live.EmptySessionReadyStore
 import dev.opencode.mobile.domain.live.EmptySessionTodoLiveStore
 import dev.opencode.mobile.domain.live.NoOpSessionViewReporter
@@ -39,6 +42,7 @@ import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.model.NewSessionModelSelectionResolver
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
 import dev.opencode.mobile.domain.preferences.ChipTimelineIntro
+import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.domain.project.ProjectRepository
 import dev.opencode.mobile.domain.project.UnavailableProjectRepository
@@ -65,6 +69,10 @@ import dev.opencode.mobile.ui.sessionchat.region.SessionChatInbox
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatRepoStrip
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatReviewChanges
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatTimeline
+import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMove
+import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveAvailability
+import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveRow
+import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveUiState
 import dev.opencode.mobile.ui.sessionchat.region.SessionInfo
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
@@ -114,6 +122,7 @@ class SessionChatViewModel
         private val sessionViewReporter: SessionViewReporter = NoOpSessionViewReporter,
         private val worktreeRepository: WorktreeRepository = UnavailableWorktreeRepository,
         private val projectRepository: ProjectRepository = UnavailableProjectRepository,
+        private val homeProjectsSnapshot: HomeProjectsSnapshot = HomeProjectsSnapshot(),
         private val worktreeInventoryCache: WorktreeInventoryCache = WorktreeInventoryCache(),
     ) : ViewModel() {
         internal var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
@@ -125,6 +134,7 @@ class SessionChatViewModel
                 repoStrip.ioDispatcher = value
                 commands.ioDispatcher = value
                 inbox.ioDispatcher = value
+                worktreeMove.ioDispatcher = value
             }
 
         internal var nowMs: () -> Long = { System.currentTimeMillis() }
@@ -204,6 +214,12 @@ class SessionChatViewModel
                 loadedMessages = { timeline.loadedMessages() },
             )
 
+        private val worktreeMove =
+            SessionChatWorktreeMove(
+                moveSession = { id, directory -> sessionRepository.moveSession(id, directory) },
+                scope = viewModelScope,
+            )
+
         private val _uiState =
             MutableStateFlow(SessionChatUiState.initial(sessionId = "", sessionTitle = ""))
         val uiState: StateFlow<SessionChatUiState> = _uiState.asStateFlow()
@@ -211,6 +227,14 @@ class SessionChatViewModel
         private var boundSessionId: String? = null
         private var boundSessionTitle: String? = null
         private var boundWorktree: String? = null
+
+        // The worktree the route bound with. After `session.moved` [boundWorktree] differs, and
+        // the route (which still names this one) must not rebind to the old directory.
+        private var routeWorktree: String? = null
+
+        // The directory the transcript (timeline cache and sync projection) is keyed by; a move
+        // keeps it so the timeline does not reload.
+        private var transcriptWorktree: String? = null
         private var projectIdentity = SessionChatProjectIdentity.None
         private var projectIdentityJob: kotlinx.coroutines.Job? = null
         private val checkoutProjectIds = mutableSetOf<String>()
@@ -258,6 +282,10 @@ class SessionChatViewModel
                 foregroundEventStream.events.collect { event ->
                     eventDomainAdapter.sessionRevertUpdate(event)?.let { update ->
                         commands.applyRevertUpdate(update)
+                        return@collect
+                    }
+                    event.sessionMoved()?.let { moved ->
+                        worktreeMove.onSessionMoved(moved, boundSessionId, boundWorktree)?.let(::rebindMovedSession)
                         return@collect
                     }
                     if (event.type != "worktree.updated") return@collect
@@ -321,6 +349,13 @@ class SessionChatViewModel
                 repoStrip.state.collect { publishUiState() }
             }
             viewModelScope.launch {
+                combine(
+                    worktreeMove.state,
+                    homeProjectsSnapshot.projects,
+                    snapshotFlow { HomeDisplayPreferences.showsWorktrees },
+                ) { _, _, _ -> }.collect { publishUiState() }
+            }
+            viewModelScope.launch {
                 snapshotFlow { SessionChatDisplayPreferences.collapseConsecutiveToolCalls }
                     .distinctUntilChanged()
                     .collect { enabled ->
@@ -345,31 +380,30 @@ class SessionChatViewModel
                 bindOptimisticCreate(sessionTitle, worktree)
                 return
             }
+            if (boundSessionId == sessionId && routeWorktree == worktree) {
+                bindCurrent(sessionId, sessionTitle)
+                return
+            }
             // Identity is session + worktree. Title may diverge after rename / session.updated;
             // do not full-reset when navigation still carries a stale title.
             // Always re-assert Ready focus: nav can dispose/clear focus then re-enter the same
             // bound ViewModel without a full reset, and Ready must clear on open.
             sessionReadyStore.setFocusedSession(sessionId, worktree)
             sessionViewReporter.focus(sessionId)
-            if (boundSessionId == sessionId && boundWorktree == worktree) {
-                bindTitleIfChanged(sessionId, sessionTitle, worktree)
-                // Peers may have changed while the screen was away; re-resolve smart label.
-                scheduleProjectIdentityRefine(worktree)
-                timeline.restartLiveObservation()
-                syncCoordinator.markFocused(ProjectionKey.Transcript(worktree, sessionId))
-                return
-            }
             boundSessionId = sessionId
             // Clear so bindTitleIfChanged always rebinds sessionInfo for a new identity,
             // even when the previous session shared the same title.
             boundSessionTitle = null
             boundWorktree = worktree
+            routeWorktree = worktree
+            transcriptWorktree = worktree
             lastSnackbarKey = null
             suppressedSnackbarKey = null
             snackbarSequence = 0L
             expandedStepParagraphs = emptyMap()
             resetChipTimelineIntro()
             resetWorkingFooter()
+            worktreeMove.reset()
             logI("bind session=$sessionId worktree=$worktree title=$sessionTitle")
             seedProjectIdentity(worktree)
             _uiState.value =
@@ -393,23 +427,71 @@ class SessionChatViewModel
             }
         }
 
+        /**
+         * The route binds the session this ViewModel already shows. After a move the route still
+         * names the old worktree, so everything uses the current one.
+         */
+        private fun bindCurrent(
+            sessionId: String,
+            sessionTitle: String,
+        ) {
+            val worktree = boundWorktree ?: return
+            sessionReadyStore.setFocusedSession(sessionId, worktree)
+            sessionViewReporter.focus(sessionId)
+            bindTitleIfChanged(sessionId, sessionTitle, worktree)
+            // Peers may have changed while the screen was away; re-resolve smart label.
+            scheduleProjectIdentityRefine(worktree)
+            timeline.restartLiveObservation()
+            syncCoordinator.markFocused(ProjectionKey.Transcript(transcriptWorktree ?: worktree, sessionId))
+        }
+
+        /**
+         * v2 `session.moved` for the open session: Session Chat follows it to [directory] in place.
+         * The transcript stays (v2 scopes messages by session only, so its cache key keeps the old
+         * directory), which keeps the timeline and scroll position; the header, composer, inbox,
+         * repo strip and commands rebind to the new directory.
+         */
+        private fun rebindMovedSession(directory: String) {
+            val sessionId = boundSessionId?.takeIf { hasCreatedSession() } ?: return
+            val previous = boundWorktree ?: return
+            logI("session moved session=$sessionId from=$previous to=$directory")
+            boundWorktree = directory
+            sessionReadyStore.setFocusedSession(sessionId, directory)
+            seedProjectIdentity(directory)
+            scheduleProjectIdentityRefine(directory)
+            composer.moveDirectory(directory)
+            sessionInfo.moveDirectory(directory)
+            commands.moveDirectory(directory)
+            inbox.moveDirectory(directory)
+            val knownBranch =
+                homeProjectsSnapshot
+                    .projectContaining(directory)
+                    ?.worktree(ServerPathPolicy.canonical(directory))
+                    ?.branch
+            repoStrip.moveTo(directory, knownBranch)
+            publishUiState()
+        }
+
         private fun bindOptimisticCreate(
             sessionTitle: String,
             worktree: String,
         ) {
-            if (boundWorktree == worktree && boundSessionId != null) {
+            if ((boundWorktree == worktree || routeWorktree == worktree) && boundSessionId != null) {
                 return
             }
             optimisticCreateJob?.cancel()
             boundSessionId = OptimisticSessionCreate.PLACEHOLDER_SESSION_ID
             boundSessionTitle = sessionTitle
             boundWorktree = worktree
+            routeWorktree = worktree
+            transcriptWorktree = worktree
             lastSnackbarKey = null
             suppressedSnackbarKey = null
             snackbarSequence = 0L
             expandedStepParagraphs = emptyMap()
             resetChipTimelineIntro()
             resetWorkingFooter()
+            worktreeMove.reset()
             logI("bind optimistic create worktree=$worktree title=$sessionTitle")
             seedProjectIdentity(worktree)
             _uiState.value =
@@ -922,6 +1004,43 @@ class SessionChatViewModel
             commands.consumePendingSessionReplace()
         }
 
+        /** Session Chat ⋯ → "Move to worktree…". */
+        fun openMoveToWorktree() {
+            if (!moveToWorktreeUiState().availability.enabled) return
+            logAction(
+                actionId = ProductAnalytics.Action.CHAT_OVERFLOW_MOVE_TO_WORKTREE,
+                screenId = ProductAnalytics.Screen.SESSION_OVERFLOW,
+            )
+            worktreeMove.openSheet()
+        }
+
+        fun dismissMoveToWorktree() {
+            worktreeMove.dismissSheet()
+        }
+
+        fun moveToWorktree(directory: String) {
+            val sessionId = boundSessionId?.takeIf { hasCreatedSession() } ?: return
+            val destination = moveToWorktreeUiState().rows.firstOrNull { it.directory == directory } ?: return
+            worktreeMove.move(sessionId, destination, isBusy = isSessionBusy())
+        }
+
+        private fun moveToWorktreeUiState(): SessionChatWorktreeMoveUiState {
+            val project = homeProjectsSnapshot.projectContaining(boundWorktree)
+            val regionState = worktreeMove.state.value
+            return SessionChatWorktreeMoveUiState(
+                availability =
+                    SessionChatWorktreeMoveAvailability.resolve(
+                        supportsSessionMove = activeConnectionManager.currentCapabilities().supportsSessionMove,
+                        worktreesEnabled = HomeDisplayPreferences.showsWorktrees,
+                        sessionCreated = hasCreatedSession(),
+                        worktreeCount = project?.worktrees?.size ?: 0,
+                    ),
+                sheetVisible = regionState.sheetVisible,
+                rows = SessionChatWorktreeMoveRow.rows(project, boundWorktree),
+                submittingDirectory = regionState.submittingDirectory,
+            )
+        }
+
         fun consumePendingTerminalOpen() {
             commands.consumePendingTerminalOpen()
         }
@@ -991,6 +1110,7 @@ class SessionChatViewModel
             suppressedSnackbarKey = lastSnackbarKey
             chipTimelineIntroNotice = null
             commands.clearActionFeedback()
+            worktreeMove.clearMessages()
             composer.clearTransientErrors()
             sessionInfo.clearTransientErrors()
             timeline.clearReadyError()
@@ -1539,6 +1659,7 @@ class SessionChatViewModel
                 } else {
                     when {
                         infoState.lifecycleErrorMessage != null -> infoState.lifecycleErrorMessage
+                        worktreeMove.state.value.errorMessage != null -> worktreeMove.state.value.errorMessage
                         composerState.errorMessage != null -> composerState.errorMessage
                         composerState.abortErrorMessage != null -> composerState.abortErrorMessage
                         commandsState.actionErrorMessage != null -> commandsState.actionErrorMessage
@@ -1554,7 +1675,10 @@ class SessionChatViewModel
             val snackbar =
                 resolveSnackbar(
                     transientError,
-                    composerState.followUpNotice ?: commandsState.actionSuccessMessage ?: chipTimelineIntroNotice,
+                    composerState.followUpNotice
+                        ?: worktreeMove.state.value.notice
+                        ?: commandsState.actionSuccessMessage
+                        ?: chipTimelineIntroNotice,
                 )
             val sessionStatusLabel =
                 if (isCompacting) {
@@ -1705,6 +1829,7 @@ class SessionChatViewModel
                 forkResultVisible = commandsState.forkResultVisible,
                 forkedSessionTitle = commandsState.forkedSessionTitle,
                 pendingSessionReplace = commandsState.pendingSessionReplace,
+                moveToWorktree = moveToWorktreeUiState(),
                 expandedStepParagraphs = expandedStepParagraphs,
                 chipTimelineIntroVisible = chipTimelineIntroVisible,
                 pendingTerminalOpen = commandsState.pendingTerminalOpen,
@@ -1715,6 +1840,7 @@ class SessionChatViewModel
                 projectLetterAccent = projectIdentity.accent,
                 worktreeCheckout = projectIdentity.isWorktreeCheckout,
                 sessionBranchPill = repoStrip.state.value.toSessionBranchPill(),
+                worktree = boundWorktree.orEmpty(),
                 dictation = dictation,
             )
         }

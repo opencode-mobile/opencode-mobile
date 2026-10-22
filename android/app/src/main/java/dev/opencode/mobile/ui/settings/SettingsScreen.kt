@@ -20,6 +20,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.PrivacyPolicy
@@ -72,6 +73,8 @@ fun SettingsScreen(
     build: String,
     hideUserDirectoryPrefix: Boolean,
     onHideUserDirectoryPrefixChange: (Boolean) -> Unit,
+    showsWorktrees: Boolean = true,
+    onShowsWorktreesChange: (Boolean) -> Unit = {},
     recentWindowHours: Int,
     onRecentWindowHoursChange: (Int) -> Unit,
     collapseConsecutiveToolCalls: Boolean,
@@ -297,6 +300,24 @@ fun SettingsScreen(
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     )
                 }
+
+                OpenCodeSectionHeader(title = "Home")
+
+                OpenCodeListItem(
+                    title = "Worktrees",
+                    subtitle = WORKTREES_SETTING_SUBTITLE,
+                    style = OpenCodeListItemStyle.Card,
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.CallSplit, "Worktrees"),
+                    accessory =
+                        OpenCodeListItemAccessory.Toggle(
+                            checked = showsWorktrees,
+                            onCheckedChange = { enabled ->
+                                logSettingsToggle(ProductAnalytics.Action.SETTINGS_TOGGLE_WORKTREES, enabled)
+                                onShowsWorktreesChange(enabled)
+                            },
+                        ),
+                    modifier = Modifier.padding(horizontal = 16.dp).testTag("settingsWorktreesToggle"),
+                )
 
                 OpenCodeSectionHeader(title = "Session Cache")
 
@@ -635,6 +656,9 @@ private fun copyAboutValueToClipboard(
     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
     clipboard.setPrimaryClip(ClipData.newPlainText(label, value))
 }
+
+internal const val WORKTREES_SETTING_SUBTITLE =
+    "Show each project\u2019s worktrees and branches on Home, and let New session pick a worktree when you hold it."
 
 private fun logSettingsToggle(
     actionId: String,

@@ -100,6 +100,16 @@ class SessionInfo(
         startObserving(sessionId, worktree)
     }
 
+    /** The bound session moved to [worktree]: keeps title and status, observes the new directory. */
+    fun moveDirectory(worktree: String) {
+        val sessionId = boundSessionId ?: return
+        if (boundWorktree == worktree) return
+        stopObserving()
+        boundWorktree = worktree
+        logI("move session=$sessionId worktree=$worktree")
+        startObserving(sessionId, worktree)
+    }
+
     fun requestLeaveSession() {
         _state.update { it.copy(shouldLeaveSession = true) }
     }

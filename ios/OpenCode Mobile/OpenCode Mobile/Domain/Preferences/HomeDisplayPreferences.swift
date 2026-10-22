@@ -11,6 +11,7 @@ final class HomeDisplayPreferences {
         static let recentWindowHours = "recentWindowHours"
         static let lastHomeHiddenAtEpochMs = "lastHomeHiddenAtEpochMs"
         static let sessionListProjectPickerEnabled = "sessionListProjectPickerEnabled"
+        static let showsWorktrees = "showsWorktrees"
     }
 
     private let defaults: UserDefaults
@@ -18,6 +19,9 @@ final class HomeDisplayPreferences {
     /// When true, replace remote `/Users/…` or `/home/…` with `~` in path labels.
     private(set) var hideUserDirectoryPrefix: Bool
     private(set) var recentWindowHours: Int
+    /// Home shows each project's worktrees and branches, and holding New session can pick one.
+    /// Off changes presentation only: sessions of every worktree stay under their project.
+    private(set) var showsWorktrees: Bool
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -25,6 +29,11 @@ final class HomeDisplayPreferences {
             hideUserDirectoryPrefix = true
         } else {
             hideUserDirectoryPrefix = defaults.bool(forKey: StorageKeys.hideUserDirectoryPrefix)
+        }
+        if defaults.object(forKey: StorageKeys.showsWorktrees) == nil {
+            showsWorktrees = true
+        } else {
+            showsWorktrees = defaults.bool(forKey: StorageKeys.showsWorktrees)
         }
         if defaults.object(forKey: StorageKeys.recentWindowHours) == nil {
             recentWindowHours = HomeSessionLadder.defaultWindowHours
@@ -38,6 +47,11 @@ final class HomeDisplayPreferences {
     func setHideUserDirectoryPrefix(_ value: Bool) {
         hideUserDirectoryPrefix = value
         defaults.set(value, forKey: StorageKeys.hideUserDirectoryPrefix)
+    }
+
+    func setShowsWorktrees(_ value: Bool) {
+        showsWorktrees = value
+        defaults.set(value, forKey: StorageKeys.showsWorktrees)
     }
 
     func lastHomeHiddenAtEpochMs() -> Int64? {
@@ -68,7 +82,9 @@ final class HomeDisplayPreferences {
         defaults.removeObject(forKey: StorageKeys.recentWindowHours)
         defaults.removeObject(forKey: StorageKeys.lastHomeHiddenAtEpochMs)
         defaults.removeObject(forKey: StorageKeys.sessionListProjectPickerEnabled)
+        defaults.removeObject(forKey: StorageKeys.showsWorktrees)
         hideUserDirectoryPrefix = true
+        showsWorktrees = true
         recentWindowHours = HomeSessionLadder.defaultWindowHours
     }
 }

@@ -54,6 +54,7 @@ import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -78,6 +79,9 @@ import kotlin.math.max
 import kotlin.math.roundToInt
 
 private val NewSessionButtonShape = RoundedCornerShape(percent = 50)
+
+/** New session's hold action: one gesture for the project choice and Run in. */
+const val CHOOSE_PROJECT_OR_WORKTREE_LABEL = "Choose project or worktree"
 private val ScopeControlShape = RoundedCornerShape(20.dp)
 private const val DockControlFillAlpha = 0.05f
 
@@ -95,6 +99,8 @@ fun OpenCodeSessionListDock(
     onOpenProjectPicker: () -> Unit = {},
     onFilterSelected: (String) -> Unit = {},
     onNewSessionLongPress: (() -> Unit)? = null,
+    /** Scopes the dock can show but does not swipe through (worktrees of a project). */
+    scopeTabs: List<SessionListFilterTab> = emptyList(),
 ) {
     val textStrong = openCodeColor("text-strong")
     val error = openCodeColor("error")
@@ -121,6 +127,7 @@ fun OpenCodeSessionListDock(
                     selectedId = selectedFilterId,
                     onOpen = onOpenProjectPicker,
                     onSelect = onFilterSelected,
+                    scopeTabs = scopeTabs,
                 )
             }
 
@@ -145,7 +152,7 @@ fun OpenCodeSessionListDock(
                 DockCta(
                     onClick = onNewSession,
                     onLongClick = onNewSessionLongPress,
-                    onLongClickLabel = if (onNewSessionLongPress != null) "Choose project" else null,
+                    onLongClickLabel = if (onNewSessionLongPress != null) CHOOSE_PROJECT_OR_WORKTREE_LABEL else null,
                     fill = controlFill,
                     shape = NewSessionButtonShape,
                     modifier =
@@ -171,11 +178,16 @@ fun SessionListScopeControl(
     onOpen: () -> Unit,
     onSelect: (String) -> Unit,
     modifier: Modifier = Modifier,
+    /** Scopes shown while selected but skipped by the swipe; each sits inside its [SessionListFilterTab.parentId]. */
+    scopeTabs: List<SessionListFilterTab> = emptyList(),
 ) {
     val textWeak = openCodeColor("text-weak")
     var shownTabId by remember { mutableStateOf(selectedId) }
-    val selectedIndex = tabs.indexOfFirst { it.id == shownTabId }.let { if (it >= 0) it else 0 }
-    val visibleTab = tabs.getOrNull(selectedIndex) ?: return
+    val visibleTab =
+        tabs.firstOrNull { it.id == shownTabId }
+            ?: scopeTabs.firstOrNull { it.id == shownTabId }
+            ?: tabs.firstOrNull()
+            ?: return
     val description = scopeControlDescription(visibleTab)
     val settleOffset = remember { Animatable(0f) }
     val outgoingOffset = remember { Animatable(0f) }
@@ -217,7 +229,6 @@ fun SessionListScopeControl(
     val latestOnOpen by rememberUpdatedState(onOpen)
     val latestOnSelect by rememberUpdatedState(onSelect)
     val latestTabs by rememberUpdatedState(tabs)
-    val latestSelectedIndex by rememberUpdatedState(selectedIndex)
     val latestVisibleTab by rememberUpdatedState(visibleTab)
     val rubberBandLimitPx =
         with(density) { SessionListScopePaging.RUBBER_BAND_LIMIT_DP.dp.toPx() }
@@ -225,14 +236,14 @@ fun SessionListScopeControl(
         with(density) { SessionListScopePaging.SWITCH_THRESHOLD_DP.dp.toPx() }
     val canGoPrevious =
         SessionListScopePaging.neighborIndex(
-            selectedIndex = selectedIndex,
-            count = tabs.size,
+            tabs = tabs,
+            selected = visibleTab,
             direction = SessionListScopePaging.Direction.Previous,
         ) != null
     val canGoNext =
         SessionListScopePaging.neighborIndex(
-            selectedIndex = selectedIndex,
-            count = tabs.size,
+            tabs = tabs,
+            selected = visibleTab,
             direction = SessionListScopePaging.Direction.Next,
         ) != null
     val latestCanGoPrevious by rememberUpdatedState(canGoPrevious)
@@ -243,8 +254,8 @@ fun SessionListScopeControl(
         val currentTabs = latestTabs
         val index =
             SessionListScopePaging.neighborIndex(
-                selectedIndex = latestSelectedIndex,
-                count = currentTabs.size,
+                tabs = currentTabs,
+                selected = latestVisibleTab,
                 direction = direction,
             ) ?: return null
         return currentTabs.getOrNull(index)
@@ -564,11 +575,178 @@ fun SessionListScopeCountBadge(
     )
 }
 
+/** One row of the project picker. */
+sealed interface SessionListProjectPickerRow {
+    val key: String
+
+    /** Guidance at the top of the list (the reorder hint while editing). */
+    data class Note(
+        val text: String,
+    ) : SessionListProjectPickerRow {
+        override val key: String get() = "note"
+    }
+
+    /**
+     * The All row or a project. A project with [worktreeCount] above one shows the worktrees
+     * pill, pointing up while [expanded].
+     */
+    data class Scope(
+        val tab: SessionListFilterTab,
+        val worktreeCount: Int = 0,
+        val expanded: Boolean = false,
+    ) : SessionListProjectPickerRow {
+        override val key: String get() = tab.id
+        val showsWorktreesPill: Boolean get() = !tab.isAll && worktreeCount > 1
+    }
+
+    /** A worktree of the project above, indented under it. */
+    data class Worktree(
+        val tab: SessionListFilterTab,
+    ) : SessionListProjectPickerRow {
+        override val key: String get() = tab.id
+    }
+
+    /** "Show all N" / "Show fewer" under an expanded project with many worktrees. */
+    data class ShowAll(
+        val projectId: String,
+        val title: String,
+    ) : SessionListProjectPickerRow {
+        override val key: String get() = "showAll:$projectId"
+    }
+}
+
 /**
- * Project picker rows. Tap selects a scope; long-press on a project row lifts
- * it for drag reordering when [onReorderProjects] is set. Swiping a project row
- * left reveals Remove, which calls [onRemoveProject]. The "All" row stays
- * pinned first and neither reorders nor reveals.
+ * Project picker rows: All, projects, and the worktrees of an expanded project. Tap selects a
+ * scope; a project's worktrees pill calls [onToggleWorktrees]; "Show all" calls
+ * [onToggleShowAll]. While [isEditing], project rows show drag handles and reorder by
+ * dragging them (tapping one does nothing) and the pills stay visible but disabled. Outside
+ * edit, rows only reorder with [reorderOnLongPress]. Swiping a project row left reveals Remove
+ * in both modes. All, worktree, and Show all rows never move or reveal.
+ */
+@Composable
+fun SessionListProjectPickerRows(
+    rows: List<SessionListProjectPickerRow>,
+    onSelect: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    isEditing: Boolean = false,
+    reorderOnLongPress: Boolean = false,
+    onToggleWorktrees: (String) -> Unit = {},
+    onToggleShowAll: (String) -> Unit = {},
+    onRemoveProject: ((String) -> Unit)? = null,
+    onReorderProjects: ((List<String>) -> Unit)? = null,
+) {
+    val reorders = onReorderProjects != null && (isEditing || reorderOnLongPress)
+    OpenCodeReorderableList(
+        items = rows,
+        key = { it.key },
+        onSelect = { row ->
+            when (row) {
+                is SessionListProjectPickerRow.Scope -> if (!isEditing || row.tab.isAll) onSelect(row.tab.id)
+                is SessionListProjectPickerRow.Worktree -> onSelect(row.tab.id)
+                is SessionListProjectPickerRow.ShowAll -> onToggleShowAll(row.projectId)
+                is SessionListProjectPickerRow.Note -> Unit
+            }
+        },
+        canMove = { it.isProjectRow },
+        onMove =
+            onReorderProjects?.takeIf { reorders }?.let { reorder ->
+                { from, to -> reorder(reorderedProjectPickerProjectIds(rows, from, to)) }
+            },
+        onContextAction =
+            onRemoveProject?.let { remove ->
+                { row -> (row as? SessionListProjectPickerRow.Scope)?.let { remove(it.tab.id) } }
+            },
+        supportsContextAction = { it.isProjectRow },
+        modifier = modifier,
+    ) { row ->
+        when (row) {
+            is SessionListProjectPickerRow.Note ->
+                Text(
+                    text = row.text,
+                    color = openCodeColor("text-weak"),
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                            .testTag(SessionListProjectPickerTags.REORDER_NOTE),
+                )
+            is SessionListProjectPickerRow.Scope -> {
+                val tab = row.tab
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (isEditing && !tab.isAll) {
+                        DragHandle(
+                            modifier =
+                                Modifier
+                                    .padding(start = 4.dp)
+                                    .testTag(SessionListProjectPickerTags.dragHandle(tab.title)),
+                        )
+                    }
+                    OpenCodeListItem(
+                        title = tab.pickerTitle,
+                        subtitle = displayedScopeSubtitle(tab),
+                        startDecorator = pickerStartDecorator(tab),
+                        trailing = {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                if (row.showsWorktreesPill) {
+                                    SessionListWorktreesPill(
+                                        count = row.worktreeCount,
+                                        expanded = row.expanded,
+                                        enabled = !isEditing,
+                                        contentDescription =
+                                            if (row.expanded) {
+                                                "Hide worktrees of ${tab.title}"
+                                            } else {
+                                                "Show worktrees of ${tab.title}"
+                                            },
+                                        onClick = { onToggleWorktrees(tab.id) },
+                                        modifier = Modifier.testTag(SessionListProjectPickerTags.worktreesPill(tab.title)),
+                                    )
+                                }
+                                SessionListScopeTrailing(tab = tab)
+                            }
+                        },
+                        modifier =
+                            Modifier
+                                .weight(1f)
+                                .testTag(SessionListProjectPickerTags.scopeRow(tab.pickerTitle)),
+                    )
+                }
+            }
+            is SessionListProjectPickerRow.Worktree ->
+                OpenCodeListItem(
+                    title = row.tab.pickerTitle,
+                    subtitle = displayedScopeSubtitle(row.tab),
+                    startDecorator = pickerStartDecorator(row.tab),
+                    trailing = { SessionListScopeTrailing(tab = row.tab) },
+                    // A project's worktrees sit indented directly under it.
+                    modifier =
+                        Modifier
+                            .padding(start = WorktreeRowIndent)
+                            .testTag(SessionListProjectPickerTags.worktreeRow(row.tab.title)),
+                )
+            is SessionListProjectPickerRow.ShowAll ->
+                Text(
+                    text = row.title,
+                    color = openCodeColor("text-interactive-base"),
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 44.dp)
+                            .padding(start = WorktreeRowIndent + 16.dp, end = 16.dp, top = 12.dp, bottom = 12.dp)
+                            .testTag(SessionListProjectPickerTags.SHOW_ALL),
+                )
+        }
+    }
+}
+
+/**
+ * Picker rows for plain [tabs] (galleries and older callers): projects reorder with a
+ * long-press, and worktree tabs sit indented under their project.
  */
 @Composable
 fun SessionListProjectPickerRows(
@@ -578,29 +756,47 @@ fun SessionListProjectPickerRows(
     onRemoveProject: ((String) -> Unit)? = null,
     onReorderProjects: ((List<String>) -> Unit)? = null,
 ) {
-    OpenCodeReorderableList(
-        items = tabs,
-        key = { it.id },
-        onSelect = { onSelect(it.id) },
-        canMove = { !it.isAll && !it.isWorktree },
-        onMove =
-            onReorderProjects?.let { reorder ->
-                { from, to -> reorder(reorderedProjectPickerWorktrees(tabs, from, to)) }
+    SessionListProjectPickerRows(
+        rows =
+            tabs.map { tab ->
+                if (tab.isWorktree) SessionListProjectPickerRow.Worktree(tab) else SessionListProjectPickerRow.Scope(tab)
             },
-        onContextAction = onRemoveProject?.let { remove -> { tab -> remove(tab.id) } },
-        supportsContextAction = { !it.isAll && !it.isWorktree },
+        onSelect = onSelect,
         modifier = modifier,
-    ) { tab ->
-        OpenCodeListItem(
-            title = tab.pickerTitle,
-            subtitle = displayedScopeSubtitle(tab),
-            startDecorator = pickerStartDecorator(tab),
-            trailing = { SessionListScopeTrailing(tab = tab) },
-            // A project's worktrees sit indented directly under it.
-            modifier = if (tab.isWorktree) Modifier.padding(start = WorktreeRowIndent) else Modifier,
-        )
-    }
+        reorderOnLongPress = true,
+        onRemoveProject = onRemoveProject,
+        onReorderProjects = onReorderProjects,
+    )
 }
+
+/** Stable test tags of the project picker (UI tests and real-app evidence). */
+object SessionListProjectPickerTags {
+    const val EDIT = "projectPickerEdit"
+    const val REORDER_NOTE = "projectPickerReorderNote"
+    const val SHOW_ALL = "projectPickerShowAll"
+
+    fun worktreesPill(projectTitle: String): String = "projectPickerWorktreesPill:$projectTitle"
+
+    fun dragHandle(projectTitle: String): String = "projectPickerDragHandle:$projectTitle"
+
+    fun scopeRow(title: String): String = "projectPickerRow:$title"
+
+    fun worktreeRow(title: String): String = "projectPickerWorktreeRow:$title"
+}
+
+private val SessionListProjectPickerRow.isProjectRow: Boolean
+    get() = this is SessionListProjectPickerRow.Scope && !tab.isAll
+
+/** Project ids in their new order after moving row [from] to [to]; worktree and other rows drop out. */
+fun reorderedProjectPickerProjectIds(
+    rows: List<SessionListProjectPickerRow>,
+    from: Int,
+    to: Int,
+): List<String> =
+    ReorderableListMath
+        .move(rows, from, to)
+        .filter { it.isProjectRow }
+        .map { it.key }
 
 fun reorderedProjectPickerWorktrees(
     tabs: List<SessionListFilterTab>,
@@ -611,6 +807,52 @@ fun reorderedProjectPickerWorktrees(
         .move(tabs, from, to)
         .filterNot { it.isAll || it.isWorktree }
         .map { it.id }
+
+/**
+ * Trailing "N worktrees" pill of a project row: its own tap target that shows or hides the
+ * project's worktrees. The chevron points up while [expanded]. Disabled, it stays visible.
+ */
+@Composable
+fun SessionListWorktreesPill(
+    count: Int,
+    expanded: Boolean,
+    onClick: () -> Unit,
+    contentDescription: String,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    val textStrong = openCodeColor("text-strong")
+    val contentColor = if (enabled) openCodeColor("text-base") else openCodeColor("text-weak")
+    val rotation by animateFloatAsState(targetValue = if (expanded) 180f else 0f, label = "worktreesPillChevron")
+    Row(
+        modifier =
+            modifier
+                .clip(RoundedCornerShape(percent = 50))
+                .background(textStrong.copy(alpha = if (enabled) 0.08f else 0.04f))
+                .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+                .semantics { this.contentDescription = contentDescription }
+                .heightIn(min = 28.dp)
+                .padding(start = 10.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = "$count worktrees",
+            color = contentColor,
+            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+            maxLines = 1,
+        )
+        Icon(
+            imageVector = OpenCodeIcons.KeyboardArrowDown,
+            contentDescription = null,
+            tint = contentColor,
+            modifier =
+                Modifier
+                    .size(16.dp)
+                    .graphicsLayer { rotationZ = rotation },
+        )
+    }
+}
 
 private val WorktreeRowIndent = 28.dp
 

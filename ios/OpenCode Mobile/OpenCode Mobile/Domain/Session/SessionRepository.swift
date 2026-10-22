@@ -44,6 +44,9 @@ protocol SessionRepository: Sendable {
     func queuePendingPrompt(sessionID: String, inboxID: String) async throws -> Bool
     /// Acknowledges a finished run as viewed on the server (v2). No-op on v1.
     func markSessionViewed(sessionId: String, idleAtEpochMs: Int64) async throws
+    /// Moves a session to another worktree of its project (v2). The server applies it at the
+    /// next turn boundary and announces it with `session.moved`. v1 has no move endpoint and throws.
+    func moveSession(id: String, directory: String) async throws
 }
 
 /// How the server handled a compact request.
@@ -77,6 +80,9 @@ extension SessionRepository {
     func steerPendingPrompt(sessionID _: String, inboxID _: String) async throws -> Bool { false }
     func queuePendingPrompt(sessionID _: String, inboxID _: String) async throws -> Bool { false }
     func markSessionViewed(sessionId _: String, idleAtEpochMs _: Int64) async throws {}
+    func moveSession(id _: String, directory _: String) async throws {
+        throw SessionError.http(statusCode: 404, message: "Needs an opencode v2 server")
+    }
     func commitRevert(id _: String) async throws -> Bool { true }
 
     func getSession(id: String) async throws -> Session {
@@ -334,6 +340,10 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
 
     func markSessionViewed(sessionId: String, idleAtEpochMs: Int64) async throws {
         try await run { try await remote.markSessionViewed(sessionId: sessionId, idleAtEpochMs: idleAtEpochMs) }
+    }
+
+    func moveSession(id: String, directory: String) async throws {
+        try await run { try await remote.moveSession(id: id, directory: directory) }
     }
 
     private func run<T>(_ work: () async throws -> T) async throws -> T {

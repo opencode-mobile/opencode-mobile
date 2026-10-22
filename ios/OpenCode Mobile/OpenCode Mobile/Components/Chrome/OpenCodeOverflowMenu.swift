@@ -8,6 +8,8 @@ private let overflowMenuEntryMinHeight: CGFloat = 48
 private let overflowMenuEntryPaddingHorizontal: CGFloat = 12
 private let overflowMenuEntryIconSize: CGFloat = 20
 private let overflowMenuEntryIconSpacing: CGFloat = 12
+private let overflowMenuEntrySubtitleSpacing: CGFloat = 2
+private let overflowMenuEntrySubtitlePaddingVertical: CGFloat = 6
 private let overflowMenuAnchorEndInset: CGFloat = 4
 private let overflowMenuAnchorTopOffset: CGFloat = 8
 /// Gap between an iPhone Duo rail item and the menu that opens beside it.
@@ -16,28 +18,42 @@ private let overflowMenuRailItemSpacing: CGFloat = 8
 struct OpenCodeOverflowMenuEntry: Identifiable {
     let id: String
     let title: String
+    /// Secondary line under the title, such as why a disabled entry is unavailable.
+    let subtitle: String?
     let icon: OpenCodeIcon?
     let enabled: Bool
     let destructive: Bool
     let accessibilityLabel: String?
+    let accessibilityIdentifier: String?
     let action: () -> Void
 
     init(
         id: String = UUID().uuidString,
         title: String,
+        subtitle: String? = nil,
         icon: OpenCodeIcon?,
         enabled: Bool = true,
         destructive: Bool = false,
         accessibilityLabel: String? = nil,
+        accessibilityIdentifier: String? = nil,
         action: @escaping () -> Void
     ) {
         self.id = id
         self.title = title
+        self.subtitle = subtitle?.isEmpty == true ? nil : subtitle
         self.icon = icon
         self.enabled = enabled
         self.destructive = destructive
         self.accessibilityLabel = accessibilityLabel
+        self.accessibilityIdentifier = accessibilityIdentifier
         self.action = action
+    }
+
+    /// Spoken label: the title (or override), then the subtitle.
+    var spokenLabel: String {
+        let label = accessibilityLabel ?? title
+        guard let subtitle else { return label }
+        return "\(label), \(subtitle)"
     }
 }
 
@@ -322,10 +338,20 @@ private struct OpenCodeOverflowMenuPanel: View {
                             .foregroundStyle(overflowEntryIconColor(entry))
                             .accessibilityHidden(true)
                         }
-                        Text(entry.title)
-                            .font(OpenCodeTypography.body)
-                            .foregroundStyle(overflowEntryTextColor(entry))
-                            .lineLimit(1)
+                        VStack(alignment: .leading, spacing: overflowMenuEntrySubtitleSpacing) {
+                            Text(entry.title)
+                                .font(OpenCodeTypography.body)
+                                .foregroundStyle(overflowEntryTextColor(entry))
+                                .lineLimit(1)
+                            if let subtitle = entry.subtitle {
+                                Text(subtitle)
+                                    .font(OpenCodeTypography.caption)
+                                    .foregroundStyle(OpenCodeColors.textWeak)
+                                    .lineLimit(2)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                        .padding(.vertical, entry.subtitle == nil ? 0 : overflowMenuEntrySubtitlePaddingVertical)
                     }
                     .frame(minWidth: overflowMenuMinWidth, minHeight: overflowMenuEntryMinHeight, alignment: .leading)
                     .padding(.horizontal, overflowMenuEntryPaddingHorizontal)
@@ -333,7 +359,8 @@ private struct OpenCodeOverflowMenuPanel: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(!entry.enabled)
-                .accessibilityLabel(entry.accessibilityLabel ?? entry.title)
+                .accessibilityLabel(entry.spokenLabel)
+                .modifier(OverflowEntryIdentifier(identifier: entry.accessibilityIdentifier))
             }
         }
         .padding(.vertical, overflowMenuPaddingVertical)
@@ -378,6 +405,18 @@ private struct OpenCodeOverflowMenuPanel: View {
     .preferredColorScheme(.dark)
 }
 
+private struct OverflowEntryIdentifier: ViewModifier {
+    let identifier: String?
+
+    func body(content: Content) -> some View {
+        if let identifier {
+            content.accessibilityIdentifier(identifier)
+        } else {
+            content
+        }
+    }
+}
+
 private func overflowEntryTextColor(_ entry: OpenCodeOverflowMenuEntry) -> Color {
     switch (entry.enabled, entry.destructive) {
     case (false, _):
@@ -415,6 +454,7 @@ private func previewOverflowMenuEntries() -> [OpenCodeOverflowMenuEntry] {
         ),
         OpenCodeOverflowMenuEntry(
             title: "Disabled action",
+            subtitle: "Why it is unavailable",
             icon: .settings,
             enabled: false,
             action: {}

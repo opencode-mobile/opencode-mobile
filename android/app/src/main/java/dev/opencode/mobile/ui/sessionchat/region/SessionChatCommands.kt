@@ -249,6 +249,12 @@ class SessionChatCommands(
         _state.update { it.copy(actionErrorMessage = message) }
     }
 
+    /** The bound session moved to [worktree]; revert, fork and compaction state carry over. */
+    fun moveDirectory(worktree: String) {
+        if (boundSessionId == null) return
+        boundWorktree = worktree
+    }
+
     fun consumePendingSessionReplace() {
         _state.update { it.copy(pendingSessionReplace = null) }
     }

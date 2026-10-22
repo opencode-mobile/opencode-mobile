@@ -17,10 +17,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -39,6 +41,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -60,6 +63,7 @@ import dev.opencode.mobile.domain.preferences.DeveloperToolsPreferences
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.SessionTodoList
 import dev.opencode.mobile.theme.OpenCodeTheme
+import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
 import dev.opencode.mobile.ui.components.OpenCodeActionPill
 import dev.opencode.mobile.ui.components.OpenCodeActionPillVariant
@@ -84,6 +88,7 @@ import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
 import dev.opencode.mobile.ui.components.ComposerDictationCardModel
 import dev.opencode.mobile.ui.components.OpenCodeDictationCardVariant
 import dev.opencode.mobile.ui.components.OpenCodeDictationUnavailableReason
+import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposer
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposerAction
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposerState
@@ -98,6 +103,7 @@ import dev.opencode.mobile.ui.components.OpenCodeTopBarAction
 import dev.opencode.mobile.ui.components.OpenCodeTopBarOverflowHost
 import dev.opencode.mobile.ui.components.OpenCodeTopBarSubtitleAccessory
 import dev.opencode.mobile.ui.components.OpenCodeTopBarSubtitleLeading
+import dev.opencode.mobile.ui.components.StartDecorator
 import dev.opencode.mobile.ui.components.copySessionIdToClipboard
 import dev.opencode.mobile.ui.components.openCodeDetailLeading
 import dev.opencode.mobile.ui.components.rememberOpenCodeSessionComposerFocus
@@ -130,6 +136,9 @@ import dev.opencode.mobile.ui.sessionchat.dictation.cardPhase
 import dev.opencode.mobile.ui.sessionchat.dictation.dictationLanguageLabel
 import dev.opencode.mobile.ui.sessionchat.dictation.formatDictationElapsed
 import dev.opencode.mobile.ui.sessionchat.dictation.probeDictationSupport
+import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveCopy
+import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveTags
+import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveUiState
 import dev.opencode.mobile.ui.sessionchat.view.toActionTileBadge
 import dev.opencode.mobile.ui.sessionchat.view.toRoute
 import kotlinx.coroutines.Dispatchers
@@ -178,6 +187,8 @@ fun SessionChatScreen(
     }
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    // After `session.moved` the route still names the old directory; actions follow the session.
+    val currentWorktree = uiState.worktree.ifEmpty { worktree }
     val attachmentSources = uiState.composer.attachmentSources(DeveloperToolsPreferences.unlocked)
     var menuExpanded by rememberSaveable { mutableStateOf(false) }
     var showDeleteConfirmation by remember { mutableStateOf(false) }
@@ -544,6 +555,12 @@ fun SessionChatScreen(
         },
     )
 
+    SessionChatMoveToWorktreeSheet(
+        state = uiState.moveToWorktree,
+        onDismiss = viewModel::dismissMoveToWorktree,
+        onMove = viewModel::moveToWorktree,
+    )
+
     Box(modifier = modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
             OpenCodeTopBarOverflowHost(
@@ -570,7 +587,7 @@ fun SessionChatScreen(
                                 onClick = {
                                     logOverflowAction(ProductAnalytics.Action.CHAT_OVERFLOW_REVIEW_CHANGES)
                                     menuExpanded = false
-                                    onReviewChangesClick(uiState.changesNavigationTarget(worktree))
+                                    onReviewChangesClick(uiState.changesNavigationTarget(currentWorktree))
                                 },
                             ),
                         )
@@ -587,13 +604,26 @@ fun SessionChatScreen(
                         )
                         add(
                             OpenCodeOverflowMenuEntry(
+                                title = SessionChatWorktreeMoveCopy.MENU_TITLE,
+                                icon = OpenCodeIcons.CallSplit,
+                                enabled = uiState.moveToWorktree.availability.enabled,
+                                subtitle = uiState.moveToWorktree.availability.subtitle,
+                                testTag = SessionChatWorktreeMoveTags.MENU_ENTRY,
+                                onClick = {
+                                    menuExpanded = false
+                                    viewModel.openMoveToWorktree()
+                                },
+                            ),
+                        )
+                        add(
+                            OpenCodeOverflowMenuEntry(
                                 title = "Browse files",
                                 icon = OpenCodeIcons.Folder,
                                 enabled = sessionCreated,
                                 onClick = {
                                     logOverflowAction(ProductAnalytics.Action.CHAT_OVERFLOW_BROWSE_FILES)
                                     menuExpanded = false
-                                    onFilesRequested(worktree)
+                                    onFilesRequested(currentWorktree)
                                 },
                             ),
                         )
@@ -751,7 +781,7 @@ fun SessionChatScreen(
                             onLoadOlder = viewModel::loadOlderMessages,
                             onSessionBranchClick = {
                                 logChatAction(ProductAnalytics.Action.CHAT_OPEN_CHANGES)
-                                onReviewChangesClick(uiState.changesNavigationTarget(worktree))
+                                onReviewChangesClick(uiState.changesNavigationTarget(currentWorktree))
                             },
                             onSessionTodosClick = {
                                 logChatAction(ProductAnalytics.Action.CHAT_OPEN_TODOS)
@@ -776,7 +806,7 @@ fun SessionChatScreen(
                                 onToolGroupClick(
                                     target.toRoute(
                                         sessionId = sessionId,
-                                        worktree = worktree,
+                                        worktree = currentWorktree,
                                         parentId = parentId ?: uiState.sessionParentId,
                                         owningTurnMessageId = uiState.owningTurnMessageId(target.messageId),
                                         supportsSessionMessageDiff = uiState.supportsSessionMessageDiff,
@@ -789,7 +819,7 @@ fun SessionChatScreen(
                                     ChildSessionNavigationTarget(
                                         sessionId = childSessionId,
                                         sessionTitle = childTitle,
-                                        worktree = worktree,
+                                        worktree = currentWorktree,
                                     ),
                                 )
                             },
@@ -797,7 +827,7 @@ fun SessionChatScreen(
                                 logChatAction(ProductAnalytics.Action.CHAT_OPEN_CHANGES_FROM_TOOL)
                                 uiState
                                     .fileChangeNavigationTarget(
-                                        worktree = worktree,
+                                        worktree = currentWorktree,
                                         assistantMessageId = assistantMessageId,
                                         initialFilePath = initialFilePath,
                                     )?.let(onReviewChangesClick)
@@ -1591,6 +1621,45 @@ private fun SessionChatScreenPreview() {
             sessionTitle = "Importing icons explanation",
             worktree = "/Users/demo/opencode-mobile",
         )
+    }
+}
+
+/** Session Chat ⋯ → "Move to worktree…": the project's worktrees, the current one checked. */
+@Composable
+private fun SessionChatMoveToWorktreeSheet(
+    state: SessionChatWorktreeMoveUiState,
+    onDismiss: () -> Unit,
+    onMove: (String) -> Unit,
+) {
+    OpenCodeBottomSheet(
+        visible = state.sheetVisible,
+        title = SessionChatWorktreeMoveCopy.SHEET_TITLE,
+        onDismissRequest = onDismiss,
+    ) {
+        state.rows.forEach { row ->
+            OpenCodeListItem(
+                title = row.title,
+                subtitle = row.subtitle,
+                selected = row.isCurrent,
+                enabled = state.submittingDirectory == null || state.submittingDirectory == row.directory,
+                startDecorator = StartDecorator.Icon(OpenCodeIcons.CallSplit, null),
+                onClick = if (row.isCurrent || state.submittingDirectory != null) null else ({ onMove(row.directory) }),
+                modifier = Modifier.testTag(SessionChatWorktreeMoveTags.row(row.title)),
+                trailing =
+                    if (row.isCurrent) {
+                        {
+                            Icon(
+                                imageVector = OpenCodeIcons.Check,
+                                contentDescription = "Current worktree",
+                                tint = openCodeColor("icon-strong-base"),
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                    } else {
+                        null
+                    },
+            )
+        }
     }
 }
 

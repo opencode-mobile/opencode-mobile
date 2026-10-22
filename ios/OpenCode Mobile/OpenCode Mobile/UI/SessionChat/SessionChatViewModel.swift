@@ -60,6 +60,13 @@ final class SessionChatViewModel {
     private let worktreeInventoryCache: WorktreeInventoryCache
     private let projectRepository: any ProjectRepository
     private var projectIdentityTask: Task<Void, Never>?
+    /// Move to worktree (#785).
+    private var moveSheetVisible = false
+    private var moveInFlight = false
+    private var moveErrorMessage: String?
+    private var moveNotice: String?
+    private var movedDirectory: String?
+    private var sessionMoveTask: Task<Void, Never>?
     /// Chip-timeline step paragraphs the user expanded past `+N more`:
     /// paragraph id to the chip count at tap time.
     private var expandedStepParagraphs: [String: Int] = [:]
@@ -235,6 +242,7 @@ final class SessionChatViewModel {
     func startObserving() {
         isSessionBound = true
         startSessionEventObservation()
+        startSessionMoveObservation()
         startCollapsePreferenceObservation()
         repoStrip.start()
         reviewChanges.start()
@@ -613,6 +621,68 @@ final class SessionChatViewModel {
         commands.openForkDialog(currentTitle: uiState.sessionTitle, atMessageID: messageID)
     }
 
+    // MARK: Move to worktree
+
+    func openMoveToWorktree() {
+        guard hasCreatedSession, activeConnectionManager.capabilities.supportsSessionMove else { return }
+        ProductAnalytics.logScreenView(
+            screenId: ProductAnalytics.Screen.sessionMoveToWorktree,
+            presentation: ProductAnalytics.Presentation.sheet,
+            trigger: ProductAnalytics.Trigger.present
+        )
+        moveSheetVisible = true
+        publishUiState()
+    }
+
+    func dismissMoveToWorktree() {
+        guard moveSheetVisible else { return }
+        moveSheetVisible = false
+        publishUiState()
+    }
+
+    /// `POST /api/session/{id}/move`. The server moves an idle session at once and a busy one
+    /// when its turn ends; `session.moved` then rebinds the screen to `directory`.
+    func moveSession(to directory: String, worktreeTitle: String) async {
+        guard hasCreatedSession, !moveInFlight else { return }
+        moveInFlight = true
+        moveErrorMessage = nil
+        moveNotice = nil
+        publishUiState()
+        let wasBusy = uiState.sessionStatusLabel != nil || effectiveCompacting()
+        do {
+            try await sessionRepository.moveSession(id: sessionID, directory: directory)
+            if wasBusy {
+                moveNotice = SessionChatMoveToWorktree.movesAfterTurn(worktreeTitle)
+            }
+        } catch {
+            moveErrorMessage = SessionChatMoveToWorktree.failure(SessionChatMoveToWorktree.serverMessage(error))
+        }
+        moveInFlight = false
+        moveSheetVisible = false
+        publishUiState()
+    }
+
+    private func startSessionMoveObservation() {
+        sessionMoveTask?.cancel()
+        sessionMoveTask = Task { [weak self] in
+            guard let self else { return }
+            for await event in self.foregroundEventStream.events() {
+                guard let moved = self.eventAdapter.sessionMoved(from: event),
+                      moved.sessionID == self.sessionID
+                else { continue }
+                self.applySessionMoved(to: moved.directory)
+            }
+        }
+    }
+
+    private func applySessionMoved(to directory: String) {
+        let canonical = ServerPathPolicy.canonical(directory)
+        guard canonical != ServerPathPolicy.canonical(worktree), canonical != movedDirectory else { return }
+        OpenCodeLog.sessionChat.info("session moved session=\(self.sessionID) directory=\(canonical)")
+        movedDirectory = canonical
+        publishUiState()
+    }
+
     func updateForkDraft(_ text: String) {
         if !loggedForkTitleEdit {
             loggedForkTitleEdit = true
@@ -682,6 +752,8 @@ final class SessionChatViewModel {
         }
         suppressedSnackbarKey = lastSnackbarKey
         chipTimelineIntroNotice = nil
+        moveErrorMessage = nil
+        moveNotice = nil
         commands.clearActionFeedback()
         composer.clearTransientErrors()
         sessionInfo.clearTransientErrors()
@@ -1168,6 +1240,8 @@ final class SessionChatViewModel {
         projectIdentityTask = nil
         worktreeEventTask?.cancel()
         worktreeEventTask = nil
+        sessionMoveTask?.cancel()
+        sessionMoveTask = nil
         timeline.stopObserving()
         sessionInfo.stopObserving()
         inbox.stop()
@@ -1458,6 +1532,7 @@ final class SessionChatViewModel {
             if let error = composerState.errorMessage { return error }
             if let error = composerState.abortErrorMessage { return error }
             if let error = commandsState.actionErrorMessage { return error }
+            if let error = moveErrorMessage { return error }
             if let error = infoState.errorMessage { return error }
             if inboxState.permissionRequests.isEmpty, let error = inboxState.permissionTopologyError { return error }
             if inboxState.questionRequests.isEmpty, let error = inboxState.questionTopologyError { return error }
@@ -1467,6 +1542,7 @@ final class SessionChatViewModel {
             transientError: transientError,
             successNotice: composerState.followUpNotice
                 ?? commandsState.actionSuccessMessage
+                ?? moveNotice
                 ?? chipTimelineIntroNotice
         )
         // Reuse the current TimelineFrame when only composer / session-info /
@@ -1583,6 +1659,10 @@ final class SessionChatViewModel {
             reviewChangesSummary: reviewChangesState.summary,
             supportsSessionMessageDiff: activeConnectionManager.capabilities.supportsSessionMessageDiff,
             supportsSessionArchive: activeConnectionManager.capabilities.supportsSessionArchive,
+            supportsSessionMove: activeConnectionManager.capabilities.supportsSessionMove,
+            moveSheetVisible: moveSheetVisible,
+            moveInFlight: moveInFlight,
+            movedDirectory: movedDirectory,
             rename: infoState.rename,
             slashSuggestionsVisible: composerState.slashSuggestionsVisible,
             slashSuggestions: composerState.slashSuggestions,

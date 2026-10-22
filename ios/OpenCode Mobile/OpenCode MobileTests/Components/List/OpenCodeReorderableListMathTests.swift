@@ -82,13 +82,14 @@ struct OpenCodeReorderableListMathTests {
         #expect(OpenCodeReorderableListMath.move(["a", "b", "c"], from: 5, to: 0) == ["a", "b", "c"])
     }
 
-    @Test func projectPickerRows_reportWorktreesWithoutAllRow() {
-        let tabs = [
-            SessionListFilterTab(id: SessionListFilterTab.allId, title: "All", count: 3),
-            SessionListFilterTab(id: "/a", title: "a", count: 1),
-            SessionListFilterTab(id: "/b", title: "b", count: 1),
-            SessionListFilterTab(id: "/c", title: "c", count: 1),
+    @Test func projectPickerRows_reportProjectsWithoutAllOrNoteRows() {
+        let rows: [HomeProjectPickerRow] = [
+            .note,
+            .all(SessionListFilterTab(id: SessionListFilterTab.allId, title: "All", count: 3)),
+            .project(SessionListFilterTab(id: "/a", title: "a", count: 1), pill: nil),
+            .project(SessionListFilterTab(id: "/b", title: "b", count: 1), pill: nil),
+            .project(SessionListFilterTab(id: "/c", title: "c", count: 1), pill: nil),
         ]
-        #expect(SessionListProjectPickerRows.reorderedWorktrees(tabs: tabs, from: 3, to: 1) == ["/c", "/a", "/b"])
+        #expect(HomeProjectPickerRow.reorderedProjectKeys(rows, from: 4, to: 2) == ["/c", "/a", "/b"])
     }
 }

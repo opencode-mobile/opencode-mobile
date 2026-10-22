@@ -3,6 +3,9 @@ import SwiftUI
 struct OpenCodeSessionListDock: View {
     let filterTabs: [SessionListFilterTab]
     let selectedFilterId: String
+    /// Dock tab of a selection that is not one of `filterTabs` (a worktree scope). Swiping
+    /// from it walks `filterTabs` as if it sat inside its `parentId` tab.
+    let selectedScopeTab: SessionListFilterTab?
     let createError: String?
     let onOpenProjectPicker: () -> Void
     let onFilterSelected: (String) -> Void
@@ -13,6 +16,7 @@ struct OpenCodeSessionListDock: View {
     init(
         filterTabs: [SessionListFilterTab],
         selectedFilterId: String,
+        selectedScopeTab: SessionListFilterTab? = nil,
         createError: String? = nil,
         onOpenProjectPicker: @escaping () -> Void = {},
         onFilterSelected: @escaping (String) -> Void = { _ in },
@@ -22,6 +26,7 @@ struct OpenCodeSessionListDock: View {
     ) {
         self.filterTabs = filterTabs
         self.selectedFilterId = selectedFilterId
+        self.selectedScopeTab = selectedScopeTab
         self.createError = createError
         self.onOpenProjectPicker = onOpenProjectPicker
         self.onFilterSelected = onFilterSelected
@@ -44,6 +49,7 @@ struct OpenCodeSessionListDock: View {
                     SessionListScopeControl(
                         tabs: filterTabs,
                         selectedId: selectedFilterId,
+                        selectedScopeTab: selectedScopeTab,
                         onOpen: onOpenProjectPicker,
                         onSelect: onFilterSelected
                     )
@@ -83,6 +89,7 @@ struct OpenCodeSessionListDock: View {
 struct SessionListScopeControl: View {
     let tabs: [SessionListFilterTab]
     let selectedId: String
+    var selectedScopeTab: SessionListFilterTab? = nil
     let onOpen: () -> Void
     let onSelect: (String) -> Void
 
@@ -223,32 +230,27 @@ struct SessionListScopeControl: View {
         RoundedRectangle(cornerRadius: 20, style: .continuous)
     }
 
-    private var selectedIndex: Int {
-        tabs.firstIndex(where: { $0.id == (shownTabId ?? selectedId) }) ?? 0
+    /// `tabs` plus the selected worktree scope, which is not one of them.
+    private func tab(id: String) -> SessionListFilterTab? {
+        if let tab = tabs.first(where: { $0.id == id }) { return tab }
+        if let selectedScopeTab, selectedScopeTab.id == id { return selectedScopeTab }
+        return nil
     }
 
     private var selectedTab: SessionListFilterTab? {
-        tabs.first { $0.id == selectedId } ?? tabs.first
+        tab(id: selectedId) ?? tabs.first
     }
 
     private var visibleTab: SessionListFilterTab? {
-        tabs.first { $0.id == (shownTabId ?? selectedId) } ?? selectedTab
+        tab(id: shownTabId ?? selectedId) ?? selectedTab
     }
 
     private var canGoPrevious: Bool {
-        SessionListScopePaging.neighborIndex(
-            selectedIndex: selectedIndex,
-            count: tabs.count,
-            direction: .previous
-        ) != nil
+        neighborTab(.previous) != nil
     }
 
     private var canGoNext: Bool {
-        SessionListScopePaging.neighborIndex(
-            selectedIndex: selectedIndex,
-            count: tabs.count,
-            direction: .next
-        ) != nil
+        neighborTab(.next) != nil
     }
 
     private var drag: some Gesture {
@@ -346,12 +348,14 @@ struct SessionListScopeControl: View {
     }
 
     private func neighborTab(_ direction: SessionListScopePaging.Direction) -> SessionListFilterTab? {
-        guard let index = SessionListScopePaging.neighborIndex(
-            selectedIndex: selectedIndex,
-            count: tabs.count,
+        let shown = visibleTab
+        guard let id = SessionListScopePaging.neighborID(
+            selectedID: shown?.id ?? selectedId,
+            parentID: shown?.parentId,
+            tabIDs: tabs.map(\.id),
             direction: direction
         ) else { return nil }
-        return tabs[index]
+        return tabs.first { $0.id == id }
     }
 
     private func adjustProject(_ direction: AccessibilityAdjustmentDirection) {
@@ -500,9 +504,9 @@ private struct NewSessionDockButton: View {
                 .accessibilityElement(children: .ignore)
                 .accessibilityAddTraits(.isButton)
                 .accessibilityLabel("New session")
-                .accessibilityHint("Use Choose project to start in a different project.")
+                .accessibilityHint("Use Choose project or worktree to start somewhere else.")
                 .accessibilityAction(.default, onNewSession)
-                .accessibilityAction(named: "Choose project", onLongPress)
+                .accessibilityAction(named: "Choose project or worktree", onLongPress)
         } else {
             Button(action: onNewSession) {
                 label
