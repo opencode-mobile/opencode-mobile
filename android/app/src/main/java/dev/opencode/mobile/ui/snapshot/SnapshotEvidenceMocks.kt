@@ -1,6 +1,7 @@
 package dev.opencode.mobile.ui.snapshot
 
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposerState
+import dev.opencode.mobile.ui.components.SessionListWorktreeEmptyCopy
 
 enum class SnapshotEvidenceRole {
     User,
@@ -33,6 +34,9 @@ object SnapshotEvidenceMocks {
     const val SESSION_TITLE = "Assistant message"
     const val USER_METADATA = "Build · DeepSeek V4 Flash · 9:05 PM"
     const val CHILD_SESSION_TITLE = "Find auth bugs"
+
+    /** Home filtered to a worktree with no sessions while sibling worktrees have some. */
+    const val WORKTREE_EMPTY_MESSAGE = SessionListWorktreeEmptyCopy.OTHER_WORKTREES
 
     val userPrompt =
         SnapshotEvidenceMessage(
