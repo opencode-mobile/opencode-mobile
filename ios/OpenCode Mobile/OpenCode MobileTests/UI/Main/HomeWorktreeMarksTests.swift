@@ -106,6 +106,11 @@ private struct FixedWorktreeRepository: WorktreeRepository {
     func refetch(projectID: String) async -> WorktreeLoad { load }
     func onDisconnected() {}
     func onConnection(key: String) {}
+    func create(_ request: CreateWorktreeRequest) async throws -> CreatedWorktree {
+        throw WorktreeCreateError(message: "unused")
+    }
+    func baseBranches(directory: String) async throws -> [String] { [] }
+    var canCreateWorktrees: Bool { true }
 }
 
 private actor ListedDirectories {

@@ -64,6 +64,64 @@ struct DefaultWorktreeRepository: WorktreeRepository {
         state.onConnection(key)
     }
 
+    var canCreateWorktrees: Bool {
+        !state.isStopped
+    }
+
+    func create(_ request: CreateWorktreeRequest) async throws -> CreatedWorktree {
+        let name = request.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let source = ServerPathPolicy.canonical(request.sourceDirectory)
+        if await protocolProvider() == .v2 {
+            let projectID = request.projectID?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            guard !projectID.isEmpty, projectID != HomeProjectGrouping.globalProjectID else {
+                throw WorktreeCreateError(message: WorktreeCreateCopy.noCommit)
+            }
+            do {
+                let directory = ServerPathPolicy.canonical(
+                    try await remote.createV2(projectID: projectID, from: source, name: name, branch: request.baseRef)
+                )
+                return CreatedWorktree(directory: directory, name: ServerPathPolicy.name(directory), branch: nil)
+            } catch {
+                throw Self.createError(error)
+            }
+        }
+        do {
+            let created = try await remote.createV1(directory: source, name: name)
+            let directory = ServerPathPolicy.canonical(created.directory)
+            let createdName = created.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            return CreatedWorktree(
+                directory: directory,
+                name: createdName.isEmpty ? ServerPathPolicy.name(directory) : createdName,
+                branch: HomeProjectGrouping.usableBranch(created.branch)
+            )
+        } catch WorktreeRemoteError.http(404, _) {
+            // No experimental worktree routes on this server: stop listing and creating.
+            state.markStopped()
+            throw WorktreeCreateError(message: WorktreeCreateCopy.unsupported)
+        } catch {
+            throw Self.createError(error)
+        }
+    }
+
+    func baseBranches(directory: String) async throws -> [String] {
+        guard await protocolProvider() == .v2 else { return [] }
+        return try await remote.branchesV2(directory: ServerPathPolicy.canonical(directory))
+    }
+
+    /// The server's own words, else its raw body, else the status.
+    static func createError(_ error: Error) -> Error {
+        if error is CancellationError || error is WorktreeCreateError { return error }
+        guard case let WorktreeRemoteError.http(statusCode, body) = error else {
+            return WorktreeCreateError(message: error.localizedDescription)
+        }
+        if let message = ServerErrorMessage.bodyMessage(body) {
+            return WorktreeCreateError(message: message)
+        }
+        let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty { return WorktreeCreateError(message: trimmed) }
+        return WorktreeCreateError(message: WorktreeCreateCopy.requestFailed(statusCode))
+    }
+
     private func loadV2(_ projectID: String?) async -> WorktreeLoad {
         guard let projectID, !projectID.isEmpty else { return .unloaded }
         do {
