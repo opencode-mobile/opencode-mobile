@@ -3,6 +3,7 @@ package dev.opencode.mobile.ui.sessionchat
 import kotlinx.coroutines.test.TestScope
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.domain.preferences.ChipTimelineIntro
+import dev.opencode.mobile.domain.preferences.SessionChatTimelineStyle
 import dev.opencode.mobile.domain.command.ClientSlashAction
 import dev.opencode.mobile.domain.command.CommandError
 import dev.opencode.mobile.domain.command.CommandRepository
@@ -1216,6 +1217,123 @@ class SessionChatViewModelTest {
             assertEquals("Second", viewModel.uiState.value.sessionTitle)
             assertEquals("", viewModel.uiState.value.composer.text)
             assertEquals(SessionChatTimelineState.Loading, viewModel.uiState.value.timeline)
+        }
+
+    @Test
+    fun openAndDismissActivityCard_resetOnSessionChange() =
+        runTest(testDispatcher) {
+            val viewModel = createViewModel(FakeMessageRepository())
+            viewModel.bind("ses-1", "First", "/repo")
+            advanceUntilIdle()
+            assertEquals(null, viewModel.uiState.value.presentedActivityCard)
+
+            // A card that is not in the timeline closes at once.
+            viewModel.openActivityCard("ac:gone")
+            assertEquals(null, viewModel.uiState.value.presentedActivityCard)
+        }
+
+    @Test
+    fun presentedActivityCard_observesItsRunningChild_andClosesWhenTheCardLeaves() =
+        runTest(testDispatcher) {
+            SessionChatDisplayPreferences.updateTimelineStyle(SessionChatTimelineStyle.ActivityCard)
+            val task =
+                MessagePart.Tool(
+                    toolName = "task",
+                    status = ToolStatus.Running,
+                    id = "p1",
+                    input =
+                        buildJsonObject {
+                            put("subagent_type", "explore")
+                            put("description", "Find the pill")
+                        },
+                    metadata = buildJsonObject { put("sessionId", "ses-child") },
+                )
+            val assistant = Message(id = "msg-2", role = MessageRole.Assistant, text = "", parts = listOf(task))
+            val repository = FakeMessageRepository()
+            repository.messages = repository.messages + assistant
+            val viewModel = createViewModel(repository)
+            viewModel.bind("ses-1", "First", "/repo")
+            advanceUntilIdle()
+
+            viewModel.openActivityCard("ac:p1")
+            advanceUntilIdle()
+            assertEquals("ac:p1", viewModel.uiState.value.presentedActivityCard)
+            // The fake serves the same transcript for the child: its one visible tool step.
+            assertEquals(1, viewModel.uiState.value.activityCardChildren["ses-child"]?.toolCount)
+
+            viewModel.dismissActivityCard()
+            assertEquals(null, viewModel.uiState.value.presentedActivityCard)
+
+            viewModel.openActivityCard("ac:p1")
+            repository.messages = repository.messages.filter { it.id != "msg-2" }
+            viewModel.refreshMessages()
+            advanceUntilIdle()
+            assertEquals(null, viewModel.uiState.value.presentedActivityCard)
+
+            viewModel.openActivityCard("ac:p1")
+            viewModel.bind("ses-2", "Second", "/repo")
+            advanceUntilIdle()
+            assertEquals(null, viewModel.uiState.value.presentedActivityCard)
+            assertTrue(viewModel.uiState.value.activityCardChildren.isEmpty())
+        }
+
+    @Test
+    fun activityCardStep_opensAndClosesInTheSheet_andClearsWithTheCardOrStep() =
+        runTest(testDispatcher) {
+            SessionChatDisplayPreferences.updateTimelineStyle(SessionChatTimelineStyle.ActivityCard)
+            val read = MessagePart.Tool(toolName = "read", status = ToolStatus.Completed, id = "p1", output = "file body")
+            val shell = MessagePart.Tool(toolName = "bash", status = ToolStatus.Completed, id = "p2", output = "ok")
+            val grep = MessagePart.Tool(toolName = "grep", status = ToolStatus.Completed, id = "p3", output = "match")
+            val assistant = Message(id = "msg-2", role = MessageRole.Assistant, text = "", parts = listOf(read, shell, grep))
+            val repository = FakeMessageRepository()
+            repository.messages = repository.messages + assistant
+            val viewModel = createViewModel(repository)
+            viewModel.bind("ses-1", "First", "/repo")
+            advanceUntilIdle()
+
+            // No sheet, no detail.
+            viewModel.openActivityCardStep("p2")
+            assertEquals(null, viewModel.uiState.value.activityCardDetailStepId)
+
+            viewModel.openActivityCard("ac:p1")
+            // A step that is not on the card is ignored.
+            viewModel.openActivityCardStep("nope")
+            assertEquals(null, viewModel.uiState.value.activityCardDetailStepId)
+            viewModel.openActivityCardStep("p2")
+            assertEquals("p2", viewModel.uiState.value.activityCardDetailStepId)
+            assertEquals("ac:p1", viewModel.uiState.value.presentedActivityCard)
+
+            // Back returns to the list; the sheet stays open.
+            viewModel.closeActivityCardStep()
+            assertEquals(null, viewModel.uiState.value.activityCardDetailStepId)
+            assertEquals("ac:p1", viewModel.uiState.value.presentedActivityCard)
+
+            // Dismiss clears both.
+            viewModel.openActivityCardStep("p2")
+            viewModel.dismissActivityCard()
+            assertEquals(null, viewModel.uiState.value.activityCardDetailStepId)
+            assertEquals(null, viewModel.uiState.value.presentedActivityCard)
+
+            // Reopening a card starts at its list.
+            viewModel.openActivityCard("ac:p1")
+            assertEquals(null, viewModel.uiState.value.activityCardDetailStepId)
+
+            // The step leaving the card goes back to the list. Two steps stay, so it is still a card.
+            viewModel.openActivityCardStep("p2")
+            repository.messages = repository.messages.map { if (it.id == "msg-2") it.copy(parts = listOf(read, grep)) else it }
+            viewModel.refreshMessages()
+            advanceUntilIdle()
+            assertEquals("ac:p1", viewModel.uiState.value.presentedActivityCard)
+            assertEquals(null, viewModel.uiState.value.activityCardDetailStepId)
+
+            // The card leaving closes the sheet and the detail.
+            viewModel.openActivityCardStep("p1")
+            assertEquals("p1", viewModel.uiState.value.activityCardDetailStepId)
+            repository.messages = repository.messages.filter { it.id != "msg-2" }
+            viewModel.refreshMessages()
+            advanceUntilIdle()
+            assertEquals(null, viewModel.uiState.value.presentedActivityCard)
+            assertEquals(null, viewModel.uiState.value.activityCardDetailStepId)
         }
 
     @Test

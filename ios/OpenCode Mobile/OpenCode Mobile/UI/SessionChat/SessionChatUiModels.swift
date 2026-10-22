@@ -332,6 +332,18 @@ struct SessionChatUiState: Equatable {
     /// Chip-timeline step paragraphs expanded past `+N more`:
     /// `SessionChatStepParagraphBlock.id` to the chip count at tap time.
     var expandedStepParagraphs: [String: Int] = [:]
+    /// Step rails (`SessionChatStepRailBlock.id`) the user unfolded (#779).
+    var unfoldedStepRails: Set<String> = []
+    /// The activity card (`SessionChatActivityCardBlock.id`) whose live sheet is open (#779).
+    var presentedActivityCard: String?
+    /// The step (`SessionChatStep.id`) of the presented card whose detail the sheet shows; nil shows the list.
+    var activityCardDetailStepId: String?
+    /// What each running child session on a live activity card is doing, by child session id.
+    var childActivities: [String: SessionChatChildActivity] = [:]
+    /// What the trailing activity card's footer band shows after the footer hold, by card id (#779).
+    var activityCardFooters: [String: SessionChatActivityFooter] = [:]
+    /// In-flight steps not rendered yet: seen running for less than the entry debounce (#779).
+    var debouncedStepIDs: Set<String> = []
     /// One-time Chip timeline intro sheet (OPE-270).
     var chipTimelineIntroVisible = false
     var dictation: ComposerDictationUiState? = nil
@@ -341,6 +353,7 @@ struct SessionChatUiState: Equatable {
         permissionRequest != nil
             || questionRequest != nil
             || commandsSheetVisible
+            || presentedActivityCard != nil
             || mcpPageVisible
             || forkDialogVisible
             || forkResultVisible
@@ -591,6 +604,18 @@ struct SessionChatTimelineRegionState: Equatable {
     var hasOlder: Bool = false
     var isLoadingOlder: Bool = false
     var errorMessage: String?
+    /// Step rails whose earlier settled steps are shown instead of folded (#779).
+    var unfoldedStepRails: Set<String> = []
+    /// The activity card whose live sheet is open; resolved from `messages` by id (#779).
+    var presentedActivityCard: String?
+    /// The presented card's step whose detail the sheet shows instead of the list.
+    var activityCardDetailStepId: String?
+    /// Observed activity of running child sessions on activity cards, by child session id.
+    var childActivities: [String: SessionChatChildActivity] = [:]
+    /// What the trailing activity card's footer band shows after the footer hold, by card id (#779).
+    var activityCardFooters: [String: SessionChatActivityFooter] = [:]
+    /// In-flight steps not rendered yet: seen running for less than the entry debounce (#779).
+    var debouncedStepIDs: Set<String> = []
 
     var knownChildSessionIDs: Set<String> {
         Set(
@@ -608,6 +633,15 @@ struct SessionChatTimelineRegionState: Equatable {
                     case .stepParagraph(_, let paragraph):
                         paragraph.chips.compactMap { chip in
                             chip.status == .pending || chip.status == .running ? chip.card.childSessionId : nil
+                        }
+                    case .stepRail(_, let rail):
+                        // Same set as the standard timeline: child sessions that did not fail.
+                        rail.steps.compactMap { step in
+                            step.status == .failed ? nil : step.childSession?.childSessionId
+                        }
+                    case .activityCard(_, let card):
+                        card.steps.compactMap { step in
+                            step.status == .failed ? nil : step.childSession?.childSessionId
                         }
                     default:
                         []

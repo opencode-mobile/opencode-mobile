@@ -26,6 +26,106 @@ struct SessionChatTimelineOlderHistoryTests {
         #expect(repository.loadOlderCount == 1)
     }
 
+    @Test func toggleStepRailFold_flipsUnfoldedSet() {
+        let timeline = SessionChatTimeline(
+            sessionID: "ses-1",
+            worktree: "/repo",
+            messageRepository: OlderHistoryMessageRepository(
+                initial: [],
+                older: [],
+                hasOlderInitially: false,
+                hasOlderAfterLoad: false
+            )
+        )
+        timeline.toggleStepRailFold("sr:r1")
+        #expect(timeline.state.unfoldedStepRails == ["sr:r1"])
+        timeline.toggleStepRailFold("sr:r1")
+        #expect(timeline.state.unfoldedStepRails.isEmpty)
+    }
+
+    @Test func openAndDismissActivityCard_setPresentedCard() {
+        let timeline = SessionChatTimeline(
+            sessionID: "ses-1",
+            worktree: "/repo",
+            messageRepository: OlderHistoryMessageRepository(
+                initial: [],
+                older: [],
+                hasOlderInitially: false,
+                hasOlderAfterLoad: false
+            )
+        )
+        #expect(timeline.state.presentedActivityCard == nil)
+        timeline.openActivityCard("ac:r1")
+        #expect(timeline.state.presentedActivityCard == "ac:r1")
+        #expect(timeline.state.unfoldedStepRails.isEmpty)
+        timeline.openActivityCard("ac:r2")
+        #expect(timeline.state.presentedActivityCard == "ac:r2")
+        timeline.dismissActivityCard()
+        #expect(timeline.state.presentedActivityCard == nil)
+    }
+
+    @Test func activityCardStep_opensClosesAndClearsOnDismiss() async {
+        let timeline = await activityCardTimeline(parts: [readPart("r1"), grepPart("g1")])
+        // No sheet open: a step cannot open.
+        timeline.openActivityCardStep("r1")
+        #expect(timeline.state.activityCardDetailStepId == nil)
+
+        timeline.openActivityCard("ac:r1")
+        timeline.openActivityCardStep("g1")
+        #expect(timeline.state.activityCardDetailStepId == "g1")
+        // A step that is not on the presented card is ignored.
+        timeline.openActivityCardStep("elsewhere")
+        #expect(timeline.state.activityCardDetailStepId == "g1")
+
+        timeline.closeActivityCardStep()
+        #expect(timeline.state.activityCardDetailStepId == nil)
+        #expect(timeline.state.presentedActivityCard == "ac:r1")
+
+        timeline.openActivityCardStep("r1")
+        timeline.dismissActivityCard()
+        #expect(timeline.state.presentedActivityCard == nil)
+        #expect(timeline.state.activityCardDetailStepId == nil)
+    }
+
+    @Test func activityCardStep_clearsWhenTheStepOrCardLeaves() async {
+        let repository = OlderHistoryMessageRepository(
+            initial: [assistant("a1", parts: [readPart("r1"), grepPart("g1")])]
+        )
+        let timeline = SessionChatTimeline(sessionID: "ses-1", worktree: "/repo", messageRepository: repository)
+        timeline.updateActivityCardTimeline(true)
+        await timeline.loadMessages()
+        timeline.openActivityCard("ac:r1")
+        timeline.openActivityCardStep("g1")
+        #expect(timeline.state.activityCardDetailStepId == "g1")
+
+        // The step leaves the card: back to the list, the sheet stays.
+        repository.initial = [assistant("a1", parts: [readPart("r1")])]
+        await timeline.loadMessages()
+        #expect(timeline.state.presentedActivityCard == "ac:r1")
+        #expect(timeline.state.activityCardDetailStepId == nil)
+
+        // The card leaves: the sheet closes with its detail.
+        timeline.openActivityCardStep("r1")
+        #expect(timeline.state.activityCardDetailStepId == "r1")
+        repository.initial = [display("u1", role: .user)]
+        await timeline.loadMessages()
+        #expect(timeline.state.presentedActivityCard == nil)
+        #expect(timeline.state.activityCardDetailStepId == nil)
+    }
+
+    @Test func openingAnotherActivityCard_showsItsList() async {
+        let timeline = await activityCardTimeline(parts: [
+            readPart("r1"),
+            .text(TextPart(id: "t1", text: "Found it.", isStreaming: false)),
+            grepPart("g1"),
+        ])
+        timeline.openActivityCard("ac:r1")
+        timeline.openActivityCardStep("r1")
+        timeline.openActivityCard("ac:g1")
+        #expect(timeline.state.presentedActivityCard == "ac:g1")
+        #expect(timeline.state.activityCardDetailStepId == nil)
+    }
+
     @Test func loadOlderFailureRetainsRowsAndAllowsRetry() async {
         let repository = OlderHistoryMessageRepository(
             initial: [display("m3", role: .user)],
@@ -102,12 +202,36 @@ struct SessionChatTimelineOlderHistoryTests {
     }
 }
 
+@MainActor
+private func activityCardTimeline(parts: [MessagePart]) async -> SessionChatTimeline {
+    let timeline = SessionChatTimeline(
+        sessionID: "ses-1",
+        worktree: "/repo",
+        messageRepository: OlderHistoryMessageRepository(initial: [assistant("a1", parts: parts)])
+    )
+    timeline.updateActivityCardTimeline(true)
+    await timeline.loadMessages()
+    return timeline
+}
+
+private func assistant(_ id: String, parts: [MessagePart]) -> DisplayMessage {
+    DisplayMessage(message: Message(id: id, role: .assistant, text: "", parts: parts, model: nil, mode: nil, sentAtEpochMs: nil))
+}
+
+private func readPart(_ id: String) -> MessagePart {
+    .tool(ToolPart(id: id, toolName: "read", status: .completed, input: ["filePath": .string("/repo/A.swift")], output: "contents"))
+}
+
+private func grepPart(_ id: String) -> MessagePart {
+    .tool(ToolPart(id: id, toolName: "grep", status: .completed, input: ["pattern": .string("x")], output: "match"))
+}
+
 private func display(_ id: String, role: MessageRole) -> DisplayMessage {
     DisplayMessage(message: Message(id: id, role: role, text: id, model: nil, mode: nil, sentAtEpochMs: nil))
 }
 
 private final class OlderHistoryMessageRepository: MessageRepository, @unchecked Sendable {
-    private let initial: [DisplayMessage]
+    var initial: [DisplayMessage]
     private let older: [DisplayMessage]
     var failOlder: Bool
     private var hasOlderInitially: Bool

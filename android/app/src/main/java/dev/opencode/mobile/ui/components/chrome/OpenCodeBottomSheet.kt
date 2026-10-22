@@ -274,6 +274,8 @@ fun OpenCodeBottomSheet(
     scrollTargetKey: Any? = null,
     pinnedTop: @Composable ColumnScope.() -> Unit = {},
     pinnedBottom: (@Composable ColumnScope.() -> Unit)? = null,
+    /** Replaces the header's [title] text (a live status, say); [title] stays the pane title. */
+    titleContent: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     var shouldRender by remember { mutableStateOf(visible) }
@@ -290,7 +292,7 @@ fun OpenCodeBottomSheet(
     // reacted to the caller clearing its state (a null target, an empty list).
     val shown = remember { BottomSheetShownSlots() }
     if (visible || !shown.isSet) {
-        shown.update(title, headerLeadingAction, headerTrailingAction, height, keyboard, scrollTargetKey, pinnedTop, pinnedBottom, content)
+        shown.update(title, headerLeadingAction, headerTrailingAction, height, keyboard, scrollTargetKey, pinnedTop, pinnedBottom, content, titleContent)
     }
 
     LaunchedEffect(visible, keyboard) {
@@ -444,6 +446,7 @@ fun OpenCodeBottomSheet(
                 ) {
                     BottomSheetContent(
                         title = shown.title,
+                        titleContent = shown.titleContent,
                         headerLeadingAction = shown.headerLeadingAction,
                         headerTrailingAction = shown.headerTrailingAction,
                         height = shown.height,
@@ -517,6 +520,8 @@ private class BottomSheetShownSlots {
         private set
     var content: @Composable ColumnScope.() -> Unit = {}
         private set
+    var titleContent: (@Composable () -> Unit)? = null
+        private set
 
     fun update(
         title: String,
@@ -528,8 +533,10 @@ private class BottomSheetShownSlots {
         pinnedTop: @Composable ColumnScope.() -> Unit,
         pinnedBottom: (@Composable ColumnScope.() -> Unit)?,
         content: @Composable ColumnScope.() -> Unit,
+        titleContent: (@Composable () -> Unit)? = null,
     ) {
         isSet = true
+        this.titleContent = titleContent
         this.title = title
         this.headerLeadingAction = headerLeadingAction
         this.headerTrailingAction = headerTrailingAction
@@ -601,6 +608,7 @@ internal fun openCodeBottomSheetCenteredScroll(
 @Composable
 private fun BottomSheetContent(
     title: String,
+    titleContent: (@Composable () -> Unit)?,
     headerLeadingAction: OpenCodeBottomSheetHeaderAction?,
     headerTrailingAction: OpenCodeBottomSheetHeaderTextAction?,
     height: OpenCodeBottomSheetHeight,
@@ -721,6 +729,7 @@ private fun BottomSheetContent(
     ) {
         BottomSheetHeader(
             title = title,
+            titleContent = titleContent,
             leadingAction = headerLeadingAction,
             trailingAction = headerTrailingAction,
             onDismissRequest = onDismissRequest,
@@ -819,6 +828,7 @@ private fun BottomSheetContent(
 @Composable
 private fun BottomSheetHeader(
     title: String,
+    titleContent: (@Composable () -> Unit)?,
     leadingAction: OpenCodeBottomSheetHeaderAction?,
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
@@ -844,14 +854,18 @@ private fun BottomSheetHeader(
                 onClick = action.onClick,
             )
         }
-        Text(
-            text = title,
-            modifier = Modifier.weight(1f).semantics { heading() },
-            style = MaterialTheme.typography.titleMedium,
-            color = openCodeColor("text-strong"),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+        if (titleContent != null) {
+            Box(modifier = Modifier.weight(1f).semantics { heading() }) { titleContent() }
+        } else {
+            Text(
+                text = title,
+                modifier = Modifier.weight(1f).semantics { heading() },
+                style = MaterialTheme.typography.titleMedium,
+                color = openCodeColor("text-strong"),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
         trailingAction?.let { action ->
             OpenCodeButton(
                 variant = OpenCodeButtonVariant.CompactText(action.title),
@@ -1104,6 +1118,8 @@ fun OpenCodeBottomSheetEntry(
     selected: Boolean = false,
     startDecorator: BottomSheetEntryDecorator = BottomSheetEntryDecorator.None,
     endDecorator: BottomSheetEntryDecorator = BottomSheetEntryDecorator.None,
+    /** Optional second line that explains the entry, for pickers whose options need a description. */
+    subtitle: String? = null,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -1155,14 +1171,36 @@ fun OpenCodeBottomSheetEntry(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         BottomSheetEntryDecoration(decorator = startDecorator, tint = iconColor)
-        Text(
-            text = title,
-            modifier = Modifier.weight(1f),
-            style = MaterialTheme.typography.bodyLarge,
-            color = contentColor,
-            maxLines = BottomSheetEntryMaxLines,
-            overflow = TextOverflow.Ellipsis,
-        )
+        if (subtitle.isNullOrEmpty()) {
+            Text(
+                text = title,
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.bodyLarge,
+                color = contentColor,
+                maxLines = BottomSheetEntryMaxLines,
+                overflow = TextOverflow.Ellipsis,
+            )
+        } else {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = contentColor,
+                    maxLines = BottomSheetEntryMaxLines,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (enabled) openCodeColor("text-base") else openCodeColor("text-weaker"),
+                    maxLines = BottomSheetEntryMaxLines,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
         BottomSheetEntryDecoration(decorator = resolvedEndDecorator, tint = iconColor)
     }
 }

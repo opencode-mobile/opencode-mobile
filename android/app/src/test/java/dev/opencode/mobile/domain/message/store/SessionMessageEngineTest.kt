@@ -558,6 +558,44 @@ class SessionMessageEngineTest {
     }
 
     @Test
+    fun partUpdated_lateRunningDuplicateDoesNotReopenSettledTool() {
+        fun toolUpdate(status: String) =
+            MessagePatch.PartUpdated(
+                buildJsonObject {
+                    put("id", "prt-r")
+                    put("messageID", "msg-1")
+                    put("sessionID", "ses-1")
+                    put("type", "tool")
+                    put("tool", "read")
+                    put(
+                        "state",
+                        buildJsonObject {
+                            put("status", status)
+                            put("input", buildJsonObject { put("filePath", "/repo/src/currency.ts") })
+                            if (status == "error") put("error", "File not found")
+                        },
+                    )
+                },
+                delta = null,
+            )
+        engine.replaceAll(
+            "ses-1",
+            listOf(Message(id = "msg-1", role = MessageRole.Assistant, text = "", parts = emptyList())),
+        )
+        // v1 delivers every update on /global/event and /event; the buses interleave.
+        listOf("running", "error", "running").forEach { engine.apply("ses-1", toolUpdate(it)) }
+        val tool =
+            engine
+                .messages("ses-1")
+                .single()
+                .parts
+                .filterIsInstance<MessagePart.Tool>()
+                .single()
+        assertEquals(ToolStatus.Error, tool.status)
+        assertEquals("File not found", tool.error)
+    }
+
+    @Test
     fun partUpdated_overlaysToolFieldsInsteadOfReplacing() {
         engine.replaceAll(
             "ses-1",

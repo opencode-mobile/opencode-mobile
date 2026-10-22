@@ -1042,6 +1042,8 @@ class InMemoryMessageStore
             }
         }
 
+        private fun isSettledTool(status: ToolStatus): Boolean = status == ToolStatus.Completed || status == ToolStatus.Error
+
         private fun mergePart(
             existing: MessagePart?,
             incoming: MessagePart,
@@ -1057,6 +1059,15 @@ class InMemoryMessageStore
                 when {
                     existing is MessagePart.Tool && incoming is MessagePart.Tool -> {
                         val mergedInput = ToolArgumentsPreview.mergedInput(existing.input, incoming.input)
+                        // A tool part runs once. v1 sends each update on both event buses, so a
+                        // late in-flight duplicate must not reopen a call that already settled.
+                        if (isSettledTool(existing.status) && !isSettledTool(incoming.status)) {
+                            return existing.copy(
+                                input = mergedInput,
+                                metadata = mergeJson(existing.metadata, incoming.metadata),
+                                timeStartEpochMs = existing.timeStartEpochMs ?: incoming.timeStartEpochMs,
+                            )
+                        }
                         existing.copy(
                             toolName =
                                 ToolPartIdentity.resolvedName(

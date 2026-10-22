@@ -835,6 +835,23 @@ fun SessionChatScreen(
                             supportsSessionMessageDiff = uiState.supportsSessionMessageDiff,
                             expandedStepParagraphs = uiState.expandedStepParagraphs,
                             onExpandStepParagraph = viewModel::expandStepParagraph,
+                            unfoldedStepRails = uiState.unfoldedStepRails,
+                            onToggleStepRailFold = viewModel::toggleStepRailFold,
+                            presentedActivityCard = uiState.presentedActivityCard,
+                            activityCardChildren = uiState.activityCardChildren,
+                            activityCardFooters = uiState.activityCardFooters,
+                            debouncedStepIds = uiState.debouncedStepIds,
+                            onOpenActivityCard = { blockId ->
+                                logChatAction(ProductAnalytics.Action.CHAT_OPEN_TOOL_DETAIL)
+                                viewModel.openActivityCard(blockId)
+                            },
+                            onDismissActivityCard = viewModel::dismissActivityCard,
+                            activityCardDetailStepId = uiState.activityCardDetailStepId,
+                            onOpenActivityCardStep = { stepId ->
+                                logChatAction(ProductAnalytics.Action.CHAT_OPEN_TOOL_DETAIL)
+                                viewModel.openActivityCardStep(stepId)
+                            },
+                            onCloseActivityCardStep = viewModel::closeActivityCardStep,
                         ),
                     modifier = Modifier.fillMaxSize(),
                 )

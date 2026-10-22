@@ -354,7 +354,7 @@ private fun ToolChipLeadingIcon(
  * still sweep in step (iOS keys off wall-clock time the same way).
  */
 @Composable
-private fun rememberRunningPhase(): State<Float> {
+internal fun rememberRunningPhase(): State<Float> {
     val phase = remember { mutableFloatStateOf(0f) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -371,7 +371,7 @@ private fun rememberRunningPhase(): State<Float> {
  * sweeping left to right across `text-base` text.
  */
 @Composable
-private fun runningShimmerBrush(phase: Float): ShaderBrush {
+internal fun runningShimmerBrush(phase: Float): ShaderBrush {
     val base = openCodeColor("text-base")
     val highlight = openCodeColor("warning")
     val half = TOOL_CHIP_SHIMMER_HALF_WIDTH

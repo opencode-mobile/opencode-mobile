@@ -152,46 +152,57 @@ internal fun SessionChatToolDetailSheet(
                 null
             },
     ) {
-        val body = target?.body.orEmpty()
-        val document by produceState<MarkdownDocument?>(initialValue = null, body, target?.bodyIsMarkdown) {
-            value =
-                if (target?.bodyIsMarkdown == true && body.isNotBlank()) {
-                    withContext(Dispatchers.Default) {
-                        runCatching {
-                            OpenCodeMarkdownParser.parse(body, codeHighlighter = OpenCodeSemanticFallbackHighlighter)
-                        }.getOrNull()
-                    }
-                } else {
-                    null
+        if (target != null) SessionChatToolDetailBody(target)
+    }
+}
+
+/**
+ * The detail body: [SessionChatToolDetailTarget.body] as markdown, a
+ * monospace provider body, or plain text. Shared by the tool detail sheet
+ * and the activity sheet's in-place step detail (#779).
+ */
+@Composable
+internal fun SessionChatToolDetailBody(target: SessionChatToolDetailTarget) {
+    val clipboard = LocalClipboardManager.current
+    val body = target.body
+    val document by produceState<MarkdownDocument?>(initialValue = null, body, target.bodyIsMarkdown) {
+        value =
+            if (target.bodyIsMarkdown && body.isNotBlank()) {
+                withContext(Dispatchers.Default) {
+                    runCatching {
+                        OpenCodeMarkdownParser.parse(body, codeHighlighter = OpenCodeSemanticFallbackHighlighter)
+                    }.getOrNull()
                 }
-        }
-        val rendered = document
-        if (rendered == null && body.isBlank()) return@OpenCodeBottomSheet
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .openCodeBottomSheetContentInset()
-                    .padding(vertical = 12.dp),
-        ) {
-            when {
-                rendered != null ->
-                    OpenCodeRenderedMarkdown(
-                        document = rendered,
-                        variant = OpenCodeRenderedMarkdownVariant.Standalone,
-                    )
-                target?.monospace == true && body.isNotBlank() ->
-                    SessionProviderResponseBody(
-                        body = body,
-                        onCopy = { clipboard.setText(AnnotatedString(body)) },
-                    )
-                body.isNotBlank() ->
-                    Text(
-                        text = body,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
+            } else {
+                null
             }
+    }
+    val rendered = document
+    if (rendered == null && body.isBlank()) return
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .openCodeBottomSheetContentInset()
+                .padding(vertical = 12.dp),
+    ) {
+        when {
+            rendered != null ->
+                OpenCodeRenderedMarkdown(
+                    document = rendered,
+                    variant = OpenCodeRenderedMarkdownVariant.Standalone,
+                )
+            target.monospace && body.isNotBlank() ->
+                SessionProviderResponseBody(
+                    body = body,
+                    onCopy = { clipboard.setText(AnnotatedString(body)) },
+                )
+            body.isNotBlank() ->
+                Text(
+                    text = body,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
         }
     }
 }

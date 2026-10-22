@@ -346,6 +346,65 @@ struct MessageListTimelineApplyPacket: Equatable, Sendable {
         )
     }
 
+    /// Step rail and activity card: fold / expansion state and the live run
+    /// live in the Screen Model and the host, not the projected frame. Rows
+    /// holding a rail or card whose fold, expansion or liveness changed
+    /// reconfigure as a layout change, and the state folds into revision so an
+    /// unchanged state never re-applies.
+    func addingStepRailState(
+        rows: [SessionChatRow],
+        state: SessionChatStepRailViewState,
+        previous: SessionChatStepRailViewState
+    ) -> MessageListTimelineApplyPacket {
+        var keyed = Dictionary(uniqueKeysWithValues: state.unfolded.map { ($0, 0) })
+        for (child, action) in state.childActions { keyed["child:" + child + ":" + action] = 2 }
+        if let live = state.liveRailID { keyed["live:" + live] = 1 }
+        if let live = state.liveCardID { keyed["liveCard:" + live] = 3 }
+        if state.awaitingUser { keyed["awaitingUser"] = 4 }
+        for (card, footer) in state.activityFooters { keyed["footer:" + card + ":" + footer.revisionKey] = 5 }
+        for step in state.debouncedStepIDs { keyed["debounced:" + step] = 6 }
+        let fingerprint = SessionChatStepParagraphExpansion.fingerprint(keyed)
+        var toggled = state.unfolded.symmetricDifference(previous.unfolded)
+        if state.liveRailID != previous.liveRailID {
+            toggled.formUnion([state.liveRailID, previous.liveRailID].compactMap { $0 })
+        }
+        if state.liveCardID != previous.liveCardID {
+            toggled.formUnion([state.liveCardID, previous.liveCardID].compactMap { $0 })
+        }
+        if state.awaitingUser != previous.awaitingUser || state.childActions != previous.childActions,
+           let live = state.liveCardID
+        {
+            toggled.insert(live)
+        }
+        for card in Set(state.activityFooters.keys).union(previous.activityFooters.keys)
+            where state.activityFooters[card] != previous.activityFooters[card]
+        {
+            toggled.insert(card)
+        }
+        let debounceChanged = state.debouncedStepIDs.symmetricDifference(previous.debouncedStepIDs)
+        if !debounceChanged.isEmpty {
+            toggled.formUnion(SessionChatStepParagraphExpansion.stepRunIDs(containingSteps: debounceChanged, in: rows))
+        }
+        let rowIDs = SessionChatStepParagraphExpansion.rowIDs(containingStepRails: toggled, in: rows)
+        guard fingerprint != 0 || !rowIDs.isEmpty else { return self }
+        var nextKinds = kinds
+        if !rowIDs.isEmpty {
+            nextKinds.insert(.structure)
+            nextKinds.insert(.content)
+        }
+        return MessageListTimelineApplyPacket(
+            frameRevision: frameRevision &+ (fingerprint &* 1_000_000_009),
+            insertedRowIDs: insertedRowIDs,
+            changedRowIDs: changedRowIDs.union(rowIDs),
+            removedRowIDs: removedRowIDs,
+            layoutChangedRowIDs: layoutChangedRowIDs.union(rowIDs),
+            grewBottomRowIDs: grewBottomRowIDs,
+            decorateRowIDs: decorateRowIDs,
+            isRequired: isRequired,
+            kinds: nextKinds
+        )
+    }
+
     /// Model-switch notices show the catalog name, which can arrive after the row.
     /// Rows whose resolved name changed reconfigure; the names fold into revision
     /// so an unchanged catalog never re-applies.
@@ -544,6 +603,25 @@ extension TimelineRow {
     }
 }
 
+/// Step rail and activity card presentation state the timeline host threads to each row.
+struct SessionChatStepRailViewState: Equatable {
+    var unfolded: Set<String>
+    /// Current action of each running child session on a live activity card,
+    /// by child session id (#779).
+    var childActions: [String: String] = [:]
+    /// The rail or activity card that shows live status and owns the Working footer, or nil.
+    var liveRailID: String?
+    /// The activity card shown live: `liveRailID`, or the last card while the turn waits on the user.
+    var liveCardID: String?
+    var awaitingUser = false
+    /// What each held activity card footer shows, by card id (#779).
+    var activityFooters: [String: SessionChatActivityFooter] = [:]
+    /// In-flight steps the entry debounce keeps off rails and footers (#779).
+    var debouncedStepIDs: Set<String> = []
+
+    static let empty = SessionChatStepRailViewState(unfolded: [], liveRailID: nil)
+}
+
 /// Chip-timeline `+N more` expansion helpers for the timeline host.
 enum SessionChatStepParagraphExpansion {
     /// Order-independent, process-stable fingerprint over paragraph id and
@@ -566,6 +644,41 @@ enum SessionChatStepParagraphExpansion {
             changed.insert(key)
         }
         return changed
+    }
+
+    /// Rows whose blocks hold a step rail or activity card with one of `railIDs`.
+    /// Ids of the step rails and activity cards that hold one of `stepIDs`.
+    static func stepRunIDs(containingSteps stepIDs: Set<String>, in rows: [SessionChatRow]) -> Set<String> {
+        var result: Set<String> = []
+        for row in rows {
+            for block in row.blocks {
+                switch block {
+                case .stepRail(_, let rail) where rail.steps.contains(where: { stepIDs.contains($0.id) }):
+                    result.insert(rail.id)
+                case .activityCard(_, let card) where card.steps.contains(where: { stepIDs.contains($0.id) }):
+                    result.insert(card.id)
+                default:
+                    break
+                }
+            }
+        }
+        return result
+    }
+
+    static func rowIDs(containingStepRails railIDs: Set<String>, in rows: [SessionChatRow]) -> Set<String> {
+        guard !railIDs.isEmpty else { return [] }
+        var result: Set<String> = []
+        for row in rows {
+            let holds = row.blocks.contains { block in
+                switch block {
+                case .stepRail(_, let rail): return railIDs.contains(rail.id)
+                case .activityCard(_, let card): return railIDs.contains(card.id)
+                default: return false
+                }
+            }
+            if holds { result.insert(row.id) }
+        }
+        return result
     }
 
     /// Rows whose blocks hold a step paragraph with one of `paragraphIDs`.

@@ -875,6 +875,30 @@ final class SessionChatViewModel {
         publishUiState()
     }
 
+    /// Activity card: open its live activity sheet.
+    func openActivityCard(_ cardID: String) {
+        timeline.openActivityCard(cardID)
+    }
+
+    func dismissActivityCard() {
+        timeline.dismissActivityCard()
+    }
+
+    /// Activity sheet: show one step's detail in the same sheet.
+    func openActivityCardStep(_ stepID: String) {
+        timeline.openActivityCardStep(stepID)
+    }
+
+    /// Activity sheet: back to the step list.
+    func closeActivityCardStep() {
+        timeline.closeActivityCardStep()
+    }
+
+    /// Step rail: show or fold one rail's earlier settled steps.
+    func toggleStepRailFold(_ railID: String) {
+        timeline.toggleStepRailFold(railID)
+    }
+
     func toggleFollowUp() {
         guard activeConnectionManager.capabilities.supportsFollowUpDelivery else { return }
         composer.toggleFollowUp()
@@ -1171,6 +1195,8 @@ final class SessionChatViewModel {
             SessionChatDisplayPreferences.shared.collapseConsecutiveToolCalls
         )
         timeline.updateChipTimeline(SessionChatDisplayPreferences.shared.chipTimeline)
+        timeline.updateStepRailTimeline(SessionChatDisplayPreferences.shared.stepRailTimeline)
+        timeline.updateActivityCardTimeline(SessionChatDisplayPreferences.shared.activityCardTimeline)
         observeCollapsePreference()
     }
 
@@ -1182,6 +1208,8 @@ final class SessionChatViewModel {
         withObservationTracking {
             _ = SessionChatDisplayPreferences.shared.collapseConsecutiveToolCalls
             _ = SessionChatDisplayPreferences.shared.chipTimeline
+            _ = SessionChatDisplayPreferences.shared.stepRailTimeline
+            _ = SessionChatDisplayPreferences.shared.activityCardTimeline
         } onChange: { [weak self] in
             Task { @MainActor in
                 guard let self, self.collapsePreferenceGeneration == generation else { return }
@@ -1189,6 +1217,10 @@ final class SessionChatViewModel {
                     SessionChatDisplayPreferences.shared.collapseConsecutiveToolCalls
                 )
                 self.timeline.updateChipTimeline(SessionChatDisplayPreferences.shared.chipTimeline)
+                self.timeline.updateStepRailTimeline(SessionChatDisplayPreferences.shared.stepRailTimeline)
+                self.timeline.updateActivityCardTimeline(
+                    SessionChatDisplayPreferences.shared.activityCardTimeline
+                )
                 self.publishUiState()
                 self.observeCollapsePreference()
             }
@@ -1686,6 +1718,12 @@ final class SessionChatViewModel {
             pendingFilesOpen: commandsState.pendingFilesOpen,
             hasPendingRevert: commandsState.hasPendingRevert,
             expandedStepParagraphs: expandedStepParagraphs,
+            unfoldedStepRails: timelineState.unfoldedStepRails,
+            presentedActivityCard: timelineState.presentedActivityCard,
+            activityCardDetailStepId: timelineState.activityCardDetailStepId,
+            childActivities: timelineState.childActivities,
+            activityCardFooters: timelineState.activityCardFooters,
+            debouncedStepIDs: timelineState.debouncedStepIDs,
             chipTimelineIntroVisible: chipTimelineIntroVisible,
             dictation: dictation
         )

@@ -26,6 +26,15 @@ object PresentationBlockId {
     }
 
     /**
+     * Step rail timeline: keyed on the first member part only, never on all
+     * members, so the rail keeps its id while later steps append.
+     */
+    fun stepRail(firstPartId: String): String = "sr:$firstPartId"
+
+    /** Activity card timeline: keyed on the first member part only, like [stepRail]. */
+    fun activityCard(firstPartId: String): String = "ac:$firstPartId"
+
+    /**
      * Chip timeline: a run of settled thoughts rendered as one row. The id is the
      * previous row id followed by the new part id, so a growing run keeps a stable prefix.
      */

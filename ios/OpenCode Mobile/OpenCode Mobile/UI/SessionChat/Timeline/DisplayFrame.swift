@@ -48,6 +48,8 @@ nonisolated enum DisplayFrameBuilder {
         serverCommands: [ServerCommand] = [],
         collapseConsecutiveToolCalls: Bool = false,
         chipTimeline: Bool = false,
+        stepRail: Bool = false,
+        activityCard: Bool = false,
         childSessions: [SessionChatChildSessionCandidate] = []
     ) -> DisplayFrame {
         // pthread_main_np avoids the async-context warning on Thread.isMainThread.
@@ -64,7 +66,9 @@ nonisolated enum DisplayFrameBuilder {
                 messageId: message.id,
                 fallbackText: message.text,
                 collapseConsecutiveToolCalls: collapseConsecutiveToolCalls,
-                chipTimeline: chipTimeline
+                chipTimeline: chipTimeline,
+                stepRail: stepRail,
+                activityCard: activityCard
             )
             blocks = SessionChatTimelineBlocks.collapseCommandInvocations(
                 role: message.role,
@@ -96,9 +100,11 @@ nonisolated enum DisplayFrameBuilder {
         bodies = SessionChatTimelineBlocks.mergeConsecutiveToolOnlyAssistantBodies(
             bodies,
             collapseConsecutiveToolCalls: collapseConsecutiveToolCalls,
-            chipTimeline: chipTimeline
+            chipTimeline: chipTimeline,
+            stepRail: stepRail,
+            activityCard: activityCard
         )
-        if chipTimeline {
+        if chipTimeline || stepRail || activityCard {
             // Merged runs rebuilt their paragraphs; pick up per-block cache hits again.
             bodies = bodies.map { body in
                 DisplayMessageBody(

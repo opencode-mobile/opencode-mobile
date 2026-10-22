@@ -116,6 +116,10 @@ struct ComponentGalleryDetailView: View {
             TimelineNoticeGalleryView()
         case .childSessionRow:
             ChildSessionRowGalleryView()
+        case .stepRail:
+            StepRailGalleryView()
+        case .activityCard:
+            ActivityCardGalleryView()
         case .workingIndicator:
             WorkingIndicatorGalleryView()
         case .reasoningRow:

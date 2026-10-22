@@ -77,6 +77,12 @@ class SessionChatTimeline(
     @Volatile
     var chipTimeline: Boolean = false
 
+    @Volatile
+    var stepRailTimeline: Boolean = false
+
+    @Volatile
+    var activityCardTimeline: Boolean = false
+
     fun updateServerCommands(commands: List<ServerCommand>) {
         if (commands == serverCommands) return
         val wasEmpty = serverCommands.isEmpty()
@@ -147,6 +153,28 @@ class SessionChatTimeline(
                 sourceWorktree = worktree,
                 fromQuietRefresh = true,
                 source = "chip-pref",
+                messagesFromCache = _state.value.messagesFromCache,
+            )
+        }
+    }
+
+    /** Step rail and activity card styles (#779); one rebuild when switching between them. */
+    fun updateStepTimelines(
+        stepRail: Boolean,
+        activityCard: Boolean,
+    ) {
+        if (stepRail == stepRailTimeline && activityCard == activityCardTimeline) return
+        stepRailTimeline = stepRail
+        activityCardTimeline = activityCard
+        val sessionId = boundSessionId ?: return
+        val worktree = boundWorktree ?: return
+        if (lastLoadedDisplayMessages.isNotEmpty()) {
+            applyLoadedDisplayMessages(
+                displayMessages = lastLoadedDisplayMessages,
+                sourceSessionId = sessionId,
+                sourceWorktree = worktree,
+                fromQuietRefresh = true,
+                source = "step-timeline-pref",
                 messagesFromCache = _state.value.messagesFromCache,
             )
         }
@@ -773,6 +801,8 @@ class SessionChatTimeline(
                         },
                         collapseConsecutiveToolCalls,
                         chipTimeline,
+                        stepRailTimeline,
+                        activityCardTimeline,
                     )
                 TimelineProjector.project(
                     frame =
@@ -1100,6 +1130,8 @@ class SessionChatTimeline(
                                 fallbackText = message.text,
                                 collapseConsecutiveToolCalls = collapseConsecutiveToolCalls,
                                 chipTimeline = chipTimeline,
+                                stepRail = stepRailTimeline,
+                                activityCard = activityCardTimeline,
                             ),
                         commands = serverCommands,
                     ),

@@ -18,6 +18,7 @@ import dev.opencode.mobile.domain.preferences.DeveloperToolsPreferences
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.preferences.MarkdownHighlightPreferences
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
+import dev.opencode.mobile.domain.preferences.SessionChatTimelineStyle
 import dev.opencode.mobile.domain.preferences.SplitPanePreferences
 import dev.opencode.mobile.domain.sessioncache.SessionCache
 import dev.opencode.mobile.domain.textmate.TextMateLogbook
@@ -128,8 +129,8 @@ class SettingsViewModel
             SessionChatDisplayPreferences.updateCollapseConsecutiveToolCalls(enabled)
         }
 
-        fun setChipTimeline(enabled: Boolean) {
-            SessionChatDisplayPreferences.updateChipTimeline(enabled)
+        fun setTimelineStyle(style: SessionChatTimelineStyle) {
+            SessionChatDisplayPreferences.updateTimelineStyle(style)
         }
 
         fun setFollowUpDelivery(value: FollowUpDelivery) {

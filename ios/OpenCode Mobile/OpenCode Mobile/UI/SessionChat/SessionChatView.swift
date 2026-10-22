@@ -274,6 +274,9 @@ struct SessionChatView: View {
                     workingIndicatorLabel: viewModel.uiState.workingIndicatorLabel,
                     workingIndicatorCollapsed: viewModel.uiState.workingIndicatorCollapsed,
                     workingIndicatorFading: viewModel.uiState.workingIndicatorFading,
+                    isTurnActive: viewModel.uiState.sessionStatusLabel != nil,
+                    isAwaitingUser: viewModel.uiState.permissionRequest != nil
+                        || viewModel.uiState.questionRequest != nil,
                     sessionTodosVisible: sessionTodosPillVisible,
                     sessionTodoCompletedCount: viewModel.uiState.sessionTodoCompletedCount,
                     sessionTodoTotalCount: viewModel.uiState.sessionTodoTotalCount,
@@ -366,6 +369,17 @@ struct SessionChatView: View {
                     onExpandStepParagraph: { paragraphID, chipCount in
                         viewModel.expandStepParagraph(paragraphID, chipCount: chipCount)
                     },
+                    unfoldedStepRails: viewModel.uiState.unfoldedStepRails,
+                    onToggleStepRailFold: { railID in viewModel.toggleStepRailFold(railID) },
+                    presentedActivityCard: viewModel.uiState.presentedActivityCard,
+                    activityCardDetailStepId: viewModel.uiState.activityCardDetailStepId,
+                    childActivities: viewModel.uiState.childActivities,
+                    activityCardFooters: viewModel.uiState.activityCardFooters,
+                    debouncedStepIDs: viewModel.uiState.debouncedStepIDs,
+                    onOpenActivityCard: { cardID in viewModel.openActivityCard(cardID) },
+                    onDismissActivityCard: { viewModel.dismissActivityCard() },
+                    onOpenActivityCardStep: { stepID in viewModel.openActivityCardStep(stepID) },
+                    onCloseActivityCardStep: { viewModel.closeActivityCardStep() },
                     noticeModelNames: TimelineNoticeModelNames(options: viewModel.uiState.composer.modelOptions)
                 )
             )
