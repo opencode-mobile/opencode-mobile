@@ -414,7 +414,7 @@ private fun RowScope.CurrentTool(
     Text(
         text = current.title,
         style = MaterialTheme.typography.bodyMedium,
-        color = openCodeColor("text-strong"),
+        color = openCodeColor("text-base"),
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
         modifier = Modifier.weight(1f),
