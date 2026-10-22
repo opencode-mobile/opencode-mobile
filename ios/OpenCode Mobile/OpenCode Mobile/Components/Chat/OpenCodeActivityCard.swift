@@ -256,7 +256,7 @@ struct OpenCodeActivityCard: View {
                     .accessibilityHidden(true)
                 Text(current.title)
                     .font(OpenCodeTypography.bodySecondary)
-                    .foregroundStyle(OpenCodeColors.textStrong)
+                    .foregroundStyle(OpenCodeColors.textBase)
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .frame(maxWidth: .infinity, alignment: .leading)
