@@ -6,6 +6,7 @@ struct ActivityCardGalleryView: View {
         case twoAgents = "Two agents, +1"
         case waiting = "Waiting for agents"
         case settled = "Settled"
+        case settledAgents = "Settled with agents"
         case settledFailure = "Settled, failed"
 
         var id: String { rawValue }
@@ -107,7 +108,28 @@ struct ActivityCardGalleryView: View {
         case .settled:
             OpenCodeActivityCard(
                 state: .settled(worstStatus: .completed, stepCount: 6),
-                summary: "Read, Grep, Edit, Agent",
+                summary: "Read, Grep, Edit",
+                onOpen: opened
+            )
+        case .settledAgents:
+            OpenCodeActivityCard(
+                state: .settled(worstStatus: .completed, stepCount: 3),
+                summary: "Agent, Thought",
+                agents: [
+                    OpenCodeActivityAgentRow(
+                        id: "explore",
+                        agentName: "Explore",
+                        action: "Branch names render in SessionChatRepoStrip",
+                        startedAtMs: nil
+                    ),
+                    OpenCodeActivityAgentRow(
+                        id: "general",
+                        agentName: "General",
+                        action: "Check how GitStatusRepository refreshes",
+                        startedAtMs: nil
+                    ),
+                ],
+                onAgentTap: tapped,
                 onOpen: opened
             )
         case .settledFailure:

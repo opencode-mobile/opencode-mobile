@@ -98,7 +98,7 @@ private val SheetSubStepInset = 44.dp
 /**
  * Activity sheet (#779): everything one activity card segment did, kept live
  * while open. The header reads `Working N` (shimmer and elapsed) while [live],
- * `Used N` once settled. An Agent section lists every child session in
+ * `N steps` once settled. An Agent section lists every child session in
  * [agents] with up to three recent steps under a running one; a Steps section
  * lists the other [steps] in order. Rows are keyed by id, so the list grows in
  * place. Composes [OpenCodeBottomSheet] at half height.
@@ -125,7 +125,7 @@ fun OpenCodeActivitySheet(
 ) {
     val animationsOn = rememberActivityAnimationsOn()
     val now by rememberActivityClock(ticking = visible && live)
-    val title = if (live) "Working $stepCount" else "Used $stepCount"
+    val title = if (live) "Working $stepCount" else openCodeActivityStepCount(stepCount)
     val elapsed = if (live) SessionChatChildSessionElapsed.format(startedAtMs, now) else null
     // Each list/detail switch gets a fresh key, so the body scrolls once per switch.
     val panes = remember { SheetPaneMemory() }
@@ -148,10 +148,10 @@ fun OpenCodeActivitySheet(
             val style = MaterialTheme.typography.titleMedium
             if (live) {
                 OpenCodeActivityWorkingLabel(text = "Working", shimmer = animationsOn, style = style)
+                Text(text = stepCount.toString(), style = style, color = openCodeColor("text-strong"), maxLines = 1)
             } else {
-                Text(text = "Used", style = style, color = openCodeColor("text-strong"), maxLines = 1)
+                Text(text = title, style = style, color = openCodeColor("text-strong"), maxLines = 1)
             }
-            Text(text = stepCount.toString(), style = style, color = openCodeColor("text-strong"), maxLines = 1)
             Box(modifier = Modifier.weight(1f))
             if (elapsed != null) {
                 Text(text = elapsed, style = activityMonoCaption(), color = openCodeColor("text-weak"), maxLines = 1)

@@ -372,7 +372,7 @@ let componentGalleryEntries = [
     ComponentGalleryEntry(
         id: .activityCard,
         title: "Activity Card",
-        description: "One live card per run of agent steps, with running agents and the current tool, that settles into a Used line.",
+        description: "One live card per run of agent steps, with running agents and the current tool, that settles into an N steps line with the agents it used.",
         category: .chat
     ),
     ComponentGalleryEntry(

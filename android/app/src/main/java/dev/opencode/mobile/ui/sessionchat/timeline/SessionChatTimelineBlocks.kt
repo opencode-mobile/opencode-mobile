@@ -694,6 +694,33 @@ object SessionChatTimelineBlocks {
     }
 
     /**
+     * What a settled activity card (#779) paints as: a segment with exactly one
+     * tool or thought step is the standard tool card or reasoning row for that
+     * part, as the Standard timeline shows it; anything else (two or more
+     * steps, a lone child session, or a step still in flight) stays the card. Liveness is only known
+     * after the build, so the Screen Model's live pass
+     * ([SessionChatStepRail.markLive]) applies this to every card it leaves
+     * settled; a live card always stays a card.
+     */
+    fun settledActivityBlock(card: SessionChatTimelineBlock.ActivityCard): SessionChatTimelineBlock {
+        if (card.isLive) return card
+        val step = card.steps.singleOrNull() ?: return card
+        // A step still in flight outside a live turn (a stale running tool) keeps the card.
+        if (step.status.isInFlight) return card
+        return when (step.kind) {
+            SessionChatStepKind.Tool -> step.card ?: card
+            SessionChatStepKind.Thought ->
+                SessionChatTimelineBlock.Reasoning(
+                    blockID = PresentationBlockId.direct(step.id),
+                    text = step.thoughtText.orEmpty(),
+                    isStreaming = false,
+                    durationMs = thoughtDurationMs(step.startedAtMs, step.endedAtMs),
+                )
+            SessionChatStepKind.ChildSession -> card
+        }
+    }
+
+    /**
      * Visible tool steps of [messages] in order, for what a child session is
      * doing on an activity card (#779). Same steps the rail and card build.
      */

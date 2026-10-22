@@ -1067,8 +1067,9 @@ internal fun sessionChatStepDetail(
 
 /**
  * Activity card timeline (#779): maps a card onto [OpenCodeActivityCard].
- * Live, agent rows open their child session through [stepAction]; the footer
- * band, and the whole settled line, open the activity sheet ([onOpen]).
+ * Agent rows (running children live, every child settled) open their child
+ * session through [stepAction]; the footer band, and the settled line, open
+ * the activity sheet ([onOpen]).
  */
 @Composable
 private fun ActivityCardBlock(
@@ -1077,9 +1078,9 @@ private fun ActivityCardBlock(
     onOpen: () -> Unit,
     stepAction: (SessionChatStep) -> (() -> Unit)?,
 ) {
+    val actions = block.steps.filter { it.kind == SessionChatStepKind.ChildSession }.associate { it.id to stepAction(it) }
     if (block.isLive) {
         val live = remember(block.steps, children) { SessionChatActivityCard.live(block, children) }
-        val actions = block.steps.filter { it.kind == SessionChatStepKind.ChildSession }.associate { it.id to stepAction(it) }
         OpenCodeActivityCard(
             state = OpenCodeActivityCardState.Live(elapsedStartMs = live.startedAtMs),
             summary = live.summary,
@@ -1114,10 +1115,13 @@ private fun ActivityCardBlock(
                     stepCount = settled.stepCount,
                 ),
             summary = settled.names.joinToString(", "),
-            agents = emptyList(),
+            agents =
+                settled.agents.map {
+                    OpenCodeActivityAgentRow(id = it.id, agentName = it.agentName, action = it.action, startedAtMs = null)
+                },
             current = null,
             idleText = null,
-            onAgentTap = {},
+            onAgentTap = { id -> actions[id]?.invoke() },
             onOpen = onOpen,
         )
     }

@@ -44,12 +44,23 @@ data class SessionChatActivityLive(
     )
 }
 
-/** A settled card: `Used N · Read, Edit, Agent`. */
+/**
+ * A settled card: `N steps · Read, Edit, Agent`, then one row per child
+ * session the segment used.
+ */
 data class SessionChatActivitySettled(
     val stepCount: Int,
     val names: List<String>,
     val worstStatus: SessionChatStepStatus,
-)
+    val agents: List<Agent> = emptyList(),
+) {
+    /** A child session; [id] is the step (part) id, [action] its result line, else its description. */
+    data class Agent(
+        val id: String,
+        val agentName: String,
+        val action: String,
+    )
+}
 
 /**
  * The activity sheet's content for one card, resolved from the current
@@ -138,6 +149,17 @@ object SessionChatActivityCard {
             stepCount = block.steps.size,
             names = toolNames(block.steps),
             worstStatus = block.worstStatus,
+            agents =
+                block.steps
+                    .filter { it.kind == SessionChatStepKind.ChildSession }
+                    .map { step ->
+                        val child = step.childSession
+                        SessionChatActivitySettled.Agent(
+                            id = step.id,
+                            agentName = agentName(step),
+                            action = child?.result ?: child?.description ?: "",
+                        )
+                    },
         )
 
     /** Finds the card [blockId] in [messages] and lays out its sheet; null once the card is gone. */

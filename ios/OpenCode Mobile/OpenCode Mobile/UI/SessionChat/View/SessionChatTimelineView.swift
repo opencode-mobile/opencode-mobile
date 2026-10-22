@@ -775,9 +775,15 @@ private struct AssistantMessageContent: View {
     let onOpenActivityCard: (String) -> Void
 
     /// Rows never render empty — unpaintable blocks are filtered and an empty
-    /// result falls back to the live placeholder.
+    /// result falls back to the live placeholder. An activity card takes its
+    /// liveness here, and a settled single-step card becomes its standard block.
     private var blocks: [SessionChatTimelineBlock] {
-        SessionChatTimelineBlocks.paintedBlocks(for: message)
+        SessionChatTimelineBlocks.paintedBlocks(for: message).map { block in
+            guard case .activityCard(_, let card) = block else { return block }
+            return SessionChatTimelineBlocks.activityCardDisplayBlock(
+                card.withLive(card.id == stepRailState.liveCardID)
+            )
+        }
     }
 
     /// Migration bridge: prefer per-block markdown; fall back to message-root
@@ -923,7 +929,7 @@ private struct AssistantMessageContent: View {
                 case .stepRail(_, let block):
                     stepRail(block.withLive(block.id == stepRailState.liveRailID))
                 case .activityCard(_, let block):
-                    activityCard(block.withLive(block.id == stepRailState.liveCardID))
+                    activityCard(block)
                 }
             }
         }

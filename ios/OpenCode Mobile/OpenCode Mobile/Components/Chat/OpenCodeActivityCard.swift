@@ -1,7 +1,8 @@
 import SwiftUI
 
 /// Live: "Working", the summary, running child sessions and the latest running
-/// tool. Settled: one "Used N · Read, Edit" line with the worst status.
+/// tool. Settled: one "N steps · Read, Edit" line with the worst status, then
+/// the child sessions the run used.
 enum OpenCodeActivityCardState: Equatable, Sendable {
     /// `startedAtMs`: the run's first start, for the header's elapsed time.
     case live(startedAtMs: Int64?)
@@ -50,12 +51,15 @@ enum OpenCodeActivityLineStatus: String, CaseIterable, Sendable {
     }
 }
 
-/// A running child session on a live Activity Card.
+/// A child session on an Activity Card: running on a live card, any status on
+/// a settled one.
 struct OpenCodeActivityAgentRow: Equatable, Sendable, Identifiable {
     let id: String
     let agentName: String
-    /// What the child is doing now, or its description.
+    /// Live: what the child is doing now, or its description. Settled: its
+    /// result line, or its description.
     let action: String?
+    /// Live only: the child's start, for its elapsed time.
     let startedAtMs: Int64?
 }
 
@@ -71,13 +75,14 @@ struct OpenCodeActivityCurrentRow: Equatable, Sendable {
 /// Activity Card (#779): one card per run of an agent's steps. Live, a
 /// shimmering "Working" header with elapsed time, a summary line, one row per
 /// running child session, and a footer band with the latest running tool that
-/// opens the live activity sheet. Settled, one "Used N · Read, Edit" line that
-/// opens the same sheet. Nothing expands inline.
+/// opens the live activity sheet. Settled, one "N steps · Read, Edit" line that
+/// opens the same sheet, then the child sessions the run used, each pushing its
+/// session. Nothing expands inline.
 struct OpenCodeActivityCard: View {
     let state: OpenCodeActivityCardState
     /// Live: "6 steps · 3 reads · 1 search". Settled: the tool names, "Read, Edit, Agent".
     let summary: String
-    /// Live only: running child sessions.
+    /// Live: running child sessions. Settled: every child session of the run.
     let agents: [OpenCodeActivityAgentRow]
     /// Live only: the latest running tool, or nil while nothing but agents runs.
     let current: OpenCodeActivityCurrentRow?
@@ -110,7 +115,12 @@ struct OpenCodeActivityCard: View {
             case .live(let startedAtMs):
                 liveCard(startedAtMs: startedAtMs)
             case .settled(let worstStatus, let stepCount):
-                settledLine(worstStatus: worstStatus, stepCount: stepCount)
+                VStack(alignment: .leading, spacing: 0) {
+                    settledLine(worstStatus: worstStatus, stepCount: stepCount)
+                    if !agents.isEmpty {
+                        agentSection
+                    }
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -265,7 +275,7 @@ struct OpenCodeActivityCard: View {
 
     // MARK: - Settled
 
-    /// Dot, "Used" muted, the count semibold, then the tool names muted.
+    /// Dot, the count semibold, "steps" muted, then the tool names muted.
     private func settledLine(worstStatus: OpenCodeActivityLineStatus, stepCount: Int) -> some View {
         Button(action: onOpen) {
             HStack(spacing: 8) {
@@ -285,7 +295,7 @@ struct OpenCodeActivityCard: View {
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
-            ["Used \(stepCount)", summary, worstStatus == .failed ? "failed" : "completed"]
+            [Self.stepsLabel(stepCount), summary, worstStatus == .failed ? "failed" : "completed"]
                 .filter { !$0.isEmpty }
                 .joined(separator: ", ")
         )
@@ -294,10 +304,15 @@ struct OpenCodeActivityCard: View {
     }
 
     private func settledText(stepCount: Int) -> Text {
-        let head = Text("Used ").foregroundColor(OpenCodeColors.textWeak)
-            + Text("\(stepCount)").fontWeight(.semibold).foregroundColor(OpenCodeColors.textStrong)
+        let head = Text("\(stepCount)").fontWeight(.semibold).foregroundColor(OpenCodeColors.textStrong)
+            + Text(stepCount == 1 ? " step" : " steps").foregroundColor(OpenCodeColors.textWeak)
         guard !summary.isEmpty else { return head }
         return head + Text(" \u{00B7} \(summary)").foregroundColor(OpenCodeColors.textWeak)
+    }
+
+    /// "1 step" / "3 steps": the settled line and the settled sheet header.
+    static func stepsLabel(_ count: Int) -> String {
+        count == 1 ? "1 step" : "\(count) steps"
     }
 }
 
@@ -316,7 +331,8 @@ private enum ActivityCardMetrics {
     static let footerPaddingBottom: CGFloat = 13
 }
 
-/// Letter tile, agent name in the agent tint, current action muted, elapsed, chevron.
+/// Letter tile, agent name in the agent tint, action or result muted, elapsed
+/// while live, chevron.
 private struct ActivityCardAgentRow: View {
     let agent: OpenCodeActivityAgentRow
 
@@ -546,6 +562,14 @@ struct OpenCodeRunningShimmerText: View {
             OpenCodeActivityCard(
                 state: .settled(worstStatus: .failed, stepCount: 7),
                 summary: "Read, Grep, Edit, Shell, Agent"
+            )
+            OpenCodeActivityCard(
+                state: .settled(worstStatus: .completed, stepCount: 3),
+                summary: "Agent, Thought",
+                agents: [
+                    OpenCodeActivityAgentRow(id: "c1", agentName: "Explore", action: "Found 3 call sites", startedAtMs: nil),
+                    OpenCodeActivityAgentRow(id: "c2", agentName: "General", action: "Audit the parser", startedAtMs: nil),
+                ]
             )
         }
         .padding()

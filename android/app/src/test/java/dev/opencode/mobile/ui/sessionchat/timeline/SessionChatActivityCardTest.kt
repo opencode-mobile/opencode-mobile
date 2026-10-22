@@ -185,14 +185,15 @@ class SessionChatActivityCardTest {
         assertFalse(runningCard.thinking)
         assertTrue(SessionChatStepRail.hasLiveRail(listOf(item("a", listOf(runningCard)))))
 
-        val idle = listOf(item("a", listOf(settled)))
+        val twoSteps = cards(listOf(tool("p1"), tool("p2"))).single()
+        val idle = listOf(item("a", listOf(twoSteps)))
         assertSame(idle, SessionChatStepRail.markLive(idle, isTurnActive = false))
         assertFalse(SessionChatStepRail.hasLiveRail(idle))
     }
 
     @Test
     fun liveCard_onlyWhenCardIsTheTrailingBlock() {
-        val messages = listOf(item("a", build(listOf(tool("p1"), text("t1", "Done.")))))
+        val messages = listOf(item("a", build(listOf(tool("p1"), tool("p2"), text("t1", "Done.")))))
         val marked = SessionChatStepRail.markLive(messages, isTurnActive = true)
         assertSame(messages, marked)
         assertFalse(SessionChatStepRail.hasLiveRail(marked))
@@ -417,6 +418,93 @@ class SessionChatActivityCardTest {
         assertTrue(thinking.agents.isEmpty())
     }
 
+    // Settled one-step segments (#779): the standard block for the step
+
+    private fun settledBlocks(parts: List<MessagePart>): List<SessionChatTimelineBlock> =
+        SessionChatStepRail.markLive(listOf(item("a", build(parts))), isTurnActive = false).single().blocks
+
+    private fun liveBlocks(parts: List<MessagePart>): List<SessionChatTimelineBlock> =
+        SessionChatStepRail.markLive(listOf(item("a", build(parts))), isTurnActive = true).single().blocks
+
+    private fun task(
+        id: String,
+        description: String,
+        output: String? = null,
+    ) = MessagePart.Tool(
+        toolName = "task",
+        status = ToolStatus.Completed,
+        id = id,
+        input =
+            buildJsonObject {
+                put("subagent_type", "explore")
+                put("description", description)
+            },
+        metadata = buildJsonObject { put("sessionId", "ses-$id") },
+        output = output,
+    )
+
+    @Test
+    fun settledSingleTool_isTheStandardToolCard() {
+        val parts = listOf(tool("p1", name = "bash", input = buildJsonObject { put("command", "ls") }))
+        val block = settledBlocks(parts).single()
+        val card = block as SessionChatTimelineBlock.ToolCard
+        assertEquals("p:p1", card.blockID)
+        assertEquals(cards(parts).single().steps.single().card, card)
+    }
+
+    @Test
+    fun settledSingleThought_isTheStandardReasoningRow() {
+        val parts = listOf(MessagePart.Reasoning(text = "plan", id = "r1", timeStartEpochMs = 1_000, timeEndEpochMs = 13_900))
+        val reasoning = settledBlocks(parts).single() as SessionChatTimelineBlock.Reasoning
+        assertEquals("p:r1", reasoning.blockID)
+        assertEquals("plan", reasoning.text)
+        assertFalse(reasoning.isStreaming)
+        assertEquals(12_900L, reasoning.durationMs)
+    }
+
+    @Test
+    fun settledSingleChild_keepsTheCardWithThatAgent() {
+        val block = settledBlocks(listOf(task("c1", "Find the pill", output = "Found it"))).single()
+        val card = block as SessionChatTimelineBlock.ActivityCard
+        val settled = SessionChatActivityCard.settled(card)
+        assertEquals(listOf(SessionChatActivitySettled.Agent(id = "c1", agentName = "Explore", action = "Found it")), settled.agents)
+    }
+
+    @Test
+    fun settledTwoSteps_keepTheCard() {
+        val block = settledBlocks(listOf(tool("p1"), MessagePart.Reasoning(text = "plan", id = "r1", timeStartEpochMs = 1, timeEndEpochMs = 2))).single()
+        assertEquals(2, (block as SessionChatTimelineBlock.ActivityCard).steps.size)
+    }
+
+    @Test
+    fun liveSingleStep_keepsTheCard() {
+        val running = liveBlocks(listOf(tool("p1", status = ToolStatus.Running))).single() as SessionChatTimelineBlock.ActivityCard
+        assertTrue(running.isLive)
+        val done = liveBlocks(listOf(tool("p1"))).single() as SessionChatTimelineBlock.ActivityCard
+        assertTrue(done.isLive)
+    }
+
+    @Test
+    fun settledSingleInFlightStep_keepsTheCard() {
+        val block = settledBlocks(listOf(tool("p1", status = ToolStatus.Running))).single()
+        assertTrue(block is SessionChatTimelineBlock.ActivityCard)
+    }
+
+    @Test
+    fun onlyTheTrailingSingleStepStaysACard_whileWorking() {
+        val blocks = liveBlocks(listOf(tool("p1"), text("t1", "Next."), tool("p2", status = ToolStatus.Running)))
+        assertTrue(blocks[0] is SessionChatTimelineBlock.ToolCard)
+        assertTrue((blocks[2] as SessionChatTimelineBlock.ActivityCard).isLive)
+    }
+
+    @Test
+    fun settledSingleStep_otherTimelinesUnchanged() {
+        val parts = listOf(tool("p1"))
+        val rail = SessionChatTimelineBlocks.build(MessageRole.Assistant, parts, stepRail = true) as SessionChatTimelineBlocksResult.Ok
+        val marked = SessionChatStepRail.markLive(listOf(item("a", rail.blocks)), isTurnActive = false).single().blocks
+        assertTrue(marked.single() is SessionChatTimelineBlock.StepRail)
+    }
+
     // Settled line
 
     @Test
@@ -446,6 +534,31 @@ class SessionChatActivityCardTest {
             settled.names,
         )
         assertEquals(SessionChatStepStatus.Completed, settled.worstStatus)
+    }
+
+    @Test
+    fun settled_agentsListEveryChild_resultElseDescription() {
+        val card =
+            card(
+                listOf(
+                    child("c1", status = SessionChatStepStatus.Completed, result = "Found 3 call sites"),
+                    step("r", SessionChatStepFamily.Read),
+                    child("c2", status = SessionChatStepStatus.Completed, description = "Review the header"),
+                    child("c3", status = SessionChatStepStatus.Failed, description = null),
+                ),
+                isLive = false,
+            )
+        val settled = SessionChatActivityCard.settled(card)
+        assertEquals(4, settled.stepCount)
+        assertEquals(
+            listOf(
+                SessionChatActivitySettled.Agent(id = "c1", agentName = "Explore", action = "Found 3 call sites"),
+                SessionChatActivitySettled.Agent(id = "c2", agentName = "Explore", action = "Review the header"),
+                SessionChatActivitySettled.Agent(id = "c3", agentName = "Explore", action = ""),
+            ),
+            settled.agents,
+        )
+        assertTrue(SessionChatActivityCard.settled(card(listOf(step("a", SessionChatStepFamily.Read)), isLive = false)).agents.isEmpty())
     }
 
     @Test

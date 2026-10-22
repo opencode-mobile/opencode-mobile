@@ -342,7 +342,89 @@ struct SessionChatActivityCardTests {
         #expect(settled.summary
             == "Read, Edit, Grep, Glob, Write, Fetch, Search, Shell, Agent, Skill, Thought, Lint_files")
         #expect(settled.state == .settled(worstStatus: .completed, stepCount: 14))
-        #expect(settled.agents.isEmpty && settled.current == nil && settled.idleText == nil)
+        #expect(settled.agents.map(\.id) == ["c1"])
+        #expect(settled.current == nil && settled.idleText == nil)
+    }
+
+    @Test func settledCard_listsEveryChildWithItsResultElseDescription() throws {
+        let card = try cards([
+            child("c1", output: "task_id: ses-a\n\n<task_result>\n## Found 3 call sites\nMore detail\n</task_result>"),
+            .reasoning(ReasoningPart(id: "th", text: "Plan", timeStartEpochMs: 1_000, timeEndEpochMs: 2_000)),
+            child("c2", sessionID: "ses-b"),
+            child("c3", status: .error, sessionID: "ses-c", output: "<task_result>\nPartial\n</task_result>"),
+        ])[0]
+        let settled = SessionChatActivityCardPresentation(card: card, childActions: [:], awaitingUser: false)
+        #expect(settled.state == .settled(worstStatus: .failed, stepCount: 4))
+        #expect(settled.summary == "Agent, Thought")
+        #expect(settled.agents == [
+            OpenCodeActivityAgentRow(id: "c1", agentName: "Explore", action: "Found 3 call sites", startedAtMs: nil),
+            OpenCodeActivityAgentRow(id: "c2", agentName: "Explore", action: "Find callers", startedAtMs: nil),
+            // A failed child has no result line; its description stands in.
+            OpenCodeActivityAgentRow(id: "c3", agentName: "Explore", action: "Find callers", startedAtMs: nil),
+        ])
+    }
+
+    @Test func childResult_skipsWrapperTags() throws {
+        let card = try cards([
+            child("c1", output: "<subagent sessionID=\"ses-a\">\n\n**Done: parser audited**\n</subagent>"),
+        ])[0]
+        #expect(card.steps[0].childSession?.result == "Done: parser audited")
+    }
+
+    @Test func settledCopy_isNSteps() {
+        #expect(OpenCodeActivityCard.stepsLabel(3) == "3 steps")
+        #expect(OpenCodeActivityCard.stepsLabel(1) == "1 step")
+    }
+
+    // MARK: - Single-step settled segments
+
+    @Test func singleSettledTool_paintsTheStandardToolCard() throws {
+        let card = try cards([bash("b1")])[0]
+        let standard = SessionChatTimelineBlocks.build(role: .assistant, parts: [bash("b1")])
+        guard case .ok(let standardBlocks) = standard else { Issue.record("Expected ok"); return }
+        let painted = SessionChatTimelineBlocks.activityCardDisplayBlock(card)
+        #expect(painted == standardBlocks.first)
+        guard case .toolCard(let id, let toolCard) = painted else { Issue.record("Expected a tool card"); return }
+        #expect(id == PresentationBlockId.direct("b1"))
+        #expect(toolCard.toolName == "bash")
+    }
+
+    @Test func singleSettledThought_paintsTheStandardReasoningRow() throws {
+        let thought = MessagePart.reasoning(
+            ReasoningPart(id: "th", text: "Plan the change", timeStartEpochMs: 1_000, timeEndEpochMs: 13_900)
+        )
+        let card = try cards([thought])[0]
+        let standard = SessionChatTimelineBlocks.build(role: .assistant, parts: [thought])
+        guard case .ok(let standardBlocks) = standard else { Issue.record("Expected ok"); return }
+        let painted = SessionChatTimelineBlocks.activityCardDisplayBlock(card)
+        #expect(painted == standardBlocks.first)
+        guard case .reasoning(_, let text, false, let durationMs) = painted else {
+            Issue.record("Expected a reasoning row")
+            return
+        }
+        #expect(text == "Plan the change")
+        #expect(durationMs == 12_900)
+    }
+
+    @Test func singleSettledChild_keepsTheCardWithItsAgent() throws {
+        let card = try cards([child("c1")])[0]
+        #expect(SessionChatTimelineBlocks.activityCardDisplayBlock(card) == .activityCard(blockID: card.id, card: card))
+        let settled = SessionChatActivityCardPresentation(card: card, childActions: [:], awaitingUser: false)
+        #expect(settled.state == .settled(worstStatus: .completed, stepCount: 1))
+        #expect(settled.agents.map(\.id) == ["c1"])
+    }
+
+    @Test func twoSettledSteps_keepTheCard() throws {
+        let card = try cards([read("r1"), bash("b1")])[0]
+        #expect(SessionChatTimelineBlocks.activityCardDisplayBlock(card) == .activityCard(blockID: card.id, card: card))
+    }
+
+    @Test func liveSingleStep_keepsTheCard() throws {
+        let running = try cards([bash("b1", status: .running)])[0]
+        #expect(SessionChatTimelineBlocks.activityCardDisplayBlock(running) == .activityCard(blockID: running.id, card: running))
+        // Live (the turn still works) with its only step settled: still a card.
+        let live = try cards([bash("b1")])[0].withLive(true)
+        #expect(SessionChatTimelineBlocks.activityCardDisplayBlock(live) == .activityCard(blockID: live.id, card: live))
     }
 
     @Test func settledLine_worstStatusIgnoresInterrupted() throws {
@@ -565,13 +647,15 @@ struct SessionChatActivityCardTests {
         _ id: String,
         status: ToolStatus = .completed,
         startedAt: Int64? = nil,
-        sessionID: String = "ses-child"
+        sessionID: String = "ses-child",
+        output: String? = nil
     ) -> MessagePart {
         .tool(ToolPart(
             id: id,
             toolName: "task",
             status: status,
             input: ["subagent_type": .string("explore"), "description": .string("Find callers")],
+            output: output,
             metadata: ["sessionId": .string(sessionID)],
             timeStartEpochMs: startedAt
         ))

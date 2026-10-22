@@ -135,8 +135,10 @@ private const val ACTIVITY_AGENT_BORDER_ALPHA = 0.4f
  * a raised footer band with the [current] running tool, or [idleText] when
  * none runs. The band opens the live sheet ([onOpen]).
  *
- * Settled it is one line: a dot in the worst status tone, `Used N` and
- * [summary] (the deduplicated tool names); a tap opens the sheet.
+ * Settled it is one line: a dot in the worst status tone, `N steps` and
+ * [summary] (the deduplicated tool names); a tap opens the sheet. When the
+ * segment used child sessions, an Agent section follows with one row per
+ * child in [agents] (its result or description, no elapsed; tap: [onAgentTap]).
  *
  * Only the header shimmers; nothing spins or pulses. With animations off the
  * header is a static `Working`. Agent rows are keyed by id so they join and
@@ -162,7 +164,15 @@ fun OpenCodeActivityCard(
             .border(1.dp, openCodeColor("border-weak-base"), shape)
     when (state) {
         is OpenCodeActivityCardState.Settled ->
-            SettledLine(state = state, names = summary, onTap = onOpen, modifier = cardModifier)
+            if (agents.isEmpty()) {
+                SettledLine(state = state, names = summary, onTap = onOpen, modifier = cardModifier)
+            } else {
+                Column(modifier = cardModifier) {
+                    SettledLine(state = state, names = summary, onTap = onOpen, modifier = Modifier.fillMaxWidth())
+                    AgentSection(agents = agents, nowMs = 0L, onAgentTap = onAgentTap)
+                    Box(modifier = Modifier.height(4.dp))
+                }
+            }
         is OpenCodeActivityCardState.Live -> {
             val animationsOn = rememberActivityAnimationsOn()
             val now by rememberActivityClock(ticking = true)
@@ -187,6 +197,9 @@ fun OpenCodeActivityCard(
         }
     }
 }
+
+/** Settled step count: `1 step`, `3 steps`. */
+fun openCodeActivityStepCount(count: Int): String = if (count == 1) "1 step" else "$count steps"
 
 /** Section label: `Agent`, or `N agents` past one. */
 fun openCodeActivityAgentSectionLabel(count: Int): String = if (count == 1) "Agent" else "$count agents"
@@ -362,7 +375,7 @@ private fun SettledLine(
     onTap: () -> Unit,
     modifier: Modifier,
 ) {
-    val label = listOf("Used ${state.stepCount}", names).filter { it.isNotEmpty() }.joinToString(" · ")
+    val label = listOf(openCodeActivityStepCount(state.stepCount), names).filter { it.isNotEmpty() }.joinToString(" · ")
     Row(
         modifier =
             modifier
@@ -379,9 +392,11 @@ private fun SettledLine(
         Text(
             text =
                 buildAnnotatedString {
-                    withStyle(SpanStyle(color = openCodeColor("text-weak"))) { append("Used ") }
                     withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = openCodeColor("text-strong"))) {
                         append(state.stepCount.toString())
+                    }
+                    withStyle(SpanStyle(color = openCodeColor("text-strong"))) {
+                        append(if (state.stepCount == 1) " step" else " steps")
                     }
                     if (names.isNotEmpty()) {
                         withStyle(SpanStyle(color = openCodeColor("text-weak"))) { append(" · $names") }
@@ -592,6 +607,14 @@ object OpenCodeActivityCardSamples {
         )
 
     const val SETTLED_NAMES = "Read, Grep, Edit, Agent"
+    const val SETTLED_AGENT_NAMES = "Agent, Read, Thought"
+
+    /** Settled children: the first shows its result line, the second only its description. */
+    val settledAgents: List<OpenCodeActivityAgentRow> =
+        listOf(
+            OpenCodeActivityAgentRow(id = "c1", agentName = "Explore", action = "Found 3 call sites of branchPill", startedAtMs = null),
+            OpenCodeActivityAgentRow(id = "c2", agentName = "Review", action = "Review the session header", startedAtMs = null),
+        )
     const val SETTLED_FAILED_NAMES = "Read, Grep, Edit, Shell, Agent"
 }
 
@@ -624,6 +647,15 @@ private fun ActivityCardPreviewColumn() {
             state = OpenCodeActivityCardState.Settled(worstStatus = OpenCodeActivityStatus.Failed, stepCount = 7),
             summary = OpenCodeActivityCardSamples.SETTLED_FAILED_NAMES,
             agents = emptyList(),
+            current = null,
+            idleText = null,
+            onAgentTap = {},
+            onOpen = {},
+        )
+        OpenCodeActivityCard(
+            state = OpenCodeActivityCardState.Settled(worstStatus = OpenCodeActivityStatus.Completed, stepCount = 4),
+            summary = OpenCodeActivityCardSamples.SETTLED_AGENT_NAMES,
+            agents = OpenCodeActivityCardSamples.settledAgents,
             current = null,
             idleText = null,
             onAgentTap = {},

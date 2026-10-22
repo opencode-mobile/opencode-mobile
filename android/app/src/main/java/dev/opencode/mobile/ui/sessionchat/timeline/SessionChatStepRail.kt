@@ -66,7 +66,10 @@ object SessionChatStepRail {
      * Marks the live rail (or activity card, #779): the trailing block of the
      * last assistant row while the turn is working. Text after it ends its
      * liveness, so the Working footer comes back for a reply that is only
-     * streaming text. Returns [messages] itself when nothing changes.
+     * streaming text. A settled one-step activity card becomes the standard
+     * block for its step ([SessionChatTimelineBlocks.settledActivityBlock]), so
+     * pass the built messages, not an earlier result. Returns [messages]
+     * itself when nothing changes.
      */
     fun markLive(
         messages: List<SessionChatMessageItem>,
@@ -124,12 +127,16 @@ object SessionChatStepRail {
                     }
                     is SessionChatTimelineBlock.ActivityCard -> {
                         val thinking = isLive && block.steps.none { it.status.isInFlight }
-                        if (block.isLive == isLive && block.thinking == thinking) {
-                            block
-                        } else {
-                            changed = true
-                            block.copy(isLive = isLive, thinking = thinking)
-                        }
+                        val marked =
+                            if (block.isLive == isLive && block.thinking == thinking) {
+                                block
+                            } else {
+                                block.copy(isLive = isLive, thinking = thinking)
+                            }
+                        // A settled one-step card paints as the standard block for its step.
+                        val painted = SessionChatTimelineBlocks.settledActivityBlock(marked)
+                        if (painted !== block) changed = true
+                        painted
                     }
                     else -> block
                 }

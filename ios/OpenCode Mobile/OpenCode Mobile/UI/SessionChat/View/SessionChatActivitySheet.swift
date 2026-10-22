@@ -30,7 +30,7 @@ extension View {
         }
         let count = card?.steps.count ?? 0
         let isLive = card?.isLive == true
-        let title = detail?.target.title ?? (isLive ? "Working \(count)" : "Used \(count)")
+        let title = detail?.target.title ?? (isLive ? "Working \(count)" : OpenCodeActivityCard.stepsLabel(count))
         let titleState: OpenCodeBottomSheetTitleState = detail == nil && isLive
             ? .running(startedAtMs: ToolStartTime.normalizeEpochMs(card?.startedAtMs))
             : .plain

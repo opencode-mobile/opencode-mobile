@@ -1277,7 +1277,8 @@ class SessionChatViewModelTest {
             SessionChatDisplayPreferences.updateTimelineStyle(SessionChatTimelineStyle.ActivityCard)
             val read = MessagePart.Tool(toolName = "read", status = ToolStatus.Completed, id = "p1", output = "file body")
             val shell = MessagePart.Tool(toolName = "bash", status = ToolStatus.Completed, id = "p2", output = "ok")
-            val assistant = Message(id = "msg-2", role = MessageRole.Assistant, text = "", parts = listOf(read, shell))
+            val grep = MessagePart.Tool(toolName = "grep", status = ToolStatus.Completed, id = "p3", output = "match")
+            val assistant = Message(id = "msg-2", role = MessageRole.Assistant, text = "", parts = listOf(read, shell, grep))
             val repository = FakeMessageRepository()
             repository.messages = repository.messages + assistant
             val viewModel = createViewModel(repository)
@@ -1311,9 +1312,9 @@ class SessionChatViewModelTest {
             viewModel.openActivityCard("ac:p1")
             assertEquals(null, viewModel.uiState.value.activityCardDetailStepId)
 
-            // The step leaving the card goes back to the list.
+            // The step leaving the card goes back to the list. Two steps stay, so it is still a card.
             viewModel.openActivityCardStep("p2")
-            repository.messages = repository.messages.map { if (it.id == "msg-2") it.copy(parts = listOf(read)) else it }
+            repository.messages = repository.messages.map { if (it.id == "msg-2") it.copy(parts = listOf(read, grep)) else it }
             viewModel.refreshMessages()
             advanceUntilIdle()
             assertEquals("ac:p1", viewModel.uiState.value.presentedActivityCard)

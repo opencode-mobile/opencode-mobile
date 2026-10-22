@@ -79,6 +79,17 @@ fun ActivityCardGalleryScreen(modifier: Modifier = Modifier) {
                 onOpen = { sheetLive = false },
             )
         }
+        GallerySample("Settled with agents") {
+            OpenCodeActivityCard(
+                state = OpenCodeActivityCardState.Settled(worstStatus = OpenCodeActivityStatus.Completed, stepCount = 4),
+                summary = OpenCodeActivityCardSamples.SETTLED_AGENT_NAMES,
+                agents = OpenCodeActivityCardSamples.settledAgents,
+                current = null,
+                idleText = null,
+                onAgentTap = {},
+                onOpen = { sheetLive = false },
+            )
+        }
     }
     OpenCodeActivitySheet(
         visible = sheetLive != null,

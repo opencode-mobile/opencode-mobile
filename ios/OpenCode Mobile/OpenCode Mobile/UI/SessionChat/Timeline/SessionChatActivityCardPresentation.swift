@@ -17,7 +17,14 @@ struct SessionChatActivityCardPresentation: Equatable {
                 stepCount: card.steps.count
             )
             summary = SessionChatActivityCardBlock.usedToolNames(card.steps).joined(separator: ", ")
-            agents = []
+            agents = card.childSteps.map { step in
+                OpenCodeActivityAgentRow(
+                    id: step.id,
+                    agentName: step.agentDisplayName,
+                    action: step.childSession?.result ?? step.childSession?.description ?? step.detail,
+                    startedAtMs: nil
+                )
+            }
             current = nil
             idleText = nil
             return

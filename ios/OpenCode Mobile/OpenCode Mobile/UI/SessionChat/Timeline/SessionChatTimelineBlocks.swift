@@ -500,6 +500,8 @@ nonisolated struct SessionChatStepChildSession: Equatable, Sendable {
     let childSessionId: String?
     /// Tools the child has run so far, when the server reports them.
     let toolsSoFar: Int?
+    /// First line of a finished child's result, when the server returned one.
+    var result: String? = nil
 }
 
 /// What a step did, for the activity card's family counts (#779).
@@ -1300,6 +1302,31 @@ nonisolated enum SessionChatTimelineBlocks {
         }
     }
 
+    /// What an activity card paints (#779): a settled card whose only step is a
+    /// tool or a thought shows that step as the standard timeline does (its tool
+    /// card or reasoning row); every other card stays a card. Liveness is known
+    /// only at render time, so the card block stays in the row and this decides.
+    static func activityCardDisplayBlock(_ card: SessionChatActivityCardBlock) -> SessionChatTimelineBlock {
+        let cardBlock = SessionChatTimelineBlock.activityCard(blockID: card.id, card: card)
+        guard !card.isLive, card.steps.count == 1, let step = card.steps.first, !step.status.isInFlight else {
+            return cardBlock
+        }
+        switch step.kind {
+        case .tool:
+            guard let toolCard = step.card else { return cardBlock }
+            return .toolCard(blockID: PresentationBlockId.direct(step.id), card: toolCard)
+        case .thought:
+            return .reasoning(
+                blockID: PresentationBlockId.direct(step.id),
+                text: step.thoughtText ?? "",
+                isStreaming: false,
+                durationMs: thoughtDurationMs(start: step.startedAtMs, end: step.endedAtMs)
+            )
+        case .childSession:
+            return cardBlock
+        }
+    }
+
     /// The same runs as `buildStepRails`, each as one activity card.
     private static func buildActivityCards(parts: [MessagePart]) -> SessionChatTimelineBlocksResult {
         buildStepRuns(parts: parts) { first, steps in
@@ -1470,7 +1497,8 @@ nonisolated enum SessionChatTimelineBlocks {
                     agent: agent,
                     description: description,
                     childSessionId: card.childSessionId,
-                    toolsSoFar: toolsSoFar
+                    toolsSoFar: toolsSoFar,
+                    result: status == .completed ? childResult(tool) : nil
                 ),
                 card: card
             )
@@ -1525,6 +1553,27 @@ nonisolated enum SessionChatTimelineBlocks {
         case .completed: .completed
         case .error: .failed
         }
+    }
+
+    /// First result line of a finished child session, without the `task_id`
+    /// header, the result tags or wrapper tags such as `<subagent sessionID="…">`.
+    private static func childResult(_ tool: ToolPart) -> String? {
+        guard let output = tool.output, !output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return nil
+        }
+        var body = Substring(output)
+        if let open = body.range(of: "<task_result>") { body = body[open.upperBound...] }
+        if let close = body.range(of: "</task_result>") { body = body[..<close.lowerBound] }
+        return body
+            .split(whereSeparator: \.isNewline)
+            .lazy
+            .map { line -> String in
+                var trimmed = line.trimmingCharacters(in: .whitespaces)
+                while let first = trimmed.first, "#*- ".contains(first) { trimmed.removeFirst() }
+                while trimmed.last == "*" { trimmed.removeLast() }
+                return trimmed
+            }
+            .first { !$0.isEmpty && !$0.hasPrefix("task_id:") && !$0.hasPrefix("<") }
     }
 
     /// Tools a child session reported in its task metadata (`summary`), if any.

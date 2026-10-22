@@ -1766,8 +1766,11 @@ class SessionChatViewModel
         ): List<SessionChatMessageItem> {
             if (messages === liveRailMarked && isTurnActive == liveRailActive) return messages
             if (messages === liveRailSource && isTurnActive == liveRailActive) return liveRailMarked
-            val marked = SessionChatStepRail.markLive(messages, isTurnActive)
-            liveRailSource = messages
+            // Re-mark from the built list: a marked list has settled one-step cards swapped
+            // for standard blocks, which could not turn back into a live card.
+            val source = if (messages === liveRailMarked) liveRailSource ?: messages else messages
+            val marked = SessionChatStepRail.markLive(source, isTurnActive)
+            liveRailSource = source
             liveRailActive = isTurnActive
             liveRailMarked = marked
             return marked
