@@ -1,5 +1,9 @@
 package dev.opencode.mobile.domain.worktree
 
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+
 sealed class WorktreeLoad {
     data class Loaded(
         val directories: List<String>,
@@ -50,7 +54,23 @@ interface WorktreeRepository {
     fun onDisconnected()
 
     fun onConnection(key: String)
+
+    /** False once a V1 create answered 404 (no worktree route) on this connection. */
+    val canCreate: StateFlow<Boolean>
+        get() = AlwaysCreatable
+
+    /**
+     * Creates a checkout: V2 `POST /api/worktree` (needs [CreateWorktreeRequest.projectId]),
+     * V1 `POST /experimental/worktree` (ignores the project id and base). Throws
+     * [WorktreeCreateError] with copy a person can read.
+     */
+    suspend fun create(request: CreateWorktreeRequest): CreatedWorktree = throw WorktreeCreateError(WorktreeCreateCopy.UNSUPPORTED)
+
+    /** Branch names a V2 checkout can be created from at [directory]; V1 has none. */
+    suspend fun baseBranches(directory: String): List<String> = emptyList()
 }
+
+private val AlwaysCreatable: StateFlow<Boolean> = MutableStateFlow(true).asStateFlow()
 
 /** Tests and previews: never calls the server, so nothing is listed. */
 object UnavailableWorktreeRepository : WorktreeRepository {
