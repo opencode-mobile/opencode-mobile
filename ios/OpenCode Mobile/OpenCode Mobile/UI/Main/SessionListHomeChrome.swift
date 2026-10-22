@@ -10,7 +10,7 @@ enum SessionListHomeChrome {
 
     /// What the New session sheet lists.
     enum NewSessionSheetMode: Equatable {
-        /// The projects. `holdPick` (opened by a hold) lets a multi-worktree pick open its Run in list.
+        /// The projects. `holdPick` (opened by a hold) lets a pick open its Run in list.
         case projects(holdPick: Bool)
         /// Where to run in one project, then the other projects when `showsOtherProjects`.
         case runIn(projectKey: String, showsOtherProjects: Bool)
@@ -156,16 +156,16 @@ enum SessionListHomeChrome {
         return .presentPicker
     }
 
-    /// Hold: Run in for a multi-worktree target project (worktrees on), else the project list
-    /// with two or more projects, else nothing to choose (no hold action).
+    /// Hold: Run in for the target project while worktrees are on (its checkouts, then New
+    /// worktree…), else the project list with two or more projects, else nothing to choose (no
+    /// hold action).
     static func newSessionLongPressAction(
         projects: [HomeProject],
         selectedFilterId: String,
         worktreesEnabled: Bool = true
     ) -> NewSessionSheetMode? {
         if worktreesEnabled,
-           let target = targetProject(projects: projects, selectedFilterId: selectedFilterId),
-           target.hasManyWorktrees
+           let target = targetProject(projects: projects, selectedFilterId: selectedFilterId)
         {
             return .runIn(projectKey: target.key, showsOtherProjects: projects.count >= 2)
         }
@@ -176,13 +176,13 @@ enum SessionListHomeChrome {
     }
 
     /// A project chosen in the New session sheet. After a tap it starts on its main checkout;
-    /// after a hold a multi-worktree project (worktrees on) opens its Run in list instead.
+    /// after a hold (worktrees on) it opens its Run in list instead.
     static func pick(
         _ project: HomeProject,
         holdPick: Bool,
         worktreesEnabled: Bool = true
     ) -> NewSessionPick {
-        if holdPick, worktreesEnabled, project.hasManyWorktrees {
+        if holdPick, worktreesEnabled {
             return .show(.runIn(projectKey: project.key, showsOtherProjects: false))
         }
         return .create(directory: project.mainCheckoutDirectory)
@@ -219,7 +219,7 @@ enum SessionListHomeChrome {
     }
 }
 
-/// Run in rows for a multi-worktree project.
+/// Run in rows: the project's checkouts, main first.
 struct HomeRunInOption: Identifiable, Equatable {
     var id: String { directory }
     let directory: String

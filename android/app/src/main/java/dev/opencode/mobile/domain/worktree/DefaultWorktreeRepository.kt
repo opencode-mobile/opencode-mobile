@@ -1,10 +1,16 @@
 package dev.opencode.mobile.domain.worktree
 
 import dev.opencode.mobile.data.remote.V1WorktreeHttp
+import dev.opencode.mobile.data.remote.WorktreeHttpException
 import dev.opencode.mobile.data.remote.WorktreeRemote
 import dev.opencode.mobile.domain.connection.ServerProtocol
+import dev.opencode.mobile.domain.filesystem.ServerPathPolicy
+import dev.opencode.mobile.domain.session.ServerErrorMessage
 import dev.opencode.mobile.network.ActiveConnectionManager
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
 
 class DefaultWorktreeRepository(
@@ -22,6 +28,8 @@ class DefaultWorktreeRepository(
 
     private var connectionKey: String? = null
     private var v1StoppedKey: String? = null
+    private val _canCreate = MutableStateFlow(true)
+    override val canCreate: StateFlow<Boolean> = _canCreate.asStateFlow()
 
     override suspend fun load(
         addedPath: String,
@@ -67,14 +75,83 @@ class DefaultWorktreeRepository(
     override fun onDisconnected() {
         connectionKey = null
         v1StoppedKey = null
+        _canCreate.value = true
     }
 
     override fun onConnection(key: String) {
         if (connectionKey != key) {
             v1StoppedKey = null
             connectionKey = key
+            _canCreate.value = true
         }
     }
+
+    override suspend fun create(request: CreateWorktreeRequest): CreatedWorktree =
+        when (protocol()) {
+            ServerProtocol.V2 -> createV2(request)
+            ServerProtocol.V1 -> createV1(request)
+        }
+
+    override suspend fun baseBranches(directory: String): List<String> =
+        when (protocol()) {
+            ServerProtocol.V2 -> remote.branchesV2(directory)
+            ServerProtocol.V1 -> emptyList()
+        }
+
+    private suspend fun createV2(request: CreateWorktreeRequest): CreatedWorktree {
+        val projectId = request.projectId?.trim()?.takeIf { it.isNotEmpty() } ?: throw WorktreeCreateError(WorktreeCreateCopy.NOT_GIT)
+        val directory =
+            createCall(notFoundMeansUnsupported = false) {
+                remote.createV2(
+                    projectId = projectId,
+                    from = request.sourceDirectory,
+                    name = request.name,
+                    branch = request.baseRef?.takeIf { it.isNotBlank() },
+                )
+            }
+        val canonical = ServerPathPolicy.canonical(directory.trim())
+        return CreatedWorktree(
+            directory = canonical,
+            name = ServerPathPolicy.name(canonical).ifBlank { request.name },
+            branch = null,
+        )
+    }
+
+    private suspend fun createV1(request: CreateWorktreeRequest): CreatedWorktree {
+        val created =
+            try {
+                createCall(notFoundMeansUnsupported = true) { remote.createV1(request.sourceDirectory, request.name) }
+            } catch (_: V1CreateNotFound) {
+                _canCreate.value = false
+                throw WorktreeCreateError(WorktreeCreateCopy.UNSUPPORTED)
+            }
+        val canonical = ServerPathPolicy.canonical(created.directory.trim())
+        return CreatedWorktree(
+            directory = canonical,
+            name = created.name.trim().ifEmpty { ServerPathPolicy.name(canonical).ifBlank { request.name } },
+            branch = created.branch?.trim()?.takeIf { it.isNotEmpty() },
+        )
+    }
+
+    /** Runs a create call and turns its failure into [WorktreeCreateError] (a v1 404 into [V1CreateNotFound]). */
+    private suspend fun <T> createCall(
+        notFoundMeansUnsupported: Boolean,
+        call: suspend () -> T,
+    ): T =
+        try {
+            call()
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (error: WorktreeCreateError) {
+            throw error
+        } catch (error: WorktreeHttpException) {
+            if (error.statusCode == 404 && notFoundMeansUnsupported) throw V1CreateNotFound()
+            throw WorktreeCreateError(httpErrorMessage(error.statusCode, error.body))
+        } catch (error: Exception) {
+            throw WorktreeCreateError(error.message?.trim()?.takeIf { it.isNotEmpty() } ?: "Unknown error")
+        }
+
+    private class V1CreateNotFound : Exception()
 
     private suspend fun loadV2(projectId: String?): WorktreeLoad {
         if (projectId.isNullOrBlank()) return WorktreeLoad.Unloaded
@@ -120,3 +197,12 @@ class DefaultWorktreeRepository(
             V1WorktreeHttp.Failed(-1)
         }
 }
+
+/** The server's own message, else the trimmed raw body, else the HTTP status. */
+internal fun httpErrorMessage(
+    statusCode: Int,
+    body: String,
+): String =
+    ServerErrorMessage.userFacing(body)
+        ?: body.trim().takeIf { it.isNotEmpty() && !it.startsWith("{") && !it.startsWith("[") && it.length <= 200 && !it.contains('\n') }
+        ?: WorktreeCreateCopy.requestFailed(statusCode)

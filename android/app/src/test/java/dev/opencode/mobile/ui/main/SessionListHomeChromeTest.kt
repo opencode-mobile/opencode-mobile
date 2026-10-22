@@ -173,10 +173,27 @@ class SessionListHomeChromeTest {
     }
 
     @Test
-    fun newSessionLongPressAction_oneProjectDoesNothing() {
+    fun newSessionLongPressAction_oneProjectOpensItsRunInWhileWorktreesIsOn() {
+        assertEquals(
+            SessionListHomeChrome.NewSessionAction.PresentSheet(
+                SessionListHomeChrome.NewSessionSheetMode.RunIn("/repo", showsOtherProjects = false),
+            ),
+            SessionListHomeChrome.newSessionLongPressAction(projects = listOf(mobile)),
+        )
         assertEquals(
             SessionListHomeChrome.NewSessionAction.None,
-            SessionListHomeChrome.newSessionLongPressAction(projects = listOf(mobile)),
+            SessionListHomeChrome.newSessionLongPressAction(projects = listOf(mobile), worktreesEnabled = false),
+        )
+    }
+
+    @Test
+    fun newSessionLongPressAction_singleCheckoutProjectOpensRunInSoNewWorktreeIsReachable() {
+        val single = mobile.copy(id = "solo", worktrees = listOf(SessionListHomeChrome.Worktree(HomeWorktree("/repo", isMain = true))))
+        assertEquals(
+            SessionListHomeChrome.NewSessionAction.PresentSheet(
+                SessionListHomeChrome.NewSessionSheetMode.RunIn("solo", showsOtherProjects = true),
+            ),
+            SessionListHomeChrome.newSessionLongPressAction(listOf(single, playground), "solo"),
         )
     }
 
@@ -318,9 +335,11 @@ class SessionListHomeChromeTest {
             ),
             SessionListHomeChrome.newSessionLongPressAction(listOf(worktreed), "all"),
         )
-        // A single-checkout target falls back to the project list.
+        // A single-checkout target opens its Run in too ("New worktree…" is there).
         assertEquals(
-            SessionListHomeChrome.NewSessionAction.PresentSheet(SessionListHomeChrome.NewSessionSheetMode.Projects(holdPick = true)),
+            SessionListHomeChrome.NewSessionAction.PresentSheet(
+                SessionListHomeChrome.NewSessionSheetMode.RunIn("/play", showsOtherProjects = true),
+            ),
             SessionListHomeChrome.newSessionLongPressAction(listOf(worktreed, playground), "/play"),
         )
         assertEquals(
@@ -358,8 +377,14 @@ class SessionListHomeChromeTest {
             SessionListHomeChrome.projectPickAction(worktreed, holdPick = true, worktreesEnabled = false),
         )
         assertEquals(
-            SessionListHomeChrome.NewSessionAction.Create("/play"),
+            SessionListHomeChrome.NewSessionAction.PresentSheet(
+                SessionListHomeChrome.NewSessionSheetMode.RunIn("/play", showsOtherProjects = false),
+            ),
             SessionListHomeChrome.projectPickAction(playground, holdPick = true),
+        )
+        assertEquals(
+            SessionListHomeChrome.NewSessionAction.Create("/play"),
+            SessionListHomeChrome.projectPickAction(playground, holdPick = true, worktreesEnabled = false),
         )
     }
 

@@ -55,7 +55,10 @@ import dev.opencode.mobile.domain.session.VcsInfo
 import dev.opencode.mobile.domain.sessioncache.NoOpSessionCache
 import dev.opencode.mobile.domain.sessioncache.SessionCache
 import dev.opencode.mobile.domain.sync.testSyncCoordinator
+import dev.opencode.mobile.domain.worktree.CreateWorktreeRequest
+import dev.opencode.mobile.domain.worktree.CreatedWorktree
 import dev.opencode.mobile.domain.worktree.UnavailableWorktreeRepository
+import dev.opencode.mobile.domain.worktree.WorktreeCreateError
 import dev.opencode.mobile.domain.worktree.WorktreeInventory
 import dev.opencode.mobile.domain.worktree.WorktreeLoad
 import dev.opencode.mobile.domain.worktree.WorktreeRepository
@@ -2579,6 +2582,85 @@ class MainScreenViewModelTest {
             val refreshed = viewModel.uiState.value as MainScreenUiState.Loaded
             assertEquals(listOf("fresh", "extra", "main"), refreshed.homeSessions().map { it.id })
             assertEquals(2, sessionRepository.listedDirectories.count { it == "/wt-unadded" })
+        }
+
+    @Test
+    fun runInNewWorktreeCreatesThenStartsASessionThereAndListsIt() =
+        runTest(testDispatcher) {
+            var listed = listOf("/repo")
+            val requests = mutableListOf<CreateWorktreeRequest>()
+            val worktrees =
+                object : WorktreeRepository by UnavailableWorktreeRepository {
+                    override suspend fun loadRefreshed(
+                        addedPath: String,
+                        projectId: String?,
+                        mainWorktree: String?,
+                    ): WorktreeLoad = WorktreeLoad.Loaded(listed, listsSessions = false)
+
+                    override suspend fun create(request: CreateWorktreeRequest): CreatedWorktree {
+                        requests += request
+                        listed = listed + "/wt/brave-otter"
+                        return CreatedWorktree("/wt/brave-otter", "brave-otter", branch = null)
+                    }
+                }
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    projectRepository = FakeProjectRepository(projectsByDirectory = repoProjects),
+                    sessionsByWorktree = mapOf("/repo" to emptyList()),
+                    worktreeRepository = worktrees,
+                    serverProtocol = ServerProtocol.V2,
+                )
+            advanceUntilIdle()
+
+            viewModel.openRunInNewWorktree("proj")
+            advanceUntilIdle()
+            val form = viewModel.worktreeCreateForm.value!!
+            assertEquals("/repo", form.sourceDirectory)
+            viewModel.updateNewWorktreeName("brave-otter")
+            viewModel.submitNewWorktree()
+            advanceUntilIdle()
+
+            assertEquals(listOf(CreateWorktreeRequest("proj", "/repo", "brave-otter", baseRef = null)), requests)
+            assertNull(viewModel.worktreeCreateForm.value)
+            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            assertEquals("/wt/brave-otter", loaded.pendingOpenSession?.worktree)
+            assertEquals(
+                listOf("/repo", "/wt/brave-otter"),
+                loaded.projects
+                    .single()
+                    .worktrees
+                    .map { it.directory },
+            )
+        }
+
+    @Test
+    fun runInNewWorktreeFailureStartsNoSession() =
+        runTest(testDispatcher) {
+            val worktrees =
+                object : WorktreeRepository by UnavailableWorktreeRepository {
+                    override suspend fun create(request: CreateWorktreeRequest): CreatedWorktree =
+                        throw WorktreeCreateError("Worktrees are only supported for git projects")
+                }
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    projectRepository = FakeProjectRepository(projectsByDirectory = repoProjects),
+                    sessionsByWorktree = mapOf("/repo" to emptyList()),
+                    worktreeRepository = worktrees,
+                    serverProtocol = ServerProtocol.V1,
+                )
+            advanceUntilIdle()
+
+            viewModel.openRunInNewWorktree("proj")
+            viewModel.submitNewWorktree()
+            advanceUntilIdle()
+
+            assertEquals(
+                "Couldn't create the worktree: Worktrees are only supported for git projects",
+                viewModel.worktreeCreateForm.value?.errorMessage,
+            )
+            assertNull((viewModel.uiState.value as MainScreenUiState.Loaded).pendingOpenSession)
         }
 
     @Test

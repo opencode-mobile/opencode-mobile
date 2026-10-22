@@ -252,7 +252,9 @@ struct ProjectListHomeView: View {
             }
             .openCodeBottomSheet(
                 isPresented: newSessionPickerBinding,
-                title: "New session"
+                title: viewModel.worktreeCreate.state?.title ?? "New session",
+                leadingAction: WorktreeCreateSheetChrome.backAction(viewModel.worktreeCreate),
+                keyboard: WorktreeCreateSheetChrome.keyboard(viewModel.worktreeCreate)
             ) {
                 newSessionSheetContent
             }
@@ -455,6 +457,10 @@ struct ProjectListHomeView: View {
         }
         // Session Chat's "Move to worktree…" lists the session's project worktrees from Home.
         .environment(\.homeProjects, viewModel.homeProjects)
+        // and refreshes them after it creates one.
+        .environment(\.refreshHomeWorktrees, { [viewModel] directory in
+            await viewModel.refreshWorktreeInventory(containing: directory)
+        })
     }
 
     private var serversSheetBinding: Binding<Bool> {
@@ -790,7 +796,15 @@ struct ProjectListHomeView: View {
     private var newSessionSheetContent: some View {
         let projects = viewModel.homeProjects
         let worktreesEnabled = homeDisplayPreferences.showsWorktrees
-        if case let .runIn(projectKey, _) = newSessionSheetMode,
+        if viewModel.worktreeCreate.isPresented {
+            WorktreeCreateForm(model: viewModel.worktreeCreate) {
+                Task {
+                    if await viewModel.submitNewWorktree() {
+                        showNewSessionProjectPicker = false
+                    }
+                }
+            }
+        } else if case let .runIn(projectKey, _) = newSessionSheetMode,
            let runIn = projects.first(where: { $0.key == projectKey })
         {
             OpenCodeSectionHeader(title: HomeProjectCopy.runInTitle)
@@ -811,6 +825,11 @@ struct ProjectListHomeView: View {
                 )
                 .accessibilityIdentifier("newSessionRunInRow")
             }
+            NewWorktreeRow(
+                availability: viewModel.newWorktreeAvailability(for: runIn, worktreesEnabled: worktreesEnabled),
+                accessibilityIdentifier: "newWorktreeRow",
+                action: { viewModel.openNewWorktree(projectKey: runIn.key) }
+            )
             let others = SessionListHomeChrome.otherProjects(projects, mode: newSessionSheetMode)
             if !others.isEmpty {
                 OpenCodeSectionHeader(title: HomeProjectCopy.otherProjectsTitle)
@@ -854,6 +873,7 @@ struct ProjectListHomeView: View {
         _ mode: SessionListHomeChrome.NewSessionSheetMode = .projects(holdPick: false)
     ) {
         newSessionSheetMode = mode
+        viewModel.worktreeCreate.dismiss()
         ProductAnalytics.logUserAction(
             screenId: ProductAnalytics.Screen.home,
             actionId: ProductAnalytics.Action.homeOpenNewSessionProjectPicker
@@ -947,6 +967,7 @@ struct ProjectListHomeView: View {
                         screenId: ProductAnalytics.Screen.homeNewSessionProjectPicker,
                         actionId: ProductAnalytics.Action.newSessionPickerDismiss
                     )
+                    viewModel.worktreeCreate.dismiss()
                 }
                 showNewSessionProjectPicker = presented
             }

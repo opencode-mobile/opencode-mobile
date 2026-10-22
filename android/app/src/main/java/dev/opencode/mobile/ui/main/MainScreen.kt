@@ -38,6 +38,7 @@ import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.session.SessionIdleOutcome
 import dev.opencode.mobile.domain.session.SessionSummary
 import dev.opencode.mobile.domain.time.RelativeTimeFormatting
+import dev.opencode.mobile.domain.worktree.WorktreeCreateCopy
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.letterAccentForWorktree
@@ -84,6 +85,15 @@ import dev.opencode.mobile.ui.keyboard.KeyboardShortcutHandler
 import dev.opencode.mobile.ui.keyboard.KeyboardShortcutRules
 import dev.opencode.mobile.ui.keyboard.SessionStepDirection
 import dev.opencode.mobile.ui.sessionchat.SessionConnectionStatus
+import dev.opencode.mobile.ui.worktree.NewWorktreeAvailability
+import dev.opencode.mobile.ui.worktree.NewWorktreeRow
+import dev.opencode.mobile.ui.worktree.WorktreeCreateFormActions
+import dev.opencode.mobile.ui.worktree.WorktreeCreateFormBody
+import dev.opencode.mobile.ui.worktree.WorktreeCreateFormCallbacks
+import dev.opencode.mobile.ui.worktree.WorktreeCreateFormState
+import dev.opencode.mobile.ui.worktree.WorktreeCreateOrigin
+import dev.opencode.mobile.ui.worktree.WorktreeCreateTags
+import dev.opencode.mobile.ui.worktree.worktreeCreateBackAction
 
 /** Long-press session actions on home: sheet, rename/fork dialogs, delete confirm. */
 data class HomeSessionActionsCallbacks(
@@ -127,6 +137,8 @@ fun MainScreen(
     val revealNewestToken by viewModel.revealNewestToken.collectAsStateWithLifecycle()
     val pendingScopeRequest by viewModel.pendingScopeRequest.collectAsStateWithLifecycle()
     val serversChrome by viewModel.serversChrome.collectAsStateWithLifecycle()
+    val worktreeCreateForm by viewModel.worktreeCreateForm.collectAsStateWithLifecycle()
+    val worktreeServerCanCreate by viewModel.worktreeServerCanCreate.collectAsStateWithLifecycle()
     LifecycleEventEffect(Lifecycle.Event.ON_START) {
         viewModel.onHomeRevealed()
     }
@@ -194,6 +206,18 @@ fun MainScreen(
                 onFolderRowDisappeared = viewModel::addProjectFolderRowDisappeared,
             ),
         onNewSession = viewModel::createSession,
+        worktreeCreateForm = worktreeCreateForm,
+        worktreeServerCanCreate = worktreeServerCanCreate,
+        onOpenRunInNewWorktree = viewModel::openRunInNewWorktree,
+        worktreeCreateCallbacks =
+            WorktreeCreateFormCallbacks(
+                onNameChange = viewModel::updateNewWorktreeName,
+                onShowBasePicker = viewModel::showNewWorktreeBasePicker,
+                onHideBasePicker = viewModel::hideNewWorktreeBasePicker,
+                onSelectBase = viewModel::selectNewWorktreeBase,
+                onSubmit = viewModel::submitNewWorktree,
+                onBack = viewModel::closeNewWorktreeForm,
+            ),
         onConsumePendingOpenSession = viewModel::consumePendingOpenSession,
         onRemoveProject = viewModel::requestRemoveProject,
         onReorderProjects = viewModel::reorderProjects,
@@ -256,10 +280,19 @@ internal fun MainScreen(
     onManageServersClick: () -> Unit = {},
     selectedSessionId: String? = null,
     sessionKeyboardNavigationEnabled: Boolean = false,
+    worktreeCreateForm: WorktreeCreateFormState? = null,
+    worktreeServerCanCreate: Boolean = true,
+    onOpenRunInNewWorktree: (String) -> Unit = {},
+    worktreeCreateCallbacks: WorktreeCreateFormCallbacks = WorktreeCreateFormCallbacks(),
 ) {
+    var newSessionSheetMode by rememberSaveable(stateSaver = NewSessionSheetModeSaver) {
+        mutableStateOf<SessionListHomeChrome.NewSessionSheetMode?>(null)
+    }
     val pendingOpenSession = (uiState as? MainScreenUiState.Loaded)?.pendingOpenSession
     LaunchedEffect(pendingOpenSession) {
         pendingOpenSession?.let { target ->
+            // A session made from the New worktree form closes the New session sheet too.
+            newSessionSheetMode = null
             onSessionClick(target)
             onConsumePendingOpenSession()
         }
@@ -277,9 +310,6 @@ internal fun MainScreen(
             else -> null
         }
 
-    var newSessionSheetMode by rememberSaveable(stateSaver = NewSessionSheetModeSaver) {
-        mutableStateOf<SessionListHomeChrome.NewSessionSheetMode?>(null)
-    }
     var selectedFilterId by rememberSaveable { mutableStateOf(SessionListFilterTab.ALL_ID) }
     val worktreesEnabled = HomeDisplayPreferences.showsWorktrees
     val loaded = uiState as? MainScreenUiState.Loaded
@@ -568,8 +598,8 @@ internal fun MainScreen(
         onDismiss = onDismissAddProject,
     )
 
-    // One New session sheet: the project list, or "Run in" for a project with several worktrees.
-    // Keeps the shown content while the sheet plays its exit motion.
+    // One New session sheet: the project list, "Run in" for a project, or the New worktree form
+    // in place of Run in. Keeps the shown content while the sheet plays its exit motion.
     var heldSheetMode by remember { mutableStateOf(newSessionSheetMode) }
     newSessionSheetMode?.let { heldSheetMode = it }
     val pickProject: (SessionListHomeChrome.Project, Boolean) -> Unit = { project, holdPick ->
@@ -577,26 +607,42 @@ internal fun MainScreen(
             screenId = ProductAnalytics.Screen.HOME_NEW_SESSION_PROJECT_PICKER,
             actionId = ProductAnalytics.Action.NEW_SESSION_PICKER_SELECT_PROJECT,
         )
-        // A hold-pick of a project with several worktrees stays open and asks where to run.
+        // A hold-pick with Worktrees on stays open and asks where to run.
         startNewSession(SessionListHomeChrome.projectPickAction(project, holdPick, worktreesEnabled))
     }
+    val heldRunInKey = (heldSheetMode as? SessionListHomeChrome.NewSessionSheetMode.RunIn)?.projectId
+    val runInForm =
+        worktreeCreateForm?.takeIf { form ->
+            heldRunInKey != null && (form.origin as? WorktreeCreateOrigin.RunIn)?.projectKey == heldRunInKey
+        }
     OpenCodeBottomSheet(
         visible = newSessionSheetMode != null,
-        title = "New session",
+        title = if (runInForm != null) WorktreeCreateCopy.FORM_TITLE else "New session",
         onDismissRequest = {
             ProductAnalytics.logUserAction(
                 screenId = ProductAnalytics.Screen.HOME_NEW_SESSION_PROJECT_PICKER,
                 actionId = ProductAnalytics.Action.NEW_SESSION_PICKER_DISMISS,
             )
             newSessionSheetMode = null
+            worktreeCreateCallbacks.onBack()
         },
+        headerTrailingAction = runInForm?.let { worktreeCreateBackAction(it, worktreeCreateCallbacks) },
+        keyboard =
+            if (runInForm != null && !runInForm.basePickerVisible) {
+                OpenCodeBottomSheetKeyboard.Keep
+            } else {
+                OpenCodeBottomSheetKeyboard.Dismiss
+            },
+        pinnedBottom = if (runInForm != null) ({ WorktreeCreateFormActions(runInForm, worktreeCreateCallbacks) }) else null,
     ) {
         val mode = heldSheetMode
         val runIn =
             (mode as? SessionListHomeChrome.NewSessionSheetMode.RunIn)?.let { runInMode ->
-                chromeProjects.firstOrNull { it.id == runInMode.projectId && it.hasManyWorktrees }
+                chromeProjects.firstOrNull { it.id == runInMode.projectId }
             }
-        if (mode is SessionListHomeChrome.NewSessionSheetMode.RunIn && runIn != null) {
+        if (runInForm != null) {
+            WorktreeCreateFormBody(runInForm, worktreeCreateCallbacks)
+        } else if (mode is SessionListHomeChrome.NewSessionSheetMode.RunIn && runIn != null) {
             OpenCodeSectionHeader(title = HomeWorktreeCopy.RUN_IN)
             runIn.worktrees.forEach { worktree ->
                 OpenCodeListItem(
@@ -614,6 +660,16 @@ internal fun MainScreen(
                     modifier = Modifier.testTag(HomeNewSessionSheetTags.runInRow(worktree.title)),
                 )
             }
+            NewWorktreeRow(
+                availability =
+                    NewWorktreeAvailability.runIn(
+                        project = loaded?.projects?.firstOrNull { it.key == runIn.id },
+                        worktreesEnabled = worktreesEnabled,
+                        serverCanCreate = worktreeServerCanCreate,
+                    ),
+                testTag = WorktreeCreateTags.RUN_IN_ROW,
+                onClick = { onOpenRunInNewWorktree(runIn.id) },
+            )
             val others = chromeProjects.filter { it.id != runIn.id }
             if (mode.showsOtherProjects && others.isNotEmpty()) {
                 OpenCodeSectionHeader(title = HomeWorktreeCopy.OTHER_PROJECTS)

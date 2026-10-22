@@ -39,13 +39,43 @@ class SessionChatWorktreeMoveTest {
             on: Boolean = true,
             created: Boolean = true,
             count: Int = 2,
-        ) = SessionChatWorktreeMoveAvailability.resolve(v2, on, created, count)
+            canCreate: Boolean = false,
+        ) = SessionChatWorktreeMoveAvailability.resolve(v2, on, created, count, canCreate)
 
-        assertEquals(SessionChatWorktreeMoveAvailability(false, "Needs an opencode v2 server"), resolve(v2 = false, on = false, count = 1))
-        assertEquals(SessionChatWorktreeMoveAvailability(false, "Turn on Worktrees in Settings"), resolve(on = false, count = 1))
-        assertEquals(SessionChatWorktreeMoveAvailability(false, null), resolve(created = false, count = 1))
+        assertEquals(
+            SessionChatWorktreeMoveAvailability(false, "Needs an opencode v2 server"),
+            resolve(v2 = false, on = false, count = 1, canCreate = true),
+        )
+        assertEquals(
+            SessionChatWorktreeMoveAvailability(false, "Turn on Worktrees in Settings"),
+            resolve(on = false, count = 1, canCreate = true),
+        )
+        assertEquals(SessionChatWorktreeMoveAvailability(false, null), resolve(created = false, count = 1, canCreate = true))
         assertEquals(SessionChatWorktreeMoveAvailability(false, "This project has no other worktrees"), resolve(count = 1))
         assertEquals(SessionChatWorktreeMoveAvailability(true, null), resolve())
+    }
+
+    @Test
+    fun oneCheckoutStillOpensTheSheetWhileANewWorktreeCanBeCreated() {
+        assertEquals(
+            SessionChatWorktreeMoveAvailability(true, null),
+            SessionChatWorktreeMoveAvailability.resolve(true, true, true, worktreeCount = 1, canCreateWorktree = true),
+        )
+        assertEquals(
+            SessionChatWorktreeMoveAvailability(false, "This project has no other worktrees"),
+            SessionChatWorktreeMoveAvailability.resolve(true, true, true, worktreeCount = 1, canCreateWorktree = false),
+        )
+        assertEquals(
+            SessionChatWorktreeMoveAvailability(true, null),
+            SessionChatWorktreeMoveAvailability.resolve(true, true, true, worktreeCount = 3, canCreateWorktree = false),
+        )
+    }
+
+    @Test
+    fun aCreatedCheckoutRowIsTitledAsGivenWithItsFolder() {
+        val row = SessionChatWorktreeMoveRow.created("/wt/ab12cd/brave-otter", "brave-otter")
+
+        assertEquals(SessionChatWorktreeMoveRow("/wt/ab12cd/brave-otter", "brave-otter", "brave-otter", isCurrent = false), row)
     }
 
     @Test

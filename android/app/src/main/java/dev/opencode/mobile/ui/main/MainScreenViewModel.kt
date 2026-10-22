@@ -62,6 +62,9 @@ import dev.opencode.mobile.ui.components.SessionListScrollPin
 import dev.opencode.mobile.ui.main.region.HomeSessionActions
 import dev.opencode.mobile.ui.sessionchat.SessionConnectionStatus
 import dev.opencode.mobile.ui.sessionchat.toSessionConnectionStatus
+import dev.opencode.mobile.ui.worktree.WorktreeCreateForm
+import dev.opencode.mobile.ui.worktree.WorktreeCreateFormState
+import dev.opencode.mobile.ui.worktree.WorktreeCreateOrigin
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -73,12 +76,12 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
-import kotlinx.coroutines.flow.distinctUntilChanged
 
 @HiltViewModel
 class MainScreenViewModel
@@ -154,6 +157,21 @@ class MainScreenViewModel
                 repository = worktreeRepository,
                 currentProject = { directory -> projectRepository.getCurrentProject(directory) },
             )
+
+        /** Run in → "New worktree…": create a checkout, then start a new session there. */
+        private val worktreeCreate =
+            WorktreeCreateForm(
+                repository = worktreeRepository,
+                scope = viewModelScope,
+                onCreated = { origin, created ->
+                    if (origin is WorktreeCreateOrigin.RunIn) createSession(created.directory)
+                },
+                onInventoryChanged = { _, request -> refreshProjectWorktrees(request.sourceDirectory) },
+            )
+        val worktreeCreateForm: StateFlow<WorktreeCreateFormState?> = worktreeCreate.state
+
+        /** False once a v1 server answered that it cannot create worktrees. */
+        val worktreeServerCanCreate: StateFlow<Boolean> = worktreeRepository.canCreate
         private val projectFirstLoads =
             HomeProjectFirstLoads(
                 scope = viewModelScope,
@@ -211,7 +229,12 @@ class MainScreenViewModel
                     .collect(homeProjectsSnapshot::publish)
             }
             viewModelScope.launch {
+                // A checkout created in Session Chat (Move to worktree) lists here at once.
+                homeProjectsSnapshot.worktreeRefreshRequests.collect(::refreshProjectWorktrees)
+            }
+            viewModelScope.launch {
                 connectionSessionCoordinator.profileSaved.collect {
+                    worktreeCreate.dismiss()
                     stopLiveObservations()
                     projectFirstLoads.clearAll()
                     pendingFirstServerSnapshots.clear()
@@ -221,6 +244,7 @@ class MainScreenViewModel
             }
             viewModelScope.launch {
                 connectionSessionCoordinator.profileCleared.collect {
+                    worktreeCreate.dismiss()
                     stopLiveObservations()
                     projectFirstLoads.clearAll()
                     pendingFirstServerSnapshots.clear()
@@ -549,6 +573,32 @@ class MainScreenViewModel
                 }
             }
         }
+
+        /** Run in → "New worktree…" of project [projectKey]: the form, made from its main checkout. */
+        fun openRunInNewWorktree(projectKey: String) {
+            val project = currentHomeProjects().firstOrNull { it.key == projectKey } ?: return
+            val main = project.worktrees.firstOrNull { it.isMain }
+            worktreeCreate.open(
+                origin = WorktreeCreateOrigin.RunIn(projectKey),
+                protocol = activeConnectionManager.protocolHint(),
+                projectId = project.projectId,
+                sourceDirectory = project.mainCheckoutDirectory,
+                sourceBranch = main?.branch,
+            )
+        }
+
+        fun updateNewWorktreeName(name: String) = worktreeCreate.updateName(name)
+
+        fun showNewWorktreeBasePicker() = worktreeCreate.showBasePicker()
+
+        fun hideNewWorktreeBasePicker() = worktreeCreate.hideBasePicker()
+
+        fun selectNewWorktreeBase(ref: String?) = worktreeCreate.selectBase(ref)
+
+        fun submitNewWorktree() = worktreeCreate.submit()
+
+        /** Form → Back, or the New session sheet closed. */
+        fun closeNewWorktreeForm() = worktreeCreate.dismiss()
 
         fun consumePendingOpenSession() {
             _uiState.update { state ->
@@ -1335,6 +1385,24 @@ class MainScreenViewModel
                         applyPathLoad(worktreeLoader.load(worktree, resolution))
                     }
                 }
+        }
+
+        /**
+         * Lists the worktrees of [directory]'s project again (v2 list + refresh, v1
+         * `GET /experimental/worktree`), so a checkout made in the app shows without a refresh.
+         */
+        private fun refreshProjectWorktrees(directory: String) {
+            val canonical = ServerPathPolicy.canonical(directory.trim())
+            val projects = currentHomeProjects()
+            val project =
+                projects.firstOrNull { it.worktree(canonical) != null }
+                    ?: projects.firstOrNull { it.contains(canonical) }
+                    ?: return
+            viewModelScope.launch {
+                for (path in project.memberPaths) {
+                    applyPathLoad(worktreeLoader.load(path, homeIndex.resolutions[path]))
+                }
+            }
         }
 
         private fun applyPathLoad(load: HomePathLoad) {

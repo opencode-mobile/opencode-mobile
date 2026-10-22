@@ -50,21 +50,23 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.opencode.mobile.ProductAnalytics
-import dev.opencode.mobile.domain.connection.ExternalLinkPolicy
-import dev.opencode.mobile.domain.message.FailureAction
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
 import dev.opencode.mobile.SessionToolGroup
 import dev.opencode.mobile.domain.command.ClientSlashAction
+import dev.opencode.mobile.domain.connection.ExternalLinkPolicy
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogAttachment
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogBuffer
 import dev.opencode.mobile.domain.feedback.FeedbackScreen
 import dev.opencode.mobile.domain.message.AttachmentIngestionService
+import dev.opencode.mobile.domain.message.FailureAction
 import dev.opencode.mobile.domain.preferences.DeveloperToolsPreferences
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.SessionTodoList
+import dev.opencode.mobile.domain.worktree.WorktreeCreateCopy
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
+import dev.opencode.mobile.ui.components.ComposerDictationCardModel
 import dev.opencode.mobile.ui.components.OpenCodeActionPill
 import dev.opencode.mobile.ui.components.OpenCodeActionPillVariant
 import dev.opencode.mobile.ui.components.OpenCodeActionTile
@@ -75,20 +77,20 @@ import dev.opencode.mobile.ui.components.OpenCodeBottomFadeOverhang
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetHeaderAction
+import dev.opencode.mobile.ui.components.OpenCodeBottomSheetKeyboard
 import dev.opencode.mobile.ui.components.OpenCodeComposerSuggestionItem
 import dev.opencode.mobile.ui.components.OpenCodeComposerSuggestionOverlay
 import dev.opencode.mobile.ui.components.OpenCodeDialog
 import dev.opencode.mobile.ui.components.OpenCodeDialogOption
 import dev.opencode.mobile.ui.components.OpenCodeDialogTextField
+import dev.opencode.mobile.ui.components.OpenCodeDictationCardVariant
+import dev.opencode.mobile.ui.components.OpenCodeDictationUnavailableReason
 import dev.opencode.mobile.ui.components.OpenCodeInlineNotice
 import dev.opencode.mobile.ui.components.OpenCodeLayout
+import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeOverflowMenuEntry
 import dev.opencode.mobile.ui.components.OpenCodePendingPromptsStrip
 import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
-import dev.opencode.mobile.ui.components.ComposerDictationCardModel
-import dev.opencode.mobile.ui.components.OpenCodeDictationCardVariant
-import dev.opencode.mobile.ui.components.OpenCodeDictationUnavailableReason
-import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposer
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposerAction
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposerState
@@ -112,22 +114,6 @@ import dev.opencode.mobile.ui.feedback.rememberFeedbackSheetState
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.keyboard.KeyboardShortcutAction
 import dev.opencode.mobile.ui.keyboard.KeyboardShortcutHandler
-import dev.opencode.mobile.ui.sessionchat.view.ComposerPickerKind
-import dev.opencode.mobile.ui.sessionchat.view.SessionRetryCountdown
-import dev.opencode.mobile.ui.sessionchat.view.sessionFailureDetailTarget
-import dev.opencode.mobile.ui.sessionchat.view.SessionChatMcpServersSheetContent
-import dev.opencode.mobile.ui.sessionchat.view.SessionChatMessageActionsSheet
-import dev.opencode.mobile.ui.sessionchat.view.SessionChatMessageActionsTarget
-import dev.opencode.mobile.ui.sessionchat.view.SessionChatPendingPromptsSheet
-import dev.opencode.mobile.ui.sessionchat.view.SessionChatPickerSheet
-import dev.opencode.mobile.ui.sessionchat.view.SessionChatTimelineView
-import dev.opencode.mobile.ui.sessionchat.view.SessionChatTimelineViewProps
-import dev.opencode.mobile.ui.sessionchat.view.SessionChatTodosSheet
-import dev.opencode.mobile.ui.sessionchat.view.SessionChatChipTimelineIntroModal
-import dev.opencode.mobile.ui.sessionchat.view.SessionChatSkillsSheet
-import dev.opencode.mobile.ui.sessionchat.view.SessionChatSkillsTarget
-import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolDetailSheet
-import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolDetailTarget
 import dev.opencode.mobile.ui.sessionchat.dictation.ComposerDictationSession
 import dev.opencode.mobile.ui.sessionchat.dictation.DictationModelDownloader
 import dev.opencode.mobile.ui.sessionchat.dictation.DictationSupport
@@ -139,8 +125,30 @@ import dev.opencode.mobile.ui.sessionchat.dictation.probeDictationSupport
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveCopy
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveTags
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveUiState
+import dev.opencode.mobile.ui.sessionchat.view.ComposerPickerKind
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatChipTimelineIntroModal
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatMcpServersSheetContent
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatMessageActionsSheet
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatMessageActionsTarget
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatPendingPromptsSheet
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatPickerSheet
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatSkillsSheet
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatSkillsTarget
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatTimelineView
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatTimelineViewProps
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatTodosSheet
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolDetailSheet
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolDetailTarget
+import dev.opencode.mobile.ui.sessionchat.view.SessionRetryCountdown
+import dev.opencode.mobile.ui.sessionchat.view.sessionFailureDetailTarget
 import dev.opencode.mobile.ui.sessionchat.view.toActionTileBadge
 import dev.opencode.mobile.ui.sessionchat.view.toRoute
+import dev.opencode.mobile.ui.worktree.NewWorktreeRow
+import dev.opencode.mobile.ui.worktree.WorktreeCreateFormActions
+import dev.opencode.mobile.ui.worktree.WorktreeCreateFormBody
+import dev.opencode.mobile.ui.worktree.WorktreeCreateFormCallbacks
+import dev.opencode.mobile.ui.worktree.WorktreeCreateTags
+import dev.opencode.mobile.ui.worktree.worktreeCreateBackAction
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -559,6 +567,16 @@ fun SessionChatScreen(
         state = uiState.moveToWorktree,
         onDismiss = viewModel::dismissMoveToWorktree,
         onMove = viewModel::moveToWorktree,
+        onNewWorktree = viewModel::openMoveToNewWorktree,
+        formCallbacks =
+            WorktreeCreateFormCallbacks(
+                onNameChange = viewModel::updateNewWorktreeName,
+                onShowBasePicker = viewModel::showNewWorktreeBasePicker,
+                onHideBasePicker = viewModel::hideNewWorktreeBasePicker,
+                onSelectBase = viewModel::selectNewWorktreeBase,
+                onSubmit = viewModel::submitNewWorktree,
+                onBack = viewModel::closeNewWorktreeForm,
+            ),
     )
 
     Box(modifier = modifier.fillMaxSize()) {
@@ -1641,42 +1659,70 @@ private fun SessionChatScreenPreview() {
     }
 }
 
-/** Session Chat ⋯ → "Move to worktree…": the project's worktrees, the current one checked. */
+/**
+ * Session Chat ⋯ → "Move to worktree…": the project's worktrees, the current one checked, then
+ * "New worktree…", whose form replaces the list in the same sheet.
+ */
 @Composable
 private fun SessionChatMoveToWorktreeSheet(
     state: SessionChatWorktreeMoveUiState,
     onDismiss: () -> Unit,
     onMove: (String) -> Unit,
+    onNewWorktree: () -> Unit,
+    formCallbacks: WorktreeCreateFormCallbacks,
 ) {
+    val form = state.form
     OpenCodeBottomSheet(
         visible = state.sheetVisible,
-        title = SessionChatWorktreeMoveCopy.SHEET_TITLE,
+        title = if (form != null) WorktreeCreateCopy.FORM_TITLE else SessionChatWorktreeMoveCopy.SHEET_TITLE,
         onDismissRequest = onDismiss,
+        headerTrailingAction = form?.let { worktreeCreateBackAction(it, formCallbacks) },
+        keyboard = if (form != null && !form.basePickerVisible) OpenCodeBottomSheetKeyboard.Keep else OpenCodeBottomSheetKeyboard.Dismiss,
+        pinnedBottom = if (form != null) ({ WorktreeCreateFormActions(form, formCallbacks) }) else null,
     ) {
-        state.rows.forEach { row ->
-            OpenCodeListItem(
-                title = row.title,
-                subtitle = row.subtitle,
-                selected = row.isCurrent,
-                enabled = state.submittingDirectory == null || state.submittingDirectory == row.directory,
-                startDecorator = StartDecorator.Icon(OpenCodeIcons.CallSplit, null),
-                onClick = if (row.isCurrent || state.submittingDirectory != null) null else ({ onMove(row.directory) }),
-                modifier = Modifier.testTag(SessionChatWorktreeMoveTags.row(row.title)),
-                trailing =
-                    if (row.isCurrent) {
-                        {
-                            Icon(
-                                imageVector = OpenCodeIcons.Check,
-                                contentDescription = "Current worktree",
-                                tint = openCodeColor("icon-strong-base"),
-                                modifier = Modifier.size(20.dp),
-                            )
-                        }
-                    } else {
-                        null
-                    },
-            )
+        if (form != null) {
+            WorktreeCreateFormBody(form, formCallbacks)
+        } else {
+            SessionChatMoveToWorktreeRows(state, onMove, onNewWorktree)
         }
     }
+}
+
+@Composable
+private fun SessionChatMoveToWorktreeRows(
+    state: SessionChatWorktreeMoveUiState,
+    onMove: (String) -> Unit,
+    onNewWorktree: () -> Unit,
+) {
+    state.rows.forEach { row ->
+        OpenCodeListItem(
+            title = row.title,
+            subtitle = row.subtitle,
+            selected = row.isCurrent,
+            enabled = state.submittingDirectory == null || state.submittingDirectory == row.directory,
+            startDecorator = StartDecorator.Icon(OpenCodeIcons.CallSplit, null),
+            onClick = if (row.isCurrent || state.submittingDirectory != null) null else ({ onMove(row.directory) }),
+            modifier = Modifier.testTag(SessionChatWorktreeMoveTags.row(row.title)),
+            trailing =
+                if (row.isCurrent) {
+                    {
+                        Icon(
+                            imageVector = OpenCodeIcons.Check,
+                            contentDescription = "Current worktree",
+                            tint = openCodeColor("icon-strong-base"),
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                } else {
+                    null
+                },
+        )
+    }
+    NewWorktreeRow(
+        // Inert like the other rows while a move is in flight.
+        availability = if (state.submittingDirectory != null) state.newWorktree.copy(enabled = false) else state.newWorktree,
+        testTag = WorktreeCreateTags.MOVE_ROW,
+        onClick = onNewWorktree,
+    )
 }
 

@@ -5,6 +5,8 @@ import dev.opencode.mobile.domain.filesystem.ServerPathPolicy
 import dev.opencode.mobile.domain.home.HomeProject
 import dev.opencode.mobile.domain.home.HomeWorktreeCopy
 import dev.opencode.mobile.domain.session.ServerErrorMessage
+import dev.opencode.mobile.ui.worktree.NewWorktreeAvailability
+import dev.opencode.mobile.ui.worktree.WorktreeCreateFormState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -42,18 +44,23 @@ data class SessionChatWorktreeMoveAvailability(
     val subtitle: String? = null,
 ) {
     companion object {
-        /** Checks in order; the first that fails explains the disabled entry. */
+        /**
+         * Checks in order; the first that fails explains the disabled entry. A project with one
+         * checkout still opens the sheet while its "New worktree…" row can create one.
+         */
         fun resolve(
             supportsSessionMove: Boolean,
             worktreesEnabled: Boolean,
             sessionCreated: Boolean,
             worktreeCount: Int,
+            canCreateWorktree: Boolean = false,
         ): SessionChatWorktreeMoveAvailability =
             when {
                 !supportsSessionMove -> SessionChatWorktreeMoveAvailability(false, SessionChatWorktreeMoveCopy.NEEDS_V2)
                 !worktreesEnabled -> SessionChatWorktreeMoveAvailability(false, SessionChatWorktreeMoveCopy.TURN_ON_WORKTREES)
                 !sessionCreated -> SessionChatWorktreeMoveAvailability(false)
-                worktreeCount < 2 -> SessionChatWorktreeMoveAvailability(false, SessionChatWorktreeMoveCopy.NO_OTHER_WORKTREES)
+                worktreeCount < 2 && !canCreateWorktree ->
+                    SessionChatWorktreeMoveAvailability(false, SessionChatWorktreeMoveCopy.NO_OTHER_WORKTREES)
                 else -> SessionChatWorktreeMoveAvailability(true)
             }
     }
@@ -83,6 +90,18 @@ data class SessionChatWorktreeMoveRow(
                 )
             }
         }
+
+        /** A checkout made from the Move sheet; titled by its branch, else its folder. */
+        fun created(
+            directory: String,
+            title: String,
+        ): SessionChatWorktreeMoveRow =
+            SessionChatWorktreeMoveRow(
+                directory = directory,
+                title = title,
+                subtitle = ServerPathPolicy.name(directory).ifBlank { directory },
+                isCurrent = false,
+            )
     }
 }
 
@@ -93,6 +112,10 @@ data class SessionChatWorktreeMoveUiState(
     val rows: List<SessionChatWorktreeMoveRow> = emptyList(),
     /** The destination whose request is in flight; rows stay inert meanwhile. */
     val submittingDirectory: String? = null,
+    /** The "New worktree…" row after the worktrees. */
+    val newWorktree: NewWorktreeAvailability = NewWorktreeAvailability(false),
+    /** The New worktree form shown in the sheet in place of the list; null shows the list. */
+    val form: WorktreeCreateFormState? = null,
 )
 
 data class SessionChatWorktreeMoveRegionState(

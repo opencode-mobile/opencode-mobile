@@ -50,6 +50,11 @@ data class HomeProject(
     val isRepository: Boolean,
     /** Main checkout first, then by folder name. */
     val worktrees: List<HomeWorktree>,
+    /**
+     * The server reports version control for the path even when the project does not merge
+     * (a git repository without a commit resolves to `global`).
+     */
+    val hasVcs: Boolean = isRepository,
 ) {
     /** Location for project-level requests. */
     val primaryPath: String
@@ -112,6 +117,7 @@ object HomeProjectGrouping {
                 memberPaths = members,
                 isRepository = isRepository,
                 worktrees = worktrees,
+                hasVcs = isRepository || resolution?.isRepository == true,
             )
         }
     }

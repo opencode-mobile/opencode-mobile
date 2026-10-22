@@ -50,6 +50,22 @@ nonisolated enum ServerErrorMessage {
         }
     }
 
+    /// `message` (or `data.message`) of a JSON error body, trimmed; nil when there is none.
+    /// Unlike `fromBody` it keeps schema errors and long text: the caller asked for the
+    /// server's words as they are.
+    static func bodyMessage(_ body: String?) -> String? {
+        let trimmed = body?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard trimmed.hasPrefix("{"),
+              let data = trimmed.data(using: .utf8),
+              let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        else { return nil }
+        let nested = root["data"] as? [String: Any]
+        let message = ((root["message"] as? String) ?? (nested?["message"] as? String))?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let message, !message.isEmpty else { return nil }
+        return message
+    }
+
     static func fromBody(_ body: String?) -> String? {
         let trimmed = body?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         guard trimmed.hasPrefix("{"),

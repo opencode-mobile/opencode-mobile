@@ -240,12 +240,21 @@ struct SessionListHomeChromeTests {
         #expect(SessionListHomeChrome.pick(playground, holdPick: false) == .create(directory: "/play"))
     }
 
-    @Test func pick_afterAHoldOpensRunInForAMultiWorktreeProject() {
+    @Test func pick_afterAHoldOpensRunIn() {
         #expect(
             SessionListHomeChrome.pick(repo, holdPick: true)
                 == .show(.runIn(projectKey: "prj", showsOtherProjects: false))
         )
-        #expect(SessionListHomeChrome.pick(playground, holdPick: true) == .create(directory: "/play"))
+        // #752: a single-checkout project opens Run in too, where New worktree… is.
+        #expect(
+            SessionListHomeChrome.pick(singleRepo, holdPick: true)
+                == .show(.runIn(projectKey: "prj_single", showsOtherProjects: false))
+        )
+        #expect(
+            SessionListHomeChrome.pick(playground, holdPick: true)
+                == .show(.runIn(projectKey: "path:/play", showsOtherProjects: false))
+        )
+        #expect(SessionListHomeChrome.pick(playground, holdPick: true, worktreesEnabled: false) == .create(directory: "/play"))
         #expect(
             SessionListHomeChrome.pick(repo, holdPick: true, worktreesEnabled: false) == .create(directory: "/src/repo")
         )
@@ -295,8 +304,12 @@ struct SessionListHomeChromeTests {
         #expect(SessionListHomeChrome.terminalAction(projects: [mobile]) == .openCatalog)
     }
 
-    @Test func newSessionLongPressAction_needsSomethingToChoose() {
-        #expect(SessionListHomeChrome.newSessionLongPressAction(projects: [mobile], selectedFilterId: "path:/repo") == nil)
+    @Test func newSessionLongPressAction_opensRunInForAnyTargetWhileWorktreesAreOn() {
+        // #752: Run in lists New worktree…, so even one checkout has something to choose.
+        #expect(
+            SessionListHomeChrome.newSessionLongPressAction(projects: [mobile], selectedFilterId: "path:/repo")
+                == .runIn(projectKey: "path:/repo", showsOtherProjects: false)
+        )
         #expect(
             SessionListHomeChrome.newSessionLongPressAction(
                 projects: [mobile, playground], selectedFilterId: SessionListFilterTab.allId
@@ -304,7 +317,26 @@ struct SessionListHomeChromeTests {
         )
         #expect(
             SessionListHomeChrome.newSessionLongPressAction(projects: [mobile, playground], selectedFilterId: "path:/play")
-                == .projects(holdPick: true)
+                == .runIn(projectKey: "path:/play", showsOtherProjects: true)
+        )
+    }
+
+    @Test func newSessionLongPressAction_singleCheckoutGitProjectOpensRunIn() {
+        #expect(singleRepo.worktrees.count == 1)
+        #expect(
+            SessionListHomeChrome.newSessionLongPressAction(projects: [singleRepo], selectedFilterId: "prj_single")
+                == .runIn(projectKey: "prj_single", showsOtherProjects: false)
+        )
+        #expect(
+            SessionListHomeChrome.newSessionLongPressAction(
+                projects: [singleRepo, playground], selectedFilterId: "prj_single"
+            ) == .runIn(projectKey: "prj_single", showsOtherProjects: true)
+        )
+        // Worktrees off: unchanged, a single project has nothing to choose.
+        #expect(
+            SessionListHomeChrome.newSessionLongPressAction(
+                projects: [singleRepo], selectedFilterId: "prj_single", worktreesEnabled: false
+            ) == nil
         )
     }
 
@@ -419,6 +451,14 @@ struct SessionListHomeChromeTests {
             addedPaths: ["/src/repo", "/src/repo-wt"],
             resolutions: ["/src/repo": resolution, "/src/repo-wt": resolution],
             branches: ["/src/repo": "main", "/src/repo-wt": "feature/x"]
+        )[0]
+    }
+
+    private var singleRepo: HomeProject {
+        HomeProjectGrouping.group(
+            addedPaths: ["/src/single"],
+            resolutions: ["/src/single": HomeProjectResolution(id: "prj_single", canonical: "/src/single", isRepository: true)],
+            branches: ["/src/single": "main"]
         )[0]
     }
 

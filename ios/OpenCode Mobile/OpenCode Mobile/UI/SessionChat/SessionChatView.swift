@@ -61,6 +61,7 @@ struct SessionChatView: View {
     @State private var movedWorktree: String?
     @State private var homeDisplayPreferences = HomeDisplayPreferences.shared
     @Environment(\.homeProjects) private var homeProjects
+    @Environment(\.refreshHomeWorktrees) private var refreshHomeWorktrees
 
     private let session: SessionListItem
     private let injectedViewModel: SessionChatViewModel?
@@ -138,7 +139,7 @@ struct SessionChatView: View {
                 // After a move every region binds to the new directory, so the handed-in
                 // view model (bound to the old one) is not reused.
                 viewModelStorage = (movedWorktree == nil ? injectedViewModel : nil) ?? Container.makeSessionChatViewModel(
-                    sessionID: session.id,
+                    sessionID: boundSession.id,
                     sessionTitle: session.title,
                     worktree: boundSession.worktree
                 )
@@ -162,7 +163,10 @@ struct SessionChatView: View {
     private var boundSession: SessionListItem {
         guard let movedWorktree else { return session }
         return SessionListItem(
-            id: session.id,
+            id: SessionChatMoveToWorktree.reboundSessionID(
+                routeID: session.id,
+                currentID: viewModelStorage?.uiState.sessionID
+            ),
             title: session.title,
             worktree: movedWorktree,
             parentID: session.parentID,
@@ -1027,12 +1031,24 @@ struct SessionChatView: View {
         SessionChatMoveToWorktree.project(containing: boundSession.worktree, in: homeProjects)
     }
 
+    /// The Move sheet's New worktree row.
+    private func newWorktreeAvailability(sessionCreated: Bool) -> NewWorktreeAvailability {
+        SessionChatMoveToWorktree.newWorktreeAvailability(
+            supportsMove: viewModel.uiState.supportsSessionMove,
+            worktreesEnabled: homeDisplayPreferences.showsWorktrees,
+            sessionCreated: sessionCreated,
+            project: moveProject,
+            serverCanCreate: viewModel.serverCanCreateWorktrees
+        )
+    }
+
     private func moveToWorktreeMenuEntry(sessionCreated: Bool) -> OpenCodeOverflowMenuEntry {
         let availability = SessionChatMoveToWorktree.availability(
             supportsMove: viewModel.uiState.supportsSessionMove,
             worktreesEnabled: homeDisplayPreferences.showsWorktrees,
             sessionCreated: sessionCreated,
-            project: moveProject
+            project: moveProject,
+            newWorktree: newWorktreeAvailability(sessionCreated: sessionCreated)
         )
         return OpenCodeOverflowMenuEntry(
             title: SessionChatMoveToWorktree.menuTitle,
@@ -1061,9 +1077,19 @@ struct SessionChatView: View {
         content
             .openCodeBottomSheet(
                 isPresented: moveSheetBinding,
-                title: SessionChatMoveToWorktree.sheetTitle
+                title: viewModel.worktreeCreate.state?.title ?? SessionChatMoveToWorktree.sheetTitle,
+                leadingAction: WorktreeCreateSheetChrome.backAction(viewModel.worktreeCreate),
+                keyboard: WorktreeCreateSheetChrome.keyboard(viewModel.worktreeCreate)
             ) {
-                if let project = moveProject {
+                if viewModel.worktreeCreate.isPresented {
+                    WorktreeCreateForm(model: viewModel.worktreeCreate) {
+                        let refresh = refreshHomeWorktrees
+                        let source = viewModel.worktreeCreate.state?.sourceDirectory ?? boundSession.worktree
+                        Task {
+                            await viewModel.submitMoveToNewWorktree { _ in await refresh(source) }
+                        }
+                    }
+                } else if let project = moveProject {
                     ForEach(
                         SessionChatMoveToWorktree.options(project: project, currentDirectory: boundSession.worktree)
                     ) { option in
@@ -1087,6 +1113,9 @@ struct SessionChatView: View {
                             option.isCurrent ? "sessionMoveToWorktreeCurrent" : "sessionMoveToWorktreeRow"
                         )
                     }
+                    moveToNewWorktreeRow(project: project)
+                } else {
+                    moveToNewWorktreeRow(project: nil)
                 }
             }
             .onChange(of: viewModel.uiState.movedDirectory, initial: true) { _, directory in
@@ -1094,6 +1123,26 @@ struct SessionChatView: View {
                 guard let directory, directory != boundSession.worktree else { return }
                 movedWorktree = directory
             }
+    }
+
+    private func moveToNewWorktreeRow(project: HomeProject?) -> some View {
+        let sessionCreated = !OptimisticSessionCreate.isPlaceholder(viewModel.uiState.sessionID)
+        let availability = newWorktreeAvailability(sessionCreated: sessionCreated)
+        return NewWorktreeRow(
+            availability: NewWorktreeAvailability(
+                enabled: availability.enabled && !viewModel.uiState.moveInFlight,
+                subtitle: availability.subtitle
+            ),
+            accessibilityIdentifier: "moveToNewWorktreeRow",
+            action: {
+                let source = boundSession.worktree
+                viewModel.openMoveToNewWorktree(
+                    projectID: project?.projectID,
+                    sourceDirectory: source,
+                    sourceBranch: project?.worktree(at: source)?.branch
+                )
+            }
+        )
     }
 
     private var sessionOverflowMenuEntries: [OpenCodeOverflowMenuEntry] {

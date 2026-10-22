@@ -447,6 +447,10 @@ final class ProjectListHomeViewModel {
     private let liveUpdates: any LiveUpdates
     private let worktreeRepository: any WorktreeRepository
     private let worktreeInventoryCache: WorktreeInventoryCache
+    /// New worktree form of the Run in sheet.
+    let worktreeCreate: WorktreeCreateModel
+    /// False once a v1 server answered 404 for its worktree routes.
+    private(set) var serverCanCreateWorktrees = true
     private let foregroundEventStream: (any ForegroundEventStream)?
     private let sessionCache: any SessionCache
     private let sessionAdapter = SessionDomainAdapter()
@@ -516,6 +520,8 @@ final class ProjectListHomeViewModel {
         self.liveUpdates = liveUpdates
         self.worktreeRepository = worktreeRepository
         self.worktreeInventoryCache = worktreeInventoryCache
+        self.worktreeCreate = WorktreeCreateModel(repository: worktreeRepository)
+        self.serverCanCreateWorktrees = worktreeRepository.canCreateWorktrees
         self.foregroundEventStream = foregroundEventStream
         let projects = projectRepository
         let sessions = sessionRepository
@@ -590,6 +596,7 @@ final class ProjectListHomeViewModel {
                 self?.stopLiveObservations()
                 self?.worktreeMarks.onDisconnected()
                 self?.worktreeInventoryCache.clear()
+                self?.worktreeCreate.dismiss()
                 self?.worktreeInventories.removeAll()
                 self?.worktreeProjectIDs.removeAll()
                 self?.clearHomeProjectInputs()
@@ -946,6 +953,68 @@ final class ProjectListHomeViewModel {
             worktree: worktree,
             optimisticNavigationInstanceID: UUID()
         )
+    }
+
+    // MARK: New worktree (Run in)
+
+    /// The Run in sheet's New worktree row for `project`.
+    func newWorktreeAvailability(for project: HomeProject, worktreesEnabled: Bool) -> NewWorktreeAvailability {
+        NewWorktreeAvailability.runIn(
+            worktreesEnabled: worktreesEnabled,
+            isRepository: project.isRepository,
+            projectID: project.projectID,
+            serverCanCreate: serverCanCreateWorktrees
+        )
+    }
+
+    /// Switches the Run in sheet to the New worktree form, creating from the main checkout.
+    func openNewWorktree(projectKey: String) {
+        guard let project = homeProjects.first(where: { $0.key == projectKey }) else { return }
+        let source = project.mainCheckoutDirectory
+        worktreeCreate.open(
+            origin: .runIn(projectKey: projectKey),
+            serverProtocol: activeConnectionManager.serverProtocol ?? .v1,
+            projectID: project.projectID,
+            sourceDirectory: source,
+            sourceBranch: project.worktree(at: source)?.branch
+        )
+    }
+
+    /// Creates the worktree, refreshes the project's checkouts, then starts a session there.
+    /// True when the sheet should close.
+    func submitNewWorktree() async -> Bool {
+        guard case let .runIn(projectKey)? = worktreeCreate.state?.origin else { return false }
+        guard let created = await worktreeCreate.submit() else {
+            serverCanCreateWorktrees = worktreeRepository.canCreateWorktrees
+            return false
+        }
+        await refreshWorktreeInventory(projectKey: projectKey)
+        worktreeCreate.dismiss()
+        await createSession(in: created.directory)
+        return true
+    }
+
+    /// Reloads the checkouts of the project that owns `directory` (Session Chat after a create).
+    func refreshWorktreeInventory(containing directory: String) async {
+        let canonical = ServerPathPolicy.canonical(directory)
+        guard let project = homeProjects.first(where: { $0.worktree(at: canonical) != nil || $0.hasMember(canonical) })
+        else { return }
+        await refreshWorktreeInventory(projectKey: project.key)
+    }
+
+    /// v2 refetches the project's list; v1 reloads each added path, as a Home refresh does.
+    func refreshWorktreeInventory(projectKey: String) async {
+        guard let project = homeProjects.first(where: { $0.key == projectKey }) else { return }
+        if activeConnectionManager.serverProtocol == .v2, let projectID = project.projectID,
+           worktreeMarks.knows(projectID)
+        {
+            await refetchWorktreeMark(projectID)
+            return
+        }
+        for path in project.memberPaths {
+            let update = await worktreeMarks.load(addedPath: path)
+            applyWorktreeMark(update)
+        }
     }
 
     private func logCreateSession(outcome: String) {
@@ -1784,6 +1853,9 @@ final class ProjectListHomeViewModel {
     }
 
     private func applyWorktreeMark(_ update: WorktreeMarkUpdate) {
+        if serverCanCreateWorktrees != worktreeRepository.canCreateWorktrees {
+            serverCanCreateWorktrees = worktreeRepository.canCreateWorktrees
+        }
         worktreeInventories[update.addedPath] = update.inventory
         worktreeInventoryCache.record(update.inventory, addedPath: update.addedPath, server: serverBaseURL)
         if let projectID = update.projectID {

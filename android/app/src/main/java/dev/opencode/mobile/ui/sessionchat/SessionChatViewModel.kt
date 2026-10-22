@@ -47,11 +47,6 @@ import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.domain.project.ProjectRepository
 import dev.opencode.mobile.domain.project.UnavailableProjectRepository
-import dev.opencode.mobile.domain.worktree.UnavailableWorktreeRepository
-import dev.opencode.mobile.domain.worktree.WorktreeInventory
-import dev.opencode.mobile.domain.worktree.WorktreeInventoryCache
-import dev.opencode.mobile.domain.worktree.WorktreeLoad
-import dev.opencode.mobile.domain.worktree.WorktreeRepository
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.PermissionRequest
 import dev.opencode.mobile.domain.session.QuestionRequest
@@ -63,6 +58,11 @@ import dev.opencode.mobile.domain.session.SessionTodoList
 import dev.opencode.mobile.domain.sync.NoOpSyncCoordinator
 import dev.opencode.mobile.domain.sync.ProjectionKey
 import dev.opencode.mobile.domain.sync.SyncCoordinator
+import dev.opencode.mobile.domain.worktree.UnavailableWorktreeRepository
+import dev.opencode.mobile.domain.worktree.WorktreeInventory
+import dev.opencode.mobile.domain.worktree.WorktreeInventoryCache
+import dev.opencode.mobile.domain.worktree.WorktreeLoad
+import dev.opencode.mobile.domain.worktree.WorktreeRepository
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatCommands
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatComposer
@@ -75,6 +75,9 @@ import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveAvailabi
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveRow
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveUiState
 import dev.opencode.mobile.ui.sessionchat.region.SessionInfo
+import dev.opencode.mobile.ui.worktree.NewWorktreeAvailability
+import dev.opencode.mobile.ui.worktree.WorktreeCreateForm
+import dev.opencode.mobile.ui.worktree.WorktreeCreateOrigin
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -85,9 +88,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -140,6 +143,7 @@ class SessionChatViewModel
                 commands.ioDispatcher = value
                 inbox.ioDispatcher = value
                 worktreeMove.ioDispatcher = value
+                worktreeCreate.ioDispatcher = value
             }
 
         internal var nowMs: () -> Long = { System.currentTimeMillis() }
@@ -223,6 +227,24 @@ class SessionChatViewModel
             SessionChatWorktreeMove(
                 moveSession = { id, directory -> sessionRepository.moveSession(id, directory) },
                 scope = viewModelScope,
+            )
+
+        /** The Move sheet's New worktree form: create a checkout from this one, then move there. */
+        private val worktreeCreate =
+            WorktreeCreateForm(
+                repository = worktreeRepository,
+                scope = viewModelScope,
+                onCreated = { origin, created ->
+                    val sessionId = (origin as? WorktreeCreateOrigin.Move)?.sessionId
+                    if (sessionId != null && sessionId == boundSessionId) {
+                        worktreeMove.move(
+                            sessionId = sessionId,
+                            destination = SessionChatWorktreeMoveRow.created(created.directory, created.branch ?: created.name),
+                            isBusy = isSessionBusy(),
+                        )
+                    }
+                },
+                onInventoryChanged = { _, request -> homeProjectsSnapshot.requestWorktreeRefresh(request.sourceDirectory) },
             )
 
         private val _uiState =
@@ -382,7 +404,9 @@ class SessionChatViewModel
                     worktreeMove.state,
                     homeProjectsSnapshot.projects,
                     snapshotFlow { HomeDisplayPreferences.showsWorktrees },
-                ) { _, _, _ -> }.collect { publishUiState() }
+                    worktreeCreate.state,
+                    worktreeRepository.canCreate,
+                ) { _, _, _, _, _ -> }.collect { publishUiState() }
             }
             viewModelScope.launch {
                 snapshotFlow { SessionChatDisplayPreferences.collapseConsecutiveToolCalls }
@@ -443,6 +467,7 @@ class SessionChatViewModel
             resetChipTimelineIntro()
             resetWorkingFooter()
             worktreeMove.reset()
+            worktreeCreate.dismiss()
             logI("bind session=$sessionId worktree=$worktree title=$sessionTitle")
             seedProjectIdentity(worktree)
             _uiState.value =
@@ -533,6 +558,7 @@ class SessionChatViewModel
             resetChipTimelineIntro()
             resetWorkingFooter()
             worktreeMove.reset()
+            worktreeCreate.dismiss()
             logI("bind optimistic create worktree=$worktree title=$sessionTitle")
             seedProjectIdentity(worktree)
             _uiState.value =
@@ -1056,8 +1082,37 @@ class SessionChatViewModel
         }
 
         fun dismissMoveToWorktree() {
+            worktreeCreate.dismiss()
             worktreeMove.dismissSheet()
         }
+
+        /** Move sheet → "New worktree…": the form, made from the session's current checkout. */
+        fun openMoveToNewWorktree() {
+            if (!moveToWorktreeUiState().newWorktree.enabled) return
+            val sessionId = boundSessionId?.takeIf { hasCreatedSession() } ?: return
+            val directory = boundWorktree?.trim()?.takeIf { it.isNotEmpty() }?.let(ServerPathPolicy::canonical) ?: return
+            val project = homeProjectsSnapshot.projectContaining(directory)
+            worktreeCreate.open(
+                origin = WorktreeCreateOrigin.Move(sessionId),
+                protocol = activeConnectionManager.protocolHint(),
+                projectId = project?.projectId,
+                sourceDirectory = directory,
+                sourceBranch = project?.worktree(directory)?.branch,
+            )
+        }
+
+        fun updateNewWorktreeName(name: String) = worktreeCreate.updateName(name)
+
+        fun showNewWorktreeBasePicker() = worktreeCreate.showBasePicker()
+
+        fun hideNewWorktreeBasePicker() = worktreeCreate.hideBasePicker()
+
+        fun selectNewWorktreeBase(ref: String?) = worktreeCreate.selectBase(ref)
+
+        fun submitNewWorktree() = worktreeCreate.submit()
+
+        /** Form → Back: the Move sheet's list again. */
+        fun closeNewWorktreeForm() = worktreeCreate.dismiss()
 
         fun moveToWorktree(directory: String) {
             val sessionId = boundSessionId?.takeIf { hasCreatedSession() } ?: return
@@ -1068,17 +1123,32 @@ class SessionChatViewModel
         private fun moveToWorktreeUiState(): SessionChatWorktreeMoveUiState {
             val project = homeProjectsSnapshot.projectContaining(boundWorktree)
             val regionState = worktreeMove.state.value
+            val supportsMove = activeConnectionManager.currentCapabilities().supportsSessionMove
+            val worktreesEnabled = HomeDisplayPreferences.showsWorktrees
+            val sessionCreated = hasCreatedSession()
+            val newWorktree =
+                NewWorktreeAvailability.move(
+                    supportsMove = supportsMove,
+                    worktreesEnabled = worktreesEnabled,
+                    sessionCreated = sessionCreated,
+                    isRepository = project?.hasVcs == true,
+                    projectId = project?.projectId,
+                    serverCanCreate = worktreeRepository.canCreate.value,
+                )
             return SessionChatWorktreeMoveUiState(
                 availability =
                     SessionChatWorktreeMoveAvailability.resolve(
-                        supportsSessionMove = activeConnectionManager.currentCapabilities().supportsSessionMove,
-                        worktreesEnabled = HomeDisplayPreferences.showsWorktrees,
-                        sessionCreated = hasCreatedSession(),
+                        supportsSessionMove = supportsMove,
+                        worktreesEnabled = worktreesEnabled,
+                        sessionCreated = sessionCreated,
                         worktreeCount = project?.worktrees?.size ?: 0,
+                        canCreateWorktree = newWorktree.enabled,
                     ),
                 sheetVisible = regionState.sheetVisible,
                 rows = SessionChatWorktreeMoveRow.rows(project, boundWorktree),
                 submittingDirectory = regionState.submittingDirectory,
+                newWorktree = newWorktree,
+                form = worktreeCreate.state.value?.takeIf { it.origin is WorktreeCreateOrigin.Move },
             )
         }
 

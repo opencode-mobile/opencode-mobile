@@ -56,14 +56,17 @@ object SessionListHomeChrome {
     /** What the New session sheet lists. */
     sealed class NewSessionSheetMode {
         /**
-         * The project list. After a hold ([holdPick]) a project with several worktrees opens
-         * its Run in list; after a tap every pick starts on the project's main checkout.
+         * The project list. After a hold ([holdPick]) a pick opens the project's Run in list
+         * while Worktrees is on; after a tap every pick starts on the project's main checkout.
          */
         data class Projects(
             val holdPick: Boolean,
         ) : NewSessionSheetMode()
 
-        /** [projectId]'s worktrees under "Run in", then "Other projects" when [showsOtherProjects]. */
+        /**
+         * [projectId]'s worktrees under "Run in" (main checkout first) and "New worktree…", then
+         * "Other projects" when [showsOtherProjects].
+         */
         data class RunIn(
             val projectId: String,
             val showsOtherProjects: Boolean,
@@ -216,8 +219,9 @@ object SessionListHomeChrome {
     }
 
     /**
-     * Hold on New session: the target project's Run in list when it has several worktrees (with
-     * the other projects below it), else the project list. Null handler with nothing to choose.
+     * Hold on New session: while Worktrees is on, the target project's Run in list (with the
+     * other projects below it), even with one checkout, so "New worktree…" is reachable. Else
+     * the project list. Null handler with nothing to choose.
      */
     fun newSessionLongPressAction(
         projects: List<Project>,
@@ -225,7 +229,7 @@ object SessionListHomeChrome {
         worktreesEnabled: Boolean = true,
     ): NewSessionAction {
         val target = targetProject(projects, selectedFilterId)
-        if (worktreesEnabled && target != null && target.hasManyWorktrees) {
+        if (worktreesEnabled && target != null) {
             return NewSessionAction.PresentSheet(
                 NewSessionSheetMode.RunIn(projectId = target.id, showsOtherProjects = projects.size >= 2),
             )
@@ -237,15 +241,16 @@ object SessionListHomeChrome {
     }
 
     /**
-     * A project picked in the New session sheet: after a hold, one with several worktrees asks
-     * where to run; otherwise the session starts on its main checkout.
+     * A project picked in the New session sheet: after a hold with Worktrees on, it asks where
+     * to run (its checkouts and "New worktree…"); otherwise the session starts on its main
+     * checkout.
      */
     fun projectPickAction(
         project: Project,
         holdPick: Boolean,
         worktreesEnabled: Boolean = true,
     ): NewSessionAction =
-        if (holdPick && worktreesEnabled && project.hasManyWorktrees) {
+        if (holdPick && worktreesEnabled) {
             NewSessionAction.PresentSheet(NewSessionSheetMode.RunIn(projectId = project.id, showsOtherProjects = false))
         } else {
             NewSessionAction.Create(project.mainCheckoutDirectory)
