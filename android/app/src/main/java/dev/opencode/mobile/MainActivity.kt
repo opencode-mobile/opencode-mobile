@@ -10,6 +10,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.biometric.BiometricPrompt
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.runtime.CompositionLocalProvider
@@ -28,6 +29,7 @@ import dev.opencode.mobile.domain.security.AppLockAvailability
 import dev.opencode.mobile.domain.security.AppLockPolicy
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.ui.components.LocalOpenCodeInputFocusRegistry
+import dev.opencode.mobile.ui.diagnostic.PerformanceOverlayHost
 import dev.opencode.mobile.ui.keyboard.KeyboardShortcutHost
 import dev.opencode.mobile.ui.keyboard.LocalKeyboardShortcutHost
 import dev.opencode.mobile.ui.root.PrivacyCover
@@ -80,8 +82,15 @@ class MainActivity : FragmentActivity() {
                 val cover = privacyCover.value
                 Box {
                     // Hidden from accessibility services while covered, like it is from touch.
-                    Box(if (cover.covered || cover.locked) Modifier.clearAndSetSemantics {} else Modifier) {
+                    Box(
+                        if (cover.covered || cover.locked) {
+                            Modifier.fillMaxSize().clearAndSetSemantics {}
+                        } else {
+                            Modifier.fillMaxSize()
+                        },
+                    ) {
                         MainNavigation()
+                        PerformanceOverlayHost()
                     }
                     // MainNavigation applies the theme inside itself; the cover sits beside it.
                     OpenCodeTheme {

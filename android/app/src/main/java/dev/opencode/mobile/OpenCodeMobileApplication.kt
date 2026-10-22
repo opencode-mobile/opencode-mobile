@@ -16,6 +16,7 @@ import dev.opencode.mobile.domain.preferences.AppOnboardingPreferences
 import dev.opencode.mobile.domain.preferences.DeveloperToolsPreferences
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.preferences.MarkdownHighlightPreferences
+import dev.opencode.mobile.domain.preferences.PerformanceOverlayPreferences
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.domain.preferences.SplitPanePreferences
 import dev.opencode.mobile.domain.textmate.TextMateProcessPressureObserver
@@ -39,6 +40,7 @@ class OpenCodeMobileApplication : Application() {
         AppLockPreferences.initialize(this)
         AppOnboardingPreferences.initialize(this)
         DeveloperToolsPreferences.initialize(this)
+        PerformanceOverlayPreferences.initialize(this)
         SessionChatDisplayPreferences.initialize(this)
         SplitPanePreferences.initialize(this)
         FeatureFlags.initialize(this)

@@ -59,6 +59,7 @@ struct SettingsView: View {
     private let appLockAuthenticator: any AppLockAuthenticating = LocalAuthenticationAppLockAuthenticator()
     @State private var sessionChatDisplayPreferences = SessionChatDisplayPreferences.shared
     @State private var developerToolsPreferences = DeveloperToolsPreferences.shared
+    @State private var performanceOverlayPreferences = PerformanceOverlayPreferences.shared
     @State private var showServers = false
     @State private var serversSubtitleState = "No servers saved"
     @State private var serversLetter: Character = "S"
@@ -633,6 +634,21 @@ struct SettingsView: View {
                             style: .card,
                             startDecorator: .icon(.settings, accessibilityLabel: "Feature Flags"),
                             action: { open(.featureFlags) }
+                        )
+                        .padding(.horizontal, 16)
+
+                        OpenCodeListItem(
+                            title: "Performance Overlay",
+                            subtitle: "Live FPS and frame-time spikes",
+                            style: .card,
+                            startDecorator: .icon(.settings, accessibilityLabel: "Performance Overlay"),
+                            accessory: .toggle(
+                                isOn: Binding(
+                                    get: { performanceOverlayPreferences.enabled },
+                                    set: { performanceOverlayPreferences.setEnabled($0) }
+                                ),
+                                accessibilityLabel: "Performance Overlay"
+                            )
                         )
                         .padding(.horizontal, 16)
                     }

@@ -828,6 +828,7 @@ extension Container {
             AppLockPreferences.shared.clear()
             AppOnboardingPreferences.shared.clear()
             DeveloperToolsPreferences.shared.clear()
+            PerformanceOverlayPreferences.shared.clear()
             SessionChatDisplayPreferences.shared.clear()
             SplitPanePreferences.shared.clear()
             FeatureFlags.shared.clearOverrides()

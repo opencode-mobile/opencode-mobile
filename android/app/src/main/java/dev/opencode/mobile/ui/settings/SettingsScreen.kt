@@ -31,6 +31,7 @@ import dev.opencode.mobile.domain.home.HomeSessionLadder
 import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.preferences.DeveloperToolsPreferences
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
+import dev.opencode.mobile.domain.preferences.PerformanceOverlayPreferences
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.domain.preferences.SessionChatTimelineStyle
 import dev.opencode.mobile.theme.OpenCodeTheme
@@ -503,6 +504,19 @@ fun SettingsScreen(
                         style = OpenCodeListItemStyle.Card,
                         startDecorator = StartDecorator.Icon(OpenCodeIcons.Settings, "Feature Flags"),
                         onClick = onFeatureFlagsClick,
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    )
+
+                    OpenCodeListItem(
+                        title = "Performance Overlay",
+                        subtitle = "Live FPS and frame-time spikes",
+                        style = OpenCodeListItemStyle.Card,
+                        startDecorator = StartDecorator.Icon(OpenCodeIcons.Settings, "Performance Overlay"),
+                        accessory =
+                            OpenCodeListItemAccessory.Toggle(
+                                checked = PerformanceOverlayPreferences.enabled,
+                                onCheckedChange = PerformanceOverlayPreferences::updateEnabled,
+                            ),
                         modifier = Modifier.padding(horizontal = 16.dp),
                     )
                 }

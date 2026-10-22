@@ -104,6 +104,13 @@ struct AppRootView: View {
             }
         }
         .background(OpenCodeColors.backgroundBase)
+        .overlay(alignment: .topTrailing) {
+            PerformanceOverlayHost()
+                .safeAreaPadding(.top)
+                .safeAreaPadding(.trailing)
+                .padding(.top, 8)
+                .padding(.trailing, 8)
+        }
         // Out of reach for VoiceOver while covered, like it is for touch.
         .accessibilityHidden(privacyCoverVisible)
         .overlay {
