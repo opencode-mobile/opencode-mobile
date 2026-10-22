@@ -154,7 +154,10 @@ private enum StepRailMetrics {
     static let lineWidth: CGFloat = 1.5
     static let dotSize: CGFloat = 8
     static let rowVerticalPadding: CGFloat = 4
-    static let rowMinHeight: CGFloat = 26
+    static let rowMinHeight: CGFloat = 36
+    /// How far a tappable row's press highlight extends past its text, clear of the rail line and dot.
+    static let pressBleed: CGFloat = 8
+    static let pressFadeOut: Double = 0.15
     static let contentSpacing: CGFloat = 8
     static let childCornerRadius: CGFloat = 10
     static let childPaddingHorizontal: CGFloat = 10
@@ -198,7 +201,7 @@ private struct StepRailRow: View {
         Group {
             if let action {
                 Button(action: action) { rowContent }
-                    .buttonStyle(.plain)
+                    .buttonStyle(StepRailPressStyle(highlightInset: gutterWidth - StepRailMetrics.pressBleed))
             } else {
                 rowContent
             }
@@ -307,6 +310,29 @@ private struct StepRailGutter: View {
                     .position(x: dotX, y: midY)
             }
         }
+    }
+}
+
+/// Press feedback for a rail row: a rounded highlight from just before the
+/// text to past the trailing edge, so the rail line and dot stay clear; it
+/// fades out on release (at once under Reduce Motion).
+private struct StepRailPressStyle: ButtonStyle {
+    let highlightInset: CGFloat
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background {
+                RoundedRectangle(cornerRadius: OpenCodeRadius.small, style: .continuous)
+                    .fill(OpenCodeColors.surfaceRaisedBase.opacity(0.92))
+                    .padding(.leading, highlightInset)
+                    .padding(.trailing, -StepRailMetrics.pressBleed)
+                    .opacity(configuration.isPressed ? 1 : 0)
+            }
+            .animation(
+                reduceMotion || configuration.isPressed ? nil : .easeOut(duration: StepRailMetrics.pressFadeOut),
+                value: configuration.isPressed
+            )
     }
 }
 

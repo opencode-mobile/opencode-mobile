@@ -34,7 +34,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -52,7 +51,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
@@ -554,7 +552,7 @@ internal fun OpenCodeActivityAgentTile(agentName: String) {
 internal fun OpenCodeActivityStatusDot(
     status: OpenCodeActivityStatus,
     pulses: Boolean,
-    size: androidx.compose.ui.unit.Dp = ActivityDotSize,
+    size: Dp = ActivityDotSize,
 ) {
     when (status) {
         OpenCodeActivityStatus.Pending, OpenCodeActivityStatus.Running ->
@@ -631,22 +629,6 @@ internal fun OpenCodeActivityStatus.spoken(): String =
         OpenCodeActivityStatus.Interrupted -> "stopped"
     }
 
-
-/** Lets a row draw (and receive presses) [amount] wider than its slot on each side without moving its content. */
-private fun Modifier.bleedHorizontally(amount: Dp): Modifier =
-    layout { measurable, constraints ->
-        val extra = (amount * 2).roundToPx()
-        val placeable =
-            measurable.measure(
-                constraints.copy(
-                    minWidth = (constraints.minWidth + extra).coerceAtMost(Constraints.Infinity),
-                    maxWidth = if (constraints.hasBoundedWidth) constraints.maxWidth + extra else constraints.maxWidth,
-                ),
-            )
-        layout(width = (placeable.width - extra).coerceAtLeast(0), height = placeable.height) {
-            placeable.place(x = -extra / 2, y = 0)
-        }
-    }
 
 /** Gallery and preview samples for the states the contract lists. */
 object OpenCodeActivityCardSamples {

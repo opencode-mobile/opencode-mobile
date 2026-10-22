@@ -47,6 +47,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.opencode.mobile.theme.OpenCodeRadius
@@ -115,13 +116,16 @@ private val StepRailLineWidth = 1.5.dp
 private val StepRailTextInset = 16.dp
 private val StepRailBranchInset = 30.dp
 private val StepRailBranchDotX = 18.dp
-private val StepRailRowMinHeight = 26.dp
+private val StepRailRowMinHeight = 36.dp
 private val StepRailRowVerticalPadding = 4.dp
 private val StepRailContentSpacing = 8.dp
 private val StepRailChildCardPaddingHorizontal = 10.dp
 private val StepRailChildCardPaddingVertical = 6.dp
 private val StepRailChevronSize = 14.dp
 private val StepRailDetailMaxWidth = 140.dp
+
+/** How far a tappable row's highlight extends past its text, clear of the rail line and dot. */
+private val StepRailPressBleed = 8.dp
 private const val STEP_RAIL_CHILD_TINT_ALPHA = 0.08f
 private const val STEP_RAIL_CHILD_BORDER_ALPHA = 0.4f
 
@@ -217,6 +221,8 @@ private fun StepRowContainer(
     label: String,
     onTap: (() -> Unit)?,
     modifier: Modifier,
+    textInset: Dp = StepRailTextInset,
+    dot: @Composable () -> Unit,
     content: @Composable () -> Unit,
 ) {
     Box(
@@ -224,14 +230,29 @@ private fun StepRowContainer(
             modifier
                 .fillMaxWidth()
                 .heightIn(min = StepRailRowMinHeight)
-                .then(if (onTap != null) Modifier.clickable(onClick = onTap) else Modifier)
                 .semantics(mergeDescendants = true) {
                     contentDescription = label
                     if (onTap != null) role = Role.Button
                 },
         contentAlignment = Alignment.CenterStart,
     ) {
-        content()
+        dot()
+        // The press highlight is a rounded, bounded ripple that starts just before the
+        // text and bleeds past it, so it never covers the rail line and dot.
+        Box(
+            modifier =
+                Modifier
+                    .padding(start = textInset)
+                    .fillMaxWidth()
+                    .heightIn(min = StepRailRowMinHeight)
+                    .bleedHorizontally(StepRailPressBleed)
+                    .clip(RoundedCornerShape(OpenCodeRadius.small))
+                    .then(if (onTap != null) Modifier.clickable(onClick = onTap) else Modifier)
+                    .padding(horizontal = StepRailPressBleed),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            content()
+        }
     }
 }
 
@@ -248,22 +269,18 @@ private fun StepRow(
         label = stepRailAccessibilityLabel(item.title, item.status, item.interrupted, elapsed),
         onTap = onTap.takeIf { item.tappable },
         modifier = modifier,
+        textInset = if (item.isBranch) StepRailBranchInset else StepRailTextInset,
+        dot = {
+            StepRailDot(
+                status = item.status,
+                interrupted = item.interrupted,
+                pulses = pulses,
+                modifier = Modifier.offset(x = if (item.isBranch) StepRailBranchDotX else 0.dp),
+            )
+        },
     ) {
-        StepRailDot(
-            status = item.status,
-            interrupted = item.interrupted,
-            pulses = pulses,
-            modifier = Modifier.offset(x = if (item.isBranch) StepRailBranchDotX else 0.dp),
-        )
         Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(
-                        start = if (item.isBranch) StepRailBranchInset else StepRailTextInset,
-                        top = StepRailRowVerticalPadding,
-                        bottom = StepRailRowVerticalPadding,
-                    ),
+            modifier = Modifier.fillMaxWidth().padding(vertical = StepRailRowVerticalPadding),
             horizontalArrangement = Arrangement.spacedBy(StepRailContentSpacing),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -412,22 +429,28 @@ private fun FoldRow(
     modifier: Modifier,
 ) {
     val label = if (item.count == 1) "1 earlier step" else "${item.count} earlier steps"
-    StepRowContainer(label = "$label, expands", onTap = onTap, modifier = modifier) {
-        Box(
-            modifier =
-                Modifier
-                    .size(StepRailDotSize)
-                    .background(
-                        if (item.status == OpenCodeStepRailStatus.Failed) {
-                            openCodeColor("error")
-                        } else {
-                            openCodeColor("text-weaker")
-                        },
-                        CircleShape,
-                    ),
-        )
+    StepRowContainer(
+        label = "$label, expands",
+        onTap = onTap,
+        modifier = modifier,
+        dot = {
+            Box(
+                modifier =
+                    Modifier
+                        .size(StepRailDotSize)
+                        .background(
+                            if (item.status == OpenCodeStepRailStatus.Failed) {
+                                openCodeColor("error")
+                            } else {
+                                openCodeColor("text-weaker")
+                            },
+                            CircleShape,
+                        ),
+            )
+        },
+    ) {
         Row(
-            modifier = Modifier.padding(start = StepRailTextInset, top = StepRailRowVerticalPadding, bottom = StepRailRowVerticalPadding),
+            modifier = Modifier.padding(vertical = StepRailRowVerticalPadding),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -447,14 +470,18 @@ private fun ThinkingRow(
     pulses: Boolean,
     modifier: Modifier,
 ) {
-    StepRowContainer(label = "Thinking", onTap = null, modifier = modifier) {
-        OpenCodePulsingDot(color = openCodeColor("warning"), size = StepRailDotSize, animated = pulses)
+    StepRowContainer(
+        label = "Thinking",
+        onTap = null,
+        modifier = modifier,
+        dot = { OpenCodePulsingDot(color = openCodeColor("warning"), size = StepRailDotSize, animated = pulses) },
+    ) {
         Text(
             text = "Thinking…",
             style = MaterialTheme.typography.bodyMedium.copy(fontStyle = FontStyle.Italic),
             color = openCodeColor("text-weak"),
             maxLines = 1,
-            modifier = Modifier.padding(start = StepRailTextInset, top = StepRailRowVerticalPadding, bottom = StepRailRowVerticalPadding),
+            modifier = Modifier.padding(vertical = StepRailRowVerticalPadding),
         )
     }
 }
