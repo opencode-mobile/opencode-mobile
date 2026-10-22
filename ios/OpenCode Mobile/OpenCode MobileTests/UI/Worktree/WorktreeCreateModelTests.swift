@@ -53,9 +53,9 @@ struct WorktreeCreateModelTests {
 
         #expect(state.title == "New worktree")
         #expect(state.branchValue == "opencode/fix-login")
-        #expect(state.branchNote == "opencode v1 names the branch after the worktree")
+        #expect(state.branchNote == "opencode v1 names it after the worktree")
         #expect(state.baseValue == "main")
-        #expect(state.baseNote == "opencode v1 creates from the project's current checkout")
+        #expect(state.baseNote == "opencode v1 uses the current checkout")
         #expect(!state.baseSelectable)
         #expect(state.submitTitle == "Create and start")
 
@@ -73,7 +73,7 @@ struct WorktreeCreateModelTests {
         let state = try #require(model.state)
         #expect(state.sourceDirectory == "/src/repo-wt")
         #expect(state.branchValue == "No branch (detached)")
-        #expect(state.branchNote == "opencode v2 creates a detached checkout, shown by its folder name")
+        #expect(state.branchNote == "opencode v2 checkouts have no branch")
         #expect(state.baseValue == "feature/x (current)")
         #expect(state.baseNote == "Tap to pick a branch")
         #expect(state.baseSelectable)
@@ -239,7 +239,7 @@ struct WorktreeCreateModelTests {
         #expect(check(true, false, nil, false) == NewWorktreeAvailability(enabled: false, subtitle: "Needs a git repository"))
         #expect(check(true, true, nil, false) == NewWorktreeAvailability(enabled: false, subtitle: "Needs a git repository with a commit"))
         #expect(check(true, true, "global", false) == NewWorktreeAvailability(enabled: false, subtitle: "Needs a git repository with a commit"))
-        #expect(check(true, true, "prj", false) == NewWorktreeAvailability(enabled: false, subtitle: "This opencode server can't create worktrees"))
+        #expect(check(true, true, "prj", false) == NewWorktreeAvailability(enabled: false, subtitle: "This server can't create worktrees"))
         #expect(check(true, true, "prj", true) == NewWorktreeAvailability(enabled: true, subtitle: "Create a checkout and start there"))
     }
 
@@ -257,9 +257,9 @@ struct WorktreeCreateModelTests {
         #expect(check(true, true, false, false, nil, false) == NewWorktreeAvailability(enabled: false, subtitle: nil))
         #expect(check(true, true, true, false, nil, false).subtitle == "Needs a git repository")
         #expect(check(true, true, true, true, "global", false).subtitle == "Needs a git repository with a commit")
-        #expect(check(true, true, true, true, "prj", false).subtitle == "This opencode server can't create worktrees")
+        #expect(check(true, true, true, true, "prj", false).subtitle == "This server can't create worktrees")
         #expect(check(true, true, true, true, "prj", true) == NewWorktreeAvailability(
-            enabled: true, subtitle: "Create a checkout from this one and move there"
+            enabled: true, subtitle: "Create a checkout and move there"
         ))
         #expect(!check(true, true, true, true, "prj", false).enabled)
     }

@@ -115,7 +115,7 @@ struct SessionChatMoveToWorktreeTests {
         )
     }
 
-    private let rowEnabled = NewWorktreeAvailability(enabled: true, subtitle: "Create a checkout from this one and move there")
+    private let rowEnabled = NewWorktreeAvailability(enabled: true, subtitle: "Create a checkout and move there")
     private let rowDisabled = NewWorktreeAvailability(enabled: false, subtitle: "Needs a git repository")
 
     private var singleRepo: HomeProject {
@@ -186,7 +186,7 @@ struct SessionChatMoveToWorktreeTests {
         let unsupported = SessionChatMoveToWorktree.newWorktreeAvailability(
             supportsMove: true, worktreesEnabled: true, sessionCreated: true, project: singleRepo, serverCanCreate: false
         )
-        #expect(unsupported.subtitle == "This opencode server can't create worktrees")
+        #expect(unsupported.subtitle == "This server can't create worktrees")
         #expect(
             SessionChatMoveToWorktree.availability(
                 supportsMove: true, worktreesEnabled: true, sessionCreated: true, project: singleRepo, newWorktree: unsupported

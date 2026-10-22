@@ -141,7 +141,7 @@ struct WorktreesAPIClientCreateTests {
         repository.onConnection(key: "server")
         #expect(repository.canCreateWorktrees)
 
-        await #expect(throws: WorktreeCreateError(message: "This opencode server can't create worktrees")) {
+        await #expect(throws: WorktreeCreateError(message: "This server can't create worktrees")) {
             _ = try await repository.create(
                 CreateWorktreeRequest(projectID: nil, sourceDirectory: "/src/repo", name: "x", baseRef: nil)
             )

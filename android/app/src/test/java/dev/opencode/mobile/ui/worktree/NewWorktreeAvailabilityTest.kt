@@ -22,7 +22,7 @@ class NewWorktreeAvailabilityTest {
         assertEquals(NewWorktreeAvailability(false, "Needs a git repository"), runIn(git = false, projectId = null, server = false))
         assertEquals(NewWorktreeAvailability(false, "Needs a git repository with a commit"), runIn(projectId = "global", server = false))
         assertEquals(NewWorktreeAvailability(false, "Needs a git repository with a commit"), runIn(projectId = null))
-        assertEquals(NewWorktreeAvailability(false, "This opencode server can't create worktrees"), runIn(server = false))
+        assertEquals(NewWorktreeAvailability(false, "This server can't create worktrees"), runIn(server = false))
         assertEquals(NewWorktreeAvailability(true, "Create a checkout and start there"), runIn())
     }
 
@@ -45,8 +45,8 @@ class NewWorktreeAvailabilityTest {
         assertEquals(NewWorktreeAvailability(false, null), move(created = false, git = false))
         assertEquals(NewWorktreeAvailability(false, "Needs a git repository"), move(git = false, projectId = "global"))
         assertEquals(NewWorktreeAvailability(false, "Needs a git repository with a commit"), move(projectId = "global", server = false))
-        assertEquals(NewWorktreeAvailability(false, "This opencode server can't create worktrees"), move(server = false))
-        assertEquals(NewWorktreeAvailability(true, "Create a checkout from this one and move there"), move())
+        assertEquals(NewWorktreeAvailability(false, "This server can't create worktrees"), move(server = false))
+        assertEquals(NewWorktreeAvailability(true, "Create a checkout and move there"), move())
     }
 
     @Test

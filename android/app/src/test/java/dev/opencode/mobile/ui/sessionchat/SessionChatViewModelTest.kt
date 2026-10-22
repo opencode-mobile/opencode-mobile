@@ -4333,7 +4333,7 @@ class SessionChatViewModelTest {
             viewModel.bind("ses-1", "Title", "/repo")
             advanceUntilIdle()
             assertEquals(
-                NewWorktreeAvailability(true, "Create a checkout from this one and move there"),
+                NewWorktreeAvailability(true, "Create a checkout and move there"),
                 viewModel.uiState.value.moveToWorktree.newWorktree,
             )
 
