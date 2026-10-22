@@ -1,9 +1,5 @@
 package dev.opencode.mobile.ui.sessionchat
 
-import kotlinx.coroutines.test.TestScope
-import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
-import dev.opencode.mobile.domain.preferences.ChipTimelineIntro
-import dev.opencode.mobile.domain.preferences.SessionChatTimelineStyle
 import dev.opencode.mobile.domain.command.ClientSlashAction
 import dev.opencode.mobile.domain.command.CommandError
 import dev.opencode.mobile.domain.command.CommandRepository
@@ -55,7 +51,10 @@ import dev.opencode.mobile.domain.model.ModelSelectionError
 import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.model.SessionModelSelection
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
+import dev.opencode.mobile.domain.preferences.ChipTimelineIntro
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
+import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
+import dev.opencode.mobile.domain.preferences.SessionChatTimelineStyle
 import dev.opencode.mobile.domain.session.CompactionStart
 import dev.opencode.mobile.domain.session.FileDiff
 import dev.opencode.mobile.domain.session.FileDiffStatus
@@ -70,6 +69,14 @@ import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionRevert
 import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.domain.sync.testSyncCoordinator
+import dev.opencode.mobile.domain.worktree.CreateWorktreeRequest
+import dev.opencode.mobile.domain.worktree.CreatedWorktree
+import dev.opencode.mobile.domain.worktree.UnavailableWorktreeRepository
+import dev.opencode.mobile.domain.worktree.WorktreeCreateError
+import dev.opencode.mobile.domain.worktree.WorktreeInventory
+import dev.opencode.mobile.domain.worktree.WorktreeInventoryCache
+import dev.opencode.mobile.domain.worktree.WorktreeLoad
+import dev.opencode.mobile.domain.worktree.WorktreeRepository
 import dev.opencode.mobile.markdown.OpenCodeBundledJoniMarkdownHighlighter
 import dev.opencode.mobile.markdown.OpenCodeMarkdownDetector
 import dev.opencode.mobile.markdown.OpenCodeMarkdownParser
@@ -78,13 +85,10 @@ import dev.opencode.mobile.markdown.OpenCodeTextMateHighlightingEngine
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.OpencodeSseHttpClient
+import dev.opencode.mobile.theme.letterAccentForWorktree
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatComposer
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatReviewChanges
-import dev.opencode.mobile.domain.worktree.WorktreeInventory
-import dev.opencode.mobile.domain.worktree.WorktreeInventoryCache
-import dev.opencode.mobile.domain.worktree.WorktreeLoad
-import dev.opencode.mobile.domain.worktree.WorktreeRepository
-import dev.opencode.mobile.theme.letterAccentForWorktree
+import dev.opencode.mobile.ui.worktree.NewWorktreeAvailability
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -100,6 +104,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -4213,28 +4218,30 @@ class SessionChatViewModelTest {
             assertNull(viewModel.uiState.value.pendingFilesOpen)
         }
 
-    private fun moveProjectsSnapshot(worktrees: List<String> = listOf("/repo", "/repo-feature")) =
-        dev.opencode.mobile.domain.home.HomeProjectsSnapshot().apply {
-            publish(
-                listOf(
-                    dev.opencode.mobile.domain.home.HomeProject(
-                        key = "proj",
-                        projectId = "proj",
-                        displayName = "repo",
-                        memberPaths = listOf("/repo"),
-                        isRepository = true,
-                        worktrees =
-                            worktrees.mapIndexed { index, directory ->
-                                dev.opencode.mobile.domain.home.HomeWorktree(
-                                    directory = directory,
-                                    branch = if (index == 0) "dev" else "feature/x",
-                                    isMain = index == 0,
-                                )
-                            },
-                    ),
+    private fun moveProjectsSnapshot(
+        worktrees: List<String> = listOf("/repo", "/repo-feature"),
+        isRepository: Boolean = true,
+    ) = dev.opencode.mobile.domain.home.HomeProjectsSnapshot().apply {
+        publish(
+            listOf(
+                dev.opencode.mobile.domain.home.HomeProject(
+                    key = "proj",
+                    projectId = "proj",
+                    displayName = "repo",
+                    memberPaths = listOf("/repo"),
+                    isRepository = isRepository,
+                    worktrees =
+                        worktrees.mapIndexed { index, directory ->
+                            dev.opencode.mobile.domain.home.HomeWorktree(
+                                directory = directory,
+                                branch = if (index == 0) "dev" else "feature/x",
+                                isMain = index == 0,
+                            )
+                        },
                 ),
-            )
-        }
+            ),
+        )
+    }
 
     @Test
     fun moveToWorktree_menuEnablementFollowsProtocolSettingAndWorktrees() =
@@ -4245,6 +4252,7 @@ class SessionChatViewModelTest {
             assertEquals("Needs an opencode v2 server", v1.uiState.value.moveToWorktree.availability.subtitle)
             assertFalse(v1.uiState.value.moveToWorktree.availability.enabled)
 
+            // One checkout: the sheet still opens while "New worktree…" can make another.
             val single =
                 createViewModel(
                     repository = FakeMessageRepository(),
@@ -4253,7 +4261,19 @@ class SessionChatViewModelTest {
                 )
             single.bind("ses-1", "Title", "/repo")
             advanceUntilIdle()
-            assertEquals("This project has no other worktrees", single.uiState.value.moveToWorktree.availability.subtitle)
+            assertTrue(single.uiState.value.moveToWorktree.availability.enabled)
+            assertTrue(single.uiState.value.moveToWorktree.newWorktree.enabled)
+
+            val singlePlain =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    serverProtocol = ServerProtocol.V2,
+                    homeProjectsSnapshot = moveProjectsSnapshot(listOf("/repo"), isRepository = false),
+                )
+            singlePlain.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            assertEquals("This project has no other worktrees", singlePlain.uiState.value.moveToWorktree.availability.subtitle)
+            assertEquals("Needs a git repository", singlePlain.uiState.value.moveToWorktree.newWorktree.subtitle)
 
             val v2 =
                 createViewModel(
@@ -4283,6 +4303,93 @@ class SessionChatViewModelTest {
                 .sendApplyNotifications()
             advanceUntilIdle()
             assertTrue(v2.uiState.value.moveToWorktree.availability.enabled)
+        }
+
+    @Test
+    fun moveToNewWorktree_createsFromTheSessionCheckoutThenMovesThere() =
+        runTest(testDispatcher) {
+            val sessionRepository = FakeSessionRepository()
+            val requests = mutableListOf<CreateWorktreeRequest>()
+            val worktrees =
+                object : WorktreeRepository by UnavailableWorktreeRepository {
+                    override suspend fun baseBranches(directory: String): List<String> = listOf("dev", "main")
+
+                    override suspend fun create(request: CreateWorktreeRequest): CreatedWorktree {
+                        requests += request
+                        return CreatedWorktree("/wt/ab12cd/brave-otter", "brave-otter", branch = null)
+                    }
+                }
+            val snapshot = moveProjectsSnapshot(listOf("/repo"))
+            val refreshes = mutableListOf<String>()
+            backgroundScope.launch { snapshot.worktreeRefreshRequests.collect { refreshes += it } }
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                    serverProtocol = ServerProtocol.V2,
+                    homeProjectsSnapshot = snapshot,
+                    worktreeRepository = worktrees,
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            assertEquals(
+                NewWorktreeAvailability(true, "Create a checkout from this one and move there"),
+                viewModel.uiState.value.moveToWorktree.newWorktree,
+            )
+
+            viewModel.openMoveToWorktree()
+            viewModel.openMoveToNewWorktree()
+            advanceUntilIdle()
+            val form = viewModel.uiState.value.moveToWorktree.form!!
+            assertEquals("/repo", form.sourceDirectory)
+            assertEquals("dev", form.sourceBranch)
+            assertEquals("Create and move", form.submitLabel)
+            viewModel.updateNewWorktreeName("brave-otter")
+            viewModel.selectNewWorktreeBase("main")
+            viewModel.submitNewWorktree()
+            advanceUntilIdle()
+
+            assertEquals(listOf(CreateWorktreeRequest("proj", "/repo", "brave-otter", baseRef = "main")), requests)
+            assertEquals(listOf("ses-1" to "/wt/ab12cd/brave-otter"), sessionRepository.moveSessionRequests)
+            assertNull(viewModel.uiState.value.moveToWorktree.form)
+            assertFalse(viewModel.uiState.value.moveToWorktree.sheetVisible)
+            assertEquals(listOf("/repo"), refreshes)
+        }
+
+    @Test
+    fun moveToNewWorktree_failedCreateDoesNotMove() =
+        runTest(testDispatcher) {
+            val sessionRepository = FakeSessionRepository()
+            val worktrees =
+                object : WorktreeRepository by UnavailableWorktreeRepository {
+                    override suspend fun create(request: CreateWorktreeRequest): CreatedWorktree =
+                        throw WorktreeCreateError("fatal: invalid reference: nope")
+                }
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                    serverProtocol = ServerProtocol.V2,
+                    homeProjectsSnapshot = moveProjectsSnapshot(),
+                    worktreeRepository = worktrees,
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.openMoveToWorktree()
+            viewModel.openMoveToNewWorktree()
+            viewModel.submitNewWorktree()
+            advanceUntilIdle()
+
+            assertTrue(sessionRepository.moveSessionRequests.isEmpty())
+            val move = viewModel.uiState.value.moveToWorktree
+            assertTrue(move.sheetVisible)
+            assertEquals("Couldn't create the worktree: fatal: invalid reference: nope", move.form?.errorMessage)
+
+            viewModel.closeNewWorktreeForm()
+            advanceUntilIdle()
+            assertNull(viewModel.uiState.value.moveToWorktree.form)
+            assertTrue(viewModel.uiState.value.moveToWorktree.sheetVisible)
         }
 
     @Test
