@@ -23,15 +23,7 @@ enum SessionChatMoveToWorktree {
         if case let .http(_, body)? = error as? SessionError, let body {
             let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed.hasPrefix("{") {
-                if let data = trimmed.data(using: .utf8),
-                   let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
-                {
-                    let nested = root["data"] as? [String: Any]
-                    let message = ((root["message"] as? String) ?? (nested?["message"] as? String))?
-                        .trimmingCharacters(in: .whitespacesAndNewlines)
-                    if let message, !message.isEmpty { return message }
-                }
-                return "Request failed"
+                return ServerErrorMessage.bodyMessage(trimmed) ?? "Request failed"
             }
             if !trimmed.isEmpty { return trimmed }
         }
@@ -47,20 +39,38 @@ enum SessionChatMoveToWorktree {
     }
 
     /// Checks in order (the first failing one explains): a v2 server, the Worktrees setting, a
-    /// created session, a project with another worktree.
+    /// created session, then somewhere to move: another worktree, or a New worktree row that can
+    /// create one.
     static func availability(
         supportsMove: Bool,
         worktreesEnabled: Bool,
         sessionCreated: Bool,
-        project: HomeProject?
+        project: HomeProject?,
+        newWorktree: NewWorktreeAvailability
     ) -> Availability {
         if !supportsMove { return Availability(enabled: false, subtitle: needsV2) }
         if !worktreesEnabled { return Availability(enabled: false, subtitle: turnOnWorktrees) }
         if !sessionCreated { return Availability(enabled: false, subtitle: nil) }
-        guard let project, project.hasManyWorktrees else {
-            return Availability(enabled: false, subtitle: noOtherWorktrees)
-        }
-        return .available
+        if project?.hasManyWorktrees == true || newWorktree.enabled { return .available }
+        return Availability(enabled: false, subtitle: noOtherWorktrees)
+    }
+
+    /// The Move sheet's New worktree row for the session's project.
+    static func newWorktreeAvailability(
+        supportsMove: Bool,
+        worktreesEnabled: Bool,
+        sessionCreated: Bool,
+        project: HomeProject?,
+        serverCanCreate: Bool
+    ) -> NewWorktreeAvailability {
+        NewWorktreeAvailability.move(
+            supportsMove: supportsMove,
+            worktreesEnabled: worktreesEnabled,
+            sessionCreated: sessionCreated,
+            isRepository: project?.isRepository ?? false,
+            projectID: project?.projectID,
+            serverCanCreate: serverCanCreate
+        )
     }
 
     /// The Home project that lists `directory` as one of its worktrees.

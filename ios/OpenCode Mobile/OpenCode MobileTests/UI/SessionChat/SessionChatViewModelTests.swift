@@ -3511,6 +3511,81 @@ struct SessionChatViewModelTests {
         #expect(viewModel.uiState.snackbar == nil)
     }
 
+    // MARK: Move to a new worktree (#752)
+
+    @Test func moveToNewWorktree_createsRefreshesClosesAndMoves() async {
+        let sessionRepository = FakeChatSessionRepository()
+        let worktrees = FormWorktreeRepository(
+            created: .success(CreatedWorktree(directory: "/data/worktree/abc/calm-river", name: "calm-river", branch: nil))
+        )
+        let viewModel = makeViewModel(sessionRepository: sessionRepository, serverProtocol: .v2, worktreeRepository: worktrees)
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+
+        viewModel.openMoveToWorktree()
+        viewModel.openMoveToNewWorktree(projectID: "prj", sourceDirectory: "/repo-wt", sourceBranch: "feature/x")
+        #expect(viewModel.worktreeCreate.state?.origin == .move(sessionID: "ses-1"))
+        #expect(viewModel.worktreeCreate.state?.submitTitle == "Create and move")
+        var refreshed: [CreatedWorktree] = []
+
+        await viewModel.submitMoveToNewWorktree { refreshed.append($0) }
+
+        #expect(worktrees.requests.map(\.sourceDirectory) == ["/repo-wt"])
+        #expect(worktrees.requests.map(\.projectID) == ["prj"])
+        #expect(refreshed.map(\.directory) == ["/data/worktree/abc/calm-river"])
+        #expect(sessionRepository.moveRequests == [.init(id: "ses-1", directory: "/data/worktree/abc/calm-river")])
+        #expect(viewModel.worktreeCreate.state == nil)
+        #expect(!viewModel.uiState.moveSheetVisible)
+    }
+
+    @Test func moveToNewWorktree_busySessionNamesTheNewCheckout() async {
+        let eventStream = FakeForegroundEventStream()
+        let sessionRepository = FakeChatSessionRepository()
+        let worktrees = FormWorktreeRepository(
+            created: .success(CreatedWorktree(directory: "/wt/calm-river", name: "calm-river", branch: nil))
+        )
+        let viewModel = makeViewModel(
+            eventStream: eventStream, sessionRepository: sessionRepository, serverProtocol: .v2, worktreeRepository: worktrees
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        eventStream.emit(
+            OpencodeEvent(
+                type: "session.status",
+                sessionID: "ses-1",
+                rawProperties: ["status": .dictionary(["type": .string("busy")])]
+            )
+        )
+        #expect(await waitUntil { viewModel.uiState.sessionStatusLabel != nil })
+
+        viewModel.openMoveToWorktree()
+        viewModel.openMoveToNewWorktree(projectID: "prj", sourceDirectory: "/repo", sourceBranch: "main")
+        await viewModel.submitMoveToNewWorktree()
+
+        #expect(viewModel.uiState.snackbar?.message == "Moves to calm-river after this turn.")
+    }
+
+    @Test func moveToNewWorktree_failedCreateNeitherMovesNorCloses() async {
+        let sessionRepository = FakeChatSessionRepository()
+        let worktrees = FormWorktreeRepository(created: .failure(WorktreeCreateError(message: "Project not found: prj")))
+        let viewModel = makeViewModel(sessionRepository: sessionRepository, serverProtocol: .v2, worktreeRepository: worktrees)
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+
+        viewModel.openMoveToWorktree()
+        viewModel.openMoveToNewWorktree(projectID: "prj", sourceDirectory: "/repo", sourceBranch: "main")
+        var refreshed = 0
+        await viewModel.submitMoveToNewWorktree { _ in refreshed += 1 }
+
+        #expect(sessionRepository.moveRequests.isEmpty)
+        #expect(refreshed == 0)
+        #expect(viewModel.uiState.moveSheetVisible)
+        #expect(viewModel.worktreeCreate.state?.errorMessage == "Couldn't create the worktree: Project not found: prj")
+
+        viewModel.dismissMoveToWorktree()
+        #expect(viewModel.worktreeCreate.state == nil)
+    }
+
     @Test func moveToWorktree_v1NeverOpensTheSheet() async {
         let sessionRepository = FakeChatSessionRepository()
         let viewModel = makeViewModel(sessionRepository: sessionRepository, serverProtocol: .v1)
@@ -6194,6 +6269,11 @@ private final class GatedWorktreeRepository: WorktreeRepository, @unchecked Send
     func refetch(projectID: String) async -> WorktreeLoad { await gated() }
     func onDisconnected() {}
     func onConnection(key: String) {}
+    func create(_ request: CreateWorktreeRequest) async throws -> CreatedWorktree {
+        throw WorktreeCreateError(message: "unused")
+    }
+    func baseBranches(directory: String) async throws -> [String] { [] }
+    var canCreateWorktrees: Bool { true }
 
     private func gated() async -> WorktreeLoad {
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in

@@ -115,17 +115,28 @@ struct SessionChatMoveToWorktreeTests {
         )
     }
 
+    private let rowEnabled = NewWorktreeAvailability(enabled: true, subtitle: "Create a checkout from this one and move there")
+    private let rowDisabled = NewWorktreeAvailability(enabled: false, subtitle: "Needs a git repository")
+
+    private var singleRepo: HomeProject {
+        HomeProjectGrouping.group(
+            addedPaths: ["/src/one"],
+            resolutions: ["/src/one": HomeProjectResolution(id: "prj_one", canonical: "/src/one", isRepository: true)],
+            branches: ["/src/one": "main"]
+        )[0]
+    }
+
     @Test func enabledOnV2WithWorktreesAndAnotherWorktree() {
         #expect(
             SessionChatMoveToWorktree.availability(
-                supportsMove: true, worktreesEnabled: true, sessionCreated: true, project: repo
+                supportsMove: true, worktreesEnabled: true, sessionCreated: true, project: repo, newWorktree: rowDisabled
             ) == .available
         )
     }
 
     @Test func v1IsDisabledFirst() {
         let availability = SessionChatMoveToWorktree.availability(
-            supportsMove: false, worktreesEnabled: false, sessionCreated: false, project: nil
+            supportsMove: false, worktreesEnabled: false, sessionCreated: false, project: nil, newWorktree: rowEnabled
         )
         #expect(!availability.enabled)
         #expect(availability.subtitle == "Needs an opencode v2 server")
@@ -133,7 +144,7 @@ struct SessionChatMoveToWorktreeTests {
 
     @Test func worktreesOffIsDisabled() {
         let availability = SessionChatMoveToWorktree.availability(
-            supportsMove: true, worktreesEnabled: false, sessionCreated: true, project: repo
+            supportsMove: true, worktreesEnabled: false, sessionCreated: true, project: repo, newWorktree: rowEnabled
         )
         #expect(!availability.enabled)
         #expect(availability.subtitle == "Turn on Worktrees in Settings")
@@ -141,20 +152,46 @@ struct SessionChatMoveToWorktreeTests {
 
     @Test func uncreatedSessionIsDisabledWithoutASubtitle() {
         let availability = SessionChatMoveToWorktree.availability(
-            supportsMove: true, worktreesEnabled: true, sessionCreated: false, project: repo
+            supportsMove: true, worktreesEnabled: true, sessionCreated: false, project: repo, newWorktree: rowEnabled
         )
         #expect(!availability.enabled)
         #expect(availability.subtitle == nil)
     }
 
-    @Test func singleWorktreeProjectIsDisabled() {
+    /// #752: one checkout is enough when New worktree… can create another.
+    @Test func singleWorktreeProjectIsEnabledWhenANewWorktreeCanBeCreated() {
+        let newWorktree = SessionChatMoveToWorktree.newWorktreeAvailability(
+            supportsMove: true, worktreesEnabled: true, sessionCreated: true, project: singleRepo, serverCanCreate: true
+        )
+        #expect(newWorktree == rowEnabled)
+        #expect(
+            SessionChatMoveToWorktree.availability(
+                supportsMove: true, worktreesEnabled: true, sessionCreated: true, project: singleRepo, newWorktree: newWorktree
+            ) == .available
+        )
+    }
+
+    @Test func singleWorktreeProjectIsDisabledWhenNoWorktreeCanBeCreated() {
         for project in [single, nil] as [HomeProject?] {
+            let newWorktree = SessionChatMoveToWorktree.newWorktreeAvailability(
+                supportsMove: true, worktreesEnabled: true, sessionCreated: true, project: project, serverCanCreate: true
+            )
+            #expect(newWorktree == rowDisabled)
             let availability = SessionChatMoveToWorktree.availability(
-                supportsMove: true, worktreesEnabled: true, sessionCreated: true, project: project
+                supportsMove: true, worktreesEnabled: true, sessionCreated: true, project: project, newWorktree: newWorktree
             )
             #expect(!availability.enabled)
             #expect(availability.subtitle == "This project has no other worktrees")
         }
+        let unsupported = SessionChatMoveToWorktree.newWorktreeAvailability(
+            supportsMove: true, worktreesEnabled: true, sessionCreated: true, project: singleRepo, serverCanCreate: false
+        )
+        #expect(unsupported.subtitle == "This opencode server can't create worktrees")
+        #expect(
+            SessionChatMoveToWorktree.availability(
+                supportsMove: true, worktreesEnabled: true, sessionCreated: true, project: singleRepo, newWorktree: unsupported
+            ).subtitle == "This project has no other worktrees"
+        )
     }
 
     @Test func optionsListTheProjectWorktreesWithTheCurrentOneChecked() {

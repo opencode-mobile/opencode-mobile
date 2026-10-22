@@ -455,6 +455,93 @@ struct ProjectListHomeViewModelTests {
         #expect(calls.count("/notes") == 3)
     }
 
+    // MARK: New worktree (#752)
+
+    @Test func newWorktreeFromRunInCreatesRefetchesAndStartsThere() async {
+        let worktrees = ScriptedWorktreeRepository(
+            loads: [.loaded(directories: ["/repo"], listsSessions: false)],
+            created: .success(CreatedWorktree(directory: "/data/worktree/abc/brave-otter", name: "brave-otter", branch: nil))
+        )
+        let repo = Project(id: "prj_repo", worktree: "/repo", displayName: "repo", isRepository: true)
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(projectsByDirectory: ["/repo": repo]),
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"]),
+            serverProtocol: .v2,
+            worktreeRepository: worktrees
+        )
+        await viewModel.refresh()
+        #expect(await waitUntil {
+            viewModel.homeProjects.first?.projectID == "prj_repo" && worktrees.loadedPaths.contains("/repo")
+        })
+        let project = viewModel.homeProjects[0]
+        #expect(project.worktrees.count == 1)
+        #expect(viewModel.newWorktreeAvailability(for: project, worktreesEnabled: true).enabled)
+
+        viewModel.openNewWorktree(projectKey: "prj_repo")
+        #expect(viewModel.worktreeCreate.state?.origin == .runIn(projectKey: "prj_repo"))
+        #expect(viewModel.worktreeCreate.state?.sourceDirectory == "/repo")
+        #expect(viewModel.worktreeCreate.state?.serverProtocol == .v2)
+
+        let closes = await viewModel.submitNewWorktree()
+
+        #expect(closes)
+        #expect(worktrees.createRequests.map(\.projectID) == ["prj_repo"])
+        #expect(worktrees.createRequests.map(\.sourceDirectory) == ["/repo"])
+        #expect(worktrees.refetchedProjectIDs == ["prj_repo"])
+        #expect(viewModel.worktreeCreate.state == nil)
+        #expect(viewModel.pendingSessionOpen?.worktree == "/data/worktree/abc/brave-otter")
+        #expect(viewModel.pendingSessionOpen?.id == OptimisticSessionCreate.placeholderSessionID)
+    }
+
+    @Test func newWorktreeOnV1ReloadsTheAddedPathsAfterCreating() async {
+        let worktrees = ScriptedWorktreeRepository(
+            loads: [.loaded(directories: [], listsSessions: true)],
+            created: .success(CreatedWorktree(directory: "/wt/fix", name: "fix", branch: "opencode/fix"))
+        )
+        let repo = Project(id: "prj_repo", worktree: "/repo", displayName: "repo", isRepository: true)
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(projectsByDirectory: ["/repo": repo]),
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"]),
+            serverProtocol: .v1,
+            worktreeRepository: worktrees
+        )
+        await viewModel.refresh()
+        #expect(await waitUntil { worktrees.loadedPaths.count >= 1 && viewModel.homeProjects.first?.projectID == "prj_repo" })
+        let loadsBefore = worktrees.loadedPaths.count
+
+        viewModel.openNewWorktree(projectKey: "prj_repo")
+        #expect(viewModel.worktreeCreate.state?.branchValue.hasPrefix("opencode/") == true)
+        #expect(await viewModel.submitNewWorktree())
+
+        #expect(worktrees.loadedPaths.count >= loadsBefore + 1)
+        #expect(worktrees.refetchedProjectIDs.isEmpty)
+        #expect(viewModel.pendingSessionOpen?.worktree == "/wt/fix")
+    }
+
+    @Test func failedNewWorktreeStartsNothingAndKeepsTheForm() async {
+        let worktrees = ScriptedWorktreeRepository(
+            loads: [.loaded(directories: ["/repo"], listsSessions: false)],
+            created: .failure(WorktreeCreateError(message: "fatal: invalid reference: nope"))
+        )
+        let repo = Project(id: "prj_repo", worktree: "/repo", displayName: "repo", isRepository: true)
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(projectsByDirectory: ["/repo": repo]),
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"]),
+            serverProtocol: .v2,
+            worktreeRepository: worktrees
+        )
+        await viewModel.refresh()
+        #expect(await waitUntil { viewModel.homeProjects.first?.projectID == "prj_repo" })
+
+        viewModel.openNewWorktree(projectKey: "prj_repo")
+        let closes = await viewModel.submitNewWorktree()
+
+        #expect(!closes)
+        #expect(viewModel.pendingSessionOpen == nil)
+        #expect(worktrees.refetchedProjectIDs.isEmpty)
+        #expect(viewModel.worktreeCreate.state?.errorMessage == "Couldn't create the worktree: fatal: invalid reference: nope")
+    }
+
     @Test func removingAMergedProjectRemovesEveryMemberPath() async {
         let store = FakeConnectionProfileStore(initial: ["/repo", "/other", "/repo-wt"])
         let repo = Project(id: "prj_repo", worktree: "/repo", displayName: "repo", isRepository: true)
@@ -2985,10 +3072,22 @@ private final class SessionListSnapshotCollector {
 private final class ScriptedWorktreeRepository: WorktreeRepository, @unchecked Sendable {
     private let lock = NSLock()
     private var loads: [WorktreeLoad]
+    private let created: Result<CreatedWorktree, WorktreeCreateError>
+    private var requests: [CreateWorktreeRequest] = []
+    private var loadCalls: [String] = []
+    private var refetchCalls: [String] = []
 
-    init(loads: [WorktreeLoad]) {
+    init(
+        loads: [WorktreeLoad],
+        created: Result<CreatedWorktree, WorktreeCreateError> = .failure(WorktreeCreateError(message: "unused"))
+    ) {
         self.loads = loads
+        self.created = created
     }
+
+    var createRequests: [CreateWorktreeRequest] { lock.withLock { requests } }
+    var loadedPaths: [String] { lock.withLock { loadCalls } }
+    var refetchedProjectIDs: [String] { lock.withLock { refetchCalls } }
 
     private func next() -> WorktreeLoad {
         lock.withLock {
@@ -2997,11 +3096,23 @@ private final class ScriptedWorktreeRepository: WorktreeRepository, @unchecked S
     }
 
     func load(addedPath: String, projectID: String?) async -> WorktreeLoad { next() }
-    func loadRefreshed(addedPath: String, projectID: String?) async -> WorktreeLoad { next() }
+    func loadRefreshed(addedPath: String, projectID: String?) async -> WorktreeLoad {
+        lock.withLock { loadCalls.append(addedPath) }
+        return next()
+    }
     func refresh(projectID: String) async -> Bool { false }
-    func refetch(projectID: String) async -> WorktreeLoad { next() }
+    func refetch(projectID: String) async -> WorktreeLoad {
+        lock.withLock { refetchCalls.append(projectID) }
+        return next()
+    }
     func onDisconnected() {}
     func onConnection(key: String) {}
+    func create(_ request: CreateWorktreeRequest) async throws -> CreatedWorktree {
+        lock.withLock { requests.append(request) }
+        return try created.get()
+    }
+    func baseBranches(directory: String) async throws -> [String] { [] }
+    var canCreateWorktrees: Bool { true }
 }
 
 /// `getVcsInfo` that holds every call until `open()`, then answers newest first. Directories in

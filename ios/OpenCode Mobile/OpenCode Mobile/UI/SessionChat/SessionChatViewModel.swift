@@ -57,6 +57,8 @@ final class SessionChatViewModel {
     private var checkoutProjectIDs: Set<String> = []
     private var worktreeEventTask: Task<Void, Never>?
     private let worktreeRepository: any WorktreeRepository
+    /// New worktree form of the Move sheet.
+    let worktreeCreate: WorktreeCreateModel
     private let worktreeInventoryCache: WorktreeInventoryCache
     private let projectRepository: any ProjectRepository
     private var projectIdentityTask: Task<Void, Never>?
@@ -133,6 +135,7 @@ final class SessionChatViewModel {
         self.sessionViewReporter = sessionViewReporter ?? EmptySessionViewReporter()
         self.foregroundEventStream = foregroundEventStream
         self.worktreeRepository = worktreeRepository
+        self.worktreeCreate = WorktreeCreateModel(repository: worktreeRepository)
         self.projectRepository = projectRepository
         self.worktreeInventoryCache = worktreeInventoryCache
         // What Home already loaded decides the identity before the first frame; the refresh
@@ -630,14 +633,47 @@ final class SessionChatViewModel {
             presentation: ProductAnalytics.Presentation.sheet,
             trigger: ProductAnalytics.Trigger.present
         )
+        worktreeCreate.dismiss()
         moveSheetVisible = true
         publishUiState()
     }
 
     func dismissMoveToWorktree() {
+        worktreeCreate.dismiss()
         guard moveSheetVisible else { return }
         moveSheetVisible = false
         publishUiState()
+    }
+
+    /// False once a v1 server answered 404 for its worktree routes.
+    var serverCanCreateWorktrees: Bool {
+        worktreeRepository.canCreateWorktrees
+    }
+
+    /// Switches the Move sheet to the New worktree form, creating from the session's checkout.
+    func openMoveToNewWorktree(projectID: String?, sourceDirectory: String, sourceBranch: String?) {
+        guard hasCreatedSession, moveSheetVisible, !moveInFlight else { return }
+        worktreeCreate.open(
+            origin: .move(sessionID: sessionID),
+            serverProtocol: activeConnectionManager.serverProtocol ?? .v1,
+            projectID: projectID,
+            sourceDirectory: sourceDirectory,
+            sourceBranch: sourceBranch
+        )
+    }
+
+    /// Creates the worktree, lets Home refresh its checkouts, closes the sheet and moves the
+    /// session there. A failed create keeps the form; a failed move uses the move error path.
+    func submitMoveToNewWorktree(
+        refreshInventory: @MainActor (CreatedWorktree) async -> Void = { _ in }
+    ) async {
+        guard case .move? = worktreeCreate.state?.origin else { return }
+        guard let created = await worktreeCreate.submit() else { return }
+        await refreshInventory(created)
+        worktreeCreate.dismiss()
+        moveSheetVisible = false
+        publishUiState()
+        await moveSession(to: created.directory, worktreeTitle: created.branch ?? created.name)
     }
 
     /// `POST /api/session/{id}/move`. The server moves an idle session at once and a busy one
