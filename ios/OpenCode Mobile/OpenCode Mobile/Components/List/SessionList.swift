@@ -271,6 +271,51 @@ struct SessionListFilterTab: Identifiable, Hashable {
             load: load
         )
     }
+
+    /// Broader scope to offer when this worktree filter has no sessions. Nil while the
+    /// project is still loading or failed, and for any scope that is not a worktree.
+    /// Prefers the project when another worktree has sessions, otherwise All when another
+    /// project does, otherwise the project so the empty worktree is not a dead end.
+    func worktreeFilterClear(
+        broaderTabs: [SessionListFilterTab],
+        visibleIsEmpty: Bool
+    ) -> WorktreeFilterClear? {
+        guard isWorktree, visibleIsEmpty, load == nil else { return nil }
+        let parent = parentId.flatMap { id in broaderTabs.first { $0.id == id } }
+        if parent?.load != nil { return nil }
+        let all = broaderTabs.first { $0.isAll }
+        if let parent, parent.count > 0 {
+            return WorktreeFilterClear(filterId: parent.id, message: SessionListWorktreeEmptyCopy.otherWorktrees)
+        }
+        if let all, all.count > 0 {
+            return WorktreeFilterClear(filterId: all.id, message: SessionListWorktreeEmptyCopy.otherProjects)
+        }
+        if let parent {
+            return WorktreeFilterClear(filterId: parent.id, message: SessionListWorktreeEmptyCopy.everyWorktree)
+        }
+        if let parentId {
+            return WorktreeFilterClear(filterId: parentId, message: SessionListWorktreeEmptyCopy.everyWorktree)
+        }
+        if let all {
+            return WorktreeFilterClear(filterId: all.id, message: SessionListWorktreeEmptyCopy.everyProject)
+        }
+        return nil
+    }
+}
+
+/// Scope a "Clear filter" action selects, and the line that explains why.
+struct WorktreeFilterClear: Equatable {
+    let filterId: String
+    let message: String
+}
+
+enum SessionListWorktreeEmptyCopy {
+    static let title = "No sessions in this worktree"
+    static let action = "Clear filter"
+    static let otherWorktrees = "Clear the filter to see sessions on other worktrees."
+    static let otherProjects = "Clear filters to see sessions on other projects."
+    static let everyWorktree = "Clear the filter to see every worktree."
+    static let everyProject = "Clear filters to see every project."
 }
 
 struct SessionList<EmptyContent: View>: View {
@@ -420,7 +465,9 @@ struct SessionList<EmptyContent: View>: View {
     @ViewBuilder
     private func listBody(filterId: String, isCurrent: Bool) -> some View {
         let visible = sessions.visibleForFilter(filterId)
-        let loadingTab = visible.isEmpty ? filterTabs.first { $0.id == filterId && $0.load != nil } : nil
+        let scopeTab = filterTabs.first { $0.id == filterId } ?? (selectedScopeTab?.id == filterId ? selectedScopeTab : nil)
+        let loadingTab = visible.isEmpty ? scopeTab.flatMap { $0.load == nil ? nil : $0 } : nil
+        let worktreeClear = scopeTab?.worktreeFilterClear(broaderTabs: filterTabs, visibleIsEmpty: visible.isEmpty)
         Group {
             if let loadingTab, let load = loadingTab.load {
                 ScrollView {
@@ -434,6 +481,26 @@ struct SessionList<EmptyContent: View>: View {
                     if isCurrent { onDisplayedSessionsChange?([]) }
                 }
                 .transition(.opacity)
+            } else if let worktreeClear {
+                ScrollView {
+                    OpenCodeEmptyState(
+                        title: SessionListWorktreeEmptyCopy.title,
+                        message: worktreeClear.message,
+                        icon: .callSplit,
+                        primaryAction: OpenCodeEmptyStateAction(title: SessionListWorktreeEmptyCopy.action) {
+                            onFilterSelected(worktreeClear.filterId)
+                        }
+                    )
+                    .frame(maxWidth: .infinity, minHeight: 420)
+                    .padding(.bottom, max(dockHeight, sessionListFallbackBottomSpacer))
+                    .accessibilityIdentifier("sessionListWorktreeEmpty")
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(OpenCodeColors.backgroundBase)
+                .modifier(SessionListRefreshableModifier(onRefresh: isCurrent ? onRefresh : nil))
+                .onAppear {
+                    if isCurrent { onDisplayedSessionsChange?([]) }
+                }
             } else if visible.isEmpty, showsEmptyContent {
                 ScrollView {
                     emptyContent

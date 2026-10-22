@@ -189,6 +189,50 @@ data class SessionListFilterTab(
                 load = load,
             )
     }
+
+    /**
+     * Broader scope to offer when this worktree filter has no sessions. Null while the
+     * project is still loading or failed, and for any scope that is not a worktree.
+     * Prefers the project when another worktree has sessions, otherwise All when another
+     * project does, otherwise the project so the empty worktree is not a dead end.
+     */
+    fun worktreeFilterClear(
+        broaderTabs: List<SessionListFilterTab>,
+        visibleIsEmpty: Boolean,
+    ): WorktreeFilterClear? {
+        if (!isWorktree || !visibleIsEmpty || load != null) return null
+        val parent = parentId?.let { id -> broaderTabs.firstOrNull { it.id == id } }
+        if (parent?.load != null) return null
+        val all = broaderTabs.firstOrNull { it.isAll }
+        return when {
+            parent != null && parent.count > 0 ->
+                WorktreeFilterClear(parent.id, SessionListWorktreeEmptyCopy.OTHER_WORKTREES)
+            all != null && all.count > 0 ->
+                WorktreeFilterClear(all.id, SessionListWorktreeEmptyCopy.OTHER_PROJECTS)
+            parent != null ->
+                WorktreeFilterClear(parent.id, SessionListWorktreeEmptyCopy.EVERY_WORKTREE)
+            parentId != null ->
+                WorktreeFilterClear(parentId, SessionListWorktreeEmptyCopy.EVERY_WORKTREE)
+            all != null ->
+                WorktreeFilterClear(all.id, SessionListWorktreeEmptyCopy.EVERY_PROJECT)
+            else -> null
+        }
+    }
+}
+
+/** Scope a "Clear filter" action selects, and the line that explains why. */
+data class WorktreeFilterClear(
+    val filterId: String,
+    val message: String,
+)
+
+object SessionListWorktreeEmptyCopy {
+    const val TITLE = "No sessions in this worktree"
+    const val ACTION = "Clear filter"
+    const val OTHER_WORKTREES = "Clear the filter to see sessions on other worktrees."
+    const val OTHER_PROJECTS = "Clear filters to see sessions on other projects."
+    const val EVERY_WORKTREE = "Clear the filter to see every worktree."
+    const val EVERY_PROJECT = "Clear filters to see every project."
 }
 
 @Composable
@@ -249,6 +293,8 @@ fun SessionList(
                     filterId = filterId,
                     showsProjectName = filterId == SessionListFilterTab.ALL_ID,
                     scopeTab = filterTabs.firstOrNull { it.id == filterId } ?: scopeTabs.firstOrNull { it.id == filterId },
+                    broaderTabs = filterTabs,
+                    onFilterSelected = onFilterSelected,
                     onRetryScopeLoad = onRetryScopeLoad,
                     listBottomFadeHeight = listBottomFadeHeight,
                     borderWeaker = borderWeaker,
@@ -299,6 +345,8 @@ private fun SessionListFeedPage(
     filterId: String,
     showsProjectName: Boolean,
     scopeTab: SessionListFilterTab?,
+    broaderTabs: List<SessionListFilterTab>,
+    onFilterSelected: (String) -> Unit,
     onRetryScopeLoad: (String) -> Unit,
     listBottomFadeHeight: Dp,
     borderWeaker: androidx.compose.ui.graphics.Color,
@@ -408,6 +456,8 @@ private fun SessionListFeedPage(
         visibleSessions = visibleSessions,
         showsProjectName = showsProjectName,
         scopeTab = scopeTab,
+        broaderTabs = broaderTabs,
+        onFilterSelected = onFilterSelected,
         onRetryScopeLoad = onRetryScopeLoad,
         ladderSections = ladderSections,
         listState = listState,
@@ -429,6 +479,8 @@ private fun SessionListFeed(
     visibleSessions: List<SessionListSession>,
     showsProjectName: Boolean,
     scopeTab: SessionListFilterTab?,
+    broaderTabs: List<SessionListFilterTab>,
+    onFilterSelected: (String) -> Unit,
     onRetryScopeLoad: (String) -> Unit,
     ladderSections: List<HomeSessionLadderSection<SessionListSession>>,
     listState: LazyListState,
@@ -477,19 +529,46 @@ private fun SessionListFeed(
                         },
                     modifier = Modifier.fillMaxSize(),
                 )
-            else ->
-                SessionListFeedRows(
-                    visibleSessions = visibleSessions,
-                    showsProjectName = showsProjectName,
-                    ladderSections = ladderSections,
-                    listState = listState,
-                    listBottomFadeHeight = listBottomFadeHeight,
-                    borderWeaker = borderWeaker,
-                    emptyContent = emptyContent,
-                    selectedSessionId = selectedSessionId,
-                    onSessionSelected = onSessionSelected,
-                    onSessionLongPress = onSessionLongPress,
-                )
+            else -> {
+                val clear =
+                    scopeTab?.worktreeFilterClear(
+                        broaderTabs = broaderTabs,
+                        visibleIsEmpty = visibleSessions.isEmpty(),
+                    )
+                if (clear != null) {
+                    Box(
+                        modifier =
+                            Modifier
+                                .fillMaxSize()
+                                .padding(bottom = listBottomFadeHeight),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        OpenCodeEmptyState(
+                            title = SessionListWorktreeEmptyCopy.TITLE,
+                            message = clear.message,
+                            icon = OpenCodeIcons.CallSplit,
+                            primaryAction =
+                                OpenCodeEmptyStateAction(
+                                    title = SessionListWorktreeEmptyCopy.ACTION,
+                                    onClick = { onFilterSelected(clear.filterId) },
+                                ),
+                        )
+                    }
+                } else {
+                    SessionListFeedRows(
+                        visibleSessions = visibleSessions,
+                        showsProjectName = showsProjectName,
+                        ladderSections = ladderSections,
+                        listState = listState,
+                        listBottomFadeHeight = listBottomFadeHeight,
+                        borderWeaker = borderWeaker,
+                        emptyContent = emptyContent,
+                        selectedSessionId = selectedSessionId,
+                        onSessionSelected = onSessionSelected,
+                        onSessionLongPress = onSessionLongPress,
+                    )
+                }
+            }
         }
     }
 }
