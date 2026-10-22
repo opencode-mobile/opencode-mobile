@@ -17,6 +17,7 @@ import dev.opencode.mobile.domain.preferences.AppOnboardingPreferences
 import dev.opencode.mobile.domain.preferences.DeveloperToolsPreferences
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.preferences.MarkdownHighlightPreferences
+import dev.opencode.mobile.domain.preferences.PerformanceOverlayPreferences
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.domain.preferences.SplitPanePreferences
 import dev.opencode.mobile.domain.sessioncache.SessionCache
@@ -93,6 +94,7 @@ class SettingsViewModel
                 AppLockPreferences.clear()
                 AppOnboardingPreferences.clear()
                 DeveloperToolsPreferences.clear()
+                PerformanceOverlayPreferences.clear()
                 SessionChatDisplayPreferences.clear()
                 SplitPanePreferences.clear()
                 FeatureFlags.clearOverrides()
