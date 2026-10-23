@@ -60,20 +60,13 @@ nonisolated enum DisplayFrameBuilder {
         bodies.reserveCapacity(ordered.count)
         for display in ordered {
             let message = display.message
-            var blocks = SessionChatTimelineBlocks.buildOrFallback(
-                role: message.role,
-                parts: message.parts,
-                messageId: message.id,
-                fallbackText: message.text,
+            var blocks = SessionChatTimelineBlocks.present(
+                message: message,
+                commands: serverCommands,
                 collapseConsecutiveToolCalls: collapseConsecutiveToolCalls,
                 chipTimeline: chipTimeline,
                 stepRail: stepRail,
                 activityCard: activityCard
-            )
-            blocks = SessionChatTimelineBlocks.collapseCommandInvocations(
-                role: message.role,
-                blocks: blocks,
-                commands: serverCommands
             )
             blocks = SessionChatTimelineBlocks.ensureLiveRow(
                 message: message,

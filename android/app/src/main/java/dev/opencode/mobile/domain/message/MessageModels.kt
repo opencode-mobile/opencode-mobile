@@ -7,6 +7,17 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 
+/**
+ * A skill admitted on a v2 user prompt. The skill body stays on the server;
+ * chat only needs the id and slash name so the prompt can show as `[/name]`.
+ */
+data class PromptSkill(
+    val id: String,
+    val name: String,
+    /** Mention text already present in the prompt, when another client recorded one. */
+    val mentionText: String? = null,
+)
+
 data class Message(
     val id: String,
     val role: MessageRole,
@@ -29,6 +40,8 @@ data class Message(
     val stopReason: MessageStopReason? = null,
     /** A run failure to show under the reply. Null when the run did not fail, or the user stopped it. */
     val failure: SessionFailure? = null,
+    /** Skills admitted with this prompt. Empty for v1 and for messages that did not load a skill. */
+    val promptSkills: List<PromptSkill> = emptyList(),
 )
 
 /** An assistant reply that ended before the model finished its answer. */

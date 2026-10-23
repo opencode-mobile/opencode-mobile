@@ -1569,6 +1569,37 @@ class MessageDomainAdapterTest {
     }
 
     @Test
+    fun projectV2_userSkillAndFile_keepsArgumentsAndSkillRefWithoutSkillBody() {
+        val message =
+            projectV2(
+                """
+                [
+                  {
+                    "id":"msg_user",
+                    "type":"user",
+                    "text":"prototype me a better list item",
+                    "files":[{"name":"16136.png","mime":"image/png","uri":"data:image/png;base64,YQ=="}],
+                    "skills":[{
+                      "id":"publish-prototype",
+                      "name":"publish-prototype",
+                      "text":"SKILL BODY should stay off the transcript"
+                    }]
+                  }
+                ]
+                """,
+            ).single()
+
+        assertEquals("prototype me a better list item", message.text)
+        assertFalse(message.text.contains("SKILL BODY"))
+        assertFalse(message.parts.any { it is MessagePart.Text && it.text.contains("SKILL BODY") })
+        assertEquals(
+            listOf(PromptSkill(id = "publish-prototype", name = "publish-prototype")),
+            message.promptSkills,
+        )
+        assertEquals(1, message.parts.filterIsInstance<MessagePart.File>().size)
+    }
+
+    @Test
     fun mergeInbox_emptyInboxIsNoOp() {
         val messages = listOf(Message(id = "msg-1", role = MessageRole.User, text = "Hello"))
         assertEquals(messages, adapter.mergeInbox(messages, emptyList()))

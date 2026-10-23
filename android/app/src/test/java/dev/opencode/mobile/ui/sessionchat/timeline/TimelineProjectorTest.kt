@@ -1,11 +1,14 @@
 package dev.opencode.mobile.ui.sessionchat
 
+import dev.opencode.mobile.domain.command.ServerCommand
+import dev.opencode.mobile.domain.command.ServerCommandSource
 import dev.opencode.mobile.domain.message.AttachmentKind
 import dev.opencode.mobile.domain.message.DisplayMessage
 import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.message.PromptSkill
 import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.ui.components.OpenCodeAttachmentVariant
@@ -383,6 +386,90 @@ class TimelineProjectorTest {
             )
         assertFalse(reconciled.rows.any { it.isPending })
         assertEquals(setOf("optimistic-photo"), reconciled.removedRowIDs)
+    }
+
+    @Test
+    fun project_skillPromptWithImage_collapsesOntoOneRowAndDropsOptimisticCopy() {
+        val args = "prototype me a better list item"
+        val collapsed = "[/publish-prototype] $args"
+        val message =
+            Message(
+                id = "msg-user",
+                role = MessageRole.User,
+                text = args,
+                parts =
+                    listOf(
+                        MessagePart.Text(text = args, id = "u1"),
+                        MessagePart.File(
+                            id = "server-file",
+                            filename = "16136.png",
+                            mime = "image/png",
+                            kind = AttachmentKind.Image,
+                            dataUrl = "",
+                        ),
+                    ),
+                promptSkills = listOf(PromptSkill(id = "publish-prototype", name = "publish-prototype")),
+            )
+        val blocks =
+            SessionChatTimelineBlocks.present(
+                message = message,
+                commands =
+                    listOf(
+                        ServerCommand(
+                            name = "publish-prototype",
+                            source = ServerCommandSource.Skill,
+                            skillId = "publish-prototype",
+                        ),
+                    ),
+            )
+        assertEquals(listOf(collapsed), blocks.filterIsInstance<SessionChatTimelineBlock.Text>().map { it.text })
+        assertEquals(1, blocks.filterIsInstance<SessionChatTimelineBlock.Attachment>().size)
+
+        val pendingAttachment =
+            SessionChatAttachmentItem(
+                id = "local-file",
+                filename = "16136.png",
+                variant = OpenCodeAttachmentVariant.Image,
+                signature = "local",
+            )
+        val pending =
+            TimelineProjector.rowFromMessageItem(
+                SessionChatMessageItem(
+                    id = "optimistic",
+                    role = MessageRole.User,
+                    text = collapsed,
+                    metadataLabel = "Build · 12:48 AM",
+                    isPending = true,
+                    blocks =
+                        listOf(
+                            SessionChatTimelineBlock.Text(
+                                blockID = PresentationBlockId.messageFallback("optimistic"),
+                                text = collapsed,
+                            ),
+                            SessionChatTimelineBlock.Attachment(
+                                blockID = PresentationBlockId.direct("local-file"),
+                                attachment = pendingAttachment,
+                            ),
+                        ),
+                    attachments = listOf(pendingAttachment),
+                ),
+            )
+        val reconciled =
+            TimelineProjector.project(
+                frame =
+                    DisplayFrame(
+                        sessionKey = "session",
+                        frameRevision = 1L,
+                        sourceRevision = 0L,
+                        messages = listOf(DisplayMessageBody(message = message, blocks = blocks)),
+                    ),
+                optimisticInputs = OptimisticInputs(pendingRows = listOf(pending)),
+            )
+
+        assertEquals(listOf("msg-user"), reconciled.rows.map { it.id })
+        assertEquals(collapsed, reconciled.rows.single().text)
+        assertEquals(1, reconciled.rows.single().attachments.size)
+        assertFalse(reconciled.rows.any { it.isPending })
     }
 
     @Test
