@@ -45,6 +45,7 @@ import dev.opencode.mobile.domain.model.SessionModelSelectionStore
 import dev.opencode.mobile.domain.preferences.ChipTimelineIntro
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
+import dev.opencode.mobile.domain.preferences.SessionChatTimelineStyle
 import dev.opencode.mobile.domain.project.ProjectRepository
 import dev.opencode.mobile.domain.project.UnavailableProjectRepository
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
@@ -315,6 +316,15 @@ class SessionChatViewModel
         private var chipTimelineIntroTurnActive: Boolean? = null
         private var chipTimelineIntroJob: Job? = null
 
+        // One-time Timeline Style picker (#805): offered once per ViewModel after the first
+        // history load shows messages. The answer notice shares the Chip intro's notice slot.
+        private var timelineStylePickerVisible = false
+
+        // Taken when the picker shows, so its rows stay put while the sheet slides out.
+        private var timelineStylePickerOptions: List<SessionChatTimelineStyleOption> = emptyList()
+        private var timelineStylePickerChecked = false
+        private var timelineStylePickerJob: Job? = null
+
         // Title / custom-answer fields change per keystroke; report the first edit per
         // dialog appearance so analytics measures engagement instead of typing volume.
         private var renameDraftEditReported = false
@@ -386,6 +396,7 @@ class SessionChatViewModel
                         messages = timeline.loadedMessages(),
                         isSessionBusy = infoState.sessionStatusLabel != null,
                     )
+                    observeTimelineStylePickerLoad(timelineState.timeline)
                     publishUiState(
                         timelineState,
                         composerState,
@@ -1180,6 +1191,65 @@ class SessionChatViewModel
             publishUiState()
         }
 
+        /** Use button of the Timeline Style picker. */
+        fun chooseTimelineStyleFromPicker(style: SessionChatTimelineStyle) {
+            if (!timelineStylePickerVisible) return
+            timelineStylePickerVisible = false
+            logAction(
+                ProductAnalytics.Action.TIMELINE_STYLE_PICKER_USE,
+                screenId = ProductAnalytics.Screen.SESSION_TIMELINE_STYLE_PICKER,
+                parameters = mapOf(ProductAnalytics.Param.MODE to style.wireValue),
+            )
+            SessionChatDisplayPreferences.updateTimelineStyle(style)
+            chipTimelineIntroNotice = timelineStylePickerNotice(style)
+            publishUiState()
+        }
+
+        /** Timeline Style picker swipe, scrim, back, or close: keeps the recommended Activity Card. */
+        fun dismissTimelineStylePicker() {
+            if (!timelineStylePickerVisible) return
+            timelineStylePickerVisible = false
+            logAction(
+                ProductAnalytics.Action.TIMELINE_STYLE_PICKER_DISMISS,
+                screenId = ProductAnalytics.Screen.SESSION_TIMELINE_STYLE_PICKER,
+            )
+            SessionChatDisplayPreferences.dismissTimelineStylePicker()
+            chipTimelineIntroNotice = timelineStylePickerNotice(SessionChatTimelineStyle.ActivityCard)
+            publishUiState()
+        }
+
+        /**
+         * The first settled history load decides the picker for this ViewModel: messages on
+         * screen schedule it; a new or empty session skips it. A failed load waits for a retry.
+         */
+        private fun observeTimelineStylePickerLoad(state: SessionChatTimelineState) {
+            if (timelineStylePickerChecked) return
+            when (state) {
+                SessionChatTimelineState.Loading, SessionChatTimelineState.Error -> return
+                SessionChatTimelineState.Creating, SessionChatTimelineState.Empty -> {
+                    timelineStylePickerChecked = true
+                    return
+                }
+                SessionChatTimelineState.Ready -> timelineStylePickerChecked = true
+            }
+            if (!SessionChatDisplayPreferences.timelineStylePickerPending) return
+            timelineStylePickerJob?.cancel()
+            timelineStylePickerJob =
+                viewModelScope.launch {
+                    delay(TIMELINE_STYLE_PICKER_DELAY_MILLIS)
+                    if (!SessionChatDisplayPreferences.timelineStylePickerPending) return@launch
+                    // Blocked: skip for this ViewModel; the next session open offers it again.
+                    if (chipTimelineIntroVisible || _uiState.value.blocksChipTimelineIntro()) return@launch
+                    timelineStylePickerOptions =
+                        SessionChatTimelineStyleOption.pickerOptions(
+                            available = SessionChatDisplayPreferences.availableTimelineStyles,
+                            current = SessionChatDisplayPreferences.timelineStyle,
+                        )
+                    timelineStylePickerVisible = true
+                    publishUiState()
+                }
+        }
+
         private fun hideChipTimelineIntro(actionId: String) {
             if (!chipTimelineIntroVisible) return
             chipTimelineIntroVisible = false
@@ -1962,6 +2032,8 @@ class SessionChatViewModel
                 activityCardFooters = activityCardFooters,
                 debouncedStepIds = debouncedStepIds,
                 chipTimelineIntroVisible = chipTimelineIntroVisible,
+                timelineStylePickerVisible = timelineStylePickerVisible,
+                timelineStylePickerOptions = timelineStylePickerOptions,
                 pendingTerminalOpen = commandsState.pendingTerminalOpen,
                 pendingFilesOpen = commandsState.pendingFilesOpen,
                 hasPendingRevert = commandsState.hasPendingRevert,
@@ -2260,6 +2332,12 @@ class SessionChatViewModel
             const val PENDING_SEND_TIMEOUT_MS = 8_000L
             const val PENDING_PROMPT_FAILURE = "Couldn't update pending prompt"
             const val CHIP_TIMELINE_INTRO_ENABLED_NOTICE = "Chip timeline is on. Turn it off in Settings."
+
+            /** Pause after the first history load before the Timeline Style picker rises (#805). */
+            const val TIMELINE_STYLE_PICKER_DELAY_MILLIS = 600L
+
+            fun timelineStylePickerNotice(style: SessionChatTimelineStyle): String =
+                "Timeline: ${style.title}. Change it any time in Settings."
         }
     }
 

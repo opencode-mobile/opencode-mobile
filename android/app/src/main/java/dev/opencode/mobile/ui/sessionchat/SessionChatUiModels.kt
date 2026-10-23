@@ -18,6 +18,7 @@ import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.domain.model.ModelSelection
 import dev.opencode.mobile.domain.model.ModelSelectionOption
+import dev.opencode.mobile.domain.preferences.SessionChatTimelineStyle
 import dev.opencode.mobile.domain.session.FileDiff
 import dev.opencode.mobile.domain.session.PermissionRequest
 import dev.opencode.mobile.domain.session.QuestionRequest
@@ -288,6 +289,10 @@ data class SessionChatUiState(
     val debouncedStepIds: Set<String> = emptySet(),
     /** One-time Chip timeline intro sheet (OPE-270). */
     val chipTimelineIntroVisible: Boolean = false,
+    /** One-time Timeline Style picker sheet (#805). */
+    val timelineStylePickerVisible: Boolean = false,
+    /** Styles the Timeline Style picker offers, with their tags; empty until it first shows. */
+    val timelineStylePickerOptions: List<SessionChatTimelineStyleOption> = emptyList(),
     /** Null while idle. A value shows the dictation card in place of prompt entry. */
     val dictation: ComposerDictationUiState? = null,
     /** Directory the session runs in now; differs from the route's after `session.moved`. Empty until bound. */
@@ -781,6 +786,41 @@ fun LiveUpdatesLabel.toSessionConnectionStatus(): SessionConnectionStatus =
         LiveUpdatesLabel.Offline -> SessionConnectionStatus.Offline
         LiveUpdatesLabel.AuthFailed -> SessionConnectionStatus.AuthFailed
     }
+
+/** One entry of the one-time Timeline Style picker (#805). */
+data class SessionChatTimelineStyleOption(
+    val style: SessionChatTimelineStyle,
+    /** [RECOMMENDED_TAG] on Activity Card; [CURRENT_TAG] on the current style when it is not Activity Card. */
+    val tag: String? = null,
+) {
+    companion object {
+        const val RECOMMENDED_TAG = "Recommended"
+        const val CURRENT_TAG = "Current"
+
+        /** The picker starts on, and recommends, Activity Card. */
+        val INITIAL_SELECTION = SessionChatTimelineStyle.ActivityCard
+
+        /**
+         * Picker entries: Activity Card first (preselected and recommended, so it stays above
+         * the fold), then the other offered styles in their usual order.
+         */
+        fun pickerOptions(
+            available: List<SessionChatTimelineStyle>,
+            current: SessionChatTimelineStyle,
+        ): List<SessionChatTimelineStyleOption> =
+            available.sortedBy { it != INITIAL_SELECTION }.map { style ->
+                SessionChatTimelineStyleOption(
+                    style = style,
+                    tag =
+                        when (style) {
+                            SessionChatTimelineStyle.ActivityCard -> RECOMMENDED_TAG
+                            current -> CURRENT_TAG
+                            else -> null
+                        },
+                )
+            }
+    }
+}
 
 enum class SessionChatTimelineState {
     Creating,

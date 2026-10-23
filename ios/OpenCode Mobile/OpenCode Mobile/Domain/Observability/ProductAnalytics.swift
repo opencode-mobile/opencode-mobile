@@ -69,6 +69,7 @@ enum ProductAnalytics {
         static let sessionToolGroup = "session_tool_group"
         static let sessionSkills = "session_skills"
         static let sessionChipTimelineIntro = "session_chip_timeline_intro"
+        static let sessionTimelineStylePicker = "session_timeline_style_picker"
         static let sessionTodos = "session_todos"
         static let sessionContext = "session_context"
         static let changes = "changes"
@@ -250,6 +251,8 @@ enum ProductAnalytics {
         static let chipTimelineIntroEnable = "chip_timeline_intro_enable"
         static let chipTimelineIntroLater = "chip_timeline_intro_later"
         static let chipTimelineIntroNever = "chip_timeline_intro_never"
+        static let timelineStylePickerUse = "timeline_style_picker_use"
+        static let timelineStylePickerDismiss = "timeline_style_picker_dismiss"
         static let sessionToolGroupBack = "session_tool_group_back"
         static let todosDismiss = "todos_dismiss"
 

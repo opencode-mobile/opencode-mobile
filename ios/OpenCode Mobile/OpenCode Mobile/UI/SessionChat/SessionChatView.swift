@@ -537,6 +537,13 @@ struct SessionChatView: View {
                 onLater: { viewModel.postponeChipTimelineIntro() },
                 onNever: { viewModel.dismissChipTimelineIntro() }
             )
+            .sessionChatTimelineStylePicker(
+                isPresented: viewModel.uiState.timelineStylePickerVisible && !viewSheetOpen,
+                styles: SessionChatDisplayPreferences.shared.availableTimelineStyles,
+                currentStyle: SessionChatDisplayPreferences.shared.effectiveTimelineStyle,
+                onUse: { viewModel.chooseTimelineStyleFromPicker($0) },
+                onDismiss: { viewModel.dismissTimelineStylePicker() }
+            )
             .sessionChatTodosSheet(
                 isPresented: $showSessionTodosSheet,
                 todos: viewModel.uiState.sessionTodos,

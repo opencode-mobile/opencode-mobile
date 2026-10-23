@@ -120,46 +120,118 @@ import Testing
         #expect(defaults.object(forKey: "chipTimelineIntroSnoozedUntilMs") == nil)
     }
 
-    @Test func chipTimeline_freshInstallResolvesOnAndPersists() {
-        let suite = "SessionChatDisplayPreferencesTests.chipFreshInstall"
+    @Test func install_freshResolvesActivityCardAndSkipsThePicker() {
+        let suite = "SessionChatDisplayPreferencesTests.freshInstall"
         let defaults = UserDefaults(suiteName: suite)!
         defaults.removePersistentDomain(forName: suite)
         let preferences = SessionChatDisplayPreferences(defaults: defaults)
 
-        preferences.resolveChipTimelineForInstall(existingInstall: false)
+        preferences.resolveTimelineForInstall(existingInstall: false)
 
-        #expect(preferences.chipTimelinePreference)
-        #expect(SessionChatDisplayPreferences(defaults: defaults).chipTimelinePreference)
+        #expect(preferences.timelineStyle == .activityCard)
+        #expect(preferences.timelineStylePickerDone == true)
+        #expect(!preferences.timelineStylePickerPending)
+        let reloaded = SessionChatDisplayPreferences(defaults: defaults)
+        #expect(reloaded.timelineStyle == .activityCard)
+        #expect(reloaded.timelineStylePickerDone == true)
         #expect(!preferences.shouldOfferChipTimelineIntro(turnToolCalls: 20, nowMs: 1_000))
     }
 
-    @Test func chipTimeline_existingInstallResolvesOffAndKeepsIntro() {
-        let suite = "SessionChatDisplayPreferencesTests.chipExistingInstall"
+    @Test func install_existingResolvesStandardAndOffersThePicker() {
+        let suite = "SessionChatDisplayPreferencesTests.existingInstall"
         let defaults = UserDefaults(suiteName: suite)!
         defaults.removePersistentDomain(forName: suite)
-        let preferences = SessionChatDisplayPreferences(defaults: defaults)
+        let flagDefaults = UserDefaults(suiteName: suite + ".flags")!
+        flagDefaults.removePersistentDomain(forName: suite + ".flags")
+        let flags = FeatureFlags(defaults: flagDefaults)
+        flags.setOverride(.sessionChatChipTimeline, true)
+        let preferences = SessionChatDisplayPreferences(defaults: defaults, featureFlags: flags)
 
-        preferences.resolveChipTimelineForInstall(existingInstall: true)
+        preferences.resolveTimelineForInstall(existingInstall: true)
 
-        #expect(preferences.chipTimelinePreference == false)
+        #expect(preferences.timelineStyle == .standard)
         #expect(defaults.object(forKey: "chipTimeline") as? Bool == false)
-        #expect(preferences.chipTimelineIntroDone == false)
+        #expect(preferences.timelineStylePickerPending)
+        #expect(SessionChatDisplayPreferences(defaults: defaults).timelineStylePickerPending)
+        // The picker replaces the Chip intro while it is pending.
+        #expect(!preferences.shouldOfferChipTimelineIntro(turnToolCalls: 20, nowMs: 1_000))
     }
 
-    @Test func chipTimeline_resolveKeepsStoredValue() {
-        let suite = "SessionChatDisplayPreferencesTests.chipResolveStored"
+    @Test func install_existingKeepsAStoredChipsStyle() {
+        let suite = "SessionChatDisplayPreferencesTests.existingChips"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        defaults.set("chips", forKey: "timelineStyle")
+        let preferences = SessionChatDisplayPreferences(defaults: defaults)
+
+        preferences.resolveTimelineForInstall(existingInstall: true)
+
+        #expect(preferences.timelineStyle == .chips)
+        #expect(preferences.timelineStylePickerPending)
+    }
+
+    @Test func install_resolveKeepsStoredValues() {
+        let suite = "SessionChatDisplayPreferencesTests.resolveStored"
         let defaults = UserDefaults(suiteName: suite)!
         defaults.removePersistentDomain(forName: suite)
         let preferences = SessionChatDisplayPreferences(defaults: defaults)
-        preferences.resolveChipTimelineForInstall(existingInstall: false)
+        preferences.resolveTimelineForInstall(existingInstall: false)
 
-        // A later launch past onboarding must not flip a fresh install back.
-        preferences.resolveChipTimelineForInstall(existingInstall: true)
-        #expect(preferences.chipTimelinePreference)
+        // A later launch past onboarding must not flip a fresh install back or reopen the picker.
+        preferences.resolveTimelineForInstall(existingInstall: true)
+        #expect(preferences.timelineStyle == .activityCard)
+        #expect(!preferences.timelineStylePickerPending)
 
         preferences.setChipTimeline(false)
-        preferences.resolveChipTimelineForInstall(existingInstall: false)
-        #expect(preferences.chipTimelinePreference == false)
+        preferences.resolveTimelineForInstall(existingInstall: false)
+        #expect(preferences.timelineStyle == .standard)
+    }
+
+    @Test func picker_anyStyleChoiceEndsIt() {
+        let suite = "SessionChatDisplayPreferencesTests.pickerChoice"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        let preferences = SessionChatDisplayPreferences(defaults: defaults)
+        preferences.resolveTimelineForInstall(existingInstall: true)
+
+        preferences.setTimelineStyle(.stepRail)
+
+        #expect(preferences.timelineStyle == .stepRail)
+        #expect(!preferences.timelineStylePickerPending)
+        #expect(preferences.chipTimelineIntroDone)
+        #expect(SessionChatDisplayPreferences(defaults: defaults).timelineStylePickerDone == true)
+    }
+
+    @Test func picker_dismissStoresActivityCard() {
+        let suite = "SessionChatDisplayPreferencesTests.pickerDismiss"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        defaults.set("chips", forKey: "timelineStyle")
+        let preferences = SessionChatDisplayPreferences(defaults: defaults)
+        preferences.resolveTimelineForInstall(existingInstall: true)
+
+        preferences.dismissTimelineStylePicker()
+
+        #expect(preferences.timelineStyle == .activityCard)
+        #expect(!preferences.timelineStylePickerPending)
+        #expect(preferences.chipTimelineIntroDone)
+    }
+
+    @Test func picker_clearResetsItToUnset() {
+        let suite = "SessionChatDisplayPreferencesTests.pickerClear"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        let preferences = SessionChatDisplayPreferences(defaults: defaults)
+        preferences.resolveTimelineForInstall(existingInstall: true)
+
+        preferences.clear()
+
+        #expect(preferences.timelineStylePickerDone == nil)
+        #expect(defaults.object(forKey: "timelineStylePickerDone") == nil)
+        // Clear All Data returns to onboarding, so the next resolve is a new install.
+        preferences.resolveTimelineForInstall(existingInstall: false)
+        #expect(preferences.timelineStyle == .activityCard)
+        #expect(!preferences.timelineStylePickerPending)
     }
 
     @Test func followUpDelivery_defaultsSteerAndPersistsQueue() {
@@ -223,11 +295,11 @@ import Testing
 
     @Test func timelineStyle_missingResolvesInstallDefault() {
         let fresh = SessionChatDisplayPreferences(defaults: freshDefaults("installFresh"))
-        fresh.resolveChipTimelineForInstall(existingInstall: false)
-        #expect(fresh.timelineStyle == .chips)
+        fresh.resolveTimelineForInstall(existingInstall: false)
+        #expect(fresh.timelineStyle == .activityCard)
 
         let existing = SessionChatDisplayPreferences(defaults: freshDefaults("installExisting"))
-        existing.resolveChipTimelineForInstall(existingInstall: true)
+        existing.resolveTimelineForInstall(existingInstall: true)
         #expect(existing.timelineStyle == .standard)
 
         let untouched = SessionChatDisplayPreferences(defaults: freshDefaults("installNone"))
@@ -239,7 +311,7 @@ import Testing
         let preferences = SessionChatDisplayPreferences(defaults: defaults)
         preferences.setTimelineStyle(.stepRail)
 
-        preferences.resolveChipTimelineForInstall(existingInstall: false)
+        preferences.resolveTimelineForInstall(existingInstall: false)
 
         #expect(preferences.timelineStyle == .stepRail)
     }

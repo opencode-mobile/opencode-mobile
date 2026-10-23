@@ -1,6 +1,7 @@
 package dev.opencode.mobile.domain.preferences
 
 import android.content.Context
+import android.content.SharedPreferences
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -15,14 +16,17 @@ import dev.opencode.mobile.domain.message.FollowUpDelivery
  */
 enum class SessionChatTimelineStyle(
     val wireValue: String,
+    val title: String,
+    val subtitle: String,
 ) {
-    Standard("standard"),
-    Chips("chips"),
-    StepRail("step_rail"),
-    ActivityCard("activity_card"),
+    Standard("standard", "Standard", "Tool cards and groups between the agent's messages"),
+    Chips("chips", "Chips", "Tools as chips under the agent's narration"),
+    StepRail("step_rail", "Step Rail", "One line per step on a rail, live while the agent works"),
+    ActivityCard("activity_card", "Activity Card", "Running steps on one live card that folds into a summary"),
     ;
 
     companion object {
+        /** In-memory style before an install is resolved and after Clear All Data. */
         val DEFAULT = Standard
 
         fun fromWire(value: String?): SessionChatTimelineStyle? = entries.firstOrNull { it.wireValue == value }
@@ -39,9 +43,9 @@ enum class SessionChatTimelineStyle(
             fromWire(storedStyle)
                 ?: storedChipTimeline?.let { if (it) Chips else Standard }
 
-        /** Starting style when nothing is stored: a fresh install starts on Chips. */
-        fun forInstall(existingInstall: Boolean): SessionChatTimelineStyle =
-            if (ChipTimelineIntro.startingChipTimeline(existingInstall)) Chips else Standard
+        /** Styles a picker offers, in order; Chips only while its flag is on. */
+        fun available(chipTimelineAvailable: Boolean): List<SessionChatTimelineStyle> =
+            entries.filter { it != Chips || chipTimelineAvailable }
 
         /** Chips is gated by the remote flag; a disabled flag renders Standard. */
         fun effective(
@@ -63,6 +67,7 @@ object SessionChatDisplayPreferences {
     private const val KEY_FOLLOW_UP_DELIVERY = "follow_up_delivery"
     private const val KEY_CHIP_TIMELINE_INTRO_DONE = "chip_timeline_intro_done"
     private const val KEY_CHIP_TIMELINE_INTRO_SNOOZED_UNTIL = "chip_timeline_intro_snoozed_until"
+    private const val KEY_TIMELINE_STYLE_PICKER_DONE = "timeline_style_picker_done"
     const val DEFAULT_COLLAPSE_CONSECUTIVE_TOOL_CALLS = true
     const val DEFAULT_CHIP_TIMELINE = false
     val DEFAULT_FOLLOW_UP_DELIVERY = FollowUpDelivery.Steer
@@ -91,6 +96,17 @@ object SessionChatDisplayPreferences {
     var chipTimelineIntroSnoozedUntilMillis: Long? by mutableStateOf(null)
         private set
 
+    /**
+     * One-time Timeline Style picker (#805): false while an existing install still has to
+     * answer it, true once answered (or on a fresh install), null when never settled.
+     */
+    var timelineStylePickerDone: Boolean? by mutableStateOf(null)
+        private set
+
+    /** Session Chat should offer the Timeline Style picker: the stored key is exactly false. */
+    val timelineStylePickerPending: Boolean
+        get() = timelineStylePickerDone == false
+
     /** True while the `session_chat_chip_timeline` flag allows the mode at all (OPE-269). */
     val chipTimelineAvailable: Boolean
         get() = FeatureFlags.isEnabled(FeatureFlag.SessionChatChipTimeline)
@@ -104,6 +120,10 @@ object SessionChatDisplayPreferences {
     val chipTimeline: Boolean
         get() = timelineStyle == SessionChatTimelineStyle.Chips
 
+    /** Styles the Settings and Session Chat pickers offer. */
+    val availableTimelineStyles: List<SessionChatTimelineStyle>
+        get() = SessionChatTimelineStyle.available(chipTimelineAvailable)
+
     /** Effective Timeline Style: Chips falls back to Standard while the flag is off. */
     val timelineStyle: SessionChatTimelineStyle
         get() = SessionChatTimelineStyle.effective(timelineStylePreference, chipTimelineAvailable)
@@ -116,11 +136,14 @@ object SessionChatDisplayPreferences {
     val activityCardTimeline: Boolean
         get() = timelineStyle == SessionChatTimelineStyle.ActivityCard
 
-    private var appContext: Context? = null
+    private var preferences: SharedPreferences? = null
 
     fun initialize(context: Context) {
-        appContext = context.applicationContext
-        val prefs = prefs() ?: return
+        initialize(context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE))
+    }
+
+    internal fun initialize(prefs: SharedPreferences) {
+        preferences = prefs
         collapseConsecutiveToolCalls =
             if (prefs.contains(KEY_COLLAPSE_CONSECUTIVE_TOOL_CALLS)) {
                 prefs.getBoolean(KEY_COLLAPSE_CONSECUTIVE_TOOL_CALLS, DEFAULT_COLLAPSE_CONSECUTIVE_TOOL_CALLS)
@@ -147,6 +170,12 @@ object SessionChatDisplayPreferences {
             } else {
                 null
             }
+        timelineStylePickerDone =
+            if (prefs.contains(KEY_TIMELINE_STYLE_PICKER_DONE)) {
+                prefs.getBoolean(KEY_TIMELINE_STYLE_PICKER_DONE, true)
+            } else {
+                null
+            }
     }
 
     fun updateCollapseConsecutiveToolCalls(value: Boolean) {
@@ -164,28 +193,48 @@ object SessionChatDisplayPreferences {
         updateTimelineStyle(if (value) SessionChatTimelineStyle.Chips else SessionChatTimelineStyle.Standard)
     }
 
-    /** Any explicit choice, from Settings or the intro sheet, also ends the intro. */
+    /**
+     * Any explicit choice, from Settings, the Chip intro, or the Timeline Style picker, also
+     * ends the Chip intro and the picker.
+     */
     fun updateTimelineStyle(value: SessionChatTimelineStyle) {
         timelineStylePreference = value
         chipTimelineIntroDone = true
+        timelineStylePickerDone = true
         prefs()
             ?.edit()
             ?.putString(KEY_TIMELINE_STYLE, value.wireValue)
             ?.putBoolean(KEY_CHIP_TIMELINE_INTRO_DONE, true)
+            ?.putBoolean(KEY_TIMELINE_STYLE_PICKER_DONE, true)
             ?.apply()
     }
 
+    /** Timeline Style picker swipe, scrim, back, or close: keeps the recommended Activity Card. */
+    fun dismissTimelineStylePicker() {
+        updateTimelineStyle(SessionChatTimelineStyle.ActivityCard)
+    }
+
     /**
-     * Settles the starting Chip timeline value once per install (OPE-270).
-     * [existingInstall] is true when the app opens past App onboarding. A
-     * stored value, from an earlier launch or a Settings choice, always wins.
+     * Settles the starting Timeline Style and the one-time picker once per install (#805).
+     * [existingInstall] is true when the app opens past App onboarding. A fresh install starts
+     * on Activity Card and never sees the picker; an existing install with nothing stored keeps
+     * Standard and is offered the picker. A stored value, from an earlier launch or a Settings
+     * choice, always wins.
      */
-    fun resolveChipTimelineForInstall(existingInstall: Boolean) {
+    fun resolveTimelineForInstall(existingInstall: Boolean) {
         val prefs = prefs() ?: return
-        if (prefs.contains(KEY_TIMELINE_STYLE) || prefs.contains(KEY_CHIP_TIMELINE)) return
-        val value = SessionChatTimelineStyle.forInstall(existingInstall)
-        timelineStylePreference = value
-        prefs.edit().putString(KEY_TIMELINE_STYLE, value.wireValue).apply()
+        val editor = prefs.edit()
+        if (!prefs.contains(KEY_TIMELINE_STYLE) && !prefs.contains(KEY_CHIP_TIMELINE)) {
+            val value = if (existingInstall) SessionChatTimelineStyle.Standard else SessionChatTimelineStyle.ActivityCard
+            timelineStylePreference = value
+            editor.putString(KEY_TIMELINE_STYLE, value.wireValue)
+        }
+        if (!prefs.contains(KEY_TIMELINE_STYLE_PICKER_DONE)) {
+            val done = !existingInstall
+            timelineStylePickerDone = done
+            editor.putBoolean(KEY_TIMELINE_STYLE_PICKER_DONE, done)
+        }
+        editor.apply()
     }
 
     /** Intro sheet "Don't show again", or a second Later. */
@@ -205,22 +254,26 @@ object SessionChatDisplayPreferences {
         prefs()?.edit()?.putLong(KEY_CHIP_TIMELINE_INTRO_SNOOZED_UNTIL, until)?.apply()
     }
 
-    /** Whether a finished turn with [turnToolCalls] tool calls should offer the intro sheet. */
+    /**
+     * Whether a finished turn with [turnToolCalls] tool calls should offer the intro sheet.
+     * Never while the Timeline Style picker is still pending (#805).
+     */
     fun shouldOfferChipTimelineIntro(
         turnToolCalls: Int,
         nowMillis: Long,
     ): Boolean =
-        ChipTimelineIntro.shouldShow(
-            chipTimelineAvailable = chipTimelineAvailable,
-            chipTimelineOn = chipTimelinePreference,
-            timelineStyleChosen =
-                timelineStylePreference == SessionChatTimelineStyle.StepRail ||
-                    timelineStylePreference == SessionChatTimelineStyle.ActivityCard,
-            introDone = chipTimelineIntroDone,
-            snoozedUntilMillis = chipTimelineIntroSnoozedUntilMillis,
-            nowMillis = nowMillis,
-            turnToolCalls = turnToolCalls,
-        )
+        !timelineStylePickerPending &&
+            ChipTimelineIntro.shouldShow(
+                chipTimelineAvailable = chipTimelineAvailable,
+                chipTimelineOn = chipTimelinePreference,
+                timelineStyleChosen =
+                    timelineStylePreference == SessionChatTimelineStyle.StepRail ||
+                        timelineStylePreference == SessionChatTimelineStyle.ActivityCard,
+                introDone = chipTimelineIntroDone,
+                snoozedUntilMillis = chipTimelineIntroSnoozedUntilMillis,
+                nowMillis = nowMillis,
+                turnToolCalls = turnToolCalls,
+            )
 
     fun clear() {
         prefs()
@@ -231,13 +284,15 @@ object SessionChatDisplayPreferences {
             ?.remove(KEY_TIMELINE_STYLE)
             ?.remove(KEY_CHIP_TIMELINE_INTRO_DONE)
             ?.remove(KEY_CHIP_TIMELINE_INTRO_SNOOZED_UNTIL)
+            ?.remove(KEY_TIMELINE_STYLE_PICKER_DONE)
             ?.apply()
         collapseConsecutiveToolCalls = DEFAULT_COLLAPSE_CONSECUTIVE_TOOL_CALLS
         followUpDelivery = DEFAULT_FOLLOW_UP_DELIVERY
         timelineStylePreference = SessionChatTimelineStyle.DEFAULT
         chipTimelineIntroDone = false
         chipTimelineIntroSnoozedUntilMillis = null
+        timelineStylePickerDone = null
     }
 
-    private fun prefs() = appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private fun prefs() = preferences
 }

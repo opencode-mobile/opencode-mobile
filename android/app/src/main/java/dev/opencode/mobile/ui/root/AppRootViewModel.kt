@@ -75,7 +75,7 @@ class AppRootViewModel
             sseHttpClient.rebuild()
             val hasProfile = connectionProfileStore.activeProfile() != null
             val existingInstall = AppOnboardingPreferences.isCompleted || hasProfile
-            SessionChatDisplayPreferences.resolveChipTimelineForInstall(existingInstall)
+            SessionChatDisplayPreferences.resolveTimelineForInstall(existingInstall)
             if (!existingInstall) {
                 _state.value = AppRootState.AppOnboarding
             } else {

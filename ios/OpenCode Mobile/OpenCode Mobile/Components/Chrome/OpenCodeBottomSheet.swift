@@ -16,6 +16,9 @@ private let bottomSheetEntryHorizontalPadding: CGFloat = 20
 private let bottomSheetEntryVerticalPadding: CGFloat = 12
 private let bottomSheetEntryDecoratorSize: CGFloat = 24
 private let bottomSheetEntryIconSize: CGFloat = 20
+private let bottomSheetEntryIllustrationWidth: CGFloat = 72
+private let bottomSheetEntryIllustrationHeight: CGFloat = 44
+private let bottomSheetEntryIllustrationCornerRadius: CGFloat = 8
 private let bottomSheetEstimatedHeaderHeight: CGFloat =
     bottomSheetHeaderTopPadding + bottomSheetHeaderBottomPadding + 40
 private let bottomSheetEnterDuration: TimeInterval = 0.32
@@ -28,6 +31,8 @@ private let bottomSheetEntryMaxLines = 2
 enum BottomSheetEntryDecorator {
     case none
     case icon(OpenCodeIcon)
+    /// Small skeleton illustration thumbnail, for pickers whose options are easier to see than read.
+    case illustration(OpenCodeSkeletonIllustrationTopic)
 }
 
 /// How a bottom sheet's title reads.
@@ -1108,6 +1113,8 @@ struct OpenCodeBottomSheetEntry: View {
     let startDecorator: BottomSheetEntryDecorator
     let endDecorator: BottomSheetEntryDecorator
     let selected: Bool
+    /// Short label after the title, such as "Recommended" or "Current".
+    let tag: String?
     let action: () -> Void
 
     init(
@@ -1118,10 +1125,12 @@ struct OpenCodeBottomSheetEntry: View {
         startDecorator: BottomSheetEntryDecorator = .none,
         endDecorator: BottomSheetEntryDecorator = .none,
         selected: Bool = false,
+        tag: String? = nil,
         action: @escaping () -> Void
     ) {
         self.title = title
         self.subtitle = subtitle
+        self.tag = tag
         self.enabled = enabled
         self.destructive = destructive
         self.startDecorator = startDecorator
@@ -1151,11 +1160,16 @@ struct OpenCodeBottomSheetEntry: View {
                 )
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(OpenCodeTypography.body)
-                        .foregroundStyle(titleColor)
-                        .lineLimit(bottomSheetEntryMaxLines)
-                        .multilineTextAlignment(.leading)
+                    HStack(spacing: 6) {
+                        Text(title)
+                            .font(OpenCodeTypography.body)
+                            .foregroundStyle(titleColor)
+                            .lineLimit(bottomSheetEntryMaxLines)
+                            .multilineTextAlignment(.leading)
+                        if let tag, !tag.isEmpty {
+                            OpenCodeTag(tag, size: .small)
+                        }
+                    }
                     if let subtitle, !subtitle.isEmpty {
                         Text(subtitle)
                             .font(OpenCodeTypography.caption)
@@ -1421,6 +1435,18 @@ private struct BottomSheetEntryDecoration: View {
             OpenCodeIconImage(icon: icon, size: bottomSheetEntryIconSize)
                 .foregroundStyle(tint)
                 .frame(width: bottomSheetEntryDecoratorSize, height: bottomSheetEntryDecoratorSize)
+                .accessibilityHidden(true)
+        case let .illustration(topic):
+            OpenCodeSkeletonIllustration(topic: topic)
+                .padding(.top, 4)
+                .frame(width: bottomSheetEntryIllustrationWidth, height: bottomSheetEntryIllustrationHeight)
+                .background(OpenCodeColors.surfaceRaisedBase)
+                .clipShape(RoundedRectangle(cornerRadius: bottomSheetEntryIllustrationCornerRadius, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: bottomSheetEntryIllustrationCornerRadius, style: .continuous)
+                        .strokeBorder(OpenCodeColors.borderWeakBase, lineWidth: 1)
+                }
+                .opacity(enabled ? 1 : 0.5)
                 .accessibilityHidden(true)
         }
     }

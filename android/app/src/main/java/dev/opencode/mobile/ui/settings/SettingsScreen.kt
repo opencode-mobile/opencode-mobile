@@ -254,7 +254,7 @@ fun SettingsScreen(
 
                 OpenCodeListItem(
                     title = "Timeline Style",
-                    subtitle = timelineStyle.settingsTitle(),
+                    subtitle = timelineStyle.title,
                     style = OpenCodeListItemStyle.Card,
                     startDecorator = StartDecorator.Icon(OpenCodeIcons.Widgets, "Timeline Style"),
                     accessory = OpenCodeListItemAccessory.Disclosure,
@@ -582,12 +582,12 @@ fun SettingsScreen(
         title = "Timeline Style",
         onDismissRequest = { showTimelineStylePicker = false },
     ) {
-        SessionChatTimelineStyle.entries
-            .filter { it != SessionChatTimelineStyle.Chips || chipTimelineAvailable }
+        SessionChatTimelineStyle
+            .available(chipTimelineAvailable)
             .forEach { style ->
                 OpenCodeBottomSheetEntry(
-                    title = style.settingsTitle(),
-                    subtitle = style.settingsSubtitle(),
+                    title = style.title,
+                    subtitle = style.subtitle,
                     selected = style == timelineStyle,
                     onClick = {
                         // Chips keeps the existing toggle event; leaving Chips logs it disabled.
@@ -726,22 +726,6 @@ private fun HomeSessionRowStyle.settingsSubtitle(): String =
     when (this) {
         HomeSessionRowStyle.Compact -> "Two lines: title and time, then project / worktree"
         HomeSessionRowStyle.Classic -> "Project and worktree on their own lines"
-    }
-
-private fun SessionChatTimelineStyle.settingsTitle(): String =
-    when (this) {
-        SessionChatTimelineStyle.Standard -> "Standard"
-        SessionChatTimelineStyle.Chips -> "Chips"
-        SessionChatTimelineStyle.StepRail -> "Step Rail"
-        SessionChatTimelineStyle.ActivityCard -> "Activity Card"
-    }
-
-private fun SessionChatTimelineStyle.settingsSubtitle(): String =
-    when (this) {
-        SessionChatTimelineStyle.Standard -> "Tool cards and groups between the agent's messages"
-        SessionChatTimelineStyle.Chips -> "Tools as chips under the agent's narration"
-        SessionChatTimelineStyle.StepRail -> "One line per step on a rail, live while the agent works"
-        SessionChatTimelineStyle.ActivityCard -> "Running steps on one live card that folds into a summary"
     }
 
 private fun logSettingsAction(actionId: String) {

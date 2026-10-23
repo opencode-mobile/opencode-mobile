@@ -70,6 +70,7 @@ object ProductAnalytics {
         const val SESSION_TOOL_GROUP = "session_tool_group"
         const val SESSION_SKILLS = "session_skills"
         const val SESSION_CHIP_TIMELINE_INTRO = "session_chip_timeline_intro"
+        const val SESSION_TIMELINE_STYLE_PICKER = "session_timeline_style_picker"
         const val SESSION_TODOS = "session_todos"
         const val SESSION_CONTEXT = "session_context"
         const val CHANGES = "changes"
@@ -260,6 +261,8 @@ object ProductAnalytics {
         const val CHIP_TIMELINE_INTRO_ENABLE = "chip_timeline_intro_enable"
         const val CHIP_TIMELINE_INTRO_LATER = "chip_timeline_intro_later"
         const val CHIP_TIMELINE_INTRO_NEVER = "chip_timeline_intro_never"
+        const val TIMELINE_STYLE_PICKER_USE = "timeline_style_picker_use"
+        const val TIMELINE_STYLE_PICKER_DISMISS = "timeline_style_picker_dismiss"
         const val SESSION_TOOL_GROUP_BACK = "session_tool_group_back"
         const val TODOS_DISMISS = "todos_dismiss"
 

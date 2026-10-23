@@ -349,6 +349,8 @@ struct SessionChatUiState: Equatable {
     var debouncedStepIDs: Set<String> = []
     /// One-time Chip timeline intro sheet (OPE-270).
     var chipTimelineIntroVisible = false
+    /// One-time Timeline Style picker for updated installs (#805).
+    var timelineStylePickerVisible = false
     var dictation: ComposerDictationUiState? = nil
 
     /// A permission, question, or Screen Model-owned sheet or dialog would sit under the intro sheet.

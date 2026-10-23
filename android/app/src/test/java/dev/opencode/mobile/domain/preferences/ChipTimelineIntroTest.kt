@@ -22,17 +22,6 @@ class ChipTimelineIntroTest {
     ) = ChipTimelineIntro.shouldShow(available, on, done, snoozedUntil, now, toolCalls)
 
     @Test
-    fun freshInstall_startsOnChipTimeline() {
-        assertTrue(ChipTimelineIntro.startingChipTimeline(existingInstall = false))
-    }
-
-    @Test
-    fun existingInstall_keepsStandardTimelineForTheIntro() {
-        assertFalse(ChipTimelineIntro.startingChipTimeline(existingInstall = true))
-        assertTrue(shouldShow(on = ChipTimelineIntro.startingChipTimeline(existingInstall = true)))
-    }
-
-    @Test
     fun longTurn_withChipTimelineOff_shows() {
         assertTrue(shouldShow())
     }

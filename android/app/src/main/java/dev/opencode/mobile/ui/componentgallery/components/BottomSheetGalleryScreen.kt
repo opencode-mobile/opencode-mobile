@@ -25,6 +25,7 @@ import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
 import dev.opencode.mobile.ui.components.OpenCodeListItem
+import dev.opencode.mobile.ui.components.OpenCodeSkeletonIllustrationTopic
 import dev.opencode.mobile.ui.components.OpenCodeTextInput
 import dev.opencode.mobile.ui.components.OpenCodeTextInputKind
 import dev.opencode.mobile.ui.components.StartDecorator
@@ -34,6 +35,7 @@ import dev.opencode.mobile.ui.icons.OpenCodeIcons
 private enum class GalleryBottomSheetDecoratorKind {
     None,
     Icon,
+    Illustration,
 }
 
 @Composable
@@ -41,6 +43,7 @@ fun BottomSheetGalleryScreen(modifier: Modifier = Modifier) {
     var visible by rememberSaveable { mutableStateOf(false) }
     var enabled by rememberSaveable { mutableStateOf(true) }
     var selected by rememberSaveable { mutableStateOf(false) }
+    var showsTag by rememberSaveable { mutableStateOf(false) }
     var showsHeaderBack by rememberSaveable { mutableStateOf(false) }
     var showsHeaderTextAction by rememberSaveable { mutableStateOf(false) }
     var headerEditing by rememberSaveable { mutableStateOf(false) }
@@ -63,11 +66,15 @@ fun BottomSheetGalleryScreen(modifier: Modifier = Modifier) {
         when (startDecoratorKind) {
             GalleryBottomSheetDecoratorKind.None -> BottomSheetEntryDecorator.None
             GalleryBottomSheetDecoratorKind.Icon -> BottomSheetEntryDecorator.Icon(OpenCodeIcons.Folder)
+            GalleryBottomSheetDecoratorKind.Illustration ->
+                BottomSheetEntryDecorator.Illustration(OpenCodeSkeletonIllustrationTopic.TimelineActivityCard)
         }
     val endDecorator =
         when (endDecoratorKind) {
             GalleryBottomSheetDecoratorKind.None -> BottomSheetEntryDecorator.None
             GalleryBottomSheetDecoratorKind.Icon -> BottomSheetEntryDecorator.Icon(OpenCodeIcons.ChevronRight)
+            GalleryBottomSheetDecoratorKind.Illustration ->
+                BottomSheetEntryDecorator.Illustration(OpenCodeSkeletonIllustrationTopic.TimelineStepRail)
         }
 
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -76,6 +83,7 @@ fun BottomSheetGalleryScreen(modifier: Modifier = Modifier) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OpenCodeChoiceBadge(label = "Entry enabled", selected = enabled, onClick = { enabled = !enabled })
                 OpenCodeChoiceBadge(label = "Entry selected", selected = selected, onClick = { selected = !selected })
+                OpenCodeChoiceBadge(label = "Entry tag", selected = showsTag, onClick = { showsTag = !showsTag })
                 OpenCodeChoiceBadge(label = "Header back", selected = showsHeaderBack, onClick = { showsHeaderBack = !showsHeaderBack })
                 OpenCodeChoiceBadge(
                     label = "Header Edit",
@@ -219,6 +227,7 @@ fun BottomSheetGalleryScreen(modifier: Modifier = Modifier) {
         ActionSheetEntries(
             enabled = enabled,
             selected = selected,
+            tag = if (showsTag) "Recommended" else null,
             startDecorator = startDecorator,
             endDecorator = endDecorator,
             itemCount = itemCount,
@@ -265,6 +274,7 @@ private fun KeyboardExpandBottomSheet(
 private fun ActionSheetEntries(
     enabled: Boolean,
     selected: Boolean,
+    tag: String?,
     startDecorator: BottomSheetEntryDecorator,
     endDecorator: BottomSheetEntryDecorator,
     itemCount: Int,
@@ -276,6 +286,7 @@ private fun ActionSheetEntries(
         startDecorator = startDecorator,
         endDecorator = endDecorator,
         selected = selected,
+        tag = tag,
         onClick = onDismiss,
     )
     OpenCodeBottomSheetEntry(

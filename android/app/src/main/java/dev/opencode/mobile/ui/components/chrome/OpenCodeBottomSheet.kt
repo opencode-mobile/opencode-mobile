@@ -21,6 +21,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -169,6 +170,10 @@ private val BottomSheetEntryHorizontalPadding = OpenCodeLayout.SheetContentHoriz
 private val BottomSheetEntryVerticalPadding = 12.dp
 private val BottomSheetEntryDecoratorSize = 24.dp
 private val BottomSheetEntryIconSize = 20.dp
+private val BottomSheetEntryIllustrationWidth = 72.dp
+private val BottomSheetEntryIllustrationHeight = 44.dp
+private val BottomSheetEntryIllustrationCornerRadius = 8.dp
+private val BottomSheetEntryIllustrationTopPadding = 4.dp
 
 @Suppress("ktlint:standard:property-naming")
 private const val BottomSheetEntryMaxLines = 2
@@ -216,12 +221,17 @@ enum class OpenCodeBottomSheetKeyboard {
     Expand,
 }
 
-/** Leading or trailing icon of an [OpenCodeBottomSheetEntry]. Decorative: the entry title is its label. */
+/** Leading or trailing decoration of an [OpenCodeBottomSheetEntry]. Decorative: the entry title is its label. */
 sealed class BottomSheetEntryDecorator {
     data object None : BottomSheetEntryDecorator()
 
     data class Icon(
         val imageVector: ImageVector,
+    ) : BottomSheetEntryDecorator()
+
+    /** 72x44 skeleton illustration thumbnail, for pickers whose options are easier seen than read. */
+    data class Illustration(
+        val topic: OpenCodeSkeletonIllustrationTopic,
     ) : BottomSheetEntryDecorator()
 }
 
@@ -1106,7 +1116,8 @@ private fun restoreDecorSiblingAccessibility(hiddenSiblings: List<Pair<View, Int
 /**
  * Tappable row in a bottom sheet. [selected] marks the current choice in a picker: it shows a
  * check in the end slot (replacing [endDecorator]) and exposes the selected state to
- * accessibility. Titles wrap to two lines at large font scales.
+ * accessibility. Titles wrap to two lines at large font scales. [tag] adds a small
+ * [OpenCodeTag] right after the title (for example "Recommended" or "Current").
  */
 @Composable
 fun OpenCodeBottomSheetEntry(
@@ -1120,6 +1131,7 @@ fun OpenCodeBottomSheetEntry(
     endDecorator: BottomSheetEntryDecorator = BottomSheetEntryDecorator.None,
     /** Optional second line that explains the entry, for pickers whose options need a description. */
     subtitle: String? = null,
+    tag: String? = null,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -1172,26 +1184,18 @@ fun OpenCodeBottomSheetEntry(
     ) {
         BottomSheetEntryDecoration(decorator = startDecorator, tint = iconColor)
         if (subtitle.isNullOrEmpty()) {
-            Text(
-                text = title,
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.bodyLarge,
+            BottomSheetEntryTitle(
+                title = title,
+                tag = tag,
                 color = contentColor,
-                maxLines = BottomSheetEntryMaxLines,
-                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
             )
         } else {
             Column(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = contentColor,
-                    maxLines = BottomSheetEntryMaxLines,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                BottomSheetEntryTitle(title = title, tag = tag, color = contentColor)
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
@@ -1202,6 +1206,42 @@ fun OpenCodeBottomSheetEntry(
             }
         }
         BottomSheetEntryDecoration(decorator = resolvedEndDecorator, tint = iconColor)
+    }
+}
+
+/** Entry title, with an optional small tag right after it on the same line. */
+@Composable
+private fun BottomSheetEntryTitle(
+    title: String,
+    tag: String?,
+    color: Color,
+    modifier: Modifier = Modifier,
+) {
+    if (tag.isNullOrBlank()) {
+        Text(
+            text = title,
+            modifier = modifier,
+            style = MaterialTheme.typography.bodyLarge,
+            color = color,
+            maxLines = BottomSheetEntryMaxLines,
+            overflow = TextOverflow.Ellipsis,
+        )
+        return
+    }
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(
+            text = title,
+            modifier = Modifier.weight(1f, fill = false),
+            style = MaterialTheme.typography.bodyLarge,
+            color = color,
+            maxLines = BottomSheetEntryMaxLines,
+            overflow = TextOverflow.Ellipsis,
+        )
+        OpenCodeTag(title = tag, size = OpenCodeTagSize.Small)
     }
 }
 
@@ -1221,6 +1261,19 @@ private fun BottomSheetEntryDecoration(
                     tint = tint,
                 )
             }
+        is BottomSheetEntryDecorator.Illustration -> {
+            val shape = RoundedCornerShape(BottomSheetEntryIllustrationCornerRadius)
+            OpenCodeSkeletonIllustration(
+                topic = decorator.topic,
+                modifier =
+                    Modifier
+                        .size(BottomSheetEntryIllustrationWidth, BottomSheetEntryIllustrationHeight)
+                        .clip(shape)
+                        .background(openCodeColor("surface-raised-base"))
+                        .border(1.dp, openCodeColor("border-weak-base"), shape)
+                        .padding(top = BottomSheetEntryIllustrationTopPadding),
+            )
+        }
     }
 }
 
@@ -1256,6 +1309,30 @@ private fun OpenCodeBottomSheetPinnedBottomPreview() {
             repeat(12) { index ->
                 OpenCodeBottomSheetEntry(title = "Folder ${index + 1}", onClick = {})
             }
+        }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun OpenCodeBottomSheetIllustrationEntryPreview() {
+    OpenCodeTheme(darkTheme = true) {
+        OpenCodeBottomSheet(visible = true, title = "New: choose your timeline", onDismissRequest = {}) {
+            OpenCodeBottomSheetEntry(
+                title = "Activity Card",
+                subtitle = "Running steps on one live card that folds into a summary",
+                tag = "Recommended",
+                selected = true,
+                startDecorator = BottomSheetEntryDecorator.Illustration(OpenCodeSkeletonIllustrationTopic.TimelineActivityCard),
+                onClick = {},
+            )
+            OpenCodeBottomSheetEntry(
+                title = "Standard",
+                subtitle = "Tool cards and groups between the agent's messages",
+                tag = "Current",
+                startDecorator = BottomSheetEntryDecorator.Illustration(OpenCodeSkeletonIllustrationTopic.TimelineStandard),
+                onClick = {},
+            )
         }
     }
 }

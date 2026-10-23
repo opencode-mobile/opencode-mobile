@@ -53,6 +53,7 @@ import dev.opencode.mobile.domain.model.SessionModelSelection
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
 import dev.opencode.mobile.domain.preferences.ChipTimelineIntro
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
+import dev.opencode.mobile.domain.preferences.InMemoryPreferences
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.domain.preferences.SessionChatTimelineStyle
 import dev.opencode.mobile.domain.session.CompactionStart
@@ -252,6 +253,144 @@ class SessionChatViewModelTest {
             advanceUntilIdle()
 
             assertFalse(viewModel.uiState.value.chipTimelineIntroVisible)
+        }
+
+    /** An existing install that has not answered the Timeline Style picker yet (#805). */
+    private fun pendTimelineStylePicker() {
+        SessionChatDisplayPreferences.initialize(InMemoryPreferences())
+        SessionChatDisplayPreferences.resolveTimelineForInstall(existingInstall = true)
+        assertTrue(SessionChatDisplayPreferences.timelineStylePickerPending)
+    }
+
+    private fun historyRepository() = longTurnRepository(toolCalls = 1)
+
+    private fun TestScope.awaitReadyTimeline(viewModel: SessionChatViewModel) {
+        runCurrent()
+        var steps = 0
+        while (viewModel.uiState.value.timeline != SessionChatTimelineState.Ready && steps++ < 10_000) {
+            testDispatcher.scheduler.advanceTimeBy(1)
+            runCurrent()
+        }
+        assertEquals(SessionChatTimelineState.Ready, viewModel.uiState.value.timeline)
+    }
+
+    @Test
+    fun timelineStylePicker_pending_showsAfterDelayOnceHistoryLoads() =
+        runTest(testDispatcher) {
+            pendTimelineStylePicker()
+            val viewModel = createViewModel(repository = historyRepository())
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            awaitReadyTimeline(viewModel)
+            testDispatcher.scheduler.advanceTimeBy(SessionChatViewModel.TIMELINE_STYLE_PICKER_DELAY_MILLIS - 1)
+            runCurrent()
+            assertFalse(viewModel.uiState.value.timelineStylePickerVisible)
+
+            testDispatcher.scheduler.advanceTimeBy(1)
+            runCurrent()
+            val state = viewModel.uiState.value
+            assertTrue(state.timelineStylePickerVisible)
+            // Activity Card first, then the other offered styles in their usual order.
+            val expectedStyles =
+                listOf(SessionChatTimelineStyle.ActivityCard) +
+                    SessionChatDisplayPreferences.availableTimelineStyles.filter { it != SessionChatTimelineStyle.ActivityCard }
+            assertEquals(expectedStyles, state.timelineStylePickerOptions.map { it.style })
+            assertEquals(SessionChatTimelineStyle.Standard, expectedStyles[1])
+            assertEquals(
+                listOf(SessionChatTimelineStyleOption.RECOMMENDED_TAG, SessionChatTimelineStyleOption.CURRENT_TAG) +
+                    List(expectedStyles.size - 2) { null },
+                state.timelineStylePickerOptions.map { it.tag },
+            )
+        }
+
+    @Test
+    fun timelineStylePicker_notPending_neverShows() =
+        runTest(testDispatcher) {
+            val viewModel = createViewModel(repository = historyRepository())
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertFalse(viewModel.uiState.value.timelineStylePickerVisible)
+            assertTrue(
+                viewModel.uiState.value.timelineStylePickerOptions
+                    .isEmpty(),
+            )
+        }
+
+    @Test
+    fun timelineStylePicker_emptySession_doesNotShow() =
+        runTest(testDispatcher) {
+            pendTimelineStylePicker()
+            val viewModel = createViewModel(repository = FakeMessageRepository(messages = emptyList()))
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertEquals(SessionChatTimelineState.Empty, viewModel.uiState.value.timeline)
+            assertFalse(viewModel.uiState.value.timelineStylePickerVisible)
+            assertTrue(SessionChatDisplayPreferences.timelineStylePickerPending)
+        }
+
+    @Test
+    fun timelineStylePicker_blockedByPermission_skipsForThisViewModel() =
+        runTest(testDispatcher) {
+            pendTimelineStylePicker()
+            val viewModel =
+                createViewModel(
+                    repository = historyRepository(),
+                    sessionRepository = FakeSessionRepository(sessions = listOf(Session(id = "ses-1", title = "Title"))),
+                    permissionLiveStore = FakePermissionLiveStore(listOf(permissionRequest("permission-1", "ses-1"))),
+                )
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertNotNull(viewModel.uiState.value.permissionRequest)
+            assertFalse(viewModel.uiState.value.timelineStylePickerVisible)
+            assertTrue(SessionChatDisplayPreferences.timelineStylePickerPending)
+        }
+
+    @Test
+    fun timelineStylePicker_choose_storesStyleHidesAndNotices() =
+        runTest(testDispatcher) {
+            pendTimelineStylePicker()
+            val viewModel = createViewModel(repository = historyRepository())
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.timelineStylePickerVisible)
+
+            viewModel.chooseTimelineStyleFromPicker(SessionChatTimelineStyle.StepRail)
+
+            assertFalse(viewModel.uiState.value.timelineStylePickerVisible)
+            assertEquals(SessionChatTimelineStyle.StepRail, SessionChatDisplayPreferences.timelineStylePreference)
+            assertFalse(SessionChatDisplayPreferences.timelineStylePickerPending)
+            assertEquals(
+                "Timeline: Step Rail. Change it any time in Settings.",
+                viewModel.uiState.value.snackbar
+                    ?.message,
+            )
+        }
+
+    @Test
+    fun timelineStylePicker_dismiss_storesActivityCardHidesAndNotices() =
+        runTest(testDispatcher) {
+            pendTimelineStylePicker()
+            val viewModel = createViewModel(repository = historyRepository())
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.timelineStylePickerVisible)
+
+            viewModel.dismissTimelineStylePicker()
+
+            assertFalse(viewModel.uiState.value.timelineStylePickerVisible)
+            assertEquals(SessionChatTimelineStyle.ActivityCard, SessionChatDisplayPreferences.timelineStylePreference)
+            assertFalse(SessionChatDisplayPreferences.timelineStylePickerPending)
+            assertEquals(
+                "Timeline: Activity Card. Change it any time in Settings.",
+                viewModel.uiState.value.snackbar
+                    ?.message,
+            )
         }
 
     @Test
