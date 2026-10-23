@@ -66,14 +66,13 @@ import dev.opencode.mobile.ui.componentgallery.ComponentGalleryThemeMode
 import dev.opencode.mobile.ui.componentgallery.components.ActionBarGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ActionPillGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ActionTileGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.ActivityCardGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.AssistantMessageGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.AttachmentGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.BottomFadeGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.BottomSheetGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ButtonGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ChildSessionRowGalleryScreen
-import dev.opencode.mobile.ui.componentgallery.components.StepRailGalleryScreen
-import dev.opencode.mobile.ui.componentgallery.components.ActivityCardGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ChoiceBadgeGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.CodeFileGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.CodeSnippetGalleryScreen
@@ -82,10 +81,10 @@ import dev.opencode.mobile.ui.componentgallery.components.DialogGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.DictationCardGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.DiffStatGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.EmptyStateGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.FileIconGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.FileTabsGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.FilterTabsGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.HunkNavigationPillGalleryScreen
-import dev.opencode.mobile.ui.componentgallery.components.FileIconGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.IconsGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.InlineNoticeGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.KeyValueRowGalleryScreen
@@ -117,6 +116,7 @@ import dev.opencode.mobile.ui.componentgallery.components.SkeletonIllustrationGa
 import dev.opencode.mobile.ui.componentgallery.components.SnackbarGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SplitPaneGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.StatusStackGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.StepRailGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SyncingPillGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.TagGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.TextInputGalleryScreen
@@ -541,6 +541,8 @@ fun MainNavigation() {
                                                         settingsViewModel::setHideUserDirectoryPrefix,
                                                     showsWorktrees = HomeDisplayPreferences.showsWorktrees,
                                                     onShowsWorktreesChange = settingsViewModel::setShowsWorktrees,
+                                                    sessionRowStyle = HomeDisplayPreferences.sessionRowStyle,
+                                                    onSessionRowStyleChange = settingsViewModel::setSessionRowStyle,
                                                     recentWindowHours = HomeDisplayPreferences.recentWindowHours,
                                                     onRecentWindowHoursChange =
                                                         settingsViewModel::setRecentWindowHours,

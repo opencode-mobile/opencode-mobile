@@ -367,3 +367,36 @@ nonisolated struct HomeRowLocation: Hashable, Sendable {
         return HomeRowLocation(parts: parts)
     }
 }
+
+/// Line 2 of a compact Home row (#803): the project, then the worktree when it is not the main checkout.
+nonisolated enum HomeCompactRowPath {
+    static let branchPrefixes = ["feature/", "fix/", "chore/", "opencode/"]
+
+    /// Shortened branch, or the folder on a detached HEAD or unknown branch. Nil on the main
+    /// checkout, for a non-repository project, and while worktrees are off.
+    static func worktreeLabel(
+        project: HomeProject,
+        sessionDirectory: String?,
+        worktreesEnabled: Bool
+    ) -> String? {
+        guard worktreesEnabled, project.isRepository else { return nil }
+        let raw = sessionDirectory?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let directory = ServerPathPolicy.canonical(raw?.isEmpty == false ? raw! : project.primaryPath)
+        let worktree = project.worktree(at: directory)
+        let isMain = worktree?.isMain
+            ?? (directory == ServerPathPolicy.canonical(project.mainCheckoutDirectory))
+        guard !isMain else { return nil }
+        if let branch = worktree?.branch, !branch.isEmpty {
+            return shortBranch(branch)
+        }
+        return worktree?.folderName ?? ServerPathPolicy.name(directory)
+    }
+
+    /// Drops one leading `feature/`, `fix/`, `chore/` or `opencode/`.
+    static func shortBranch(_ branch: String) -> String {
+        for prefix in branchPrefixes where branch.hasPrefix(prefix) && branch.count > prefix.count {
+            return String(branch.dropFirst(prefix.count))
+        }
+        return branch
+    }
+}

@@ -3,6 +3,7 @@ import SwiftUI
 struct SessionListGalleryView: View {
     @State private var selectedFilterId = SessionListFilterTab.allId
     @State private var oneProject = false
+    @State private var rowStyle: HomeSessionRowStyle = .compact
     @State private var showProjectPicker = false
     @State private var load: SessionListDockGalleryLoad = .none
 
@@ -26,7 +27,8 @@ struct SessionListGalleryView: View {
                 onSessionSelected: { _ in },
                 onAddProject: {},
                 onNewSession: {},
-                onRetryScopeLoad: { _ in load = .loading }
+                onRetryScopeLoad: { _ in load = .loading },
+                rowStyle: rowStyle
             )
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
@@ -40,6 +42,13 @@ struct SessionListGalleryView: View {
                                 : SessionListFilterTab.allId
                         }
                     )
+                    ForEach(HomeSessionRowStyle.allCases, id: \.self) { style in
+                        OpenCodeChoiceBadge(
+                            label: style.title,
+                            selected: rowStyle == style,
+                            action: { rowStyle = style }
+                        )
+                    }
                 }
                 HStack(spacing: 8) {
                     ForEach(SessionListDockGalleryLoad.allCases, id: \.self) { option in
@@ -90,7 +99,9 @@ private let sessionListGallerySamples: [SessionListSession] = {
             subtitle: "/Users/demo/opencode-mobile",
             status: .running,
             caption: "now",
-            updatedAtEpochMs: now
+            updatedAtEpochMs: now,
+            projectName: "opencode-mobile",
+            worktreeLabel: "803-compact-home-session-rows-with-a-classic-option"
         ),
         SessionListSession(
             id: "session-stale",
@@ -102,7 +113,8 @@ private let sessionListGallerySamples: [SessionListSession] = {
             status: .running,
             statusIsStale: true,
             caption: "14m ago",
-            updatedAtEpochMs: now - 14 * 60_000
+            updatedAtEpochMs: now - 14 * 60_000,
+            projectName: "opencode-mobile"
         ),
         SessionListSession(
             id: "session-2",
@@ -124,7 +136,9 @@ private let sessionListGallerySamples: [SessionListSession] = {
             subtitle: "/Users/demo/opencode-mobile",
             status: .ready,
             caption: "3h ago",
-            updatedAtEpochMs: now - 3 * 3_600_000
+            updatedAtEpochMs: now - 3 * 3_600_000,
+            projectName: "opencode-mobile",
+            worktreeLabel: "opencode-mobile-779"
         ),
         SessionListSession(
             id: "session-4",
@@ -135,7 +149,9 @@ private let sessionListGallerySamples: [SessionListSession] = {
             subtitle: "/Users/demo/api-client",
             status: .retrying(attempt: 2),
             caption: "2d ago",
-            updatedAtEpochMs: now - 2 * 86_400_000
+            updatedAtEpochMs: now - 2 * 86_400_000,
+            projectName: "api-client-for-the-enterprise-billing-platform",
+            worktreeLabel: "ope-1042-retry"
         ),
     ]
 }()

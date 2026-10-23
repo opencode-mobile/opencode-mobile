@@ -258,6 +258,33 @@ object HomeSessionLocation {
     const val SEPARATOR = " · "
 }
 
+/** Line 2 of a compact Home row (#803): `project / worktree`. */
+object HomeCompactRowPath {
+    private val BRANCH_PREFIX = Regex("^(feature|fix|chore|opencode)/")
+
+    /**
+     * Worktree part of the line: the shortened branch, or the folder name on a detached HEAD or
+     * unknown branch. Null on the main checkout, for a non-repository project, and while
+     * [worktreesEnabled] is off.
+     */
+    fun worktreeLabel(
+        project: HomeProject,
+        sessionDirectory: String?,
+        worktreesEnabled: Boolean = true,
+    ): String? {
+        if (!worktreesEnabled || !project.isRepository) return null
+        val directory =
+            sessionDirectory?.trim()?.takeIf { it.isNotEmpty() }?.let(ServerPathPolicy::canonical)
+                ?: return null
+        val worktree = project.worktree(directory) ?: HomeWorktree(directory = directory)
+        if (worktree.isMain) return null
+        return worktree.branch?.let(::shortBranch) ?: worktree.folderName
+    }
+
+    /** Drops a `feature/`, `fix/`, `chore/` or `opencode/` prefix; a bare prefix stays as it is. */
+    fun shortBranch(branch: String): String = branch.replace(BRANCH_PREFIX, "").ifEmpty { branch }
+}
+
 /** Copy shared by the scope picker, dock, and Run in chooser. */
 object HomeWorktreeCopy {
     const val MAIN_CHECKOUT = "main checkout"

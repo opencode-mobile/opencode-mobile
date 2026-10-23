@@ -19,11 +19,13 @@ import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
 import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeListItemAccessory
+import dev.opencode.mobile.ui.components.OpenCodeListItemPath
 import dev.opencode.mobile.ui.components.OpenCodeListItemStatus
 import dev.opencode.mobile.ui.components.OpenCodeListItemStatusTone
 import dev.opencode.mobile.ui.components.OpenCodeListItemStyle
 import dev.opencode.mobile.ui.components.OpenCodeListItemSubtitleSegment
 import dev.opencode.mobile.ui.components.OpenCodeListItemSubtitleTone
+import dev.opencode.mobile.ui.components.OpenCodeListItemVariant
 import dev.opencode.mobile.ui.components.StartDecorator
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
@@ -321,6 +323,28 @@ fun ListItemGalleryScreen(modifier: Modifier = Modifier) {
             )
         }
 
+        Text(text = "Compact variant", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
+        Column {
+            galleryCompactRows.forEach { row ->
+                OpenCodeListItem(
+                    title = row.title,
+                    variant = OpenCodeListItemVariant.Compact,
+                    path = row.path,
+                    titleEmphasized = row.emphasized,
+                    status = row.status,
+                    caption = row.caption,
+                    startDecorator =
+                        StartDecorator.Tile(
+                            character = row.path.project.first(),
+                            accent = row.accent,
+                            statusDot = row.status?.tone,
+                            pulsing = row.pulsing,
+                        ),
+                    onClick = {},
+                )
+            }
+        }
+
         Text(text = "Title tag", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
         Column {
             OpenCodeListItem(
@@ -393,3 +417,80 @@ fun ListItemGalleryScreen(modifier: Modifier = Modifier) {
         )
     }
 }
+
+private data class GalleryCompactRow(
+    val title: String,
+    val path: OpenCodeListItemPath,
+    val accent: LetterAccent,
+    val caption: String,
+    val status: OpenCodeListItemStatus? = null,
+    val pulsing: Boolean = false,
+    val emphasized: Boolean = false,
+)
+
+private val galleryCompactRows =
+    listOf(
+        GalleryCompactRow(
+            title = "Better action sheet tool results UI",
+            path = OpenCodeListItemPath("opencode-mobile", "794-readable-tool-results"),
+            accent = LetterAccent.Red,
+            caption = "4m ago",
+            status = OpenCodeListItemStatus("Running", OpenCodeListItemStatusTone.Interactive),
+            pulsing = true,
+        ),
+        GalleryCompactRow(
+            title = "Skill session image message duplicate prompt",
+            path = OpenCodeListItemPath("opencode-mobile", "skill-image-duplicate-prompt"),
+            accent = LetterAccent.Red,
+            caption = "6m ago",
+            status = OpenCodeListItemStatus("Done", OpenCodeListItemStatusTone.Success),
+            emphasized = true,
+        ),
+        GalleryCompactRow(
+            title = "Live reload for published sites",
+            path = OpenCodeListItemPath("artifact-publisher", "live-reload"),
+            accent = LetterAccent.Violet,
+            caption = "35m ago",
+            status = OpenCodeListItemStatus("Retrying · 2", OpenCodeListItemStatusTone.Warning),
+        ),
+        GalleryCompactRow(
+            title = "Checking open PRs",
+            path = OpenCodeListItemPath("opencode-mobile", "skill-image-duplicate-prompt"),
+            accent = LetterAccent.Red,
+            caption = "17h ago",
+            status = OpenCodeListItemStatus("Failed", OpenCodeListItemStatusTone.Error),
+            emphasized = true,
+        ),
+        GalleryCompactRow(
+            title = "Fix zsh prompt slowness",
+            path = OpenCodeListItemPath("dotfiles"),
+            accent = LetterAccent.Teal,
+            caption = "2h ago",
+            status = OpenCodeListItemStatus("Stopped", OpenCodeListItemStatusTone.Warning),
+            emphasized = true,
+        ),
+        GalleryCompactRow(
+            title = "Idle on the main checkout: no dot, no pill",
+            path = OpenCodeListItemPath("opencode-mobile"),
+            accent = LetterAccent.Red,
+            caption = "2d ago",
+        ),
+        GalleryCompactRow(
+            title = "Long names share line 2 by the 40/60 rule",
+            path =
+                OpenCodeListItemPath(
+                    "opencode-mobile-enterprise-edition",
+                    "ope-1042-show-worktree-and-project-on-home-rows",
+                ),
+            accent = LetterAccent.Red,
+            caption = "13m ago",
+            status = OpenCodeListItemStatus("Ready", OpenCodeListItemStatusTone.Success),
+            emphasized = true,
+        ),
+        GalleryCompactRow(
+            title = "A short project keeps its full width",
+            path = OpenCodeListItemPath("dotfiles", "806-clear-the-worktree-filter-when-it-is-empty"),
+            accent = LetterAccent.Teal,
+            caption = "1d ago",
+        ),
+    )

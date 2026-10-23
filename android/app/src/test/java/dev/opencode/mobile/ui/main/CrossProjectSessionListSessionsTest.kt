@@ -163,6 +163,28 @@ class CrossProjectSessionListSessionsTest {
     }
 
     @Test
+    fun compactRows_showTheShortBranchOnlyOutsideTheMainCheckout() {
+        val sections =
+            listOf(
+                section(
+                    worktree = "/repo",
+                    session(id = "main", title = "Main", updatedAtEpochMs = 10L, directory = "/repo"),
+                    session(id = "wt", title = "Checkout", updatedAtEpochMs = 20L, directory = "/repo-wt"),
+                ),
+            )
+        val projects = mergedProjects(branches = mapOf("/repo" to "dev", "/repo-wt" to "feature/723-iphone-duo"))
+
+        val on = homeSessionListSessions(projects, sections)
+        val off = homeSessionListSessions(projects, sections, worktreesEnabled = false)
+
+        assertEquals("723-iphone-duo", on.first { it.id == "wt" }.compactWorktree)
+        assertNull(on.first { it.id == "main" }.compactWorktree)
+        assertEquals(listOf(null, null), off.map { it.compactWorktree })
+        assertEquals("repo", on.first { it.id == "wt" }.compactPath().project)
+        assertEquals("repo", off.first { it.id == "wt" }.compactPath().project)
+    }
+
+    @Test
     fun rowLines_putProjectAndWorktreeOnSeparateLines() {
         fun row(
             location: List<SessionListLocationPart>?,

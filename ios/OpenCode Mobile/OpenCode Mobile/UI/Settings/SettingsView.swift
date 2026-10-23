@@ -51,6 +51,7 @@ struct SettingsView: View {
     @State private var showRecentWindowPicker = false
     @State private var showFollowUpPicker = false
     @State private var showTimelineStylePicker = false
+    @State private var showSessionRowsPicker = false
     @State private var themeManager = ThemeManager.shared
     @State private var homeDisplayPreferences = HomeDisplayPreferences.shared
     @State private var markdownHighlightPreferences = MarkdownHighlightPreferences.shared
@@ -155,6 +156,24 @@ struct SettingsView: View {
                         )
                         sessionChatDisplayPreferences.setTimelineStyle(style)
                         showTimelineStylePicker = false
+                    }
+                )
+            }
+        }
+        .openCodeBottomSheet(isPresented: $showSessionRowsPicker, title: "Session rows") {
+            ForEach(HomeSessionRowStyle.allCases, id: \.self) { style in
+                OpenCodeBottomSheetEntry(
+                    title: style.title,
+                    subtitle: style.subtitle,
+                    selected: style == homeDisplayPreferences.sessionRowStyle,
+                    action: {
+                        ProductAnalytics.logUserAction(
+                            screenId: ProductAnalytics.Screen.settings,
+                            actionId: ProductAnalytics.Action.settingsSessionRows,
+                            parameters: [ProductAnalytics.Param.mode: style.wireValue]
+                        )
+                        homeDisplayPreferences.setSessionRowStyle(style)
+                        showSessionRowsPicker = false
                     }
                 )
             }
@@ -428,6 +447,20 @@ struct SettingsView: View {
                     )
                     .padding(.horizontal, 16)
                     .accessibilityIdentifier("settingsWorktreesToggle")
+
+                    OpenCodeListItem(
+                        title: "Session rows",
+                        subtitle: homeDisplayPreferences.sessionRowStyle.title,
+                        style: .card,
+                        startDecorator: .icon(.list, accessibilityLabel: "Session rows"),
+                        accessory: .disclosure,
+                        action: {
+                            logSettingsAction(ProductAnalytics.Action.settingsOpenSessionRowsPicker)
+                            showSessionRowsPicker = true
+                        }
+                    )
+                    .padding(.horizontal, 16)
+                    .accessibilityIdentifier("settingsSessionRows")
 
                     OpenCodeSectionHeader(title: "Session Cache")
 
