@@ -67,6 +67,8 @@ final class SessionChatViewModel {
     private var moveInFlight = false
     private var moveErrorMessage: String?
     private var moveNotice: String?
+    /// Shown instead of opening Changes when the last turn moved folders.
+    private var turnDiffNotice: String?
     private var movedDirectory: String?
     private var sessionMoveTask: Task<Void, Never>?
     /// Chip-timeline step paragraphs the user expanded past `+N more`:
@@ -209,6 +211,7 @@ final class SessionChatViewModel {
         lastSnackbarKey = nil
         suppressedSnackbarKey = nil
         snackbarSequence = 0
+        turnDiffNotice = nil
         OpenCodeLog.sessionChat.info("bind session=\(sessionID) worktree=\(worktree) title=\(sessionTitle)")
         sessionInfo.bind(sessionID: sessionID, sessionTitle: sessionTitle)
         timeline.onChange = { [weak self] in self?.publishUiState() }
@@ -782,6 +785,14 @@ final class SessionChatViewModel {
         commands.consumePendingSessionReplace()
     }
 
+    /// The last turn moved folders, so its combined diff cannot be shown. Stay on this screen.
+    func presentTurnDiffUnavailable() {
+        turnDiffNotice = TurnDiffUnavailable.message
+        lastSnackbarKey = nil
+        suppressedSnackbarKey = nil
+        publishUiState()
+    }
+
     func consumeSnackbar() {
         if uiState.snackbar != nil {
             logChatAction(ProductAnalytics.Action.chatDismissSnackbar)
@@ -790,6 +801,7 @@ final class SessionChatViewModel {
         chipTimelineIntroNotice = nil
         moveErrorMessage = nil
         moveNotice = nil
+        turnDiffNotice = nil
         commands.clearActionFeedback()
         composer.clearTransientErrors()
         sessionInfo.clearTransientErrors()
@@ -1602,6 +1614,7 @@ final class SessionChatViewModel {
             if let error = composerState.abortErrorMessage { return error }
             if let error = commandsState.actionErrorMessage { return error }
             if let error = moveErrorMessage { return error }
+            if let error = turnDiffNotice { return error }
             if let error = infoState.errorMessage { return error }
             if inboxState.permissionRequests.isEmpty, let error = inboxState.permissionTopologyError { return error }
             if inboxState.questionRequests.isEmpty, let error = inboxState.questionTopologyError { return error }

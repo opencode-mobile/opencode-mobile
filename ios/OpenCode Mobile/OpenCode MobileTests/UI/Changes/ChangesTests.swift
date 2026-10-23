@@ -470,6 +470,51 @@ struct ChangesViewModelTests {
         #expect(multi?.initialFilePath == nil)
     }
 
+    @Test func lastTurnSpansLocationChangeWhenAMoveSitsBetweenAssistantSteps() {
+        var state = SessionChatUiState.initial(sessionID: "s", sessionTitle: "Session")
+        state.timeline = .ready
+        state.messages = [
+            row("user", .user),
+            row("before", .assistant),
+            moved("moved", "/repo/wt"),
+            row("after", .assistant),
+            row("later-user", .user),
+            row("later", .assistant),
+        ]
+        #expect(state.lastTurnSpansLocationChange(messageID: "user"))
+        #expect(!state.lastTurnSpansLocationChange(messageID: "later-user"))
+    }
+
+    @Test func moveBeforeAnyAssistantDoesNotBlockTheTurn() {
+        var state = SessionChatUiState.initial(sessionID: "s", sessionTitle: "Session")
+        state.timeline = .ready
+        state.messages = [
+            row("user", .user),
+            moved("moved", "/repo/wt"),
+            row("after", .assistant),
+        ]
+        #expect(!state.lastTurnSpansLocationChange(messageID: "user"))
+    }
+
+    @Test func locationChangeRejectionUsesAPlainSentence() async {
+        let repository = ChangesSessionRepository(
+            results: [.failure(SessionError.http(
+                statusCode: 400,
+                message: #"{"_tag":"InvalidRequestError","message":"Turn range spans a location change","field":"to"}"#
+            ))],
+            vcsInfoResults: [.success(VcsInfo(currentBranch: "feature", defaultBranch: "main"))]
+        )
+        let viewModel = ChangesViewModel(
+            sessionID: "s",
+            worktree: "/w",
+            messageID: "user",
+            initialSource: .lastTurn,
+            repository: repository
+        )
+        await viewModel.load()
+        #expect(viewModel.state.phase == .error(TurnDiffUnavailable.message))
+    }
+
     private static func file(
         _ path: String,
         additions: Int = 1,
@@ -491,6 +536,21 @@ struct ChangesViewModelTests {
             modelProviderID: nil,
             modelID: nil,
             contextInputTokens: nil
+        )
+    }
+
+    private func moved(_ id: String, _ directory: String) -> SessionChatRow {
+        SessionChatRow(
+            id: id,
+            role: .notice,
+            text: "",
+            metadataLabel: "",
+            blocks: [
+                .notice(
+                    blockID: id,
+                    notice: TimelineNotice(id: id, kind: .moved(directory: directory))
+                ),
+            ]
         )
     }
 }

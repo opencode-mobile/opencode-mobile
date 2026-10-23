@@ -7,6 +7,7 @@ import dev.opencode.mobile.domain.event.EventStreamConnectionState
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.event.OpencodeEvent
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.message.TimelineNotice
 import dev.opencode.mobile.domain.session.FileDiff
 import dev.opencode.mobile.domain.session.FileDiffStatus
 import dev.opencode.mobile.domain.session.PermissionDecision
@@ -22,6 +23,7 @@ import dev.opencode.mobile.ui.sessionchat.LastTurnReviewChangesStore
 import dev.opencode.mobile.ui.sessionchat.ReviewChangesPillVisibility
 import dev.opencode.mobile.ui.sessionchat.ReviewChangesSummary
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
+import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlock
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineState
 import dev.opencode.mobile.ui.sessionchat.SessionChatUiState
 import kotlinx.coroutines.Dispatchers
@@ -500,10 +502,88 @@ class ChangesViewModelTest {
         assertNull(multi?.initialFilePath)
     }
 
+    @Test fun lastTurnSpansLocationChangeWhenAMoveSitsBetweenAssistantSteps() {
+        val state =
+            SessionChatUiState(
+                "s",
+                "Session",
+                SessionChatTimelineState.Ready,
+                messages =
+                    listOf(
+                        row("user", MessageRole.User),
+                        row("before", MessageRole.Assistant),
+                        moved("moved", "/repo/wt"),
+                        row("after", MessageRole.Assistant),
+                        row("later-user", MessageRole.User),
+                        row("later", MessageRole.Assistant),
+                    ),
+            )
+        assertTrue(state.lastTurnSpansLocationChange("user"))
+        assertFalse(state.lastTurnSpansLocationChange("later-user"))
+    }
+
+    @Test fun moveBeforeAnyAssistantDoesNotBlockTheTurn() {
+        val state =
+            SessionChatUiState(
+                "s",
+                "Session",
+                SessionChatTimelineState.Ready,
+                messages =
+                    listOf(
+                        row("user", MessageRole.User),
+                        moved("moved", "/repo/wt"),
+                        row("after", MessageRole.Assistant),
+                    ),
+            )
+        assertFalse(state.lastTurnSpansLocationChange("user"))
+    }
+
+    @Test fun locationChangeRejectionUsesAPlainSentence() =
+        runTest(dispatcher) {
+            val repository =
+                FakeRepository(
+                    results =
+                        ArrayDeque(
+                            listOf(
+                                Result.failure(
+                                    SessionError.Http(
+                                        statusCode = 400,
+                                        message = "Bad response",
+                                        body =
+                                            """{"_tag":"InvalidRequestError","message":"Turn range spans a location change","field":"to"}""",
+                                    ),
+                                ),
+                            ),
+                        ),
+                    vcsInfoResults = ArrayDeque(listOf(Result.success(VcsInfo("feature", "main")))),
+                )
+            val viewModel = ChangesViewModel(repository)
+            viewModel.bind("s", "/w", "user", ChangeSource.LastTurn)
+            advanceUntilIdle()
+            assertEquals(ChangesPhase.Error(TurnDiffUnavailable.MESSAGE), viewModel.uiState.value.phase)
+        }
+
     private fun row(
         id: String,
         role: MessageRole,
     ) = SessionChatMessageItem(id, role, "", "", isPending = false)
+
+    private fun moved(
+        id: String,
+        directory: String,
+    ) = SessionChatMessageItem(
+        id = id,
+        role = MessageRole.Notice,
+        text = "",
+        metadataLabel = "",
+        blocks =
+            listOf(
+                SessionChatTimelineBlock.Notice(
+                    blockID = id,
+                    notice = TimelineNotice.Moved(directory),
+                ),
+            ),
+    )
 
     private fun file(
         path: String,

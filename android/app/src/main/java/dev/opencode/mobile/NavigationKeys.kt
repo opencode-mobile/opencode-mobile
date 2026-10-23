@@ -80,6 +80,7 @@ import kotlinx.serialization.Serializable
     val messageId: String,
     val owningTurnMessageId: String? = null,
     val supportsSessionMessageDiff: Boolean,
+    val lastTurnDiffUnavailable: Boolean = false,
     val members: List<SessionToolGroupMember>,
 ) : NavKey
 

@@ -38,6 +38,7 @@ import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessageListUpdate
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.ui.changes.TurnDiffUnavailable
 import dev.opencode.mobile.domain.model.ModelCatalogStore
 import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.model.NewSessionModelSelectionResolver
@@ -273,6 +274,7 @@ class SessionChatViewModel
         private var workingHoldJob: Job? = null
         private var suppressedSnackbarKey: String? = null
         private var snackbarSequence: Long = 0L
+        private var turnDiffNotice: String? = null
 
         // Chip-timeline paragraphs the user expanded past `+N more`, keyed by
         // expansion id with the chip count at tap time; reset per session.
@@ -461,6 +463,7 @@ class SessionChatViewModel
             lastSnackbarKey = null
             suppressedSnackbarKey = null
             snackbarSequence = 0L
+            turnDiffNotice = null
             expandedStepParagraphs = emptyMap()
             unfoldedStepRails = emptySet()
             resetActivityCards()
@@ -552,6 +555,7 @@ class SessionChatViewModel
             lastSnackbarKey = null
             suppressedSnackbarKey = null
             snackbarSequence = 0L
+            turnDiffNotice = null
             expandedStepParagraphs = emptyMap()
             unfoldedStepRails = emptySet()
             resetActivityCards()
@@ -1216,9 +1220,18 @@ class SessionChatViewModel
                 }
         }
 
+        /** The last turn moved folders, so its combined diff cannot be shown. Stay on this screen. */
+        fun presentTurnDiffUnavailable() {
+            turnDiffNotice = TurnDiffUnavailable.MESSAGE
+            lastSnackbarKey = null
+            suppressedSnackbarKey = null
+            publishUiState()
+        }
+
         fun consumeSnackbar() {
             logAction(ProductAnalytics.Action.CHAT_DISMISS_SNACKBAR)
             suppressedSnackbarKey = lastSnackbarKey
+            turnDiffNotice = null
             chipTimelineIntroNotice = null
             commands.clearActionFeedback()
             worktreeMove.clearMessages()
@@ -1783,6 +1796,7 @@ class SessionChatViewModel
                         composerState.errorMessage != null -> composerState.errorMessage
                         composerState.abortErrorMessage != null -> composerState.abortErrorMessage
                         commandsState.actionErrorMessage != null -> commandsState.actionErrorMessage
+                        turnDiffNotice != null -> turnDiffNotice
                         infoState.errorMessage != null -> infoState.errorMessage
                         inboxSnapshot.permissionRequests.isEmpty() &&
                             inboxSnapshot.permissionTopologyError != null -> inboxSnapshot.permissionTopologyError

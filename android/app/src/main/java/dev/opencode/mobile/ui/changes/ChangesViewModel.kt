@@ -470,15 +470,28 @@ class ChangesViewModel(
     }
 }
 
+/** Copy for a last-turn diff the server will not build because the turn moved folders. */
+object TurnDiffUnavailable {
+    const val MESSAGE = "This turn moved folders, so its changes can't be shown together."
+    const val SERVER_MARKER = "Turn range spans a location change"
+
+    fun userFacing(error: Throwable): String? {
+        val http = error as? SessionError.Http ?: return null
+        val text = listOfNotNull(http.message, http.body).joinToString("\n")
+        return MESSAGE.takeIf { text.contains(SERVER_MARKER) }
+    }
+}
+
 private fun ChangeSource.logValue() = name.replace(Regex("([a-z])([A-Z])"), "$1-$2").lowercase()
 
 private fun Throwable.isUnsupportedVcs() = this is SessionError.Http && statusCode == 404
 
 private fun Throwable.userMessage(): String =
-    when (this) {
-        is SessionError.Transport -> cause.message ?: "Request failed"
-        else -> message ?: "Request failed"
-    }
+    TurnDiffUnavailable.userFacing(this)
+        ?: when (this) {
+            is SessionError.Transport -> cause.message ?: "Request failed"
+            else -> message ?: "Request failed"
+        }
 
 private fun FileDiffStatus.displayName() = name.replaceFirstChar(Char::uppercase)
 
