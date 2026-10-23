@@ -677,6 +677,8 @@ nonisolated struct PromptSendOptions: Equatable, Sendable {
     let worktree: String?
     let skillIDs: [String]
     let delivery: FollowUpDelivery
+    /// `ClientMessageID` the server gives the user message it creates.
+    let messageID: String?
 
     init(
         text: String,
@@ -688,7 +690,8 @@ nonisolated struct PromptSendOptions: Equatable, Sendable {
         fileMentions: [FileMention] = [],
         worktree: String? = nil,
         skillIDs: [String] = [],
-        delivery: FollowUpDelivery = .steer
+        delivery: FollowUpDelivery = .steer,
+        messageID: String? = nil
     ) {
         self.text = text
         self.attachments = attachments
@@ -700,6 +703,7 @@ nonisolated struct PromptSendOptions: Equatable, Sendable {
         self.worktree = worktree
         self.skillIDs = skillIDs
         self.delivery = delivery
+        self.messageID = messageID
     }
 }
 

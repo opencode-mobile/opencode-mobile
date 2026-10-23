@@ -127,12 +127,20 @@ nonisolated struct SendMessageRequestDTO: Codable, Sendable {
     let model: SendPromptModelDTO?
     let variant: String?
     let agent: String?
+    let messageID: String?
 
-    init(parts: [SendMessagePartDTO], model: SendPromptModelDTO? = nil, variant: String? = nil, agent: String? = nil) {
+    init(
+        parts: [SendMessagePartDTO],
+        model: SendPromptModelDTO? = nil,
+        variant: String? = nil,
+        agent: String? = nil,
+        messageID: String? = nil
+    ) {
         self.parts = parts
         self.model = model
         self.variant = variant
         self.agent = agent
+        self.messageID = messageID
     }
 }
 
@@ -219,6 +227,7 @@ nonisolated struct AgentPartSourceDTO: Codable, Sendable, Equatable {
 }
 
 nonisolated struct V2PromptRequestDTO: Codable, Sendable {
+    let id: String?
     let text: String
     let files: [V2PromptFileDTO]?
     let agents: [V2PromptAgentDTO]?
@@ -228,6 +237,7 @@ nonisolated struct V2PromptRequestDTO: Codable, Sendable {
     let fileMentions: [V2PromptFileMentionDTO]?
 
     init(
+        id: String? = nil,
         text: String,
         files: [V2PromptFileDTO]? = nil,
         agents: [V2PromptAgentDTO]? = nil,
@@ -235,6 +245,7 @@ nonisolated struct V2PromptRequestDTO: Codable, Sendable {
         delivery: String = "steer",
         fileMentions: [V2PromptFileMentionDTO]? = nil
     ) {
+        self.id = id
         self.text = text
         self.files = files
         self.agents = agents
@@ -244,11 +255,12 @@ nonisolated struct V2PromptRequestDTO: Codable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case text, files, agents, skills, delivery
+        case id, text, files, agents, skills, delivery
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(String.self, forKey: .id)
         text = try container.decode(String.self, forKey: .text)
         files = try container.decodeIfPresent([V2PromptFileDTO].self, forKey: .files)
         agents = try container.decodeIfPresent([V2PromptAgentDTO].self, forKey: .agents)
@@ -259,6 +271,7 @@ nonisolated struct V2PromptRequestDTO: Codable, Sendable {
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(id, forKey: .id)
         try container.encode(text, forKey: .text)
         try container.encodeIfPresent(files, forKey: .files)
         try container.encodeIfPresent(agents, forKey: .agents)

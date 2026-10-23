@@ -191,7 +191,7 @@ class SessionChatTimeline(
     private var pendingLiveDisplayApply: PendingDisplayApply? = null
     private var mergePendingWhileSending = false
     private var pendingOptimisticRows: List<SessionChatMessageItem> = emptyList()
-    private var pendingBaselineSignatures: Map<String, String> = emptyMap()
+    private var pendingBaselineIds: Set<String> = emptySet()
     private var lastLoadedMessages: List<Message> = emptyList()
     private var lastLoadedDisplayMessages: List<DisplayMessage> = emptyList()
     private val pendingPromptPatches = mutableMapOf<String, PendingPromptPatch>()
@@ -211,7 +211,7 @@ class SessionChatTimeline(
         boundWorktree = worktree
         mergePendingWhileSending = false
         pendingOptimisticRows = emptyList()
-        pendingBaselineSignatures = emptyMap()
+        pendingBaselineIds = emptySet()
         lastLoadedMessages = emptyList()
         lastLoadedDisplayMessages = emptyList()
         resetChildSessionLookup()
@@ -248,7 +248,7 @@ class SessionChatTimeline(
         boundWorktree = worktree
         mergePendingWhileSending = false
         pendingOptimisticRows = emptyList()
-        pendingBaselineSignatures = emptyMap()
+        pendingBaselineIds = emptySet()
         lastLoadedMessages = emptyList()
         lastLoadedDisplayMessages = emptyList()
         resetChildSessionLookup()
@@ -397,8 +397,7 @@ class SessionChatTimeline(
     fun beginOptimisticSend(enrichedRows: List<SessionChatMessageItem>) {
         mergePendingWhileSending = true
         pendingOptimisticRows = enrichedRows
-        pendingBaselineSignatures =
-            TimelineProjector.reconciliationSignaturesById(lastLoadedServerRows())
+        pendingBaselineIds = lastLoadedServerRows().mapTo(HashSet()) { it.id }
         val displayedItems = TimelineProjector.displayedOptimisticSendItems(enrichedRows)
         val displayedRows = displayedItems.map(TimelineProjector::rowFromMessageItem)
         val previous = lastTimelineFrame
@@ -467,17 +466,18 @@ class SessionChatTimeline(
     ) {
         mergePendingWhileSending = false
         pendingOptimisticRows = emptyList()
-        pendingBaselineSignatures = emptyMap()
+        pendingBaselineIds = emptySet()
         val previous = lastTimelineFrame
         val frame =
             previous?.let { prior ->
-                val rows = prior.rows.filterNot { it.id == optimisticId }
+                // An echo already shown under the same client id stays: the server has it.
+                val rows = prior.rows.filterNot { it.id == optimisticId && it.isPending }
                 TimelineFrame(
                     frameRevision = nextFrameRevision++,
                     rows = rows,
                     insertedRowIDs = emptySet(),
                     changedRowIDs = emptySet(),
-                    removedRowIDs = setOf(optimisticId).intersect(prior.rows.map { it.id }.toSet()),
+                    removedRowIDs = (prior.rows.map { it.id }.toSet() - rows.map { it.id }.toSet()),
                     layoutChangedRowIDs = emptySet(),
                     listIdAliases = prior.listIdAliases,
                 )
@@ -485,7 +485,7 @@ class SessionChatTimeline(
         lastTimelineFrame = frame
         _state.update {
             it.copy(
-                messages = it.messages.filterNot { item -> item.id == optimisticId },
+                messages = it.messages.filterNot { item -> item.id == optimisticId && item.isPending },
                 timelineFrame = frame,
                 errorMessage = error,
             )
@@ -495,7 +495,7 @@ class SessionChatTimeline(
     fun clearSendingState() {
         mergePendingWhileSending = false
         pendingOptimisticRows = emptyList()
-        pendingBaselineSignatures = emptyMap()
+        pendingBaselineIds = emptySet()
     }
 
     fun clearReadyError() {
@@ -781,7 +781,7 @@ class SessionChatTimeline(
                     pendingOptimisticRows.ifEmpty { stateSnapshot.messages.filter { it.isPending } }
                 OptimisticInputs(
                     pendingRows = pendingItems.map(TimelineProjector::rowFromMessageItem),
-                    baselineSignatures = pendingBaselineSignatures,
+                    baselineIds = pendingBaselineIds,
                 )
             } else {
                 OptimisticInputs()
@@ -904,7 +904,7 @@ class SessionChatTimeline(
     private fun applyLoadError(throwable: Throwable) {
         mergePendingWhileSending = false
         pendingOptimisticRows = emptyList()
-        pendingBaselineSignatures = emptyMap()
+        pendingBaselineIds = emptySet()
         // Retain the last good timeline when one exists; only clear on cold failure.
         _state.update { current ->
             val retainLastGood = current.messages.isNotEmpty()
@@ -925,7 +925,7 @@ class SessionChatTimeline(
      * reconciliation cannot use displayed ids. An optimistic send is done when
      * every pending item has a new server echo relative to the send-time
      * baseline — the same match [TimelineProjector] uses to drop the optimistic
-     * row, often under a different id.
+     * row.
      */
     private fun clearOptimisticIfReconciled() {
         if (!mergePendingWhileSending) return
@@ -933,7 +933,7 @@ class SessionChatTimeline(
         if (pendingItems.isEmpty()) {
             mergePendingWhileSending = false
             pendingOptimisticRows = emptyList()
-            pendingBaselineSignatures = emptyMap()
+            pendingBaselineIds = emptySet()
             return
         }
         val stillUnacked =
@@ -941,12 +941,12 @@ class SessionChatTimeline(
                 .unmatchedPending(
                     pendingRows = pendingItems.map(TimelineProjector::rowFromMessageItem),
                     serverRows = lastLoadedServerRows(),
-                    baselineSignatures = pendingBaselineSignatures,
+                    baselineIds = pendingBaselineIds,
                 ).isNotEmpty()
         if (stillUnacked) return
         mergePendingWhileSending = false
         pendingOptimisticRows = emptyList()
-        pendingBaselineSignatures = emptyMap()
+        pendingBaselineIds = emptySet()
     }
 
     private fun lastLoadedServerRows(): List<TimelineRow> =

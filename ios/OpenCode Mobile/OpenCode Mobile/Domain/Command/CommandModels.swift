@@ -40,6 +40,8 @@ struct CommandRunOptions: Equatable, Sendable {
     let variant: String?
     let mode: String?
     let delivery: FollowUpDelivery
+    /// `ClientMessageID` for the user message. v1 keeps it; v2 commands take no id.
+    let messageID: String?
 
     init(
         command: String,
@@ -48,7 +50,8 @@ struct CommandRunOptions: Equatable, Sendable {
         model: PromptModelSelection? = nil,
         variant: String? = nil,
         mode: String? = nil,
-        delivery: FollowUpDelivery = .steer
+        delivery: FollowUpDelivery = .steer,
+        messageID: String? = nil
     ) {
         self.command = command
         self.arguments = arguments
@@ -57,6 +60,7 @@ struct CommandRunOptions: Equatable, Sendable {
         self.variant = variant
         self.mode = mode
         self.delivery = delivery
+        self.messageID = messageID
     }
 }
 

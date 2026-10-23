@@ -79,7 +79,7 @@ struct SessionChatTimelineProjectorTests {
         #expect(second.rows[0].layoutRevision == first.rows[0].layoutRevision &+ 1)
     }
 
-    @Test func optimisticThenAuthoritative_reconcilesMatchingSignature() {
+    @Test func optimisticThenAuthoritative_reconcilesNewEcho() {
         let pending = TimelineRow(
             id: "optimistic-1",
             role: .user,
@@ -96,7 +96,6 @@ struct SessionChatTimelineProjectorTests {
             contentRevision: ContentRevision.of("Hello"),
             layoutRevision: 1
         )
-        let signature = SessionChatTimelineProjector.optimisticSignature(pending)
         let empty = project(displayFrame(messages: []))
         #expect(empty.rows.isEmpty)
 
@@ -104,7 +103,7 @@ struct SessionChatTimelineProjectorTests {
             displayFrame(revision: 1, messages: []),
             optimistic: OptimisticInputs(
                 pendingRows: [pending],
-                baselineSignatureCounts: [signature: 0],
+                baselineIDs: [],
                 mergePending: true
             ),
             previous: empty
@@ -121,7 +120,7 @@ struct SessionChatTimelineProjectorTests {
             displayFrame(revision: 2, messages: [DisplayMessage(message: authoritative)]),
             optimistic: OptimisticInputs(
                 pendingRows: [pending],
-                baselineSignatureCounts: [signature: 0],
+                baselineIDs: [],
                 mergePending: true
             ),
             previous: withOptimistic
@@ -482,12 +481,11 @@ struct SessionChatTimelineProjectorTests {
             contentRevision: ContentRevision.of("What is it"),
             layoutRevision: 1
         )
-        let signature = SessionChatTimelineProjector.optimisticSignature(pending)
         let withOptimistic = project(
             displayFrame(messages: []),
             optimistic: OptimisticInputs(
                 pendingRows: [pending],
-                baselineSignatureCounts: [signature: 0],
+                baselineIDs: [],
                 mergePending: true
             )
         )
@@ -513,7 +511,7 @@ struct SessionChatTimelineProjectorTests {
             ]),
             optimistic: OptimisticInputs(
                 pendingRows: [pending],
-                baselineSignatureCounts: [signature: 0],
+                baselineIDs: [],
                 mergePending: true
             ),
             previous: withOptimistic
@@ -578,7 +576,7 @@ struct SessionChatTimelineProjectorTests {
             frame,
             optimistic: OptimisticInputs(
                 pendingRows: [pending],
-                baselineSignatureCounts: [:],
+                baselineIDs: [],
                 mergePending: true
             )
         )
@@ -605,12 +603,11 @@ struct SessionChatTimelineProjectorTests {
             contentRevision: ContentRevision.of("What"),
             layoutRevision: 1
         )
-        let signature = SessionChatTimelineProjector.optimisticSignature(pending)
         let withOptimistic = project(
             displayFrame(messages: []),
             optimistic: OptimisticInputs(
                 pendingRows: [pending],
-                baselineSignatureCounts: [signature: 0],
+                baselineIDs: [],
                 mergePending: true
             )
         )
@@ -619,7 +616,7 @@ struct SessionChatTimelineProjectorTests {
             displayFrame(revision: 2, messages: [DisplayMessage(message: serverUser)]),
             optimistic: OptimisticInputs(
                 pendingRows: [pending],
-                baselineSignatureCounts: [signature: 0],
+                baselineIDs: [],
                 mergePending: true
             ),
             previous: withOptimistic
@@ -634,7 +631,7 @@ struct SessionChatTimelineProjectorTests {
     @Test func optimisticFile_reconcilesOntoNewestTextOnlyWhenHistorySharesText() {
         let previous = userMessage(id: "msg-old", text: "What", sentAtEpochMs: 1)
         let history = project(displayFrame(messages: [DisplayMessage(message: previous)]))
-        let baseline = SessionChatTimelineProjector.signatureCounts(history.rows)
+        let baseline = Set(history.rows.map(\.id))
         let pendingFile = filePart(id: "local-file", dataURL: "data:image/jpeg;base64,abc")
         let pending = TimelineRow(
             id: "optimistic-photo",
@@ -657,7 +654,7 @@ struct SessionChatTimelineProjectorTests {
             displayFrame(messages: [DisplayMessage(message: previous)]),
             optimistic: OptimisticInputs(
                 pendingRows: [pending],
-                baselineSignatureCounts: baseline,
+                baselineIDs: baseline,
                 mergePending: true
             )
         )
@@ -671,7 +668,7 @@ struct SessionChatTimelineProjectorTests {
             ]),
             optimistic: OptimisticInputs(
                 pendingRows: [pending],
-                baselineSignatureCounts: baseline,
+                baselineIDs: baseline,
                 mergePending: true
             ),
             previous: withOptimistic
@@ -713,7 +710,7 @@ struct SessionChatTimelineProjectorTests {
             ]),
             optimistic: OptimisticInputs(
                 pendingRows: [pending],
-                baselineSignatureCounts: [:],
+                baselineIDs: ["msg-asst", "msg-hey"],
                 mergePending: true
             )
         )
@@ -896,12 +893,11 @@ struct SessionChatTimelineProjectorTests {
             layoutRevision: 1
         )
         let earlier = userMessage(id: "msg-user-0", text: "Earlier")
-        let signature = SessionChatTimelineProjector.optimisticSignature(pending)
         let frame = project(
             displayFrame(revision: 1, messages: [DisplayMessage(message: earlier)]),
             optimistic: OptimisticInputs(
                 pendingRows: [pending],
-                baselineSignatureCounts: [signature: 0],
+                baselineIDs: [],
                 mergePending: true
             )
         )
@@ -926,12 +922,11 @@ struct SessionChatTimelineProjectorTests {
             layoutRevision: 1
         )
         let earlier = userMessage(id: "msg-user-0", text: "Earlier")
-        let signature = SessionChatTimelineProjector.optimisticSignature(pending)
         let withOptimistic = project(
             displayFrame(revision: 1, messages: [DisplayMessage(message: earlier)]),
             optimistic: OptimisticInputs(
                 pendingRows: [pending],
-                baselineSignatureCounts: [signature: 0],
+                baselineIDs: ["msg-user-0"],
                 mergePending: true
             )
         )
@@ -951,7 +946,7 @@ struct SessionChatTimelineProjectorTests {
             ),
             optimistic: OptimisticInputs(
                 pendingRows: [pending],
-                baselineSignatureCounts: [signature: 0],
+                baselineIDs: ["msg-user-0"],
                 mergePending: true
             ),
             previous: withOptimistic
@@ -971,7 +966,7 @@ struct SessionChatTimelineProjectorTests {
         let leftover = SessionChatTimelineProjector.unmatchedPending(
             [pending],
             serverRows: [inboxRow],
-            baselineSignatureCounts: [SessionChatTimelineProjector.optimisticSignature(inboxRow): 1]
+            baselineIDs: [inboxRow.id]
         )
         #expect(leftover.map(\.id) == ["optimistic-1"])
     }
@@ -988,11 +983,10 @@ struct SessionChatTimelineProjectorTests {
                 DisplayMessage(message: echo),
             ])
         )
-        let inboxSignature = SessionChatTimelineProjector.optimisticSignature(serverRows[0])
         let leftover = SessionChatTimelineProjector.unmatchedPending(
             [pending],
             serverRows: serverRows,
-            baselineSignatureCounts: [inboxSignature: 1]
+            baselineIDs: [serverRows[0].id]
         )
         #expect(leftover.isEmpty)
     }
@@ -1008,7 +1002,7 @@ struct SessionChatTimelineProjectorTests {
             displayFrame(messages: [DisplayMessage(message: inbox)]),
             optimistic: OptimisticInputs(
                 pendingRows: [pending],
-                baselineSignatureCounts: [SessionChatTimelineProjector.optimisticSignature(inboxRow): 1],
+                baselineIDs: [inboxRow.id],
                 mergePending: true
             )
         )
@@ -1031,7 +1025,7 @@ struct SessionChatTimelineProjectorTests {
             ]),
             optimistic: OptimisticInputs(
                 pendingRows: [pending],
-                baselineSignatureCounts: [SessionChatTimelineProjector.optimisticSignature(inboxRow): 1],
+                baselineIDs: [inboxRow.id],
                 mergePending: true
             )
         )
@@ -1063,7 +1057,7 @@ struct SessionChatTimelineProjectorTests {
             displayFrame(messages: []),
             optimistic: OptimisticInputs(
                 pendingRows: [pending],
-                baselineSignatureCounts: [:],
+                baselineIDs: [],
                 mergePending: true
             )
         )
@@ -1088,7 +1082,7 @@ struct SessionChatTimelineProjectorTests {
             displayFrame(revision: 2, messages: [DisplayMessage(message: serverUser)]),
             optimistic: OptimisticInputs(
                 pendingRows: [pending],
-                baselineSignatureCounts: [:],
+                baselineIDs: [],
                 mergePending: true
             ),
             previous: withOptimistic
@@ -1125,54 +1119,7 @@ struct SessionChatTimelineProjectorTests {
         let leftover = SessionChatTimelineProjector.unmatchedPending(
             [pending],
             serverRows: blankRow.map { [$0] } ?? [],
-            baselineSignatureCounts: [:]
-        )
-        #expect(leftover.map(\.id) == ["optimistic-file"])
-    }
-
-    @Test func unmatchedPending_blankTextDoesNotMatchCaptionedAttachmentRow() {
-        let pendingFile = FilePart(
-            id: "local-file",
-            filename: "notes.txt",
-            mime: "text/plain",
-            kind: .text,
-            dataURL: "local"
-        )
-        let pending = TimelineRow(
-            id: "optimistic-file",
-            role: .user,
-            text: "",
-            metadataLabel: "",
-            isPending: true,
-            blocks: [
-                .attachment(blockID: PresentationBlockId.direct("local-file"), file: pendingFile),
-            ],
-            contentRevision: ContentRevision.of(""),
-            layoutRevision: 1
-        )
-        let captioned = userMessage(
-            id: "msg-captioned",
-            text: "See notes",
-            parts: [
-                text("u-caption", "See notes"),
-                .file(
-                    FilePart(
-                        id: "server-file",
-                        filename: "notes.txt",
-                        mime: "text/plain",
-                        kind: .text,
-                        dataURL: "https://example.test/notes.txt"
-                    )
-                ),
-            ]
-        )
-        let serverRow = SessionChatTimelineProjector.serverRows(
-            from: displayFrame(messages: [DisplayMessage(message: captioned)])
-        ).first!
-        let leftover = SessionChatTimelineProjector.unmatchedPending(
-            [pending],
-            serverRows: [serverRow],
-            baselineSignatureCounts: [:]
+            baselineIDs: []
         )
         #expect(leftover.map(\.id) == ["optimistic-file"])
     }
@@ -1211,32 +1158,11 @@ struct SessionChatTimelineProjectorTests {
         )
     }
 
-    @Test func signatureCounts_fromDisplayMessages_includesWaitingForPickupUser() {
-        let earlier = userMessage(id: "msg-earlier", text: "Earlier")
-        let inbox = userMessage(id: "msg-inbox", text: "Hold this")
-            .withPickupState(isWaitingForPickup: true, followUpDelivery: .queue)
-        let counts = SessionChatTimelineProjector.signatureCounts(
-            fromDisplayMessages: [
-                DisplayMessage(message: earlier),
-                DisplayMessage(message: inbox),
-            ],
-            sessionKey: "session-a"
-        )
-        let inboxRow = SessionChatTimelineProjector.serverRows(
-            from: displayFrame(messages: [DisplayMessage(message: inbox)])
-        ).first!
-        #expect(counts[SessionChatTimelineProjector.optimisticSignature(inboxRow)] == 1)
-        let earlierRow = SessionChatTimelineProjector.serverRows(
-            from: displayFrame(messages: [DisplayMessage(message: earlier)])
-        ).first!
-        #expect(counts[SessionChatTimelineProjector.optimisticSignature(earlierRow)] == 1)
-    }
-
     @Test func project_optimisticEcho_keepsOptimisticListIdentity() {
         let pending = pendingUserRow(id: "optimistic-1", text: "What do you see here")
         let optimistic = OptimisticInputs(
             pendingRows: [pending],
-            baselineSignatureCounts: [:],
+            baselineIDs: [],
             mergePending: true
         )
         let withOptimistic = project(displayFrame(messages: []), optimistic: optimistic)
@@ -1284,7 +1210,7 @@ struct SessionChatTimelineProjectorTests {
             contentRevision: ContentRevision.of("What do you see here"),
             layoutRevision: 1
         )
-        let optimistic = OptimisticInputs(pendingRows: [pending], baselineSignatureCounts: [:], mergePending: true)
+        let optimistic = OptimisticInputs(pendingRows: [pending], baselineIDs: [], mergePending: true)
         let withOptimistic = project(displayFrame(messages: []), optimistic: optimistic)
 
         let echo = userMessage(
@@ -1316,7 +1242,7 @@ struct SessionChatTimelineProjectorTests {
         let pending = pendingUserRow(id: "optimistic-1", text: "What do you see here")
         let optimistic = OptimisticInputs(
             pendingRows: [pending],
-            baselineSignatureCounts: [:],
+            baselineIDs: [],
             mergePending: true
         )
         let withOptimistic = project(displayFrame(messages: []), optimistic: optimistic)
@@ -1337,7 +1263,7 @@ struct SessionChatTimelineProjectorTests {
                 serverRows: SessionChatTimelineProjector.serverRows(
                     from: displayFrame(revision: 2, messages: [DisplayMessage(message: waiting)])
                 ),
-                baselineSignatureCounts: [:]
+                baselineIDs: []
             ).map(\.id) == ["optimistic-1"]
         )
 
@@ -1357,6 +1283,110 @@ struct SessionChatTimelineProjectorTests {
     }
 
     // MARK: - Helpers
+
+    @Test func unmatchedPending_commandRowRetiredByFirstNewUserRowWhateverItsText() {
+        let pending = pendingUserRow(id: "pending-command", text: "[/review-diff] money")
+        let earlier = userMessage(id: "msg-earlier", text: "[/review-diff] money")
+        let echo = userMessage(id: "msg-echo", text: "Review the staged diff. Focus: money")
+        let before = SessionChatTimelineProjector.serverRows(
+            from: displayFrame(messages: [DisplayMessage(message: earlier)])
+        )
+        let after = SessionChatTimelineProjector.serverRows(
+            from: displayFrame(messages: [DisplayMessage(message: earlier), DisplayMessage(message: echo)])
+        )
+
+        #expect(
+            SessionChatTimelineProjector.unmatchedPending([pending], serverRows: before, baselineIDs: ["msg-earlier"])
+                .map(\.id) == ["pending-command"]
+        )
+        #expect(
+            SessionChatTimelineProjector.unmatchedPending([pending], serverRows: after, baselineIDs: ["msg-earlier"])
+                .isEmpty
+        )
+    }
+
+    @Test func project_commandEchoReplacesOptimisticRowOnce() {
+        let pending = pendingUserRow(id: "pending-command", text: "[/review-diff] money")
+        let earlier = userMessage(id: "msg-earlier", text: "Earlier")
+        let echo = userMessage(id: "msg-echo", text: "Review the staged diff. Focus: money")
+        let optimistic = OptimisticInputs(pendingRows: [pending], baselineIDs: ["msg-earlier"], mergePending: true)
+        let sent = project(displayFrame(messages: [DisplayMessage(message: earlier)]), optimistic: optimistic)
+        let echoed = project(
+            displayFrame(revision: 2, messages: [DisplayMessage(message: earlier), DisplayMessage(message: echo)]),
+            optimistic: optimistic,
+            previous: sent
+        )
+
+        #expect(echoed.rows.map(\.id) == ["msg-earlier", "msg-echo"])
+    }
+
+    @Test func unmatchedPending_clientIDEchoRetiresRowWhateverItsText() {
+        let pending = pendingUserRow(id: Self.clientID, text: "[/review] the diff")
+        let serverRows = SessionChatTimelineProjector.serverRows(
+            from: displayFrame(messages: [
+                DisplayMessage(message: userMessage(id: Self.clientID, text: "Review the staged diff and list risks.")),
+            ])
+        )
+
+        let leftover = SessionChatTimelineProjector.unmatchedPending(
+            [pending],
+            serverRows: serverRows,
+            baselineIDs: []
+        )
+
+        #expect(leftover.isEmpty)
+    }
+
+    @Test func unmatchedPending_clientIDIgnoresSameTextUnderAnotherID() {
+        let pending = pendingUserRow(id: Self.clientID, text: "yes")
+        let serverRows = SessionChatTimelineProjector.serverRows(
+            from: displayFrame(messages: [DisplayMessage(message: userMessage(id: "msg_from_another_client", text: "yes"))])
+        )
+
+        let leftover = SessionChatTimelineProjector.unmatchedPending(
+            [pending],
+            serverRows: serverRows,
+            baselineIDs: []
+        )
+
+        #expect(leftover.map(\.id) == [Self.clientID])
+    }
+
+    @Test func unmatchedPending_clientIDWaitingSteerEchoKeepsShownRow() {
+        let pending = pendingUserRow(id: Self.clientID, text: "Hold this")
+        let steer = userMessage(id: Self.clientID, text: "Hold this")
+            .withPickupState(isWaitingForPickup: true, followUpDelivery: .steer)
+        let serverRows = SessionChatTimelineProjector.serverRows(
+            from: displayFrame(messages: [DisplayMessage(message: steer)])
+        )
+
+        let leftover = SessionChatTimelineProjector.unmatchedPending(
+            [pending],
+            serverRows: serverRows,
+            baselineIDs: []
+        )
+
+        #expect(leftover.map(\.id) == [Self.clientID])
+    }
+
+    @Test func project_clientIDEchoReplacesOptimisticRowOnce() {
+        let pending = pendingUserRow(id: Self.clientID, text: "[/review] the diff")
+        let optimistic = OptimisticInputs(pendingRows: [pending], baselineIDs: [], mergePending: true)
+        let sent = project(displayFrame(messages: []), optimistic: optimistic)
+        let echoed = project(
+            displayFrame(revision: 2, messages: [
+                DisplayMessage(message: userMessage(id: Self.clientID, text: "Review the staged diff and list risks.")),
+            ]),
+            optimistic: optimistic,
+            previous: sent
+        )
+
+        #expect(echoed.rows.map(\.id) == [Self.clientID])
+        #expect(echoed.rows.first?.isPending == false)
+        #expect(echoed.rows.first?.text == "Review the staged diff and list risks.")
+    }
+
+    private static let clientID = "msg_19a1b2c3d4e5AbCdEfGhIjKlMn"
 
     private func project(
         _ frame: DisplayFrame,

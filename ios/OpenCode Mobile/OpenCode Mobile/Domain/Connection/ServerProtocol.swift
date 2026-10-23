@@ -30,6 +30,8 @@ nonisolated struct ServerCapabilities: Sendable, Equatable {
     let supportsSessionViewed: Bool
     /// `POST /api/session/{id}/move` (v2). v1 has no move endpoint.
     let supportsSessionMove: Bool
+    /// The command route keeps a client message id (v1 `messageID`); v2 `…/command` takes none.
+    var commandKeepsClientMessageID: Bool = false
 
     static func forProtocol(_ serverProtocol: ServerProtocol, v2Features: V2ServerFeatures = V2ServerFeatures()) -> ServerCapabilities {
         switch serverProtocol {
@@ -39,7 +41,8 @@ nonisolated struct ServerCapabilities: Sendable, Equatable {
                 supportsSessionArchive: true,
                 supportsFollowUpDelivery: false,
                 supportsSessionViewed: false,
-                supportsSessionMove: false
+                supportsSessionMove: false,
+                commandKeepsClientMessageID: true
             )
         case .v2:
             return ServerCapabilities(

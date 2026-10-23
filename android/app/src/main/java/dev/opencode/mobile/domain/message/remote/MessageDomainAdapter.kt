@@ -240,6 +240,7 @@ class MessageDomainAdapter {
             model = options.model?.let { SendPromptModelDto(providerId = it.providerId, modelId = it.modelId) },
             variant = options.variant,
             agent = options.mode,
+            messageId = options.messageId,
         )
 
     fun toV1ShellRequest(options: ShellCommandOptions): V1ShellRequestDto =
@@ -284,6 +285,7 @@ class MessageDomainAdapter {
                 .takeIf { it.isNotEmpty() }
         val fileMentions = v2FileMentions(options)
         return V2PromptRequestDto(
+            id = options.messageId,
             text = options.text,
             files = files,
             agents = agents,

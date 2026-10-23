@@ -260,7 +260,8 @@ nonisolated struct MessageDomainAdapter: Sendable {
             parts: parts,
             model: options.model.map { SendPromptModelDTO(providerID: $0.providerID, modelID: $0.modelID) },
             variant: options.variant,
-            agent: options.mode
+            agent: options.mode,
+            messageID: options.messageID
         )
     }
 
@@ -293,6 +294,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
             return V2PromptSkillDTO(id: id)
         }
         return V2PromptRequestDTO(
+            id: options.messageID,
             text: options.text,
             files: files.isEmpty ? nil : files,
             agents: agents.isEmpty ? nil : agents,

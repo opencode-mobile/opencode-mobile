@@ -31,6 +31,8 @@ data class CommandRunOptions(
     val variant: String? = null,
     val mode: String? = null,
     val delivery: FollowUpDelivery = FollowUpDelivery.Steer,
+    /** [ClientMessageId] for the user message. v1 keeps it; v2 commands take no id. */
+    val messageId: String? = null,
 )
 
 sealed class ComposerSubmitIntent {

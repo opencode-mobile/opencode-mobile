@@ -144,6 +144,7 @@ data class SendMessageRequestDto(
     val model: SendPromptModelDto? = null,
     val variant: String? = null,
     val agent: String? = null,
+    @SerialName("messageID") val messageId: String? = null,
 )
 
 @Serializable
@@ -189,6 +190,7 @@ data class AgentPartSourceDto(
 
 @Serializable
 data class V2PromptRequestDto(
+    val id: String? = null,
     val text: String,
     val files: List<V2PromptFileDto>? = null,
     val agents: List<V2PromptAgentDto>? = null,

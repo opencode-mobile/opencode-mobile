@@ -94,6 +94,7 @@ class CommandDomainAdapter {
                         filename = attachment.filename,
                     )
                 },
+            messageId = options.messageId,
         )
 
     fun toV2RunRequest(options: CommandRunOptions): V2RunCommandRequestDto =

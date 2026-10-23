@@ -102,6 +102,10 @@ object PromptJsonBodyWriter {
                 writer.key("agent")
                 writer.writeString(it)
             }
+            body.messageId?.let {
+                writer.key("messageID")
+                writer.writeString(it)
+            }
             writer.endObject()
         }
 
@@ -112,6 +116,10 @@ object PromptJsonBodyWriter {
     ): File =
         write(directory) { writer ->
             writer.beginObject()
+            body.id?.let {
+                writer.key("id")
+                writer.writeString(it)
+            }
             writer.key("text")
             writer.writeString(body.text)
             val mentionFiles = body.fileMentions.orEmpty()
@@ -239,6 +247,10 @@ object PromptJsonBodyWriter {
                     writer.endObject()
                 }
                 writer.endArray()
+            }
+            body.messageId?.let {
+                writer.key("messageID")
+                writer.writeString(it)
             }
             writer.endObject()
         }

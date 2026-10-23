@@ -96,7 +96,7 @@ struct CommandDomainAdapterTests {
         #expect(command?.template == "Ask about OpenCode")
     }
 
-    @Test func toRunRequest_mapsComposerSnapshotWithoutMessageId() {
+    @Test func toRunRequest_mapsComposerSnapshotAndClientMessageID() {
         let request = adapter.toRunRequest(
             CommandRunOptions(
                 command: "init",
@@ -112,11 +112,13 @@ struct CommandDomainAdapterTests {
                 ],
                 model: PromptModelSelection(providerID: "openai", modelID: "gpt-4"),
                 variant: "high",
-                mode: "build"
+                mode: "build",
+                messageID: "msg_client"
             )
         )
 
         #expect(request.command == "init")
+        #expect(request.messageID == "msg_client")
         #expect(request.arguments == "please")
         #expect(request.agent == "build")
         #expect(request.model == "openai/gpt-4")

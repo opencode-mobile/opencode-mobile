@@ -747,6 +747,7 @@ final class SessionChatComposer {
         onSendFailed: (String, String) -> Void,
         isSessionBusy: Bool,
         supportsFollowUp: Bool,
+        commandKeepsClientMessageID: Bool = false,
         waitToSend: (() async -> Bool)? = nil,
         serverAlreadyAccepted: () -> Bool = { false },
         beforePrompt: () async throws -> Void = {}
@@ -798,6 +799,16 @@ final class SessionChatComposer {
         let collapsedDisplay =
             CommandInvocationCollapser.collapse(text: trimmed, commands: state.serverCommands)
         let displayText = collapsedDisplay?.text ?? trimmed
+        let intent = ComposerSubmitRouting.resolve(
+            text: trimmed,
+            commands: state.serverCommands
+        )
+        // The echo of a send that carries its id comes back under it. v2 commands take
+        // no id, so their row keeps a local id and retires on text instead.
+        let messageID: String? = {
+            if case .serverCommand = intent, !commandKeepsClientMessageID { return nil }
+            return ClientMessageID.next()
+        }()
         let optimisticBlocks =
             (displayText.isEmpty
                 ? []
@@ -810,7 +821,7 @@ final class SessionChatComposer {
                 ]) + attachmentBlocks
 
         let optimistic = SessionChatRow(
-            id: "pending-\(UUID().uuidString)",
+            id: messageID ?? "pending-\(UUID().uuidString)",
             role: .user,
             text: displayText,
             metadataLabel: metadataLabel(
@@ -866,10 +877,6 @@ final class SessionChatComposer {
         }
 
         do {
-            let intent = ComposerSubmitRouting.resolve(
-                text: trimmed,
-                commands: state.serverCommands
-            )
             let hasAttachments = !submittedAttachments.isEmpty
             try await PromptSendProgressReporting.$handler.withValue({ [weak self] sent, total in
                 Task { @MainActor in
@@ -904,7 +911,8 @@ final class SessionChatComposer {
                                 fileMentions: fileMentions,
                                 worktree: worktree,
                                 skillIDs: skillIDs,
-                                delivery: delivery
+                                delivery: delivery,
+                                messageID: messageID
                             ),
                             directory: worktree
                         )
@@ -941,7 +949,8 @@ final class SessionChatComposer {
                             ),
                             variant: composer.selectedVariant,
                             mode: composer.selectedMode,
-                            delivery: composer.followUpDelivery
+                            delivery: composer.followUpDelivery,
+                            messageID: messageID
                         ),
                         directory: worktree
                     )

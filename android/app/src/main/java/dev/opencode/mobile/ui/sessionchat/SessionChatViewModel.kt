@@ -1367,11 +1367,13 @@ class SessionChatViewModel
             val sessionId = boundSessionId ?: return
             val worktree = boundWorktree ?: return
             val shouldQueue = !sessionInfo.state.value.canMutate
+            val capabilities = activeConnectionManager.currentCapabilities()
             composer.sendPrompt(
                 sessionId = sessionId,
                 worktree = worktree,
                 isSessionBusy = sessionInfo.state.value.sessionStatusLabel != null,
-                supportsFollowUp = activeConnectionManager.currentCapabilities().supportsFollowUpDelivery,
+                supportsFollowUp = capabilities.supportsFollowUpDelivery,
+                commandKeepsClientMessageId = capabilities.commandKeepsClientMessageId,
                 holdUntil = {
                     if (!shouldQueue) {
                         true
@@ -2264,8 +2266,8 @@ class SessionChatViewModel
 /**
  * Union of server inbox rows and still-unmerged optimistic busy sends.
  * [optimistic] must already be the merge leftover (echo dropped the matching
- * optimistic row, often under a different id). This function only skips
- * optimistic ids that are already in [loaded].
+ * optimistic row). This function only skips optimistic ids that are already in
+ * [loaded], as a client-id send's inbox echo is.
  */
 internal fun pendingPromptsFrom(
     loaded: List<Message>,

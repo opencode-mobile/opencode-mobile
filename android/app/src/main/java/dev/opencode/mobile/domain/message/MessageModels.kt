@@ -196,6 +196,8 @@ data class PromptSendOptions(
     val worktree: String? = null,
     val skillIds: List<String> = emptyList(),
     val delivery: FollowUpDelivery = FollowUpDelivery.Steer,
+    /** [ClientMessageId] the server gives the user message it creates. */
+    val messageId: String? = null,
 )
 
 data class PromptModelSelection(

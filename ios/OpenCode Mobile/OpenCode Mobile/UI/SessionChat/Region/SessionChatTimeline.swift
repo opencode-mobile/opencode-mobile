@@ -17,7 +17,7 @@ final class SessionChatTimeline {
     private var observationGeneration = 0
     private var mergePendingWhileSending = false
     private var pendingOptimisticRows: [SessionChatRow] = []
-    private var pendingBaselineSignatureCounts: [String: Int] = [:]
+    private var pendingBaselineIDs: Set<String> = []
     private var lastLoadedMessages: [Message] = []
     private var lastLoadedDisplayMessages: [DisplayMessage] = []
     private var pendingPromptPatches: [String: PendingPromptPatch] = [:]
@@ -307,7 +307,7 @@ final class SessionChatTimeline {
         cancelObservationTasks()
         mergePendingWhileSending = false
         pendingOptimisticRows = []
-        pendingBaselineSignatureCounts = [:]
+        pendingBaselineIDs = []
         lastLoadedMessages = []
         lastLoadedDisplayMessages = []
         childSessionLookupTask?.cancel()
@@ -414,7 +414,7 @@ final class SessionChatTimeline {
                 : []
         let optimistic = OptimisticInputs(
             pendingRows: pendingRows,
-            baselineSignatureCounts: pendingBaselineSignatureCounts,
+            baselineIDs: pendingBaselineIDs,
             mergePending: mergePendingWhileSending
         )
         let previousFrame = timelineFrame.frameRevision == 0 && timelineFrame.rows.isEmpty
@@ -617,15 +617,7 @@ final class SessionChatTimeline {
     func beginOptimisticSend(_ rows: [SessionChatRow]) {
         mergePendingWhileSending = true
         pendingOptimisticRows = rows
-        pendingBaselineSignatureCounts = SessionChatTimelineProjector.signatureCounts(
-            fromDisplayMessages: lastLoadedDisplayMessages,
-            sessionKey: sessionID,
-            serverCommands: serverCommands,
-            collapseConsecutiveToolCalls: collapseConsecutiveToolCalls,
-            chipTimeline: chipTimeline,
-            stepRail: stepRailTimeline,
-            activityCard: activityCardTimeline
-        )
+        pendingBaselineIDs = Set(lastLoadedDisplayMessages.map(\.message.id))
         let displayed = SessionChatTimelineProjector.displayedOptimisticSendRows(rows)
         let hadPriorRows = !state.messages.isEmpty || !timelineFrame.rows.isEmpty
         if displayed.isEmpty {
@@ -663,14 +655,17 @@ final class SessionChatTimeline {
     func failOptimisticSend(optimisticID: String, error: String) {
         mergePendingWhileSending = false
         pendingOptimisticRows = []
-        pendingBaselineSignatureCounts = [:]
-        state.messages.removeAll { $0.id == optimisticID }
+        pendingBaselineIDs = []
+        // An echo already shown under the same client id stays: the server has it.
+        let countBefore = state.messages.count
+        state.messages.removeAll { $0.id == optimisticID && $0.isPending }
+        let removed = state.messages.count != countBefore
         state.errorMessage = error
         publishSyntheticTimelineFrame(
             messages: state.messages,
             insertedRowIDs: [],
             changedRowIDs: [],
-            removedRowIDs: [optimisticID],
+            removedRowIDs: removed ? [optimisticID] : [],
             layoutChangedRowIDs: []
         )
         notifyChange()
@@ -679,7 +674,7 @@ final class SessionChatTimeline {
     func clearSendingState() {
         mergePendingWhileSending = false
         pendingOptimisticRows = []
-        pendingBaselineSignatureCounts = [:]
+        pendingBaselineIDs = []
     }
 
     func clearReadyError() {
@@ -844,7 +839,7 @@ final class SessionChatTimeline {
         }
         let optimistic = OptimisticInputs(
             pendingRows: pendingRows,
-            baselineSignatureCounts: pendingBaselineSignatureCounts,
+            baselineIDs: pendingBaselineIDs,
             mergePending: mergePendingWhileSending
         )
         let previousFrame = timelineFrame.frameRevision == 0 && timelineFrame.rows.isEmpty
@@ -962,16 +957,15 @@ final class SessionChatTimeline {
 
     /// Hidden pending-prompt rows leave the displayed frame before this runs, so
     /// reconciliation cannot use displayed ids. An optimistic send stays pending
-    /// until every leftover item has a new server echo of the same signature —
-    /// `serverExact[exact] > baseline` — the same match `mergeWithPending` uses
-    /// to drop the optimistic row, often under a different id.
+    /// until every leftover item has a new server echo — the same match
+    /// `mergeWithPending` uses to drop the optimistic row.
     private func clearOptimisticIfReconciled() {
         guard mergePendingWhileSending else { return }
         let pendingItems = pendingOptimisticItems()
         if pendingItems.isEmpty {
             mergePendingWhileSending = false
             pendingOptimisticRows = []
-            pendingBaselineSignatureCounts = [:]
+            pendingBaselineIDs = []
             return
         }
         let frame = DisplayFrameBuilder.build(
@@ -989,12 +983,12 @@ final class SessionChatTimeline {
         let stillUnacked = SessionChatTimelineProjector.unmatchedPending(
             pendingItems.map { TimelineRow.fromSessionChatRow($0) },
             serverRows: SessionChatTimelineProjector.serverRows(from: frame),
-            baselineSignatureCounts: pendingBaselineSignatureCounts
+            baselineIDs: pendingBaselineIDs
         )
         guard stillUnacked.isEmpty else { return }
         mergePendingWhileSending = false
         pendingOptimisticRows = []
-        pendingBaselineSignatureCounts = [:]
+        pendingBaselineIDs = []
     }
 
     private func confirmCacheSync() {
@@ -1008,7 +1002,7 @@ final class SessionChatTimeline {
     private func applyError(_ error: Error) {
         mergePendingWhileSending = false
         pendingOptimisticRows = []
-        pendingBaselineSignatureCounts = [:]
+        pendingBaselineIDs = []
         // Retain the last good timeline when one exists; only clear on cold failure.
         let retainLastGood = !state.messages.isEmpty
         if !retainLastGood {

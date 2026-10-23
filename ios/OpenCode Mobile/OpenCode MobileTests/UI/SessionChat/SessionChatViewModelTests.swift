@@ -2622,7 +2622,7 @@ struct SessionChatViewModelTests {
         repository.messages = [
             existing,
             Message(
-                id: "msg-new",
+                id: repository.sentOptions?.messageID ?? "msg-new",
                 role: .user,
                 text: "",
                 parts: [.file(file)],
@@ -5383,8 +5383,9 @@ private final class FakeMessageRepository: MessageRepository, @unchecked Sendabl
             await withCheckedContinuation { sendContinuation = $0 }
         }
         if echoSentPrompt, !options.text.isEmpty {
+            // Like the server, the echo keeps the client message id.
             messages.append(
-                Message(id: "msg-sent", role: .user, text: options.text, model: nil, mode: nil, sentAtEpochMs: nil)
+                Message(id: options.messageID ?? "msg-sent", role: .user, text: options.text, model: nil, mode: nil, sentAtEpochMs: nil)
             )
         }
     }
