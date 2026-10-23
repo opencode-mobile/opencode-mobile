@@ -14,6 +14,17 @@ sealed class StartDecorator {
         val worktree: Boolean = false,
     ) : StartDecorator()
 
+    /**
+     * Small round project letter badge, for [OpenCodeListItemVariant.Compact]. A [statusDot]
+     * sits on its top-end edge; [pulsing] fades it while work runs.
+     */
+    data class Tile(
+        val character: Char,
+        val accent: LetterAccent,
+        val statusDot: OpenCodeListItemStatusTone? = null,
+        val pulsing: Boolean = false,
+    ) : StartDecorator()
+
     data class Icon(
         val imageVector: ImageVector,
         val contentDescription: String?,

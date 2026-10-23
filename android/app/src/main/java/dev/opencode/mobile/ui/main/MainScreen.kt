@@ -28,6 +28,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
 import dev.opencode.mobile.domain.connection.ConnectionProfileIdentity
+import dev.opencode.mobile.domain.home.HomeCompactRowPath
 import dev.opencode.mobile.domain.home.HomeProject
 import dev.opencode.mobile.domain.home.HomeProjectGrouping
 import dev.opencode.mobile.domain.home.HomeProjectPickerState
@@ -1199,6 +1200,7 @@ private data class HomeRowSource(
                     .parts(project, directory, includeProjectName = false, worktreesEnabled = worktreesEnabled)
                     ?.map { SessionListLocationPart(it.text, isBranch = it.isBranch) },
             projectName = project.displayName,
+            compactWorktree = HomeCompactRowPath.worktreeLabel(project, directory, worktreesEnabled),
         )
     }
 }

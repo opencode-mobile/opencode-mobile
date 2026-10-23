@@ -31,6 +31,7 @@ import dev.opencode.mobile.domain.home.HomeSessionLadder
 import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.preferences.DeveloperToolsPreferences
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
+import dev.opencode.mobile.domain.preferences.HomeSessionRowStyle
 import dev.opencode.mobile.domain.preferences.PerformanceOverlayPreferences
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.domain.preferences.SessionChatTimelineStyle
@@ -77,6 +78,8 @@ fun SettingsScreen(
     onHideUserDirectoryPrefixChange: (Boolean) -> Unit,
     showsWorktrees: Boolean = true,
     onShowsWorktreesChange: (Boolean) -> Unit = {},
+    sessionRowStyle: HomeSessionRowStyle = HomeSessionRowStyle.DEFAULT,
+    onSessionRowStyleChange: (HomeSessionRowStyle) -> Unit = {},
     recentWindowHours: Int,
     onRecentWindowHoursChange: (Int) -> Unit,
     collapseConsecutiveToolCalls: Boolean,
@@ -103,6 +106,7 @@ fun SettingsScreen(
     var showRecentWindowPicker by remember { mutableStateOf(false) }
     var showFollowUpPicker by remember { mutableStateOf(false) }
     var showTimelineStylePicker by remember { mutableStateOf(false) }
+    var showSessionRowStylePicker by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val currentTheme = ThemeManager.currentTheme
     val currentSyntax = ThemeManager.currentSyntaxPreset
@@ -312,6 +316,19 @@ fun SettingsScreen(
                             },
                         ),
                     modifier = Modifier.padding(horizontal = 16.dp).testTag("settingsWorktreesToggle"),
+                )
+
+                OpenCodeListItem(
+                    title = "Session rows",
+                    subtitle = sessionRowStyle.settingsTitle(),
+                    style = OpenCodeListItemStyle.Card,
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.List, "Session rows"),
+                    accessory = OpenCodeListItemAccessory.Disclosure,
+                    onClick = {
+                        logSettingsAction(ProductAnalytics.Action.SETTINGS_OPEN_SESSION_ROWS_PICKER)
+                        showSessionRowStylePicker = true
+                    },
+                    modifier = Modifier.padding(horizontal = 16.dp).testTag("settingsSessionRows"),
                 )
 
                 OpenCodeSectionHeader(title = "Session Cache")
@@ -588,6 +605,29 @@ fun SettingsScreen(
     }
 
     OpenCodeBottomSheet(
+        visible = showSessionRowStylePicker,
+        title = "Session rows",
+        onDismissRequest = { showSessionRowStylePicker = false },
+    ) {
+        HomeSessionRowStyle.entries.forEach { style ->
+            OpenCodeBottomSheetEntry(
+                title = style.settingsTitle(),
+                subtitle = style.settingsSubtitle(),
+                selected = style == sessionRowStyle,
+                onClick = {
+                    ProductAnalytics.logUserAction(
+                        screenId = ProductAnalytics.Screen.SETTINGS,
+                        actionId = ProductAnalytics.Action.SETTINGS_SESSION_ROWS,
+                        parameters = mapOf(ProductAnalytics.Param.MODE to style.wireValue),
+                    )
+                    onSessionRowStyleChange(style)
+                    showSessionRowStylePicker = false
+                },
+            )
+        }
+    }
+
+    OpenCodeBottomSheet(
         visible = showFollowUpPicker,
         title = "Follow-up send",
         onDismissRequest = { showFollowUpPicker = false },
@@ -675,6 +715,18 @@ fun SettingsScreen(
         onDismissRequest = { showClearConfirmation = false },
     )
 }
+
+private fun HomeSessionRowStyle.settingsTitle(): String =
+    when (this) {
+        HomeSessionRowStyle.Compact -> "Compact"
+        HomeSessionRowStyle.Classic -> "Classic"
+    }
+
+private fun HomeSessionRowStyle.settingsSubtitle(): String =
+    when (this) {
+        HomeSessionRowStyle.Compact -> "Two lines: title and time, then project / worktree"
+        HomeSessionRowStyle.Classic -> "Project and worktree on their own lines"
+    }
 
 private fun SessionChatTimelineStyle.settingsTitle(): String =
     when (this) {

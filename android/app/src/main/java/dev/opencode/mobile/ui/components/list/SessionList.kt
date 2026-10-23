@@ -38,6 +38,7 @@ import dev.opencode.mobile.domain.home.HomeSessionLadderKind
 import dev.opencode.mobile.domain.home.HomeSessionLadderSection
 import dev.opencode.mobile.domain.home.HomeSessionOrderStabilizer
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
+import dev.opencode.mobile.domain.preferences.HomeSessionRowStyle
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.letterAccentForWorktree
@@ -99,7 +100,17 @@ data class SessionListSession(
     val location: List<SessionListLocationPart>? = null,
     /** Project name shown on the line above [location]. */
     val projectName: String? = null,
+    /** Worktree part of the compact row's `project / worktree`; null on the main checkout. */
+    val compactWorktree: String? = null,
 ) {
+    /** Line 2 of the compact row: the project name (else the folder), then [compactWorktree]. */
+    fun compactPath(): OpenCodeListItemPath {
+        val project =
+            projectName?.takeIf { it.isNotEmpty() }
+                ?: subtitle.trimEnd('/').substringAfterLast('/').ifEmpty { subtitle }
+        return OpenCodeListItemPath(project = project, worktree = compactWorktree?.takeIf { it.isNotEmpty() })
+    }
+
     /**
      * Git project rows: the project name (folder icon) on the subtitle line, and the worktree
      * (branch icon, then folder) on the detail line under it, in every scope. Each line cuts on
@@ -107,8 +118,9 @@ data class SessionListSession(
      */
     fun locationLines(): SessionListLocationLines? {
         val parts = location ?: return null
-        val name = projectName?.takeIf { it.isNotEmpty() }
-            ?: return SessionListLocationLines(parts.toSubtitleSegments(), detail = null)
+        val name =
+            projectName?.takeIf { it.isNotEmpty() }
+                ?: return SessionListLocationLines(parts.toSubtitleSegments(), detail = null)
         val worktree = parts.toSubtitleSegments(OpenCodeListItemSubtitleTone.Tertiary)
         return SessionListLocationLines(
             subtitle = listOf(OpenCodeListItemSubtitleSegment(name, OpenCodeListItemSubtitleTone.Secondary, OpenCodeIcons.Folder)),
@@ -273,6 +285,7 @@ fun SessionList(
     onRetryScopeLoad: (String) -> Unit = {},
     /** Selectable scopes outside [filterTabs] (worktrees); the dock shows them but never swipes to them. */
     scopeTabs: List<SessionListFilterTab> = emptyList(),
+    rowStyle: HomeSessionRowStyle = HomeDisplayPreferences.sessionRowStyle,
 ) {
     val background = openCodeColor("background-base")
     val borderWeaker = openCodeColor("border-weaker-base")
@@ -320,6 +333,7 @@ fun SessionList(
                     onSessionLongPress = onSessionLongPress,
                     onDisplayedSessionsChange =
                         onDisplayedSessionsChange.takeIf { filterId == selectedFilterId },
+                    rowStyle = rowStyle,
                 )
             }
 
@@ -370,6 +384,7 @@ private fun SessionListFeedPage(
     onSessionSelected: (SessionListSession) -> Unit,
     onSessionLongPress: ((SessionListSession) -> Unit)?,
     onDisplayedSessionsChange: ((List<SessionListSession>) -> Unit)?,
+    rowStyle: HomeSessionRowStyle,
 ) {
     val recentWindowHours = HomeDisplayPreferences.recentWindowHours
     val visibleSessions =
@@ -479,6 +494,7 @@ private fun SessionListFeedPage(
         selectedSessionId = selectedSessionId,
         onSessionSelected = onSessionSelected,
         onSessionLongPress = onSessionLongPress,
+        rowStyle = rowStyle,
         modifier =
             Modifier
                 .fillMaxSize()
@@ -501,6 +517,7 @@ private fun SessionListFeed(
     selectedSessionId: String?,
     onSessionSelected: (SessionListSession) -> Unit,
     onSessionLongPress: ((SessionListSession) -> Unit)?,
+    rowStyle: HomeSessionRowStyle,
     modifier: Modifier = Modifier,
 ) {
     // A loading or failed scope shows its placeholder only while it has no rows to show.
@@ -576,6 +593,7 @@ private fun SessionListFeed(
                         selectedSessionId = selectedSessionId,
                         onSessionSelected = onSessionSelected,
                         onSessionLongPress = onSessionLongPress,
+                        rowStyle = rowStyle,
                     )
                 }
             }
@@ -594,6 +612,7 @@ private fun SessionListFeedRows(
     selectedSessionId: String?,
     onSessionSelected: (SessionListSession) -> Unit,
     onSessionLongPress: ((SessionListSession) -> Unit)?,
+    rowStyle: HomeSessionRowStyle,
     modifier: Modifier = Modifier,
 ) {
     if (visibleSessions.isEmpty() && emptyContent != null) {
@@ -630,6 +649,7 @@ private fun SessionListFeedRows(
                                 selected = session.id == selectedSessionId,
                                 onSessionSelected = onSessionSelected,
                                 onSessionLongPress = onSessionLongPress,
+                                rowStyle = rowStyle,
                             )
                         }
                     }
@@ -651,6 +671,7 @@ private fun SessionListFeedRows(
                                 selected = session.id == selectedSessionId,
                                 onSessionSelected = onSessionSelected,
                                 onSessionLongPress = onSessionLongPress,
+                                rowStyle = rowStyle,
                             )
                         }
                     }
@@ -669,8 +690,21 @@ private fun SessionListRow(
     selected: Boolean,
     onSessionSelected: (SessionListSession) -> Unit,
     onSessionLongPress: ((SessionListSession) -> Unit)?,
+    rowStyle: HomeSessionRowStyle,
 ) {
     val status = session.status.toListItemStatus(session.retryAttempt, stale = session.statusStale)
+    if (rowStyle == HomeSessionRowStyle.Compact) {
+        SessionListCompactRow(
+            session = session,
+            status = status,
+            showDivider = showDivider,
+            borderWeaker = borderWeaker,
+            selected = selected,
+            onSessionSelected = onSessionSelected,
+            onSessionLongPress = onSessionLongPress,
+        )
+        return
+    }
     val lines = session.locationLines()
     OpenCodeListItem(
         title = session.title,
@@ -696,6 +730,49 @@ private fun SessionListRow(
         )
     }
 }
+
+/** Two-line row (#803): the same in every scope; Idle shows no dot and no pill. */
+@Composable
+private fun SessionListCompactRow(
+    session: SessionListSession,
+    status: OpenCodeListItemStatus,
+    showDivider: Boolean,
+    borderWeaker: androidx.compose.ui.graphics.Color,
+    selected: Boolean,
+    onSessionSelected: (SessionListSession) -> Unit,
+    onSessionLongPress: ((SessionListSession) -> Unit)?,
+) {
+    val active = session.compactStatus(status)
+    OpenCodeListItem(
+        title = session.title,
+        variant = OpenCodeListItemVariant.Compact,
+        path = session.compactPath(),
+        titleEmphasized = session.status.isUnreadFinish,
+        status = active,
+        caption = session.caption.takeIf { it.isNotEmpty() },
+        startDecorator =
+            StartDecorator.Tile(
+                character = session.letter,
+                accent = session.letterAccent,
+                statusDot = active?.tone,
+                pulsing = session.status == SessionListStatus.Running && !session.statusStale,
+            ),
+        selected = selected,
+        onClick = { onSessionSelected(session) },
+        onLongPress = onSessionLongPress?.let { handler -> { handler(session) } },
+    )
+    if (showDivider) {
+        HorizontalDivider(
+            modifier = Modifier.padding(start = 58.dp),
+            color = borderWeaker,
+        )
+    }
+}
+
+/** Compact rows show a status only when the session is not Idle. */
+internal fun SessionListSession.compactStatus(
+    status: OpenCodeListItemStatus = this.status.toListItemStatus(retryAttempt, stale = statusStale),
+): OpenCodeListItemStatus? = status.takeIf { this.status != SessionListStatus.Idle }
 
 private class SelectionRevealHold(
     var sessionId: String?,

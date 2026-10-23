@@ -304,6 +304,8 @@ object ProductAnalytics {
         const val SETTINGS_OPEN_SYNTAX_PICKER = "settings_open_syntax_picker"
         const val SETTINGS_TOGGLE_HIDE_USER_DIRECTORY = "settings_toggle_hide_user_directory"
         const val SETTINGS_TOGGLE_WORKTREES = "settings_toggle_worktrees"
+        const val SETTINGS_OPEN_SESSION_ROWS_PICKER = "settings_open_session_rows_picker"
+        const val SETTINGS_SESSION_ROWS = "settings_session_rows"
         const val SETTINGS_OPEN_RECENT_WINDOW_PICKER = "settings_open_recent_window_picker"
         const val SETTINGS_TOGGLE_COLLAPSE_CONSECUTIVE_TOOL_CALLS = "settings_toggle_collapse_consecutive_tool_calls"
         const val SETTINGS_TOGGLE_CHIP_TIMELINE = "settings_toggle_chip_timeline"

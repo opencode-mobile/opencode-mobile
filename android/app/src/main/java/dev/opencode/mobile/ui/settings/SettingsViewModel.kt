@@ -16,6 +16,7 @@ import dev.opencode.mobile.domain.preferences.AppLockPreferences
 import dev.opencode.mobile.domain.preferences.AppOnboardingPreferences
 import dev.opencode.mobile.domain.preferences.DeveloperToolsPreferences
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
+import dev.opencode.mobile.domain.preferences.HomeSessionRowStyle
 import dev.opencode.mobile.domain.preferences.MarkdownHighlightPreferences
 import dev.opencode.mobile.domain.preferences.PerformanceOverlayPreferences
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
@@ -121,6 +122,10 @@ class SettingsViewModel
 
         fun setShowsWorktrees(enabled: Boolean) {
             HomeDisplayPreferences.updateShowsWorktrees(enabled)
+        }
+
+        fun setSessionRowStyle(style: HomeSessionRowStyle) {
+            HomeDisplayPreferences.updateSessionRowStyle(style)
         }
 
         fun setRecentWindowHours(hours: Int) {

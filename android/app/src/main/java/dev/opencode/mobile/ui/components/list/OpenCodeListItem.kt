@@ -62,6 +62,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
@@ -92,6 +93,8 @@ private val SubtitleIconWidth = 1.15.em
 private val SubtitleIconHeight = 1.em
 private val ListItemTitleTagSpacing = 6.dp
 private val StatusChipShape = OpenCodePillShape
+private val ListItemSmallStatusFontSize = 11.sp
+private val ListItemSmallStatusLineHeight = 14.sp
 private const val ListItemPressedScale = 0.965f
 private const val ListItemPopPeakScale = 1.035f
 
@@ -100,6 +103,17 @@ private fun subtitleIconId(index: Int): String = "subtitle-icon-$index"
 enum class OpenCodeListItemStyle {
     Plain,
     Card,
+}
+
+enum class OpenCodeListItemVariant {
+    /** Title, subtitle and detail lines, with caption and status stacked at the end. */
+    Standard,
+
+    /**
+     * Two lines of fixed height: the title and caption, then a path and a small status pill.
+     * Pairs with [StartDecorator.Tile].
+     */
+    Compact,
 }
 
 enum class OpenCodeListItemSubtitleTone {
@@ -165,6 +179,12 @@ fun OpenCodeListItem(
     onLongPress: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     trailing: (@Composable () -> Unit)? = null,
+    /** [OpenCodeListItemVariant.Compact] draws two fixed lines: title and caption, then [path] and status. */
+    variant: OpenCodeListItemVariant = OpenCodeListItemVariant.Standard,
+    /** Compact line 2: `project / worktree`. Falls back to [subtitle]. */
+    path: OpenCodeListItemPath? = null,
+    /** Compact title in a heavier weight, for finished work not opened yet. */
+    titleEmphasized: Boolean = false,
 ) {
     require(subtitle == null || subtitleSegments == null) {
         "List Item accepts either a plain subtitle or semantic segments"
@@ -290,88 +310,100 @@ fun OpenCodeListItem(
                             .indication(interactionSource, ripple(bounded = true)),
                 )
             }
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = ListItemVerticalPadding),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                ListItemStartDecoration(decorator = startDecorator, enabled = enabled)
-
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(ListItemTitleSubtitleSpacing),
+            if (variant == OpenCodeListItemVariant.Compact) {
+                CompactListItemContent(
+                    title = title,
+                    titleEmphasized = titleEmphasized,
+                    path = path,
+                    subtitle = subtitle,
+                    status = status,
+                    caption = caption,
+                    startDecorator = startDecorator,
+                    enabled = enabled,
+                )
+            } else {
+                Row(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = ListItemVerticalPadding),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    val titleText = @Composable { titleModifier: Modifier ->
-                        Text(
-                            text = title,
-                            color = if (enabled) textStrong else textWeaker,
-                            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = titleModifier,
-                        )
-                    }
-                    if (titleTag.isNullOrBlank()) {
-                        titleText(Modifier)
-                    } else {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(ListItemTitleTagSpacing),
-                        ) {
-                            titleText(Modifier.weight(1f, fill = false))
-                            OpenCodeTag(title = titleTag, size = OpenCodeTagSize.Small)
+                    ListItemStartDecoration(decorator = startDecorator, enabled = enabled)
+
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(ListItemTitleSubtitleSpacing),
+                    ) {
+                        val titleText = @Composable { titleModifier: Modifier ->
+                            Text(
+                                text = title,
+                                color = if (enabled) textStrong else textWeaker,
+                                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = titleModifier,
+                            )
+                        }
+                        if (titleTag.isNullOrBlank()) {
+                            titleText(Modifier)
+                        } else {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(ListItemTitleTagSpacing),
+                            ) {
+                                titleText(Modifier.weight(1f, fill = false))
+                                OpenCodeTag(title = titleTag, size = OpenCodeTagSize.Small)
+                            }
+                        }
+                        if (subtitleSegments != null) {
+                            ListItemSegmentsText(subtitleSegments, enabled)
+                        } else if (subtitle != null) {
+                            Text(
+                                text = subtitle,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = if (enabled) textBase else textWeaker,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        if (!detailSegments.isNullOrEmpty()) {
+                            ListItemSegmentsText(detailSegments, enabled)
                         }
                     }
-                    if (subtitleSegments != null) {
-                        ListItemSegmentsText(subtitleSegments, enabled)
-                    } else if (subtitle != null) {
-                        Text(
-                            text = subtitle,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = if (enabled) textBase else textWeaker,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                    if (!detailSegments.isNullOrEmpty()) {
-                        ListItemSegmentsText(detailSegments, enabled)
-                    }
-                }
 
-                if (hasMeta) {
-                    ListItemMetaColumn(
-                        status = status,
-                        caption = caption,
-                        enabled = enabled,
-                        textBase = textBase,
-                        textWeaker = textWeaker,
-                        surfaceRaised = surfaceRaised,
-                    )
-                }
-
-                if (trailing != null) {
-                    Box(contentAlignment = Alignment.Center) { trailing() }
-                }
-
-                when (val itemAccessory = accessory) {
-                    null -> Unit
-                    OpenCodeListItemAccessory.Disclosure -> {
-                        Icon(
-                            imageVector = OpenCodeIcons.ChevronRight,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
-                            tint = if (enabled) openCodeColor("text-base") else openCodeColor("text-weaker"),
-                        )
-                    }
-                    is OpenCodeListItemAccessory.Toggle -> {
-                        Switch(
-                            checked = itemAccessory.checked,
-                            onCheckedChange = itemAccessory.onCheckedChange,
+                    if (hasMeta) {
+                        ListItemMetaColumn(
+                            status = status,
+                            caption = caption,
                             enabled = enabled,
+                            textBase = textBase,
+                            textWeaker = textWeaker,
                         )
+                    }
+
+                    if (trailing != null) {
+                        Box(contentAlignment = Alignment.Center) { trailing() }
+                    }
+
+                    when (val itemAccessory = accessory) {
+                        null -> Unit
+                        OpenCodeListItemAccessory.Disclosure -> {
+                            Icon(
+                                imageVector = OpenCodeIcons.ChevronRight,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                                tint = if (enabled) openCodeColor("text-base") else openCodeColor("text-weaker"),
+                            )
+                        }
+                        is OpenCodeListItemAccessory.Toggle -> {
+                            Switch(
+                                checked = itemAccessory.checked,
+                                onCheckedChange = itemAccessory.onCheckedChange,
+                                enabled = enabled,
+                            )
+                        }
                     }
                 }
             }
@@ -386,7 +418,6 @@ private fun ListItemMetaColumn(
     enabled: Boolean,
     textBase: Color,
     textWeaker: Color,
-    surfaceRaised: Color,
 ) {
     Column(
         modifier = Modifier.width(IntrinsicSize.Max),
@@ -404,29 +435,53 @@ private fun ListItemMetaColumn(
             )
         }
         if (status != null) {
-            val foreground = if (enabled) status.tone.foreground() else textWeaker
-            val background = if (enabled) status.tone.background() else surfaceRaised
-            Text(
-                text = status.text,
-                color = foreground,
-                textAlign = TextAlign.Center,
-                style =
-                    MaterialTheme.typography.labelSmall.copy(
-                        fontWeight = FontWeight.SemiBold,
-                    ),
-                maxLines = 1,
-                modifier =
-                    Modifier
-                        .clip(StatusChipShape)
-                        .background(background)
-                        .padding(horizontal = 8.dp, vertical = 3.dp),
-            )
+            ListItemStatusPill(status = status, enabled = enabled)
         }
     }
 }
 
+/** Status chip; [small] is the Compact variant's size. */
 @Composable
-private fun OpenCodeListItemStatusTone.foreground(): Color =
+internal fun ListItemStatusPill(
+    status: OpenCodeListItemStatus,
+    enabled: Boolean,
+    small: Boolean = false,
+) {
+    val foreground = if (enabled) status.tone.foreground() else openCodeColor("text-weaker")
+    val background = if (enabled) status.tone.background() else openCodeColor("surface-raised-base")
+    Text(
+        text = status.text,
+        color = foreground,
+        textAlign = TextAlign.Center,
+        style =
+            if (small) {
+                MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = ListItemSmallStatusFontSize,
+                    lineHeight = ListItemSmallStatusLineHeight,
+                )
+            } else {
+                MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.SemiBold,
+                )
+            },
+        maxLines = 1,
+        modifier =
+            Modifier
+                .clip(StatusChipShape)
+                .background(background)
+                .then(
+                    if (small) {
+                        Modifier.padding(horizontal = 7.dp, vertical = 1.dp)
+                    } else {
+                        Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                    },
+                ),
+    )
+}
+
+@Composable
+internal fun OpenCodeListItemStatusTone.foreground(): Color =
     when (this) {
         OpenCodeListItemStatusTone.Interactive -> openCodeColor("interactive")
         OpenCodeListItemStatusTone.Success -> openCodeColor("success")
@@ -437,7 +492,7 @@ private fun OpenCodeListItemStatusTone.foreground(): Color =
     }
 
 @Composable
-private fun OpenCodeListItemStatusTone.background(): Color =
+internal fun OpenCodeListItemStatusTone.background(): Color =
     when (this) {
         OpenCodeListItemStatusTone.Interactive -> openCodeColor("interactive").copy(alpha = 0.12f)
         OpenCodeListItemStatusTone.Success -> openCodeColor("success").copy(alpha = 0.12f)
@@ -448,19 +503,17 @@ private fun OpenCodeListItemStatusTone.background(): Color =
     }
 
 @Composable
-private fun ListItemStartDecoration(
+internal fun ListItemStartDecoration(
     decorator: StartDecorator,
     enabled: Boolean,
 ) {
     if (decorator is StartDecorator.None) return
-    val dark = isSystemInDarkTheme()
     val emphasize =
         Modifier.then(
             if (enabled) Modifier else Modifier.alpha(0.7f),
         )
     when (decorator) {
         is StartDecorator.Letter -> {
-            val (fill, tint) = decorator.accent.badgeColors(dark)
             val backgroundBase = openCodeColor("background-base")
             Box(
                 modifier =
@@ -468,24 +521,12 @@ private fun ListItemStartDecoration(
                         .size(ListItemLetterBadgeSize)
                         .then(emphasize),
             ) {
-                Box(
-                    modifier =
-                        Modifier
-                            .fillMaxSize()
-                            .clip(CircleShape)
-                            .background(fill)
-                            .semantics { hideFromAccessibility() },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = normalizedBadgeLetter(decorator.character),
-                        fontSize = ListItemLetterGlyphSize,
-                        fontWeight = FontWeight.Bold,
-                        color = tint,
-                        textAlign = TextAlign.Center,
-                        maxLines = 1,
-                    )
-                }
+                ListItemLetterCircle(
+                    character = decorator.character,
+                    accent = decorator.accent,
+                    glyphSize = ListItemLetterGlyphSize,
+                    modifier = Modifier.fillMaxSize(),
+                )
                 val statusTone = decorator.statusDot
                 val showWorktree = decorator.worktree
                 if (statusTone != null && showWorktree) {
@@ -577,7 +618,36 @@ private fun ListItemStartDecoration(
                 )
             }
         }
+        is StartDecorator.Tile -> ListItemTile(decorator = decorator, modifier = emphasize)
         is StartDecorator.None -> Unit
+    }
+}
+
+/** Round project letter badge in its letter accent colours; the caller sets the size. */
+@Composable
+internal fun ListItemLetterCircle(
+    character: Char,
+    accent: LetterAccent,
+    glyphSize: TextUnit,
+    modifier: Modifier = Modifier,
+) {
+    val (fill, tint) = accent.badgeColors(isSystemInDarkTheme())
+    Box(
+        modifier =
+            modifier
+                .clip(CircleShape)
+                .background(fill)
+                .semantics { hideFromAccessibility() },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = normalizedBadgeLetter(character),
+            fontSize = glyphSize,
+            fontWeight = FontWeight.Bold,
+            color = tint,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+        )
     }
 }
 
