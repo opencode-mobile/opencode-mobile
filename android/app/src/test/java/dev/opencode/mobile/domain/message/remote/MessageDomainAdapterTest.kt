@@ -407,11 +407,12 @@ class MessageDomainAdapterTest {
                 """,
             ).single()
 
-        assertEquals(listOf("tdd", "bare"), message.skillMentions.map { it.skillId })
-        assertEquals("tdd", message.skillMentions[0].name)
-        assertEquals(0, message.skillMentions[0].start)
-        assertEquals(4, message.skillMentions[0].end)
-        assertEquals("bare", message.skillMentions[1].name)
+        assertEquals(listOf("tdd", "bare"), message.promptSkills.map { it.id })
+        assertEquals("tdd", message.promptSkills[0].name)
+        assertEquals(0, message.promptSkills[0].mentionStart)
+        assertEquals(4, message.promptSkills[0].mentionEnd)
+        assertEquals("bare", message.promptSkills[1].name)
+        assertEquals(null, message.promptSkills[1].mentionStart)
         assertEquals("/tdd the login flow".length + "/tdd".length, message.contextEstimate.userCharacters)
     }
 
@@ -1604,6 +1605,37 @@ class MessageDomainAdapterTest {
                 """.trimIndent(),
             )
         assertEquals(1, adapter.projectV2(dtos).size)
+    }
+
+    @Test
+    fun projectV2_userSkillAndFile_keepsArgumentsAndSkillRefWithoutSkillBody() {
+        val message =
+            projectV2(
+                """
+                [
+                  {
+                    "id":"msg_user",
+                    "type":"user",
+                    "text":"prototype me a better list item",
+                    "files":[{"name":"16136.png","mime":"image/png","uri":"data:image/png;base64,YQ=="}],
+                    "skills":[{
+                      "id":"publish-prototype",
+                      "name":"publish-prototype",
+                      "text":"SKILL BODY should stay off the transcript"
+                    }]
+                  }
+                ]
+                """,
+            ).single()
+
+        assertEquals("prototype me a better list item", message.text)
+        assertFalse(message.text.contains("SKILL BODY"))
+        assertFalse(message.parts.any { it is MessagePart.Text && it.text.contains("SKILL BODY") })
+        assertEquals(
+            listOf(PromptSkill(id = "publish-prototype", name = "publish-prototype")),
+            message.promptSkills,
+        )
+        assertEquals(1, message.parts.filterIsInstance<MessagePart.File>().size)
     }
 
     @Test

@@ -12,7 +12,8 @@ data class V2SessionMessageDto(
     val text: String? = null,
     val files: List<V2FileAttachmentDto> = emptyList(),
     val agents: List<V2AgentAttachmentDto> = emptyList(),
-    val skills: List<V2SkillAttachmentDto> = emptyList(),
+    /** Skills admitted on a `user` prompt. The body is model-facing and not decoded. */
+    val skills: List<V2UserSkillDto> = emptyList(),
     val agent: String? = null,
     val model: V2ModelRefDto? = null,
     val content: List<V2AssistantContentDto> = emptyList(),
@@ -95,6 +96,13 @@ data class V2FileSourceDto(
 )
 
 @Serializable
+data class V2UserSkillDto(
+    val id: String? = null,
+    val name: String? = null,
+    val mention: V2PromptSourceDto? = null,
+)
+
+@Serializable
 data class V2AgentAttachmentDto(
     val name: String? = null,
     val source: V2PromptSourceDto? = null,
@@ -102,12 +110,6 @@ data class V2AgentAttachmentDto(
 )
 
 /** A skill admitted on a user message: `{id, name?, mention?}`. */
-@Serializable
-data class V2SkillAttachmentDto(
-    val id: String,
-    val name: String? = null,
-    val mention: V2PromptSourceDto? = null,
-)
 
 @Serializable
 data class V2PromptSourceDto(

@@ -984,9 +984,10 @@ struct MessageDomainAdapterTests {
         )
 
         let message = try #require(adapter.messages(fromV2: dtos).first)
-        #expect(message.skillMentions.map(\.skillID) == ["tdd", "security"])
-        #expect(message.skillMentions.map(\.name) == ["tdd", "security"])
-        #expect(message.skillMentions.map(\.start) == [4, 13])
+        #expect(message.promptSkills.map(\.id) == ["tdd", "security"])
+        #expect(message.promptSkills.map(\.name) == ["tdd", "security"])
+        #expect(message.promptSkills.map(\.mentionStart) == [4, 13])
+        #expect(message.promptSkills.map(\.mentionEnd) == [8, 17])
         #expect(message.contextEstimate.userCharacters == "fix /tdd now /sec".count + "/tdd".count + "/sec".count)
     }
 
@@ -1113,6 +1114,39 @@ struct MessageDomainAdapterTests {
         #expect(tool.input?["agent"]?.stringValue == "explore")
         #expect(tool.metadata?["sessionID"]?.stringValue == "ses_child")
         #expect(tool.timeStartEpochMs == 10)
+    }
+
+    @Test func projectV2UserSkillAndFile_keepsArgumentsAndSkillRefWithoutSkillBody() throws {
+        let dtos = try decoder.decode(
+            [V2SessionMessageDTO].self,
+            from: Data(
+                """
+                [
+                  {
+                    "id":"msg_user",
+                    "type":"user",
+                    "text":"prototype me a better list item",
+                    "files":[{"name":"16136.png","mime":"image/png","uri":"data:image/png;base64,YQ=="}],
+                    "skills":[{
+                      "id":"publish-prototype",
+                      "name":"publish-prototype",
+                      "text":"SKILL BODY should stay off the transcript"
+                    }]
+                  }
+                ]
+                """.utf8
+            )
+        )
+        let message = try #require(adapter.messages(fromV2: dtos).first)
+        #expect(message.text == "prototype me a better list item")
+        #expect(!message.text.contains("SKILL BODY"))
+        #expect(message.promptSkills == [PromptSkill(id: "publish-prototype", name: "publish-prototype")])
+        let files = message.parts.compactMap { part -> FilePart? in
+            if case let .file(file) = part { return file }
+            return nil
+        }
+        #expect(files.count == 1)
+        #expect(files.first?.filename == "16136.png")
     }
 
     @Test func projectV2UserInlineFileDataBuildsDataURL() throws {

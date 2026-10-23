@@ -523,6 +523,69 @@ struct SessionChatTimelineProjectorTests {
         #expect(reconciled.removedRowIDs.contains("optimistic-photo"))
     }
 
+    @Test func skillPromptWithImage_collapsesOntoOneRowAndDropsOptimisticCopy() {
+        let args = "prototype me a better list item"
+        let collapsed = "[/publish-prototype] \(args)"
+        let message = Message(
+            id: "msg-user",
+            role: .user,
+            text: args,
+            parts: [
+                text("u1", args),
+                .file(filePart(id: "server-file", dataURL: "data:image/png;base64,YQ==", filename: "16136.png")),
+            ],
+            model: nil,
+            mode: nil,
+            sentAtEpochMs: 1,
+            promptSkills: [PromptSkill(id: "publish-prototype", name: "publish-prototype")]
+        )
+        let frame = DisplayFrameBuilder.build(
+            sessionKey: "session-a",
+            frameRevision: 1,
+            sourceRevision: 1,
+            displayMessages: [DisplayMessage(message: message)],
+            serverCommands: [
+                ServerCommand(name: "publish-prototype", source: .skill, skillID: "publish-prototype"),
+            ]
+        )
+        let serverTexts = frame.messages.flatMap { body in
+            body.blocks.compactMap { block -> String? in
+                if case let .text(_, text, _) = block { return text }
+                return nil
+            }
+        }
+        #expect(serverTexts == [collapsed])
+
+        let pendingFile = filePart(id: "local-file", dataURL: "data:image/jpeg;base64,abc", filename: "16136.png")
+        let pending = TimelineRow(
+            id: "optimistic-photo",
+            role: .user,
+            text: collapsed,
+            metadataLabel: "",
+            isPending: true,
+            blocks: [
+                .text(
+                    blockID: PresentationBlockId.messageFallback("optimistic-photo"),
+                    text: collapsed,
+                    renderedMarkdown: nil
+                ),
+                .attachment(blockID: PresentationBlockId.direct("local-file"), file: pendingFile),
+            ],
+            contentRevision: ContentRevision.of(collapsed),
+            layoutRevision: 1
+        )
+        let reconciled = project(
+            frame,
+            optimistic: OptimisticInputs(
+                pendingRows: [pending],
+                baselineSignatureCounts: [:],
+                mergePending: true
+            )
+        )
+        #expect(reconciled.rows.map(\.id) == ["msg-user"])
+        #expect(reconciled.rows.allSatisfy { !$0.isPending })
+    }
+
     @Test func optimisticFile_reconcilesWhenLiveInboxOmitsFile() {
         let pendingFile = filePart(id: "local-file", dataURL: "data:image/jpeg;base64,abc")
         let pending = TimelineRow(
@@ -1374,10 +1437,10 @@ struct SessionChatTimelineProjectorTests {
         )
     }
 
-    private func filePart(id: String, dataURL: String) -> FilePart {
+    private func filePart(id: String, dataURL: String, filename: String = "IMG_1234.JPG") -> FilePart {
         FilePart(
             id: id,
-            filename: "IMG_1234.JPG",
+            filename: filename,
             mime: "image/jpeg",
             kind: .image,
             dataURL: dataURL

@@ -1,5 +1,25 @@
 import Foundation
 
+/// A skill admitted on a v2 user prompt. The skill body stays on the server;
+/// chat only needs the id and slash name so the prompt can show as `[/name]`.
+nonisolated struct PromptSkill: Equatable, Sendable {
+    let id: String
+    let name: String
+    /// Mention text already present in the prompt, when another client recorded one.
+    let mentionText: String?
+    /// Offsets of that mention into the prompt text, when the sender recorded them.
+    let mentionStart: Int?
+    let mentionEnd: Int?
+
+    init(id: String, name: String, mentionText: String? = nil, mentionStart: Int? = nil, mentionEnd: Int? = nil) {
+        self.id = id
+        self.name = name
+        self.mentionText = mentionText
+        self.mentionStart = mentionStart
+        self.mentionEnd = mentionEnd
+    }
+}
+
 nonisolated struct Message: Equatable, Sendable, Identifiable {
     let id: String
     let role: MessageRole
@@ -22,8 +42,8 @@ nonisolated struct Message: Equatable, Sendable, Identifiable {
     var stopReason: MessageStopReason?
     /// A run failure to show under the reply. Nil when the run did not fail, or the user stopped it.
     var failure: SessionFailure?
-    /// v2 skills the user placed in this prompt as `/name` spans, with their offsets into `text`.
-    var skillMentions: [SkillMention]
+    /// Skills admitted with this prompt. Empty for v1 and for messages that did not load a skill.
+    let promptSkills: [PromptSkill]
 
     init(
         id: String,
@@ -45,7 +65,7 @@ nonisolated struct Message: Equatable, Sendable, Identifiable {
         isWaitingForPickup: Bool = false,
         stopReason: MessageStopReason? = nil,
         failure: SessionFailure? = nil,
-        skillMentions: [SkillMention] = []
+        promptSkills: [PromptSkill] = []
     ) {
         self.id = id
         self.role = role
@@ -66,7 +86,7 @@ nonisolated struct Message: Equatable, Sendable, Identifiable {
         self.isWaitingForPickup = isWaitingForPickup
         self.stopReason = stopReason
         self.failure = failure
-        self.skillMentions = skillMentions
+        self.promptSkills = promptSkills
     }
 
     /// Fills agent, model, variant, and an omitted failure this copy lacks from `base`.
@@ -98,7 +118,7 @@ nonisolated struct Message: Equatable, Sendable, Identifiable {
             isWaitingForPickup: isWaitingForPickup,
             stopReason: copy.stopReason,
             failure: copy.failure,
-            skillMentions: skillMentions
+            promptSkills: promptSkills
         )
     }
 
@@ -126,7 +146,7 @@ nonisolated struct Message: Equatable, Sendable, Identifiable {
             isWaitingForPickup: isWaitingForPickup,
             stopReason: stopReason,
             failure: failure,
-            skillMentions: skillMentions
+            promptSkills: promptSkills
         )
     }
 
@@ -151,7 +171,7 @@ nonisolated struct Message: Equatable, Sendable, Identifiable {
             isWaitingForPickup: isWaitingForPickup,
             stopReason: stopReason,
             failure: failure,
-            skillMentions: skillMentions
+            promptSkills: promptSkills
         )
     }
 }

@@ -477,10 +477,11 @@ nonisolated struct MessageDomainAdapter: Sendable {
                 parts.append(part)
             }
         }
-        var message = messageFromV2(
+        return messageFromV2(
             id: dto.id,
             role: .user,
             parts: parts,
+            promptSkills: promptSkills(dto),
             mode: dto.agent ?? (agent.isEmpty ? nil : agent),
             model: dto.model ?? model,
             sentAtEpochMs: dto.time?.created,
@@ -492,16 +493,6 @@ nonisolated struct MessageDomainAdapter: Sendable {
                     + dto.skills.reduce(0) { $0 + ($1.mention?.text?.count ?? 0) }
             )
         )
-        message.skillMentions = dto.skills.enumerated().map { index, skill in
-            SkillMention(
-                id: "\(dto.id):skill:\(index)",
-                skillID: skill.id,
-                name: skill.name ?? skill.id,
-                start: skill.mention?.start ?? -1,
-                end: skill.mention?.end ?? -1
-            )
-        }
-        return message
     }
 
     private func projectV2Synthetic(_ dto: V2SessionMessageDTO, agent: String, model: V2ModelRefDTO?) -> Message? {
@@ -655,6 +646,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
         role: MessageRole,
         parts: [MessagePart],
         fallbackText: String = "",
+        promptSkills: [PromptSkill] = [],
         cost: Double? = nil,
         tokens: MessageTokenUsage? = nil,
         mode: String? = nil,
@@ -682,8 +674,27 @@ nonisolated struct MessageDomainAdapter: Sendable {
             completedAtEpochMs: completedAtEpochMs,
             contextInputTokens: contextInputTokens,
             contextEstimate: contextEstimate,
-            failure: failure
+            failure: failure,
+            promptSkills: promptSkills
         )
+    }
+
+    /// Skills ride on the user message. Keep id and name only — `text` is the
+    /// model-facing skill body and must not become a second chat bubble.
+    private func promptSkills(_ dto: V2SessionMessageDTO) -> [PromptSkill] {
+        dto.skills.compactMap { skill in
+            let id = skill.id?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+                ?? skill.name?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+            let name = skill.name?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? id
+            guard let name else { return nil }
+            return PromptSkill(
+                id: id ?? name,
+                name: name,
+                mentionText: skill.mention?.text?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
+                mentionStart: skill.mention?.start,
+                mentionEnd: skill.mention?.end
+            )
+        }
     }
 
     private func v2AssistantPart(_ content: V2AssistantContentDTO, fallbackID: String) -> MessagePart? {

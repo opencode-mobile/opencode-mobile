@@ -7,6 +7,7 @@ import dev.opencode.mobile.domain.message.FailureAction
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.message.PromptSkill
 import dev.opencode.mobile.domain.message.MessageStopReason
 import dev.opencode.mobile.domain.message.ThoughtPartChrome
 import dev.opencode.mobile.domain.message.TimelineNotice
@@ -1510,6 +1511,140 @@ object SessionChatTimelineBlocks {
             is SessionChatTimelineBlock.Notice,
             -> false
         }
+
+    /**
+     * Builds the blocks Session Chat shows for one message: part blocks, then
+     * the slash token for a skill admitted beside the user's text, then
+     * template collapse. Skill admission has to happen before collapse so a
+     * skill-plus-image send displays as one `[/name] args` row and matches the
+     * optimistic send instead of leaving a second copy of the image.
+     */
+    fun present(
+        message: Message,
+        commands: List<ServerCommand>,
+        collapseConsecutiveToolCalls: Boolean = false,
+        chipTimeline: Boolean = false,
+        stepRail: Boolean = false,
+        activityCard: Boolean = false,
+    ): List<SessionChatTimelineBlock> {
+        val built =
+            buildOrFallback(
+                role = message.role,
+                parts = message.parts,
+                messageId = message.id,
+                fallbackText = message.text,
+                collapseConsecutiveToolCalls = collapseConsecutiveToolCalls,
+                chipTimeline = chipTimeline,
+                stepRail = stepRail,
+                activityCard = activityCard,
+            )
+        return collapseCommandInvocations(
+            role = message.role,
+            blocks = admitPromptSkills(message.role, built, message.promptSkills, commands),
+            commands = commands,
+            skillMentions = skillMentions(message.promptSkills, commands),
+        )
+    }
+
+    /**
+     * The `/name` spans a user prompt carries, for `[/name]` collapse. A skill sent without
+     * offsets (an older client, or one `admitPromptSkills` just prefixed) is placed by token search.
+     */
+    fun skillMentions(
+        skills: List<PromptSkill>,
+        commands: List<ServerCommand>,
+    ): List<SkillMention> =
+        skills.mapIndexedNotNull { index, skill ->
+            val name = slashName(skill, commands) ?: return@mapIndexedNotNull null
+            SkillMention(
+                id = "prompt-skill:$index",
+                skillId = skill.id,
+                name = name,
+                start = skill.mentionStart ?: -1,
+                end = skill.mentionEnd ?: -1,
+            )
+        }
+
+    /**
+     * A v2 skill prompt stores the user's arguments as the message text and the
+     * skill beside it. Restore `/name` so collapse can show `[/name] args` on
+     * that same row. Skip when the text is already a slash invocation or an
+     * expanded template — prefixing those would hide the command collapse.
+     */
+    fun admitPromptSkills(
+        role: MessageRole,
+        blocks: List<SessionChatTimelineBlock>,
+        skills: List<PromptSkill>,
+        commands: List<ServerCommand>,
+    ): List<SessionChatTimelineBlock> {
+        if (role != MessageRole.User || skills.isEmpty()) return blocks
+        val names = skills.mapNotNull { slashName(it, commands) }.distinct()
+        if (names.isEmpty()) return blocks
+        val textIndex = blocks.indexOfFirst { it is SessionChatTimelineBlock.Text }
+        val existing = (blocks.getOrNull(textIndex) as? SessionChatTimelineBlock.Text)?.text.orEmpty()
+        if (existing.isNotBlank() && CommandInvocationCollapser.collapse(existing, commands) != null) {
+            return blocks
+        }
+        val missing = names.filter { name -> !alreadyAdmitted(existing, name, skills) }
+        if (missing.isEmpty()) return blocks
+        val prefix = missing.joinToString(" ") { "/$it" }
+        val nextText = if (existing.isBlank()) prefix else "$prefix ${existing.trimStart()}"
+        if (textIndex >= 0) {
+            return blocks.mapIndexed { index, block ->
+                if (index != textIndex || block !is SessionChatTimelineBlock.Text) {
+                    block
+                } else {
+                    block.copy(text = nextText, renderedMarkdown = null)
+                }
+            }
+        }
+        val inserted =
+            SessionChatTimelineBlock.Text(
+                blockID = PresentationBlockId.direct("prompt-skill:${names.first()}"),
+                text = prefix,
+            )
+        return listOf(inserted) + blocks
+    }
+
+    private fun slashName(
+        skill: PromptSkill,
+        commands: List<ServerCommand>,
+    ): String? {
+        val id = skill.id.trim()
+        val name = skill.name.trim()
+        val fromCatalog =
+            commands
+                .firstOrNull { command ->
+                    val skillId = command.skillId?.trim().orEmpty()
+                    skillId.isNotEmpty() && (skillId == id || skillId == name)
+                }?.name
+                ?: commands.firstOrNull { it.name == name || (id.isNotEmpty() && it.name == id) }?.name
+        val resolved = fromCatalog?.trim().orEmpty().ifEmpty { name.ifEmpty { id } }
+        return resolved.takeIf { it.isNotEmpty() }
+    }
+
+    private fun alreadyAdmitted(
+        text: String,
+        name: String,
+        skills: List<PromptSkill>,
+    ): Boolean {
+        val trimmed = text.trim()
+        if (trimmed.startsWith("[/$name]") || startsWithSlashToken(trimmed, name)) return true
+        return skills.any { skill ->
+            val mention = skill.mentionText?.trim().orEmpty()
+            mention.isNotEmpty() && text.contains(mention) &&
+                (skill.name == name || skill.id == name)
+        }
+    }
+
+    private fun startsWithSlashToken(
+        text: String,
+        name: String,
+    ): Boolean {
+        val token = "/$name"
+        if (!text.startsWith(token)) return false
+        return text.length == token.length || text[token.length].isWhitespace()
+    }
 
     /**
      * Rewrites user text blocks that are expanded slash-command / skill

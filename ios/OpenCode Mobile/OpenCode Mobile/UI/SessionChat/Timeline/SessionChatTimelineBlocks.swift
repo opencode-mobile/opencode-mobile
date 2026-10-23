@@ -2249,6 +2249,138 @@ nonisolated enum SessionChatTimelineBlocks {
         return stripped.split(separator: "/").first.map(String.init) ?? url
     }
 
+    /// Builds the blocks Session Chat shows for one message: part blocks, then
+    /// the slash token for a skill admitted beside the user's text, then
+    /// template collapse. Skill admission has to happen before collapse so a
+    /// skill-plus-image send displays as one `[/name] args` row and matches the
+    /// optimistic send instead of leaving a second copy of the image.
+    static func present(
+        message: Message,
+        commands: [ServerCommand],
+        collapseConsecutiveToolCalls: Bool = false,
+        chipTimeline: Bool = false,
+        stepRail: Bool = false,
+        activityCard: Bool = false
+    ) -> [SessionChatTimelineBlock] {
+        let built = buildOrFallback(
+            role: message.role,
+            parts: message.parts,
+            messageId: message.id,
+            fallbackText: message.text,
+            collapseConsecutiveToolCalls: collapseConsecutiveToolCalls,
+            chipTimeline: chipTimeline,
+            stepRail: stepRail,
+            activityCard: activityCard
+        )
+        return collapseCommandInvocations(
+            role: message.role,
+            blocks: admitPromptSkills(
+                role: message.role,
+                blocks: built,
+                skills: message.promptSkills,
+                commands: commands
+            ),
+            commands: commands,
+            skillMentions: skillMentions(message.promptSkills, commands: commands)
+        )
+    }
+
+    /// The `/name` spans a user prompt carries, for `[/name]` collapse. A skill sent without
+    /// offsets (an older client, or one `admitPromptSkills` just prefixed) is placed by token search.
+    static func skillMentions(_ skills: [PromptSkill], commands: [ServerCommand]) -> [SkillMention] {
+        skills.enumerated().compactMap { index, skill in
+            guard let name = slashName(skill, commands: commands) else { return nil }
+            return SkillMention(
+                id: "prompt-skill:\(index)",
+                skillID: skill.id,
+                name: name,
+                start: skill.mentionStart ?? -1,
+                end: skill.mentionEnd ?? -1
+            )
+        }
+    }
+
+    /// A v2 skill prompt stores the user's arguments as the message text and the
+    /// skill beside it. Restore `/name` so collapse can show `[/name] args` on
+    /// that same row. Skip when the text is already a slash invocation or an
+    /// expanded template — prefixing those would hide the command collapse.
+    static func admitPromptSkills(
+        role: MessageRole,
+        blocks: [SessionChatTimelineBlock],
+        skills: [PromptSkill],
+        commands: [ServerCommand]
+    ) -> [SessionChatTimelineBlock] {
+        guard role == .user, !skills.isEmpty else { return blocks }
+        var names: [String] = []
+        for skill in skills {
+            guard let name = Self.slashName(skill, commands: commands), !names.contains(name) else { continue }
+            names.append(name)
+        }
+        guard !names.isEmpty else { return blocks }
+        let textIndex = blocks.firstIndex { block in
+            if case .text = block { return true }
+            return false
+        }
+        let existing: String
+        if let textIndex, case let .text(_, text, _) = blocks[textIndex] {
+            existing = text
+        } else {
+            existing = ""
+        }
+        if !existing.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           CommandInvocationCollapser.collapse(text: existing, commands: commands) != nil
+        {
+            return blocks
+        }
+        let missing = names.filter { !alreadyAdmitted(existing, name: $0, skills: skills) }
+        guard !missing.isEmpty else { return blocks }
+        let prefix = missing.map { "/\($0)" }.joined(separator: " ")
+        let trimmedExisting = existing.trimmingCharacters(in: .whitespaces)
+        let nextText = trimmedExisting.isEmpty ? prefix : "\(prefix) \(trimmedExisting)"
+        if let textIndex {
+            var next = blocks
+            let blockID = blocks[textIndex].blockID
+            next[textIndex] = .text(blockID: blockID, text: nextText, renderedMarkdown: nil)
+            return next
+        }
+        let inserted = SessionChatTimelineBlock.text(
+            blockID: PresentationBlockId.direct("prompt-skill:\(names[0])"),
+            text: prefix,
+            renderedMarkdown: nil
+        )
+        return [inserted] + blocks
+    }
+
+    private static func slashName(_ skill: PromptSkill, commands: [ServerCommand]) -> String? {
+        let id = skill.id.trimmingCharacters(in: .whitespacesAndNewlines)
+        let name = skill.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let fromCatalog = commands.first { command in
+            let skillID = command.skillID?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return !skillID.isEmpty && (skillID == id || skillID == name)
+        }?.name ?? commands.first { $0.name == name || (!id.isEmpty && $0.name == id) }?.name
+        let catalog = fromCatalog?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !catalog.isEmpty { return catalog }
+        if !name.isEmpty { return name }
+        return id.isEmpty ? nil : id
+    }
+
+    private static func alreadyAdmitted(_ text: String, name: String, skills: [PromptSkill]) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.hasPrefix("[/\(name)]") || startsWithSlashToken(trimmed, name: name) { return true }
+        return skills.contains { skill in
+            let mention = skill.mentionText?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return !mention.isEmpty && text.contains(mention) && (skill.name == name || skill.id == name)
+        }
+    }
+
+    private static func startsWithSlashToken(_ text: String, name: String) -> Bool {
+        let token = "/\(name)"
+        guard text.hasPrefix(token) else { return false }
+        if text.count == token.count { return true }
+        let next = text[text.index(text.startIndex, offsetBy: token.count)]
+        return next.isWhitespace
+    }
+
     /// Rewrites user text blocks that are expanded slash-command / skill
     /// templates into `[/name] args` for Session Chat display.
     /// `/name` skill spans (from the message) and server-command templates both collapse into

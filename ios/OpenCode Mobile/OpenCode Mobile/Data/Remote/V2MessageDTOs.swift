@@ -6,7 +6,8 @@ nonisolated struct V2SessionMessageDTO: Decodable, Sendable {
     let text: String?
     let files: [V2FileAttachmentDTO]
     let agents: [V2AgentAttachmentDTO]
-    let skills: [V2SkillAttachmentDTO]
+    /// Skills admitted on a `user` prompt. The body is model-facing and not decoded.
+    let skills: [V2UserSkillDTO]
     let agent: String?
     let model: V2ModelRefDTO?
     let content: [V2AssistantContentDTO]
@@ -34,8 +35,7 @@ nonisolated struct V2SessionMessageDTO: Decodable, Sendable {
     let metadata: [String: AnyCodable]?
 
     private enum CodingKeys: String, CodingKey {
-        case id, type, text, files, agents, skills, agent, model, content, cost, tokens, error, outcome, retry, finish
-        case time
+        case id, type, text, files, agents, skills, agent, model, content, cost, tokens, error, outcome, retry, finish, time
         case reason, summary, status, command, output, exit, callID, name, description, previous, location, metadata
     }
 
@@ -46,7 +46,7 @@ nonisolated struct V2SessionMessageDTO: Decodable, Sendable {
         text = try container.decodeIfPresent(String.self, forKey: .text)
         files = try container.decodeIfPresent([V2FileAttachmentDTO].self, forKey: .files) ?? []
         agents = try container.decodeIfPresent([V2AgentAttachmentDTO].self, forKey: .agents) ?? []
-        skills = (try? container.decodeIfPresent([V2SkillAttachmentDTO].self, forKey: .skills)) ?? []
+        skills = try container.decodeIfPresent([V2UserSkillDTO].self, forKey: .skills) ?? []
         agent = try container.decodeIfPresent(String.self, forKey: .agent)
         model = try container.decodeIfPresent(V2ModelRefDTO.self, forKey: .model)
         content = try container.decodeIfPresent([V2AssistantContentDTO].self, forKey: .content) ?? []
@@ -253,13 +253,6 @@ nonisolated struct V2FileSourceDTO: Decodable, Sendable {
     let text: String?
 }
 
-/// A skill on a user message: `{ id, name?, mention? }`.
-nonisolated struct V2SkillAttachmentDTO: Decodable, Sendable {
-    let id: String
-    let name: String?
-    let mention: V2PromptSourceDTO?
-}
-
 nonisolated struct V2AgentAttachmentDTO: Decodable, Sendable {
     let name: String?
     let source: V2PromptSourceDTO?
@@ -276,6 +269,12 @@ nonisolated struct V2AgentAttachmentDTO: Decodable, Sendable {
         mention = try container.decodeIfPresent(V2PromptSourceDTO.self, forKey: .mention)
             ?? source
     }
+}
+
+nonisolated struct V2UserSkillDTO: Decodable, Sendable {
+    let id: String?
+    let name: String?
+    let mention: V2PromptSourceDTO?
 }
 
 nonisolated struct V2PromptSourceDTO: Codable, Sendable, Equatable {
